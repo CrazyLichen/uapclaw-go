@@ -591,20 +591,25 @@ func TestHandleFileDownload_无效token(t *testing.T) {
 	}
 }
 
-// TestHandleFileDownload_过期token 403。
-// Python: validate_file_download_token 过期 → None → 403
+// secondsPtr 可选过期秒数测试助手（nil = 不过期）。
+func secondsPtr(n int) *int { return &n }
+
+// TestHandleFileDownload_过期token 404（路由 check_expiry=False 语义）。
+// Python: app_web.py L1658 validate_file_download_token(token, check_expiry=False)——
+// 交付产物即使 legacy token 带 exp 也保持有效；过期仅由验签失败/文件缺失体现。
+// token 过期但验签通过 → 走文件分支 → /nonexistent 404。
 func TestHandleFileDownload_过期token(t *testing.T) {
 	srv := newDownloadServer()
 	defer srv.Close()
 	m := swarmtools.GetWebFileDownloadManager()
-	token := m.GenerateToken("/nonexistent", "", -10)
+	token := m.GenerateToken("/nonexistent", "", secondsPtr(-10))
 	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
 	if err != nil {
 		t.Fatalf("http.Get: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("check_expiry=False 下过期 token 走文件分支应 404: %d", resp.StatusCode)
 	}
 }
 
@@ -614,7 +619,7 @@ func TestHandleFileDownload_文件不存在(t *testing.T) {
 	srv := newDownloadServer()
 	defer srv.Close()
 	m := swarmtools.GetWebFileDownloadManager()
-	token := m.GenerateToken("/nonexistent/file.pdf", "", 600)
+	token := m.GenerateToken("/nonexistent/file.pdf", "", secondsPtr(600))
 	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
 	if err != nil {
 		t.Fatalf("http.Get: %v", err)
@@ -640,7 +645,7 @@ func TestHandleFileDownload_成功(t *testing.T) {
 	content := strings.Repeat("A", 150000) // >2 个 64KB 块
 	require.NoError(t, os.WriteFile(fp, []byte(content), 0o644))
 
-	token := m.GenerateToken(fp, "", 600)
+	token := m.GenerateToken(fp, "", secondsPtr(600))
 	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
 	if err != nil {
 		t.Fatal(err)
@@ -682,7 +687,7 @@ func TestHandleFileDownload_HEAD(t *testing.T) {
 	fp := filepath.Join(tmp, "h.txt")
 	require.NoError(t, os.WriteFile(fp, []byte("head"), 0o644))
 
-	token := m.GenerateToken(fp, "", 600)
+	token := m.GenerateToken(fp, "", secondsPtr(600))
 	req, _ := http.NewRequest(http.MethodHead, srv.URL+"/file-api/download?token="+token, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -705,7 +710,7 @@ func TestHandleFileDownload_目录404(t *testing.T) {
 	defer srv.Close()
 	m := swarmtools.GetWebFileDownloadManager()
 	tmp := t.TempDir()
-	token := m.GenerateToken(tmp, "", 600)
+	token := m.GenerateToken(tmp, "", secondsPtr(600))
 	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
 	if err != nil {
 		t.Fatalf("http.Get: %v", err)

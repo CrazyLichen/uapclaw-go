@@ -325,9 +325,10 @@ func basicSendFilePayload(validFiles []string) []map[string]any {
 	return payload
 }
 
-// defaultDownloadInfoBuilder 默认下载信息构造（默认过期 600 秒）。
+// defaultDownloadInfoBuilder 默认下载信息构造（持久令牌：expiresIn=nil，对齐 Python
+// send_file_to_user.py build_file_download_info 无 expires_in 调用；userID 由信封传入）。
 func defaultDownloadInfoBuilder(filePath, baseName, sessionID string) (map[string]any, error) {
-	info := BuildFileDownloadInfo(filePath, baseName, sessionID, webFileDownloadDefaultExpiresSeconds)
+	info := BuildFileDownloadInfo(filePath, baseName, sessionID, nil, "")
 	return info, nil
 }
 
