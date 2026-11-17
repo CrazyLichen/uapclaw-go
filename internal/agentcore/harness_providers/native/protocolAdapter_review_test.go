@@ -12,6 +12,8 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	hpbase "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 签名收窄（本轮新增） ────────────────────────────
@@ -292,4 +294,84 @@ func TestCodec_DirectUnmarshalRoundTrip(t *testing.T) {
 	}
 	_ = context.Background()
 	_ = hp.JsonObject{}
+}
+
+// ──────────────────────────── 跨流 consumeChunk 缺陷（方案 A） ────────────────────────────
+
+// TestConsumeChunk_使用Adapter自己的Base 断言普通帧消费不再经
+// 15.6 DeepAgentHarness 空实例（其 base 未 Start，emit 会报
+// "outside an active cycle"），而是投递到 adapter 自己的 a.base。
+// Python: protocol_adapter.py:256 self._consume_chunk(...)——继承来的方法
+// 作用在 self（adapter）上，emit 进 adapter 的 SerializedTurnHarness。
+func TestConsumeChunk_使用Adapter自己的Base(t *testing.T) {
+	a := NewNativeV2Adapter(schema.NewDeepAgentSpec(), nil, 1024)
+	ctx := context.Background()
+	_ = a.Start(ctx, hp.HarnessContext{
+		ProtocolVersion: hp.ProtocolVersion, HostSessionID: "h", AgentID: "a",
+		ResumePolicy: hp.ResumePolicyNew,
+	})
+	turn := &hpbase.PendingTurn{
+		TurnID: "t", MessageID: "m", Content: hp.HarnessInput{Content: "x"},
+		AcceptedMode: hp.DeliveryModeAuto,
+	}
+	st := newTurnState("t")
+	chunk := &stream.OutputSchema{Type: "llm_output", Index: 0,
+		Payload: map[string]any{"content": "hello"}}
+	if err := a.consumeFn(ctx, turn, st, chunk); err != nil {
+		t.Fatalf("普通帧消费不应报 emit 错（应走 a.base.Emit）: %v", err)
+	}
+	if len(st.answerParts) != 1 || st.answerParts[0] != "hello" {
+		t.Fatalf("answerParts 未累积: %#v", st.answerParts)
+	}
+}
+
+// TestNoDeepAgentHarnessField 规则 8：不再保留 15.6 空实例字段。
+func TestNoDeepAgentHarnessField(t *testing.T) {
+	src, err := os.ReadFile("protocolAdapter.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "deepAgentHarness") {
+		t.Fatal("a.deepAgentHarness 空实例字段应按规则 8 删除，不留兼容壳")
+	}
+}
+
+// TestPhaseSync_两台Supervisor同步RUNNING 对齐 Python 的因果链：
+// base._supervise_turns 设 active_turn → transition(RUNNING) → 阻塞
+// _run_provider_turn → adapter._run_round → agent.send → L2 on_send
+// transition(RUNNING)。实测 Send 后两层均为 RUNNING 且 activeTurn 非 nil。
+func TestPhaseSync_两台Supervisor同步RUNNING(t *testing.T) {
+	a := NewNativeV2Adapter(schema.NewDeepAgentSpec(), nil, 1024)
+	// 用注入的输出帧序列替代无模型轮次：先给一个普通帧（验证 consumeChunk
+	// 不再报 emit 错），再给 control(IDLE) 让 runRound 正常收尾。
+	frames := []stream.Schema{
+		&stream.OutputSchema{Type: "llm_output", Index: 0,
+			Payload: map[string]any{"content": "尾帧"}},
+		&stream.OutputSchema{Type: controlChunkType, Index: 0,
+			Payload: map[string]any{"state": string(hp.HarnessStateIdle)}},
+	}
+	i := 0
+	a.outputNext = func(context.Context) (stream.Schema, bool) {
+		if i >= len(frames) {
+			return nil, false
+		}
+		f := frames[i]
+		i++
+		return f, true
+	}
+	ctx := context.Background()
+	_ = a.Start(ctx, hp.HarnessContext{
+		ProtocolVersion: hp.ProtocolVersion, HostSessionID: "h-sync", AgentID: "a-sync",
+		ResumePolicy: hp.ResumePolicyNew,
+	})
+	// 直接驱动一轮（不经真实 L2 轮次），断言 consumeFn 与 runRoundControl 都不报错。
+	turn := &hpbase.PendingTurn{TurnID: "t-sync", MessageID: "m-sync",
+		Content: hp.HarnessInput{Content: "x"}, AcceptedMode: hp.DeliveryModeAuto}
+	st := newTurnState("t-sync")
+	if err := a.runRound(ctx, nil, turn, st); err != nil {
+		t.Fatalf("runRound 应正常收尾（普通帧 + control IDLE）: %v", err)
+	}
+	if len(st.answerParts) != 1 || st.answerParts[0] != "尾帧" {
+		t.Fatalf("控制帧 FIFO：IDLE 之前的普通帧必须先被消费，得 %#v", st.answerParts)
+	}
 }

@@ -17,6 +17,7 @@ import (
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -105,8 +106,6 @@ type NativeHarnessProtocolAdapter struct {
 	emitLifecycleFn func(context.Context, *harness_providers.PendingTurn, hp.TurnEventKind) error
 	// executeTurnErr ExecuteTurn 故障注入（仅测试）
 	executeTurnErr error
-	// deepAgentHarness 同包 15.6 实例，供 consumeFn 直调 consumeChunk（D-3 ③）
-	deepAgentHarness *DeepAgentHarness
 }
 
 // NativeV2HarnessProvider 从可序列化配置构造未启动的 adapter。
@@ -147,15 +146,15 @@ func NewNativeV2Adapter(spec atschema.DeepAgentSpec, buildCtx hschema.BuildConte
 	a := &NativeHarnessProtocolAdapter{
 		spec:             spec,
 		buildContext:     buildCtx,
-		dispatched:       make(chan struct{}, 1),
-		pausedObserved:   make(chan struct{}, 1),
-		resumedObserved:  make(chan struct{}, 1),
-		deepAgentHarness: NewDeepAgentHarness(nil),
+		dispatched:      make(chan struct{}, 1),
+		pausedObserved:  make(chan struct{}, 1),
+		resumedObserved: make(chan struct{}, 1),
 	}
 	a.buildNativeFn = a.buildNative
-	a.consumeFn = func(ctx context.Context, turn *harness_providers.PendingTurn, state *turnState, chunk stream.Schema) error {
-		return a.deepAgentHarness.consumeChunk(ctx, turn, state, chunk)
-	}
+	// Python :256 self._consume_chunk(...) 作用在 adapter 自己身上；
+	// Go 组合下绑定到 adapter 自写的等价实现（emit 走 a.base），
+	// 不再借用 15.6 DeepAgentHarness 空实例的上下文（D-3 ③ 修订）。
+	a.consumeFn = a.consumeChunk
 	// D-3 关键：hooks 注入自己，不是嵌入后覆盖。
 	a.base = harness_providers.NewSerializedTurnHarness(harness_providers.HarnessOptions{
 		Card:                nativeV2Card(),
@@ -819,6 +818,187 @@ func (a *NativeHarnessProtocolAdapter) runRound(ctx context.Context, _ *atharnes
 			return nil
 		}
 	}
+}
+
+// consumeChunk 把 L2 输出流里的一帧普通 chunk 翻译成协议事件。
+// Python: protocol_adapter.py:256 `await self._consume_chunk(turn, state, chunk)`
+// ——继承自 DeepAgentHarness._consume_chunk（harness.py:369-469，八分支）。
+//
+// ⚠️ D-3 ③ 修订：不能直接调 15.6 的 (*DeepAgentHarness).consumeChunk——
+// 那个方法把事件投递到「那个实例自己的 base」，而 25.1f 的 active cycle
+// 在 a.base（adapter 自己的 SerializedTurnHarness）上。Go 组合无继承，
+// 故在此等价重写八分支，emit 改走 a.base.Emit；步骤/分支/短路顺序与
+// harness.py 逐条对应。同包的 delta/payloadText/shortUUID/strAny/
+// orDefault/jsonTextNonASCII/interactionPayload/toJsonObject 直接复用。
+func (a *NativeHarnessProtocolAdapter) consumeChunk(
+	ctx context.Context,
+	turn *harness_providers.PendingTurn,
+	state *turnState,
+	chunk stream.Schema,
+) error {
+	// L2 forwarder 产出 *OutputSchema；15.6 的 attach_output 流产出值类型。
+	// 两种形态都接受（对齐 Python duck typing）。
+	var outChunk stream.OutputSchema
+	switch c := chunk.(type) {
+	case stream.OutputSchema:
+		outChunk = c
+	case *stream.OutputSchema:
+		if c == nil {
+			return nil
+		}
+		outChunk = *c
+	default:
+		return nil
+	}
+	chunkType := outChunk.Type
+	payload := outChunk.Payload
+
+	switch chunkType {
+	case "llm_output":
+		// Python: harness.py:375-381
+		if text := payloadText(payload); text != "" {
+			state.answerParts = append(state.answerParts, text)
+			state.emittedOutput = true
+			event, err := delta(turn.TurnID, hp.OutputChannelAnswer, text)
+			if err != nil {
+				return err
+			}
+			return a.emitEvent(ctx, event, turn, "")
+		}
+		return nil
+	case "llm_reasoning":
+		// Python: harness.py:382-387
+		if text := payloadText(payload); text != "" {
+			state.reasoningParts = append(state.reasoningParts, text)
+			event, err := delta(turn.TurnID, hp.OutputChannelReasoning, text)
+			if err != nil {
+				return err
+			}
+			return a.emitEvent(ctx, event, turn, "")
+		}
+		return nil
+	case toolCallChunk:
+		// Python: harness.py:388-409
+		m, ok := payload.(map[string]any)
+		if !ok {
+			return nil
+		}
+		callID := orDefault(strAny(m["tool_call_id"]), shortUUID())
+		name := orDefault(strAny(m["tool_name"]), "unknown")
+		arguments := harness_providers.ToJsonSafe(m["tool_args"])
+		block, err := hp.NewContentBlock(
+			fmt.Sprintf("%s:tool:%s", turn.TurnID, callID), "tool_call",
+			hp.JsonObject{"name": name, "arguments": arguments},
+			hp.JsonObject{"call_id": callID})
+		if err != nil {
+			return err
+		}
+		state.toolBlocks = append(state.toolBlocks, block)
+		itemData, err := hp.FreezeJsonObject(hp.JsonObject{"name": name, "arguments": arguments})
+		if err != nil {
+			return err
+		}
+		event, err := hp.NewItemLifecycleEvent(hp.ItemEventKindStarted, "tool", itemData)
+		if err != nil {
+			return err
+		}
+		return a.emitEvent(ctx, event, turn, callID)
+	case toolResultChunk:
+		// Python: harness.py:410-443
+		m, ok := payload.(map[string]any)
+		if !ok {
+			return nil
+		}
+		callID := orDefault(strAny(m["tool_call_id"]), shortUUID())
+		name := orDefault(strAny(m["tool_name"]), "unknown")
+		result := harness_providers.ToJsonSafe(m["tool_result"])
+		renderedResult, _ := m["rendered_result"].(string)
+		blockData := hp.JsonObject{"call_id": callID}
+		itemData := hp.JsonObject{"tool_name": name, "result": result}
+		if renderedResult != "" {
+			blockData["rendered_result"] = renderedResult
+			itemData["rendered_result"] = renderedResult
+		}
+		block, err := hp.NewContentBlock(
+			fmt.Sprintf("%s:tool-result:%s", turn.TurnID, callID), "tool_result",
+			result, blockData)
+		if err != nil {
+			return err
+		}
+		msg, err := hp.NewTurnMessage(
+			fmt.Sprintf("%s:tool-result:%s", turn.TurnID, callID), hp.MessageRoleTool,
+			[]hp.ContentBlock{block}, nil)
+		if err != nil {
+			return err
+		}
+		state.toolMessages = append(state.toolMessages, msg)
+		frozen, err := hp.FreezeJsonObject(itemData)
+		if err != nil {
+			return err
+		}
+		event, err := hp.NewItemLifecycleEvent(hp.ItemEventKindCompleted, "tool", frozen)
+		if err != nil {
+			return err
+		}
+		return a.emitEvent(ctx, event, turn, callID)
+	case "answer":
+		// Python: harness.py:444-448
+		m, ok := payload.(map[string]any)
+		if !ok {
+			return nil
+		}
+		output := m["output"]
+		if text, isText := output.(string); isText {
+			state.finalOutput = &text
+		} else {
+			jsonText := jsonTextNonASCII(harness_providers.ToJsonSafe(output))
+			state.finalOutput = &jsonText
+		}
+		if rt := strAny(m["result_type"]); rt != "" {
+			state.resultType = &rt
+		} else {
+			answer := "answer"
+			state.resultType = &answer
+		}
+		return nil
+	case interaction.InteractionType:
+		// Python: harness.py:449-453（INTERACTION chunk）
+		interruptID, value := interactionPayload(payload)
+		if interruptID != "" {
+			state.pendingInterrupts[interruptID] = value
+		}
+		return nil
+	case string(hschema.InteractionEventTypeExecutionError):
+		// Python: harness.py:454-459
+		m, ok := payload.(map[string]any)
+		if !ok {
+			return nil
+		}
+		message := orDefault(strAny(m["message"]), "DeepAgent execution error")
+		code := orDefault(strAny(m["code"]), "execution_error")
+		state.err = &hp.TurnError{
+			Message:  message,
+			Code:     strPtr(code),
+			Category: strPtr("sdk_error"),
+		}
+		return nil
+	default:
+		// Python: harness.py:461-469 其余 → ProviderEvent 透传
+		event, err := hp.NewProviderEvent(ProviderName,
+			orDefault(chunkType, "chunk"), "1",
+			hp.JsonObject(toJsonObject(payload)))
+		if err != nil {
+			return err
+		}
+		return a.emitEvent(ctx, event, turn, "")
+	}
+}
+
+// emitEvent 把事件投递到 adapter 自己的协议层骨架（active cycle 所在）。
+// 等价 15.6 DeepAgentHarness.emitEvent / emitItemEvent 的 h.base.Emit。
+func (a *NativeHarnessProtocolAdapter) emitEvent(ctx context.Context,
+	event hp.HarnessEventPayload, turn *harness_providers.PendingTurn, itemID string) error {
+	return a.base.Emit(ctx, event, harness_providers.EmitOptions{Turn: turn, ItemID: itemID})
 }
 
 // runRoundControl 处理单个控制帧；返回 true 表示 IDLE 应结束本轮。
