@@ -10,7 +10,7 @@ import (
 
 // fakeGraph 满足 ExecutableGraph 的最小 fake：Invoke_ 写真实现，
 // Invoke/Stream/Collect/Transform/Interrupt 一行转手 DefaultGraphXxx 沿用默认
-//（≙ Python 子类只覆写 _invoke、其余方法继承默认体）
+// （≙ Python 子类只覆写 _invoke、其余方法继承默认体）
 type fakeGraph struct {
 	BaseExecutable[map[string]any, map[string]any]
 	invokeArgs map[string]any

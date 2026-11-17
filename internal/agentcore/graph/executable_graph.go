@@ -21,7 +21,7 @@ const (
 // 在 Executable 之上追加：Invoke 信封拆分（Python invoke，base.py:13-14）、
 // 默认 pass 的 Stream/Collect/Transform/Interrupt（偏差 D5，与父类抛 NotImplementedError
 // 不同——Python 侧本类是 pass 静默空实现）、抽象 _invoke 的导出对应物 Invoke_
-//（偏差 D4，8.1 CompiledGraph 实现并消费）。
+// （偏差 D4，8.1 CompiledGraph 实现并消费）。
 //
 // Python 的方法默认实现（invoke 拆信封体 / stream 等 pass 体）在 Go 接口上无承载点，
 // 由下方 DefaultGraphXxx 包级泛型函数提供唯一参考实现（默认体单点定义不被抄错）；

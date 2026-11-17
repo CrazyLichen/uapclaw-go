@@ -2,6 +2,7 @@ package stream_actor
 
 import (
 	"context"
+
 	"fmt"
 	"strings"
 	"sync"
@@ -361,6 +362,7 @@ func (a *StreamActor) taskDoneClosed() bool {
 
 // Receive 帧入主队列（对齐 Python receive）
 func (p *StreamProcessor) Receive(payload StreamPayload) {
+
 	p.queue.put(payload)
 }
 
