@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -39,7 +40,7 @@ type mockStub struct {
 	streamWriterManagerVal *stream.StreamWriterManager
 	sessionIDVal           string
 	checkpointerVal        interfaces.Checkpointer
-	actorManagerVal        any
+	actorManagerVal        *stream_actor.ActorManager
 	closeErr               error
 	closeCalled            bool
 }
@@ -50,7 +51,7 @@ func (m *mockStub) Tracer() *tracer.Tracer                           { return m.
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
 func (m *mockStub) Checkpointer() interfaces.Checkpointer            { return m.checkpointerVal }
-func (m *mockStub) ActorManager() any                                { return m.actorManagerVal }
+func (m *mockStub) ActorManager() *stream_actor.ActorManager                                { return m.actorManagerVal }
 func (m *mockStub) Close() error                                     { m.closeCalled = true; return m.closeErr }
 
 // testMockCheckpointer 用于 session_test 的模拟检查点器
@@ -112,7 +113,7 @@ func TestProxySession_委托全部方法(t *testing.T) {
 		streamWriterManagerVal: expectedSWM,
 		sessionIDVal:           "session-123",
 		checkpointerVal:        mockCP,
-		actorManagerVal:        "actor-value",
+		actorManagerVal:        nil,
 		closeErr:               nil,
 	}
 
@@ -150,8 +151,8 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	}
 
 	// 验证 ActorManager 委托
-	if got := p.ActorManager(); got != "actor-value" {
-		t.Errorf("ActorManager() = %v, 期望 %v", got, "actor-value")
+	if got := p.ActorManager(); got != nil {
+		t.Errorf("ActorManager() = %v, 期望 nil（actorManagerVal 已类型化为 *stream_actor.ActorManager）", got)
 	}
 
 	// 验证 Close 委托

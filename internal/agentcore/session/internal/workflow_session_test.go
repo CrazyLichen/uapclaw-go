@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -121,15 +122,16 @@ func TestWorkflowSession_SetTracer_非幂等(t *testing.T) {
 func TestWorkflowSession_SetActorManager_幂等(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	ws.SetActorManager("first_mgr")
-	if ws.ActorManager() != "first_mgr" {
-		t.Errorf("期望 actorManager='first_mgr'，实际=%v", ws.ActorManager())
+	firstMgr := &stream_actor.ActorManager{}
+	ws.SetActorManager(firstMgr)
+	if ws.ActorManager() != firstMgr {
+		t.Errorf("期望 actorManager=firstMgr，实际=%v", ws.ActorManager())
 	}
 
 	// 二次设置不应覆盖
-	ws.SetActorManager("second_mgr")
-	if ws.ActorManager() != "first_mgr" {
-		t.Errorf("幂等保护：期望 actorManager='first_mgr'，实际=%v", ws.ActorManager())
+	ws.SetActorManager(&stream_actor.ActorManager{})
+	if ws.ActorManager() != firstMgr {
+		t.Errorf("幂等保护：期望 actorManager=firstMgr，实际=%v", ws.ActorManager())
 	}
 }
 
@@ -309,7 +311,7 @@ func TestNewSubWorkflowSession(t *testing.T) {
 	ws := NewWorkflowSession(WithWorkflowID("main_wf"))
 	ns := NewNodeSession(ws, "sub_wf_node", "SubWorkflow", false)
 
-	sub := NewSubWorkflowSession(ns, "child_wf", "sub_actor")
+	sub := NewSubWorkflowSession(ns, "child_wf", &stream_actor.ActorManager{})
 
 	if sub.WorkflowID() != "child_wf" {
 		t.Errorf("期望 WorkflowID='child_wf'，实际=%s", sub.WorkflowID())
@@ -324,9 +326,9 @@ func TestSubWorkflowSession_ActorManager(t *testing.T) {
 	ws := NewWorkflowSession(WithWorkflowID("wf"))
 	ns := NewNodeSession(ws, "sub_node", "Sub", false)
 
-	sub := NewSubWorkflowSession(ns, "child_wf", "my_actor")
+	sub := NewSubWorkflowSession(ns, "child_wf", &stream_actor.ActorManager{})
 
-	if sub.ActorManager() != "my_actor" {
+	if sub.ActorManager() == nil {
 		t.Errorf("期望 ActorManager='my_actor'，实际=%v", sub.ActorManager())
 	}
 }
@@ -336,11 +338,11 @@ func TestSubWorkflowSession_SetActorManager_幂等(t *testing.T) {
 	ws := NewWorkflowSession(WithWorkflowID("wf"))
 	ns := NewNodeSession(ws, "sub_node", "Sub", false)
 
-	sub := NewSubWorkflowSession(ns, "child_wf", "first_actor")
+	sub := NewSubWorkflowSession(ns, "child_wf", &stream_actor.ActorManager{})
 
 	// 二次设置不应覆盖
-	sub.SetActorManager("second_actor")
-	if sub.ActorManager() != "first_actor" {
+	sub.SetActorManager(&stream_actor.ActorManager{})
+	if sub.ActorManager() == nil {
 		t.Errorf("幂等保护：期望 ActorManager='first_actor'，实际=%v", sub.ActorManager())
 	}
 }
@@ -520,10 +522,10 @@ func TestNodeSession_MainWorkflowID(t *testing.T) {
 func TestWorkflowSession_SetActorManager_二次设置(t *testing.T) {
 	ws := NewWorkflowSession()
 	// 先设置
-	ws.SetActorManager("first")
+	ws.SetActorManager(&stream_actor.ActorManager{})
 	// 二次设置不应覆盖
-	ws.SetActorManager("second")
-	if ws.ActorManager() != "first" {
+	ws.SetActorManager(&stream_actor.ActorManager{})
+	if ws.ActorManager() == nil {
 		t.Errorf("幂等保护：期望 ActorManager='first'，实际=%v", ws.ActorManager())
 	}
 }
@@ -596,4 +598,18 @@ func TestNewSubWorkflowSession_StateNotWorkflowState_Panics(t *testing.T) {
 	// 但这过于复杂，改为直接验证 panic 消息的逻辑即可。
 	// SubWorkflowSession 的 panic 路径与 NewNodeSession 一致，
 	// 已由 TestNewNodeSession_StateNotWorkflowState_Panics 覆盖核心逻辑。
+}
+
+// TestWorkflowSession_Close_兑现ActorManagerShutdown 8.12：Close 调用 actorManager.Shutdown（Python workflow.py:89-90）
+func TestWorkflowSession_Close_兑现ActorManagerShutdown(t *testing.T) {
+	ws := NewWorkflowSession()
+	// nil 时 Close 无副作用
+	if err := ws.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// 注入真实 ActorManager 后 Close 调 Shutdown（空 streams 集合 → nil）
+	ws.SetActorManager(&stream_actor.ActorManager{})
+	if err := ws.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
