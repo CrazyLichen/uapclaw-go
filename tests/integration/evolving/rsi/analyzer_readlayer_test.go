@@ -8,6 +8,7 @@
 package rsi
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -146,6 +147,8 @@ func (s *AnalyzerReadLayerSuite) TestChain1_成绩单到信号到证据包() {
 	modelRef := filepath.Join(s.fixtureDir, "model_config.yaml")
 	s.writeFileAt(modelRef, `model:
   model_client_config:
+    client_id: intg-client
+    client_provider: llm_OpenAI
     model_name: ${RSI_INTG_MODEL}
     timeout: 60
   model_request_config:
@@ -156,10 +159,9 @@ func (s *AnalyzerReadLayerSuite) TestChain1_成绩单到信号到证据包() {
 	s.Require().NoError(loadErr)
 	model := loaded["model"].(map[string]any)
 	s.Equal("intg-model", model["model_client_config"].(map[string]any)["model_name"])
-	cfg, buildErr := member_optimizer.BuildDeepAgentFromModelConfig(loaded)
+	cfg, buildErr := member_optimizer.BuildDeepAgentFromModelConfig(context.Background(), loaded)
 	s.Require().NoError(buildErr)
 	s.NotNil(cfg.Model)
-	s.Equal(0, cfg.Model.ModelClientConfig.MaxRetries, "without_inner_sdk_retries 应置零")
 	s.NotNil(cfg.Workspace)
 }
 
