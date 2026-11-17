@@ -3,8 +3,8 @@ package externalcli
 import (
 	"testing"
 
-	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
 func strPtrT(s string) *string { return &s }

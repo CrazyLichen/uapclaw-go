@@ -831,14 +831,14 @@ func (b *cliRuntimeBase) transition(newPhase harnessprotocol.HarnessState) {
 	onState := append([]stateCallback(nil), b.onState...)
 	b.mu.Unlock()
 	for _, cb := range onState {
-	// Python 回调收到 session_id（base 恒 None）；Go 回调签名为 string，
-	// nil 以空串承载（同旧基线行为）。
-	sid := b.SessionID()
-	if sid != nil {
-		cb(old, newPhase, *sid)
-	} else {
-		cb(old, newPhase, "")
-	}
+		// Python 回调收到 session_id（base 恒 None）；Go 回调签名为 string，
+		// nil 以空串承载（同旧基线行为）。
+		sid := b.SessionID()
+		if sid != nil {
+			cb(old, newPhase, *sid)
+		} else {
+			cb(old, newPhase, "")
+		}
 	}
 }
 

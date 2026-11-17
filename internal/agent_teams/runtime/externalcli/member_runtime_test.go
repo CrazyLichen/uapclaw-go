@@ -239,7 +239,7 @@ func TestExternalHarnessMemberRuntime_绑定槽位(t *testing.T) {
 	r.BindTools(nil)
 	r.BindFallbackPromotion(func(_ context.Context) (bool, error) { return true, nil })
 	sinkCalled := 0
-	r.BindActivitySink(func(_ any) { sinkCalled++ }, "a1", "phase", "label", "corr")
+	r.BindActivitySink(func(_ *AgentActivityEvent) { sinkCalled++ }, "a1", "phase", "label", "corr")
 	var recorder *harnessproviders.HarnessTrajectoryRecorder
 	r.BindTrajectoryRecorder(recorder)
 	r.AddTeardownHook(func(_ context.Context) error { return nil })
