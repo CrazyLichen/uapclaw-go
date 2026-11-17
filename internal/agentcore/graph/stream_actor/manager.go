@@ -11,6 +11,7 @@ import (
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -156,10 +157,12 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 	return m, nil
 }
 
-// SubWorkflowStream 子图流队列；非子图报错（Python:60-64 build_error）。
+// SubWorkflowStream 子图流队列；非子图报错（Python:60-64 build_error，错误码对齐
+// StatusCode.GRAPH_STREAM_ACTOR_EXECUTION_ERROR，Go 复刻 Python 字面量 112030（上游与 GRAPH_STATE_COMMIT_ERROR 撞号笔误一并复刻））。
 func (m *ActorManager) SubWorkflowStream() (*stream.AsyncStreamQueue, error) {
 	if !m.subGraph {
-		return nil, fmt.Errorf("only sub graph has sub_workflow_stream")
+		return nil, exception.BuildError(exception.StatusGraphStreamActorExecutionError,
+			exception.WithParam("reason", "only sub graph has sub_workflow_stream"))
 	}
 	return m.subWorkflowStreamQ, nil
 }
@@ -175,6 +178,10 @@ func (m *ActorManager) ActiveProduceAbility(producerID string, ability component
 // MarkProducerDone 写回 finished_stream_nodes（Python:71-76，幂等 append）
 func (m *ActorManager) MarkProducerDone(producerID string) {
 	if m.workflowSession == nil {
+		// 审查变化 4：nil 守卫必须留痕，防止装配遗漏时静默不写状态
+		logger.Warn(logComponent).
+			Str("node_id", producerID).
+			Msg("workflow session is nil, skip marking producer done")
 		return
 	}
 	nodes := toStringSlice(m.workflowSession.GetWorkflowStateValue("finished_stream_nodes"))
@@ -271,7 +278,12 @@ func (m *ActorManager) Consume(ctx context.Context, consumerID string, ability c
 		return nil, fmt.Errorf("actor not found for consumer %s", consumerID)
 	}
 	consumeIter := actor.Generator(ability, schema, streamCallback)
-	if m.workflowSession != nil {
+	if m.workflowSession == nil {
+		// 审查变化 4：nil 守卫必须留痕，防止装配遗漏时静默跳过补发
+		logger.Warn(logComponent).
+			Str("consumer_id", consumerID).
+			Msg("workflow session is nil, skip resending end messages for finished producers")
+	} else {
 		finished := toStringSlice(m.workflowSession.GetWorkflowStateValue("finished_stream_nodes"))
 		for _, producerID := range m.consumerDict[consumerID] {
 			fin := false

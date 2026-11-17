@@ -66,6 +66,10 @@
 | D4 | `Transformer` 注解：Python `Callable[[ReadableStateLike], Any]` 与运行时用法（消息变换）不符，Go 按 `func(map[string]any) map[string]any` | 修正上游注解错误，行为对齐运行时 | 无 |
 | D5 | END 哨兵字符串 `"END_<producer_id>"` 前缀判定一比一复刻（真实内容恰以 END_ 开头会误判，Python 同病） | 结构忠实保留 | 上游改类型化协议时跟随 |
 | D6 | WorkflowSpec/NodeSpec 前置件裁剪：仅含 ActorManager 消费字段 + NodeSpec 最小集 | 前置件范围控制 | 8.15 实施时完整同步（IMPLEMENTATION_PLAN ⤴️ 已标） |
+| D7 | SubWorkflowStream 非子图错误码复刻 Python 字面量 112030（GRAPH_STREAM_ACTOR_EXECUTION_ERROR 与 GRAPH_STATE_COMMIT_ERROR 撞号——上游 codes.py:394/412 复制粘贴笔误一并复刻），经 exception.BuildError 结构化抛出 | 结构忠实保留上游撞号 | 上游修复撞号时跟随顺延 |
+| D8 | Produce/Consume 对「actor 不存在」加防御分支（Python 缺键 KeyError，构造期保证可达性不可触发；Go: Produce continue / Consume 返 error） | Go 侧防御性等价 | 上游改契约时跟随 |
+| D9 | MarkProducerDone/Consume 的 workflowSession==nil 守卫保留但必须记 Warn 日志（防装配遗漏静默不写状态，2026-11-19 审查拍板「4 要加日志」） | 防御性日志兜底 | 无 |
+| D10 | 子图队列按 Python emitter.py 独立类落地 `session/stream/async_queue.go`（计划原写复用 StreamQueue，实施更结构忠实，审查追认） | 计划偏差追认 | 无 |
 
 ## 7. 测试方案
 

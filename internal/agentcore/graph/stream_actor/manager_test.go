@@ -2,12 +2,14 @@ package stream_actor
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // fakeSession ActorSession 测试替身
@@ -199,8 +201,17 @@ func TestShouldSanitizeStreamSource_三分支(t *testing.T) {
 func TestSubWorkflowStream_非子图报错(t *testing.T) {
 	spec := testSpec()
 	am := buildTestManager(t, spec, NewStreamGraph(), nil)
-	if _, err := am.SubWorkflowStream(); err == nil {
+	_, err := am.SubWorkflowStream()
+	if err == nil {
 		t.Fatal("非子图应报错（对齐 Python build_error）")
+	}
+	// 错误码断言：对齐 Python StatusCode.GRAPH_STREAM_ACTOR_EXECUTION_ERROR（复刻 Python 字面量 112030）
+	var baseErr *exception.BaseError
+	if !errors.As(err, &baseErr) {
+		t.Fatalf("应为结构化 BaseError, got %T", err)
+	}
+	if baseErr.Code() != 112030 {
+		t.Fatalf("错误码应为 112030, got %d", baseErr.Code())
 	}
 	// 子图
 	subMgr, err := NewActorManager(context.Background(), spec, NewStreamGraph(), true,
