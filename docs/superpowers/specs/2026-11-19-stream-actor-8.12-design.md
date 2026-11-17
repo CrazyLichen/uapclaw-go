@@ -45,7 +45,7 @@
 ## 4. 并发模型（用户拍板：run 启动点挪至 consume 之后）
 
 - goroutine+chan 直译 asyncio；`send` 不阻塞（无界内存队列承载主 queue，见偏差 D2）。
-- **processor.run 的启动点从 send() 首帧挪到 consume() 注册完成之后**（偏差 D1，用户 2026-11-19 拍板）。收益：注册→启动串行化，processor_queues 无并发写，省 mutex；仅 run 与 shutdown 之间靠 ctx 取消 + WaitGroup 收割。
+- **processor.run 的启动点从 send() 首帧挪到 consume() 注册完成之后**（偏差 D1，用户 2026-11-19 拍板）。收益：注册→启动串行化，processor_queues 无并发写，省 mutex；仅 run 与 shutdown 之间靠 ctx 取消 + WaitGroup 收割。**⚠️ 已还原（8.11 前置，2026-11-17）**：Vertex 落地后 Python 完整契约（策略注册完成→close 外层 event→Send 启动全部 processor，base.py:98-100）可兑现，启动点回归 Send 侧（含未注册 ability 空转语义），Consume 内 D1 段删除；见 8.11 spec docs/superpowers/specs/2026-11-17-vertex-8.11-design.md §5。
 - generator 拉数/入队所有阻塞点均 select ctx.Done 与 timeout，保证外层可取消（用户明确要求）。
 - **丢帧语义不复刻原竞态**：Python 中 run 先于注册消费帧会静默丢弃（base.py:187-193 注册表为空不投递）；Go 侧因 run 启动于注册后，**注册前的帧滞留主 queue、启动 run 后先补投再跟进新帧**——行为严格优于 Python 且无竞态，作为偏差 D1 的一部分登记。
 - timeout：路径 chan 未声明源才限时（`_path_has_declared_source`），值来自 session env `STREAM_INPUT_GEN_TIMEOUT_KEY`（Python 与 Go 默认均 -1=不超时，config/base.py:157 vs constants.go:80，已核对无差异）。
@@ -60,7 +60,8 @@
 
 | 编号 | 内容 | 性质 | 回收条件 |
 |---|---|---|---|
-| D1 | processor.run 启动点从 send 首帧挪至 consume 注册后；未 consume 的 processor 不启动；注册前帧不丢（滞留补投） | 用户拍板的结构偏离（规则 9/12 例外） | 上游改此结构时跟随；若上游修丢帧语义则行为自然合流 |
+| D1 | ~~processor.run 启动点从 send 首帧挪至 consume 注册后~~ **已还原（8.11 前置，2026-11-17）**：启动点回归 Python send:98-100（Send 侧启动全部 processor），Consume 内启动段删除 | 原结构偏离已消除，回归规则 9/12 对齐 | 无（已对齐 Python） |
+| D-8.11a | **实施修正（8.11 期发现）**：Send 首帧 spawn 门卫条件移植缺取反——Python base.py:86 `not first_frame or not is_done()` 误写为 `!firstFrame \|\| IsDone()`，导致全新 Vertex（计数 0==0 → is_done=true）首帧永远被丢弃 | 已修正为 `!firstFrame \|\| !IsDone()`，回归用例锁定（首帧拉起/广播/补发三用例改用 done=true 桩） | 8.12 审查遗漏（fake 桩 done=false 恰好绕过该分支） | 无（已对齐 Python） |
 | D2 | asyncio 无界队列 → Go 带锁内存队列（slice+Cond 或等价） | 语言能力缺失（chan 无法无界） | 无 |
 | D3 | asyncio 单线程免锁 → Go 无锁依赖 D1 串行化，run/shutdown 并发由 ctx 取消兜底 | 伴生 D1 | 同 D1 |
 | D4 | `Transformer` 注解：Python `Callable[[ReadableStateLike], Any]` 与运行时用法（消息变换）不符，Go 按 `func(map[string]any) map[string]any` | 修正上游注解错误，行为对齐运行时 | 无 |

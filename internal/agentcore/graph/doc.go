@@ -5,7 +5,7 @@
 // Vertex.__call__ state 形参的类型标注；节点返回值在 pregel/task.py:152 被丢弃，
 // Annotated[list, operator.add] reducer 全仓无归并执行点，故 Go 侧仅复刻类型
 // 不实现归并（spec 偏差 D1）。与子包 pregel 的检查点 GraphState
-//（internal/agentcore/graph/pregel/state.go）同名不同义。
+// （internal/agentcore/graph/pregel/state.go）同名不同义。
 // AtomicNode（atomic_node.go）为节点级原子提交包装（Python atomic_node.py，
 // 8.10），消费方为 8.11 Vertex 与 8.19/8.20 条件组件；当前无即时消费者，
 // 属后续章节的地基件。
@@ -27,7 +27,12 @@
 //	├── executable.go          # Executable 泛型接口 + StreamChunk + BaseExecutable 基座（8.2）
 //	├── executable_graph.go    # ExecutableGraph 契约 + InputsKey/ConfigKey 信封常量（8.2）
 //	├── atomic_node.go         # AtomicNode 原子提交包装（8.10）
-//	└── graph_state.go        # GraphState 节点输出聚合 schema
+//	├── graph_state.go        # GraphState 节点输出聚合 schema
+//	└── vertex.go             # Vertex 图顶点执行器（8.11，双链批入/流入执行体）
 //
-// 对应 Python 代码：openjiuwen/core/graph/graph_state.py · atomic_node.py · executable.py · base.py
+// Vertex（vertex.go）为图顶点执行器（8.11，Python vertex.py）：双链模型——批入侧
+// （INVOKE/STREAM 同步链）+ 流入侧（COLLECT/TRANSFORM，StreamActor 首帧异步链），
+// 两半经当轮 streamDone channel 握手对齐；并发映射零锁，依赖引擎屏障定序不变式。
+//
+// 对应 Python 代码：openjiuwen/core/graph/graph_state.py · atomic_node.py · executable.py · base.py · vertex.py
 package graph

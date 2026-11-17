@@ -2,6 +2,7 @@ package stream_actor
 
 import (
 	"context"
+
 	"fmt"
 	"strings"
 	"sync"
@@ -221,8 +222,10 @@ func (a *StreamActor) Send(ctx context.Context, message map[string]any,
 			default:
 			}
 		}
-		// 非首帧或 vertex 已 done → 丢弃（base.py:86-90）
-		if !firstFrame || a.vertex.IsDone() {
+		// 非首帧，或（首帧但 vertex 未收口）→ 丢弃（Python base.py:86-90
+		// not first_frame or not is_done；首帧仅在 vertex 处于轮次间隙 IsDone=true
+		// 时才允许 spawn——8.12 原移植缺取反，8.11 实施时修正并回归锁定）
+		if !firstFrame || !a.vertex.IsDone() {
 			logger.Warn(logComponent).
 				Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
 				Str("node_id", a.nodeID).
@@ -258,6 +261,11 @@ func (a *StreamActor) Send(ctx context.Context, message map[string]any,
 			Str("event_type", "GRAPH_VERTEX_STREAM_ACTOR_START").
 			Str("node_id", a.nodeID).
 			Msgf("Stream actor task node [%s] started", a.nodeID)
+		// Python send:98-100：event 放行后启动【全部】processor.run（含未走 Consume
+		// 注册的 ability 空转处理队列）。8.11 前置还原：原偏差 D1 的 Consume 挂载点删除。
+		for _, p := range a.processors {
+			a.startProcessor(a.taskCtx, p)
+		}
 	}
 	// 广播全部 processor（base.py:101-103，不看 ability 匹配）
 	logger.Debug(logComponent).
@@ -282,7 +290,7 @@ func (a *StreamActor) Generator(ability components.ComponentAbility, schema map[
 	return p.Generator(schema, streamCallback)
 }
 
-// startProcessor consume 注册完成后启动 processor.run（偏差 D1 新挂载点，替代 Python send:98-100）
+// startProcessor 启动单个 processor.run 并登记级联取消句柄（Python send:98-100 循环体）
 func (a *StreamActor) startProcessor(parent context.Context, p *StreamProcessor) {
 	ctx, cancel := context.WithCancel(parent)
 	a.mu.Lock()
@@ -354,6 +362,7 @@ func (a *StreamActor) taskDoneClosed() bool {
 
 // Receive 帧入主队列（对齐 Python receive）
 func (p *StreamProcessor) Receive(payload StreamPayload) {
+
 	p.queue.put(payload)
 }
 

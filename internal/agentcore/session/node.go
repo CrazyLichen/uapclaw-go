@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -272,4 +274,32 @@ func (f *NodeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
 // Python: agent.py:74 get_parent_session_id() -> str | None
 func (f *NodeSessionFacade) GetParentSessionID() string {
 	return ""
+}
+
+// WorkflowVertexSession 工作流顶点会话消费面（8.11 Vertex 依赖）：
+// internal.NodeSession 全量方法的窄化视图，由 *internal.NodeSession 实现。
+// 独立接口的原因：graph 包受 Go internal 包可见性约束无法导入 session/internal，
+// 构造经 NewWorkflowVertexSession 导出代理（构造调用位置仍在 Vertex.Init，
+// 对齐 Python vertex.py:88 NodeSession(session, ...)；偏差 D-2 登记 8.11 spec §4.2）。
+type WorkflowVertexSession interface {
+	// interfaces.InnerSession 会话全量面（Config/State/Tracer/StreamWriterManager/
+	// SessionID/Checkpointer/ActorManager/Close）——internal.NodeSession 已实现
+	interfaces.InnerSession
+	// tracer.WorkflowNodeSession 身份面（ExecutableID/ParentID/WorkflowID/
+	// NodeID/NodeType）
+	tracer.WorkflowNodeSession
+	// StreamWriterManager 流写入管理器（Python: stream_writer_manager()）
+	StreamWriterManager() *stream.StreamWriterManager
+	// ActorManager Actor 管理器（Python: actor_manager()）
+	ActorManager() *stream_actor.ActorManager
+	// NodeConfig 节点规格（Python: node_config()，any 承载 ⤵️ 8.15 回填）
+	NodeConfig() any
+	// SkipTrace 是否跳过追踪（Python: skip_trace）
+	SkipTrace() bool
+}
+
+// NewWorkflowVertexSession 创建工作流顶点会话（内部层 NodeSession 的导出构造代理）。
+// Python: session/internal/workflow.py NodeSession(session, node_id, node_type, skip_trace)。
+func NewWorkflowVertexSession(parent interfaces.InnerSession, nodeID, nodeType string, skipTrace bool) WorkflowVertexSession {
+	return internal.NewNodeSession(parent, nodeID, nodeType, skipTrace)
 }

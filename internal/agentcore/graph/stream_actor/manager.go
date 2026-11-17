@@ -308,10 +308,7 @@ func (m *ActorManager) Consume(ctx context.Context, consumerID string, ability c
 			}
 		}
 	}
-	// 偏差 D1：注册完成后启动该 ability 的 processor.run（替代 Python send:98-100 的启动点）
-	if p := actor.processors[ability]; p != nil {
-		actor.startProcessor(ctx, p)
-	}
+	// 8.11 前置还原：D1 启动段删除——processor.run 启动点回归 Python send:98-100（Send 侧）
 	return consumeIter, nil
 }
 

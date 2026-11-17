@@ -94,11 +94,20 @@ func TestConsume_补发EndMessage(t *testing.T) {
 	}
 	graph := NewStreamGraph()
 	wait := make(chan struct{})
-	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e) }, callWaitCh: wait}
-	graph.AddStreamConsumer(v, "C")
-	defer close(wait) // 测试结束时放行消费者执行体
 	st := &fakeSession{wf: map[string]any{"finished_stream_nodes": []any{"A"}}}
-	am := buildTestManager(t, spec, graph, st)
+	// 模拟真实 Vertex 契约：StreamCall 内先注册 gen 树（Consume），后 close event
+	//（D1 还原后 processor.run 启动于 event 放行，注册必须先行，否则帧被空转丢弃）
+	var out map[string]any
+	var consumeErr error
+	schema := map[string]any{"a": "${A.answer}", "b": "${B.out}"}
+	var am *ActorManager
+	v := &fakeConsumer{handle: true, done: true, callWaitCh: wait, eventFn: func(e chan struct{}) {
+		out, consumeErr = am.Consume(context.Background(), "C", components.ComponentAbilityCollect, schema, nil)
+		close(e)
+	}}
+	graph.AddStreamConsumer(v, "C") // 必须先注册：NewActorManager 构造期读取 vertex
+	defer close(wait)               // 测试结束时放行消费者执行体
+	am = buildTestManager(t, spec, graph, st)
 	// B 首帧拉起消费者（B 活跃；A 已完成但本轮无活跃记录）
 	if err := am.Produce(context.Background(), "B",
 		map[string]any{"out": "x"},
@@ -106,10 +115,8 @@ func TestConsume_补发EndMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := am.streams["C"].processors[components.ComponentAbilityCollect]
-	schema := map[string]any{"a": "${A.answer}", "b": "${B.out}"}
-	out, err := am.Consume(context.Background(), "C", components.ComponentAbilityCollect, schema, nil)
-	if err != nil || out == nil {
-		t.Fatalf("应返回 gen 树, err=%v", err)
+	if consumeErr != nil || out == nil {
+		t.Fatalf("应返回 gen 树, err=%v", consumeErr)
 	}
 	// 补发后 A 应登记活跃能力（Python consume:141 active_produce_ability）
 	if !am.activeProducerIDs["A"][components.ComponentAbilityStream] {
@@ -149,10 +156,13 @@ func TestProduce_路由(t *testing.T) {
 	if len(am.activeProducerIDs["A"]) == 0 {
 		t.Fatal("produce 应登记活跃能力")
 	}
-	// 消费者未 consume 前，帧滞留主队列（D1）
+	// D1 还原后（8.11 前置）：fake 立即 close event → Send 拉起任务并启动全部 processor.run；
+	// 帧广播后 run 已消费主队列（此时无注册订阅者，值按 Python 语义被丢弃、主队列清空）。
+	// 真实 Vertex 在 Consume 注册完成后才 close event，故订阅路径不丢帧。
+	time.Sleep(30 * time.Millisecond) // 等 run 循环拉取
 	p := am.streams["C"].processors[components.ComponentAbilityCollect]
-	if p.queue.len() != 1 {
-		t.Fatalf("帧应滞留主队列, got %d", p.queue.len())
+	if p.queue.len() != 0 {
+		t.Fatalf("run 已启动应消费主队列, got %d", p.queue.len())
 	}
 }
 
