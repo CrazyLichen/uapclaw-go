@@ -18,10 +18,14 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 
@@ -160,6 +164,11 @@ func (v *Vertex) applyNodeConfig(nc any) {
 	v.hasCall = len(v.componentAbility) > len(v.streamAbilities())
 }
 
+// ShouldHandleMessage 是否可处理流式消息（Python should_handle_message，vertex.py:805-807）
+func (v *Vertex) ShouldHandleMessage() bool {
+	return len(v.streamAbilities()) > 0
+}
+
 // streamAbilities 流入能力过滤（Python _stream_abilities，vertex.py:800-803：
 // 仅 COLLECT/TRANSFORM）
 func (v *Vertex) streamAbilities() []components.ComponentAbility {
@@ -256,7 +265,7 @@ func (v *Vertex) traceEnable() bool {
 
 // traceComponentInputs 组件输入埋点（Python __trace_component_inputs__，vertex.py:813-820）：
 // 置位 isCallStarted；混合节点流未完成时 send=false（合并发送协议 spec §4.3-3）
-func (v *Vertex) traceComponentInputs(ctx context.Context, inputs map[string]any) {
+func (v *Vertex) traceComponentInputs(ctx context.Context, inputs any) {
 	if !v.traceEnable() {
 		return
 	}
@@ -354,6 +363,476 @@ func (v *Vertex) traceComponentStreamInputSend(ctx context.Context) {
 	}
 	if !v.hasCall || v.isCallStarted.Load() {
 		tracer.TracerWorkflowUtils{}.TraceComponentStreamInput(ctx, v.nodeSession, map[string]any{}, true)
+	}
+}
+
+// ──────────────────────────── 批入前/后处理（Python _pre_invoke/_post_invoke，vertex.py:421-567） ────────────────────────────
+
+// preInvoke 批入取数（Python _pre_invoke，vertex.py:421-432 步骤一比一）
+func (v *Vertex) preInvoke(ctx context.Context) any {
+	// ① 组件开始埋点（vertex.py:422）
+	v.traceComponentBegin(ctx)
+	// ② 输入 schema（vertex.py:423）
+	var inputsSchema any
+	if v.nodeConfig != nil && v.nodeConfig.IOConfigs != nil {
+		inputsSchema = v.nodeConfig.IOConfigs.InputsSchema
+	}
+	// ③ 双轨取数（vertex.py:424-428）：dict → GetInputs 轨；非 dict → transformer 轨
+	var inputs any
+	if _, isDict := inputsSchema.(map[string]any); !isDict && inputsSchema != nil {
+		if tr, ok := inputsSchema.(state.Transformer); ok {
+			inputs = v.stateView().GetInputsByTransformer(tr)
+		}
+	} else if inputsSchema != nil {
+		inputs = v.stateView().GetInputs(state.SchemaKey(inputsSchema.(map[string]any)))
+	}
+	// ④ End 节点批量输入清洗（vertex.py:429-430）
+	if d, ok := inputs.(map[string]any); ok {
+		if sd, ok2 := inputsSchema.(map[string]any); ok2 && v.isEndNode {
+			d = v.sanitizeEndNodeInputs(ctx, d, sd)
+			inputs = d
+		}
+	}
+	// ⑤ 输入埋点（vertex.py:431）
+	v.traceComponentInputs(ctx, inputs)
+	return inputs
+}
+
+// sanitizeEndNodeInputs End 节点批量输入清洗与混合模式等待调整
+// （Python _sanitize_end_node_inputs，vertex.py:434-465 步骤一比一）
+func (v *Vertex) sanitizeEndNodeInputs(ctx context.Context, inputs map[string]any, inputsSchema map[string]any) map[string]any {
+	// ① template 鸭子探测（vertex.py:447-449，Python getattr(_template) → Go 接口断言）
+	tpl := v.executableTemplate()
+	if tpl == nil {
+		return inputs
+	}
+	// ② 未执行分支清洗（vertex.py:450）
+	inputs = v.sanitizeUnexecutedBranchInputs(ctx, inputs, inputsSchema)
+	// ③ 非混合模式直接返回（vertex.py:451-452）
+	if !(v.hasCall && v.hasStreamCall) {
+		return inputs
+	}
+	// ④ 流式输入 schema（vertex.py:453-457）
+	var streamSchema map[string]any
+	if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+		streamSchema, _ = v.nodeConfig.StreamIOConfigs.InputsSchema.(map[string]any)
+	}
+	if len(streamSchema) == 0 {
+		return inputs
+	}
+	// ⑤ 流侧源组件全部未执行 → 数据源计数清零，模板跳过等待（vertex.py:460-464）
+	streamSrcIDs := collectRefSourceIDs(streamSchema)
+	allUnexecuted := len(streamSrcIDs) > 0
+	for sid := range streamSrcIDs {
+		if v.isComponentExecuted(sid) {
+			allUnexecuted = false
+			break
+		}
+	}
+	if allUnexecuted {
+		tpl.SetDataSourceCount(0)
+	}
+	return inputs
+}
+
+// templateLike 模板鸭子探测契约（Python getattr(exe, '_template') 的接口化）
+type templateLike interface {
+	// SetDataSourceCount 设置模板数据源计数（Python template.set_data_source_count）
+	SetDataSourceCount(int)
+}
+
+// executableTemplate 取可执行体模板（nil 表示无模板，清洗短路）
+func (v *Vertex) executableTemplate() templateLike {
+	prov, ok := v.executable.(interface{ Template() templateLike })
+	if !ok {
+		return nil
+	}
+	return prov.Template()
+}
+
+// sanitizeUnexecutedBranchInputs 未执行分支输入清洗入口
+// （Python _sanitize_unexecuted_branch_inputs，vertex.py:467-480）
+func (v *Vertex) sanitizeUnexecutedBranchInputs(ctx context.Context, inputs map[string]any, inputsSchema map[string]any) map[string]any {
+	v.sanitizeNode(ctx, inputs, inputsSchema)
+	return inputs
+}
+
+// sanitizeNode 递归清洗 dict/list 嵌套结构（Python _sanitize_node，vertex.py:482-501）
+func (v *Vertex) sanitizeNode(ctx context.Context, inputs, inputsSchema any) {
+	switch in := inputs.(type) {
+	case map[string]any:
+		schema, ok := inputsSchema.(map[string]any)
+		if !ok {
+			return
+		}
+		for key, value := range in {
+			schemaValue := schema[key]
+			switch schemaValue.(type) {
+			case map[string]any, []any:
+				if _, isContainer := value.(map[string]any); isContainer {
+					v.sanitizeNode(ctx, value, schemaValue)
+					continue
+				}
+				if _, isContainer := value.([]any); isContainer {
+					v.sanitizeNode(ctx, value, schemaValue)
+					continue
+				}
+			}
+			v.sanitizeLeaf(ctx, in, key, value, schemaValue)
+		}
+	case []any:
+		schema, ok := inputsSchema.([]any)
+		if !ok {
+			return
+		}
+		n := len(in)
+		if len(schema) < n {
+			n = len(schema)
+		}
+		for i := 0; i < n; i++ {
+			value := in[i]
+			switch value.(type) {
+			case map[string]any, []any:
+				v.sanitizeNode(ctx, value, schema[i])
+				continue
+			}
+			v.sanitizeLeaf(ctx, in, i, value, schema[i])
+		}
+	}
+}
+
+// sanitizeLeaf 叶子清洗：来自未执行分支的值替换为空串
+// （Python _sanitize_leaf，vertex.py:503-519 步骤一比一）
+func (v *Vertex) sanitizeLeaf(ctx context.Context, container any, key, value, refPath any) {
+	// ① 非 None 且非流类型 → 原样（vertex.py:505-506）
+	if value != nil && !isStreamReader(value) {
+		return
+	}
+	// ② 引用路径判定（vertex.py:507-508）
+	refStr, ok := refPath.(string)
+	if !ok || !utils.IsRefPath(refStr) {
+		return
+	}
+	// ③ origin 键（vertex.py:509-511）
+	originKey := utils.ExtractOriginKey(refStr)
+	if originKey == "" {
+		return
+	}
+	compID := strings.SplitN(originKey, ".", 2)[0]
+	// ④ 组件已执行 → 原样（vertex.py:512-514）
+	if v.isComponentExecuted(compID) {
+		return
+	}
+	// ⑤ 流类型且流源仍 pending → 原样（vertex.py:515-516）
+	if isStreamReader(value) && v.isStreamSourceStillPending(compID) {
+		return
+	}
+	// ⑥ 关闭僵尸流 + 置空串（vertex.py:517-519；Go StreamReader 无消费即终止，
+	// 放弃 Next 等价 aclose）
+	setLeaf(container, key, "")
+}
+
+// isStreamReader 值是否为流式叶子（Python isinstance(value, AsyncGenerator)）
+func isStreamReader(value any) bool {
+	_, ok := value.(*stream_actor.StreamReader)
+	return ok
+}
+
+// setLeaf 容器叶子赋值（dict/list 双轨）
+func setLeaf(container any, key, val any) {
+	switch c := container.(type) {
+	case map[string]any:
+		c[key.(string)] = val
+	case []any:
+		c[key.(int)] = val
+	}
+}
+
+// isStreamSourceStillPending 流源是否仍在等待（Python _is_stream_source_still_pending，
+// vertex.py:521-528）
+func (v *Vertex) isStreamSourceStillPending(compID string) bool {
+	am := v.nodeSession.ActorManager()
+	if am == nil {
+		return false
+	}
+	// Python getattr 探测 should_sanitize_stream_source —— Go 静态方法必在，仅 nil 守卫
+	return !am.ShouldSanitizeStreamSource(v.nodeID, compID)
+}
+
+// isComponentExecuted 组件本轮是否已执行（Python _is_component_executed，vertex.py:530-533）
+func (v *Vertex) isComponentExecuted(compID string) bool {
+	return containsString(workflowStateList(v.stateView(), "executed_nodes"), compID)
+}
+
+// markNodeExecuted 标记节点开始执行（Python _mark_node_executed，vertex.py:535-540）
+func (v *Vertex) markNodeExecuted() {
+	executed := workflowStateList(v.stateView(), "executed_nodes")
+	if containsString(executed, v.nodeID) {
+		return
+	}
+	executed = append(executed, v.nodeID)
+	v.stateView().UpdateAndCommitWorkflowState(map[string]any{"executed_nodes": executed})
+}
+
+// stateView 节点状态全量消费面（SessionState → WorkflowState 断言；NodeSession
+// 构造期已保证节点状态视图实现 WorkflowState，失败时返回 nil 由调用方 panic 传播）
+func (v *Vertex) stateView() state.WorkflowState {
+	ws, _ := v.nodeSession.State().(state.WorkflowState)
+	return ws
+}
+
+// workflowStateList 读工作流状态列表键（Python get_workflow_state(key) or []）
+func workflowStateList(st state.WorkflowState, key string) []string {
+	raw := st.GetWorkflowState(state.StringKey(key))
+	if raw == nil {
+		return nil
+	}
+	if l, ok := raw.([]string); ok {
+		return l
+	}
+	if l, ok := raw.([]any); ok {
+		out := make([]string, 0, len(l))
+		for _, item := range l {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func containsString(list []string, target string) bool {
+	for _, s := range list {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
+// postInvoke 输出后处理（Python _post_invoke，vertex.py:542-567 步骤一比一）
+func (v *Vertex) postInvoke(ctx context.Context, results map[string]any) (map[string]any, error) {
+	// ① 输出 schema（vertex.py:543）
+	var outputsSchema any
+	if v.nodeConfig != nil && v.nodeConfig.IOConfigs != nil {
+		outputsSchema = v.nodeConfig.IOConfigs.OutputsSchema
+	}
+	// ② 双轨（vertex.py:544-551）：dict → get_by_schema；非 dict → transformer
+	if _, isDict := outputsSchema.(map[string]any); !isDict && outputsSchema != nil {
+		// Python 单一 Callable → Go 双断言（utils.MessageTransformer / state.Transformer）
+		if tr, ok := outputsSchema.(sutils.MessageTransformer); ok {
+			results = tr(results)
+		} else if tr, ok := outputsSchema.(state.Transformer); ok {
+			r := tr(nil)
+			results, _ = r.(map[string]any)
+		}
+	} else if outputsSchema != nil && len(results) > 0 {
+		results = state.GetBySchemaMap(outputsSchema.(map[string]any), results)
+		if !v.isEndNode && len(results) > 0 {
+			// 非 End 节点过滤 None 值（vertex.py:548-549）
+			filtered := make(map[string]any, len(results))
+			for k, val := range results {
+				if val != nil {
+					filtered[k] = val
+				}
+			}
+			results = filtered
+		}
+	}
+	// ③ End 混合模式 output 列表合并（vertex.py:552-561）
+	isEndMixMode := v.isEndNode && v.hasCall && v.hasStreamCall
+	if len(results) > 0 && isEndMixMode {
+		if outputs, ok := results["output"]; ok && outputs != nil {
+			if _, isList := outputs.([]any); !isList {
+				results["output"] = []any{outputs}
+			}
+		}
+		oldOutputs := v.stateView().GetOutputs()
+		if oldMap, ok := oldOutputs.(map[string]any); ok {
+			// 存储形如 {nodeID: {…}}（UpdateByID 嵌套写入）时解包一层，
+			// 对齐 Python get_outputs(node_id) 直接返回节点输出 dict 的语义
+			if inner, ok2 := oldMap[v.nodeID].(map[string]any); ok2 {
+				oldMap = inner
+			}
+			oldList, ok1 := oldMap["output"].([]any)
+			newList, ok2 := results["output"].([]any)
+			if ok1 && ok2 {
+				results["output"] = append(newList, oldList...)
+			}
+		}
+	}
+	// ④ 写回输出（vertex.py:563-564）
+	if results != nil {
+		v.stateView().SetOutputs(results)
+	}
+	// ⑤ 输出埋点 + 交互清理（vertex.py:565-566）
+	v.traceComponentOutputs(ctx, results)
+	v.clearInteractive()
+	return results, nil
+}
+
+// clearInteractive 清理交互输入（Python _clear_interactive，vertex.py:656-658）
+func (v *Vertex) clearInteractive() {
+	if v.nodeSession.State().Get(state.StringKey(constants.InteractiveInputKey)) != nil {
+		_ = v.nodeSession.State().Update(map[string]any{constants.InteractiveInputKey: nil})
+	}
+}
+
+// ──────────────────────────── 流式半边（Python _pre_stream/_post_stream/_process_chunk，vertex.py:569-654） ────────────────────────────
+
+// preStream 流入取数（Python _pre_stream，vertex.py:569-588 步骤一比一）：
+// 返回 schema 形状的输入树（$ref 叶子为 *StreamReader）
+func (v *Vertex) preStream(ctx context.Context, ability components.ComponentAbility) (map[string]any, error) {
+	// ① 组件开始埋点（vertex.py:571）
+	v.traceComponentBegin(ctx)
+	// ② 流式输入 schema（vertex.py:573-575）：非 dict → nil
+	var inputsSchema map[string]any
+	if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+		inputsSchema, _ = v.nodeConfig.StreamIOConfigs.InputsSchema.(map[string]any)
+	}
+	// ③ 逐帧回调（vertex.py:578-584）：debug 日志 + trace stream input（send=false）
+	enableTrace := v.nodeSession.Tracer() != nil && !v.executable.SkipTrace()
+	streamCallable := func(chunk map[string]any) {
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Str("ability", ability.Name()).
+			Any("chunk", chunk).
+			Msgf("Consume chunk of %s[%s]", v.nodeID, ability.Name())
+		if enableTrace {
+			tracer.TracerWorkflowUtils{}.TraceComponentStreamInput(ctx, v.nodeSession, chunk, false)
+		}
+	}
+	// ④ 消费注册（vertex.py:586）
+	am := v.nodeSession.ActorManager()
+	return am.Consume(ctx, v.nodeID, ability, inputsSchema, streamCallable)
+}
+
+// postStream 流入产出收尾（Python _post_stream，vertex.py:590-628 步骤一比一）
+func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[map[string]any], ability components.ComponentAbility) {
+	// ① 形态标记（vertex.py:591-593）
+	isSubGraph := v.nodeSession.ParentID() != ""
+	am := v.nodeSession.ActorManager()
+	// ② 输出 schema 双轨（vertex.py:594-598）
+	var outputSchema map[string]any
+	var outputTransformer sutils.MessageTransformer
+	if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+		os, _ := v.nodeConfig.StreamIOConfigs.OutputsSchema.(map[string]any)
+		outputSchema = os
+	}
+	if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+		if ot, ok := v.nodeConfig.StreamIOConfigs.OutputsSchema.(sutils.MessageTransformer); ok {
+			outputTransformer = ot
+		}
+	}
+	// ③ 逐 chunk 转换与下发（vertex.py:600-612）
+	endStreamIndex := 0
+	for chunk := range resultsIter {
+		if chunk.Err != nil {
+			// 流中错误为末元素（8.2 StreamChunk 契约）：转 panic 由 runExecutable
+			// 的 recover 兜底？Python 侧迭代器抛异常直接沿 await 传播——Go 以 error
+			// 上抛通道等价物处理：此处返回不再可行（无 error 返回值，对齐 Python
+			// _post_stream 无 error 返回），以 panic 传播等价异常语义
+			panic(chunk.Err)
+		}
+		var message any
+		if outputTransformer == nil {
+			if len(outputSchema) > 0 {
+				message = am.StreamTransform().GetByDefaultTransformer(chunk.Val, outputSchema)
+			} else {
+				message = chunk.Val
+			}
+		} else {
+			message = am.StreamTransform().GetByDefinedTransformer(chunk.Val, outputTransformer)
+		}
+		_ = outputSchema
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Str("ability", ability.Name()).
+			Int("index", endStreamIndex).
+			Any("chunk", message).
+			Bool("is_end_node", v.isEndNode).
+			Bool("is_sub_graph", isSubGraph).
+			Msgf("Produce chunk[%d] from %s[%s]", endStreamIndex, v.nodeID, ability.Name())
+		v.processChunk(ctx, message, v.isEndNode, endStreamIndex, isSubGraph, ability)
+		endStreamIndex++
+	}
+	// ④ 收口分流（vertex.py:613-616）：End+子图 → 子图流发 END_FRAME；否则 end_message
+	if v.isEndNode && isSubGraph {
+		if q, err := am.SubWorkflowStream(); err == nil {
+			q.Close(ctx, 0) // Go close 信号等价 END_FRAME（session/stream D-哨兵决策）
+		}
+	} else {
+		_ = am.EndMessage(ctx, v.nodeID, ability)
+	}
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+		Str("graph_id", v.nodeSession.WorkflowID()).
+		Str("node_id", v.nodeID).
+		Str("ability", ability.Name()).
+		Bool("is_end_node", v.isEndNode).
+		Bool("is_sub_graph", isSubGraph).
+		Msgf("Produce 'END_FRAME' chunk of [%s] ability [%s]", v.nodeID, ability.Name())
+	// ⑤ 交互清理（vertex.py:622）
+	v.clearInteractive()
+	// ⑥ get_stream_output 鸭子探测（vertex.py:625-628，hasattr → 接口断言）
+	if gso, ok := v.executable.(interface{ GetStreamOutput() map[string]any }); ok {
+		if result := gso.GetStreamOutput(); result != nil {
+			v.stateView().SetOutputs(result)
+		}
+	}
+}
+
+// processChunk 单帧下发三分支（Python _process_chunk，vertex.py:630-654 步骤一比一）
+func (v *Vertex) processChunk(ctx context.Context, message any, isEndNode bool, endStreamIndex int, isSubGraph bool, ability components.ComponentAbility) {
+	switch {
+	case isEndNode && !isSubGraph:
+		// End 非子图（vertex.py:635-646）：StreamSchemas 直用；否则 end-node-stream 信封
+		var messageStreamData stream.Schema
+		switch msg := message.(type) {
+		case stream.OutputSchema:
+			messageStreamData = msg
+		case *stream.OutputSchema:
+			messageStreamData = msg
+		case stream.CustomSchema:
+			messageStreamData = msg
+		case *stream.CustomSchema:
+			messageStreamData = msg
+		case stream.TraceSchema:
+			messageStreamData = msg
+		case *stream.TraceSchema:
+			messageStreamData = msg
+		default:
+			// Python dict {type, index, payload} 信封 → Go OutputSchema 同构承载
+			messageStreamData = &stream.OutputSchema{
+				Type:    constants.EndNodeStream,
+				Index:   endStreamIndex,
+				Payload: message,
+			}
+		}
+		v.traceComponentStreamOutput(ctx, messageStreamData)
+		if writer := v.nodeSession.StreamWriterManager().GetOutputWriter(); writer != nil {
+			_ = writer.Write(ctx, messageStreamData)
+		}
+	case isEndNode && isSubGraph:
+		// End 子图（vertex.py:647-650）：OutputSchema 取 payload 直发子图流
+		messageStreamData := message
+		if os, ok := message.(*stream.OutputSchema); ok {
+			messageStreamData = os.Payload
+		}
+		v.traceComponentStreamOutput(ctx, messageStreamData)
+		if q, err := v.nodeSession.ActorManager().SubWorkflowStream(); err == nil {
+			_ = q.Send(ctx, messageStreamData, 0, 1)
+		}
+	default:
+		// 普通节点（vertex.py:651-654）：首帧标记 + produce
+		firstFrame := endStreamIndex == 0
+		v.traceComponentStreamOutput(ctx, message)
+		_ = v.nodeSession.ActorManager().Produce(ctx, v.nodeID, message, ability, firstFrame)
 	}
 }
 
