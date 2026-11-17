@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"strings"
 	"os"
@@ -29,7 +30,7 @@ func wireFullBridge(t *testing.T, script []string) *[]string {
 		}
 		return raw, nil
 	}
-	agentsBridge.InvokeAgent = func(_ context.Context, agent any, message, sessionID string) (map[string]any, error) {
+	agentsBridge.InvokeAgent = func(_ context.Context, agent *agentface.Agent, message, sessionID string) (map[string]any, error) {
 		*seen = append(*seen, message)
 		text := script[0]
 		if len(script) > 1 {
@@ -39,11 +40,11 @@ func wireFullBridge(t *testing.T, script []string) *[]string {
 	}
 	agentsBridge.ParseJSONObject = testParseJSONObject
 	agentsBridge.ParseYamlOrJSONObject = testParseJSONObject
-	agentsBridge.CreateActionPlanningAgent = func(context.Context, PlannerAgentParams) (any, error) {
-		return "fake-planner", nil
+	agentsBridge.CreateActionPlanningAgent = func(context.Context, PlannerAgentParams) (*agentface.Agent, error) {
+		return &agentface.Agent{}, nil
 	}
-	agentsBridge.CreateActionExecutionAgent = func(context.Context, ExecutorAgentParams) (any, error) {
-		return "fake-executor", nil
+	agentsBridge.CreateActionExecutionAgent = func(context.Context, ExecutorAgentParams) (*agentface.Agent, error) {
+		return &agentface.Agent{}, nil
 	}
 	t.Cleanup(func() { agentsBridge = saved })
 	return seen
@@ -54,7 +55,7 @@ func TestPlannerAgentCreatePlan_重试消息链(t *testing.T) {
 	// 此处验证 CreatePlan 的消息构造与解析链路。
 	script := []string{`{"actions": [], "action_waves": []}`}
 	seen := wireFullBridge(t, script)
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake", modelConfigRef: ""}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}, modelConfigRef: ""}
 	params := PlannerCreateParams{
 		Targets:                    plannerTarget(),
 		RoleAttributionReport:      &RoleAttributionReport{},
@@ -70,7 +71,7 @@ func TestPlannerAgentCreatePlan_重试消息链(t *testing.T) {
 func TestPlannerAgentCreatePlan_耗尽拒绝(t *testing.T) {
 	script := []string{"bad1", "bad2", "bad3"}
 	wireFullBridge(t, script)
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake", modelConfigRef: ""}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}, modelConfigRef: ""}
 	_, err := agent.CreatePlan(context.Background(), PlannerCreateParams{
 		Targets:                    plannerTarget(),
 		RoleAttributionReport:      &RoleAttributionReport{},
@@ -83,7 +84,7 @@ func TestPlannerAgentCreatePlan_耗尽拒绝(t *testing.T) {
 
 func TestPlannerAgentCreatePlan_会话ID同胞命名(t *testing.T) {
 	wireFullBridge(t, []string{`{"actions": [], "action_waves": []}`})
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake", modelConfigRef: ""}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}, modelConfigRef: ""}
 	_, err := agent.CreatePlan(context.Background(), PlannerCreateParams{
 		Targets:                    plannerTarget(),
 		RoleAttributionReport:      &RoleAttributionReport{},

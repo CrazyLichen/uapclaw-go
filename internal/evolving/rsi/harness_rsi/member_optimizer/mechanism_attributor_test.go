@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"fmt"
 	"strings"
@@ -240,8 +241,8 @@ func withMechSeam(t *testing.T, fake *fakeMechAgent) {
 		}
 	}
 	agentsBridge.ParseYamlOrJSONObject = testParseYamlOrJSON
-	agentsBridge.CreateMechanismAttributionAgent = func(context.Context, AttributionAgentParams) (any, error) {
-		return "fake-deep-agent", nil
+	agentsBridge.CreateMechanismAttributionAgent = func(context.Context, AttributionAgentParams) (*agentface.Agent, error) {
+		return &agentface.Agent{}, nil
 	}
 	t.Cleanup(func() { agentsBridge = saved })
 }

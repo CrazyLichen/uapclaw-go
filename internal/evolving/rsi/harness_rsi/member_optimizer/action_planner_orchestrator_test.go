@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TestMemberActionPlanner_Plan_编排全链(t *testing.T) {
 	agentsBridge.ParseYamlOrJSONObject = testParseJSONObject
 	t.Cleanup(func() { agentsBridge = saved })
 	// prebuilt agent 注入点绕过工厂
-	agent.prebuiltAgent = "fake"
+	agent.prebuiltAgent = &agentface.Agent{}
 	// holder 断言跳过（fake 非 holder）
 	planner := NewMemberActionPlanner(agent, nil, nil)
 	plan, err := planner.Plan(context.Background(), PlanParams{
@@ -118,7 +119,7 @@ func TestMemberActionPlanner_Plan_结构校验失败进重试(t *testing.T) {
 	}
 	agentsBridge.ParseYamlOrJSONObject = testParseJSONObject
 	t.Cleanup(func() { agentsBridge = saved })
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake"}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}}
 	planner := NewMemberActionPlanner(agent, nil, nil)
 	plan, err := planner.Plan(context.Background(), PlanParams{
 		Targets:                    plannerTarget(),
@@ -137,7 +138,7 @@ func TestMemberActionPlanner_Plan_耗尽拒绝(t *testing.T) {
 	}
 	agentsBridge.ParseYamlOrJSONObject = testParseJSONObject
 	t.Cleanup(func() { agentsBridge = saved })
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake"}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}}
 	planner := NewMemberActionPlanner(agent, nil, nil)
 	_, err := planner.Plan(context.Background(), PlanParams{
 		Targets: plannerTarget(), RoleAttributionReport: &RoleAttributionReport{},
@@ -156,7 +157,7 @@ func TestMemberActionPlanner_Plan_单动作模式禁search(t *testing.T) {
 	}
 	agentsBridge.ParseYamlOrJSONObject = testParseJSONObject
 	t.Cleanup(func() { agentsBridge = saved })
-	agent := &MemberActionPlannerAgent{prebuiltAgent: "fake"}
+	agent := &MemberActionPlannerAgent{prebuiltAgent: &agentface.Agent{}}
 	// 捕获 adapter 收到的定义（fake agent 路径下走不到 adapter；改由 ValidatePlan 断言
 	// search_disabled metadata）
 	planner := NewMemberActionPlanner(agent, nil, nil)

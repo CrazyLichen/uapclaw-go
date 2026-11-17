@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/tamnd/gopapy/v2/parser2"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/action_groups"
 	"gopkg.in/yaml.v3"
@@ -1052,7 +1053,7 @@ type MemberActionExecutorAgent struct {
 	agentSkillsDirs           []string
 	outputRepair              harnessrsi.OutputRepairConfig
 	runtimeIterationHardLimit int
-	prebuiltAgent             any
+	prebuiltAgent             *agentface.Agent
 }
 
 // NewMemberActionExecutorAgent 构造（Python __init__）。
@@ -1113,10 +1114,9 @@ func (a *MemberActionExecutorAgent) ExecuteAction(ctx context.Context, actionWor
 	if err != nil {
 		return map[string]any{"status": "failed", "declared_write_paths": declaredPaths, "error": err.Error()}, nil
 	}
-	handle, _ := agent.(interface{ Release() error })
 	defer func() {
-		if handle != nil {
-			_ = handle.Release()
+		if agent.Release != nil {
+			_ = agent.Release()
 		}
 	}()
 	// Python: for attempt in range(tracker.max_attempts):
@@ -1436,7 +1436,7 @@ func parseJSONObjectLocal(text string) (map[string]any, error) {
 
 // bridgeInvokeAgent 经 agents 桥的 invokeFn 通道调用执行 agent。
 // Python: agent.invoke(inputs={"query": message}, session=Session(session_id, card))。
-func bridgeInvokeAgent(ctx context.Context, agent any, message, sessionID string) (map[string]any, error) {
+func bridgeInvokeAgent(ctx context.Context, agent *agentface.Agent, message, sessionID string) (map[string]any, error) {
 	return agentsBridge.InvokeAgent(ctx, agent, message, sessionID)
 }
 

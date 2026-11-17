@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 )
 
@@ -44,7 +45,7 @@ type MechanismAttributorAgent struct {
 	// agentSkillsDirs agent 技能目录
 	agentSkillsDirs []string
 	// prebuiltAgent 预构建 DeepAgent（测试注入点，等价 Python monkeypatch）
-	prebuiltAgent any
+	prebuiltAgent *agentface.Agent
 }
 
 // MechanismAttributor 编排全部已定责角色的病根归因。
@@ -212,7 +213,7 @@ func NewMechanismAttributorAgent(modelConfigRef string, attributionRetryLimit in
 // NewMechanismAttributorAgentWithAgent 以预构建 agent 构造（测试注入点）。
 func NewMechanismAttributorAgentWithAgent(modelConfigRef string, attributionRetryLimit int) *MechanismAttributorAgent {
 	agent := NewMechanismAttributorAgent(modelConfigRef, attributionRetryLimit, "", nil, nil)
-	agent.prebuiltAgent = "fake-deep-agent"
+	agent.prebuiltAgent = &agentface.Agent{}
 	return agent
 }
 
@@ -554,7 +555,7 @@ func WriteMechanismAttributionReport(report *MechanismAttributionReport, outputD
 
 // createDeepAgent 创建病根归因 DeepAgent。
 // Python: mechanism_attributor.py 无独立方法（agent 内联 create_mechanism_attribution_agent）。
-func (a *MechanismAttributorAgent) createDeepAgent(ctx context.Context) (any, error) {
+func (a *MechanismAttributorAgent) createDeepAgent(ctx context.Context) (*agentface.Agent, error) {
 	// 测试注入点：等价 Python monkeypatch
 	if a.prebuiltAgent != nil {
 		return a.prebuiltAgent, nil

@@ -12,11 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +25,7 @@ func init() {
 		InvokeStructured:      InvokeMemberOptimizerAgentStructured,
 		ParseJSONObject:       ParseJSONObjectResponse,
 		ParseYamlOrJSONObject: ParseYamlOrJsonObjectResponse,
-		CreateActionExecutionAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (any, error) {
+		CreateActionExecutionAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (*agentface.Agent, error) {
 			agent, err := CreateActionExecutionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
 				Workspace:       params.Workspace,
@@ -35,17 +34,17 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			handle, err := OptimizerAgentResources(agent)
+			release, err := optimizerReleaseFn(agent)
 			if err != nil {
 				return nil, err
 			}
-			return &executionAgentHandle{agent: agent, handle: handle}, nil
+			return &agentface.Agent{Deep: agent, Release: release}, nil
 		},
 		InvokeAgent:          invokeFn,
 		ExtractText:          ExtractAgentText,
 		PackageWriteAllowed:  func(path string, declaredPaths []string) bool { return PackageWriteAllowed(path, declaredPaths, false) },
 		HostReadRoots:        SupportedHostReadRoots,
-		CreateVerificationRepairAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (any, error) {
+		CreateVerificationRepairAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (*agentface.Agent, error) {
 			agent, err := CreateVerificationRepairAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
 				Workspace:       params.Workspace,
@@ -54,13 +53,13 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			handle, err := OptimizerAgentResources(agent)
+			release, err := optimizerReleaseFn(agent)
 			if err != nil {
 				return nil, err
 			}
-			return &executionAgentHandle{agent: agent, handle: handle}, nil
+			return &agentface.Agent{Deep: agent, Release: release}, nil
 		},
-		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
+		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) {
 			agent, err := CreateRoleAttributionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
 				Workspace:       params.Workspace,
@@ -69,9 +68,13 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return agent, nil
+			release, relErr := optimizerReleaseFn(agent)
+			if relErr != nil {
+				return nil, relErr
+			}
+			return &agentface.Agent{Deep: agent, Release: release}, nil
 		},
-		CreateMechanismAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
+		CreateMechanismAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) {
 			agent, err := CreateMechanismAttributionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
 				Workspace:       params.Workspace,
@@ -80,7 +83,11 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return agent, nil
+			release, relErr := optimizerReleaseFn(agent)
+			if relErr != nil {
+				return nil, relErr
+			}
+			return &agentface.Agent{Deep: agent, Release: release}, nil
 		},
 	})
 }
@@ -94,14 +101,7 @@ type StructuredOutputExhaustedError = memberoptimizer.StructuredOutputExhaustedE
 // StructuredInvokeParams 结构化调用参数。Go 类型别名指回父包定义（spec §4 D-c1-1）。
 type StructuredInvokeParams = memberoptimizer.StructuredInvokeParams
 
-// executionAgentHandle agent + 资源句柄（实现 Release 以对齐 optimizer_agent_resources）。
-type executionAgentHandle struct {
-	agent  *harness.DeepAgent
-	handle *OptimizerResourceHandle
-}
 
-// Release 释放本次调用的原生资源。
-func (h *executionAgentHandle) Release() error { return h.handle.Release() }
 
 
 // fencedMappingRE 代码围栏内映射提取。Python: output.py:16-18 _FENCED_MAPPING_RE。
@@ -120,11 +120,11 @@ var (
 )
 
 // invokeFn DeepAgent 调用注入点（Python 测试对 agent.invoke 的 monkeypatch 等价）。
-var invokeFn = func(ctx context.Context, agent any, message, sessionID string) (map[string]any, error) {
-	baseAgent, ok := agent.(agentinterfaces.BaseAgent)
-	if !ok {
-		return nil, fmt.Errorf("member optimizer agent does not implement BaseAgent: %T", agent)
+var invokeFn = func(ctx context.Context, agent *agentface.Agent, message, sessionID string) (map[string]any, error) {
+	if agent == nil || agent.Deep == nil {
+		return nil, fmt.Errorf("member optimizer agent is nil")
 	}
+	baseAgent := agent.Deep
 	return runner.RunAgent(ctx,
 		runner.ByAgent(baseAgent),
 		map[string]any{"query": message},
@@ -477,16 +477,16 @@ func stopReasonOr(stopReason, fallback string) string {
 }
 
 // SnapshotInvokeFn 取当前 DeepAgent 调用注入点快照（测试注入用）。
-func SnapshotInvokeFn() func(context.Context, any, string, string) (map[string]any, error) {
+func SnapshotInvokeFn() func(context.Context, *agentface.Agent, string, string) (map[string]any, error) {
 	return invokeFn
 }
 
 // RestoreInvokeFnForTest 还原调用注入点快照。
-func RestoreInvokeFnForTest(saved func(context.Context, any, string, string) (map[string]any, error)) {
+func RestoreInvokeFnForTest(saved func(context.Context, *agentface.Agent, string, string) (map[string]any, error)) {
 	invokeFn = saved
 }
 
 // SetInvokeFnForTest 设置调用注入点（测试注入；生产禁用）。
-func SetInvokeFnForTest(fn func(context.Context, any, string, string) (map[string]any, error)) {
+func SetInvokeFnForTest(fn func(context.Context, *agentface.Agent, string, string) (map[string]any, error)) {
 	invokeFn = fn
 }

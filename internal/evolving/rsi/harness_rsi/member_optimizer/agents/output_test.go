@@ -1,6 +1,7 @@
 package agents
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"errors"
 	"strings"
@@ -100,12 +101,13 @@ func TestExtractAgentText(t *testing.T) {
 // TestInvokeStructured_重试耗尽抛Exhausted fake agent 恒返坏输出。
 func TestInvokeStructured_重试耗尽抛Exhausted(t *testing.T) {
 	invoked := 0
-	agent := &fakeAgent{invoke: func() map[string]any {
+	fakeAgentSlot = &fakeAgent{invoke: func() map[string]any {
 		invoked++
 		return map[string]any{"text": "not a mapping"}
 	}}
+	defer func() { fakeAgentSlot = nil }()
 	_, err := InvokeMemberOptimizerAgentStructured(t.Context(), StructuredInvokeParams{
-		Agent:       agent,
+		Agent:       &agentface.Agent{},
 		AgentName:   "test_agent",
 		UserMessage: "u",
 		SessionID:   "s1",
@@ -124,11 +126,12 @@ func TestInvokeStructured_重试耗尽抛Exhausted(t *testing.T) {
 
 // TestInvokeStructured_校验通过即返回 好输出一次通过。
 func TestInvokeStructured_校验通过即返回(t *testing.T) {
-	agent := &fakeAgent{invoke: func() map[string]any {
+	fakeAgentSlot = &fakeAgent{invoke: func() map[string]any {
 		return map[string]any{"text": "role: solver\nconfidence: 0.9"}
 	}}
+	defer func() { fakeAgentSlot = nil }()
 	raw, err := InvokeMemberOptimizerAgentStructured(t.Context(), StructuredInvokeParams{
-		Agent:       agent,
+		Agent:       &agentface.Agent{},
 		AgentName:   "test_agent",
 		UserMessage: "u",
 		SessionID:   "s1",
@@ -150,11 +153,12 @@ func TestInvokeStructured_校验通过即返回(t *testing.T) {
 // TestInvokeStructured_校验失败走默认重试消息 默认重试文案含原消息与前次输出。
 func TestInvokeStructured_校验失败走默认重试消息(t *testing.T) {
 	messages := []string{}
-	agent := &fakeAgent{invoke: func() map[string]any {
+	fakeAgentSlot = &fakeAgent{invoke: func() map[string]any {
 		return map[string]any{"text": "role: wrong"}
 	}}
+	defer func() { fakeAgentSlot = nil }()
 	_, err := InvokeMemberOptimizerAgentStructured(t.Context(), StructuredInvokeParams{
-		Agent:       agent,
+		Agent:       &agentface.Agent{},
 		AgentName:   "test_agent",
 		UserMessage: "ORIGINAL",
 		SessionID:   "s1",
@@ -207,17 +211,18 @@ type parseError struct{}
 func (*parseError) Error() string { return "not a mapping" }
 
 // fakeAgent 测试用假 agent（记录调用次数，返回固定响应）。
+// agentface.Agent.Deep 是具体类型无法承载假体——fake 经全局指针槽注入，
+// 测试内 invokeFn 按 Deep 指针匹配（invokeFn monkeypatch 等价语义不变）。
 type fakeAgent struct {
 	invoke func() map[string]any
 }
 
-func (*fakeAgent) Name() string { return "fake" }
+var fakeAgentSlot *fakeAgent
 
 func init() {
-	// 注入 fake 调用点，绕开真实 runner 基础设施
-	invokeFn = func(_ context.Context, agent any, _, _ string) (map[string]any, error) {
-		if f, ok := agent.(*fakeAgent); ok {
-			return f.invoke(), nil
+	invokeFn = func(_ context.Context, agent *agentface.Agent, _, _ string) (map[string]any, error) {
+		if fakeAgentSlot != nil && agent.Deep == nil {
+			return fakeAgentSlot.invoke(), nil
 		}
 		return nil, errors.New("unexpected agent type")
 	}

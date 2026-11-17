@@ -405,7 +405,7 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 		Targets: selectionReport.Targets,
 		RoleAttributionReport: roleAttrReport,
 		MechanismAttributionReport: mechanismAttrReport,
-		ActionDefinitions:          toHarnessrsiActionDefs(actionDefinitions),
+		ActionDefinitions:          actionDefinitions,
 		ModelConfigRef:             m.config.ModelConfigRef,
 		StageRetryLimit:            m.config.StageRetryLimit,
 		AgentWorkspace:             planningWorkspace,
@@ -683,17 +683,6 @@ func targetIssueIDs(report *MemberSelectionReport) []string {
 	}
 	sort.Strings(ids)
 	return ids
-}
-
-// toHarnessrsiActionDefs 策略定义 → 引擎定义（同构转换）。
-func toHarnessrsiActionDefs(defs []actiongroups.PolicyActionDefinition) []harnessrsi.ActionDefinition {
-	out := make([]harnessrsi.ActionDefinition, 0, len(defs))
-	for _, def := range defs {
-		out = append(out, harnessrsi.ActionDefinition{
-			Name: def.Name, Group: def.Group, Operation: def.Operation,
-		})
-	}
-	return out
 }
 
 // allocateOptimizationDir 分配下一个 member_optimization_XXX 目录。

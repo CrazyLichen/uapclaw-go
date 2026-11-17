@@ -4,6 +4,7 @@
 package agents
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"errors"
 	"os"
@@ -123,7 +124,7 @@ func TestFormatActionDefinitions(t *testing.T) {
 
 // TestOptimizerAgentResources_句柄释放 无操作 ID 时 Release 安全。
 func TestOptimizerAgentResources_句柄释放(t *testing.T) {
-	handle, err := OptimizerAgentResources(struct{}{})
+	handle, err := OptimizerAgentResources(&harness.DeepAgent{})
 	require.NoError(t, err)
 	require.NoError(t, handle.Release()) // operationID 为空：no-op
 }
@@ -430,17 +431,12 @@ func TestWritePyJSONIndent_缩进输出(t *testing.T) {
 }
 
 func TestOptimizerAgentResources_深配置(t *testing.T) {
-	// 深配置无 ID → 空句柄
-	handle, err := OptimizerAgentResources(fakeDeepConfigAgent{})
+	// 深配置无 SysOperation → 空句柄（用真 DeepAgent 零值）
+	handle, err := OptimizerAgentResources(&harness.DeepAgent{})
 	require.NoError(t, err)
 	require.NotNil(t, handle)
 	require.NoError(t, handle.Release())
 }
-
-// fakeDeepConfigAgent 深配置假实现（无 GetID）。
-type fakeDeepConfigAgent struct{}
-
-func (fakeDeepConfigAgent) DeepConfig() any { return struct{}{} }
 
 func TestUnwrapModel_分支(t *testing.T) {
 	// nil → nil
@@ -479,7 +475,7 @@ func TestInvokeStructured_瞬时失败重试与恢复(t *testing.T) {
 	t.Cleanup(func() { invokeFn = saved })
 	calls := 0
 	transient := errors.New("transient")
-	invokeFn = func(context.Context, any, string, string) (map[string]any, error) {
+	invokeFn = func(context.Context, *agentface.Agent, string, string) (map[string]any, error) {
 		calls++
 		if calls == 1 {
 			return nil, transient
@@ -495,7 +491,7 @@ func TestInvokeStructured_瞬时失败重试与恢复(t *testing.T) {
 	savedBridge := memberoptimizer.SnapshotAgentsBridge()
 	defer memberoptimizer.RestoreAgentsBridge(savedBridge)
 	params := memberoptimizer.StructuredInvokeParams{
-		Agent:         "fake",
+		Agent:         &agentface.Agent{},
 		AgentName:     "T",
 		UserMessage:   "u",
 		SessionID:     "s",
@@ -520,7 +516,7 @@ func TestBridgeAdapters_注册闭包(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, raw["a"]) // YAML int(1) / JSON float64(1)——解析器各自语义
 	// 两个 agent 工厂适配器（模型配置缺失即报错——验证转调链路）
-	for _, fn := range []func(context.Context, memberoptimizer.AttributionAgentParams) (any, error){
+	for _, fn := range []func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error){
 		bridge.CreateRoleAttributionAgent, bridge.CreateMechanismAttributionAgent,
 	} {
 		_, err := fn(context.Background(), memberoptimizer.AttributionAgentParams{ModelConfigRef: ""})

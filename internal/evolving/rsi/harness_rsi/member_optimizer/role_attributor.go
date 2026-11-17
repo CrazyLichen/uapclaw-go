@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 )
 
@@ -42,7 +43,7 @@ type RoleAttributorAgent struct {
 	agentSkillsDirs []string
 	// prebuiltAgent 预构建 DeepAgent（Python 无此字段；测试注入点，
 	// 等价 Python 测试对 _create_deep_agent 的 monkeypatch）
-	prebuiltAgent any
+	prebuiltAgent *agentface.Agent
 }
 
 // RoleAttributor 编排全部 TeamIssue 的角色定责。
@@ -302,7 +303,7 @@ func NewRoleAttributorAgent(modelConfigRef string, attributionRetryLimit int, wo
 
 // NewRoleAttributorAgentWithAgent 以预构建 agent 构造（测试注入点，
 // 等价 Python 测试对 _create_deep_agent 的 monkeypatch）。
-func NewRoleAttributorAgentWithAgent(modelConfigRef string, attributionRetryLimit int, agent any) *RoleAttributorAgent {
+func NewRoleAttributorAgentWithAgent(modelConfigRef string, attributionRetryLimit int, agent *agentface.Agent) *RoleAttributorAgent {
 	agent2 := NewRoleAttributorAgent(modelConfigRef, attributionRetryLimit, "", nil, nil)
 	agent2.prebuiltAgent = agent
 	return agent2
@@ -758,7 +759,7 @@ func WriteRoleAttributionReport(report *RoleAttributionReport, outputDir string)
 
 // createDeepAgent 创建定责 DeepAgent。
 // Python: role_attributor.py:159-165 _create_deep_agent。
-func (a *RoleAttributorAgent) createDeepAgent(ctx context.Context) (any, error) {
+func (a *RoleAttributorAgent) createDeepAgent(ctx context.Context) (*agentface.Agent, error) {
 	// 测试注入点：等价 Python 测试 monkeypatch _create_deep_agent
 	if a.prebuiltAgent != nil {
 		return a.prebuiltAgent, nil
