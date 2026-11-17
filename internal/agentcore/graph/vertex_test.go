@@ -1027,3 +1027,15 @@ func TestStreamCall_取消分类(t *testing.T) {
 		t.Fatal("streamDone 应已送达")
 	}
 }
+
+func TestRegisterStreamConsumer(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	g := stream_actor.NewStreamGraph()
+	v.RegisterStreamConsumer(g)
+	if g.GetNode("n1") == nil {
+		t.Fatal("应按 nodeID 注册（对齐 graph.py add_stream_consumer）")
+	}
+	g2 := stream_actor.NewStreamGraph()
+	v.RegisterStreamConsumer(g2)
+	v.RegisterStreamConsumer(g2) // 幂等
+}
