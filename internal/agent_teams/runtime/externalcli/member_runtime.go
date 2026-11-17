@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -1144,6 +1145,68 @@ func prependContext(content harness_protocol.HarnessInput, prefix string) harnes
 		return content
 	}
 	return out
+}
+
+// failureReason 构造结构化失败原因；字符串实参经 or-default 空串、
+// http_status 仅接受整数（int/整值 float64，其余 nil）。
+// Python 关键字参数 → Go 定位参数（顺序 message/code/sdk_error_type/http_status）。
+// Python: _failure_reason (member_runtime.py:1070)
+func failureReason(message string, code, sdkErrorType, httpStatus any) *schema.ExternalRuntimeFailureReason {
+	return schema.NewExternalRuntimeFailureReason(
+		message,
+		anyToStr(sdkErrorType),
+		anyToStr(code),
+		httpStatusPtr(httpStatus),
+	)
+}
+
+// classifyFailure 把协议 TurnError 翻译进团队可靠性词汇。
+// 类别仅在 USER_ACTION_REQUIRED 闭集内保留，否则 sdk_error；
+// provider_data 提供 sdk_error_type/http_status。
+// Python: _classify (member_runtime.py:1081)
+func classifyFailure(err *harness_protocol.TurnError) (schema.ExternalRuntimeFailureCategory, *schema.ExternalRuntimeFailureReason) {
+	if err == nil {
+		return schema.ExternalRuntimeFailureCategorySDKError,
+			failureReason("external harness turn failed without a structured error", nil, nil, nil)
+	}
+	category := schema.ExternalRuntimeFailureCategorySDKError
+	if err.Category != nil {
+		if _, ok := schema.UserActionRequiredMap[schema.ExternalRuntimeFailureCategory(*err.Category)]; ok {
+			category = schema.ExternalRuntimeFailureCategory(*err.Category)
+		}
+	}
+	providerData, _ := harness_protocol.JsonValueToBuiltin(err.ProviderData).(map[string]any)
+	data := providerData
+	if data == nil {
+		data = map[string]any{}
+	}
+	return category, failureReason(err.Message, err.Code, data["sdk_error_type"], data["http_status"])
+}
+
+// anyToStr 把 any 收敛成字符串；缺席/非串返回空串（Python str(x or "")）。
+func anyToStr(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// httpStatusPtr 把 http_status 收敛成 *int；int/整值 float64 收 int，其余 nil
+// （Python `isinstance(http_status, int)`；JSON 往返会把整数解成 float64）。
+func httpStatusPtr(value any) *int {
+	switch v := value.(type) {
+	case int:
+		return &v
+	case int64:
+		i := int(v)
+		return &i
+	case float64:
+		if v == float64(int(v)) {
+			i := int(v)
+			return &i
+		}
+	}
+	return nil
 }
 
 // ──────────────────────────── 暂缺清单（⤵️15.16 成员事件循环） ────────────────────────────
