@@ -22,11 +22,13 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -560,16 +562,20 @@ func (r *ExternalHarnessMemberRuntime) ensureMemberSession(teamSession any) (ses
 	if teamSession == nil || agentID == "" {
 		return nil, nil
 	}
+	// Python hasattr(team_session, "create_agent_session")（member_runtime.py:947）
+	// 的 Go 等价：接口形状与真实 AgentTeamSession.CreateAgentSession
+	// （agent_team.go:371，card/agentID/shareStreamWriter/memberName 四参返回
+	// *session.Session）逐参对齐——此前误断言两参签名，鸭子路径对真实团队
+	// 会话恒不命中而静默返回 nil（Task 10 集成测试实施中发现的缺陷）。
 	factory, ok := teamSession.(interface {
-		CreateAgentSession(agentID string, shareStreamWriter bool) (sessioninterfaces.SessionFacade, error)
+		CreateAgentSession(card *agentschema.AgentCard, agentID string, shareStreamWriter bool, memberName string) *session.Session
 	})
 	if !ok {
 		return nil, nil
 	}
-	memberSession, err := factory.CreateAgentSession(agentID, false)
-	if err != nil {
-		return nil, err
-	}
+	// Python create_agent_session(agent_id=..., share_stream_writer=False)：
+	// card nil 由会话侧回落默认卡；member_name 不传（Python 无此实参）。
+	var memberSession sessioninterfaces.SessionFacade = factory.CreateAgentSession(nil, agentID, false, "")
 	if preRunner, ok := memberSession.(memberSessionPreRunner); ok {
 		if err := preRunner.PreRun(context.Background()); err != nil {
 			return nil, err

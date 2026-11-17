@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -257,6 +258,41 @@ func TestExternalHarnessMemberRuntime_成员会话助手(t *testing.T) {
 	// finalize：无会话 no-op
 	if err := r.finalizeMemberSession(context.Background()); err != nil {
 		t.Fatalf("finalize 无会话应 no-op: %v", err)
+	}
+}
+
+// 鸭子路径对真实团队会话命中：ensureMemberSession 的接口形状必须与
+// AgentTeamSession.CreateAgentSession（agent_team.go:371）逐参对齐，否则该
+// 路径对真实会话恒静默返回 nil（Task 10 集成测试实施中发现的缺陷）。
+// Python: member_runtime.py:947 hasattr + create_agent_session。
+func TestExternalHarnessMemberRuntime_成员会话鸭子路径命中真实会话(t *testing.T) {
+	r, _ := NewExternalHarnessMemberRuntime(&fakeHarnessProtocol{},
+		func(_ any) (*harness_protocol.HarnessContext, error) {
+			return &harness_protocol.HarnessContext{}, nil
+		}, ExternalHarnessMemberRuntimeOptions{})
+	r.memberAgentID = "pay_beta"
+	teamSession := session.CreateAgentTeamSession("duck-sess", nil, "pay")
+	sess, err := r.ensureMemberSession(teamSession)
+	if err != nil {
+		t.Fatalf("ensureMemberSession: %v", err)
+	}
+	if sess == nil {
+		t.Fatal("真实团队会话必须命中鸭子路径并创建成员子会话")
+	}
+	if r.memberSession == nil {
+		t.Fatal("成员会话槽位必须落位")
+	}
+	// 幂等：二次调用返回同一会话
+	sess2, err := r.ensureMemberSession(teamSession)
+	if err != nil || sess2 != sess {
+		t.Fatalf("ensureMemberSession 必须幂等: %v %v", sess2, err)
+	}
+	// 收尾清槽位
+	if err := r.finalizeMemberSession(context.Background()); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	if r.memberSession != nil {
+		t.Fatal("finalize 后成员会话槽位必须清空")
 	}
 }
 
