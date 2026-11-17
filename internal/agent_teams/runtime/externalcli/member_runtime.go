@@ -1184,9 +1184,15 @@ func classifyFailure(err *harness_protocol.TurnError) (schema.ExternalRuntimeFai
 }
 
 // anyToStr 把 any 收敛成字符串；缺席/非串返回空串（Python str(x or "")）。
+// *string（如 TurnError.Code）解引用后取值。
 func anyToStr(value any) string {
-	if s, ok := value.(string); ok {
-		return s
+	switch v := value.(type) {
+	case string:
+		return v
+	case *string:
+		if v != nil {
+			return *v
+		}
 	}
 	return ""
 }
