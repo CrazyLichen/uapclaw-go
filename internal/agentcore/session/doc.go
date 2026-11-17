@@ -87,12 +87,15 @@
 //	│   └── decorator/                       # 追踪装饰器子包
 //	│       ├── doc.go                       # decorator 子包文档
 //	│       └── decorator.go                # TracedModelClient（追踪模型客户端）/TracedTool（追踪工具）/TracedWorkflow（追踪工作流） 装饰器 + Decorate*WithTrace + TracerSession（追踪会话） 接口
-//	└── utils/              # 通用工具函数（嵌套路径/引用路径/字典/容器操作）
+//	├── utils/              # 通用工具函数（嵌套路径/引用路径/字典/容器操作）
 //	    ├── doc.go                           # utils 包文档
 //	    ├── path.go                          # SplitNestedPath（拆分嵌套路径）/GetValueByNestedPath（按嵌套路径取值）/RootToPath（根到路径）/RootToIndex（根到索引）
 //	    ├── ref.go                           # IsRefPath（是否引用路径）/ExtractOriginKey（提取原始键）
 //	    ├── dict.go                          # UpdateDict（更新字典）/UpdateByKey（按键更新）/DeleteByKey（按键删除）/ExpandNestedStructure（展开嵌套结构）
 //	    ├── container.go                     # SafeExtendContainer（安全扩展容器）/DeepCopyMap（深拷贝Map）/Slice（切片工具）/Value（取值）/Updates（更新集合）/ConvertUpdatesFromJSON（从JSON转换更新）
+//	└── vcs/                # 会话上下文状态 JSON-native 编解码（Python: core/session/vcs/）
+//	    ├── doc.go                           # vcs 包文档
+//	    └── codec.go                         # EncodeMessage/DecodeMessage/EncodeContextState/DecodeContextState（Python: codec.py 68 行）
 //	    ├── string.go                        # ContainsChar（包含字符）/ContainsSubstring（包含子串）/SplitString（拆分字符串）/ParseListIndexes（解析列表索引）
 //	    └── constants.go                     # RegexMaxLength（正则最大长度）/NestedPathSplit（嵌套路径分隔）/NestedPathListSplit（嵌套路径列表分隔）
 //
