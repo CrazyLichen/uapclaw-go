@@ -997,7 +997,7 @@ func coordinatorStateFromMap(m map[string]any) taskloop.LoopCoordinatorState {
 		}
 	}
 	return taskloop.LoopCoordinatorState{
-		Iteration: intFromAny(m["iteration"]), TokenUsage: intFromAny(m["token_usage"]),
+		Iteration: intField(m, "iteration"), TokenUsage: intField(m, "token_usage"),
 		StopReason: stopReason, EvaluatorStates: evStates,
 	}
 }
@@ -1014,18 +1014,17 @@ func coordinatorStateToMap(s taskloop.LoopCoordinatorState) map[string]any {
 	}
 }
 
-// intFromAny 把 JSON 数字（float64/int）统一取成 int。
-func intFromAny(v any) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case float64:
-		return int(n)
-	case json.Number:
-		i, _ := n.Int64()
-		return int(i)
+// intField 从快照字典取整数；失败按 Python
+// `int(data.get(name, 0) or 0)` 的宽松语义降级为 0。
+// 复用 harness_protocol 的 AsInteger（serialization.py:_integer 的严格校验），
+// 不再自己维护一套 int/float64/json.Number 分支。
+// Python: loop_coordinator.py:180-187 load_state 的 iteration/token_usage
+func intField(m map[string]any, name string) int {
+	n, err := hp.AsInteger(m[name], name)
+	if err != nil {
+		return 0
 	}
-	return 0
+	return n
 }
 
 // saveOutputState 输出态 6 字段经 ToJsonSafe 序列化。
@@ -1070,8 +1069,13 @@ func restoreOutputState(state *turnState, values map[string]any) error {
 }
 
 // toStringSlice 从 JSON-native 列表还原字符串切片。
+// Python: :419-420 `list(values.get("answer_parts", []))`——缺值/错型按空列表降级。
+// 复用 harness_protocol.AsList（serialization.py:_list），不再自己断言 []any。
 func toStringSlice(v any) []string {
-	list, _ := v.([]any)
+	list, err := hp.AsList(v, "output_state")
+	if err != nil {
+		return []string{}
+	}
 	out := make([]string, 0, len(list))
 	for _, item := range list {
 		if s, ok := item.(string); ok {
@@ -1082,22 +1086,27 @@ func toStringSlice(v any) []string {
 }
 
 // stringPtrFromAny 从 JSON-native 值还原 *string（nil 保持 nil）。
+// Python: :421-422 `values.get("final_output")`——非字符串按 nil 降级。
+// 复用 harness_protocol.AsOptionalString。
 func stringPtrFromAny(v any) *string {
-	s, ok := v.(string)
-	if !ok {
+	s, err := hp.AsOptionalString(v, "output_state")
+	if err != nil {
 		return nil
 	}
-	return &s
+	return s
 }
 
 // contentBlocksFromAny 从 JSON-native 列表重建 []ContentBlock。
 // Python: :423 [ContentBlock(**item) for item in values.get("tool_blocks", [])]
 func contentBlocksFromAny(v any) ([]hp.ContentBlock, error) {
-	list, _ := v.([]any)
+	list, err := hp.AsList(v, "tool_blocks")
+	if err != nil {
+		return []hp.ContentBlock{}, nil // 宽松降级：缺值按空列表
+	}
 	out := make([]hp.ContentBlock, 0, len(list))
 	for _, item := range list {
-		m, ok := item.(map[string]any)
-		if !ok {
+		m, err := hp.AsMapping(item, "tool_blocks[]")
+		if err != nil {
 			return nil, fmt.Errorf("invalid native checkpoint")
 		}
 		raw, err := json.Marshal(m)
@@ -1118,20 +1127,32 @@ func contentBlocksFromAny(v any) ([]hp.ContentBlock, error) {
 //
 //	content=tuple(ContentBlock(**block) ...), data=...) ...]
 func turnMessagesFromAny(v any) ([]hp.TurnMessage, error) {
-	list, _ := v.([]any)
+	list, err := hp.AsList(v, "tool_messages")
+	if err != nil {
+		return []hp.TurnMessage{}, nil // 宽松降级：缺值按空列表
+	}
 	out := make([]hp.TurnMessage, 0, len(list))
 	for _, item := range list {
-		m, ok := item.(map[string]any)
-		if !ok {
+		m, err := hp.AsMapping(item, "tool_messages[]")
+		if err != nil {
 			return nil, fmt.Errorf("invalid native checkpoint")
 		}
 		blocks, err := contentBlocksFromAny(m["content"])
 		if err != nil {
 			return nil, err
 		}
-		msgID, _ := m["message_id"].(string)
-		role, _ := m["role"].(string)
-		data, _ := m["data"].(map[string]any)
+		msgID, err := hp.AsRequiredString(m["message_id"], "message_id")
+		if err != nil {
+			return nil, err
+		}
+		role, err := hp.AsRequiredString(m["role"], "role")
+		if err != nil {
+			return nil, err
+		}
+		data, err := hp.AsMapping(m["data"], "data")
+		if err != nil {
+			data = map[string]any{} // Python: item["data"] 缺省按空字典
+		}
 		msg, err := hp.NewTurnMessage(msgID, hp.MessageRole(role), blocks, data)
 		if err != nil {
 			return nil, err
