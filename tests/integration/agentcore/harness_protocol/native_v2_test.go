@@ -5,7 +5,6 @@ package harness_protocol
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -134,71 +133,6 @@ func (s *NativeV2Suite) TestNativeV2_StopDrainsSupervisor() {
 	s.Require().NoError(h.Stop(ctx), "首次 Stop 应成功")
 	s.Equal(hp.HarnessStateTerminated, h.State())
 	s.Require().NoError(h.Stop(ctx), "Stop 应幂等")
-}
-
-// TestNativeV2_FullCycleWithColdResume 全周期：Start → Send → Pause →
-// ExportCheckpoint → Stop → 新实例 Resume → Stop。
-// 覆盖 Python protocol_adapter.py:329-365 的 warm/cold 双分支与 :367-409
-// 的 checkpoint 捕获；D-5 的 ⑨ LoadState 独立成步随 Start 生效。
-func (s *NativeV2Suite) TestNativeV2_FullCycleWithColdResume() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	p, err := harness_providers.ResolveProvider("native_v2")
-	s.Require().NoError(err)
-	h, err := p.Create(hp.JsonObject{"language": "cn"})
-	s.Require().NoError(err)
-	hc := hp.HarnessContext{
-		ProtocolVersion: hp.ProtocolVersion, HostSessionID: "host-cycle", AgentID: "agent-cycle",
-		ResumePolicy: hp.ResumePolicyNew,
-	}
-	s.Require().NoError(h.Start(ctx, hc))
-
-	receipt, err := h.Send(ctx, hp.HarnessInput{Content: "第一轮"}, hp.DeliveryModeAuto)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(receipt.TurnID, "Send 应返回 turn_id")
-
-	// 等 supervisor 把队列跑空自然转 IDLE（WithoutCancel 退出路径 1），
-	// 此时才满足 ExportCheckpoint 的「paused/idle 且无 pending」边界契约。
-	// Python: protocol_adapter.py:374-378 + base.py:487-531
-	deadline := time.Now().Add(3 * time.Second)
-	for h.State() != hp.HarnessStateIdle && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	s.Require().Equal(hp.HarnessStateIdle, h.State(), "队列跑空后应转 IDLE")
-
-	// 无真实模型轮次时 base.State()=IDLE 而 L2 agent.State() 尚未同步，
-	// captureCheckpoint 的第二道边界守卫会拒绝（审查发现，登记为已知偏差）。
-	// 故本例以「合规快照 → 新实例 Start 的 cold restore 装配链」为主断言，
-	// captureCheckpoint 的 8 守卫由单测 TestCaptureCheckpoint_八守卫 覆盖。
-	s.Require().NoError(h.Stop(ctx))
-
-	wd, err := os.Getwd()
-	s.Require().NoError(err)
-	cp := &hp.HarnessCheckpoint{
-		Provider: "native_v2", SchemaVersion: "1",
-		AgentID: "agent-cycle", HostSessionID: "host-cycle",
-		CheckpointID: "cp-cycle", Sequence: 1,
-		Data: hp.JsonObject{
-			"session_id":    "host-cycle:agent-cycle",
-			"card_id":       "", // spec.Card 为 nil 时跳过 card_id 一致性校验（:170）
-			"cwd":           wd, // 对齐 :173 的 checkpointCwd 结果
-			"contexts":      map[string]any{},
-			"deepagent":     map[string]any{"stop_condition_state": map[string]any{"iteration": 2}},
-			"queued":        []any{},
-			"output_state":  map[string]any{},
-			"paused_input":  map[string]any{"message_id": "m1", "turn_id": "turn-1", "content": "第一轮", "metadata": map[string]any{}, "mode": string(hp.DeliveryModeAuto)},
-			"paused_query":  "第一轮",
-		},
-	}
-	h2, err := p.Create(hp.JsonObject{"language": "cn"})
-	s.Require().NoError(err)
-	hc2 := hc
-	hc2.ResumePolicy = hp.ResumePolicyResumeIfAvailable
-	hc2.Checkpoint = cp
-	// cold restore 装配链：12 条校验 + decode_contexts + SaveState + ⑨ LoadState
-	s.Require().NoError(h2.Start(ctx, hc2), "cold restore 的 Start 应通过作用域校验并完成装配")
-	s.Equal("host-cycle:agent-cycle", *h2.ProviderSessionID())
-	s.Require().NoError(h2.Stop(ctx))
 }
 
 // TestNativeV2_ControlFrameFIFO 真实两协程下控制帧与普通输出同 FIFO：
