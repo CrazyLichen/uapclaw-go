@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	cutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -174,6 +175,73 @@ func NewStreamProcessor(nodeID string, sourceGroups [][]string, timeout time.Dur
 // Receive 帧入主队列（对齐 Python receive）
 func (p *StreamProcessor) Receive(payload StreamPayload) {
 	p.queue.put(payload)
+}
+
+// Run 常驻分发循环（偏差 D1：由 consume 注册完成后启动，非 send 首帧）。
+// Python: base.py run(ability) 170-195 步骤一比一：
+// 取帧 → end 帧关流判定（记录 handle_map、按 source_path_map 关路径、全组满足关全队列）
+// → 非帧关非活跃组源 + 按 r_path 摘值投路径队列 → 全组满足退出。
+func (p *StreamProcessor) Run(ctx context.Context, ability components.ComponentAbility) {
+	handleMap := map[string]bool{}
+	sourcePathMap := map[string]map[string]bool{}
+	for {
+		raw, ok := p.queue.get(ctx)
+		if !ok {
+			return // ctx 取消/shutdown（Python 由 task cancel 承担）
+		}
+		payload := raw.(StreamPayload)
+		sourceKey := uniqueSourceKey(payload)
+		if isEndMessage(payload.Message) {
+			sourceID := getProducerID(payload.Message)
+			handleMap[sourceKey] = true
+			p.closeQueuesForSourceKey(sourceID, sourceKey, sourcePathMap)
+			if p.allSourceGroupsFinished(handleMap) {
+				p.closeAllQueues(sourceID)
+			}
+		} else {
+			p.closeInactiveGroupSources(sourceKey)
+			p.mu.Lock()
+			for path, queues := range p.processorQueues {
+				originPath := utils.ExtractOriginKey(path)
+				value := utils.GetValueByNestedPath(originPath, payload.Message)
+				if value != nil {
+					if sourcePathMap[sourceKey] == nil {
+						sourcePathMap[sourceKey] = map[string]bool{}
+					}
+					sourcePathMap[sourceKey][path] = true
+					for _, q := range queues {
+						q.put(value)
+					}
+				}
+			}
+			p.mu.Unlock()
+		}
+		if p.allSourceGroupsFinished(handleMap) {
+			return
+		}
+	}
+}
+
+// Generator 按 schema 叶子路径建 gen 树（Python:248-260 generator 一比一）。
+// $ref 叶子建 StreamReader 注册路径队列；非 $ref 叶子原样保留；rebuild_dict 还原形状。
+func (p *StreamProcessor) Generator(schema map[string]any,
+	streamCallback func(map[string]any)) map[string]any {
+	if len(schema) == 0 {
+		return map[string]any{}
+	}
+	leaves := cutils.ExtractLeafNodes(schema)
+	pairs := make([]cutils.LeafNode, 0, len(leaves))
+	for _, leaf := range leaves {
+		pathStr := cutils.FormatPath(leaf.Path)
+		refStr, ok := leaf.Value.(string)
+		if !ok || !strings.Contains(refStr, "$") {
+			pairs = append(pairs, leaf)
+			continue
+		}
+		pairs = append(pairs, cutils.LeafNode{Path: leaf.Path,
+			Value: p.createGenerator(pathStr, refStr, streamCallback)})
+	}
+	return cutils.RebuildDict(pairs)
 }
 
 // Next 拉取下一帧。返回 (值, true)；EndFrame/超时/ctx 取消返回 (nil, false)。
@@ -348,4 +416,105 @@ func secondsToDuration(sec float64) time.Duration {
 		return 0
 	}
 	return time.Duration(sec * float64(time.Second))
+}
+
+// allSourceGroupsFinished 组全到齐判定（Python:197-200，空组恒 false）
+func (p *StreamProcessor) allSourceGroupsFinished(handled map[string]bool) bool {
+	if len(p.sourceGroups) == 0 {
+		return false
+	}
+	for _, group := range p.sourceGroups {
+		hit := false
+		for k := range group {
+			if handled[k] {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			return false
+		}
+	}
+	return true
+}
+
+// closeInactiveGroupSources 组内其他源提前关流（Python:202-207）
+func (p *StreamProcessor) closeInactiveGroupSources(activeKey string) {
+	for _, group := range p.sourceGroups {
+		if !group[activeKey] || len(group) <= 1 {
+			continue
+		}
+		for k := range group {
+			if k != activeKey {
+				p.closeQueuesForSource(producerIDFromSourceKey(k))
+			}
+		}
+	}
+}
+
+// closeQueuesForSource 按源 id 关其名下路径队列（Python:209-213，put EndFrame(source_id)）
+func (p *StreamProcessor) closeQueuesForSource(sourceID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for path, queues := range p.processorQueues {
+		if isValueFromSource(utils.ExtractOriginKey(path), sourceID) {
+			for _, q := range queues {
+				q.put(&utils.EndFrame{Source: sourceID})
+			}
+		}
+	}
+}
+
+// closeQueuesForSourceKey 按源键只关其处理过的路径（Python:215-222，用 source_path_map）
+func (p *StreamProcessor) closeQueuesForSourceKey(sourceID, sourceKey string, sourcePathMap map[string]map[string]bool) {
+	paths := sourcePathMap[sourceKey]
+	if len(paths) == 0 {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for path := range paths {
+		for _, q := range p.processorQueues[path] {
+			q.put(&utils.EndFrame{Source: sourceID})
+		}
+	}
+}
+
+// closeAllQueues 全部路径队列关流（Python:224-229）
+func (p *StreamProcessor) closeAllQueues(sourceID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, queues := range p.processorQueues {
+		for _, q := range queues {
+			q.put(&utils.EndFrame{Source: sourceID})
+		}
+	}
+}
+
+// createGenerator 建路径队列并注册，返回 StreamReader（Python:262-268 _create_generator 前半）。
+// 未声明源的路径才带 timeout（Python:269 _path_has_declared_source）。
+func (p *StreamProcessor) createGenerator(kPath, rPath string, streamCallback func(map[string]any)) *StreamReader {
+	q := newPayloadQueue()
+	p.mu.Lock()
+	p.processorQueues[rPath] = append(p.processorQueues[rPath], q)
+	p.mu.Unlock()
+	timeout := time.Duration(0)
+	if !p.pathHasDeclaredSource(rPath) {
+		timeout = p.timeout
+	}
+	return &StreamReader{kPath: kPath, rPath: rPath, q: q, timeout: timeout, nodeID: p.nodeID,
+		callback: streamCallback}
+}
+
+// pathHasDeclaredSource 路径的源 id 是否在 source_ids 中（Python:308-313）
+func (p *StreamProcessor) pathHasDeclaredSource(rPath string) bool {
+	origin := utils.ExtractOriginKey(rPath)
+	if origin == "" {
+		return false
+	}
+	sourceID := origin
+	if i := strings.Index(origin, "."); i >= 0 {
+		sourceID = origin[:i]
+	}
+	return p.sourceIDs[sourceID]
 }

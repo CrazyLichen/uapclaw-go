@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 )
 
 // TestPayloadQueue_无界不阻塞 send 侧永不阻塞（D2，对齐 asyncio.Queue 无界语义）
@@ -117,3 +118,242 @@ type fakeGraphConsumer struct{}
 func (f *fakeGraphConsumer) StreamCall(ctx context.Context, event chan struct{}, done func(error)) {}
 func (f *fakeGraphConsumer) ShouldHandleMessage() bool                                             { return false }
 func (f *fakeGraphConsumer) IsDone() bool                                                          { return false }
+
+func newTestProcessor(groups ...[]string) *StreamProcessor {
+	sgs := make([]map[string]bool, 0, len(groups))
+	for _, g := range groups {
+		m := map[string]bool{}
+		for _, k := range g {
+			m[k] = true
+		}
+		sgs = append(sgs, m)
+	}
+	return &StreamProcessor{
+		nodeID:          "C",
+		queue:           newPayloadQueue(),
+		processorQueues: map[string][]*payloadQueue{},
+		sourceGroups:    sgs,
+		timeout:         -1,
+	}
+}
+
+// 讨论点 2：帧广播不看 ability 匹配——producer STREAM 帧照常分发
+func TestProcessorRun_广播不匹配ability(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true}
+	p.processorQueues["A.answer"] = []*payloadQueue{newPayloadQueue()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx, components.ComponentAbilityCollect)
+	time.Sleep(20 * time.Millisecond) // 等 run 启动（D1：run 先启动后投帧）
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "你"}}, SourceAbility: components.ComponentAbilityStream})
+	v, ok := p.processorQueues["A.answer"][0].get(context.Background())
+	if !ok {
+		t.Fatal("应收到分发值")
+	}
+	if v != "你" {
+		t.Fatalf("got %v", v)
+	}
+}
+
+// 讨论点 4（D1 新行为）：注册先于 run，注册前的帧滞留主队列、run 启动后补投不丢
+func TestProcessorRun_注册前帧不丢失(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true}
+	// 注意：先投帧，后注册，再启动 run（D1 顺序）
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "你"}}})
+	p.processorQueues["A.answer"] = []*payloadQueue{newPayloadQueue()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx, components.ComponentAbilityCollect)
+	v, ok := p.processorQueues["A.answer"][0].get(context.Background())
+	if !ok || v != "你" {
+		t.Fatalf("注册前帧应补投, got %v ok=%v", v, ok)
+	}
+}
+
+// 讨论点 5：多源组全到齐才关全流；单源到齐只关自己路径
+func TestProcessorRun_多源组关流(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream", "B-stream"})
+	p.sources = map[string]bool{"A-stream": true, "B-stream": true}
+	p.sourceIDs = map[string]bool{"A": true, "B": true}
+	qa := newPayloadQueue()
+	qb := newPayloadQueue()
+	p.processorQueues["A.answer"] = []*payloadQueue{qa}
+	p.processorQueues["B.results"] = []*payloadQueue{qb}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { p.Run(ctx, components.ComponentAbilityCollect); close(done) }()
+	time.Sleep(20 * time.Millisecond)
+	// A 先发数据帧（source_path_map 记录路径后 END 才关这些路径——Python 同语义）
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	_, _ = qa.get(context.Background()) // 消费数据帧
+	// A 组内到齐：只关 A 路径，B 路径不动
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	// closeInactiveGroupSources：A 数据帧时 B（同组非活跃源）路径已被关流
+	if v, ok := qb.get(context.Background()); !ok {
+		t.Fatal("B 路径应收到 EndFrame(B)（close_inactive_group_sources）")
+	} else if ef, isEF := v.(*utils.EndFrame); !isEF || ef.Source != "B" {
+		t.Fatalf("B 路径应收到 EndFrame(B), got %v", v)
+	}
+	// Python `group & handled` 为组内 OR：{A,B} 组任一源到齐即满足 → A END 后关全队列退出
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("OR 组任一源到齐后 run 应退出（对齐 Python _all_source_groups_finished）")
+	}
+	// closeAllQueues 给所有路径放 EndFrame(A)
+	if v, ok := qb.get(context.Background()); !ok {
+		t.Fatal("关全队列后 B 路径应收到 EndFrame(A)")
+	} else if ef, isEF := v.(*utils.EndFrame); !isEF || ef.Source != "A" {
+		t.Fatalf("B 路径应收到 EndFrame(A), got %v", v)
+	}
+}
+
+// 讨论点 5 补充：单源组（默认拆分）单源到齐即全组满足 → 立即关全队列
+func TestProcessorRun_单源组到齐即关全流(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"}, []string{"B-stream"})
+	p.sources = map[string]bool{"A-stream": true, "B-stream": true}
+	p.sourceIDs = map[string]bool{"A": true, "B": true}
+	qa := newPayloadQueue()
+	qb := newPayloadQueue()
+	p.processorQueues["A.answer"] = []*payloadQueue{qa}
+	p.processorQueues["B.results"] = []*payloadQueue{qb}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { p.Run(ctx, components.ComponentAbilityCollect); close(done) }()
+	time.Sleep(20 * time.Millisecond)
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	_, _ = qa.get(context.Background())
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	select {
+	case <-done:
+		t.Fatal("仅 A 组到齐 run 不应退出（B 组未到齐）")
+	case <-time.After(100 * time.Millisecond):
+	}
+	p.Receive(StreamPayload{Message: map[string]any{"B": map[string]any{"results": "y"}}, SourceAbility: components.ComponentAbilityStream})
+	_, _ = qb.get(context.Background())
+	p.Receive(StreamPayload{Message: map[string]any{"B": "END_B"}, SourceAbility: components.ComponentAbilityStream})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("两组均到齐后 run 应退出（对齐 Python _all_source_groups_finished）")
+	}
+}
+
+// 讨论点 6：END 哨兵前缀判定 + EndFrame 进路径队列
+func TestProcessorRun_EndFrame传播(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true}
+	q := newPayloadQueue()
+	p.processorQueues["A.answer"] = []*payloadQueue{q}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx, components.ComponentAbilityCollect)
+	time.Sleep(20 * time.Millisecond)
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	_, _ = q.get(context.Background())
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	v, ok := q.get(context.Background())
+	if !ok {
+		t.Fatal("路径队列应收到 EndFrame")
+	}
+	ef, isEF := v.(*utils.EndFrame)
+	if !isEF || ef.Source != "A" {
+		t.Fatalf("EndFrame.Source 应为 A, got %v", v)
+	}
+}
+
+// 讨论点 8：未声明源的路径限时，超时退出；声明源不限时
+func TestStreamReader_超时(t *testing.T) {
+	r := &StreamReader{kPath: "x", rPath: "unknown.foo", q: newPayloadQueue(),
+		timeout: 30 * time.Millisecond, nodeID: "C"}
+	start := time.Now()
+	if _, ok := r.Next(context.Background()); ok {
+		t.Fatal("未声明源超时应返回 false")
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("应在 timeout 后退出")
+	}
+	// 声明源：manager.generator 置 timeout=0 → 不限时，只能 ctx 取消
+	r2 := &StreamReader{kPath: "x", rPath: "A.foo", q: newPayloadQueue(), timeout: 0, nodeID: "C"}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(30 * time.Millisecond); cancel() }()
+	if _, ok := r2.Next(ctx); ok {
+		t.Fatal("ctx 取消应退出")
+	}
+}
+
+// 讨论点 10：generator 按 schema 叶子路径建 gen 树（rebuild_dict 形状）+ 每路径多 chan 广播
+func TestProcessorGenerator_叶子树重建(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true, "B": true}
+	schema := map[string]any{
+		"llm_text": "${A.answer}",
+		"search":   map[string]any{"hits": "${B.results}"},
+		"plain":    3,
+	}
+	out := p.Generator(schema, nil)
+	if _, ok := out["llm_text"].(*StreamReader); !ok {
+		t.Fatalf("llm_text 叶子应为 StreamReader, got %T", out["llm_text"])
+	}
+	sub, ok := out["search"].(map[string]any)
+	if !ok {
+		t.Fatal("search 应保持嵌套 map")
+	}
+	if _, ok := sub["hits"].(*StreamReader); !ok {
+		t.Fatalf("search.hits 叶子应为 StreamReader, got %T", sub["hits"])
+	}
+	if out["plain"] != 3 {
+		t.Fatal("非 $ref 叶子保持原值")
+	}
+	if len(p.processorQueues) != 2 {
+		t.Fatalf("应注册 2 条路径, got %d", len(p.processorQueues))
+	}
+}
+
+// 每路径多 chan 广播：同一路径注册两次，帧同时投两处
+func TestProcessorGenerator_每路径多chan广播(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true}
+	_ = p.Generator(map[string]any{"a": "${A.answer}"}, nil)
+	_ = p.Generator(map[string]any{"b": "${A.answer}"}, nil)
+	queues := p.processorQueues["${A.answer}"]
+	if len(queues) != 2 {
+		t.Fatalf("同路径应注册 2 个队列, got %d", len(queues))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx, components.ComponentAbilityCollect)
+	time.Sleep(20 * time.Millisecond)
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "v"}}})
+	for i, q := range queues {
+		if v, ok := q.get(context.Background()); !ok || v != "v" {
+			t.Fatalf("队列 %d 应广播到帧, got %v ok=%v", i, v, ok)
+		}
+	}
+}
+
+// 未声明源超时：generator 生成的 StreamReader 带限速，超时后 reader 退出
+func TestProcessorGenerator_未声明源限时(t *testing.T) {
+	p := newTestProcessor([]string{"A-stream"})
+	p.sources = map[string]bool{"A-stream": true}
+	p.sourceIDs = map[string]bool{"A": true}
+	p.timeout = 30 * time.Millisecond
+	r := p.createGenerator("x", "unknown.foo", nil)
+	if r.timeout != 30*time.Millisecond {
+		t.Fatal("未声明源路径应限时")
+	}
+	r2 := p.createGenerator("x", "A.foo", nil)
+	if r2.timeout != 0 {
+		t.Fatal("声明源路径应不限时")
+	}
+}
