@@ -4,6 +4,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetBySchemaMap 按 schema（map 形态）从数据取值，非引用字符串保留为默认值。
+// Python: session/utils.py get_by_schema(stream_inputs_schema, origin_message)
+// 供 stream_actor manager 的 get_by_default_transformer 使用（8.12 最小导出面）。
+func GetBySchemaMap(schema map[string]any, data map[string]any) map[string]any {
+	return getBySchemaMap(schema, data)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getBySchema 根据 schema 从 data 中获取值

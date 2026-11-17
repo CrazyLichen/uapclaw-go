@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -43,8 +44,8 @@ type InnerSession interface {
 	// Checkpointer 获取检查点管理器
 	Checkpointer() Checkpointer
 	// ActorManager 获取 Actor 管理器（可选，默认返回 nil）
-	// ⤵️ 后续回填：返回类型从 any 改为 ActorManager
-	ActorManager() any
+	// ✅ 8.12 已回填：返回类型从 any 改为 *stream_actor.ActorManager
+	ActorManager() *stream_actor.ActorManager
 	// Close 关闭会话，释放资源
 	Close() error
 }

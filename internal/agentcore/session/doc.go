@@ -7,7 +7,7 @@
 // NodeSessionFacade 是工作流组件场景下的公开会话，包装内部层 NodeSession，提供
 // 身份查询、状态读写、追踪、交互、流写入、环境变量等组件开发者面向 API。
 // 本包依赖 state 子包提供的双层状态接口（StateLike/CommitStateLike 底层 + SessionState 上层）。
-// Config 已于 5.12 回填为 config.SessionConfig，ActorManager 暂用 any 占位待后续回填。
+// Config 已于 5.12 回填为 config.SessionConfig，ActorManager 已于 8.12 回填为 *stream_actor.ActorManager。
 // Tracer 已于 5.11 回填为 *tracer.Tracer，AgentSpan 已于 5.11 回填为 *tracer.TraceAgentSpan。
 // StreamWriterManager 已于 5.10 回填为 *stream.StreamWriterManager。
 // 文件目录：

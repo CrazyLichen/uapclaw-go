@@ -17,5 +17,5 @@
 //
 // 未移植说明：
 //   - create_wrapper_class：Python 中零调用，Go 使用手动委托模式替代（见 NodeSessionFacade/RouterSessionFacade）
-//   - EndFrame/Frame：Go 使用 close(ch) 替代单源场景，多源场景 ⤵️ 延后到 8.x stream_actor 回填
+//   - EndFrame/Frame：✅ 8.12 已回填多源场景（frame.go：EndFrame{Source} + IsEndFrame）
 package utils
