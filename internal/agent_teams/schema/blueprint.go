@@ -87,6 +87,12 @@ type TeamAgentSpec struct {
 	// 注册工厂重建（Python materialize_build_context，blueprint.py:685）。
 	// Python: build_context (blueprint.py:645, Optional[Any], exclude=True)
 	BuildContext harnessschema.BuildContextInterface `json:"-"`
+	// BuildContextSeed 可序列化种子：跨序列化边界重建活载体用。与 BuildContext
+	// 不同，它随 JSON 序列化往返（Python model_dump/model_validate）；接收侧
+	// 调 MaterializeBuildContext 经注册工厂（RegisterBuildContextFactory）把
+	// 种子重建回活 BuildContext。平台侧在 BuildContext 旁填充种子，二者内容对应。
+	// Python: build_context_seed (blueprint.py:660-663, Optional[dict[str, Any]])
+	BuildContextSeed map[string]any `json:"build_context_seed,omitempty"`
 	// Metadata 元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableHITT 是否启用 Human-in-the-Team
@@ -341,6 +347,29 @@ func (s *TeamAgentSpec) Build() (*TeamAgentSpec, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// MaterializeBuildContext 活载体缺失时从种子重建（幂等）。
+//
+// 仅当 BuildContext 为 nil 且种子非空时动作：进程内路径（活上下文已设）与
+// 旧路径（无种子）均不受影响。在序列化边界接收侧（FromSpawnPayload /
+// RecoverFromSession）configure 前调用，provider 装配的成员能力经注册工厂
+// 从种子声明式重建。
+//
+// Go 差异：Python 无返回值、工厂异常直接上抛；Go 以 error 返回承载同一
+// 上抛语义，调用方（team_agent.go）包一层错误后透传。
+//
+// Python: TeamAgentSpec.materialize_build_context (blueprint.py:685-699)
+func (s *TeamAgentSpec) MaterializeBuildContext() error {
+	if s.BuildContext != nil || len(s.BuildContextSeed) == 0 {
+		return nil
+	}
+	bc, err := BuildContextFromSeed(s.BuildContextSeed)
+	if err != nil {
+		return err
+	}
+	s.BuildContext = bc
+	return nil
 }
 
 // ValidateLeaderModelResolved 校验 Leader 模型是否已解析。

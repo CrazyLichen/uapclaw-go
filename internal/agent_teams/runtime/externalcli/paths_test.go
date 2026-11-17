@@ -110,3 +110,26 @@ func TestResolveExternalPaths(t *testing.T) {
 		t.Fatalf("全空应落 workspace 且 extra 为空: %s %v", cwd, extra)
 	}
 }
+
+// TestBuildContextSeed_materialize后提取器取值 15.12 回填③：seed → materialize
+// → 提取器在非 nil 槽位上取到值（Python materialize 后 getattr 语义）。
+// ResolveExternalPaths 取 project_dir（external_cli_spawn.py:267-271），
+// BuildTeamContextTracker 取 team_outputs_dir（external_cli_spawn.py:231 附近）。
+func TestBuildContextSeed_materialize后提取器取值(t *testing.T) {
+	spec := &schema.TeamAgentSpec{BuildContextSeed: map[string]any{
+		"project_dir":      "/proj",
+		"team_outputs_dir": "/out",
+	}}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	ctx := &schema.TeamRuntimeContext{}
+	cwd, _ := ResolveExternalPaths(spec, ctx, "", "alpha")
+	if cwd != "/proj" {
+		t.Fatalf("materialize 后 cwd 应回落 project_dir: %q", cwd)
+	}
+	tr := BuildTeamContextTracker(nil, spec, ctx, "beta", "pay")
+	if got := unexportedString(tr, "teamOutputsDir"); got != "/out" {
+		t.Fatalf("materialize 后 team_outputs_dir 应进 tracker: %q", got)
+	}
+}

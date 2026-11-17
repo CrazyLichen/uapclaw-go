@@ -429,6 +429,30 @@ func TestTeamAgent_FromSpawnPayload(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestTeamAgent_FromSpawnPayload_materializeBuildContext 接线对齐 Python
+// from_spawn_payload 的 configure 前 materialize（team_agent.py:1467）：
+// payload 携带 build_context_seed 时，Configure 之前活载体由种子重建。
+func TestTeamAgent_FromSpawnPayload_materializeBuildContext(t *testing.T) {
+	spec := atschema.NewTeamAgentSpec()
+	spec.TeamName = "team_seed"
+	spec.Agents = map[string]atschema.DeepAgentSpec{"leader": {}}
+	spec.BuildContextSeed = map[string]any{"project_dir": "/proj"}
+	rctx := atschema.TeamRuntimeContext{
+		Role:     atschema.TeamRoleLeader,
+		TeamSpec: &atschema.TeamSpec{TeamName: "team_seed"},
+	}
+	// spec 以指针直传（teamAgentSpecFromAny 的同进程形态，不复制），
+	// 以便断言 FromSpawnPayload 内部 materialize 作用于同一对象。
+	ta, err := FromSpawnPayload(context.Background(), map[string]any{
+		"spec":    &spec,
+		"context": rctx,
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, ta)
+	assert.NotNil(t, spec.BuildContext, "materialize 应在 Configure 前重建活载体")
+	assert.Equal(t, "/proj", spec.BuildContext.GetProjectDir())
+}
+
 // TestTeamAgent_RecoverTeam 测试无 TeamBackend 时返回空列表
 func TestTeamAgent_RecoverTeam(t *testing.T) {
 	card := agentschema.NewAgentCard()

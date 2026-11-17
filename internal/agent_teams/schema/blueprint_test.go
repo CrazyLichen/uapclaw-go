@@ -501,3 +501,88 @@ func TestTeamAgentSpec_BuildContext槽位(t *testing.T) {
 		t.Fatalf("活载体取值失败: %v", spec.BuildContext)
 	}
 }
+
+// TestTeamAgentSpec_MaterializeBuildContext_幂等 对齐 materialize_build_context
+// （blueprint.py:685-699）：活载体缺失且种子非空时经注册工厂重建；二次调用
+// 不重复构造（幂等）；回填③提取器依赖的 GetProjectDir/GetTeamOutputsDir 非 nil。
+func TestTeamAgentSpec_MaterializeBuildContext_幂等(t *testing.T) {
+	spec := &TeamAgentSpec{BuildContextSeed: map[string]any{
+		"project_dir":      "/proj",
+		"team_outputs_dir": "/out",
+	}}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	first := spec.BuildContext
+	if first == nil {
+		t.Fatal("materialize 后活载体应为非 nil")
+	}
+	if first.GetProjectDir() != "/proj" || first.GetTeamOutputsDir() != "/out" {
+		t.Fatalf("回填③提取器依赖字段未恢复: %q %q", first.GetProjectDir(), first.GetTeamOutputsDir())
+	}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("二次 materialize: %v", err)
+	}
+	if spec.BuildContext != first {
+		t.Fatal("幂等：二次 materialize 不应重建活载体")
+	}
+}
+
+// TestTeamAgentSpec_MaterializeBuildContext_无种子行为不变 对齐 Python
+// build_context 为 None / seed 为空的 no-op 分支（blueprint.py:695）。
+func TestTeamAgentSpec_MaterializeBuildContext_无种子行为不变(t *testing.T) {
+	spec := &TeamAgentSpec{}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != nil {
+		t.Fatal("无种子时活载体应保持 nil")
+	}
+	spec.BuildContextSeed = map[string]any{}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != nil {
+		t.Fatal("空种子时活载体应保持 nil")
+	}
+}
+
+// TestTeamAgentSpec_MaterializeBuildContext_活载体优先 对齐 Python 幂等守卫
+// 首条：活上下文已设时不被种子覆盖（blueprint.py:695）。
+func TestTeamAgentSpec_MaterializeBuildContext_活载体优先(t *testing.T) {
+	live := &harnessschema.BuildContext{ProjectDir: "/live"}
+	spec := &TeamAgentSpec{
+		BuildContext:     live,
+		BuildContextSeed: map[string]any{"project_dir": "/seed"},
+	}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != live {
+		t.Fatal("活载体已存在时不应被种子覆盖")
+	}
+}
+
+// TestTeamAgentSpec_BuildContextSeed_JSON往返 对齐 Python：build_context_seed
+// 随 model_dump/model_validate 传输（blueprint.py:660-663），而 build_context
+// 为 Field(exclude=True)（blueprint.py:645）。
+func TestTeamAgentSpec_BuildContextSeed_JSON往返(t *testing.T) {
+	spec := &TeamAgentSpec{BuildContextSeed: map[string]any{"project_dir": "/proj"}}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"build_context_seed"`) {
+		t.Fatal("种子应随 JSON 传输（Python 非 exclude 字段）")
+	}
+	var back TeamAgentSpec
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.BuildContextSeed["project_dir"] != "/proj" {
+		t.Fatalf("种子往返丢失: %v", back.BuildContextSeed)
+	}
+	if back.BuildContext != nil {
+		t.Fatal("活载体不参与序列化（Python exclude=True）")
+	}
+}

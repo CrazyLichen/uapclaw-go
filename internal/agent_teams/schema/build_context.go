@@ -29,6 +29,25 @@ type BuildContextFactory = hschema.BuildContextFactory
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// DefaultBuildContextFromSeed 从种子重建基类 BuildContext（过渡默认工厂）。
+//
+// 偏差 D-15.13-k：Python 无默认注册，工厂由平台注册（jiuwenswarm
+// registry.py:198 _build_swarm_context_from_seed → SwarmBuildContext.from_seed，
+// 携带本地 config / trajectory_span_processor 等不可序列化句柄）；Go 平台子类
+// 与 provider 注册面（15.16）尚未落地，先注册本基类工厂作为过渡——只恢复
+// 基类可序列化字段，平台专属键忽略。平台子类落地后经
+// RegisterBuildContextFactory 覆盖注册（后者覆盖前者）。
+func DefaultBuildContextFromSeed(seed map[string]any) (BuildContextInterface, error) {
+	return &BuildContext{
+		Language:       seedString(seed, "language"),
+		MemberName:     seedString(seed, "member_name"),
+		Role:           seedString(seed, "role"),
+		MemberCardID:   seedString(seed, "member_card_id"),
+		ProjectDir:     seedString(seed, "project_dir"),
+		TeamOutputsDir: seedString(seed, "team_outputs_dir"),
+	}, nil
+}
+
 // RegisterBuildContextFactory 转发 core 侧种子工厂注册。
 func RegisterBuildContextFactory(f hschema.BuildContextFactory) {
 	hschema.RegisterBuildContextFactory(f)
@@ -42,4 +61,18 @@ func BuildContextFromSeed(seed map[string]any) (hschema.BuildContextInterface, e
 // ParentSysOperation 转发 core 侧的父 SysOperation 读取。
 func ParentSysOperation(context hschema.BuildContextInterface) any {
 	return hschema.ParentSysOperation(context)
+}
+
+// seedString 读取种子中的字符串键（缺失/类型不符返回空串）。
+func seedString(seed map[string]any, key string) string {
+	if v, ok := seed[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// init 注册过渡默认种子工厂（偏差 D-15.13-k，见 DefaultBuildContextFromSeed）。
+// 平台工厂（15.16）落地后经 RegisterBuildContextFactory 覆盖。
+func init() {
+	RegisterBuildContextFactory(DefaultBuildContextFromSeed)
 }

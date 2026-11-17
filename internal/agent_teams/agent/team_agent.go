@@ -1045,6 +1045,14 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 		return nil, fmt.Errorf("payload 中 context 字段无效: %w", err)
 	}
 
+	// 步骤 1b: 从种子重建 build_context（Python team_agent.py:1467）：
+	// build_context 是 Field(exclude=True)（blueprint.py:645），跨进程
+	// 反序列化后为 nil，不 materialize 则 provider 装配的成员能力全丢；
+	// 无种子的旧路径为 no-op。
+	if err := spec.MaterializeBuildContext(); err != nil {
+		return nil, fmt.Errorf("materialize build context 失败: %w", err)
+	}
+
 	// 步骤 2: 构造 AgentCard（Python: agent_spec = spec.agents.get(role.value) or spec.agents["leader"]；
 	// card = agent_spec.card or AgentCard(id=team_member, ...)）
 	card := buildTeamAgentCardFromSpec(spec, runtimeCtx)
@@ -1101,6 +1109,18 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	if runtimeSpec != nil && runtimeSpec.Memory != nil &&
 		runtimeSpec.Memory.EmbeddingConfig != nil && spec.Memory != nil {
 		spec.Memory.EmbeddingConfig = runtimeSpec.Memory.EmbeddingConfig
+	}
+
+	// 步骤 3c: build_context 同为 Field(exclude=True) 不参与 checkpoint 序列化：
+	// 暖恢复优先沿用活 runtime spec 的上下文，冷恢复从可序列化种子重建。
+	// Python: TeamAgent.recover_from_session（team_agent.py:2074-2075）
+	if runtimeSpec != nil && runtimeSpec.BuildContext != nil {
+		spec.BuildContext = runtimeSpec.BuildContext
+	}
+
+	// 步骤 3d: 物化种子（Python team_agent.py:2081）；无种子旧路径为 no-op。
+	if err := spec.MaterializeBuildContext(); err != nil {
+		return nil, fmt.Errorf("materialize build context 失败: %w", err)
 	}
 
 	// 步骤 4: 反序列化 context（S-26: 同步骤 2 的桥接修复）

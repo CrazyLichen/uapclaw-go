@@ -612,6 +612,10 @@ func TestBuildCliRuntime_provider路全链(t *testing.T) {
 // 传 None（Go 空串）。
 func TestBuildTeamContextTracker_workspace两分支(t *testing.T) {
 	rtc := externalCliRtc("openclaw")
+	// 审查修正：原断言 `x != "" && x != rtc.Prompt` 在 rtc.Prompt 为空串时恒假，
+	// 改喂非空 prompt 后断言透传（Python member_prompt=ctx.prompt or ""，
+	// external_cli_spawn.py:231）。
+	rtc.Prompt = "beta-私有约定"
 	root := filepath.Join(t.TempDir(), "team-ws")
 	enabled := &schema.TeamAgentSpec{
 		Workspace: &team_workspace.TeamWorkspaceConfig{Enabled: true, RootPath: root},
@@ -628,8 +632,8 @@ func TestBuildTeamContextTracker_workspace两分支(t *testing.T) {
 	if got := unexportedString(tr2, "teamWorkspacePath"); got != "" {
 		t.Fatalf("disabled → 空串（Python None）: %q", got)
 	}
-	if unexportedString(tr, "memberPrompt") != "" && unexportedString(tr, "memberPrompt") != rtc.Prompt {
-		t.Fatalf("member_prompt: %q", unexportedString(tr, "memberPrompt"))
+	if got := unexportedString(tr, "memberPrompt"); got != rtc.Prompt {
+		t.Fatalf("member_prompt 应透传 ctx.prompt: %q", got)
 	}
 }
 
