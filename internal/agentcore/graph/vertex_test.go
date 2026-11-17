@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -112,11 +113,24 @@ func TestVertex_Reset(t *testing.T) {
 // fakeVertexExecutable Task2-12 共用的可编程可执行体桩（各任务按需扩字段）
 type fakeVertexExecutable struct {
 	BaseExecutable[map[string]any, map[string]any]
+	invokeFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
+	collectFn func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
 }
 
 func (f *fakeVertexExecutable) OnInvoke(ctx context.Context, inputs map[string]any,
 	sess session.BaseSession, kw map[string]any) (map[string]any, error) {
+	if f.invokeFn != nil {
+		return f.invokeFn(ctx, inputs, sess, kw)
+	}
 	return map[string]any{"invoked": true}, nil
+}
+
+func (f *fakeVertexExecutable) OnCollect(ctx context.Context, inputs <-chan map[string]any,
+	sess session.BaseSession, kw map[string]any) (map[string]any, error) {
+	if f.collectFn != nil {
+		return f.collectFn(ctx, inputs, sess, kw)
+	}
+	return map[string]any{"collected": true}, nil
 }
 
 // ──────────────────────────── Task3: Init ────────────────────────────
@@ -594,5 +608,164 @@ func TestPostStream_收口分流(t *testing.T) {
 	p := am2.StreamActor("n2").Processor(components.ComponentAbilityCollect)
 	if p.MainQueueLen() != 2 { // 数据帧 + END 帧
 		t.Fatalf("应产出数据帧+END 帧, got %d", p.MainQueueLen())
+	}
+}
+
+// ──────────────────────────── Task5: runExecutable / retry / 错误恢复 ────────────────────────────
+
+func TestRunExecutable_Invoke策略主干(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	exe := &fakeVertexExecutable{
+		invokeFn: func(ctx context.Context, inputs map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			if _, exists := kw["context"]; !exists {
+				t.Error("kwargs 应携带 context 键（vertex.py:139 kwargs.get('context')）")
+			}
+			return map[string]any{"out": "ok"}, nil
+		},
+	}
+	v.executable = exe
+	ok, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	if err != nil || !ok {
+		t.Fatalf("invoke 策略应成功, ok=%v err=%v", ok, err)
+	}
+	if !v.isComponentExecuted("n1") {
+		t.Fatal("mark_node_executed 应先行（vertex.py:117）")
+	}
+}
+
+func TestRunExecutable_异常分类(t *testing.T) {
+	// BaseError → 原样上抛（vertex.py:213-222）
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	be := exception.BuildError(exception.StatusWorkflowExecutionTimeout)
+	v.executable = &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return nil, be
+		},
+	}
+	_, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	if !errors.Is(err, be) {
+		t.Fatalf("BaseError 应原样上抛, got %v", err)
+	}
+	// 通用错误 → 组件执行错误包装（vertex.py:223-233）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v2.executable = &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	_, err2 := v2.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	var be2 *exception.BaseError
+	if !errors.As(err2, &be2) || be2.Code() != exception.StatusWorkflowComponentExecutionError.Code() {
+		t.Fatalf("通用错误应包装为组件执行错误, got %v", err2)
+	}
+	// event 兜底置位（vertex.py:234-236）
+	ev := make(chan struct{})
+	_, _ = v2.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, ev)
+	select {
+	case <-ev:
+	default:
+		t.Fatal("异常路径 event 也应置位")
+	}
+}
+
+func TestRunExecutable_Collect策略信封(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	var gotSchema map[string]any
+	v.executable = &fakeVertexExecutable{
+		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			m := <-inputs
+			gotSchema = m
+			return map[string]any{"collected": true}, nil
+		},
+	}
+	ok, err := v.runExecutable(context.Background(), components.ComponentAbilityCollect, false, nil, nil)
+	if err != nil || !ok {
+		t.Fatalf("collect 策略应成功, ok=%v err=%v", ok, err)
+	}
+	// collect_iter = dict（无 schema 时为空 map）
+	if gotSchema == nil {
+		t.Fatal("on_collect 应收到 dict 信封")
+	}
+}
+
+func TestRunExecutableWithRetry_超时真取消(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v.nodeConfig = &workflow.NodeSpec{Timeout: 0.05, MaxRetries: 0}
+	started := make(chan struct{})
+	v.executable = &fakeVertexExecutable{
+		invokeFn: func(ctx context.Context, inputs map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			close(started)
+			<-ctx.Done() // 阻塞至超时取消（对齐 asyncio wait_for 取消被包裹协程）
+			return nil, ctx.Err()
+		},
+	}
+	_, err := v.runExecutableWithRetry(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != exception.StatusWorkflowExecutionTimeout.Code() {
+		t.Fatalf("超时应回落为执行超时错误, got %v", err)
+	}
+	<-started
+}
+
+func TestRunExecutableWithRetry_重试后成功(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v.nodeConfig = &workflow.NodeSpec{MaxRetries: 2}
+	calls := 0
+	v.executable = &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			calls++
+			if calls < 3 {
+				return nil, errors.New("transient")
+			}
+			return map[string]any{"ok": true}, nil
+		},
+	}
+	ok, err := v.runExecutableWithRetry(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	if err != nil || !ok || calls != 3 {
+		t.Fatalf("第 3 次应成功, ok=%v err=%v calls=%d", ok, err, calls)
+	}
+}
+
+func TestBuildTimeoutError_命中与回落(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	// 未命中 → 回落默认（vertex.py:326-330）
+	err := v.buildTimeoutError(context.Background(), errors.New("t"), 1.5)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != exception.StatusWorkflowExecutionTimeout.Code() {
+		t.Fatalf("应回落执行超时错误, got %v", err)
+	}
+	// 注册 handler 返回自定义错误 → 命中（vertex.py:306-316）
+	custom := exception.BuildError(exception.StatusGraphVertexStreamCallTimeout)
+	callback.GetCallbackFramework().OnCustom("component_timeout_error",
+		func(ctx context.Context, data map[string]any) any { return custom })
+	err2 := v.buildTimeoutError(context.Background(), errors.New("t"), 1.0)
+	if !errors.Is(err2, custom) {
+		t.Fatalf("应命中 handler 自定义错误, got %v", err2)
+	}
+}
+
+func TestRunErrorRecovery_三出口(t *testing.T) {
+	// STREAM 不可恢复（vertex.py:335-337）
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	boom := errors.New("boom")
+	if _, err := v.runErrorRecovery(context.Background(), components.ComponentAbilityStream, boom); !errors.Is(err, boom) {
+		t.Fatal("STREAM 能力应直接上抛")
+	}
+	// 无 handler → 上抛（vertex.py:362）
+	if _, err := v.runErrorRecovery(context.Background(), components.ComponentAbilityInvoke, boom); !errors.Is(err, boom) {
+		t.Fatal("无命中应上抛原错误")
+	}
+	// handler 命中 → postInvoke 恢复并成功（vertex.py:356-358）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	callback.GetCallbackFramework().OnCustom("component_error_recovery",
+		func(ctx context.Context, data map[string]any) any {
+			return map[string]any{"recovered": true}
+		})
+	ok, err := v2.runErrorRecovery(context.Background(), components.ComponentAbilityInvoke, boom)
+	if err != nil || !ok {
+		t.Fatalf("恢复命中应返回成功, ok=%v err=%v", ok, err)
 	}
 }

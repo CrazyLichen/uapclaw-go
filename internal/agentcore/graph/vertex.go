@@ -18,7 +18,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -364,6 +366,387 @@ func (v *Vertex) traceComponentStreamInputSend(ctx context.Context) {
 	if !v.hasCall || v.isCallStarted.Load() {
 		tracer.TracerWorkflowUtils{}.TraceComponentStreamInput(ctx, v.nodeSession, map[string]any{}, true)
 	}
+}
+
+// ──────────────────────────── 能力执行与重试（Python _run_executable(+with_retry)/_build_timeout_error/_run_error_recovery，vertex.py:114-362） ────────────────────────────
+
+// setEvent 置位一次性信号（Python asyncio.Event.set 的幂等语义 → close channel）
+func setEvent(ev chan struct{}) {
+	if ev == nil {
+		return
+	}
+	defer func() { _ = recover() }() // 已关闭时幂等返回
+	select {
+	case <-ev:
+	default:
+		close(ev)
+	}
+}
+
+// triggerUntil 触发自定义事件并返回首个非 nil 结果
+// （Python CallbackFramework.trigger_until(event, predicate=r is not None, **kwargs)
+// 的语义组合：Go TriggerCustom 收集全部结果，此处取首个非 nil）
+func triggerUntil(ctx context.Context, event string, data map[string]any) (result any) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = nil // handler 异常 → 视为无命中（Python except 分支）
+		}
+	}()
+	for _, r := range callback.Trigger(ctx, event, data) {
+		if r != nil {
+			return r
+		}
+	}
+	return nil
+}
+
+// runExecutable 执行单个能力的策略分派（Python _run_executable，vertex.py:114-236 步骤一比一）
+func (v *Vertex) runExecutable(ctx context.Context, ability components.ComponentAbility,
+	isSubgraph bool, config any, event chan struct{}) (bool, error) {
+	// 策略体共用错误通道（Python async 函数的异常沿 await 传播 → Go 以 error 返回值承载，
+	// 分类处理在 strategyError 分类段）
+	type strategyResult struct{ err error }
+	invokeStrategy := func() error {
+		// Python invoke_strategy（vertex.py:129-146）
+		batchInputs := v.preInvoke(ctx)
+		v.debugAbilityRunning(ability, "inputs", batchInputs, isSubgraph)
+		if isSubgraph {
+			// 子图封装（vertex.py:136-137）
+			batchInputs = map[string]any{InputsKey: batchInputs, ConfigKey: config}
+		}
+		results, err := v.executable.OnInvoke(ctx, toMapAny(batchInputs), v.nodeSession,
+			map[string]any{"context": v.ctx})
+		if err != nil {
+			return err
+		}
+		_, err = v.postInvoke(ctx, results)
+		if err != nil {
+			return err
+		}
+		v.debugAbilityRunning(ability, "outputs", results, isSubgraph)
+		return nil
+	}
+	streamStrategy := func() error {
+		// Python stream_strategy（vertex.py:148-158）
+		batchInputs := v.preInvoke(ctx)
+		v.debugAbilityRunning(ability, "inputs", batchInputs, isSubgraph)
+		if isSubgraph {
+			batchInputs = map[string]any{InputsKey: batchInputs, ConfigKey: config}
+		}
+		resultsIter, err := v.executable.OnStream(ctx, toMapAny(batchInputs), v.nodeSession,
+			map[string]any{"context": v.ctx})
+		if err != nil {
+			return err
+		}
+		v.postStream(ctx, resultsIter, ability)
+		return nil
+	}
+	collectStrategy := func() error {
+		// Python collect_strategy（vertex.py:160-175）：preStream → set_event →
+		// End 节点未执行分支清洗 → on_collect → post_invoke
+		collectIter, err := v.preStream(ctx, ability)
+		if err != nil {
+			return err
+		}
+		setEvent(event)
+		if v.isEndNode {
+			var streamSchema map[string]any
+			if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+				streamSchema, _ = v.nodeConfig.StreamIOConfigs.InputsSchema.(map[string]any)
+			}
+			if len(streamSchema) > 0 {
+				collectIter = v.sanitizeUnexecutedBranchInputs(ctx, collectIter, streamSchema)
+			}
+		}
+		// 单元素信封：channel 仅作传输壳，dict-of-StreamReader 形状对齐 Python collect_iter
+		envelope := make(chan map[string]any, 1)
+		envelope <- collectIter
+		close(envelope)
+		batchOutput, err := v.executable.OnCollect(ctx, envelope, v.nodeSession,
+			map[string]any{"context": v.ctx})
+		if err != nil {
+			return err
+		}
+		_, err = v.postInvoke(ctx, batchOutput)
+		if err != nil {
+			return err
+		}
+		v.debugAbilityRunning(ability, "outputs", batchOutput, isSubgraph)
+		return nil
+	}
+	transformStrategy := func() error {
+		// Python transform_strategy（vertex.py:177-188）
+		transformIter, err := v.preStream(ctx, ability)
+		if err != nil {
+			return err
+		}
+		setEvent(event)
+		if v.isEndNode {
+			var streamSchema map[string]any
+			if v.nodeConfig != nil && v.nodeConfig.StreamIOConfigs != nil {
+				streamSchema, _ = v.nodeConfig.StreamIOConfigs.InputsSchema.(map[string]any)
+			}
+			if len(streamSchema) > 0 {
+				transformIter = v.sanitizeUnexecutedBranchInputs(ctx, transformIter, streamSchema)
+			}
+		}
+		envelope := make(chan map[string]any, 1)
+		envelope <- transformIter
+		close(envelope)
+		outputIter, err := v.executable.OnTransform(ctx, envelope, v.nodeSession,
+			map[string]any{"context": v.ctx})
+		if err != nil {
+			return err
+		}
+		v.postStream(ctx, outputIter, ability)
+		return nil
+	}
+	// 策略表（vertex.py:190-195）
+	strategies := map[components.ComponentAbility]func() error{
+		components.ComponentAbilityInvoke:    invokeStrategy,
+		components.ComponentAbilityStream:    streamStrategy,
+		components.ComponentAbilityCollect:   collectStrategy,
+		components.ComponentAbilityTransform: transformStrategy,
+	}
+	// 执行策略（vertex.py:198-199）
+	strategy, found := strategies[ability]
+	if !found {
+		return false, nil // Python strategy() 为 None 会 TypeError；Go 侧能力面由 init 保证，防御分支
+	}
+	// mark_node_executed + ABILITY_START 日志（vertex.py:117-122）
+	v.markNodeExecuted()
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_VERTEX_ABILITY_START").
+		Str("graph_id", v.nodeSession.WorkflowID()).
+		Str("node_id", v.nodeID).
+		Str("ability", ability.Name()).
+		Msgf("Begin to call node [%s] ability [%s]", v.nodeID, ability.Name())
+	strategyErr := strategy()
+	// finally：event 兜底置位（vertex.py:234-236）
+	defer setEvent(event)
+	if strategyErr == nil {
+		// 成功（vertex.py:200-205）
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_ABILITY_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Str("ability", ability.Name()).
+			Msgf("Succeed to call node [%s] ability [%s]", v.nodeID, ability.Name())
+		return true, nil
+	}
+	// 异常分类（vertex.py:206-233）
+	var gi *pregel.GraphInterrupt
+	if errors.As(strategyErr, &gi) {
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_VERTEX_ABILITY_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Str("ability", ability.Name()).
+			Msgf("Interrupt to call node [%s] ability [%s]", v.nodeID, ability.Name())
+		return false, strategyErr
+	}
+	var be *exception.BaseError
+	if errors.As(strategyErr, &be) {
+		logger.Error(logComponent).
+			Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Str("ability", ability.Name()).
+			Int("error_code", be.Code()).
+			Str("error_msg", be.Message()).
+			Err(strategyErr).
+			Msgf("Failed to call node [%s] ability [%s]", v.nodeID, ability.Name())
+		return false, strategyErr
+	}
+	logger.Error(logComponent).
+		Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+		Str("graph_id", v.nodeSession.WorkflowID()).
+		Str("node_id", v.nodeID).
+		Err(strategyErr).
+		Msgf("Failed to call node [%s]'s '%s'", v.nodeID, ability.Name())
+	wrapped := exception.BuildError(exception.StatusWorkflowComponentExecutionError,
+		exception.WithCause(strategyErr),
+		exception.WithParam("ability", ability.Name()),
+		exception.WithParam("comp", v.nodeID),
+		exception.WithParam("reason", strategyErr),
+		exception.WithParam("workflow", v.nodeSession.WorkflowID()))
+	return false, wrapped
+}
+
+// debugAbilityRunning ABILITY_RUNNING 调试日志（vertex.py:131-135/142-146/171-175 公共字段）
+func (v *Vertex) debugAbilityRunning(ability components.ComponentAbility, phase string, payload any, isSubgraph bool) {
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+		Str("graph_id", v.nodeSession.WorkflowID()).
+		Str("node_id", v.nodeID).
+		Str("ability", ability.Name()).
+		Any(phase, payload).
+		Bool("is_subgraph", isSubgraph).
+		Msgf("%s for [%s] ability [%s]", map[string]string{
+			"inputs": "Prepare inputs", "outputs": "Post-process results",
+		}[phase], v.nodeID, ability.Name())
+}
+
+// secondsToDuration 秒转时长（<=0 返回 0 表示不限时）
+func secondsToDuration(sec float64) time.Duration {
+	if sec <= 0 {
+		return 0
+	}
+	return time.Duration(sec * float64(time.Second))
+}
+
+// toMapAny 输入形状收窄（GeneralExecutor I=map[string]any；非 map 形状以空 map 承载）
+func toMapAny(v any) map[string]any {
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+	return map[string]any{}
+}
+
+// runExecutableWithRetry 带重试与超时的能力执行（Python _run_executable_with_retry，
+// vertex.py:238-287 步骤一比一）
+func (v *Vertex) runExecutableWithRetry(ctx context.Context, ability components.ComponentAbility,
+	isSubgraph bool, config any, event chan struct{}) (bool, error) {
+	// ① 重试与超时配置（vertex.py:240-241；NodeSpec.Timeout<=0 即无超时）
+	maxRetries := 0
+	timeout := -1.0
+	if v.nodeConfig != nil {
+		maxRetries = v.nodeConfig.MaxRetries
+		timeout = v.nodeConfig.Timeout
+	}
+	// ② 负重试数 → 直接执行（vertex.py:243-244）
+	if maxRetries < 0 {
+		return v.runExecutable(ctx, ability, isSubgraph, config, event)
+	}
+	// ③ 重试循环（vertex.py:246-285）
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		var runErr error
+		if timeout < 0 {
+			_, runErr = v.runExecutable(ctx, ability, isSubgraph, config, event)
+		} else {
+			// Python asyncio.wait_for 超时会取消被包裹协程（CancelledError 传播）
+			// → Go context.WithTimeout 真取消（非偏差，见 spec §4.2 修正记录）
+			runCtx, cancel := context.WithTimeout(ctx, secondsToDuration(timeout))
+			_, runErr = v.runExecutable(runCtx, ability, isSubgraph, config, event)
+			cancel()
+			// 超时分支（vertex.py:256-272）：asyncio.TimeoutError → 包 BaseError
+			if errors.Is(runErr, context.DeadlineExceeded) {
+				wrapped := v.buildTimeoutError(ctx, runErr, timeout)
+				if attempt < maxRetries {
+					logger.Warn(logComponent).
+						Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+						Str("graph_id", v.nodeSession.WorkflowID()).
+						Str("node_id", v.nodeID).
+						Str("ability", ability.Name()).
+						Int("attempt", attempt+1).
+						Int("max_retries", maxRetries+1).
+						Err(runErr).
+						Msgf("Node [%s] ability [%s] timed out on attempt %d/%d, will retry",
+							v.nodeID, ability.Name(), attempt+1, maxRetries+1)
+					v.traceInnerError(ctx, runErr)
+					continue
+				}
+				// 重试耗尽 → 错误恢复（vertex.py:271-272）
+				return v.runErrorRecovery(ctx, ability, wrapped)
+			}
+		}
+		if runErr == nil {
+			return true, nil
+		}
+		// 中断直接上抛（vertex.py:254-255）
+		var gi *pregel.GraphInterrupt
+		if errors.As(runErr, &gi) {
+			return false, runErr
+		}
+		// 外部取消（非超时）→ 对齐 Python CancelledError 不被捕获直接传播
+		if errors.Is(runErr, context.Canceled) && ctx.Err() != nil {
+			return false, runErr
+		}
+		// 通用错误重试（vertex.py:273-285）
+		if attempt < maxRetries {
+			logger.Warn(logComponent).
+				Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+				Str("graph_id", v.nodeSession.WorkflowID()).
+				Str("node_id", v.nodeID).
+				Str("ability", ability.Name()).
+				Int("attempt", attempt+1).
+				Int("max_retries", maxRetries+1).
+				Err(runErr).
+				Msgf("Node [%s] ability [%s] failed on attempt %d/%d, will retry",
+					v.nodeID, ability.Name(), attempt+1, maxRetries+1)
+			v.traceInnerError(ctx, runErr)
+			continue
+		}
+		// 重试耗尽 → 错误恢复（vertex.py:284-285）
+		return v.runErrorRecovery(ctx, ability, runErr)
+	}
+	return false, nil // Python:287 兜底返回 False
+}
+
+// buildTimeoutError 超时错误构建（Python _build_timeout_error，vertex.py:289-330）：
+// 经 CallbackFramework component_timeout_error 事件，命中 handler 用其返回的
+// BaseError；未命中/框架异常回落默认超时错误
+func (v *Vertex) buildTimeoutError(ctx context.Context, cause error, timeout float64) error {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+				Str("graph_id", v.nodeSession.WorkflowID()).
+				Str("node_id", v.nodeID).
+				Any("exception", r).
+				Msgf("Failed to use CallbackFramework to build timeout error for node [%s]", v.nodeID)
+		}
+	}()
+	var exceptionConfig any
+	if v.nodeConfig != nil && v.nodeConfig.ExceptionConfig != nil {
+		exceptionConfig = v.nodeConfig.ExceptionConfig
+	}
+	if result := triggerUntil(ctx, "component_timeout_error", map[string]any{
+		"cause":            cause,
+		"timeout":          timeout,
+		"node_id":          v.nodeID,
+		"exception_config": exceptionConfig,
+		"session":          v.nodeSession,
+	}); result != nil {
+		if err, ok := result.(error); ok {
+			return err
+		}
+	}
+	return exception.BuildError(exception.StatusWorkflowExecutionTimeout,
+		exception.WithCause(cause),
+		exception.WithParam("timeout", timeout),
+		exception.WithParam("node_id", v.nodeID))
+}
+
+// runErrorRecovery 重试耗尽后的错误恢复（Python _run_error_recovery，vertex.py:332-362）：
+// 流式能力不可恢复；INVOKE/COLLECT 经 component_error_recovery 事件，
+// 命中则 postInvoke 恢复数据并返回成功
+func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.ComponentAbility, err error) (bool, error) {
+	// ① 流式输出不可恢复（vertex.py:335-337）
+	if ability != components.ComponentAbilityInvoke && ability != components.ComponentAbilityCollect {
+		return false, err
+	}
+	// ② 节点异常配置（vertex.py:339-340）
+	var exceptionConfig any
+	if v.nodeConfig != nil && v.nodeConfig.ExceptionConfig != nil {
+		exceptionConfig = v.nodeConfig.ExceptionConfig
+	}
+	// ③ 事件触发（vertex.py:343-358）；handler 异常 → 视为中断（triggerUntil 内 recover）
+	if result := triggerUntil(ctx, "component_error_recovery", map[string]any{
+		"error":            err,
+		"session":          v.nodeSession,
+		"node_id":          v.nodeID,
+		"ability":          ability,
+		"exception_config": exceptionConfig,
+	}); result != nil {
+		if recoveryData, ok := result.(map[string]any); ok {
+			if _, perr := v.postInvoke(ctx, recoveryData); perr == nil {
+				return true, nil
+			}
+		}
+	}
+	// ④ 无命中/handler None → 中断上抛（vertex.py:362）
+	return false, err
 }
 
 // ──────────────────────────── 批入前/后处理（Python _pre_invoke/_post_invoke，vertex.py:421-567） ────────────────────────────

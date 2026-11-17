@@ -282,8 +282,11 @@ func (f *NodeSessionFacade) GetParentSessionID() string {
 // 构造经 NewWorkflowVertexSession 导出代理（构造调用位置仍在 Vertex.Init，
 // 对齐 Python vertex.py:88 NodeSession(session, ...)；偏差 D-2 登记 8.11 spec §4.2）。
 type WorkflowVertexSession interface {
-	// tracer.WorkflowNodeSession 身份与状态面（Tracer/ExecutableID/ParentID/
-	// WorkflowID/NodeID/NodeType/State/Config）
+	// interfaces.InnerSession 会话全量面（Config/State/Tracer/StreamWriterManager/
+	// SessionID/Checkpointer/ActorManager/Close）——internal.NodeSession 已实现
+	interfaces.InnerSession
+	// tracer.WorkflowNodeSession 身份面（ExecutableID/ParentID/WorkflowID/
+	// NodeID/NodeType）
 	tracer.WorkflowNodeSession
 	// StreamWriterManager 流写入管理器（Python: stream_writer_manager()）
 	StreamWriterManager() *stream.StreamWriterManager
