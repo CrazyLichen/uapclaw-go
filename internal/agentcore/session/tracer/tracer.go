@@ -77,6 +77,13 @@ func NewTracer() *Tracer {
 	}
 }
 
+// WorkflowHandlerValid 工作流处理器是否可用（Python workflow_handler_valid，tracer.py:233-234）
+func (t *Tracer) WorkflowHandlerValid() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.workflowHandlers) > 0
+}
+
 // Init 初始化追踪器，创建默认 Handler 并构建事件分发表。
 // Python: Tracer.init(stream_writer_manager)。
 func (t *Tracer) Init(swm *stream.StreamWriterManager) {
