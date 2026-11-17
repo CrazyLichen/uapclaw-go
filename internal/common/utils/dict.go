@@ -68,7 +68,7 @@ func FlattenDict(data map[string]any) map[string]any {
 	nodes := ExtractLeafNodes(data)
 	result := make(map[string]any, len(nodes))
 	for _, node := range nodes {
-		result[formatPath(node.Path)] = node.Value
+		result[FormatPath(node.Path)] = node.Value
 	}
 	return result
 }
@@ -247,9 +247,10 @@ func ValidateArgs(schema map[string]any, args map[string]any) error {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// formatPath 将路径列表格式化为点分字符串。
+// FormatPath 将路径列表格式化为点分字符串。
 // 列表索引（如 "[0]"）直接拼接到前一个元素后，不加点分隔符。
-func formatPath(path []string) string {
+// Python: format_path(key_path)（8.12 导出供 stream_actor 使用）
+func FormatPath(path []string) string {
 	var buf strings.Builder
 	for i, key := range path {
 		if i == 0 || strings.HasPrefix(key, "[") {

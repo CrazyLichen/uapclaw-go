@@ -478,7 +478,7 @@ func mapsEqual(a, b map[string]any) bool {
 func leafNodesToMap(nodes []LeafNode) map[string]any {
 	m := make(map[string]any, len(nodes))
 	for _, n := range nodes {
-		m[formatPath(n.Path)] = n.Value
+		m[FormatPath(n.Path)] = n.Value
 	}
 	return m
 }
