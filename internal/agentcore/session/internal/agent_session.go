@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -189,7 +190,7 @@ func (s *AgentSession) Checkpointer() interfaces.Checkpointer {
 }
 
 // ActorManager 获取 Actor 管理器（当前始终返回 nil）
-func (s *AgentSession) ActorManager() any {
+func (s *AgentSession) ActorManager() *stream_actor.ActorManager {
 	return nil
 }
 
