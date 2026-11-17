@@ -895,3 +895,135 @@ func TestAtomicInvoke_转发call(t *testing.T) {
 		t.Fatalf("atomicInvoke 应转发 callInternal, err=%v", err)
 	}
 }
+
+// ──────────────────────────── Task10: StreamCall ────────────────────────────
+
+func TestStreamCall_未初始化分支(t *testing.T) {
+	v := NewVertex("n1", nil)
+	cbErr := make(chan error, 1)
+	// nodeSession nil → streamDone 送达错误 + doneCallback（vertex.py:725-735）
+	done := make(chan struct{})
+	go func() {
+		v.StreamCall(context.Background(), nil, func(err error) { cbErr <- err; close(done) })
+	}()
+	select {
+	case err := <-cbErr:
+		var be *exception.BaseError
+		if !errors.As(err, &be) || be.Code() != exception.StatusGraphVertexStreamCallError.Code() {
+			t.Fatalf("应报 queue manager 未初始化, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("doneCallback 应被调用")
+	}
+	select {
+	case err := <-v.streamDone:
+		if err == nil {
+			t.Fatal("streamDone 应携带错误")
+		}
+	default:
+		t.Fatal("streamDone 应已送达")
+	}
+}
+
+func TestStreamCall_启动链与成功收割(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	collectStarted := make(chan struct{})
+	v.executable = &fakeVertexExecutable{
+		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			close(collectStarted)
+			return map[string]any{"c": 1}, nil
+		},
+	}
+	event := make(chan struct{})
+	var cbCalled bool
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.StreamCall(context.Background(), event, func(err error) { cbCalled = true })
+	}()
+	// 外层 event 在能力就位后放行（vertex.py:745）
+	select {
+	case <-event:
+	case <-time.After(time.Second):
+		t.Fatal("外层 event 应被置位")
+	}
+	<-collectStarted
+	<-done
+	if cbCalled {
+		t.Fatal("成功路径不应调 error_callback")
+	}
+	select {
+	case err := <-v.streamDone:
+		if err != nil {
+			t.Fatalf("成功应送达 nil, got %v", err)
+		}
+	default:
+		t.Fatal("streamDone 应已送达")
+	}
+	if !v.streamDoneSet.Load() {
+		t.Fatal("done 标记应置位（Future.done 探测）")
+	}
+}
+
+func TestStreamCall_失败回调(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	boom := errors.New("collect failed")
+	v.executable = &fakeVertexExecutable{
+		collectFn: func(context.Context, <-chan map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return nil, boom
+		},
+	}
+	event := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		v.StreamCall(context.Background(), event, func(err error) { done <- err })
+	}()
+	<-event
+	select {
+	case err := <-done:
+		if !errors.Is(err, boom) {
+			t.Fatalf("error_callback 应收到原错误, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("失败应调 error_callback")
+	}
+	select {
+	case err := <-v.streamDone:
+		if !errors.Is(err, boom) {
+			t.Fatalf("streamDone 应携带错误, got %v", err)
+		}
+	default:
+		t.Fatal("streamDone 应已送达")
+	}
+}
+
+func TestStreamCall_取消分类(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	blockCtx, cancel := context.WithCancel(context.Background())
+	v.executable = &fakeVertexExecutable{
+		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			<-ctx.Done() // 阻塞至取消（对齐 Python task.cancel() 打断）
+			return nil, ctx.Err()
+		},
+	}
+	event := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.StreamCall(blockCtx, event, func(err error) { t.Error("取消路径不应调 error_callback") })
+	}()
+	<-event
+	time.Sleep(30 * time.Millisecond) // 等能力进入阻塞
+	cancel()
+	<-done
+	select {
+	case err := <-v.streamDone:
+		if err != nil {
+			t.Fatalf("取消路径 error 应保持 nil（对齐 Python CancelledError 不入 error 通道）, got %v", err)
+		}
+	default:
+		t.Fatal("streamDone 应已送达")
+	}
+}

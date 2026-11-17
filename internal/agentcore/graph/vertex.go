@@ -13,6 +13,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -611,12 +612,15 @@ func toMapAny(v any) map[string]any {
 // vertex.py:238-287 步骤一比一）
 func (v *Vertex) runExecutableWithRetry(ctx context.Context, ability components.ComponentAbility,
 	isSubgraph bool, config any, event chan struct{}) (bool, error) {
-	// ① 重试与超时配置（vertex.py:240-241；NodeSpec.Timeout<=0 即无超时）
+	// ① 重试与超时配置（vertex.py:240-241；Python getattr(timeout, -1.0) 默认无超时，
+	// Go NodeSpec.Timeout<=0 同义）
 	maxRetries := 0
 	timeout := -1.0
 	if v.nodeConfig != nil {
 		maxRetries = v.nodeConfig.MaxRetries
-		timeout = v.nodeConfig.Timeout
+		if v.nodeConfig.Timeout > 0 {
+			timeout = v.nodeConfig.Timeout
+		}
 	}
 	// ② 负重试数 → 直接执行（vertex.py:243-244）
 	if maxRetries < 0 {
@@ -751,6 +755,133 @@ func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.Compon
 	}
 	// ④ 无命中/handler None → 中断上抛（vertex.py:362）
 	return false, err
+}
+
+// ──────────────────────────── 流入侧执行（Python stream_call，vertex.py:718-798） ────────────────────────────
+
+// graphID 安全取工作流 ID（nodeSession 未初始化时返回空串，日志用）
+func (v *Vertex) graphID() string {
+	if v.nodeSession == nil {
+		return ""
+	}
+	return v.nodeSession.WorkflowID()
+}
+
+// deliverStreamDone 送达当轮流结果（Python _stream_done.set_result，缓冲 1 不阻塞）
+func (v *Vertex) deliverStreamDone(err error) {
+	select {
+	case v.streamDone <- err:
+	default:
+	}
+	v.streamDoneSet.Store(true)
+}
+
+// StreamCall 流入侧执行入口（Python stream_call，vertex.py:718-798 步骤一比一；
+// 实现 StreamConsumer 接口）
+func (v *Vertex) StreamCall(ctx context.Context, event chan struct{}, doneCallback func(error)) {
+	// 开始日志（vertex.py:719-721）
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_VERTEX_STREAM_CALL_START").
+		Str("graph_id", v.graphID()).
+		Str("node_id", v.nodeID).
+		Msgf("Begin to call stream-in node [%s]", v.nodeID)
+	// ① 计数与当轮容器（vertex.py:722-723）
+	v.streamCallCount.Add(1)
+	v.resetStreamDone()
+	// ② 未初始化分支（vertex.py:725-735）
+	if v.nodeSession == nil || v.nodeSession.ActorManager() == nil {
+		err := exception.BuildError(exception.StatusGraphVertexStreamCallError,
+			exception.WithParam("reason", "queue manager is not initialized"),
+			exception.WithParam("node_id", v.nodeID))
+		v.deliverStreamDone(err)
+		logger.Warn(logComponent).
+			Str("event_type", "GRAPH_VERTEX_STREAM_CALL_ERROR").
+			Str("graph_id", v.graphID()).
+			Str("node_id", v.nodeID).
+			Err(err).
+			Msgf("Failed to call stream-in node [%s, actor_manager is missing", v.nodeID)
+		if doneCallback != nil {
+			doneCallback(err)
+		}
+		return
+	}
+	var errorResult error
+	// ③ 逐能力启动：spawn → 能力级 event 就位 → 下一能力（vertex.py:738-745）
+	abilities := v.streamAbilities()
+	wg := &sync.WaitGroup{}
+	errCh := make(chan error, len(abilities)+1)
+spawnLoop:
+	for _, ability := range abilities {
+		e := make(chan struct{})
+		wg.Add(1)
+		go func(ab components.ComponentAbility) {
+			defer wg.Done()
+			// Python create_task(self._run_executable_with_retry(ability, event=e))：
+			// is_subgraph=False、config=None（vertex.py:742）
+			if _, err := v.runExecutableWithRetry(ctx, ab, false, nil, e); err != nil {
+				errCh <- err
+			}
+		}(ability)
+		select {
+		case <-e: // await e.wait()：策略在 _pre_stream 注册后置位
+		case <-ctx.Done():
+			break spawnLoop
+		}
+	}
+	// ④ 全部就位放行（vertex.py:745）
+	setEvent(event)
+	// ⑤ 收割（vertex.py:746-749 gather return_exceptions=True → 首个异常上抛）
+	finished := make(chan struct{})
+	go func() { wg.Wait(); close(finished) }()
+	select {
+	case <-finished:
+		close(errCh)
+		for err := range errCh {
+			if errorResult == nil {
+				errorResult = err
+			}
+		}
+		if errorResult == nil {
+			// 成功（vertex.py:750-752）
+			logger.Debug(logComponent).
+				Str("event_type", "GRAPH_VERTEX_STREAM_CALL_END").
+				Str("graph_id", v.graphID()).
+				Str("node_id", v.nodeID).
+				Msgf("Succeed to call stream-in node [%s]", v.nodeID)
+		} else {
+			// 失败（vertex.py:787-795）：error 日志 + error_callback
+			logger.Error(logComponent).
+				Str("event_type", "GRAPH_VERTEX_STREAM_CALL_ERROR").
+				Str("graph_id", v.graphID()).
+				Str("node_id", v.nodeID).
+				Err(errorResult).
+				Msgf("Failed to call stream-in node [%s]", v.nodeID)
+			if doneCallback != nil {
+				doneCallback(errorResult)
+			}
+		}
+	case <-ctx.Done():
+		// ⑥ 取消分类收割（vertex.py:753-786 CancelledError 分支）：
+		// ctx 级联取消在途能力（对齐 task.cancel()），不调 error_callback、
+		// error 保持 nil（对齐 Python CancelledError 不进入 error 通道）
+		wg.Wait()
+		close(errCh)
+		errCount := 0
+		for range errCh {
+			errCount++
+		}
+		logger.Warn(logComponent).
+			Str("event_type", "GRAPH_VERTEX_STREAM_CALL_ERROR").
+			Str("graph_id", v.graphID()).
+			Str("node_id", v.nodeID).
+			Int("cancelled", len(abilities)).
+			Int("finished", len(abilities)-errCount).
+			Int("error", errCount).
+			Msgf("Cancel to call stream-in node [%s]", v.nodeID)
+	}
+	// ⑦ finally（vertex.py:796-798）：送达结果 + 流输入埋点补发
+	v.deliverStreamDone(errorResult)
+	v.traceComponentStreamInputSend(ctx)
 }
 
 // ──────────────────────────── 批入编排（Python __call__/call/_atomic_invoke，vertex.py:364-419,660-716） ────────────────────────────
