@@ -388,7 +388,7 @@ func (f *fakeConsumer) IsDone() bool              { return f.done }
 // 讨论点 3：首帧拉起消费者、等 event 置位、未 handle 丢弃
 func TestActorSend_首帧拉起(t *testing.T) {
 	eventClosed := make(chan struct{})
-	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e); close(eventClosed) }}
+	v := &fakeConsumer{handle: true, done: true, eventFn: func(e chan struct{}) { close(e); close(eventClosed) }}
 	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
 	// 未 handle 直接丢弃，不拉起任务
@@ -425,7 +425,7 @@ func TestActorSend_任务已结束丢弃(t *testing.T) {
 
 // 讨论点 3：错误回调置 taskErr，后续首帧被拦截
 func TestActorSend_错误拦截(t *testing.T) {
-	v := &fakeConsumer{handle: true, callErr: errors.New("boom"),
+	v := &fakeConsumer{handle: true, done: true, callErr: errors.New("boom"),
 		eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
@@ -440,20 +440,26 @@ func TestActorSend_错误拦截(t *testing.T) {
 
 // 广播：帧进入全部 processor 主队列（不看 ability 匹配）
 func TestActorSend_广播全部processor(t *testing.T) {
-	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e) }}
+	v := &fakeConsumer{handle: true, done: true, eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v,
 		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
 		[][]string{{"A-stream"}}, -1)
 	if len(actor.processors) != 2 {
 		t.Fatal("应建两个 processor")
 	}
+	// 注册订阅路径须先于 Send（run 于 event 放行后启动，广播帧直接路由到订阅者）
+	qa := newPayloadQueue()
+	qb := newPayloadQueue()
+	actor.processors[components.ComponentAbilityCollect].processorQueues["A.x"] = []*payloadQueue{qa}
+	actor.processors[components.ComponentAbilityTransform].processorQueues["A.x"] = []*payloadQueue{qb}
 	ctx := context.Background()
-	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A"); err != nil {
+	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"x": "hello"}},
+		components.ComponentAbilityStream, true, "A"); err != nil {
 		t.Fatal(err)
 	}
-	for ab, p := range actor.processors {
-		if p.queue.len() != 1 {
-			t.Fatalf("processor %v 主队列应有 1 帧, got %d", ab, p.queue.len())
+	for ab, q := range map[string]*payloadQueue{"collect": qa, "transform": qb} {
+		if got, ok := q.getWithTimeout(ctx, time.Second); !ok || got != "hello" {
+			t.Fatalf("processor %s 应路由到帧, got %v ok=%v", ab, got, ok)
 		}
 	}
 }
@@ -461,7 +467,7 @@ func TestActorSend_广播全部processor(t *testing.T) {
 // D1 还原（8.11 前置）：外层 event 放行后 Send 启动【全部】processor.run
 // （Python send:98-100，含未走 Consume 注册的 ability 空转）。
 func TestActorSend_启动全部processor(t *testing.T) {
-	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e) }}
+	v := &fakeConsumer{handle: true, done: true, eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v,
 		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
 		[][]string{{"A-stream"}}, -1)
@@ -491,7 +497,7 @@ func TestActorSend_启动全部processor(t *testing.T) {
 // 讨论点 9：shutdown 级联取消（-race）
 func TestActorShutdown_级联取消(t *testing.T) {
 	wait := make(chan struct{})
-	v := &fakeConsumer{handle: true, callWaitCh: wait, eventFn: func(e chan struct{}) { close(e) }}
+	v := &fakeConsumer{handle: true, done: true, callWaitCh: wait, eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v, []components.ComponentAbility{components.ComponentAbilityCollect},
 		[][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
