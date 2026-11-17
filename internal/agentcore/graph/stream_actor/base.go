@@ -221,8 +221,10 @@ func (a *StreamActor) Send(ctx context.Context, message map[string]any,
 			default:
 			}
 		}
-		// 非首帧或 vertex 已 done → 丢弃（base.py:86-90）
-		if !firstFrame || a.vertex.IsDone() {
+		// 非首帧，或（首帧但 vertex 未收口）→ 丢弃（Python base.py:86-90
+		// not first_frame or not is_done；首帧仅在 vertex 处于轮次间隙 IsDone=true
+		// 时才允许 spawn——8.12 原移植缺取反，8.11 实施时修正并回归锁定）
+		if !firstFrame || !a.vertex.IsDone() {
 			logger.Warn(logComponent).
 				Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
 				Str("node_id", a.nodeID).

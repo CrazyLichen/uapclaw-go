@@ -61,6 +61,7 @@
 | 编号 | 内容 | 性质 | 回收条件 |
 |---|---|---|---|
 | D1 | ~~processor.run 启动点从 send 首帧挪至 consume 注册后~~ **已还原（8.11 前置，2026-11-17）**：启动点回归 Python send:98-100（Send 侧启动全部 processor），Consume 内启动段删除 | 原结构偏离已消除，回归规则 9/12 对齐 | 无（已对齐 Python） |
+| D-8.11a | **实施修正（8.11 期发现）**：Send 首帧 spawn 门卫条件移植缺取反——Python base.py:86 `not first_frame or not is_done()` 误写为 `!firstFrame \|\| IsDone()`，导致全新 Vertex（计数 0==0 → is_done=true）首帧永远被丢弃 | 已修正为 `!firstFrame \|\| !IsDone()`，回归用例锁定（首帧拉起/广播/补发三用例改用 done=true 桩） | 8.12 审查遗漏（fake 桩 done=false 恰好绕过该分支） | 无（已对齐 Python） |
 | D2 | asyncio 无界队列 → Go 带锁内存队列（slice+Cond 或等价） | 语言能力缺失（chan 无法无界） | 无 |
 | D3 | asyncio 单线程免锁 → Go 无锁依赖 D1 串行化，run/shutdown 并发由 ctx 取消兜底 | 伴生 D1 | 同 D1 |
 | D4 | `Transformer` 注解：Python `Callable[[ReadableStateLike], Any]` 与运行时用法（消息变换）不符，Go 按 `func(map[string]any) map[string]any` | 修正上游注解错误，行为对齐运行时 | 无 |

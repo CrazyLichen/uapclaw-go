@@ -531,7 +531,7 @@ func (f *fakeVertexConsumer) StreamCall(ctx context.Context, event chan struct{}
 	<-ctx.Done() // 阻塞保持任务存活（模拟真实能力执行中，END 帧可入队）
 }
 func (f *fakeVertexConsumer) ShouldHandleMessage() bool { return true }
-func (f *fakeVertexConsumer) IsDone() bool              { return false }
+func (f *fakeVertexConsumer) IsDone() bool              { return true }
 
 // newVertexAsProducer 构造以 n1 为流式生产者、n2 为消费者的 Vertex
 func newVertexAsProducer(t *testing.T) (*Vertex, *stream_actor.ActorManager) {
@@ -1038,4 +1038,57 @@ func TestRegisterStreamConsumer(t *testing.T) {
 	g2 := stream_actor.NewStreamGraph()
 	v.RegisterStreamConsumer(g2)
 	v.RegisterStreamConsumer(g2) // 幂等
+}
+
+// ──────────────────────────── Task12: -race 并发锁定 ────────────────────────────
+
+// TestVertex_双链并发_race 全链并发：真实 StreamActor 首帧 spawn StreamCall
+// （流入侧）与 Call（批入侧）并发握手。锁定 spec §1 屏障定序不变式——
+// 若未来某路径破坏「流先批后」定序，-race 当场报出。
+func TestVertex_双链并发_race(t *testing.T) {
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
+	v := NewVertex("n1", &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return map[string]any{"invoked": true}, nil
+		},
+	})
+	_ = v.Init(parent, nil)
+	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+		components.ComponentAbilityInvoke, components.ComponentAbilityCollect}})
+	spec := workflow.NewWorkflowSpec()
+	spec.StreamEdges = map[string][]string{"A": {"n1"}}
+	spec.CompConfigs = map[string]*workflow.NodeSpec{
+		"A":  {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"n1": {Abilities: v.componentAbility},
+	}
+	g := stream_actor.NewStreamGraph()
+	v.RegisterStreamConsumer(g)
+	am, err := stream_actor.NewActorManager(context.Background(), spec, g, false, &fakeVertexActorSession{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent.am = am
+	// 流入侧：首帧 spawn StreamCall（批入侧 Call 之前启动——不变式）
+	if err := am.Produce(context.Background(), "A", map[string]any{"A": "first"},
+		components.ComponentAbilityStream, true); err != nil {
+		t.Fatal(err)
+	}
+	// 批入侧：Call 等待当轮 streamDone 握手
+	callDone := make(chan error, 1)
+	go func() {
+		_, err := v.Call(context.Background(), map[string]any{"st": 1}, nil)
+		callDone <- err
+	}()
+	select {
+	case err := <-callDone:
+		if err != nil {
+			t.Fatalf("双链握手应成功, err=%v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Call 应在流侧完成后返回")
+	}
+	if v.callCount.Load() != 1 || v.streamCallCount.Load() != 1 {
+		t.Fatalf("计数应对账, call=%d stream=%d", v.callCount.Load(), v.streamCallCount.Load())
+	}
 }
