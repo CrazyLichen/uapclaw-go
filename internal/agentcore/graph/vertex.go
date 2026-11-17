@@ -759,6 +759,15 @@ func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.Compon
 
 // ──────────────────────────── 流入侧执行（Python stream_call，vertex.py:718-798） ────────────────────────────
 
+// 编译期断言：Vertex 实现 StreamConsumer（Python 双基类之一的 StreamConsumer ABC）
+var _ stream_actor.StreamConsumer = (*Vertex)(nil)
+
+// RegisterStreamConsumer 注册到流式节点注册表（Python graph.py 构图期
+// add_stream_consumer(vertex, node_id) 的薄封装；实际调用方为 8.1 PregelGraph）
+func (v *Vertex) RegisterStreamConsumer(g *stream_actor.StreamGraph) {
+	g.AddStreamConsumer(v, v.nodeID)
+}
+
 // graphID 安全取工作流 ID（nodeSession 未初始化时返回空串，日志用）
 func (v *Vertex) graphID() string {
 	if v.nodeSession == nil {
