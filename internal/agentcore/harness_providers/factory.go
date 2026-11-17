@@ -1,7 +1,6 @@
 package harness_providers
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -220,29 +219,6 @@ func ManifestSourceFromPath(manifestPath string) (hschema.AgentTemplateSpec, err
 		return hschema.AgentTemplateSpec{}, err
 	}
 	return hresources.LoadAgentTemplatePackage(manifest)
-}
-
-// LoadManifestAny 从「已解析 spec / 路径字符串」两态加载清单。
-// Python: factory.py:load_manifest 的 union 形态（25.1f
-// create_native_harness_protocol 的 manifest 参数直接消费）。
-func LoadManifestAny(manifest any) (hschema.AgentTemplateSpec, error) {
-	switch v := manifest.(type) {
-	case hschema.AgentTemplateSpec:
-		return v, nil
-	case string:
-		return ManifestSourceFromPath(v)
-	case map[string]any:
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return hschema.AgentTemplateSpec{}, err
-		}
-		var spec hschema.AgentTemplateSpec
-		if err := json.Unmarshal(raw, &spec); err != nil {
-			return hschema.AgentTemplateSpec{}, err
-		}
-		return spec, nil
-	}
-	return hschema.AgentTemplateSpec{}, fmt.Errorf("unsupported manifest type %T", manifest)
 }
 
 // ManifestMcpServers 把清单的 MCP 声明翻译成协议 MCP 服务器配置。

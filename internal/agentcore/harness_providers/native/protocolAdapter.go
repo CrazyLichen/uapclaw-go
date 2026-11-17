@@ -389,7 +389,8 @@ func (a *NativeHarnessProtocolAdapter) OpenSession(ctx context.Context, hc hp.Ha
 	if restored != nil {
 		a.record("load_state(stop_condition_state)")
 		if coord := agent.Coordinator(); coord != nil {
-			coord.LoadState(coordinatorStateFromMap(restored.DeepAgent["stop_condition_state"]))
+			scs, _ := restored.DeepAgent["stop_condition_state"].(map[string]any)
+			coord.LoadState(coordinatorStateFromMap(scs))
 		}
 	}
 	// ⑩ 输出迭代器
@@ -740,7 +741,8 @@ func (p *NativeV2HarnessProvider) Create(config hp.JsonObject) (hp.HarnessProtoc
 		}
 		capacity = n
 	}
-	spec, err := deepAgentSpecFromMap(m["deep_agent"])
+	deepAgentRaw, _ := m["deep_agent"].(map[string]any)
+	spec, err := deepAgentSpecFromMap(deepAgentRaw)
 	if err != nil {
 		return nil, err
 	}
@@ -748,7 +750,19 @@ func (p *NativeV2HarnessProvider) Create(config hp.JsonObject) (hp.HarnessProtoc
 		spec.Language = lang
 	}
 	a := NewNativeV2Adapter(spec, nil, capacity)
-	if tpl, exists := m["agent_template"]; exists {
+	if raw, exists := m["agent_template"]; exists {
+		// JSON 边界就在此处：配置里的是 map[string]any，转成具体类型后
+		// 交给具名入口。路径态由外部调用方经
+		// harness_providers.ManifestSourceFromPath 自行转换（对齐 15.5
+		// factory.go:212-216「union 在 API 层拆开」决策）。
+		tplMap, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("agent_template must be an object")
+		}
+		tpl, err := agentTemplateSpecFromMap(tplMap)
+		if err != nil {
+			return nil, err
+		}
 		if err := CreateNativeHarnessProtocol(a, tpl); err != nil {
 			return nil, err
 		}
@@ -756,13 +770,13 @@ func (p *NativeV2HarnessProvider) Create(config hp.JsonObject) (hp.HarnessProtoc
 	return a, nil
 }
 
-// CreateNativeHarnessProtocol 用模板加载器装配未启动的 adapter。
+// CreateNativeHarnessProtocol 用模板清单装配未启动的 adapter。
 // Python: protocol_adapter.py:429-455 create_native_harness_protocol
-func CreateNativeHarnessProtocol(a *NativeHarnessProtocolAdapter, manifest any) error {
-	tpl, err := harness_providers.LoadManifestAny(manifest)
-	if err != nil {
-		return err
-	}
+//
+// 入参只收 hschema.AgentTemplateSpec 具体类型；Python 的
+// `AgentTemplateSpec | str | Path` 三态 union 在 Go API 层拆开：
+// 路径态由调用方先调 ManifestSourceFromPath 转换后传入。
+func CreateNativeHarnessProtocol(a *NativeHarnessProtocolAdapter, tpl hschema.AgentTemplateSpec) error {
 	if a.spec.Card == nil {
 		card := tpl.AgentCard
 		a.spec.Card = &card
@@ -972,8 +986,7 @@ func decodeNativeCheckpoint(data hp.JsonObject) (NativeCheckpoint, error) {
 
 // coordinatorStateFromMap 把快照里的 stop_condition_state 还原为 LoopCoordinatorState。
 // D-5：Python load_state(data) 的 Go 等价（D-6 改名后为 LoadState）。
-func coordinatorStateFromMap(v any) taskloop.LoopCoordinatorState {
-	m, _ := v.(map[string]any)
+func coordinatorStateFromMap(m map[string]any) taskloop.LoopCoordinatorState {
 	stopReason, _ := m["stop_reason"].(string)
 	evStates := make(map[string]map[string]any)
 	if raw, ok := m["evaluator_states"].(map[string]any); ok {
@@ -1130,21 +1143,75 @@ func turnMessagesFromAny(v any) ([]hp.TurnMessage, error) {
 
 // structToJsonObject 把快照结构体转成协议 JsonObject。
 // Python: snapshot.model_dump(mode="json")
+//
+// 直接按 jsontag 逐字段构造，不经 []byte 中转：避免一次 Marshal + 一次
+// Unmarshal，也避免 JSON 数字被解成 float64（iteration 等整数字段保持 int）。
+// SavedInput / Queued 已含 jsontag，逐条转成 JsonObject 保持键名一致。
 func structToJsonObject(snap NativeCheckpoint) (hp.JsonObject, error) {
-	raw, err := json.Marshal(snap)
-	if err != nil {
-		return nil, err
+	out := hp.JsonObject{
+		"session_id":    snap.SessionID,
+		"card_id":       snap.CardID,
+		"contexts":      snap.Contexts,
+		"deepagent":     snap.DeepAgent,
+		"queued":        savedInputsToJsonObjects(snap.Queued),
+		"output_state":  snap.OutputState,
 	}
-	var out hp.JsonObject
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
+	if snap.Cwd != "" {
+		out["cwd"] = snap.Cwd
+	}
+	if snap.PausedInput != nil {
+		out["paused_input"] = savedInputToJsonObject(*snap.PausedInput)
+	}
+	if snap.PausedQuery != nil {
+		out["paused_query"] = *snap.PausedQuery
 	}
 	return out, nil
 }
 
+// savedInputToJsonObject 把单个 SavedInput 按 jsontag 转成 JsonObject。
+func savedInputToJsonObject(s SavedInput) hp.JsonObject {
+	return hp.JsonObject{
+		"message_id": s.MessageID,
+		"turn_id":    s.TurnID,
+		"content":    s.Content,
+		"metadata":   s.Metadata,
+		"mode":       s.Mode,
+	}
+}
+
+// savedInputsToJsonObjects 批量转 SavedInput（保持顺序，空集返回非 nil 空切片）。
+func savedInputsToJsonObjects(items []SavedInput) []any {
+	out := make([]any, 0, len(items))
+	for _, s := range items {
+		out = append(out, savedInputToJsonObject(s))
+	}
+	return out
+}
+
+// agentTemplateSpecFromMap 从配置字典解析 AgentTemplateSpec。
+// Python: :444 AgentTemplateSpec.model_validate(template)
+//
+// 参数只收 map[string]any（config 的 JSON 边界形态），不开放 any。
+func agentTemplateSpecFromMap(v map[string]any) (hschema.AgentTemplateSpec, error) {
+	spec := hschema.AgentTemplateSpec{}
+	if v == nil {
+		return spec, nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return spec, err
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return spec, err
+	}
+	return spec, nil
+}
+
 // deepAgentSpecFromMap 从配置字典解析 DeepAgentSpec。
 // Python: :473 DeepAgentSpec.model_validate(values.get("deep_agent") or {})
-func deepAgentSpecFromMap(v any) (atschema.DeepAgentSpec, error) {
+//
+// 参数收窄为 map[string]any（调用方只有这一形态），不开放 any。
+func deepAgentSpecFromMap(v map[string]any) (atschema.DeepAgentSpec, error) {
 	spec := atschema.NewDeepAgentSpec()
 	if v == nil {
 		return spec, nil
