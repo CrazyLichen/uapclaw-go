@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -114,6 +115,7 @@ func TestVertex_Reset(t *testing.T) {
 type fakeVertexExecutable struct {
 	BaseExecutable[map[string]any, map[string]any]
 	invokeFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
+	streamFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[map[string]any], error)
 	collectFn func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
 }
 
@@ -123,6 +125,16 @@ func (f *fakeVertexExecutable) OnInvoke(ctx context.Context, inputs map[string]a
 		return f.invokeFn(ctx, inputs, sess, kw)
 	}
 	return map[string]any{"invoked": true}, nil
+}
+
+func (f *fakeVertexExecutable) OnStream(ctx context.Context, inputs map[string]any,
+	sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[map[string]any], error) {
+	if f.streamFn != nil {
+		return f.streamFn(ctx, inputs, sess, kw)
+	}
+	ch := make(chan StreamChunk[map[string]any])
+	close(ch)
+	return ch, nil
 }
 
 func (f *fakeVertexExecutable) OnCollect(ctx context.Context, inputs <-chan map[string]any,
@@ -737,10 +749,11 @@ func TestBuildTimeoutError_命中与回落(t *testing.T) {
 	if !errors.As(err, &be) || be.Code() != exception.StatusWorkflowExecutionTimeout.Code() {
 		t.Fatalf("应回落执行超时错误, got %v", err)
 	}
-	// 注册 handler 返回自定义错误 → 命中（vertex.py:306-316）
+	// 注册 handler 返回自定义错误 → 命中（vertex.py:306-316）；defer 注销防跨用例泄漏
 	custom := exception.BuildError(exception.StatusGraphVertexStreamCallTimeout)
-	callback.GetCallbackFramework().OnCustom("component_timeout_error",
-		func(ctx context.Context, data map[string]any) any { return custom })
+	timeoutFn := func(ctx context.Context, data map[string]any) any { return custom }
+	callback.GetCallbackFramework().OnCustom("component_timeout_error", timeoutFn)
+	defer callback.GetCallbackFramework().OffCustom("component_timeout_error", timeoutFn)
 	err2 := v.buildTimeoutError(context.Background(), errors.New("t"), 1.0)
 	if !errors.Is(err2, custom) {
 		t.Fatalf("应命中 handler 自定义错误, got %v", err2)
@@ -760,12 +773,125 @@ func TestRunErrorRecovery_三出口(t *testing.T) {
 	}
 	// handler 命中 → postInvoke 恢复并成功（vertex.py:356-358）
 	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
-	callback.GetCallbackFramework().OnCustom("component_error_recovery",
-		func(ctx context.Context, data map[string]any) any {
-			return map[string]any{"recovered": true}
-		})
+	recoveryFn := func(ctx context.Context, data map[string]any) any {
+		return map[string]any{"recovered": true}
+	}
+	callback.GetCallbackFramework().OnCustom("component_error_recovery", recoveryFn)
+	defer callback.GetCallbackFramework().OffCustom("component_error_recovery", recoveryFn)
 	ok, err := v2.runErrorRecovery(context.Background(), components.ComponentAbilityInvoke, boom)
 	if err != nil || !ok {
 		t.Fatalf("恢复命中应返回成功, ok=%v err=%v", ok, err)
+	}
+}
+
+// ──────────────────────────── Task9: callInternal / Call / atomicInvoke ────────────────────────────
+
+func TestCallInternal_未初始化报错(t *testing.T) {
+	v := NewVertex("n1", nil)
+	err := v.callInternal(context.Background(), nil)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != exception.StatusGraphVertexExecutionError.Code() {
+		t.Fatalf("未初始化应报顶点执行错误, got %v", err)
+	}
+}
+
+func TestCallInternal_无流数据报错(t *testing.T) {
+	// 有流能力、非 End、流侧从未启动 → no stream data in（vertex.py:701-704）
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	// COLLECT（流能力）执行成功但流侧从未被 StreamActor 触发 → no stream data in
+	err := v.callInternal(context.Background(), nil)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != exception.StatusGraphVertexStreamCallError.Code() {
+		t.Fatalf("应报流调用错误, got %v", err)
+	}
+}
+
+func TestCallInternal_流等待握手(t *testing.T) {
+	// 流侧先启动（stream=1,call=0）→ callInternal 等待 streamDone
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v.componentAbility = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	v.streamCallCount.Store(1) // 模拟流侧已启动
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		v.streamDone <- nil // 流侧完成
+	}()
+	if err := v.callInternal(context.Background(), nil); err != nil {
+		t.Fatalf("流侧成功结果应放行, err=%v", err)
+	}
+	// 流侧失败 → 转抛（vertex.py:696-697）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v2.streamCallCount.Store(1)
+	boom := errors.New("stream failed")
+	go func() { v2.streamDone <- boom }()
+	if err := v2.callInternal(context.Background(), nil); !errors.Is(err, boom) {
+		t.Fatalf("流侧失败应转抛, got %v", err)
+	}
+	// 超时分支 D-1（vertex.py:698-700）
+	v3, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v3.streamCallCount.Store(1)
+	v3.streamCalledTimeout = 0.05
+	err3 := v3.callInternal(context.Background(), nil)
+	var be *exception.BaseError
+	if !errors.As(err3, &be) || be.Code() != exception.StatusGraphVertexStreamCallTimeout.Code() {
+		t.Fatalf("流等待超时应报超时错误, got %v", err3)
+	}
+}
+
+func TestCall_成功路径(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	// post_commit=true → AtomicInvoke 路径（需 state 实现 WorkflowState——已满足）
+	res, err := v.Call(context.Background(), map[string]any{"st": 1}, nil)
+	if err != nil {
+		t.Fatalf("Call 应成功, err=%v", err)
+	}
+	ids, ok := res["source_node_id"].([]string)
+	if !ok || len(ids) != 1 || ids[0] != "n1" {
+		t.Fatalf("应返回 source_node_id 信封, got %v", res)
+	}
+	if v.callCount.Load() != 1 {
+		t.Fatal("finally 应计数（vertex.py:414）")
+	}
+	if v.isStarted.Load() || v.isCallStarted.Load() {
+		t.Fatal("finally 应复位标志（vertex.py:415-416）")
+	}
+}
+
+func TestCall_异常路径触发NodeError(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v.executable = &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	fired := make(chan string, 1)
+	nodeErrorFn := func(ctx context.Context, data map[string]any) any {
+		fired <- "fired"
+		return nil
+	}
+	callback.GetCallbackFramework().OnCustom(string(callback.NodeError), nodeErrorFn)
+	defer callback.GetCallbackFramework().OffCustom(string(callback.NodeError), nodeErrorFn)
+	_, err := v.Call(context.Background(), nil, nil)
+	if err == nil {
+		t.Fatal("批入失败应上抛")
+	}
+	select {
+	case <-fired:
+	case <-time.After(time.Second):
+		t.Fatal("非中断失败应触发 NODE_ERROR 事件")
+	}
+	if v.callCount.Load() != 1 {
+		t.Fatal("失败路径 finally 也应计数")
+	}
+}
+
+func TestAtomicInvoke_转发call(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	// atomicInvoke → callInternal（vertex.py:418-419）：未初始化不成立时走正常链，
+	// 此处经 stream 侧未启动的正常批入返回 nil error
+	if err := func() error {
+		_, err := v.atomicInvoke(context.Background(), map[string]any{"config": nil})
+		return err
+	}(); err != nil {
+		t.Fatalf("atomicInvoke 应转发 callInternal, err=%v", err)
 	}
 }

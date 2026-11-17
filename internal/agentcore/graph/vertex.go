@@ -41,6 +41,8 @@ import (
 // 双基类（AsyncAtomicNode 由 8.10 AtomicNode 承载，于批入编排任务接入；
 // StreamConsumer 三方法由本类型实现）。
 type Vertex struct {
+	// AtomicNode 承载 Python AsyncAtomicNode 基类（8.10，构造期注入 _atomic_invoke 回调）
+	AtomicNode
 	// executable 可执行体（Python: self._executable: Executable；GeneralExecutor
 	// 对齐 Python GeneralExecutor = Executable[dict, dict] 的默认实例化形状）
 	executable GeneralExecutor
@@ -101,6 +103,8 @@ func NewVertex(nodeID string, executable GeneralExecutor) *Vertex {
 		streamCalledTimeout: 10,
 		streamDone:          make(chan error, 1),
 	}
+	// Python AsyncAtomicNode 基类继承 → Go 构造期注入 _atomic_invoke 回调（8.10 D1 承载）
+	v.AtomicNode = NewAtomicNode(v.atomicInvoke)
 	v.isFirstInit.Store(true)
 	return v
 }
@@ -747,6 +751,179 @@ func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.Compon
 	}
 	// ④ 无命中/handler None → 中断上抛（vertex.py:362）
 	return false, err
+}
+
+// ──────────────────────────── 批入编排（Python __call__/call/_atomic_invoke，vertex.py:364-419,660-716） ────────────────────────────
+
+// callInternal 执行批入能力与流等待（Python call，vertex.py:660-709 步骤①-⑥一比一）
+func (v *Vertex) callInternal(ctx context.Context, config any) error {
+	// ① 未初始化检查（vertex.py:661-664）
+	if v.nodeSession == nil || v.executable == nil {
+		return exception.BuildError(exception.StatusGraphVertexExecutionError,
+			exception.WithParam("reason", "node is not initialized"),
+			exception.WithParam("node_id", v.nodeID))
+	}
+	// ② 批入能力顺序执行（vertex.py:665-685）
+	isSubgraph := v.executable.GraphInvoker()
+	currentAbility := components.ComponentAbility(-1)
+	var callAbility []components.ComponentAbility
+	for _, ability := range v.componentAbility {
+		if ability == components.ComponentAbilityInvoke || ability == components.ComponentAbilityStream {
+			callAbility = append(callAbility, ability)
+		}
+	}
+	for _, ability := range callAbility {
+		currentAbility = ability
+		if _, err := v.runExecutableWithRetry(ctx, ability, isSubgraph, config, nil); err != nil {
+			// ExecutionError 分支（vertex.py:677-685）
+			var be *exception.BaseError
+			if errors.As(err, &be) && be.Category() == exception.ErrorCategoryExecution {
+				var abilityName any
+				if currentAbility >= 0 {
+					abilityName = currentAbility.Name()
+				}
+				logger.Error(logComponent).
+					Str("event_type", "GRAPH_VERTEX_CALL_ERROR").
+					Str("node_id", v.nodeID).
+					Str("error_message", err.Error()).
+					Any("ability", abilityName).
+					Msg("Node ability call failed")
+			}
+			return err
+		}
+	}
+	if len(callAbility) == 0 {
+		v.traceComponentBegin(ctx)
+	}
+	// ③ 流等待（vertex.py:687-704）
+	if v.streamCalled() {
+		streamTimeout := v.streamCalledTimeout
+		if !(streamTimeout > 0) {
+			streamTimeout = -1 // Python None → 无超时
+		}
+		var resultErr error
+		if streamTimeout > 0 {
+			select {
+			case resultErr = <-v.streamDone:
+			case <-time.After(secondsToDuration(streamTimeout)):
+				// D-1：仅放弃等待，流侧任务继续（对齐 Python 等待 Future 结构）
+				return exception.BuildError(exception.StatusGraphVertexStreamCallTimeout,
+					exception.WithParam("timeout", streamTimeout),
+					exception.WithParam("node_id", v.nodeID))
+			}
+		} else {
+			resultErr = <-v.streamDone
+		}
+		if resultErr != nil {
+			return resultErr
+		}
+	} else if v.hasStreamCall && !v.isEndNode {
+		// 有流能力但整轮无流输入 → 报错（vertex.py:701-704）
+		return exception.BuildError(exception.StatusGraphVertexStreamCallError,
+			exception.WithParam("reason", "no stream data in"),
+			exception.WithParam("node_id", v.nodeID))
+	}
+	// ④ 生产者收口登记（vertex.py:705-706）
+	if am := v.nodeSession.ActorManager(); am != nil {
+		am.MarkProducerDone(v.nodeID)
+	}
+	// ⑤ 流式模式收尾埋点（vertex.py:708-709）
+	v.traceComponentDone(ctx)
+	return nil
+}
+
+// Call 批入编排入口（Python __call__，vertex.py:364-416 步骤一比一）：
+// 返回 {"source_node_id": [nodeID]} 喂给 GraphState.SourceNodeID（8.8 首个真实消费点）
+func (v *Vertex) Call(ctx context.Context, stateVal any, config any) (map[string]any, error) {
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_VERTEX_CALL_START").
+		Str("graph_id", v.nodeSession.WorkflowID()).
+		Str("node_id", v.nodeID).
+		Msgf("Begin to call batch-in node [%s]", v.nodeID)
+	// finally（vertex.py:413-416）：计数与标志复位（成功/失败都执行）
+	defer func() {
+		v.callCount.Add(1)
+		v.isStarted.Store(false)
+		v.isCallStarted.Store(false)
+	}()
+	nodeOutput, callErr := func() (any, error) {
+		// post_commit 分流（vertex.py:368-371）
+		if v.executable.PostCommit() {
+			if _, err := v.AtomicInvoke(ctx, map[string]any{
+				"config": config, "session": v.nodeSession}); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}
+		if err := v.callInternal(ctx, config); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}()
+	if callErr == nil {
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_CALL_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Msgf("Succeed to call batch-in node [%s]", v.nodeID)
+		nodeOutput = v.nodeSession.State().Get(state.StringKey(v.nodeID))
+		// NODE_EXECUTED 事件（vertex.py:377-383）
+		abilityNames := make([]string, 0, len(v.componentAbility))
+		for _, a := range v.componentAbility {
+			abilityNames = append(abilityNames, a.Name())
+		}
+		callback.Trigger(ctx, string(callback.NodeExecuted), map[string]any{
+			"node_id":  v.nodeID,
+			"ability":  abilityNames,
+			"graph_id": v.nodeSession.WorkflowID(),
+			"inputs":   stateVal,
+			"outputs":  nodeOutput,
+		})
+		return map[string]any{"source_node_id": []string{v.nodeID}}, nil
+	}
+	// 异常路径（vertex.py:386-412）
+	if v.nodeSession.Tracer() != nil {
+		v.traceError(ctx, callErr)
+	}
+	var be *exception.BaseError
+	var gi *pregel.GraphInterrupt
+	if errors.As(callErr, &be) {
+		logger.Error(logComponent).
+			Str("event_type", "GRAPH_VERTEX_CALL_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Int("error_code", be.Code()).
+			Str("error_msg", be.Message()).
+			Err(callErr).
+			Msgf("Failed to call batch-in node [%s]", v.nodeID)
+	} else if errors.As(callErr, &gi) {
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_VERTEX_CALL_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Msgf("Interrupt to call batch-in node [%s]", v.nodeID)
+	} else {
+		logger.Error(logComponent).
+			Str("event_type", "GRAPH_VERTEX_CALL_END").
+			Str("graph_id", v.nodeSession.WorkflowID()).
+			Str("node_id", v.nodeID).
+			Err(callErr).
+			Msgf("Failed to call batch-in node [%s]", v.nodeID)
+	}
+	if !errors.As(callErr, &gi) {
+		// 非中断 → NODE_ERROR 事件（vertex.py:405-411）
+		callback.Trigger(ctx, string(callback.NodeError), map[string]any{
+			"node_id":  v.nodeID,
+			"graph_id": v.nodeSession.WorkflowID(),
+			"error":    callErr,
+		})
+	}
+	return nil, callErr
+}
+
+// atomicInvoke 原子回调（Python _atomic_invoke，vertex.py:418-419：转发 call(config)）
+func (v *Vertex) atomicInvoke(ctx context.Context, kwargs map[string]any) (any, error) {
+	return nil, v.callInternal(ctx, kwargs["config"])
 }
 
 // ──────────────────────────── 批入前/后处理（Python _pre_invoke/_post_invoke，vertex.py:421-567） ────────────────────────────
