@@ -762,6 +762,18 @@ func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.Compon
 // 编译期断言：Vertex 实现 StreamConsumer（Python 双基类之一的 StreamConsumer ABC）
 var _ stream_actor.StreamConsumer = (*Vertex)(nil)
 
+// ApplyNodeConfig 装配期节点规格注入（偏差 D-3 的装配面：8.15 NodeConfig 管路
+// 回填前由构图层（8.1）与集成装配直接驱动 init 的派生逻辑；步骤与 init 一致）
+func (v *Vertex) ApplyNodeConfig(nc any) {
+	v.applyNodeConfig(nc)
+}
+
+// SetEndNode 装配期 End 节点标记（Python graph.py 构图期设置 is_end_node 的
+// 对应物；调用方为 8.1 PregelGraph.Compile）
+func (v *Vertex) SetEndNode(isEnd bool) {
+	v.isEndNode = isEnd
+}
+
 // RegisterStreamConsumer 注册到流式节点注册表（Python graph.py 构图期
 // add_stream_consumer(vertex, node_id) 的薄封装；实际调用方为 8.1 PregelGraph）
 func (v *Vertex) RegisterStreamConsumer(g *stream_actor.StreamGraph) {

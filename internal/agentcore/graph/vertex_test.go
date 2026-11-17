@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -17,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 )
@@ -1091,4 +1093,328 @@ func TestVertex_双链并发_race(t *testing.T) {
 	if v.callCount.Load() != 1 || v.streamCallCount.Load() != 1 {
 		t.Fatalf("计数应对账, call=%d stream=%d", v.callCount.Load(), v.streamCallCount.Load())
 	}
+}
+
+// ──────────────────────────── Task12: 覆盖率补强 ────────────────────────────
+
+// templateExe 带 Template 鸭子探测的桩（sanitizeEndNodeInputs 混合模式）
+type templateExe struct {
+	fakeVertexExecutable
+	tpl *fakeTemplate
+}
+
+func (t *templateExe) Template() templateLike { return t.tpl }
+
+type fakeTemplate struct{ count int }
+
+func (t *fakeTemplate) SetDataSourceCount(n int) { t.count = n }
+
+func TestSanitizeEndNodeInputs_混合模式(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	v.isEndNode = true
+	v.hasCall = true
+	v.hasStreamCall = true
+	// template 缺失 → 原样返回（vertex.py:447-449）
+	in := map[string]any{"a": "x"}
+	if got := v.sanitizeEndNodeInputs(context.Background(), in, map[string]any{}); got == nil {
+		t.Fatal("无模板应原样返回")
+	}
+	// 有模板 + 流侧源全部未执行 → set_data_source_count(0)（vertex.py:460-464）
+	exe := &templateExe{tpl: &fakeTemplate{}}
+	v.executable = exe
+	v.applyNodeConfig(&workflow.NodeSpec{
+		StreamIOConfigs: &workflow.CompIOConfig{InputsSchema: map[string]any{
+			"x": "${A.out}"}}})
+	got := v.sanitizeEndNodeInputs(context.Background(), in, map[string]any{})
+	if got == nil || exe.tpl.count != 0 {
+		t.Fatalf("混合模式流源全未执行应清零数据源计数, count=%d", exe.tpl.count)
+	}
+	// 流侧源已执行 → 不清零（count 不再变化）
+	v.stateView().UpdateAndCommitWorkflowState(map[string]any{"executed_nodes": []string{"A"}})
+	_ = v.sanitizeEndNodeInputs(context.Background(), in, map[string]any{})
+	// hasCall=false（非混合）→ 短路返回（vertex.py:451-452）
+	v2, _ := newTraceVertex(t, false)
+	v2.isEndNode = true
+	exe2 := &templateExe{tpl: &fakeTemplate{}}
+	v2.executable = exe2
+	_ = v2.sanitizeEndNodeInputs(context.Background(), map[string]any{}, map[string]any{})
+	if exe2.tpl.count != 0 {
+		t.Fatal("非混合模式不应触达模板")
+	}
+	// 流 schema 为空 → 返回（vertex.py:458-459）
+	v3, _ := newTraceVertex(t, false)
+	v3.isEndNode = true
+	v3.hasCall = true
+	v3.hasStreamCall = true
+	exe3 := &templateExe{tpl: &fakeTemplate{}}
+	v3.executable = exe3
+	_ = v3.sanitizeEndNodeInputs(context.Background(), map[string]any{}, map[string]any{})
+}
+
+func TestTraceComponentBegin_元数据钩子执行(t *testing.T) {
+	// TraceMetadata 钩子：返回值不透传（D-4）但执行 + panic 告警路径（vertex.py:834-846）
+	tr := tracer.NewTracer()
+	tr.Init(stream.NewStreamWriterManager(stream.NewStreamEmitter()))
+	parent := &fakeInnerSession{cfg: config.NewSessionConfig(context.Background()),
+		st: state.NewInMemoryWorkflowState(), id: "s1", tr: tr}
+	v := NewVertex("n1", &traceMetaExe{})
+	_ = v.Init(parent, nil)
+	v.traceComponentBegin(context.Background())
+	// panic 钩子
+	v2 := NewVertex("n1", &traceMetaPanicExe{})
+	_ = v2.Init(parent, nil)
+	v2.isStarted.Store(false)
+	v2.traceComponentBegin(context.Background())
+}
+
+// traceMetaExe 实现 TraceMetadata 钩子
+type traceMetaExe struct {
+	fakeVertexExecutable
+}
+
+func (t *traceMetaExe) TraceMetadata() map[string]any { return map[string]any{"k": "v"} }
+
+// traceMetaPanicExe 钩子 panic 桩
+type traceMetaPanicExe struct {
+	fakeVertexExecutable
+}
+
+func (t *traceMetaPanicExe) TraceMetadata() map[string]any { panic("hook failed") }
+
+func TestIsStreamSourceStillPending_分支(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	// actor_manager nil → false（vertex.py:522-524）
+	if v.isStreamSourceStillPending("A") {
+		t.Fatal("无 actor manager 应 false")
+	}
+	// 有 manager：未匹配组 → should_sanitize true → pending false（取反）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	if v2.isStreamSourceStillPending("Z") {
+		t.Fatal("无匹配组应 pending=false")
+	}
+	// 单源组 AND 依赖 → 不 sanitize → pending true
+	if !v2.isStreamSourceStillPending("A") {
+		t.Fatal("单源组 AND 依赖应 pending=true")
+	}
+}
+
+func TestApplyNodeConfig与SetEndNode(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	v.ApplyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+		components.ComponentAbilityTransform}})
+	v.SetEndNode(true)
+	if !v.isEndNode {
+		t.Fatal("SetEndNode 应生效")
+	}
+}
+
+func TestTraceMethods_有效链路(t *testing.T) {
+	// tracer 有效 handler：八方法全链路不 panic（TriggerWorkflow 真实下发）
+	tr := tracer.NewTracer()
+	tr.Init(stream.NewStreamWriterManager(stream.NewStreamEmitter()))
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1", tr: tr}
+	v := NewVertex("n1", &fakeVertexExecutable{})
+	_ = v.Init(parent, nil)
+	ctx := context.Background()
+	v.traceComponentBegin(ctx)
+	v.traceComponentInputs(ctx, map[string]any{"a": 1})
+	v.traceComponentOutputs(ctx, map[string]any{"b": 2})
+	v.traceComponentStreamOutput(ctx, &stream.OutputSchema{Type: "t"})
+	v.traceComponentDone(ctx)
+	v.traceError(ctx, errors.New("e"))
+	v.traceInnerError(ctx, errors.New("inner"))
+	v.traceComponentStreamInputSend(ctx)
+	// 子图组件类型 → RegisterWorkflowSpanManager 分支（vertex.py:819-820）
+	v.executable = &subWorkflowExe{}
+	v.isStarted.Store(false)
+	v.traceComponentBegin(ctx)
+}
+
+// subWorkflowExe ComponentType=sub_workflow 的桩
+type subWorkflowExe struct {
+	fakeVertexExecutable
+}
+
+func (s *subWorkflowExe) ComponentType() string { return subWorkflowComponent }
+
+func TestWorkflowStateList_三态(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	// nil → nil
+	if workflowStateList(v.stateView(), "missing") != nil {
+		t.Fatal("缺失键应 nil")
+	}
+	// []any 混合
+	v.stateView().UpdateAndCommitWorkflowState(map[string]any{"k": []any{"a", 1, "b"}})
+	got := workflowStateList(v.stateView(), "k")
+	if len(got) != 2 {
+		t.Fatalf("[]any 应过滤非字符串, got %v", got)
+	}
+}
+
+func TestClearInteractive_未设置(t *testing.T) {
+	// 无交互输入 → Get nil → 不更新（vertex.py:657-658 分支）
+	v, _ := newTraceVertex(t, false)
+	v.clearInteractive()
+}
+
+func TestSecondsToDuration_非正值(t *testing.T) {
+	if secondsToDuration(0) != 0 || secondsToDuration(-1) != 0 {
+		t.Fatal("<=0 应返回 0（不限时）")
+	}
+	if secondsToDuration(2) != 2*time.Second {
+		t.Fatal("正秒数应转换")
+	}
+}
+
+func TestPostStream_Transformer轨与StreamOutput(t *testing.T) {
+	// transformer 轨（非 dict outputs_schema）+ get_stream_output 钩子（vertex.py:597-598/625-628）
+	v, am := newVertexAsProducer(t)
+	v.applyNodeConfig(&workflow.NodeSpec{StreamIOConfigs: &workflow.CompIOConfig{
+		OutputsSchema: sutils.MessageTransformer(func(m map[string]any) map[string]any {
+			return map[string]any{"t": "x"}
+		})}})
+	// get_stream_output 钩子
+	v.executable = &streamOutExe{}
+	ch := make(chan StreamChunk[map[string]any], 1)
+	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "raw"}}
+	close(ch)
+	v.postStream(context.Background(), ch, components.ComponentAbilityStream)
+	// transformer 轨产出的 message "x"（map）入下游 + END 帧
+	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 2 {
+		t.Fatal("transformer 轨应产出数据帧+END 帧")
+	}
+}
+
+// streamOutExe 实现 GetStreamOutput 钩子
+type streamOutExe struct {
+	fakeVertexExecutable
+}
+
+func (s *streamOutExe) GetStreamOutput() map[string]any { return map[string]any{"acc": "sum"} }
+
+func TestAnyToFloat64_多类型(t *testing.T) {
+	cases := []struct {
+		in   any
+		want float64
+	}{{3.5, 3.5}, {float32(2.5), 2.5}, {7, 7}, {int64(9), 9}, {"bad", 0}, {nil, 0}}
+	for _, c := range cases {
+		if got := anyToFloat64(c.in); got != c.want {
+			t.Fatalf("anyToFloat64(%v)=%v want %v", c.in, got, c.want)
+		}
+	}
+}
+
+func TestClearInteractive(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	v.stateView().UpdateAndCommitWorkflowState(map[string]any{
+		constants.InteractiveInputKey: "pending"})
+	// 写入交互键到当前节点状态（Get 走节点视图）
+	_ = v.nodeSession.State().Update(map[string]any{constants.InteractiveInputKey: "pending"})
+	v.clearInteractive()
+	if v.nodeSession.State().Get(state.StringKey(constants.InteractiveInputKey)) != nil {
+		t.Fatal("交互输入应被清理")
+	}
+}
+
+func TestRunExecutable_Stream策略与子图封装(t *testing.T) {
+	// 子图封装：OnInvoke 收到 {inputs, config} 信封（vertex.py:136-137）
+	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	var gotInputs map[string]any
+	v.executable = &fakeVertexExecutable{
+		invokeFn: func(ctx context.Context, inputs map[string]any, sess session.BaseSession,
+			kw map[string]any) (map[string]any, error) {
+			gotInputs = inputs
+			return map[string]any{}, nil
+		},
+	}
+	_, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, true,
+		map[string]any{"wf": "cfg"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := gotInputs[InputsKey]; !has {
+		t.Fatalf("子图信封应含 inputs 键, got %v", gotInputs)
+	}
+	if _, has := gotInputs[ConfigKey]; !has {
+		t.Fatalf("子图信封应含 config 键, got %v", gotInputs)
+	}
+	// stream 策略：OnStream 成功空流（vertex.py:148-158）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityStream)
+	v2.executable = &fakeVertexExecutable{} // 默认空流
+	ok, err := v2.runExecutable(context.Background(), components.ComponentAbilityStream, false, nil, nil)
+	if err != nil || !ok {
+		t.Fatalf("stream 策略应成功, ok=%v err=%v", ok, err)
+	}
+	// 中断路径：OnInvoke 返回 GraphInterrupt → info 日志原样上抛（vertex.py:206-212）
+	v3, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	gi := &pregel.GraphInterrupt{}
+	v3.executable = &fakeVertexExecutable{
+		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
+			return nil, gi
+		},
+	}
+	_, err3 := v3.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	if !errors.Is(err3, gi) {
+		t.Fatal("中断应原样上抛")
+	}
+}
+
+func TestProcessChunk_End子图与Schema直通(t *testing.T) {
+	// End 子图：OutputSchema 取 payload 发 sub_workflow_stream（vertex.py:647-650）
+	w, _ := newSubVertexWorld(t)
+	v := w.v
+	os := &stream.OutputSchema{Type: "x", Payload: "p"}
+	v.processChunk(context.Background(), os, true, 0, true, components.ComponentAbilityStream)
+	q, err := w.am.SubWorkflowStream()
+	if err != nil {
+		t.Fatal(err)
+	}
+	val, rerr := q.Receive(context.Background(), 500*time.Millisecond)
+	if rerr != nil || val != "p" {
+		t.Fatalf("End 子图应直发 payload, got %v err=%v", val, rerr)
+	}
+	// 普通 OutputSchema 直通（StreamSchemas isinstance 分支）
+	v2, _ := newTraceVertex(t, false)
+	written := make(chan any, 1)
+	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	_ = swm.AddWriter(stream.StreamModeOutput, &fakeOutputWriter{ch: written})
+	v2.nodeSession = &fakeVertexNodeSession{WorkflowVertexSession: v2.nodeSession, swm: swm}
+	v2.isEndNode = true
+	v2.processChunk(context.Background(), &stream.OutputSchema{Type: "raw", Payload: "d"},
+		true, 0, false, components.ComponentAbilityStream)
+	select {
+	case got := <-written:
+		if got.(*stream.OutputSchema).Type != "raw" {
+			t.Fatal("StreamSchemas 应直通不发信封")
+		}
+	default:
+		t.Fatal("writer 应收到直通帧")
+	}
+}
+
+// newSubVertexWorld 子图 Vertex 世界（SubWorkflowStream 可用）
+type subWorld struct {
+	v  *Vertex
+	am *stream_actor.ActorManager
+}
+
+func newSubVertexWorld(t *testing.T) (*subWorld, error) {
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
+	v := NewVertex("B", &fakeVertexExecutable{})
+	_ = v.Init(parent, nil)
+	v.SetEndNode(true)
+	spec := workflow.NewWorkflowSpec()
+	spec.CompConfigs = map[string]*workflow.NodeSpec{
+		"B": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+	}
+	g := stream_actor.NewStreamGraph()
+	v.RegisterStreamConsumer(g)
+	am, err := stream_actor.NewActorManager(context.Background(), spec, g, true, &fakeVertexActorSession{})
+	if err != nil {
+		return nil, err
+	}
+	parent.am = am
+	return &subWorld{v: v, am: am}, nil
 }
