@@ -9,9 +9,8 @@ package externalcli
 // 可选的轨迹记录器（经协议事件流供数）与认证回退晋升钩子。
 //
 // 生命周期/交互方法（Start/Stop/Outputs/Send/Abort/Pause/Resume）为转发实现
-// （偏差 D-15.13-n）：折叠链对齐 Python send/start 逐步，事件泵消费面
-//（_on_event/_record_input 等）仍归属 ⤵️15.16 成员事件循环，见文件尾
-// 「暂缺清单」。
+// （偏差 D-15.13-n）：折叠链与事件泵消费面（_on_event/_record_input 等）
+// 已随 15.16a 成员事件循环补齐。
 
 import (
 	"context"
@@ -575,9 +574,9 @@ func (r *ExternalHarnessMemberRuntime) Subscribe(
 
 // Start 启动 provider 周期。转发实现：Python _start 的宿主能力注入已并入
 // resolveContext（spec A.4 归并注记）、可靠性 begin_attempt 因
-// RuntimeReliabilityContext 未移植而恒跳过（D-15.13-m，ctx 恒 nil 对齐
-// Python `is not None` 不命中分支）；启动失败路径的 _finalize_startup_failure
-// 归属 ⤵️15.16 成员事件循环，此处仅回退成员会话收尾。
+// RuntimeReliabilityContext 实现类 ⤴️15.7/15.8 而恒跳过（D-15.13-m，
+// ctx 恒 nil 对齐 Python `is not None` 不命中分支）；启动失败路径走
+// _finalize_startup_failure（15.16a 已落）。
 //
 // Python: start/_start (member_runtime.py:429/:435)
 func (r *ExternalHarnessMemberRuntime) Start(teamSession any) error {
@@ -771,10 +770,8 @@ func (r *ExternalHarnessMemberRuntime) Outputs() <-chan stream.OutputSchema {
 }
 
 // Send 能力感知地提交输入：pending 团队状态与任务通知折叠进同一消息。
-// 转发实现：折叠链（时钟锚/任务通知/团队上下文）对齐 Python send 逐步；
-// _record_input 输入登记（member_runtime.py:887）与可靠性循环归属
-// ⤵️15.16 成员事件循环，此处省略（D-15.13-n）。InteractiveInput 直投
-// （应答挂起中断）。
+// 折叠链（时钟锚/任务通知/团队上下文）与输入登记（record_input 系列）
+// 对齐 Python send 逐步；InteractiveInput 直投（应答挂起中断）。
 //
 // Python: send (member_runtime.py:564)
 func (r *ExternalHarnessMemberRuntime) Send(content any, immediate bool) (any, error) {
@@ -789,8 +786,9 @@ func (r *ExternalHarnessMemberRuntime) Send(content any, immediate bool) (any, e
 	if err != nil {
 		return nil, err
 	}
-	// Python: delivered_text = harness_input_text(external_input)（:572）——
-	// 供 _record_input（⤵️15.16）登记，此处省略。
+	// Python: delivered_text = harness_input_text(external_input)（:572）
+	// ——须在 prepend 前取，登记的正文才与时钟/上下文块区分开。
+	deliveredText := harnessproviders.HarnessInputText(externalInput)
 	// Python: external_input = _prepend_context(external_input, clock)（:575-576）
 	clock := inboundtags.RenderClock(inboundtags.FormatAbsoluteTime(database.GetCurrentTime()))
 	externalInput = prependContext(externalInput, clock)
@@ -819,12 +817,21 @@ func (r *ExternalHarnessMemberRuntime) Send(content any, immediate bool) (any, e
 		}
 		return nil, err
 	}
-	// Python: record_input 系列（:594-602）⤵️15.16；commit/persist 照常。
-	if pendingContext != "" {
-		r.commitTeamContext()
+	// Python: record_input 系列（:594-602）。每一段都登记，且消息最先——
+	// 它是轮次状态所认定的输入；provider 会把投递拆成每块一条消息，
+	// 合并文本会与它们全都不匹配，轮次会读作"没人说过话"。
+	// 失败回收（release）已在上方 except 分支。
+	r.recordInput(receipt, deliveredText)
+	r.recordInput(receipt, clock)
+	if pendingOutcome != nil {
+		r.recordInput(receipt, pendingOutcome.Text)
+		if outcomeTracker != nil && sess != nil {
+			outcomeTracker.Persist(sess)
+		}
 	}
-	if pendingOutcome != nil && outcomeTracker != nil && sess != nil {
-		outcomeTracker.Persist(sess)
+	if pendingContext != "" {
+		r.recordInput(receipt, pendingContext)
+		r.commitTeamContext()
 	}
 	return receipt, nil
 }
@@ -839,16 +846,18 @@ func (r *ExternalHarnessMemberRuntime) AnnounceTeamContext() error {
 	if pending == "" {
 		return nil
 	}
-	if _, err := r.adapter.Send(context.Background(), pending, false); err != nil {
+	receipt, err := r.adapter.Send(context.Background(), pending, false)
+	if err != nil {
 		return err
 	}
+	r.recordInput(receipt, pending)
 	r.commitTeamContext()
 	return nil
 }
 
 // AnnounceTaskRevisions 把待发任务编辑通知作为独立消息投递（F_129）：
-// steer 忙碌成员；tracker 无新内容时 no-op。已投递的通知登记为该轮输入的
-// _record_input 归属 ⤵️15.16（D-15.13-n）。
+// steer 忙碌成员；tracker 无新内容时 no-op。已投递的通知登记为该轮输入
+// （record_input，15.16a 已落）。
 //
 // Python: announce_task_revisions (member_runtime.py:613)
 func (r *ExternalHarnessMemberRuntime) AnnounceTaskRevisions() error {
@@ -861,10 +870,21 @@ func (r *ExternalHarnessMemberRuntime) AnnounceTaskRevisions() error {
 	}
 	r.contextDeliveryMu.Lock()
 	defer r.contextDeliveryMu.Unlock()
+	var delivered *harness_protocol.SendReceipt
+	var deliveredText string
 	_, err := outcomeTracker.Announce(sess, func(text string) error {
-		_, err := r.adapter.Send(context.Background(), text, true)
+		receipt, err := r.adapter.Send(context.Background(), text, true)
+		if err == nil {
+			// Python: delivered = (await _adapter.send(text, immediate=True), text)；
+			// 已投递的通知是本轮的输入，无论其后发生什么（member_runtime.py:629-634）。
+			delivered = receipt
+			deliveredText = text
+		}
 		return err
 	})
+	if delivered != nil {
+		r.recordInput(delivered, deliveredText)
+	}
 	return err
 }
 
@@ -1628,14 +1648,3 @@ func (r *ExternalHarnessMemberRuntime) openMemberTurn() harness.MemberTurn {
 	return turn
 }
 
-// ──────────────────────────── 暂缺清单（⤵️15.16 成员事件循环） ────────────────────────────
-//
-// 以下 Python 方法依赖事件泵消费面（成员事件循环，⤵️15.16 已裁决维持）或
-// activity emitter（workflow.backends.activity_emitter）；生命周期/交互方法
-// 已于 15.13 收尾以转发实现补齐（D-15.13-n），余项随消费面实施一并移植，
-// 行号对齐 member_runtime.py：
-//
-//   - _on_event / _on_turn_event / _on_diagnostic / _on_tool_item（:676-800）
-//   - _emit_activity / _on_provider_interaction / _persist_fallback（:803/:835/:843）
-//   - _finalize_turn_failure / _finalize_startup_failure（:863/:872）
-//   - _record_input / _record_event / _open_member_turn（:887/:897/:917）
