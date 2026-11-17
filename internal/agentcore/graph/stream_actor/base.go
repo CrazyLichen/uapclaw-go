@@ -258,6 +258,11 @@ func (a *StreamActor) Send(ctx context.Context, message map[string]any,
 			Str("event_type", "GRAPH_VERTEX_STREAM_ACTOR_START").
 			Str("node_id", a.nodeID).
 			Msgf("Stream actor task node [%s] started", a.nodeID)
+		// Python send:98-100：event 放行后启动【全部】processor.run（含未走 Consume
+		// 注册的 ability 空转处理队列）。8.11 前置还原：原偏差 D1 的 Consume 挂载点删除。
+		for _, p := range a.processors {
+			a.startProcessor(a.taskCtx, p)
+		}
 	}
 	// 广播全部 processor（base.py:101-103，不看 ability 匹配）
 	logger.Debug(logComponent).
@@ -282,7 +287,7 @@ func (a *StreamActor) Generator(ability components.ComponentAbility, schema map[
 	return p.Generator(schema, streamCallback)
 }
 
-// startProcessor consume 注册完成后启动 processor.run（偏差 D1 新挂载点，替代 Python send:98-100）
+// startProcessor 启动单个 processor.run 并登记级联取消句柄（Python send:98-100 循环体）
 func (a *StreamActor) startProcessor(parent context.Context, p *StreamProcessor) {
 	ctx, cancel := context.WithCancel(parent)
 	a.mu.Lock()

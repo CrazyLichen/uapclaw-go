@@ -149,10 +149,13 @@ func TestProduce_路由(t *testing.T) {
 	if len(am.activeProducerIDs["A"]) == 0 {
 		t.Fatal("produce 应登记活跃能力")
 	}
-	// 消费者未 consume 前，帧滞留主队列（D1）
+	// D1 还原后（8.11 前置）：fake 立即 close event → Send 拉起任务并启动全部 processor.run；
+	// 帧广播后 run 已消费主队列（此时无注册订阅者，值按 Python 语义被丢弃、主队列清空）。
+	// 真实 Vertex 在 Consume 注册完成后才 close event，故订阅路径不丢帧。
+	time.Sleep(30 * time.Millisecond) // 等 run 循环拉取
 	p := am.streams["C"].processors[components.ComponentAbilityCollect]
-	if p.queue.len() != 1 {
-		t.Fatalf("帧应滞留主队列, got %d", p.queue.len())
+	if p.queue.len() != 0 {
+		t.Fatalf("run 已启动应消费主队列, got %d", p.queue.len())
 	}
 }
 
