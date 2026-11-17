@@ -10,12 +10,17 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
@@ -45,6 +50,9 @@ type Vertex struct {
 	// streamDone 当轮流侧结果容器（Python: self._stream_done asyncio.Future，
 	// vertex.py:74；每轮 StreamCall 新建，缓冲 1 对齐 set_result 不阻塞语义）
 	streamDone chan error
+	// streamDoneSet 结果已送达标记（Python Future.done()，vertex.py:817/879 探测用；
+	// 不消费 channel 的非破坏性 done 判定）
+	streamDoneSet atomic.Bool
 	// callCount 批入轮次计数（Python: self._call_count，单写方=批侧）
 	callCount atomic.Int64
 	// streamCallCount 流入轮次计数（Python: self._stream_call_count，单写方=流侧）
@@ -198,6 +206,7 @@ func anyToFloat64(v any) float64 {
 // vertex.py:885-889；Go 无等待方时取消无副作用，直接新建）
 func (v *Vertex) resetStreamDone() {
 	v.streamDone = make(chan error, 1)
+	v.streamDoneSet.Store(false)
 }
 
 // Init 初始化节点会话与能力面（Python init，vertex.py:87-112；步骤一比一，返回 bool）
@@ -235,6 +244,117 @@ func (v *Vertex) Init(sess session.BaseSession, kwargs map[string]any) bool {
 	// ⑩ clear is_started（vertex.py:111）并返回 true（vertex.py:112）
 	v.isStarted.Store(false)
 	return true
+}
+
+// ──────────────────────────── trace 埋点方法（Python __trace_*__ 族，vertex.py:809-880） ────────────────────────────
+
+// traceEnable 埋点是否可用（Python _trace_enable，vertex.py:809-811）
+func (v *Vertex) traceEnable() bool {
+	return v.nodeSession.Tracer() != nil && v.nodeSession.Tracer().WorkflowHandlerValid() &&
+		!v.executable.SkipTrace()
+}
+
+// traceComponentInputs 组件输入埋点（Python __trace_component_inputs__，vertex.py:813-820）：
+// 置位 isCallStarted；混合节点流未完成时 send=false（合并发送协议 spec §4.3-3）
+func (v *Vertex) traceComponentInputs(ctx context.Context, inputs map[string]any) {
+	if !v.traceEnable() {
+		return
+	}
+	v.isCallStarted.Store(true)
+	needSend := !v.hasStreamCall || v.streamDoneSet.Load()
+	tracer.TracerWorkflowUtils{}.TraceComponentInputs(ctx, v.nodeSession, inputs, needSend)
+	if v.executable.ComponentType() == subWorkflowComponent {
+		v.nodeSession.Tracer().RegisterWorkflowSpanManager(v.nodeSession.ExecutableID())
+	}
+}
+
+// traceComponentOutputs 组件输出埋点（Python __trace_component_outputs__，vertex.py:822-825）
+func (v *Vertex) traceComponentOutputs(ctx context.Context, outputs any) {
+	if !v.traceEnable() {
+		return
+	}
+	tracer.TracerWorkflowUtils{}.TraceComponentOutputs(ctx, v.nodeSession, outputs)
+}
+
+// traceComponentBegin 组件开始埋点（Python __trace_component_begin__，vertex.py:827-846）：
+// isStarted 去重一轮一次；trace_metadata 钩子经接口断言复刻 hasattr 探测（偏差 D-4：
+// 钩子返回值无法经现有 TraceComponentBegin 签名透传，仅保留执行与失败告警语义）
+func (v *Vertex) traceComponentBegin(ctx context.Context) {
+	if !v.traceEnable() {
+		return
+	}
+	if !v.isStarted.CompareAndSwap(false, true) {
+		return
+	}
+	// 组件可导出静态事实（top_k、数据源 id 等）到 trace span；基类钩子默认 None
+	if hook, ok := v.executable.(interface{ TraceMetadata() map[string]any }); ok {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Warn(logComponent).
+						Str("event_type", "GRAPH_VERTEX_ABILITY_ERROR").
+						Str("graph_id", v.nodeSession.WorkflowID()).
+						Str("node_id", v.nodeID).
+						Any("exception", r).
+						Msgf("trace_metadata() failed for node [%s]", v.nodeID)
+				}
+			}()
+			_ = hook.TraceMetadata() // 偏差 D-4：返回值暂不透传
+		}()
+	}
+	tracer.TracerWorkflowUtils{}.TraceComponentBegin(ctx, v.nodeSession, nil)
+}
+
+// traceComponentDone 组件完成埋点（Python __trace_component_done__，vertex.py:848-851）
+func (v *Vertex) traceComponentDone(ctx context.Context) {
+	if !v.traceEnable() {
+		return
+	}
+	tracer.TracerWorkflowUtils{}.TraceComponentDone(ctx, v.nodeSession)
+}
+
+// traceComponentStreamOutput 组件流式输出埋点（Python __trace_component_stream_output__，vertex.py:853-856）
+func (v *Vertex) traceComponentStreamOutput(ctx context.Context, chunk any) {
+	if !v.traceEnable() {
+		return
+	}
+	tracer.TracerWorkflowUtils{}.TraceComponentStreamOutput(ctx, v.nodeSession, chunk)
+}
+
+// traceError 错误埋点（Python __trace_error__，vertex.py:858-861）
+func (v *Vertex) traceError(ctx context.Context, err error) {
+	if !v.traceEnable() {
+		return
+	}
+	tracer.TracerWorkflowUtils{}.TraceError(ctx, v.nodeSession, err)
+}
+
+// traceInnerError 重试内层错误埋点（Python __trace_inner_error__，vertex.py:863-874）：
+// BaseError 取 code/message，否则回退组件执行错误码 + str(err)
+func (v *Vertex) traceInnerError(ctx context.Context, err error) {
+	if !v.traceEnable() {
+		return
+	}
+	innerErrorInfo := map[string]any{"error_code": exception.StatusWorkflowComponentExecutionError.Code(), "message": err.Error()}
+	var be *exception.BaseError
+	if errors.As(err, &be) {
+		innerErrorInfo = map[string]any{"error_code": be.Code(), "message": be.Message()}
+	}
+	tracer.TracerWorkflowUtils{}.Trace(ctx, v.nodeSession, map[string]any{
+		"inner_error":  innerErrorInfo,
+		"current_time": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+}
+
+// traceComponentStreamInputSend 流输入埋点补发（Python __trace_component_stream_input_send__，
+// vertex.py:876-880）：无批侧或批侧已置位时补发 send=true 帧
+func (v *Vertex) traceComponentStreamInputSend(ctx context.Context) {
+	if !v.traceEnable() {
+		return
+	}
+	if !v.hasCall || v.isCallStarted.Load() {
+		tracer.TracerWorkflowUtils{}.TraceComponentStreamInput(ctx, v.nodeSession, map[string]any{}, true)
+	}
 }
 
 // Reset 重置计数与流容器（Python reset，vertex.py:882-890）

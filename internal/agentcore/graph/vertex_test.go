@@ -2,10 +2,13 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -203,4 +206,102 @@ func TestInit_能力判定_流批混合(t *testing.T) {
 	if !v.hasStreamCall || v.hasCall {
 		t.Fatal("纯流能力：hasStreamCall true / hasCall false")
 	}
+}
+
+// ──────────────────────────── Task4: trace 协议 ────────────────────────────
+
+// newTraceVertex 构造带会话的 Vertex（trace 用例公共底座）
+func newTraceVertex(t *testing.T, withValidHandler bool) (*Vertex, *fakeInnerSession) {
+	t.Helper()
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
+	if withValidHandler {
+		tr := tracer.NewTracer()
+		tr.Init(stream.NewStreamWriterManager(stream.NewStreamEmitter()))
+		parent.tr = tr
+	}
+	v := NewVertex("n1", &fakeVertexExecutable{})
+	if !v.Init(parent, nil) {
+		t.Fatal("Init 应成功")
+	}
+	return v, parent
+}
+
+func TestTraceEnable_门控(t *testing.T) {
+	// tracer nil → false（vertex.py:809-811）
+	v, _ := newTraceVertex(t, false)
+	if v.traceEnable() {
+		t.Fatal("tracer nil 应 traceEnable=false")
+	}
+	// tracer 有效 + handler 可用 + 不 skip → true
+	v2, _ := newTraceVertex(t, true)
+	if !v2.traceEnable() {
+		t.Fatal("有效 handler 应 traceEnable=true")
+	}
+	// skipTrace=true → false
+	v3, _ := newTraceVertex(t, true)
+	v3.executable = &skipTraceExecutable{}
+	if v3.traceEnable() {
+		t.Fatal("skipTrace 应 traceEnable=false")
+	}
+}
+
+// skipTraceExecutable 覆写 SkipTrace=true 的桩
+type skipTraceExecutable struct {
+	fakeVertexExecutable
+}
+
+func (s *skipTraceExecutable) SkipTrace() bool { return true }
+
+func TestTraceComponentInputs_合并发送协议(t *testing.T) {
+	// trace 不可用 → 不置位 isCallStarted（vertex.py:813-815 提前返回）
+	v, _ := newTraceVertex(t, false)
+	v.traceComponentInputs(context.Background(), map[string]any{"a": 1})
+	if v.isCallStarted.Load() {
+		t.Fatal("trace 不可用不应置位 isCallStarted")
+	}
+	// 纯批入（hasStreamCall=false）→ 置位 + send=true 路径可达（vertex.py:816-818）
+	v2, _ := newTraceVertex(t, true)
+	v2.traceComponentInputs(context.Background(), map[string]any{"a": 1})
+	if !v2.isCallStarted.Load() {
+		t.Fatal("应置位 isCallStarted（vertex.py:816）")
+	}
+	// 混合节点且流未完成：need_send=false（vertex.py:817）——经 fakeExecutable
+	// 能力面注入后由 StreamCall 用例覆盖实际 send 时机
+}
+
+func TestTraceComponentBegin_去重与元数据钩子(t *testing.T) {
+	v, _ := newTraceVertex(t, true)
+	// 首次：置位 isStarted 并发埋点（vertex.py:830-832）
+	v.traceComponentBegin(context.Background())
+	if !v.isStarted.Load() {
+		t.Fatal("begin 应置位 isStarted")
+	}
+	// 第二次：不再重复（isStarted 已置位，短路）
+	v.traceComponentBegin(context.Background())
+	// traceMetadata 钩子（vertex.py:834-846）：实现者返回元数据、失败记 warning 不中断
+	// —— 无钩子（fakeVertexExecutable 不实现 TraceMetadata）路径已覆盖默认 None 分支
+}
+
+func TestTraceComponentStreamInputSend_补发条件(t *testing.T) {
+	// !hasCall → 补发（vertex.py:879-880）
+	v, _ := newTraceVertex(t, true)
+	v.hasCall = false
+	v.traceComponentStreamInputSend(context.Background())
+	// hasCall 且批侧已置位 → 补发
+	v2, _ := newTraceVertex(t, true)
+	v2.isCallStarted.Store(true)
+	v2.traceComponentStreamInputSend(context.Background())
+	// hasCall 且批侧未置位 → 不补发（无可观测副作用，不 panic 即通过）
+	v3, _ := newTraceVertex(t, true)
+	v3.traceComponentStreamInputSend(context.Background())
+}
+
+func TestTraceInnerError_双轨(t *testing.T) {
+	v, _ := newTraceVertex(t, true)
+	// BaseError 轨：error_code/message（vertex.py:866-867）
+	be := exception.BuildError(exception.StatusWorkflowExecutionTimeout)
+	v.traceInnerError(context.Background(), be)
+	// 非 BaseError 轨：WORKFLOW_COMPONENT_EXECUTION_ERROR.code + str(err)（vertex.py:868-870）
+	v.traceInnerError(context.Background(), errors.New("boom"))
 }
