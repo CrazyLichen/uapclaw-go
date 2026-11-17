@@ -458,6 +458,36 @@ func TestActorSend_广播全部processor(t *testing.T) {
 	}
 }
 
+// D1 还原（8.11 前置）：外层 event 放行后 Send 启动【全部】processor.run
+// （Python send:98-100，含未走 Consume 注册的 ability 空转）。
+func TestActorSend_启动全部processor(t *testing.T) {
+	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e) }}
+	actor := NewStreamActor("C", v,
+		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
+		[][]string{{"A-stream"}}, -1)
+	qa := newPayloadQueue()
+	qb := newPayloadQueue()
+	actor.processors[components.ComponentAbilityCollect].processorQueues["A.answer"] = []*payloadQueue{qa}
+	actor.processors[components.ComponentAbilityTransform].processorQueues["A.answer"] = []*payloadQueue{qb}
+	ctx := context.Background()
+	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"answer": "你"}},
+		components.ComponentAbilityStream, true, "A"); err != nil {
+		t.Fatal(err)
+	}
+	// 路由值按 Python 语义：origin 路径解析到叶值
+	got, ok := qa.getWithTimeout(ctx, time.Second)
+	if !ok || got != "你" {
+		t.Fatalf("COLLECT 订阅路径应收到分发值, got %v ok=%v", got, ok)
+	}
+	got2, ok2 := qb.getWithTimeout(ctx, time.Second)
+	if !ok2 || got2 != "你" {
+		t.Fatalf("TRANSFORM（未走 Consume）run 也应被启动并路由, got %v ok=%v", got2, ok2)
+	}
+	if err := actor.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 讨论点 9：shutdown 级联取消（-race）
 func TestActorShutdown_级联取消(t *testing.T) {
 	wait := make(chan struct{})
