@@ -547,7 +547,7 @@ func (r *ExternalHarnessMemberRuntime) SetModelSelection(
 // Python: subscribe (member_runtime.py:661)
 func (r *ExternalHarnessMemberRuntime) Subscribe(
 	onState func(old, new harness_protocol.HarnessState, sessionID string),
-	onRound func(kind string, roundID int),
+	onRound func(kind string, roundID int, turnID string, result *harness_protocol.TurnResult),
 ) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

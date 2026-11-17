@@ -77,7 +77,7 @@ type MemberRuntime interface {
 	// Python: subscribe (member_runtime.py:97)
 	Subscribe(
 		onState func(old, new harnessprotocol.HarnessState, sessionID string),
-		onRound func(kind string, roundID int),
+		onRound func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult),
 	)
 
 	// ───── interrupt-resume helpers ─────

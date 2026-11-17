@@ -113,7 +113,7 @@ func (s *ExternalCliLifecycleSuite) TestAdapterLifecycle_一轮消息与tracker�
 
 	// 轮次事件订阅：收集 kind 供等待 finished
 	roundKinds := make(chan string, 16)
-	reinvoke.Subscribe(nil, func(kind string, _ int) {
+	reinvoke.Subscribe(nil, func(kind string, _ int, _ string, _ *harnessprotocol.TurnResult) {
 		roundKinds <- kind
 	})
 	outputs := reinvoke.Outputs()

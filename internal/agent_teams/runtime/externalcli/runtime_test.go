@@ -77,7 +77,7 @@ func TestExternalCliRuntime_整轮与完成判定(t *testing.T) {
 	rt, _ := newEchoStreamingRuntime(t, "beta")
 	var roundKinds []string
 	var mu sync.Mutex
-	rt.Subscribe(nil, func(kind string, roundID int) {
+	rt.Subscribe(nil, func(kind string, roundID int, _ string, _ *harnessprotocol.TurnResult) {
 		mu.Lock()
 		roundKinds = append(roundKinds, kind)
 		mu.Unlock()
@@ -257,7 +257,7 @@ func TestReinvokeCliRuntime_spawn失败传播(t *testing.T) {
 	}
 	var roundKinds []string
 	var mu sync.Mutex
-	rt.Subscribe(nil, func(kind string, roundID int) {
+	rt.Subscribe(nil, func(kind string, roundID int, _ string, _ *harnessprotocol.TurnResult) {
 		mu.Lock()
 		roundKinds = append(roundKinds, kind)
 		mu.Unlock()
@@ -327,7 +327,7 @@ func TestCliRuntimeBase_resume空串仍发送(t *testing.T) {
 	rt, _ := newEchoStreamingRuntime(t, "beta")
 	var roundKinds []string
 	var mu sync.Mutex
-	rt.Subscribe(nil, func(kind string, roundID int) {
+	rt.Subscribe(nil, func(kind string, roundID int, _ string, _ *harnessprotocol.TurnResult) {
 		mu.Lock()
 		roundKinds = append(roundKinds, kind)
 		mu.Unlock()

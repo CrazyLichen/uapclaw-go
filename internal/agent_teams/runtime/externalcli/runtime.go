@@ -52,7 +52,7 @@ type memberSessionFactory func() (sessioninterfaces.SessionFacade, error)
 type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 
 // roundCallback harness.round 事件的回调形状。
-type roundCallback func(kind string, roundID int)
+type roundCallback func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult)
 
 // runtimeReliabilityContext 可靠性上下文的最小投递面（RuntimeReliabilityContext
 // 归属 external/reliability.py，Go 侧 ⤵️15.7/15.8 落地后实现本接口并注入
@@ -562,7 +562,7 @@ func (b *cliRuntimeBase) sendRaw(text string, immediate bool) (any, error) {
 	b.transitionLocked(harnessprotocol.HarnessStateRunning)
 	onRound := append([]roundCallback(nil), b.onRound...)
 	b.mu.Unlock()
-	b.emitRound(onRound, "started", roundID)
+	b.emitRound(onRound, "started", roundID, "", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	b.mu.Lock()
@@ -631,7 +631,7 @@ func (b *cliRuntimeBase) Resume(query any) error {
 // Python: subscribe (runtime.py:440)
 func (b *cliRuntimeBase) Subscribe(
 	onState func(old, new harnessprotocol.HarnessState, sessionID string),
-	onRound func(kind string, roundID int),
+	onRound func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult),
 ) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -727,11 +727,11 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 	}
 	switch {
 	case aborted:
-		b.emitRound(onRound, "aborted", roundID)
+		b.emitRound(onRound, "aborted", roundID, "", nil)
 	case finalizedByTurn || abnormalExit || driveErr != nil:
-		b.emitRound(onRound, "failed", roundID)
+		b.emitRound(onRound, "failed", roundID, "", nil)
 	default:
-		b.emitRound(onRound, "finished", roundID)
+		b.emitRound(onRound, "finished", roundID, "", nil)
 	}
 	if transitionIdle {
 		b.transition(harnessprotocol.HarnessStateIdle)
@@ -838,9 +838,9 @@ func (b *cliRuntimeBase) transitionLocked(newPhase harnessprotocol.HarnessState)
 
 // emitRound 为一次轮次生命周期迁移触发 harness.round。
 // Python: _emit_round (runtime.py:589)
-func (b *cliRuntimeBase) emitRound(onRound []roundCallback, kind string, roundID int) {
+func (b *cliRuntimeBase) emitRound(onRound []roundCallback, kind string, roundID int, turnID string, result *harnessprotocol.TurnResult) {
 	for _, cb := range onRound {
-		cb(kind, roundID)
+		cb(kind, roundID, turnID, result)
 	}
 }
 
