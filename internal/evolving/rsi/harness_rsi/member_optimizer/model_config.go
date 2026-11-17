@@ -4,6 +4,7 @@
 package memberoptimizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,31 +12,26 @@ import (
 	"regexp"
 	"strings"
 
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	workspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// BudgetedRsiModel 预算化 RSI 模型包装的最小占位。
-// Python: member_optimizer/budget_model.py BudgetedRsiModel（17.4c 落真身）。
-// ⤴️ 17.4c：真身承载请求预算核算；本节桩仅承载变换后的模型配置字段。
-type BudgetedRsiModel struct {
-	// ModelClientConfig 模型客户端配置
-	ModelClientConfig llmschema.ModelClientConfig
-	// ModelRequestConfig 模型请求配置（可选）
-	ModelRequestConfig *llmschema.ModelRequestConfig
-}
-
-// BuildDeepAgentConfig build_deep_agent_from_model_config 桩的返回载体。
-// Python 真身返回 DeepAgent(config=DeepAgentConfig(model, workspace))；
-// 桩阶段以配置结构承载同样两字段，DeepAgent 装配 ⤴️ 17.4c。
-type BuildDeepAgentConfig struct {
-	// Model 预算化模型包装（无 model 键时为 nil）
+// BuildDeepAgentFromModelConfigResult build_deep_agent_from_model_config 的返回载体。
+// Python: model_config.py:92-119 真身返回 DeepAgent（BudgetedRsiModel 包装 + Workspace）。
+type BuildDeepAgentFromModelConfigResult struct {
+	// Model 预算化模型包装（无 model 键时为 nil，DeepAgent 以无模型装配）
 	Model *BudgetedRsiModel
-	// Workspace 工作空间
+	// DeepAgent 装配后的 DeepAgent 实例
+	DeepAgent *harness.DeepAgent
+	// Workspace 工作空间（与 DeepAgent 内 workspace 同源，供调用方登记）
 	Workspace *workspace.Workspace
 }
 
@@ -218,17 +214,19 @@ func LoadModelConfigRef(modelConfigRef string) (map[string]any, error) {
 }
 
 // BuildDeepAgentFromModelConfig 从载入的 member 优化模型配置构建 DeepAgent。
-// Python: model_config.py:92-119 build_deep_agent_from_model_config
+// Python: model_config.py:92-119 build_deep_agent_from_model_config——
+// 返回 DeepAgent(config=DeepAgentConfig(BudgetedRsiModel 包装模型, Workspace))。
 //
-// ⤴️ 17.4c 回填：Python 真身返回 BudgetedRsiModel 包装的 DeepAgent；本节按拍板
-// 方案②落桩——BudgetedRsiModel 以最小占位承载变换后的模型配置（字段语义见
-// BuildDeepAgentConfig），DeepAgent 装配（BudgetedRsiModel 真身 + harness 工厂
-// 接线）在 17.4c 完成。Python 全仓该函数当前零调用（死代码保留纪律）。
-func BuildDeepAgentFromModelConfig(configData map[string]any) (*BuildDeepAgentConfig, error) {
+// 17.4c1 回填：BudgetedRsiModel 真身（budget_model.go）+ harness 工厂装配。
+// Python 全仓该函数当前零调用（死代码保留纪律），装配走 CreateDeepAgent
+// 最小参数（Card 兜底名 member_optimizer_agent，偏差 D-2 登记 spec §4）。
+func BuildDeepAgentFromModelConfig(ctx context.Context, configData map[string]any) (*BuildDeepAgentFromModelConfigResult, error) {
 	// Python: config_data = with_rsi_reasoning_policy(with_rsi_output_budget(config_data))
 	transformed := WithRSIReasoningPolicy(WithRSIOutputBudget(configData))
 	// Python: model = None; if "model" in config_data: ...
 	var budgeted *BudgetedRsiModel
+	var clientConfig *llmschema.ModelClientConfig
+	var requestConfig *llmschema.ModelRequestConfig
 	if modelData, exists := transformed["model"]; exists {
 		// Python: built = TeamModelConfig.model_validate(without_inner_sdk_retries(config_data["model"])).build()
 		built, err := validateTeamModelConfig(WithoutInnerSDKRetries(modelData.(map[string]any)))
@@ -236,9 +234,13 @@ func BuildDeepAgentFromModelConfig(configData map[string]any) (*BuildDeepAgentCo
 			return nil, err
 		}
 		// Python: model = BudgetedRsiModel(model_client_config=built.model_client_config, model_config=built.model_config)
-		budgeted = &BudgetedRsiModel{
-			ModelClientConfig:  built.ModelClientConfig,
-			ModelRequestConfig: built.ModelRequestConfig,
+		clientConfigCopy := built.ModelClientConfig
+		clientConfig = &clientConfigCopy
+		requestConfig = built.ModelRequestConfig
+		var err2 error
+		budgeted, err2 = NewBudgetedRsiModel(clientConfig, requestConfig)
+		if err2 != nil {
+			return nil, err2
 		}
 	}
 
@@ -256,10 +258,25 @@ func BuildDeepAgentFromModelConfig(configData map[string]any) (*BuildDeepAgentCo
 			}
 		}
 	}
+	ws := workspace.NewWorkspace(rootPath, language)
 
-	return &BuildDeepAgentConfig{
+	// Python: return DeepAgent(config=DeepAgentConfig(model, workspace))
+	var model *llm.Model
+	if budgeted != nil {
+		model = budgeted.Model
+	}
+	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Model:     model,
+		Card:      agentschema.NewAgentCard(agentschema.WithAgentName("member_optimizer_agent")),
+		Workspace: ws,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &BuildDeepAgentFromModelConfigResult{
 		Model:     budgeted,
-		Workspace: workspace.NewWorkspace(rootPath, language),
+		DeepAgent: agent,
+		Workspace: ws,
 	}, nil
 }
 
@@ -378,4 +395,31 @@ func validateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig,
 // 17.4b2 诊断 agent 运行时消费；内部实现即 validateTeamModelConfig。
 func ValidateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig, error) {
 	return validateTeamModelConfig(modelData)
+}
+
+// ValidateClientConfigJSON JSON 解码校验客户端配置（Python ModelClientConfig.model_validate 等价）。
+// agents/factory.go 经 JSON 往返消费。
+func ValidateClientConfigJSON(data map[string]any) (*llmschema.ModelClientConfig, error) {
+	cfg := &llmschema.ModelClientConfig{}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// ValidateRequestConfigJSON JSON 解码校验请求配置（Python ModelRequestConfig.model_validate 等价）。
+func ValidateRequestConfigJSON(data map[string]any) (*llmschema.ModelRequestConfig, error) {
+	cfg := &llmschema.ModelRequestConfig{}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }

@@ -809,6 +809,8 @@ github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXl
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
+github.com/tamnd/gopapy/v2 v2.0.0 h1:JN1e4dAHEPbsOZBC6RVKfbWYcWjCW5tvg17TfhZWkbA=
+github.com/tamnd/gopapy/v2 v2.0.0/go.mod h1:3Q3MQ/O9WhNsOI+FSjW/RhgzUyUs5ZQSCvW6g0jz1tE=
 github.com/testcontainers/testcontainers-go v0.42.0 h1:He3IhTzTZOygSXLJPMX7n44XtK+qhjat1nI9cneBbUY=
 github.com/testcontainers/testcontainers-go v0.42.0/go.mod h1:vZjdY1YmUA1qEForxOIOazfsrdyORJAbhi0bp8plN30=
 github.com/testcontainers/testcontainers-go/modules/chroma v0.40.1-0.20260210100442-3894e5768a31 h1:ImTztHDu747xELISdoP/v1xtnJ/rfsie2deZCe49H84=

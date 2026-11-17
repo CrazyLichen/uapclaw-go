@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -289,46 +290,52 @@ func TestWithoutInnerSDKRetries_禁用内层重试(t *testing.T) {
 	}
 }
 
-// TestBuildDeepAgentFromModelConfig_桩 对齐 Python build_deep_agent_from_model_config 的
-// 可测路径（BudgetedRsiModel 真身 ⤴️ 17.4c，本节为方案②拍板的桩）。
+// TestBuildDeepAgentFromModelConfig 对齐 Python build_deep_agent_from_model_config 真身
+// （17.4c1 回填：BudgetedRsiModel 真身 + DeepAgent 装配）。
 // Python: model_config.py:92-119
-func TestBuildDeepAgentFromModelConfig_桩(t *testing.T) {
+func TestBuildDeepAgentFromModelConfig(t *testing.T) {
 	// ① 有 model 键：先变换（reasoning policy + output budget）再校验构建，
 	//    BudgetedRsiModel 桩承载 model_client_config / model_request_config
 	input := map[string]any{
 		"model": map[string]any{
-			"model_client_config": map[string]any{"model_name": "m1", "max_retries": 3},
+			"model_client_config": map[string]any{"model_name": "m1", "client_provider": "llm_OpenAI", "client_id": "c1", "max_retries": 3},
 			"model_request_config": map[string]any{
 				"reasoning":  "auto",
 				"max_tokens": nil,
 			},
 		},
 	}
-	cfg, err := BuildDeepAgentFromModelConfig(input)
+	cfg, err := BuildDeepAgentFromModelConfig(context.Background(), input)
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
 	if cfg.Model == nil {
-		t.Fatal("桩应承载 BudgetedRsiModel（含变换后的模型配置）")
+		t.Fatal("真身应承载 BudgetedRsiModel")
 	}
-	if cfg.Model.ModelClientConfig.MaxRetries != 0 {
-		t.Fatalf("模型配置应经过 without_inner_sdk_retries, max_retries=%v", cfg.Model.ModelClientConfig.MaxRetries)
+	if cfg.Model.ClientConfig.MaxRetries != 0 {
+		t.Fatalf("模型配置应经过 without_inner_sdk_retries, max_retries=%v", cfg.Model.ClientConfig.MaxRetries)
+	}
+	if cfg.DeepAgent == nil {
+		t.Fatal("真身应装配 DeepAgent")
 	}
 
 	// ② 无 model 键：model 为 nil，默认工作空间
-	cfg2, err := BuildDeepAgentFromModelConfig(map[string]any{})
+	cfg2, err := BuildDeepAgentFromModelConfig(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("空配置构建失败: %v", err)
 	}
 	if cfg2.Model != nil {
-		t.Fatal("无 model 键时桩应为 nil")
+		t.Fatal("无 model 键时 Model 应为 nil")
+	}
+	if cfg2.DeepAgent == nil {
+		t.Fatal("无 model 键时仍应装配 DeepAgent（model=None 语义）")
 	}
 	if cfg2.Workspace == nil {
 		t.Fatal("应创建默认工作空间")
 	}
 
 	// ③ workspace 配置生效
-	cfg3, err := BuildDeepAgentFromModelConfig(map[string]any{
+	cfg3, err := BuildDeepAgentFromModelConfig(context.Background(), map[string]any{
 		"workspace": map[string]any{"root_path": "/tmp/ws", "language": "zh"},
 	})
 	if err != nil {
