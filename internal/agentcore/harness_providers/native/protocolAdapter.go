@@ -1428,19 +1428,35 @@ func deepAgentSpecFromMap(v map[string]any) (atschema.DeepAgentSpec, error) {
 }
 
 // chunkTypeOf 读取输出帧的 type 字段。
+// chunkTypeOf 读取输出帧的 type 字段。
+// Python: protocol_adapter.py:255 getattr(chunk, "type", None)——duck typing，
+// OutputSchema 值类型与指针形态都接受（session.normalizeOutputStream 产出
+// 值类型，测试注入与部分 forwarder 路径产出指针）。
 func chunkTypeOf(chunk stream.Schema) string {
-	if s, ok := chunk.(*stream.OutputSchema); ok {
+	switch s := chunk.(type) {
+	case *stream.OutputSchema:
+		if s != nil {
+			return s.Type
+		}
+	case stream.OutputSchema:
 		return s.Type
 	}
 	return ""
 }
 
-// controlPayloadOf 读取控制帧的 payload 字段。
+// controlPayloadOf 读取控制帧的 payload 字段（同 chunkTypeOf 的两种形态）。
 func controlPayloadOf(chunk stream.Schema) map[string]any {
-	if s, ok := chunk.(*stream.OutputSchema); ok {
-		if m, ok := s.Payload.(map[string]any); ok {
-			return m
+	var payload any
+	switch s := chunk.(type) {
+	case *stream.OutputSchema:
+		if s != nil {
+			payload = s.Payload
 		}
+	case stream.OutputSchema:
+		payload = s.Payload
+	}
+	if m, ok := payload.(map[string]any); ok {
+		return m
 	}
 	return map[string]any{}
 }

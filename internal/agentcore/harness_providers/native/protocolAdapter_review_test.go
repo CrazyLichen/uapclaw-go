@@ -375,3 +375,29 @@ func TestPhaseSync_两台Supervisor同步RUNNING(t *testing.T) {
 		t.Fatalf("控制帧 FIFO：IDLE 之前的普通帧必须先被消费，得 %#v", st.answerParts)
 	}
 }
+
+// TestControlFrame_值类型与指针形态都识别 对齐 Python :255 的 duck typing。
+// session.normalizeOutputStream 产出值类型 OutputSchema；若只认指针，
+// control(IDLE) 会被当普通帧 emit，runRound 永远等不到 done →
+// "output closed before reaching IDLE" → 两层 supervisor 相位漂移。
+func TestControlFrame_值类型与指针形态都识别(t *testing.T) {
+	payload := map[string]any{"state": string(hp.HarnessStateIdle)}
+	cases := []struct {
+		name  string
+		chunk stream.Schema
+	}{
+		{"值类型", stream.OutputSchema{Type: controlChunkType, Index: 0, Payload: payload}},
+		{"指针", &stream.OutputSchema{Type: controlChunkType, Index: 0, Payload: payload}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := chunkTypeOf(c.chunk); got != controlChunkType {
+				t.Fatalf("chunkTypeOf = %q, want %q", got, controlChunkType)
+			}
+			got := controlPayloadOf(c.chunk)
+			if got["state"] != string(hp.HarnessStateIdle) {
+				t.Fatalf("controlPayloadOf = %#v", got)
+			}
+		})
+	}
+}
