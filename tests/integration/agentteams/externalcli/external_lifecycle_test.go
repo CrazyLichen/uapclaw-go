@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -113,7 +114,7 @@ func (s *ExternalCliLifecycleSuite) TestAdapterLifecycle_一轮消息与tracker�
 
 	// 轮次事件订阅：收集 kind 供等待 finished
 	roundKinds := make(chan string, 16)
-	reinvoke.Subscribe(nil, func(kind string, _ int, _ string, _ *harnessprotocol.TurnResult) {
+	reinvoke.Subscribe(nil, func(kind string, _ int, _ string, _ *harness_protocol.TurnResult) {
 		roundKinds <- kind
 	})
 	outputs := reinvoke.Outputs()
