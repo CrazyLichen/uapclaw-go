@@ -136,7 +136,7 @@ type ExecutableGraph[I, O any] interface {
 }
 ```
 
-注意：Python `ExecutableGraph.stream/collect/transform/interrupt` 默认是 **pass（静默空实现）**，与父类四个 on_* 的 NotImplementedError 不同——Go 侧默认返回零值+nil error（流式返回已关闭空 channel），**不**走基座抛错。`Invoke`/`Stream`/`Collect`/`Transform` 的信封拆分版为包级函数或基座方法皆可，实施时按测试友好性定，行为以本节描述为准。
+注意：Python `ExecutableGraph.stream/collect/transform/interrupt` 默认是 **pass（静默空实现）**，与父类四个 on_* 的 NotImplementedError 不同——Go 侧默认返回零值+nil error（流式返回已关闭空 channel），**不**走基座抛错。`Invoke/Stream/Collect/Transform/Interrupt` **进接口**（2026-11-17 审查修订：接口声明完整方法面，外层调用方一律走接口方法 `g.Invoke/g.Stream`，覆写经接口派发天然可达）；Python 的方法默认实现（invoke 拆信封体 / stream 等 pass 体）在 Go 接口上无承载点，由 `DefaultGraphXxx` 包级泛型函数（`DefaultGraphInvoke/DefaultGraphStream/DefaultGraphCollect/DefaultGraphTransform/DefaultGraphInterrupt`）单点承载，实现者沿用默认时一行转手、覆写时写真实现——避免"手抄 pass"导致默认体漂移。
 
 信封拆分语义（对齐 base.py:13-14）：
 - `inputs.get(INPUTS_KEY)` / `inputs.get(CONFIG_KEY)` 为宽容取值：**config 缺失传 nil 不报错**；
@@ -155,7 +155,7 @@ base.py:33-36 的 `Router`（同步/异步 Callable 返回 Hashable 或 list）�
 | D2 | 错误文案去类名 | NotImplementedError 文案含 `type(self).__name__` | 通用提示文案，不带类名 | reflect 拿不到接口真实实现类名 | 若后续需要类名，组件覆写时自带 |
 | D3 | 输入流异常语义 | `AsyncIterator[Input]` 迭代中异常沿 async 链上抛 | ctx 取消 + channel 关闭 | Go channel 无异常通道概念 | 永久（语言差异） |
 | D4 | `_invoke` 导出 | 抽象方法 `_invoke`（非导出命名） | 导出 `Invoke_`（下划线后缀保留名字痕迹） | Go 接口方法必须导出才能被包外实现/消费 | 永久（可见性规则） |
-| D5 | 默认 pass 语义 | 子类 `stream/collect/transform/interrupt` 默认 pass | 返回零值+nil error / 已关闭空 channel | 行为等价复刻，非偏差；此处登记为对照锚点 | — |
+| D5 | 默认 pass 语义 | 子类 `stream/collect/transform/interrupt` 默认 pass；方法默认实现随类继承 | 接口声明全量方法面 + `DefaultGraphXxx` 包级泛型函数单点承载默认体，实现者一行转手 | Go 接口无方法默认实现；默认体单点避免手抄漂移（2026-11-17 审查修订） | 永久（语言差异） |
 | D6 | 死别名复刻 | `GeneralExecutor` 全仓零消费 | 类型别名保留，不发明调用方 | 项目惯例：零调用死代码仍复刻 | — |
 
 ## 5. 测试设计
