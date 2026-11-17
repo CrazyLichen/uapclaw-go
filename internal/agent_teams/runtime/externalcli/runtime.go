@@ -32,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -54,15 +55,28 @@ type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 // roundCallback harness.round 事件的回调形状。
 type roundCallback func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult)
 
-// runtimeReliabilityContext 可靠性上下文的最小投递面（RuntimeReliabilityContext
-// 归属 external/reliability.py，Go 侧 ⤵️15.7/15.8 落地后实现本接口并注入
-// reliabilityCtx；本批 CLI adapter runtime 恒 nil，对齐 Python `ctx is None` 分支）。
+// runtimeReliabilityContext 可靠性上下文投递面（RuntimeReliabilityContext，
+// external/reliability.py:54 的公有面）。实现类 ⤴️15.7/15.8（构造逻辑随
+// claude/codex SDK 分支落地，偏差 D-15.13-m/D-15.16-a7）；本批 CLI adapter
+// runtime 恒 nil，对齐 Python `ctx is None` 分支。
 type runtimeReliabilityContext interface {
-	// HasFinalized 本轮是否已 finalize 过失败。
+	// BeginAttempt 一次尝试开始（startup 或某轮）。
+	// Python: begin_attempt(*, phase, round_id) (reliability.py:114)
+	BeginAttempt(phase schema.ExternalRuntimePhase, roundID *int)
+	// HasFinalized 本周期是否已 finalize 过失败。
+	// Python: has_finalized() (reliability.py:138)
 	HasFinalized() bool
-	// FinalizeFailure 以类别/原因/摘要 finalize 一次失败。
-	FinalizeFailure(category, message, sdkErrorType, summary string) error
+	// UpdateModel CLI/SDK 报告的实际服务模型。
+	// Python: update_model(model) (reliability.py:162)
+	UpdateModel(model *string)
+	// PublishRetrying 发布一次暂时性重试进度。
+	// Python: publish_retrying(...) (reliability.py:203)
+	PublishRetrying(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) error
+	// FinalizeFailure 以类别/结构化原因/摘要 finalize 一次失败。
+	// Python: finalize_failure(...) (reliability.py:260)
+	FinalizeFailure(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) error
 	// MarkMemberError 把成员置 ERROR。
+	// Python: mark_member_error() (reliability.py:369)
 	MarkMemberError() error
 }
 
@@ -193,7 +207,7 @@ type cliRuntimeBase struct {
 	// reliabilityCtx Claude/Codex SDK runtime 的可靠性上下文；经
 	// BindReliabilityContext 注入。CLI adapter runtime（传统 stdin/重起 CLI）
 	// 恒 nil——外部 runtime 可靠性循环的范围之外。
-	reliabilityCtx any
+	reliabilityCtx runtimeReliabilityContext
 
 	// driveErr flavor 的 _drive 在轮内产生的错误（注入失败 / premature-EOF）。
 	// Python 经 async generator 异常传播到 _drive_turn 的 except 分支；Go 的
@@ -748,13 +762,11 @@ func (b *cliRuntimeBase) hasFinalized() bool {
 	return client != nil && client.HasFinalized()
 }
 
-// reliabilityClient 取 reliabilityCtx 的最小投递面；未注入或未实现接口时 nil。
+// reliabilityClient 取 reliabilityCtx；未注入时 nil。
 func (b *cliRuntimeBase) reliabilityClient() runtimeReliabilityContext {
 	b.mu.Lock()
-	rc := b.reliabilityCtx
-	b.mu.Unlock()
-	client, _ := rc.(runtimeReliabilityContext)
-	return client
+	defer b.mu.Unlock()
+	return b.reliabilityCtx
 }
 
 // finalizeAbnormalExit 为意外任务退出 finalize 一个 sdk_error 失败。
@@ -770,8 +782,9 @@ func (b *cliRuntimeBase) finalizeAbnormalExit(roundID int) {
 	}
 	if !ctx.HasFinalized() {
 		summary := b.memberName + " external runtime task exited unexpectedly"
-		_ = ctx.FinalizeFailure("sdk_error", "external runtime task exited unexpectedly",
-			"CancelledError", summary)
+		reason := schema.NewExternalRuntimeFailureReason(
+			"external runtime task exited unexpectedly", "CancelledError", "", nil)
+		_ = ctx.FinalizeFailure(schema.ExternalRuntimeFailureCategorySDKError, reason, summary)
 	}
 	_ = ctx.MarkMemberError()
 }
@@ -794,7 +807,8 @@ func (b *cliRuntimeBase) finalizeCrashExit(err error, roundID int) {
 		message = excType
 	}
 	summary := fmt.Sprintf("%s external runtime turn crashed: %s", b.memberName, excType)
-	_ = ctx.FinalizeFailure("sdk_error", message, excType, summary)
+	reason := schema.NewExternalRuntimeFailureReason(message, excType, "", nil)
+	_ = ctx.FinalizeFailure(schema.ExternalRuntimeFailureCategorySDKError, reason, summary)
 }
 
 // nextRoundIDLocked 返回本 runtime 实例的单调轮次 id（须持锁）。
