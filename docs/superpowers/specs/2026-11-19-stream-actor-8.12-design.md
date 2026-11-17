@@ -16,6 +16,8 @@
 
 **ability 语义**：STREAM=纯产出、COLLECT=纯收集、TRANSFORM=双向（收+转发）。帧广播给消费者的全部 processor，不看 ability 匹配；producer 的 ability 只影响源键（`producerId-ABILITY`）与 source_groups 匹配。
 
+**输入通道分野（2026-11-19 用户确认）**：INVOKE/STREAM 策略的输入走 `_pre_invoke()`（`io_configs.inputs_schema` 经 session state 取静态值），不经过 ActorManager；仅 COLLECT/TRANSFORM 策略经 `_pre_stream(ability)` → `consume()` 走数据面 gen 树。普通 invoke 数据链 = 节点返回值 → `_post_invoke` → `session.state().set_outputs` → 下游 `_pre_invoke` 取值，全程控制面/state，与 8.12 无交集。
+
 ## 2. 范围与顺序决策
 
 1. **实施顺序换回 8.12 → 8.11**（十次记录）：8.11 Vertex 依赖 StreamConsumer 属 8.12，先落真类型避免接口占位回填。同步更新 IMPLEMENTATION_PLAN.md 顺序注记（十二次记录）。
@@ -68,6 +70,18 @@
 ## 7. 测试方案
 
 - fake StreamConsumer（三方法可控）+ fake session state（finished_stream_nodes/executed_nodes 读写）驱动 StreamActor/StreamProcessor 全分支。
+- **讨论点全覆盖要求（2026-11-19 用户要求）**：本次讨论澄清的每个语义点都必须有对应用例锁定，单元与集成（tests/integration，规则 7 真实跨 ≥3 子系统）双层覆盖，至少包括：
+  1. 输入通道分野：INVOKE/STREAM 输入走 state 不进 ActorManager；COLLECT/TRANSFORM 走 consume 换 gen 树（§1 末段）
+  2. 帧广播不匹配 ability：producer STREAM 帧 consumer 侧全部 processor 各自收到（§1 ability 语义）
+  3. 首帧拉起时序与 event 置位前后窗口、is_done 计数判定
+  4. run 启动点在 consume 之后：注册前帧滞留主 queue、启动后补投不丢（D1 新行为）
+  5. source_groups：单源组=AND 等 end frame、多源组到齐关全流、组内活跃替代源 sanitize（should_sanitize_stream_source 三分支）
+  6. END 哨兵 `END_<producer_id>` 前缀判定与传播（D5，含误判边界用例留档）
+  7. finished_stream_nodes 恢复场景：consume 时补发 end_message
+  8. timeout：仅未声明源路径限时、-1=不超时、timeout 退出与 ctx 取消可中断所有阻塞点
+  9. shutdown 级联取消（-race）：task/processor/running_tasks 三层收割与日志
+  10. generator gen 树重建形状（rebuild_dict）+ 每路径多 chan 广播
+  11. WorkflowSpec 前置件字段往返与默认值（D6）
 - 重点用例：首帧拉起时序（event 置位前后）、source_groups 单源组 vs 多源组关流、END 哨兵传播、补发 end_message（finished_stream_nodes 恢复场景）、timeout 未声明源、shutdown 级联取消（-race）、should_sanitize_stream_source 三分支、generator gen 树重建（rebuild_dict 形状）。
 - 前置件 workflow_config.go 覆盖字段往返与默认值。
 - 门槛：包覆盖率 ≥85%，`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 全量零 FAIL（CI 同款标签）。
