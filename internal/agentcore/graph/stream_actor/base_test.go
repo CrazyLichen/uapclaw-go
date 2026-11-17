@@ -2,6 +2,7 @@ package stream_actor
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -355,5 +356,127 @@ func TestProcessorGenerator_未声明源限时(t *testing.T) {
 	r2 := p.createGenerator("x", "A.foo", nil)
 	if r2.timeout != 0 {
 		t.Fatal("声明源路径应不限时")
+	}
+}
+
+// fakeConsumer 可控 StreamConsumer
+type fakeConsumer struct {
+	handle     bool
+	done       bool
+	eventFn    func(chan struct{})
+	callErr    error
+	callWaitCh chan struct{} // 非空时 StreamCall 阻塞至此关闭
+}
+
+func (f *fakeConsumer) StreamCall(ctx context.Context, event chan struct{}, done func(error)) {
+	if f.eventFn != nil {
+		f.eventFn(event)
+	}
+	if f.callErr != nil {
+		done(f.callErr)
+	}
+	if f.callWaitCh != nil {
+		select {
+		case <-f.callWaitCh:
+		case <-ctx.Done(): // 对齐真实 Vertex：执行体响应 ctx 取消
+		}
+	}
+}
+func (f *fakeConsumer) ShouldHandleMessage() bool { return f.handle }
+func (f *fakeConsumer) IsDone() bool              { return f.done }
+
+// 讨论点 3：首帧拉起消费者、等 event 置位、未 handle 丢弃
+func TestActorSend_首帧拉起(t *testing.T) {
+	eventClosed := make(chan struct{})
+	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e); close(eventClosed) }}
+	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
+	ctx := context.Background()
+	// 未 handle 直接丢弃，不拉起任务
+	vNoHandle := &fakeConsumer{handle: false}
+	a2 := NewStreamActor("C2", vNoHandle, nil, [][]string{{"A-stream"}}, -1)
+	_ = a2.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, false, "A")
+	if a2.taskCtx != nil {
+		t.Fatal("未 handle 不应拉起任务")
+	}
+	// 首帧拉起
+	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"answer": "你"}},
+		components.ComponentAbilityStream, true, "A"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-eventClosed:
+	case <-time.After(time.Second):
+		t.Fatal("应等待 event 置位")
+	}
+}
+
+// 讨论点 3：非首帧且任务未启动且 vertex 已 done → 丢弃
+func TestActorSend_任务已结束丢弃(t *testing.T) {
+	v := &fakeConsumer{handle: true, done: true}
+	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
+	ctx := context.Background()
+	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, false, "A"); err != nil {
+		t.Fatal(err)
+	}
+	if actor.taskCtx != nil {
+		t.Fatal("非首帧且 vertex 已 done 不应拉起任务")
+	}
+}
+
+// 讨论点 3：错误回调置 taskErr，后续首帧被拦截
+func TestActorSend_错误拦截(t *testing.T) {
+	v := &fakeConsumer{handle: true, callErr: errors.New("boom"),
+		eventFn: func(e chan struct{}) { close(e) }}
+	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
+	ctx := context.Background()
+	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond) // 等 taskErr 被错误回调填充
+	if err := actor.Send(ctx, map[string]any{"A": "y"}, components.ComponentAbilityStream, true, "A"); err == nil {
+		t.Fatal("task_error 有异常时后续首帧应被拦截")
+	}
+}
+
+// 广播：帧进入全部 processor 主队列（不看 ability 匹配）
+func TestActorSend_广播全部processor(t *testing.T) {
+	v := &fakeConsumer{handle: true, eventFn: func(e chan struct{}) { close(e) }}
+	actor := NewStreamActor("C", v,
+		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
+		[][]string{{"A-stream"}}, -1)
+	if len(actor.processors) != 2 {
+		t.Fatal("应建两个 processor")
+	}
+	ctx := context.Background()
+	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A"); err != nil {
+		t.Fatal(err)
+	}
+	for ab, p := range actor.processors {
+		if p.queue.len() != 1 {
+			t.Fatalf("processor %v 主队列应有 1 帧, got %d", ab, p.queue.len())
+		}
+	}
+}
+
+// 讨论点 9：shutdown 级联取消（-race）
+func TestActorShutdown_级联取消(t *testing.T) {
+	wait := make(chan struct{})
+	v := &fakeConsumer{handle: true, callWaitCh: wait, eventFn: func(e chan struct{}) { close(e) }}
+	actor := NewStreamActor("C", v, []components.ComponentAbility{components.ComponentAbilityCollect},
+		[][]string{{"A-stream"}}, -1)
+	ctx := context.Background()
+	_ = actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A")
+	actor.startProcessor(ctx, actor.processors[components.ComponentAbilityCollect])
+	if err := actor.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-wait:
+		t.Fatal("shutdown 应取消消费者任务（callWaitCh 阻塞的 goroutine 应回收）")
+	default:
+	}
+	// 二次 Shutdown 幂等（task 已清空）
+	if err := actor.Shutdown(); err != nil {
+		t.Fatal(err)
 	}
 }

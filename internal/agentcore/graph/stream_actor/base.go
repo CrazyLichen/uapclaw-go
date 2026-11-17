@@ -2,14 +2,16 @@ package stream_actor
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	cutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 const logComponent = logger.ComponentAgentCore
@@ -169,6 +171,184 @@ func NewStreamProcessor(nodeID string, sourceGroups [][]string, timeout time.Dur
 		sources:         sources,
 		sourceIDs:       sourceIDs,
 		timeout:         timeout,
+	}
+}
+
+// NewStreamActor 构造（对齐 Python __init__：每 ability 建一个 processor；
+// abilities 为空时不建 processor，processor 可由测试/ActorManager 显式注入）。
+func NewStreamActor(nodeID string, vertex StreamConsumer, abilities []components.ComponentAbility,
+	sourceGroups [][]string, timeout time.Duration) *StreamActor {
+	ps := map[components.ComponentAbility]*StreamProcessor{}
+	for _, ab := range abilities {
+		p := NewStreamProcessor(nodeID, sourceGroups, timeout)
+		p.ability = ab
+		ps[ab] = p
+	}
+	return &StreamActor{processors: ps, vertex: vertex, nodeID: nodeID}
+}
+
+// Send 接收帧：未 handle 丢弃 → 任务未启动时首帧拉起（等 event）→ 广播全部 processor。
+// Python: base.py send(64-104) 一比一；偏差 D1：此处不启动 processor.run（挪至 consume 注册后）。
+func (a *StreamActor) Send(ctx context.Context, message map[string]any,
+	sourceAbility components.ComponentAbility, firstFrame bool, producerID string) error {
+	// Python send 第一分支：未 handle 丢弃（base.py:69-74）
+	if !a.vertex.ShouldHandleMessage() {
+		logger.Warn(logComponent).
+			Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
+			Str("node_id", a.nodeID).
+			Str("producer_id", producerID).
+			Str("chunk", fmt.Sprintf("%v", message)).
+			Msgf("Discard chunk send from [%s], %s[%s] unable to handle", producerID, a.nodeID, sourceAbility.Name())
+		return nil
+	}
+	a.mu.Lock()
+	needStart := a.taskCtx == nil || a.taskDoneClosed()
+	if !needStart {
+		a.mu.Unlock()
+	} else {
+		// task 已结束且带异常 → 拦截（base.py:76-85）
+		if a.taskCtx != nil && a.taskDoneClosed() && a.taskErr != nil {
+			select {
+			case err := <-a.taskErr:
+				logger.Warn(logComponent).
+					Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
+					Str("node_id", a.nodeID).
+					Str("producer_id", producerID).
+					Err(err).
+					Msgf("Discard chunk send from [%s], %s[%s] occur exception", producerID, a.nodeID, sourceAbility.Name())
+				a.mu.Unlock()
+				return err
+			default:
+			}
+		}
+		// 非首帧或 vertex 已 done → 丢弃（base.py:86-90）
+		if !firstFrame || a.vertex.IsDone() {
+			logger.Warn(logComponent).
+				Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
+				Str("node_id", a.nodeID).
+				Str("producer_id", producerID).
+				Str("chunk", fmt.Sprintf("%v", message)).
+				Msgf("Discard chunk send from [%s], %s[%s] vertex is done", producerID, a.nodeID, sourceAbility.Name())
+			a.mu.Unlock()
+			return nil
+		}
+		// 首帧拉起（base.py:91-100）
+		event := make(chan struct{})
+		a.taskErr = make(chan error, 1)
+		taskCtx, cancel := context.WithCancel(ctx)
+		a.taskCtx, a.taskCancel, a.taskDone = taskCtx, cancel, make(chan struct{})
+		a.mu.Unlock()
+		go func() {
+			defer close(a.taskDone)
+			a.vertex.StreamCall(taskCtx, event, func(err error) {
+				if err != nil {
+					select {
+					case a.taskErr <- err:
+					default:
+					}
+				}
+			})
+		}()
+		select {
+		case <-event: // 等 vertex 把 stream-in 策略全部启动（对齐 await event.wait()）
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_STREAM_ACTOR_START").
+			Str("node_id", a.nodeID).
+			Msgf("Stream actor task node [%s] started", a.nodeID)
+	}
+	// 广播全部 processor（base.py:101-103，不看 ability 匹配）
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_SEND_STREAM_CHUNK").
+		Str("node_id", a.nodeID).
+		Str("producer_id", producerID).
+		Str("chunk", fmt.Sprintf("%v", message)).
+		Msgf("Send chunk from [%s] to %s[%s]", producerID, a.nodeID, sourceAbility.Name())
+	for _, processor := range a.processors {
+		processor.Receive(StreamPayload{Message: message, SourceAbility: sourceAbility})
+	}
+	return nil
+}
+
+// Generator 按 ability 取 processor 注册 gen 树（Python generator(105-108)）
+func (a *StreamActor) Generator(ability components.ComponentAbility, schema map[string]any,
+	streamCallback func(map[string]any)) map[string]any {
+	p := a.processors[ability]
+	if p == nil {
+		return map[string]any{}
+	}
+	return p.Generator(schema, streamCallback)
+}
+
+// startProcessor consume 注册完成后启动 processor.run（偏差 D1 新挂载点，替代 Python send:98-100）
+func (a *StreamActor) startProcessor(parent context.Context, p *StreamProcessor) {
+	ctx, cancel := context.WithCancel(parent)
+	a.mu.Lock()
+	a.runningCancel = append(a.runningCancel, cancel)
+	a.runningWg.Add(1)
+	a.mu.Unlock()
+	go func() {
+		defer a.runningWg.Done()
+		p.Run(ctx, p.ability)
+	}()
+}
+
+// Shutdown 级联取消：消费者任务 → taskErr → 全部 processor.run（Python:114-157 步骤一比一，finally 清空）。
+func (a *StreamActor) Shutdown() error {
+	logMsg := func() *zerolog.Event {
+		return logger.Debug(logComponent).
+			Str("event_type", "GRAPH_VERTEX_STREAM_ACTOR_SHUTDOWN").
+			Str("node_id", a.nodeID)
+	}
+	logMsg().Msgf("Begin to shutdown stream actor task for %s", a.nodeID)
+	// 1. 取消消费者任务并等待退出（Python:121-129）
+	a.mu.Lock()
+	taskCancel, taskDone, taskErr := a.taskCancel, a.taskDone, a.taskErr
+	a.mu.Unlock()
+	if taskCancel != nil {
+		taskCancel()
+		if taskDone != nil {
+			<-taskDone // 对齐 await self._task（CancelledError/Exception 分支由 goroutine 退出承载）
+		}
+		logMsg().Msgf("Cancel stream actor task for %s", a.nodeID)
+	}
+	// 2. taskErr 处理（Python:130-143：未完成则取消；已完成且有异常则记日志）
+	if taskErr != nil {
+		select {
+		case err := <-taskErr:
+			logMsg().Err(err).Msgf("No need cancel stream actor error task for %s with exception", a.nodeID)
+		default:
+		}
+	}
+	// 3. 全部 processor.run 取消并收割（Python:145-153 gather return_exceptions=True）
+	a.mu.Lock()
+	cancels := a.runningCancel
+	a.runningCancel = nil
+	a.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	a.runningWg.Wait()
+	// finally：清空任务状态（Python:155-157）
+	a.mu.Lock()
+	a.taskCtx, a.taskCancel, a.taskDone, a.taskErr = nil, nil, nil, nil
+	a.mu.Unlock()
+	logMsg().Msgf("Succeed to shutdown stream actor task for %s", a.nodeID)
+	return nil
+}
+
+// taskDoneClosed 任务是否已退出
+func (a *StreamActor) taskDoneClosed() bool {
+	if a.taskDone == nil {
+		return false
+	}
+	select {
+	case <-a.taskDone:
+		return true
+	default:
+		return false
 	}
 }
 
