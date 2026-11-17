@@ -88,3 +88,8 @@ type GraphState struct {
 - `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/graph/...` 零 FAIL；
 - 包覆盖率 ≥ 85%；
 - 推送远端即交付（规则 11，不追踪 CI）。
+
+
+## 回收核对（2026-11-17，8.11 Vertex 实施时）
+
+`Vertex.__call__`（vertex.py:385）返回 `{"source_node_id": [node_id]}` 已在 Go `Vertex.Call` 兑现（internal/agentcore/graph/vertex.go），GraphState.SourceNodeID 迎来首个真实消费；reducer（Annotated[list, operator.add]）在上游仍无归并执行点（task.py:152 丢弃节点返回值），偏差 D1 结论维持：类型承载语义、注释承载 reducer、不发明归并方法。
