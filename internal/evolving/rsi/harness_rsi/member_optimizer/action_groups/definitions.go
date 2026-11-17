@@ -4,6 +4,7 @@
 package actiongroups
 
 import (
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,35 +18,6 @@ import (
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// PolicyActionDefinition 动作定义载体（Python ActionDefinition 字段面）。
-// harness_rsi.ActionDefinition 的字段镜像（子包不引父包 schema，结构一致）。
-type PolicyActionDefinition struct {
-	// Name 定义名
-	Name string
-	// Group 动作组
-	Group string
-	// Operation 操作
-	Operation string
-	// Function 执行函数名
-	Function string
-	// Purpose 用途
-	Purpose string
-	// OptimizableModules 可优化模块清单
-	OptimizableModules []string
-	// RequiresSearch 是否需要搜索
-	RequiresSearch bool
-	// RequiresInstall 是否需要安装
-	RequiresInstall bool
-	// DependencyResources 依赖资源
-	DependencyResources map[string]string
-	// ParametersSchema 参数 schema
-	ParametersSchema map[string]any
-	// IsDestructive 是否破坏性
-	IsDestructive bool
-	// ValidationRules 校验规则
-	ValidationRules []string
-}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -65,9 +37,9 @@ var builtinGroupOperations = map[string][]string{
 // 配置文件可声明支持的动作组，但不能把可执行策略扩展到当前 Auto Harness
 // 包面之外。
 // Python: definitions.py:31-64 load_action_definitions。
-func LoadActionDefinitions(configPaths []string) []PolicyActionDefinition {
+func LoadActionDefinitions(configPaths []string) []harnessrsi.ActionDefinition {
 	// Python: definitions: list[ActionDefinition] = []
-	var definitions []PolicyActionDefinition
+	var definitions []harnessrsi.ActionDefinition
 	// Python: for config_path in config_paths: ...
 	for _, configPath := range configPaths {
 		if configPath == "" {
@@ -120,11 +92,11 @@ func LoadActionDefinitions(configPaths []string) []PolicyActionDefinition {
 
 // builtinActionDefinitions 构建一个内置符号组的可执行定义。
 // Python: definitions.py:23-28 _builtin_action_definitions。
-func builtinActionDefinitions(group string) []PolicyActionDefinition {
-	var out []PolicyActionDefinition
+func builtinActionDefinitions(group string) []harnessrsi.ActionDefinition {
+	var out []harnessrsi.ActionDefinition
 	// Python: for operation in _BUILTIN_GROUP_OPERATIONS[group]: ActionDefinition(name=f"{group}_{operation}", ...)
 	for _, operation := range builtinGroupOperations[group] {
-		out = append(out, PolicyActionDefinition{
+		out = append(out, harnessrsi.ActionDefinition{
 			Name:          group + "_" + operation,
 			Group:         group,
 			Operation:     operation,
@@ -137,7 +109,7 @@ func builtinActionDefinitions(group string) []PolicyActionDefinition {
 }
 
 // actionDefinitionFromMap map → 定义载体（字段缺失回落 Python 默认值）。
-func actionDefinitionFromMap(actionMap map[string]any) (*PolicyActionDefinition, error) {
+func actionDefinitionFromMap(actionMap map[string]any) (*harnessrsi.ActionDefinition, error) {
 	// Python: 关键字构造——类型不符抛 TypeError/ValueError（Go 以断言失败等价）
 	optimizableModules := []string{}
 	if list, ok := actionMap["optimizable_modules"].([]any); ok {
@@ -161,7 +133,7 @@ func actionDefinitionFromMap(actionMap map[string]any) (*PolicyActionDefinition,
 			validationRules = append(validationRules, fmt.Sprintf("%v", item))
 		}
 	}
-	return &PolicyActionDefinition{
+	return &harnessrsi.ActionDefinition{
 		Name:                strField(actionMap, "name"),
 		Group:               strField(actionMap, "group"),
 		Operation:           strField(actionMap, "operation"),

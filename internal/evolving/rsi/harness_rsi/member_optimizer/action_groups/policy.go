@@ -6,6 +6,8 @@ package actiongroups
 
 import (
 	"fmt"
+
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"path"
 	"sort"
 	"strconv"
@@ -141,9 +143,9 @@ func ActionPolicyPrompt() string {
 
 // FilterActionDefinitions 保留符合当前动作策略的配置定义。
 // Python: policy.py:163-172 filter_action_definitions。
-func FilterActionDefinitions(actionDefinitions []PolicyActionDefinition) []PolicyActionDefinition {
+func FilterActionDefinitions(actionDefinitions []harnessrsi.ActionDefinition) []harnessrsi.ActionDefinition {
 	// Python: filtered = []; for definition: group in ALLOWED and _operation_allowed
-	var filtered []PolicyActionDefinition
+	var filtered []harnessrsi.ActionDefinition
 	for _, definition := range actionDefinitions {
 		if !allowedActionGroups[definition.Group] {
 			continue

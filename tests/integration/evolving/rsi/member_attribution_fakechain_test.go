@@ -9,6 +9,7 @@
 package rsi
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"encoding/json"
 	"os"
@@ -72,8 +73,8 @@ func (s *MemberAttributionFakeChainSuite) wireFakeBridge() {
 		},
 		ParseJSONObject:                 parseJSONForIntegration,
 		ParseYamlOrJSONObject:           parseJSONForIntegration,
-		CreateRoleAttributionAgent:      func(context.Context, memberoptimizer.AttributionAgentParams) (any, error) { return "fake", nil },
-		CreateMechanismAttributionAgent: func(context.Context, memberoptimizer.AttributionAgentParams) (any, error) { return "fake", nil },
+		CreateRoleAttributionAgent:      func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) { return &agentface.Agent{}, nil },
+		CreateMechanismAttributionAgent: func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) { return &agentface.Agent{}, nil },
 	})
 	s.T().Cleanup(func() { memberoptimizer.RestoreAgentsBridge(saved) })
 }

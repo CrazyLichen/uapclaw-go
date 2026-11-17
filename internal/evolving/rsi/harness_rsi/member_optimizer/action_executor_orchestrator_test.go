@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ func wireExecutorBridge(t *testing.T, script []string) *[]string {
 	t.Helper()
 	saved := SnapshotAgentsBridge()
 	seen := &[]string{}
-	agentsBridge.InvokeAgent = func(_ context.Context, agent any, message, sessionID string) (map[string]any, error) {
+	agentsBridge.InvokeAgent = func(_ context.Context, agent *agentface.Agent, message, sessionID string) (map[string]any, error) {
 		*seen = append(*seen, message)
 		text := script[0]
 		if len(script) > 1 {
@@ -24,8 +25,8 @@ func wireExecutorBridge(t *testing.T, script []string) *[]string {
 		}
 		return map[string]any{"text": text}, nil
 	}
-	agentsBridge.CreateActionExecutionAgent = func(context.Context, ExecutorAgentParams) (any, error) {
-		return "fake-exec-agent", nil
+	agentsBridge.CreateActionExecutionAgent = func(context.Context, ExecutorAgentParams) (*agentface.Agent, error) {
+		return &agentface.Agent{}, nil
 	}
 	t.Cleanup(func() { agentsBridge = saved })
 	return seen

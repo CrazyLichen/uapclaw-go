@@ -15,7 +15,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -23,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	workspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -104,15 +104,24 @@ type OptimizerResourceHandle struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// optimizerReleaseFn 取 agent 资源释放闭包（桥装配用）。
+func optimizerReleaseFn(agent *harness.DeepAgent) (func() error, error) {
+	handle, err := OptimizerAgentResources(agent)
+	if err != nil {
+		return nil, err
+	}
+	return handle.Release, nil
+}
+
 // OptimizerAgentResources 释放本次调用的原生资源而不停止共享 Runner。
 // Python: factory.py:63-80 optimizer_agent_resources——Go 侧返回句柄，
 // 调用方 defer handle.Release()。
-func OptimizerAgentResources(agent any) (*OptimizerResourceHandle, error) {
+func OptimizerAgentResources(agent *harness.DeepAgent) (*OptimizerResourceHandle, error) {
 	handle := &OptimizerResourceHandle{}
 	// Python: operation = agent.deep_config.sys_operation; operation_id = operation.id
-	if deepConfiger, ok := agent.(interface{ DeepConfig() any }); ok {
-		if op, ok := deepConfiger.DeepConfig().(interface{ GetID() string }); ok {
-			handle.operationID = op.GetID()
+	if op := agent.DeepConfig(); op != nil && op.SysOperation != nil {
+		if getter, ok := op.SysOperation.(interface{ GetID() string }); ok {
+			handle.operationID = getter.GetID()
 		}
 	}
 	return handle, nil
@@ -507,7 +516,7 @@ var (
 // Python: factory.py:211-228 create_action_planning_agent + planner agent 内部
 // evidence_rail 创建（action_planner.py:765）；Go 经桥接后以 handle 承载 rail
 // 能力面（D-c2-4 桥接时序等价）。
-func CreatePlannerAgentAdapter(ctx context.Context, params memberoptimizer.PlannerAgentParams) (any, error) {
+func CreatePlannerAgentAdapter(ctx context.Context, params memberoptimizer.PlannerAgentParams) (*agentface.Agent, error) {
 	// Python: HarnessStructureRail 构造/update_harness_summaries 等价——构造时注入
 	structureRail := rails.NewHarnessStructureRail(params.HarnessSummaries)
 	holder := rails.NewPlannerEvidenceRail(ActionPlanning.MaxIterations)
@@ -521,19 +530,9 @@ func CreatePlannerAgentAdapter(ctx context.Context, params memberoptimizer.Plann
 	if err != nil {
 		return nil, err
 	}
-	if holder == nil {
-		return agent, nil
+	release, releaseErr := optimizerReleaseFn(agent)
+	if releaseErr != nil {
+		return nil, releaseErr
 	}
-	return &plannerAgentHandle{agent: agent, holder: holder}, nil
-}
-
-// plannerAgentHandle agent + 证据护栏句柄（实现 memberoptimizer.PlannerEvidenceHolder）。
-type plannerAgentHandle struct {
-	agent  *harness.DeepAgent
-	holder *rails.PlannerEvidenceRail
-}
-
-// FinalizationMessages 委托证据护栏收尾消息构造。
-func (h *plannerAgentHandle) FinalizationMessages(request, previous string) []llmschema.BaseMessage {
-	return h.holder.FinalizationMessages(request, previous)
+	return &agentface.Agent{Deep: agent, Finalizer: holder, Release: release}, nil
 }

@@ -7,6 +7,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
@@ -26,7 +27,7 @@ func (e *StructuredOutputExhaustedError) Error() string { return e.Msg }
 // StructuredInvokeParams 结构化调用参数（Python invoke_member_optimizer_agent_structured 关键字参数）。
 type StructuredInvokeParams struct {
 	// Agent DeepAgent 实例（Python 类型 Any；默认实现断言 BaseAgent）
-	Agent any
+	Agent *agentface.Agent
 	// AgentName agent 名（错误消息与会话兜底卡名）
 	AgentName string
 	// UserMessage 用户消息
@@ -70,15 +71,15 @@ type AgentsBridge struct {
 	// ParseYamlOrJSONObject YAML/JSON 对象解析（Python output.py parse_yaml_or_json_object_response）
 	ParseYamlOrJSONObject func(string) (map[string]any, error)
 	// CreateRoleAttributionAgent 定责 agent 构造（Python factory.py:179）
-	CreateRoleAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
+	CreateRoleAttributionAgent func(context.Context, AttributionAgentParams) (*agentface.Agent, error)
 	// CreateMechanismAttributionAgent 定病根 agent 构造（Python factory.py:196）
-	CreateMechanismAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
+	CreateMechanismAttributionAgent func(context.Context, AttributionAgentParams) (*agentface.Agent, error)
 	// CreateActionPlanningAgent 开单 agent 构造（Python factory.py:211-228）
-	CreateActionPlanningAgent func(context.Context, PlannerAgentParams) (any, error)
+	CreateActionPlanningAgent func(context.Context, PlannerAgentParams) (*agentface.Agent, error)
 	// CreateActionExecutionAgent 动刀 agent 构造（Python factory.py:231-249）
-	CreateActionExecutionAgent func(ctx context.Context, params ExecutorAgentParams) (any, error)
+	CreateActionExecutionAgent func(ctx context.Context, params ExecutorAgentParams) (*agentface.Agent, error)
 	// InvokeAgent agent 直调（Python agent.invoke(inputs, session) 通道）
-	InvokeAgent func(ctx context.Context, agent any, message, sessionID string) (map[string]any, error)
+	InvokeAgent func(ctx context.Context, agent *agentface.Agent, message, sessionID string) (map[string]any, error)
 	// ExtractText 响应文本提取（Python extract_agent_text）
 	ExtractText func(map[string]any) string
 	// PackageWriteAllowed 包写允许（Python factory.py package_write_allowed）
@@ -86,7 +87,7 @@ type AgentsBridge struct {
 	// HostReadRoots 支持的主机只读契约根（Python supported_host_read_roots）
 	HostReadRoots func() []string
 	// CreateVerificationRepairAgent 验证补救 agent 构造（Python factory.py:226）
-	CreateVerificationRepairAgent func(context.Context, ExecutorAgentParams) (any, error)
+	CreateVerificationRepairAgent func(context.Context, ExecutorAgentParams) (*agentface.Agent, error)
 }
 
 // ExecutorAgentParams 动刀 agent 构造参数（Python create_action_execution_agent 关键字收拢）。

@@ -1,6 +1,7 @@
 package memberoptimizer
 
 import (
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"encoding/json"
 	"errors"
@@ -75,8 +76,8 @@ func withInvokeSeam(t *testing.T, fake *fakeRoleAgent) {
 		}
 	}
 	agentsBridge.ParseJSONObject = testParseJSONObject
-	agentsBridge.CreateRoleAttributionAgent = func(context.Context, AttributionAgentParams) (any, error) {
-		return "fake-deep-agent", nil
+	agentsBridge.CreateRoleAttributionAgent = func(context.Context, AttributionAgentParams) (*agentface.Agent, error) {
+		return &agentface.Agent{}, nil
 	}
 	agentsBridge.CreateMechanismAttributionAgent = agentsBridge.CreateRoleAttributionAgent
 	t.Cleanup(func() { agentsBridge = saved })

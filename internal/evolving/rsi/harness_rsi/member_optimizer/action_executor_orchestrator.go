@@ -15,6 +15,7 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/action_groups"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"gopkg.in/yaml.v3"
 )
 
@@ -743,7 +744,7 @@ func (e *MemberActionExecutor) getExecutorAgent(modelConfigRef string) *MemberAc
 }
 
 // CreateExecutionAgentForExecutor 经桥构造执行 agent（adapter 返回 handle）。
-func CreateExecutionAgentForExecutor(ctx context.Context, params ExecutorAgentParams) (any, error) {
+func CreateExecutionAgentForExecutor(ctx context.Context, params ExecutorAgentParams) (*agentface.Agent, error) {
 	if agentsBridge.CreateActionExecutionAgent == nil {
 		return nil, fmt.Errorf("agents bridge not registered: import member_optimizer/agents (blank) to wire implementation")
 	}

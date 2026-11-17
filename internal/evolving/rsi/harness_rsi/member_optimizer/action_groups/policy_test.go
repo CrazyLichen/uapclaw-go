@@ -1,6 +1,7 @@
 package actiongroups
 
 import (
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func TestActionPolicyPrompt_模板逐字(t *testing.T) {
 }
 
 func TestFilterActionDefinitions_白名单(t *testing.T) {
-	defs := []PolicyActionDefinition{
+	defs := []harnessrsi.ActionDefinition{
 		{Group: "prompt", Operation: "add"},
 		{Group: "prompt", Operation: "search"}, // prompt+search 不允许
 		{Group: "model", Operation: "add"},     // 组不允许

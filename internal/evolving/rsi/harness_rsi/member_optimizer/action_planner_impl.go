@@ -23,6 +23,7 @@ import (
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/action_groups"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"gopkg.in/yaml.v3"
 )
@@ -345,7 +346,7 @@ func validateOfferedActionDefinition(action map[string]any, actionDefinitions []
 	}
 	// Python: offered = {(group, operation) for definition in filter_action_definitions(...)}
 	offered := map[[2]string]bool{}
-	for _, definition := range filterDefinitionsToPolicy(actionDefinitions) {
+	for _, definition := range actionDefinitions {
 		offered[[2]string{strings.TrimSpace(definition.Group), strings.TrimSpace(definition.Operation)}] = true
 	}
 	// Python: selected = (group, operation)
@@ -423,7 +424,7 @@ func validateActionableTargetCoverage(targets []MemberOptimizationTarget, action
 func supportedOptimizationSurfaces(actionDefinitions []harnessrsi.ActionDefinition) map[string]bool {
 	// Python: surfaces = set(); for definition in filter_action_definitions(...)
 	surfaces := map[string]bool{}
-	for _, definition := range filterDefinitionsToPolicy(actionDefinitions) {
+	for _, definition := range actionDefinitions {
 		group := strings.TrimSpace(definition.Group)
 		switch {
 		case group == "prompt":
@@ -827,7 +828,7 @@ func buildActionContractText(actionDefinitions []harnessrsi.ActionDefinition) st
 	// Python: parts = [action_policy_prompt().strip()]
 	parts := []string{strings.TrimSpace(actiongroups.ActionPolicyPrompt())}
 	// Python: filtered_definitions = filter_action_definitions(...)
-	filteredDefinitions := filterDefinitionsToPolicy(actionDefinitions)
+	filteredDefinitions := actionDefinitions
 	// Python: strict_lines = [...三行...]
 	strictLines := []string{
 		"## Run-Specific Strict Allowlist",
@@ -865,22 +866,6 @@ func buildActionContractText(actionDefinitions []harnessrsi.ActionDefinition) st
 		}
 	}
 	return strings.Join(nonEmpty, "\n\n")
-}
-
-// filterDefinitionsToPolicy harnessrsi.ActionDefinition → policy 载体过滤。
-func filterDefinitionsToPolicy(actionDefinitions []harnessrsi.ActionDefinition) []actiongroups.PolicyActionDefinition {
-	var converted []actiongroups.PolicyActionDefinition
-	for i := range actionDefinitions {
-		converted = append(converted, actiongroups.PolicyActionDefinition{
-			Name:          actionDefinitions[i].Name,
-			Group:         actionDefinitions[i].Group,
-			Operation:     actionDefinitions[i].Operation,
-			Function:      actionDefinitions[i].Function,
-			Purpose:       actionDefinitions[i].Purpose,
-			IsDestructive: actionDefinitions[i].IsDestructive,
-		})
-	}
-	return actiongroups.FilterActionDefinitions(converted)
 }
 
 // attachImprovementBriefs 附加 analyzer 改进简报到 prompt 手术。
@@ -1449,9 +1434,9 @@ type MemberActionPlannerAgent struct {
 	// agentSkillsDirs agent 技能目录
 	agentSkillsDirs []string
 	// lastEvidenceHolder 最近一次 CreatePlan 的证据护栏（adapter 返回后缓存）
-	lastEvidenceHolder PlannerEvidenceHolder
+	lastEvidenceHolder agentface.EvidenceFinalizer
 	// prebuiltAgent 预构建 agent（测试注入点，等价 Python monkeypatch）
-	prebuiltAgent any
+	prebuiltAgent *agentface.Agent
 }
 
 // MemberActionPlannerAgentBuildRetryMessage 构造重试消息。
@@ -1550,10 +1535,8 @@ func (a *MemberActionPlannerAgent) CreatePlan(ctx context.Context, params Planne
 		return nil, err
 	}
 	// Python: evidence_rail 在 create_plan 内创建并被 finalize 闭包持有；
-	// Go 经 adapter 返回的 holder 断言缓存（D-c2-4 桥接时序等价）
-	if holder, ok := agent.(PlannerEvidenceHolder); ok {
-		a.lastEvidenceHolder = holder
-	}
+	// Go 经 adapter 返回的 Finalizer 直接缓存（D-c2-4 桥接时序等价）
+	a.lastEvidenceHolder = agent.Finalizer
 	// Python: user_message = self._build_user_message(...)
 	userMessage := a.BuildUserMessage(params)
 	// Python: retry_limit = feedback_tracker.max_attempts - 1 if tracker else min(self._retry_limit, 1)
@@ -1638,14 +1621,9 @@ type PlannerCreateParams struct {
 	// RetryLimit 重试上限（tracker 非空时为 max_attempts-1）
 	RetryLimit int
 	// EvidenceRailHolder 证据护栏持有者（收尾消息构造；agents 侧 adapter 填充）
-	EvidenceRailHolder PlannerEvidenceHolder
-}
+	}
 
-// PlannerEvidenceHolder 证据护栏收尾消息构造接口（PlannerEvidenceRail.Go 的能力面）。
-type PlannerEvidenceHolder interface {
-	// FinalizationMessages 构造收尾请求消息。
-	FinalizationMessages(request, previous string) []llmschema.BaseMessage
-}
+// PlannerEvidenceHolder 证据护栏收尾消息构造接口（agentface.EvidenceFinalizer 别名保留消费点语义）。
 
 // BuildPlannerUserMessage 构造规划用户消息。
 // Python: action_planner.py:902-1042 _build_user_message（staticmethod）。
@@ -1655,7 +1633,7 @@ func (a *MemberActionPlannerAgent) BuildUserMessage(params PlannerCreateParams) 
 
 // createDeepAgent 创建规划 DeepAgent。
 // Python: create_plan 内联 create_action_planning_agent(...)。
-func (a *MemberActionPlannerAgent) createDeepAgent(ctx context.Context, params PlannerCreateParams, harnessSummaries map[string]string) (any, error) {
+func (a *MemberActionPlannerAgent) createDeepAgent(ctx context.Context, params PlannerCreateParams, harnessSummaries map[string]string) (*agentface.Agent, error) {
 	// 测试注入点
 	if a.prebuiltAgent != nil {
 		return a.prebuiltAgent, nil
@@ -2358,7 +2336,7 @@ func buildWavesFromActions(actions []MemberOptimizationAction) ([][]string, erro
 
 // filterHarnessDefinitions 过滤后的 harnessrsi.ActionDefinition 视图。
 func filterHarnessDefinitions(actionDefinitions []harnessrsi.ActionDefinition) []harnessrsi.ActionDefinition {
-	filtered := filterDefinitionsToPolicy(actionDefinitions)
+	filtered := actionDefinitions
 	var out []harnessrsi.ActionDefinition
 	for _, definition := range filtered {
 		out = append(out, harnessrsi.ActionDefinition{
