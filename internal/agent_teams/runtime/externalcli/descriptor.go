@@ -112,7 +112,9 @@ func (d *TeamJoinDescriptor) ToEnv() map[string]string {
 }
 
 // TeamJoinDescriptorFromJSON 从 JSON 字符串解析描述符。
-// 报文非法时报 AGENT_TEAM_CONFIG_INVALID（对齐 Python ValidationError 分支）。
+// 报文非法时报 AGENT_TEAM_CONFIG_INVALID（对齐 Python ValidationError 分支）；
+// pydantic required 字段（session_id/team_name/member_name，descriptor.py:116-118）
+// 缺失同样报 AGENT_TEAM_CONFIG_INVALID。
 //
 // Python: TeamJoinDescriptor.from_json (descriptor.py:107)
 func TeamJoinDescriptorFromJSON(raw string) (*TeamJoinDescriptor, error) {
@@ -121,6 +123,17 @@ func TeamJoinDescriptorFromJSON(raw string) (*TeamJoinDescriptor, error) {
 		return nil, exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
 			exception.WithMsg("malformed team join descriptor: "+err.Error()),
 			exception.WithCause(err))
+	}
+	// pydantic required 字段校验：缺失报错，文案对齐 pydantic "Field required"
+	for _, req := range []struct{ field, value string }{
+		{"session_id", d.SessionID},
+		{"team_name", d.TeamName},
+		{"member_name", d.MemberName},
+	} {
+		if req.value == "" {
+			return nil, exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+				exception.WithMsg(req.field+": Field required"))
+		}
 	}
 	return &d, nil
 }

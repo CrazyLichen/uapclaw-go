@@ -211,3 +211,28 @@ func TestDescriptorFromContext_回落ctxMessagerConfig(t *testing.T) {
 		t.Fatal("回落路径同样需要 team_name/node_id 更新")
 	}
 }
+
+// TestDescriptorFromJSON_required字段缺失报错 对齐 descriptor.py:116-118
+// pydantic required：session_id/team_name/member_name 缺失报
+// AGENT_TEAM_CONFIG_INVALID，文案对齐 pydantic "Field required"。
+func TestDescriptorFromJSON_required字段缺失报错(t *testing.T) {
+	for _, raw := range []string{
+		`{"team_name":"t","member_name":"m"}`,
+		`{"session_id":"s","member_name":"m"}`,
+		`{"session_id":"s","team_name":"t"}`,
+		`{}`,
+	} {
+		_, err := TeamJoinDescriptorFromJSON(raw)
+		if err == nil || !strings.Contains(err.Error(), "Field required") {
+			t.Fatalf("raw %s: got %v", raw, err)
+		}
+	}
+	// 三字段齐全应通过
+	d, err := TeamJoinDescriptorFromJSON(`{"session_id":"s","team_name":"t","member_name":"m"}`)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if d.SessionID != "s" || d.TeamName != "t" || d.MemberName != "m" {
+		t.Fatalf("往返: %+v", d)
+	}
+}
