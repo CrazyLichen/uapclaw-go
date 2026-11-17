@@ -305,3 +305,294 @@ func TestTraceInnerError_双轨(t *testing.T) {
 	// 非 BaseError 轨：WORKFLOW_COMPONENT_EXECUTION_ERROR.code + str(err)（vertex.py:868-870）
 	v.traceInnerError(context.Background(), errors.New("boom"))
 }
+
+// ──────────────────────────── Task6: preInvoke / sanitize 族 ────────────────────────────
+
+func TestMarkNodeExecuted与IsComponentExecuted(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	if v.isComponentExecuted("A") {
+		t.Fatal("初始应未执行")
+	}
+	v.markNodeExecuted()
+	v.markNodeExecuted() // 去重
+	executed := workflowStateList(v.stateView(), "executed_nodes")
+	if len(executed) != 1 || executed[0] != "n1" {
+		t.Fatalf("executed_nodes 应恰含 n1 一次, got %v", executed)
+	}
+	if !v.isComponentExecuted("n1") {
+		t.Fatal("标记后应已执行")
+	}
+}
+
+func TestSanitizeLeaf_分支判定(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	// ① 非 None 且非流 → 原样（vertex.py:505-506）
+	container := map[string]any{"k": "text"}
+	v.sanitizeLeaf(context.Background(), container, "k", "text", "${A.out}")
+	if container["k"] != "text" {
+		t.Fatal("普通值不应被清洗")
+	}
+	// ② 非引用路径 → 原样（vertex.py:507-508）
+	container2 := map[string]any{"k": nil}
+	v.sanitizeLeaf(context.Background(), container2, "k", nil, "plain")
+	if container2["k"] != nil {
+		t.Fatal("非引用路径不应清洗")
+	}
+	// ③ 组件已执行 → 原样（vertex.py:512-514）
+	v3, _ := newTraceVertex(t, false)
+	v3.markNodeExecuted() // n1 已执行
+	container3 := map[string]any{"n1": nil}
+	v3.sanitizeLeaf(context.Background(), container3, "n1", nil, "${n1.out}")
+	if container3["n1"] != nil {
+		t.Fatal("已执行组件不应清洗")
+	}
+	// ④ 未执行分支的 None 值 → 置空串（vertex.py:517-519）
+	container4 := map[string]any{"other": nil}
+	v3.sanitizeLeaf(context.Background(), container4, "other", nil, "${other.out}")
+	if container4["other"] != "" {
+		t.Fatalf("未执行分支应置空串, got %v", container4["other"])
+	}
+}
+
+func TestSanitizeNode_嵌套递归(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	inputs := map[string]any{
+		"a": map[string]any{"x": nil},
+		"b": []any{nil, "keep"},
+	}
+	schema := map[string]any{
+		"a": map[string]any{"x": "${missing.out}"},
+		"b": []any{"${missing.out}", "literal"},
+	}
+	v.sanitizeNode(context.Background(), inputs, schema)
+	if inputs["a"].(map[string]any)["x"] != "" {
+		t.Fatal("嵌套 dict 叶子应清洗")
+	}
+	if inputs["b"].([]any)[0] != "" {
+		t.Fatal("嵌套 list 叶子应清洗")
+	}
+	if inputs["b"].([]any)[1] != "keep" {
+		t.Fatal("list 内非引用叶应保留")
+	}
+}
+
+func TestPreInvoke_双轨取数(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	// schema 为 nil → inputs nil（vertex.py:426）
+	in := v.preInvoke(context.Background())
+	if in != nil {
+		t.Fatalf("无 schema 应取 nil, got %v", in)
+	}
+	// dict schema 轨（vertex.py:426）：io_state 无上游输出 → 引用键取 nil 缺省
+	v.nodeConfig = &workflow.NodeSpec{IOConfigs: &workflow.CompIOConfig{
+		InputsSchema: map[string]any{"x": "${A.out}"}}}
+	in2, ok2 := v.preInvoke(context.Background()).(map[string]any)
+	if !ok2 || len(in2) != 1 {
+		if in2 == nil {
+			return // 上游无输出时整体为 nil 亦合法
+		}
+		t.Fatalf("dict 轨应返回 schema 形状 map, got %v", in2)
+	}
+	if val, exists := in2["x"]; exists && val != nil {
+		t.Fatalf("无上游输出引用键应为 nil, got %v", val)
+	}
+}
+
+// ──────────────────────────── Task7: postInvoke ────────────────────────────
+
+func TestPostInvoke_None过滤与Merge(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	// 非 End：schema 取值 + 过滤 None（vertex.py:546-549）
+	v.nodeConfig = &workflow.NodeSpec{IOConfigs: &workflow.CompIOConfig{
+		OutputsSchema: map[string]any{"a": "${a}", "b": "${b}"}}}
+	res, err := v.postInvoke(context.Background(), map[string]any{"a": "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := res["b"]; exists {
+		t.Fatal("非 End 节点应过滤 None 值")
+	}
+	if res["a"] != "v1" {
+		t.Fatalf("schema 保留键应存活, got %v", res)
+	}
+	// End 混合模式 merge（vertex.py:552-561）
+	v2, _ := newTraceVertex(t, false)
+	v2.isEndNode = true
+	v2.hasCall = true
+	v2.hasStreamCall = true
+	v2.stateView().SetOutputs(map[string]any{"output": []any{"old"}})
+	v2.stateView().Commit() // 暂存模型：旧输出须提交后才对 get_outputs 可见（对齐 Python staged 语义）
+	res2, _ := v2.postInvoke(context.Background(), map[string]any{"output": "new"})
+	outList, ok := res2["output"].([]any)
+	if !ok || len(outList) != 2 || outList[0] != "new" || outList[1] != "old" {
+		t.Fatalf("混合 End 应合并新旧 output 列表, got %v", res2["output"])
+	}
+}
+
+// ──────────────────────────── Task8: preStream / postStream / processChunk ────────────────────────────
+
+func TestStreamAbilities与ShouldHandleMessage(t *testing.T) {
+	v, _ := newTraceVertex(t, false)
+	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+		components.ComponentAbilityInvoke, components.ComponentAbilityCollect,
+		components.ComponentAbilityTransform}})
+	ab := v.streamAbilities()
+	if len(ab) != 2 {
+		t.Fatalf("应过滤出 COLLECT/TRANSFORM, got %v", ab)
+	}
+	if !v.ShouldHandleMessage() {
+		t.Fatal("流能力非空应可处理消息")
+	}
+}
+
+// fakeVertexActorSession ActorSession 桩（ActorManager 构造依赖）
+type fakeVertexActorSession struct{}
+
+func (f *fakeVertexActorSession) GetEnvFloat(string) (float64, bool)          { return -1, false }
+func (f *fakeVertexActorSession) GetWorkflowStateValue(string) any            { return nil }
+func (f *fakeVertexActorSession) UpdateAndCommitWorkflowState(map[string]any) {}
+
+// newVertexWithActor 构造带 ActorManager 的 Vertex（A --stream--> n1）
+func newVertexWithActor(t *testing.T, abilities ...components.ComponentAbility) (*Vertex, *stream_actor.ActorManager) {
+	t.Helper()
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
+	v := NewVertex("n1", &fakeVertexExecutable{})
+	_ = v.Init(parent, nil)
+	v.applyNodeConfig(&workflow.NodeSpec{Abilities: abilities})
+	spec := workflow.NewWorkflowSpec()
+	spec.StreamEdges = map[string][]string{"A": {"n1"}}
+	spec.CompConfigs = map[string]*workflow.NodeSpec{
+		"A":  {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"n1": {Abilities: abilities},
+	}
+	am, err := stream_actor.NewActorManager(context.Background(), spec, stream_actor.NewStreamGraph(), false, &fakeVertexActorSession{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent.am = am
+	return v, am
+}
+
+func TestPreStream_消费注册(t *testing.T) {
+	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	// 无 schema：Consume 返回空 map（Generator 空 schema 短路）
+	out, err := v.preStream(context.Background(), components.ComponentAbilityCollect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out == nil {
+		t.Fatal("Consume 返回不应为 nil")
+	}
+	// 有 schema：$ref 叶子应注册为 StreamReader（Generator 一比一）
+	v2, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v2.nodeConfig = &workflow.NodeSpec{StreamIOConfigs: &workflow.CompIOConfig{
+		InputsSchema: map[string]any{"x": "${A.answer}"}}}
+	out2, err := v2.preStream(context.Background(), components.ComponentAbilityCollect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := out2["x"].(*stream_actor.StreamReader); !ok {
+		t.Fatalf("$ref 叶子应为 StreamReader, got %T", out2["x"])
+	}
+}
+
+// fakeVertexConsumer graph 测试侧的 StreamConsumer 桩（下游消费者）
+type fakeVertexConsumer struct{}
+
+func (f *fakeVertexConsumer) StreamCall(ctx context.Context, event chan struct{}, done func(error)) {
+	close(event)
+	<-ctx.Done() // 阻塞保持任务存活（模拟真实能力执行中，END 帧可入队）
+}
+func (f *fakeVertexConsumer) ShouldHandleMessage() bool { return true }
+func (f *fakeVertexConsumer) IsDone() bool              { return false }
+
+// newVertexAsProducer 构造以 n1 为流式生产者、n2 为消费者的 Vertex
+func newVertexAsProducer(t *testing.T) (*Vertex, *stream_actor.ActorManager) {
+	t.Helper()
+	cfg := config.NewSessionConfig(context.Background())
+	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
+	v := NewVertex("n1", &fakeVertexExecutable{})
+	_ = v.Init(parent, nil)
+	spec := workflow.NewWorkflowSpec()
+	spec.StreamEdges = map[string][]string{"n1": {"n2"}}
+	spec.CompConfigs = map[string]*workflow.NodeSpec{
+		"n1": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"n2": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+	}
+	g := stream_actor.NewStreamGraph()
+	g.AddStreamConsumer(&fakeVertexConsumer{}, "n2")
+	am, err := stream_actor.NewActorManager(context.Background(), spec, g, false, &fakeVertexActorSession{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent.am = am
+	return v, am
+}
+
+func TestProcessChunk_三分支(t *testing.T) {
+	// ① End 非子图：默认信封 OutputSchema{Type=EndNodeStream} + writer 写入
+	v, _ := newTraceVertex(t, false)
+	v.isEndNode = true
+	written := make(chan any, 1)
+	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	_ = swm.AddWriter(stream.StreamModeOutput, &fakeOutputWriter{ch: written})
+	v.nodeSession = &fakeVertexNodeSession{WorkflowVertexSession: v.nodeSession, swm: swm}
+	v.processChunk(context.Background(), "chunk-0", true, 0, false, components.ComponentAbilityStream)
+	select {
+	case w := <-written:
+		os, ok := w.(*stream.OutputSchema)
+		if !ok || os.Type != constants.EndNodeStream || os.Index != 0 || os.Payload != "chunk-0" {
+			t.Fatalf("End 信封不符: %+v", w)
+		}
+	default:
+		t.Fatal("输出写入器应收到 End 信封")
+	}
+	// ② 普通节点：produce 转发（n1 --stream--> n2）
+	v2, am := newVertexAsProducer(t)
+	v2.processChunk(context.Background(), "x", false, 0, false, components.ComponentAbilityStream)
+	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 1 {
+		t.Fatal("普通节点应 produce 到下游 actor")
+	}
+}
+
+// fakeVertexNodeSession 覆写 StreamWriterManager 的会话桩（嵌入真实会话转发其余方法）
+type fakeVertexNodeSession struct {
+	session.WorkflowVertexSession
+	swm *stream.StreamWriterManager
+}
+
+func (f *fakeVertexNodeSession) StreamWriterManager() *stream.StreamWriterManager { return f.swm }
+
+// fakeOutputWriter 捕获写入帧
+type fakeOutputWriter struct {
+	ch chan any
+}
+
+func (f *fakeOutputWriter) Write(ctx context.Context, schema stream.Schema) error {
+	f.ch <- schema
+	return nil
+}
+
+func TestPostStream_收口分流(t *testing.T) {
+	// 普通节点：数据帧 + 收口 END_ 哨兵帧（Python 行为对齐：task 未拉起时
+	// first_frame=False 的 END 帧同样被 Send 丢弃分支拦截，故此路径需先有数据帧）
+	v, am := newVertexAsProducer(t)
+	ch := make(chan StreamChunk[map[string]any], 1)
+	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
+	close(ch)
+	v.postStream(context.Background(), ch, components.ComponentAbilityStream)
+	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 2 {
+		t.Fatalf("应产出数据帧+END 哨兵帧, got %d", am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen())
+	}
+	// 逐 chunk 转发：默认 transformer 无 schema → 原样透传
+	v2, am2 := newVertexAsProducer(t)
+	ch2 := make(chan StreamChunk[map[string]any], 1)
+	ch2 <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
+	close(ch2)
+	v2.postStream(context.Background(), ch2, components.ComponentAbilityStream)
+	p := am2.StreamActor("n2").Processor(components.ComponentAbilityCollect)
+	if p.MainQueueLen() != 2 { // 数据帧 + END 帧
+		t.Fatalf("应产出数据帧+END 帧, got %d", p.MainQueueLen())
+	}
+}
