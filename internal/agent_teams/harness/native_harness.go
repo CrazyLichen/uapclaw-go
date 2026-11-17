@@ -604,6 +604,14 @@ func (h *NativeHarness) Dispose(ctx context.Context) error {
 	return nil
 }
 
+// Coordinator 返回本周期任务循环协调器的具体类型句柄。
+// 25.1f D-5：DeepAgent.LoopCoordinator() 返回窄接口（无 GetState/LoadState），
+// 适配器需具体类型做 checkpoint 的 stop_condition_state 读写。只加只读 getter，
+// 不改任何方法体、不扩接口面。
+func (h *NativeHarness) Coordinator() *task_loop.LoopCoordinator {
+	return h.coordinator
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // transition 切相位并发事件（仅 supervisor 或 Start 内调用）。

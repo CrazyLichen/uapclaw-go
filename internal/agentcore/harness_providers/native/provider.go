@@ -207,10 +207,14 @@ func buildDeepAgentFromSpec(spec *hschema.DeepAgentSpec) (*harness.DeepAgent, er
 	return agent, nil
 }
 
-// init 编译期注册：等价 Python factory.py:203-206 对 native 的惰性 import。
-// 导入本包即链接内置 provider "native"（resolve_provider 的内置分支语义）。
+// init 编译期注册：等价 Python factory.py:203-210 对 native / native_v2
+// 的惰性 import。导入本包即链接两个内置 provider。
 func init() {
 	harness_providers.RegisterBuiltinProvider(providerFactoryName, func() (harnessprotocol.HarnessProvider, error) {
 		return &NativeHarnessProvider{}, nil
+	})
+	// Python: factory.py:207-210 provider == "native_v2" → NativeV2HarnessProvider()
+	harness_providers.RegisterBuiltinProvider(nativeV2ProviderName, func() (harnessprotocol.HarnessProvider, error) {
+		return &NativeV2HarnessProvider{}, nil
 	})
 }
