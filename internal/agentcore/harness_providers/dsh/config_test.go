@@ -110,6 +110,29 @@ func TestDshHarnessConfigFromMapping_未知字段报错(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown DSH configuration fields: nope")
 }
 
+// spawn 公共键容忍：external/cli_agent/spawn.py:936-942 契约的 cwd/env/
+// inherit_process_env/skills/skill_conflict 与可选 cli_path 全量传入时构造
+// 成功；dsh 无对应字段的 inherit_process_env/cli_path 被忽略。
+// 偏差 D-15.13-l（spec §5）：Python from_mapping 同样拒未知键且上游 spawn→dsh
+// 组合从未被真实执行，Go 以容忍承载 spawn 文档声明的共享契约。
+func TestDshHarnessConfigFromMapping_spawn公共键容忍(t *testing.T) {
+	cfg, err := DshHarnessConfigFromMapping(map[string]any{
+		"provider":            "deepseek-official",
+		"model":               "deepseek-v4-flash",
+		"cwd":                 "/w",
+		"env":                 map[string]any{"K": "V"},
+		"inherit_process_env": false,
+		"skills":              []any{},
+		"skill_conflict":      "skip",
+		"cli_path":            "/opt/dsh",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "/w", cfg.Cwd)
+	assert.Equal(t, map[string]string{"K": "V"}, cfg.Env)
+	// 被忽略的键不得漏进配置面（dsh 配置无此二者字段）
+	assert.Equal(t, "skip", cfg.SkillConflict)
+}
+
 // 集合字段转换：Python config.py:127-140（env dict、两个数组字段转 tuple）。
 func TestDshHarnessConfigFromMapping_集合字段转换(t *testing.T) {
 	cfg, err := DshHarnessConfigFromMapping(map[string]any{

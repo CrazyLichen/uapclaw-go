@@ -183,6 +183,14 @@ func DshHarnessConfigFromMapping(config harnessprotocol.JsonObject) (DshHarnessC
 		"request_timeout_seconds": true, "shutdown_timeout_seconds": true,
 		"base_url": true, "api_key": true, "system_prompt_env_var": true,
 		"event_buffer_capacity": true,
+		// spawn 公共键（external/cli_agent/spawn.py:936-942 契约：每个 provider
+		// 包共享 cwd/env/inherit_process_env/skills/skill_conflict，另加可选
+		// cli_path）：dsh 配置面没有对应字段，容忍并忽略。偏差 D-15.13-l——
+		// Python from_mapping 对未知键同样报错且 spawn 同样传入这两个键，上游
+		// spawn→dsh 组合从未被真实执行（上游 e2e 只直调 from_mapping），
+		// Go 以容忍承载 spawn 文档声明的共享契约。回收条件见 spec §5。
+		"inherit_process_env": true,
+		"cli_path":            true,
 	}
 	unknown := slices.Sorted(func(yield func(string) bool) {
 		for key := range values {
