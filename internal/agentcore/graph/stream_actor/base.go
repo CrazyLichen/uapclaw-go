@@ -357,6 +357,16 @@ func (p *StreamProcessor) Receive(payload StreamPayload) {
 	p.queue.put(payload)
 }
 
+// MainQueueLen 主队列积压帧数（观测/测试辅助）
+func (p *StreamProcessor) MainQueueLen() int {
+	return p.queue.len()
+}
+
+// Processor 取 ability 对应 processor（观测/测试辅助）
+func (a *StreamActor) Processor(ability components.ComponentAbility) *StreamProcessor {
+	return a.processors[ability]
+}
+
 // Run 常驻分发循环（偏差 D1：由 consume 注册完成后启动，非 send 首帧）。
 // Python: base.py run(ability) 170-195 步骤一比一：
 // 取帧 → end 帧关流判定（记录 handle_map、按 source_path_map 关路径、全组满足关全队列）

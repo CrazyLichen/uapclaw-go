@@ -221,6 +221,16 @@ func (m *ActorManager) ShouldSanitizeStreamSource(consumerID, producerID string)
 // StreamTransform 访问器（Python property stream_transform）
 func (m *ActorManager) StreamTransform() *StreamTransform { return m.streamsTransform }
 
+// StreamActor 取消费者 actor（观测/测试辅助）
+func (m *ActorManager) StreamActor(consumerID string) *StreamActor {
+	return m.streams[consumerID]
+}
+
+// ActiveAbilities 取 producer 已活跃能力（观测/测试辅助）
+func (m *ActorManager) ActiveAbilities(producerID string) map[components.ComponentAbility]bool {
+	return m.activeProducerIDs[producerID]
+}
+
 // Produce 路由帧到 stream_edges 指定的消费者（Python:106-120 步骤一比一）。
 func (m *ActorManager) Produce(ctx context.Context, producerID string, messageContent any,
 	ability components.ComponentAbility, firstFrame bool) error {
