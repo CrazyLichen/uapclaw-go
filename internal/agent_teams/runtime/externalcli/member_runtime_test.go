@@ -5,12 +5,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+)
+
+// 编译期接口满足断言：三种成员运行时实现 agent.MemberRuntime
+// （Python MemberRuntime Protocol 的 Go 承载）。agent 包不反向 import
+// externalcli（生产零反向依赖），断言置于测试侧。
+var (
+	_ agent.MemberRuntime = (*ExternalCliRuntime)(nil)
+	_ agent.MemberRuntime = (*ReinvokeCliRuntime)(nil)
+	_ agent.MemberRuntime = (*ExternalHarnessMemberRuntime)(nil)
+
+	_ agent.TaskNoticeAwareRuntime = (*ExternalCliRuntime)(nil)
+	_ agent.TaskNoticeAwareRuntime = (*ReinvokeCliRuntime)(nil)
+	_ agent.TaskNoticeAwareRuntime = (*ExternalHarnessMemberRuntime)(nil)
 )
 
 // ──────────────────────────── 测试替身 ────────────────────────────

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -168,11 +169,13 @@ func RegisterMCPOutOfBand(
 // ExternalHarnessMemberRuntime；adapter 路按 SupportsStdinInjection 分发——
 // 流式 CLI 启动一个长驻子进程返回 ExternalCliRuntime，one-shot CLI（openclaw/
 // hermes）返回每轮重起新子进程的 ReinvokeCliRuntime。返回的 runtime 拥有其
-// 子进程；Stop 收尾。Python 返回联合类型 MemberRuntimeLike，Go 无联合类型，
-// 以 any 承载（15.16 消费面定型后收窄）。
+// 子进程；Stop 收尾。Python 返回联合类型
+// MemberRuntimeLike = CliRuntimeBase | ExternalHarnessMemberRuntime（同一
+// 鸭子面），Go 以 agent.MemberRuntime 接口承载（spec §5 登记承载方式差异）；
+// 外部第三方 provider 运行时未来也须满足该接口。
 //
 // Python: build_cli_runtime (spawn.py:200-537)
-func BuildCliRuntime(ctx context.Context, rtc *schema.TeamRuntimeContext, opts Options) (any, error) {
+func BuildCliRuntime(ctx context.Context, rtc *schema.TeamRuntimeContext, opts Options) (agent.MemberRuntime, error) {
 	// 步骤 1：cli_agent 判空（:297-301）
 	if rtc.CLIAgent == "" {
 		return nil, exception.RaiseError(exception.StatusAgentTeamConfigInvalid,

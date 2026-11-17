@@ -109,7 +109,7 @@ func (s *ExternalCliLifecycleSuite) TestAdapterLifecycle_一轮消息与tracker�
 	reinvoke.SetMemberSessionFactory(func() (sessioninterfaces.SessionFacade, error) {
 		return teamSession.CreateAgentSession(nil, "pay_beta", false, "beta"), nil
 	})
-	s.Require().NoError(reinvoke.Start())
+	s.Require().NoError(reinvoke.Start(nil))
 
 	// 轮次事件订阅：收集 kind 供等待 finished
 	roundKinds := make(chan string, 16)

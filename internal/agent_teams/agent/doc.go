@@ -17,6 +17,7 @@
 //	├── team_agent.go         # TeamAgent 主体
 //	├── state.go              # TeamAgentState 可变状态
 //	├── member.go             # TeamMember 成员状态管理
+//	├── member_runtime.go     # MemberRuntime 成员「大脑缝」接口（Python Protocol 移植）
 //	├── member_factory.go     # CreateMemberHandle 工厂
 //	├── infra.go              # TeamInfra 进程级基础设施
 //	├── resources.go          # PrivateAgentResources 实例级资源

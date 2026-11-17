@@ -45,7 +45,7 @@ done`)
 	adapter.Completion = CompletionMarkerPrefix + "<<END_OF_TURN>>"
 	rt := NewExternalCliRuntime(memberName, adapter, NewStdinPipeInjector(proc.Stdin()),
 		proc.Stdout(), proc, tr, "agent-1")
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	return rt, script
@@ -97,7 +97,7 @@ func TestExternalCliRuntime_整轮与完成判定(t *testing.T) {
 	if len(roundKinds) < 2 || roundKinds[0] != "started" || roundKinds[len(roundKinds)-1] != "finished" {
 		t.Fatalf("轮次事件: %v", roundKinds)
 	}
-	if rt.SessionID() != "" {
+	if rt.SessionID() != nil {
 		t.Fatal("CLI runtime 的 session_id 恒空")
 	}
 }
@@ -144,7 +144,7 @@ func TestReinvokeCliRuntime_每轮新起与后续轮resume(t *testing.T) {
 		"", []string{"--mcp-flag"}, "agent-2")
 	rt.SetInactivityTimeoutS(30)
 	rt.SetTurnTimeoutS(60)
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rt.Send("turn one", false); err != nil {
@@ -160,7 +160,7 @@ func TestReinvokeCliRuntime_每轮新起与后续轮resume(t *testing.T) {
 	if !strings.Contains(texts[0], "--session") || !strings.Contains(texts[0], "--mcp-flag") {
 		t.Fatalf("首轮 argv 未含 session/launch 参数: %v", texts)
 	}
-	if rt.SessionID() != "" {
+	if rt.SessionID() != nil {
 		t.Fatal("CLI runtime 的 session_id 恒空")
 	}
 }
@@ -172,7 +172,7 @@ func TestReinvokeCliRuntime_轮中消息缓冲为followup(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	// 无在飞轮次时 followUp 直接缓冲（Python RUNNING 才缓冲；这里先手工置 RUNNING 验证）
@@ -204,7 +204,7 @@ func TestReinvokeCliRuntime_abort抢占(t *testing.T) {
 	adapter.Command = []string{script}
 	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
 	rt.SetInactivityTimeoutS(60)
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rt.Send("slow", false); err != nil {
@@ -252,7 +252,7 @@ func TestReinvokeCliRuntime_spawn失败传播(t *testing.T) {
 	adapter.Completion = CompletionNone
 	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
 	rt.SetTransport(&failingTransport{})
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	var roundKinds []string
@@ -296,7 +296,7 @@ echo "<<END_OF_TURN>>"`)
 	adapter.Completion = CompletionMarkerPrefix + "<<END_OF_TURN>>"
 	rt := NewExternalCliRuntime("beta", adapter, NewStdinPipeInjector(proc.Stdin()),
 		proc.Stdout(), proc, tr, "agent-1")
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rt.Send("go", false); err != nil {
@@ -369,7 +369,7 @@ func TestReinvokeCliRuntime_首轮空prompt照常重起(t *testing.T) {
 	adapter.Command = []string{script}
 	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
 	rt.SetInactivityTimeoutS(30)
-	if err := rt.Start(); err != nil {
+	if err := rt.Start(nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rt.Send("", false); err != nil {

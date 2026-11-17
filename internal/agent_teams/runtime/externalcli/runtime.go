@@ -250,9 +250,12 @@ const (
 // Start 为一个运行周期准备 CLI runtime 并打开成员会话。
 // 成员 AgentSession 从团队会话派生并在任何轮次运行前恢复，因此团队上下文
 // 投递基线（及 SDK 子类的后端原生 resume 状态）从第一条消息起就可用。
+// teamSession 由 SetMemberSessionFactory 的工厂闭包在构造期捕获（D-15.13-g），
+// 本签名保留 Python start(team_session) 的参数面，实参在此不参与派生。
 //
 // Python: CliRuntimeBase.start (runtime.py:192)
-func (b *cliRuntimeBase) Start() error {
+func (b *cliRuntimeBase) Start(teamSession any) error {
+	_ = teamSession
 	b.mu.Lock()
 	if b.started {
 		b.mu.Unlock()
@@ -394,9 +397,10 @@ func (b *cliRuntimeBase) State() harnessprotocol.HarnessState {
 	return b.phase
 }
 
-// SessionID 返回空串：CLI 子进程拥有自己的会话，不是团队会话。
+// SessionID 返回 nil：CLI 子进程拥有自己的会话，不是团队会话。
+// Python session_id 恒 None（runtime.py:284-286），Go 以 nil 承载。
 // Python: session_id property (runtime.py:284)
-func (b *cliRuntimeBase) SessionID() string { return "" }
+func (b *cliRuntimeBase) SessionID() *string { return nil }
 
 // Outputs 返回本运行周期叙述块的通道（stop 时关闭）。
 // Python: outputs (runtime.py:293)
@@ -413,8 +417,12 @@ func (b *cliRuntimeBase) Outputs() <-chan stream.OutputSchema {
 // 返回 nil（CLI runtime 没有可呈现的单调序列 id）。
 //
 // Python: send (runtime.py:297)
-func (b *cliRuntimeBase) Send(content string, immediate bool) (any, error) {
-	text := content
+func (b *cliRuntimeBase) Send(content any, immediate bool) (any, error) {
+	// Python: text = content if isinstance(content, str) else str(content)（:305）
+	text, ok := content.(string)
+	if !ok {
+		text = fmt.Sprint(content)
+	}
 	// 入站消息只带绝对发送时间；时钟锚告诉成员"现在"是什么，如同
 	// TeamPolicyRail 对进程内成员的做法。
 	clock := inboundtags.RenderClock(inboundtags.FormatAbsoluteTime(database.GetCurrentTime()))
@@ -599,14 +607,17 @@ func (b *cliRuntimeBase) Pause() {
 // Resume 恢复 CLI 表面；冷恢复 query 成为新输入。
 // CLI runtime 不保留暂停的在飞轮次，所以热恢复是 no-op。生命周期层可在重建
 // runtime 后提供冷恢复 query；经正常队列投递该 query。
-// Python 判 `query is not None`（runtime.py:436）；Go 字符串恒非 nil，空串
-// 同 Python 空串一样是合法输入，照常投递（附时钟锚）。
+// Python 判 `query is not None`（runtime.py:436）；nil 即不投递，其余值
+// （含空串，同 Python 空串一样是合法输入）经正常队列投递（附时钟锚）。
 // Python: resume (runtime.py:429)
-func (b *cliRuntimeBase) Resume(query string) error {
+func (b *cliRuntimeBase) Resume(query any) error {
 	b.mu.Lock()
 	terminated := b.phase == harnessprotocol.HarnessStateTerminated
 	b.mu.Unlock()
 	if !terminated {
+		if query == nil {
+			return nil
+		}
 		_, err := b.Send(query, false)
 		return err
 	}
@@ -615,9 +626,13 @@ func (b *cliRuntimeBase) Resume(query string) error {
 
 // Subscribe 注册可选相位/轮次回调（NativeHarness 同款契约）。
 // 只注册非 nil 回调。on_state 接收 old/new/session_id；on_round 接收
-// kind/round_id。
+// kind/round_id。参数用字面 func 签名承载（agent.MemberRuntime 接口面），
+// 内部落库时转回 stateCallback/roundCallback 命名类型。
 // Python: subscribe (runtime.py:440)
-func (b *cliRuntimeBase) Subscribe(onState stateCallback, onRound roundCallback) {
+func (b *cliRuntimeBase) Subscribe(
+	onState func(old, new harnessprotocol.HarnessState, sessionID string),
+	onRound func(kind string, roundID int),
+) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if onState != nil {
@@ -802,7 +817,14 @@ func (b *cliRuntimeBase) transition(newPhase harnessprotocol.HarnessState) {
 	onState := append([]stateCallback(nil), b.onState...)
 	b.mu.Unlock()
 	for _, cb := range onState {
-		cb(old, newPhase, b.SessionID())
+	// Python 回调收到 session_id（base 恒 None）；Go 回调签名为 string，
+	// nil 以空串承载（同旧基线行为）。
+	sid := b.SessionID()
+	if sid != nil {
+		cb(old, newPhase, *sid)
+	} else {
+		cb(old, newPhase, "")
+	}
 	}
 }
 

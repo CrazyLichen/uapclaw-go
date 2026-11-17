@@ -8,19 +8,21 @@ package externalcli
 // team-context 投递基线）、TeamContextTracker 搭载、外部 runtime 可靠性循环、
 // 可选的轨迹记录器（经协议事件流供数）与认证回退晋升钩子。
 //
-// 本批落骨架：结构体字段、构造器、只读面、pre-start 绑定、成员会话/团队
-// 上下文助手、checkpoint 序列化助手、no-op 钩子与纯函数助手。依赖
-// external/reliability.py（RuntimeReliabilityContext，⤵️15.7/15.8）与
-// workflow activity emitter（⤵️对应章节）的行为方法（start/send/_on_event/
-// stop 等）暂缺，见文件尾「暂缺清单」，随 provider 路（Task 8 / 15.7/15.8）
-// 一并移植。
+// 生命周期/交互方法（Start/Stop/Outputs/Send/Abort/Pause/Resume）为转发实现
+// （偏差 D-15.13-n）：折叠链对齐 Python send/start 逐步，事件泵消费面
+//（_on_event/_record_input 等）仍归属 ⤵️15.16 成员事件循环，见文件尾
+// 「暂缺清单」。
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
@@ -28,6 +30,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -204,7 +207,9 @@ type ExternalHarnessMemberRuntime struct {
 	extraMCPServers []harness_protocol.McpServerConfig
 	// boundTools 下一次 start 挂载的原生工具网关
 	boundTools harness_protocol.ToolGateway
-	// reliabilityCtx 可靠性上下文（RuntimeReliabilityContext ⤵️15.7/15.8）
+	// reliabilityCtx 可靠性上下文（RuntimeReliabilityContext 未移植，
+	// external/reliability.py 430 行 ⤵️15.7/15.8，偏差 D-15.13-m：本批恒 nil，
+	// 对齐 Python `ctx is not None` 不命中分支）
 	reliabilityCtx any
 	// trajectory 把本成员事件流转成轨迹 span 的记录器
 	trajectory *harnessproviders.HarnessTrajectoryRecorder
@@ -225,6 +230,17 @@ type ExternalHarnessMemberRuntime struct {
 	// onState/onRound 订阅回调（与 cliRuntimeBase 同款契约）
 	onState []stateCallback
 	onRound []roundCallback
+
+	// lifecycleMu 生命周期串行锁（Python _lifecycle_lock，start/stop 互斥）
+	lifecycleMu sync.Mutex
+	// contextDeliveryMu 团队上下文投递串行锁（Python _context_delivery_lock，
+	// start/stop/send/announce 共用）
+	contextDeliveryMu sync.Mutex
+	// outputsOnce/outputsCh/outputsStop Outputs 通道惰性装配（单次泵 goroutine
+	// 把 adapter 输出迭代器桥接到 channel 面，Stop 时收编）
+	outputsOnce sync.Once
+	outputsCh   chan stream.OutputSchema
+	outputsStop chan struct{}
 }
 
 // NewExternalHarnessMemberRuntime 构造 runtime 并组装 HarnessIOAdapter。
@@ -526,16 +542,344 @@ func (r *ExternalHarnessMemberRuntime) SetModelSelection(
 }
 
 // Subscribe 注册可选相位/轮次回调（与 cliRuntimeBase 同款契约）。
+// 参数用字面 func 签名承载（agent.MemberRuntime 接口面），落库时转回
+// stateCallback/roundCallback 命名类型。
 // Python: subscribe (member_runtime.py:661)
-func (r *ExternalHarnessMemberRuntime) Subscribe(onState stateCallback, onRound roundCallback) {
+func (r *ExternalHarnessMemberRuntime) Subscribe(
+	onState func(old, new harness_protocol.HarnessState, sessionID string),
+	onRound func(kind string, roundID int),
+) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if onState != nil {
-		r.onState = append(r.onState, onState)
+		r.onState = append(r.onState, stateCallback(onState))
 	}
 	if onRound != nil {
-		r.onRound = append(r.onRound, onRound)
+		r.onRound = append(r.onRound, roundCallback(onRound))
 	}
+}
+
+// ──────────────────────────── 生命周期（转发实现，D-15.13-n） ────────────────────────────
+
+// Start 启动 provider 周期。转发实现：Python _start 的宿主能力注入已并入
+// resolveContext（spec A.4 归并注记）、可靠性 begin_attempt 因
+// RuntimeReliabilityContext 未移植而恒跳过（D-15.13-m，ctx 恒 nil 对齐
+// Python `is not None` 不命中分支）；启动失败路径的 _finalize_startup_failure
+// 归属 ⤵️15.16 成员事件循环，此处仅回退成员会话收尾。
+//
+// Python: start/_start (member_runtime.py:429/:435)
+func (r *ExternalHarnessMemberRuntime) Start(teamSession any) error {
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	// Python: if not self._stopped: raise HarnessStateError（:436-437）
+	r.mu.Lock()
+	stopped := r.stopped
+	r.mu.Unlock()
+	if !stopped {
+		return fmt.Errorf("external harness member runtime is already started")
+	}
+	// Python: async with _context_delivery_lock: await _finalize_member_session()（:439-440）
+	r.contextDeliveryMu.Lock()
+	err := r.finalizeMemberSession(context.Background())
+	r.contextDeliveryMu.Unlock()
+	if err != nil {
+		return err
+	}
+	// Python: context = await self._resolve_context(team_session)（:441）
+	hctx, err := r.resolveContext(teamSession)
+	if err != nil {
+		return err
+	}
+	// Python: self._member_name/_member_agent_id = context...（:442-443）
+	r.mu.Lock()
+	r.memberName = hctx.AgentName
+	r.memberAgentID = hctx.AgentID
+	r.mu.Unlock()
+	// Python: await self._ensure_member_session(team_session)（:444）
+	memberSession, err := r.ensureMemberSession(teamSession)
+	if err != nil {
+		return err
+	}
+	// Python: seed checkpoint 落盘后清槽（:445-448）
+	if r.seedCheckpoint != nil && memberSession != nil {
+		if err := r.writeSeedCheckpoint(hctx, memberSession); err != nil {
+			return err
+		}
+		r.mu.Lock()
+		r.seedCheckpoint = nil
+		r.mu.Unlock()
+	}
+	// Python: context = self._host_context(context)（:449）——宿主能力注入
+	// 已并入 resolveContext（spec A.4）；reliability begin_attempt（:450-451）
+	// 因 ctx 恒 nil 跳过（D-15.13-m）。
+	// Python: await self._adapter.start(context)（:452）
+	if err := r.adapter.Start(context.Background(), *hctx); err != nil {
+		// Python except 分支：_finalize_startup_failure（⤵️15.16）+ 成员会话
+		// 收尾（:453-458）。
+		r.contextDeliveryMu.Lock()
+		_ = r.finalizeMemberSession(context.Background())
+		r.contextDeliveryMu.Unlock()
+		return err
+	}
+	// Python: self._stopped = False（:459）
+	r.mu.Lock()
+	r.stopped = false
+	r.mu.Unlock()
+	return nil
+}
+
+// writeSeedCheckpoint 把宿主预置的 checkpoint 指针落成成员自己的 checkpoint
+// 信封（写进成员子会话状态）。
+//
+// Python: _write_seed_checkpoint (member_runtime.py:510)
+func (r *ExternalHarnessMemberRuntime) writeSeedCheckpoint(
+	hctx *harness_protocol.HarnessContext,
+	memberSession sessioninterfaces.SessionFacade,
+) error {
+	r.mu.Lock()
+	seed := r.seedCheckpoint
+	backend := r.harness.Card().Name
+	r.mu.Unlock()
+	data, err := harness_protocol.FreezeJsonObject(seed)
+	if err != nil {
+		return err
+	}
+	checkpoint := &harness_protocol.HarnessCheckpoint{
+		Provider:      backend,
+		SchemaVersion: "1",
+		AgentID:       hctx.AgentID,
+		HostSessionID: hctx.HostSessionID,
+		CheckpointID:  "seed-" + strings.ReplaceAll(uuid.New().String(), "-", ""),
+		Sequence:      0,
+		Data:          data,
+	}
+	sink := NewMemberSessionCheckpointSink(memberSession, backend)
+	_, err = sink.Save(checkpoint, harness_protocol.CheckpointReasonSessionActivated, "")
+	return err
+}
+
+// Stop 停止 provider 并关闭投影的 MemberRuntime 输出。幂等。
+// Go 无事件总线（回调注册表即订阅面），Python _events.unregister_namespace
+// （member_runtime.py:536）为 no-op（登记注记）。
+//
+// Python: stop/_stop (member_runtime.py:526/:532)
+func (r *ExternalHarnessMemberRuntime) Stop() {
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	r.mu.Lock()
+	stopped := r.stopped
+	r.mu.Unlock()
+	if stopped {
+		r.contextDeliveryMu.Lock()
+		_ = r.finalizeMemberSession(context.Background())
+		r.contextDeliveryMu.Unlock()
+		return
+	}
+	// Python: try: await self._adapter.stop()（:533-534）——错误在 Python 于
+	// finally 前上抛；转发面记 Warn 保持收尾顺序完整（D-15.13-n）。
+	if err := r.adapter.Stop(context.Background()); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member", r.memberName).
+			Msg("[external-cli] harness stop failed")
+	}
+	// Python finally 块（:535-545）：事件命名空间注销（Go no-op）、stopped
+	// 置位、轨迹收口、teardown 钩子逐个执行（失败记日志不上抛）。
+	r.mu.Lock()
+	r.stopped = true
+	traj := r.trajectory
+	hooks := append([]func(ctx context.Context) error(nil), r.teardownHooks...)
+	r.mu.Unlock()
+	if traj != nil {
+		// 停在轮中不会发出终局轮事件；把记录器仍持有的收口掉。
+		traj.Close()
+	}
+	for _, hook := range hooks {
+		if err := hook(context.Background()); err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("member", r.memberName).
+				Msg("external harness teardown hook failed")
+		}
+	}
+	// Go channel 面收尾：停泵并关闭 outputs（Python _END 哨兵语义）。
+	r.terminateOutputs()
+	r.contextDeliveryMu.Lock()
+	_ = r.finalizeMemberSession(context.Background())
+	r.contextDeliveryMu.Unlock()
+}
+
+// terminateOutputs 停止 outputs 泵 goroutine 并关闭通道（未装配则 no-op）。
+func (r *ExternalHarnessMemberRuntime) terminateOutputs() {
+	if r.outputsStop != nil {
+		select {
+		case <-r.outputsStop:
+		default:
+			close(r.outputsStop)
+		}
+	}
+}
+
+// ──────────────────────────── 交互（转发实现，D-15.13-n） ────────────────────────────
+
+// Outputs 返回队列背书的输出块通道。Python 直接返回 adapter.outputs() 的
+// async 迭代器；Go 接口面是 channel（cliRuntimeBase 同款），此处以惰性泵
+// goroutine 把 adapter 输出迭代器桥接到 channel——Python 无此中间层，登记于
+// D-15.13-n。Stop 收编泵并关通道（Python _END 哨兵语义）。
+//
+// Python: outputs (member_runtime.py:557)
+func (r *ExternalHarnessMemberRuntime) Outputs() <-chan stream.OutputSchema {
+	r.outputsOnce.Do(func() {
+		ch := make(chan stream.OutputSchema)
+		stop := make(chan struct{})
+		r.outputsCh = ch
+		r.outputsStop = stop
+		it := r.adapter.Outputs()
+		go func() {
+			defer close(ch)
+			for {
+				item, ok := it.Next(context.Background())
+				if !ok {
+					return
+				}
+				// adapter 输出队列条目恒为 OutputSchema 投影块。
+				chunk, ok := item.(stream.OutputSchema)
+				if !ok {
+					continue
+				}
+				select {
+				case ch <- chunk:
+				case <-stop:
+					return
+				}
+			}
+		}()
+	})
+	return r.outputsCh
+}
+
+// Send 能力感知地提交输入：pending 团队状态与任务通知折叠进同一消息。
+// 转发实现：折叠链（时钟锚/任务通知/团队上下文）对齐 Python send 逐步；
+// _record_input 输入登记（member_runtime.py:887）与可靠性循环归属
+// ⤵️15.16 成员事件循环，此处省略（D-15.13-n）。InteractiveInput 直投
+// （应答挂起中断）。
+//
+// Python: send (member_runtime.py:564)
+func (r *ExternalHarnessMemberRuntime) Send(content any, immediate bool) (any, error) {
+	r.contextDeliveryMu.Lock()
+	defer r.contextDeliveryMu.Unlock()
+	// Python: isinstance(content, InteractiveInput) → adapter 直投（:569-570）
+	if _, ok := content.(*interaction.InteractiveInput); ok {
+		return r.adapter.Send(context.Background(), content, immediate)
+	}
+	// Python: external_input = to_harness_input(content)（:571）
+	externalInput, err := harnessproviders.ToHarnessInput(content)
+	if err != nil {
+		return nil, err
+	}
+	// Python: delivered_text = harness_input_text(external_input)（:572）——
+	// 供 _record_input（⤵️15.16）登记，此处省略。
+	// Python: external_input = _prepend_context(external_input, clock)（:575-576）
+	clock := inboundtags.RenderClock(inboundtags.FormatAbsoluteTime(database.GetCurrentTime()))
+	externalInput = prependContext(externalInput, clock)
+	// Python: pending_outcome = await tracker.claim(...)（:578-579）
+	r.mu.Lock()
+	outcomeTracker := r.taskOutcomeTracker
+	sess := r.memberSession
+	r.mu.Unlock()
+	var pendingOutcome *tracker.ClaimedNotice
+	if outcomeTracker != nil && sess != nil {
+		pendingOutcome = outcomeTracker.Claim(sess)
+	}
+	if pendingOutcome != nil {
+		externalInput = prependContext(externalInput, pendingOutcome.Text)
+	}
+	// Python: pending_context = await self._pending_team_context()（:581-582）
+	pendingContext, _ := r.pendingTeamContext()
+	if pendingContext != "" {
+		externalInput = prependContext(externalInput, pendingContext)
+	}
+	// Python: receipt = await self._adapter.send(...)；失败 release（:584-589）
+	receipt, err := r.adapter.Send(context.Background(), externalInput, immediate)
+	if err != nil {
+		if pendingOutcome != nil && outcomeTracker != nil {
+			outcomeTracker.Release(pendingOutcome)
+		}
+		return nil, err
+	}
+	// Python: record_input 系列（:594-602）⤵️15.16；commit/persist 照常。
+	if pendingContext != "" {
+		r.commitTeamContext()
+	}
+	if pendingOutcome != nil && outcomeTracker != nil && sess != nil {
+		outcomeTracker.Persist(sess)
+	}
+	return receipt, nil
+}
+
+// AnnounceTeamContext 把待告知团队状态作为独立消息投递；无新内容 no-op。
+//
+// Python: announce_team_context (member_runtime.py:604)
+func (r *ExternalHarnessMemberRuntime) AnnounceTeamContext() error {
+	r.contextDeliveryMu.Lock()
+	defer r.contextDeliveryMu.Unlock()
+	pending, _ := r.pendingTeamContext()
+	if pending == "" {
+		return nil
+	}
+	if _, err := r.adapter.Send(context.Background(), pending, false); err != nil {
+		return err
+	}
+	r.commitTeamContext()
+	return nil
+}
+
+// AnnounceTaskRevisions 把待发任务编辑通知作为独立消息投递（F_129）：
+// steer 忙碌成员；tracker 无新内容时 no-op。已投递的通知登记为该轮输入的
+// _record_input 归属 ⤵️15.16（D-15.13-n）。
+//
+// Python: announce_task_revisions (member_runtime.py:613)
+func (r *ExternalHarnessMemberRuntime) AnnounceTaskRevisions() error {
+	r.mu.Lock()
+	outcomeTracker := r.taskOutcomeTracker
+	sess := r.memberSession
+	r.mu.Unlock()
+	if outcomeTracker == nil {
+		return nil
+	}
+	r.contextDeliveryMu.Lock()
+	defer r.contextDeliveryMu.Unlock()
+	_, err := outcomeTracker.Announce(sess, func(text string) error {
+		_, err := r.adapter.Send(context.Background(), text, true)
+		return err
+	})
+	return err
+}
+
+// Abort 中止在飞轮次（能力感知，经 adapter）。Python await _adapter.abort
+//（member_runtime.py:636）；接口面无返回（与 cliRuntimeBase 契约一致），
+// 失败记 Warn。
+func (r *ExternalHarnessMemberRuntime) Abort(immediate bool) {
+	if err := r.adapter.Abort(context.Background(), immediate); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member", r.memberName).
+			Bool("immediate", immediate).
+			Msg("[external-cli] harness abort failed")
+	}
+}
+
+// Pause 暂停在飞轮次（支持 pause_resume 能力时生效）。
+// Python: pause (member_runtime.py:639)
+func (r *ExternalHarnessMemberRuntime) Pause() {
+	if err := r.adapter.Pause(context.Background()); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member", r.memberName).
+			Msg("[external-cli] harness pause failed")
+	}
+}
+
+// Resume 恢复热的或 checkpoint 还原的暂停轮次；query 透传 adapter。
+// Python: resume (member_runtime.py:642)
+func (r *ExternalHarnessMemberRuntime) Resume(query any) error {
+	return r.adapter.Resume(context.Background(), query)
 }
 
 // ──────────────────────────── 成员会话 / 团队上下文 ────────────────────────────
@@ -802,19 +1146,13 @@ func prependContext(content harness_protocol.HarnessInput, prefix string) harnes
 	return out
 }
 
-// ──────────────────────────── 暂缺清单（⤵️ provider 路 / 15.7/15.8） ────────────────────────────
+// ──────────────────────────── 暂缺清单（⤵️15.16 成员事件循环） ────────────────────────────
 //
-// 以下 Python 方法依赖 RuntimeReliabilityContext（external/reliability.py）或
-// activity emitter（workflow.backends.activity_emitter），Go 侧上游件未移植，
-// 且其消费面（Task 8 BuildProviderMemberRuntime / 15.7/15.8 harness 构造）尚未
-// 落地；随 provider 路实施一并移植，行号对齐 member_runtime.py：
+// 以下 Python 方法依赖事件泵消费面（成员事件循环，⤵️15.16 已裁决维持）或
+// activity emitter（workflow.backends.activity_emitter）；生命周期/交互方法
+// 已于 15.13 收尾以转发实现补齐（D-15.13-n），余项随消费面实施一并移植，
+// 行号对齐 member_runtime.py：
 //
-//   - start / _start（:429/:435）——provider 周期启动与事件泵
-//   - _host_context（:462）——宿主能力/checkpoint/resume/mcp/tools 注入
-//   - _write_seed_checkpoint（:510）——宿主预置 checkpoint 落盘
-//   - stop / _stop / dispose / outputs（:526/:532/:554/:557）
-//   - send / announce_team_context / announce_task_revisions（:564/:604/:613）
-//   - abort / pause / resume（:636/:639/:642）
 //   - _on_event / _on_turn_event / _on_diagnostic / _on_tool_item（:676-800）
 //   - _emit_activity / _on_provider_interaction / _persist_fallback（:803/:835/:843）
 //   - _finalize_turn_failure / _finalize_startup_failure（:863/:872）
