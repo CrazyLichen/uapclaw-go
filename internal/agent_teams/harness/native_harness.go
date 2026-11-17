@@ -1113,7 +1113,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		h.coordinator.SetLastResult(cmd.result)
 	}
 	st := h.agent.LoadState(h.sess)
-	exported := h.coordinator.ExportState()
+	exported := h.coordinator.GetState()
 	st.StopConditionState = map[string]any{
 		"iteration":        exported.Iteration,
 		"token_usage":      exported.TokenUsage,

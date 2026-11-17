@@ -189,15 +189,16 @@ func (lc *LoopCoordinator) ElapsedSeconds() float64 {
 	return time.Since(startTime).Seconds()
 }
 
-// ExportState 导出状态用于持久化。
+// GetState 导出 JSON 安全快照用于 checkpoint。
+// Python: loop_coordinator.py:153 LoopCoordinator.get_state
 // Python: LoopCoordinator.get_state
-func (lc *LoopCoordinator) ExportState() LoopCoordinatorState {
+func (lc *LoopCoordinator) GetState() LoopCoordinatorState {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	evStates := make(map[string]map[string]any, len(lc.evaluators))
 	for _, ev := range lc.evaluators {
-		s := ev.ExportState()
+		s := ev.GetState()
 		if s != nil {
 			evStates[ev.Name()] = s
 		}
@@ -211,10 +212,11 @@ func (lc *LoopCoordinator) ExportState() LoopCoordinatorState {
 	}
 }
 
-// ImportState 从持久化状态恢复。
+// LoadState 从持久化快照恢复，startTime 重置使 TimeoutEvaluator 从恢复点计时。
+// Python: loop_coordinator.py:172 LoopCoordinator.load_state
 // startTime 重置为当前时间，使 TimeoutEvaluator 从恢复点开始计时。
 // Python: LoopCoordinator.load_state
-func (lc *LoopCoordinator) ImportState(state LoopCoordinatorState) {
+func (lc *LoopCoordinator) LoadState(state LoopCoordinatorState) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
@@ -226,7 +228,7 @@ func (lc *LoopCoordinator) ImportState(state LoopCoordinatorState) {
 	if state.EvaluatorStates != nil {
 		for _, ev := range lc.evaluators {
 			if evState, ok := state.EvaluatorStates[ev.Name()]; ok {
-				ev.ImportState(evState)
+				ev.LoadState(evState)
 			}
 		}
 	}

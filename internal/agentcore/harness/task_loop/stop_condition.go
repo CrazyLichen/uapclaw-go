@@ -20,11 +20,13 @@ type StopConditionEvaluator interface {
 	// Name 返回评估器名称（用于状态序列化索引、停止原因和日志）
 	Name() string
 
-	// ExportState 导出评估器状态用于持久化（无状态评估器返回 nil）
-	ExportState() map[string]any
+	// GetState 导出评估器状态用于持久化（无状态评估器返回 nil）
+	// Python: harness/schema/stop_condition.py:77 get_state
+	GetState() map[string]any
 
-	// ImportState 从持久化状态恢复（无状态评估器忽略参数）
-	ImportState(data map[string]any)
+	// LoadState 从持久化状态恢复（无状态评估器忽略参数）
+	// Python: harness/schema/stop_condition.py:85 load_state
+	LoadState(data map[string]any)
 
 	// Reset 重置内部状态，用于新的 invoke 周期
 	Reset()
@@ -166,14 +168,14 @@ func (e *MaxRoundsEvaluator) Name() string {
 	return "MaxRoundsEvaluator"
 }
 
-// ExportState 无状态评估器，返回 nil。
+// GetState 无状态评估器，返回 nil。
 // Python: StopConditionEvaluator.get_state() 返回 None
-func (e *MaxRoundsEvaluator) ExportState() map[string]any {
+func (e *MaxRoundsEvaluator) GetState() map[string]any {
 	return nil
 }
 
-// ImportState 无状态评估器，忽略参数。
-func (e *MaxRoundsEvaluator) ImportState(_ map[string]any) {}
+// LoadState 无状态评估器，忽略参数。
+func (e *MaxRoundsEvaluator) LoadState(_ map[string]any) {}
 
 // Reset 无状态评估器，无操作。
 func (e *MaxRoundsEvaluator) Reset() {}
@@ -188,14 +190,14 @@ func (e *TokenBudgetEvaluator) Name() string {
 	return "TokenBudgetEvaluator"
 }
 
-// ExportState 无状态评估器，返回 nil。
+// GetState 无状态评估器，返回 nil。
 // Python: StopConditionEvaluator.get_state() 返回 None
-func (e *TokenBudgetEvaluator) ExportState() map[string]any {
+func (e *TokenBudgetEvaluator) GetState() map[string]any {
 	return nil
 }
 
-// ImportState 无状态评估器，忽略参数。
-func (e *TokenBudgetEvaluator) ImportState(_ map[string]any) {}
+// LoadState 无状态评估器，忽略参数。
+func (e *TokenBudgetEvaluator) LoadState(_ map[string]any) {}
 
 // Reset 无状态评估器，无操作。
 func (e *TokenBudgetEvaluator) Reset() {}
@@ -210,14 +212,14 @@ func (e *TimeoutEvaluator) Name() string {
 	return "TimeoutEvaluator"
 }
 
-// ExportState 无状态评估器，返回 nil。
+// GetState 无状态评估器，返回 nil。
 // Python: StopConditionEvaluator.get_state() 返回 None
-func (e *TimeoutEvaluator) ExportState() map[string]any {
+func (e *TimeoutEvaluator) GetState() map[string]any {
 	return nil
 }
 
-// ImportState 无状态评估器，忽略参数。
-func (e *TimeoutEvaluator) ImportState(_ map[string]any) {}
+// LoadState 无状态评估器，忽略参数。
+func (e *TimeoutEvaluator) LoadState(_ map[string]any) {}
 
 // Reset 无状态评估器，无操作。
 func (e *TimeoutEvaluator) Reset() {}
@@ -233,9 +235,9 @@ func (e *CompletionPromiseEvaluator) Name() string {
 	return "CompletionPromiseEvaluator"
 }
 
-// ExportState 导出状态：fulfilled, matchedText, requiredConfirmations, confirmationCount。
+// GetState 导出状态：fulfilled, matchedText, requiredConfirmations, confirmationCount。
 // Python: CompletionPromiseEvaluator.get_state
-func (e *CompletionPromiseEvaluator) ExportState() map[string]any {
+func (e *CompletionPromiseEvaluator) GetState() map[string]any {
 	return map[string]any{
 		"fulfilled":              e.fulfilled,
 		"matched_text":           e.matchedText,
@@ -244,9 +246,9 @@ func (e *CompletionPromiseEvaluator) ExportState() map[string]any {
 	}
 }
 
-// ImportState 从持久化状态恢复。
+// LoadState 从持久化状态恢复。
 // Python: CompletionPromiseEvaluator.load_state
-func (e *CompletionPromiseEvaluator) ImportState(data map[string]any) {
+func (e *CompletionPromiseEvaluator) LoadState(data map[string]any) {
 	if data == nil {
 		return
 	}
@@ -318,14 +320,14 @@ func (e *CustomPredicateEvaluator) Name() string {
 	return e.name
 }
 
-// ExportState 无状态评估器，返回 nil。
+// GetState 无状态评估器，返回 nil。
 // Python: StopConditionEvaluator.get_state() 返回 None
-func (e *CustomPredicateEvaluator) ExportState() map[string]any {
+func (e *CustomPredicateEvaluator) GetState() map[string]any {
 	return nil
 }
 
-// ImportState 无状态评估器，忽略参数。
-func (e *CustomPredicateEvaluator) ImportState(_ map[string]any) {}
+// LoadState 无状态评估器，忽略参数。
+func (e *CustomPredicateEvaluator) LoadState(_ map[string]any) {}
 
 // Reset 无状态评估器，无操作。
 func (e *CustomPredicateEvaluator) Reset() {}
@@ -414,8 +416,8 @@ func (e *NoProgressAnswerEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 // Name 返回评估器名称（同时作为 stop_reason）。
 func (e *NoProgressAnswerEvaluator) Name() string { return "NoProgressAnswerEvaluator" }
 
-// ExportState 导出连续计数用于持久化。
-func (e *NoProgressAnswerEvaluator) ExportState() map[string]any {
+// GetState 导出连续计数用于持久化。
+func (e *NoProgressAnswerEvaluator) GetState() map[string]any {
 	return map[string]any{
 		"consecutive_empty_answers":     e.consecutiveEmptyAnswers,
 		"max_consecutive_empty_answers": e.maxConsecutiveEmptyAnswers,
@@ -423,8 +425,8 @@ func (e *NoProgressAnswerEvaluator) ExportState() map[string]any {
 	}
 }
 
-// ImportState 从持久化状态恢复连续计数。
-func (e *NoProgressAnswerEvaluator) ImportState(data map[string]any) {
+// LoadState 从持久化状态恢复连续计数。
+func (e *NoProgressAnswerEvaluator) LoadState(data map[string]any) {
 	if v, ok := data["consecutive_empty_answers"].(int); ok && v > 0 {
 		e.consecutiveEmptyAnswers = v
 	}
