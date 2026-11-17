@@ -51,3 +51,13 @@ func (a ComponentAbility) Desc() string {
 		return ""
 	}
 }
+
+// AbilityValues 返回全部能力成员（对齐 Python 迭代 ComponentAbility 枚举，供源键反解）
+func AbilityValues() []ComponentAbility {
+	return []ComponentAbility{
+		ComponentAbilityInvoke,
+		ComponentAbilityStream,
+		ComponentAbilityCollect,
+		ComponentAbilityTransform,
+	}
+}
