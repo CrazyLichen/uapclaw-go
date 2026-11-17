@@ -142,13 +142,18 @@ func ThirdPartyProviders() []string {
 }
 
 // ProviderTakesEndpointModels 第三方 provider name 是否在 host 端点上跑模型。
-// 仅当 provider 参与模型映射（ModelConfigProvider）且其 card 声明
-// ENDPOINT_MODELS 时为 true。
+// 仅当 provider 参与模型映射（ModelConfigProvider，protocol.py:65 的可选接口）
+// 且其 card 声明 ENDPOINT_MODELS 时为 true；非 ModelConfigProvider 的 provider
+// 恒 false。
 //
 // Python: provider_takes_endpoint_models (backends.py:122)
 func ProviderTakesEndpointModels(name string) bool {
 	provider, err := harness_providers.ResolveProvider(name)
 	if err != nil {
+		return false
+	}
+	// Python: isinstance(provider, ModelConfigProvider) 前置（backends.py:129）
+	if _, ok := provider.(harnessprotocol.ModelConfigProvider); !ok {
 		return false
 	}
 	card := provider.Card()
@@ -168,6 +173,10 @@ func TakesAuthFallback(name string) bool {
 	}
 	provider, err := harness_providers.ResolveProvider(backend.Provider)
 	if err != nil {
+		return false
+	}
+	// Python: isinstance(provider, ModelConfigProvider) 前置（backends.py:145）
+	if _, ok := provider.(harnessprotocol.ModelConfigProvider); !ok {
 		return false
 	}
 	card := provider.Card()

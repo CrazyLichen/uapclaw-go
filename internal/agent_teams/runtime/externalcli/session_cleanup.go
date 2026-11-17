@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -114,16 +113,10 @@ func externalCLIConfigsForTeam(
 	}
 	out := make(map[string]*schema.ExternalCliAgentSpec, len(spec.ExternalCliAgents))
 	for i := range spec.ExternalCliAgents {
-		cfg := &spec.ExternalCliAgents[i]
-		if cfg.CLIAgent == "" {
-			continue
-		}
-		key := cfg.CLIAgent
-		if strings.Contains(key, "/") {
-			// 防御：键应为一个后端名；异常形状跳过而不是覆盖
-			continue
-		}
-		out[key] = cfg
+		// Python 一行推导：{config.cli_agent: config for config in
+		// spec.external_cli_agents}（session_cleanup.py:104）——无任何键过滤；
+		// Go map 键无冲突问题，含 "/" 或空键照常收录。
+		out[spec.ExternalCliAgents[i].CLIAgent] = &spec.ExternalCliAgents[i]
 	}
 	return out
 }

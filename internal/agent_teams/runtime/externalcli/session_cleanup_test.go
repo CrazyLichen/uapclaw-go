@@ -108,3 +108,24 @@ func writeTeamsBucketForTest(sess *fakeMemberSession, teamName string, bucket ma
 	teams[teamName] = bucket
 	sess.states[metadata.TeamsKey] = teams
 }
+
+// TestExternalCLIConfigsForTeam_无键过滤 对齐 session_cleanup.py:104 一行推导：
+// Python dict 推导不过滤任何键——含 "/" 或空串的 cli_agent 照常收录
+// （Go map 键无冲突问题，防御性跳过已摘除）。
+func TestExternalCLIConfigsForTeam_无键过滤(t *testing.T) {
+	sess := newFakeMemberSession()
+	writeTeamsBucketForTest(sess, "team-x", map[string]any{"spec": map[string]any{
+		"external_cli_agents": []any{
+			map[string]any{"cli_agent": "codex"},
+			map[string]any{"cli_agent": "some/provider"},
+			map[string]any{"cli_agent": ""},
+		},
+	}})
+	configs := externalCLIConfigsForTeam(sess, "team-x")
+	if len(configs) != 3 {
+		t.Fatalf("Python 推导不过滤键，应收录 3 条: %d", len(configs))
+	}
+	if configs["codex"] == nil || configs["some/provider"] == nil {
+		t.Fatalf("键缺失: %v", configs)
+	}
+}

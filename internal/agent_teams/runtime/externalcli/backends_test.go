@@ -94,3 +94,82 @@ func (f *fakeBackendProbeProvider) Card() harnessprotocol.HarnessCard {
 func (f *fakeBackendProbeProvider) Create(config harnessprotocol.JsonObject) (harnessprotocol.HarnessProtocol, error) {
 	return nil, nil
 }
+
+// TestProviderTakesEndpointModels_未实现ModelConfigProvider恒false 对齐
+// backends.py:127-129/141-145：card 声明 ENDPOINT_MODELS 但未实现
+// ModelConfigProvider 可选接口（protocol.py:65）时，两个判定都为 False。
+func TestProviderTakesEndpointModels_未实现ModelConfigProvider恒false(t *testing.T) {
+	name := "testcli-nomcp-provider"
+	err := harness_providers.RegisterHarnessProvider(name, func() (harnessprotocol.HarnessProvider, error) {
+		return &fakeNoModelConfigProvider{}, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer harness_providers.UnregisterHarnessProvider(name)
+	if ProviderTakesEndpointModels(name) {
+		t.Fatal("未实现 ModelConfigProvider 应恒 false")
+	}
+	if TakesAuthFallback(name) {
+		t.Fatal("未实现 ModelConfigProvider 应恒 false")
+	}
+}
+
+// TestTakesAuthFallback_实现ModelConfigProvider且双能力 对齐 backends.py:141-145
+// 的 isinstance 前置：实现接口 + card 声明双能力时为 true。
+func TestTakesAuthFallback_实现ModelConfigProvider且双能力(t *testing.T) {
+	name := "testcli-fullcap-provider"
+	err := harness_providers.RegisterHarnessProvider(name, func() (harnessprotocol.HarnessProvider, error) {
+		return &fakeEndpointModelsProvider{}, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer harness_providers.UnregisterHarnessProvider(name)
+	if !ProviderTakesEndpointModels(name) {
+		t.Fatal("实现 ModelConfigProvider + ENDPOINT_MODELS 应为 true")
+	}
+	if !TakesAuthFallback(name) {
+		t.Fatal("实现 ModelConfigProvider + 双能力应为 true")
+	}
+}
+
+// fakeEndpointModelsProvider card 声明 ENDPOINT_MODELS/AUTH_FALLBACK 且实现
+// ModelConfigProvider 可选接口的探测桩。
+type fakeEndpointModelsProvider struct{}
+
+func (f *fakeEndpointModelsProvider) Card() harnessprotocol.HarnessCard {
+	return harnessprotocol.HarnessCard{
+		Capabilities: map[harnessprotocol.HarnessCapability]bool{
+			harnessprotocol.HarnessCapabilityEndpointModels: true,
+			harnessprotocol.HarnessCapabilityAuthFallback:   true,
+		},
+	}
+}
+
+// Create 满足 HarnessProvider 接口（探测桩不会真正创建）。
+func (f *fakeEndpointModelsProvider) Create(config harnessprotocol.JsonObject) (harnessprotocol.HarnessProtocol, error) {
+	return nil, nil
+}
+
+// ModelConfig 满足 ModelConfigProvider 可选接口（modelConfigCapable 时）。
+func (f *fakeEndpointModelsProvider) ModelConfig(choice harnessprotocol.ModelChoice, fallback *harnessprotocol.ModelChoice) (harnessprotocol.JsonObject, error) {
+	return harnessprotocol.JsonObject{}, nil
+}
+
+// fakeNoModelConfigProvider 只实现 HarnessProvider 的探测桩（无 ModelConfigProvider）。
+type fakeNoModelConfigProvider struct{}
+
+func (f *fakeNoModelConfigProvider) Card() harnessprotocol.HarnessCard {
+	return harnessprotocol.HarnessCard{
+		Capabilities: map[harnessprotocol.HarnessCapability]bool{
+			harnessprotocol.HarnessCapabilityEndpointModels: true,
+			harnessprotocol.HarnessCapabilityAuthFallback:   true,
+		},
+	}
+}
+
+// Create 满足 HarnessProvider 接口（探测桩不会真正创建）。
+func (f *fakeNoModelConfigProvider) Create(config harnessprotocol.JsonObject) (harnessprotocol.HarnessProtocol, error) {
+	return nil, nil
+}
