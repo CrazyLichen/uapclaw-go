@@ -1203,6 +1203,8 @@ func httpStatusPtr(value any) *int {
 	switch v := value.(type) {
 	case int:
 		return &v
+	case *int:
+		return v
 	case int64:
 		i := int(v)
 		return &i
