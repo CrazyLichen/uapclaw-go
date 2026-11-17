@@ -41,38 +41,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// harness 私有事件主题 + 命名空间，镜像 NativeHarness，使团队
-	// StreamController 能用同一 subscribe(on_state=, on_round=) 契约订阅 CLI
-	// runtime。kind 取 started / finished / aborted / failed（CLI 轮次无
-	// paused 相位）。Python: _EVENT_STATE/_EVENT_ROUND/_EVENT_NAMESPACE
-	eventStateTopic = "harness.state"
-	eventRoundTopic = "harness.round"
-	eventNamespace  = "cli_runtime"
-
-	// followupSep 把缓冲的轮中消息拼成一条后续 prompt。
-	// Python: _FOLLOWUP_SEP
-	followupSep = "\n\n---\n\n"
-
-	// stderrTailLimit 失败 CLI 的 stderr 诊断日志保留长度。
-	// Python: _STDERR_TAIL_LIMIT
-	stderrTailLimit = 2000
-
-	// defaultInactivityTimeoutS 重起 one-shot CLI 轮次默认无输出（无活动）
-	// 上限。只有子进程静默这么久才杀轮——做长但活跃工作的 CLI 永不被杀，
-	// 挂起/启动卡死的才被杀。
-	// Python: _DEFAULT_INACTIVITY_TIMEOUT_S
-	defaultInactivityTimeoutS = 180.0
-
-	// stderrPeekTimeoutS 流式进程后台 stderr 排空在 premature-EOF 路径上
-	// 交付尾部的有界等待。排空在 stderr EOF 结束——死进程立即到达；上限防
-	// 半关闭管道。
-	// Python: _STDERR_PEEK_TIMEOUT_S
-	stderrPeekTimeoutS = 5.0
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // memberSessionFactory 成员子会话工厂：由调用方（15.16 接线）注入。
@@ -85,6 +53,92 @@ type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 
 // roundCallback harness.round 事件的回调形状。
 type roundCallback func(kind string, roundID int)
+
+// runtimeReliabilityContext 可靠性上下文的最小投递面（RuntimeReliabilityContext
+// 归属 external/reliability.py，Go 侧 ⤵️15.7/15.8 落地后实现本接口并注入
+// reliabilityCtx；本批 CLI adapter runtime 恒 nil，对齐 Python `ctx is None` 分支）。
+type runtimeReliabilityContext interface {
+	// HasFinalized 本轮是否已 finalize 过失败。
+	HasFinalized() bool
+	// FinalizeFailure 以类别/原因/摘要 finalize 一次失败。
+	FinalizeFailure(category, message, sdkErrorType, summary string) error
+	// MarkMemberError 把成员置 ERROR。
+	MarkMemberError() error
+}
+
+// outputQueue 无界输出队列：对齐 Python 无界 asyncio.Queue（偏差 D-15.13-j）。
+// Push 永不阻塞（内部 slice 缓冲 + 单槽通知），使 driveTurn 泵送不会因消费者
+// 暂缓读取而挂死、Stop 等待轮次 goroutine 永不超时；Close 后泵把已缓冲块
+// 排空再关闭通道面（保留 Python stop 后 _END 前队列内容仍可消费的语义）。
+type outputQueue struct {
+	mu         sync.Mutex
+	buf        []stream.OutputSchema
+	notify     chan struct{} // 容量 1；Push 时非阻塞投递唤醒泵
+	closed     chan struct{} // Close 时关闭（sync.Once 保证单次）
+	closedOnce sync.Once
+	closedFlag bool
+}
+
+// newOutputQueue 创建空队列。
+func newOutputQueue() *outputQueue {
+	return &outputQueue{notify: make(chan struct{}, 1), closed: make(chan struct{})}
+}
+
+// Push 入队一个输出块；永不阻塞。Close 之后到达的块丢弃
+// （Python 侧 stop 先 await 轮次任务再推 _END，正常路径无此窗口）。
+func (q *outputQueue) Push(v stream.OutputSchema) {
+	q.mu.Lock()
+	if q.closedFlag {
+		q.mu.Unlock()
+		return
+	}
+	q.buf = append(q.buf, v)
+	q.mu.Unlock()
+	select {
+	case q.notify <- struct{}{}:
+	default:
+	}
+}
+
+// Close 标记队列终止；泵在缓冲排空后关闭通道面。
+func (q *outputQueue) Close() {
+	q.closedOnce.Do(func() {
+		q.mu.Lock()
+		q.closedFlag = true
+		q.mu.Unlock()
+		close(q.closed)
+	})
+}
+
+// Channel 启动泵并返回通道面。泵逐块投递已缓冲内容；Close 后继续排空剩余
+// 缓冲，清空后关闭通道。消费者完全放弃读取时泵会阻塞在最后一次投递上——
+// 遗留一个有界 goroutine（缓冲即上界），Python 侧等价为队列内容随对象回收。
+func (q *outputQueue) Channel() <-chan stream.OutputSchema {
+	out := make(chan stream.OutputSchema)
+	go func() {
+		defer close(out)
+		for {
+			q.mu.Lock()
+			if len(q.buf) > 0 {
+				v := q.buf[0]
+				q.buf = q.buf[1:]
+				q.mu.Unlock()
+				out <- v
+				continue
+			}
+			isClosed := q.closedFlag
+			q.mu.Unlock()
+			if isClosed {
+				return
+			}
+			select {
+			case <-q.notify:
+			case <-q.closed:
+			}
+		}
+	}()
+	return out
+}
 
 // cliRuntimeBase CLI 成员运行时的共享 MemberRuntime 表面。
 //
@@ -115,10 +169,12 @@ type cliRuntimeBase struct {
 	// phase 映射到团队 HarnessState 词汇的生命周期相位，使 StreamController
 	// 把 CLI runtime 完全当 NativeHarness 对待。
 	phase harnessprotocol.HarnessState
-	// outputCh 当前运行周期的输出通道（缓冲承载轮次叙述块，等价 Python
-	// 无界 asyncio.Queue；容量按单轮叙述上界预留）；stop 关闭它使 outputs
-	// 迭代终止。每次 start 重建。
-	outputCh chan stream.OutputSchema
+	// outputQueue 本运行周期的输出队列（无界，等价 Python 无界 asyncio.Queue，
+	// 偏差 D-15.13-j）；Close 后消费者把已缓冲块排空再终止。每次 start 重建。
+	outputQueue *outputQueue
+	// outputCh 输出队列的通道面（outputQueue 泵在排空后关闭它）。stop 后
+	// 返回已关闭通道，消费者 range 立即终止（Python _END 哨兵语义的 Go 等价物）。
+	outputCh <-chan stream.OutputSchema
 	// onState/onRound 订阅回调（NativeHarness 同款契约）。
 	onState []stateCallback
 	onRound []roundCallback
@@ -157,6 +213,38 @@ type cliRuntimeBase struct {
 	started bool
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// harness 私有事件主题 + 命名空间，镜像 NativeHarness，使团队
+	// StreamController 能用同一 subscribe(on_state=, on_round=) 契约订阅 CLI
+	// runtime。kind 取 started / finished / aborted / failed（CLI 轮次无
+	// paused 相位）。Python: _EVENT_STATE/_EVENT_ROUND/_EVENT_NAMESPACE
+	eventStateTopic = "harness.state"
+	eventRoundTopic = "harness.round"
+	eventNamespace  = "cli_runtime"
+
+	// followupSep 把缓冲的轮中消息拼成一条后续 prompt。
+	// Python: _FOLLOWUP_SEP
+	followupSep = "\n\n---\n\n"
+
+	// stderrTailLimit 失败 CLI 的 stderr 诊断日志保留长度。
+	// Python: _STDERR_TAIL_LIMIT
+	stderrTailLimit = 2000
+
+	// defaultInactivityTimeoutS 重起 one-shot CLI 轮次默认无输出（无活动）
+	// 上限。只有子进程静默这么久才杀轮——做长但活跃工作的 CLI 永不被杀，
+	// 挂起/启动卡死的才被杀。
+	// Python: _DEFAULT_INACTIVITY_TIMEOUT_S
+	defaultInactivityTimeoutS = 180.0
+
+	// stderrPeekTimeoutS 流式进程后台 stderr 排空在 premature-EOF 路径上
+	// 交付尾部的有界等待。排空在 stderr EOF 结束——死进程立即到达；上限防
+	// 半关闭管道。
+	// Python: _STDERR_PEEK_TIMEOUT_S
+	stderrPeekTimeoutS = 5.0
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Start 为一个运行周期准备 CLI runtime 并打开成员会话。
@@ -176,7 +264,9 @@ func (b *cliRuntimeBase) Start() error {
 		return err
 	}
 	b.mu.Lock()
-	b.outputCh = make(chan stream.OutputSchema, 1024)
+	q := newOutputQueue()
+	b.outputQueue = q
+	b.outputCh = q.Channel()
 	b.turnAborted = false
 	b.phase = harnessprotocol.HarnessStateIdle
 	b.mu.Unlock()
@@ -268,7 +358,7 @@ func (b *cliRuntimeBase) Stop() {
 	b.turnCancel = nil
 	done := b.turnDone
 	b.turnDone = nil
-	ch := b.outputCh
+	q := b.outputQueue
 	b.mu.Unlock()
 
 	b.abortTurnFn()
@@ -283,13 +373,13 @@ func (b *cliRuntimeBase) Stop() {
 	if done != nil {
 		<-done
 	}
-	b.mu.Lock()
-	// 关闭但保留引用：Outputs() 在 stop 后返回已关闭通道，消费者 range 立即
-	// 终止（Python _END 哨兵语义的 Go 等价物）。
-	if ch != nil {
-		close(ch)
+	// 关闭输出队列：泵在排空剩余缓冲后关闭 outputCh（Python _END 哨兵语义）。
+	// 轮次 goroutine 已收编，Push 不再有竞态窗口。队列无界（Push 永不阻塞），
+	// 本调用不会因消费者暂缓读取而挂死（偏差 D-15.13-j）。
+	if q != nil {
+		q.Close()
 	}
-	b.mu.Unlock()
+	return
 }
 
 // Dispose 永久处置本 CLI runtime。
@@ -509,12 +599,14 @@ func (b *cliRuntimeBase) Pause() {
 // Resume 恢复 CLI 表面；冷恢复 query 成为新输入。
 // CLI runtime 不保留暂停的在飞轮次，所以热恢复是 no-op。生命周期层可在重建
 // runtime 后提供冷恢复 query；经正常队列投递该 query。
+// Python 判 `query is not None`（runtime.py:436）；Go 字符串恒非 nil，空串
+// 同 Python 空串一样是合法输入，照常投递（附时钟锚）。
 // Python: resume (runtime.py:429)
 func (b *cliRuntimeBase) Resume(query string) error {
 	b.mu.Lock()
 	terminated := b.phase == harnessprotocol.HarnessStateTerminated
 	b.mu.Unlock()
-	if query != "" && !terminated {
+	if !terminated {
 		_, err := b.Send(query, false)
 		return err
 	}
@@ -554,7 +646,7 @@ func (b *cliRuntimeBase) Subscribe(onState stateCallback, onRound roundCallback)
 func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID int) {
 	b.mu.Lock()
 	b.currentRoundID = roundID
-	out := b.outputCh
+	q := b.outputQueue
 	b.mu.Unlock()
 	finalizedByTurn := false
 	abnormalExit := false
@@ -585,14 +677,15 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 					b.mu.Unlock()
 					return
 				}
-				if out != nil {
-					out <- chunk
+				if q != nil {
+					q.Push(chunk)
 				}
 			}
 		}
 	}()
-	// flavor 轮内错误（注入失败 / premature-EOF）：Python 经 generator 异常落到
-	// _drive_turn 的 except 分支；Go 在此读取 drive 字段并归入 crashed 分类。
+	// flavor 轮内错误（注入失败 / premature-EOF / spawn 失败）：Python 经
+	// generator 异常落到 _drive_turn 的 except 分支；Go 在此读取 drive 字段
+	// 并归入 crashed 分类（D-15.13-b 同源偏差）。
 	b.mu.Lock()
 	driveErr := b.driveErr
 	b.driveErr = nil
@@ -601,6 +694,12 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 		// Python: team_logger.exception("[{}] external cli turn crashed", ...)
 		logger.Error(logComponent).Str("member", b.memberName).Err(driveErr).
 			Msg("external cli turn crashed")
+		// Python: crashed 分支的 await self._finalize_crash_exit(exc, round_id)
+		b.finalizeCrashExit(driveErr, roundID)
+	}
+	// Python: CancelledError 分支的 await self._finalize_abnormal_exit(round_id)
+	if abnormalExit {
+		b.finalizeAbnormalExit(roundID)
 	}
 	b.mu.Lock()
 	terminated := b.phase == harnessprotocol.HarnessStateTerminated
@@ -625,8 +724,23 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 }
 
 // hasFinalized 检查 reliabilityCtx（SDK runtime 注入）是否已 finalize 失败。
-// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil。
-func (b *cliRuntimeBase) hasFinalized() bool { return false }
+// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil（未实现接口时 false）。
+func (b *cliRuntimeBase) hasFinalized() bool {
+	b.mu.Lock()
+	rc := b.reliabilityCtx
+	b.mu.Unlock()
+	client, _ := rc.(runtimeReliabilityContext)
+	return client != nil && client.HasFinalized()
+}
+
+// reliabilityClient 取 reliabilityCtx 的最小投递面；未注入或未实现接口时 nil。
+func (b *cliRuntimeBase) reliabilityClient() runtimeReliabilityContext {
+	b.mu.Lock()
+	rc := b.reliabilityCtx
+	b.mu.Unlock()
+	client, _ := rc.(runtimeReliabilityContext)
+	return client
+}
 
 // finalizeAbnormalExit 为意外任务退出 finalize 一个 sdk_error 失败。
 // 只有意外取消路径（runtime 任务异常退出）把成员置 ERROR；轮内失败不置。
@@ -634,8 +748,17 @@ func (b *cliRuntimeBase) hasFinalized() bool { return false }
 // Python: _finalize_abnormal_exit (runtime.py:522)
 func (b *cliRuntimeBase) finalizeAbnormalExit(roundID int) {
 	_ = roundID
-	// reliabilityCtx 为 nil（本批 CLI adapter runtime）时 no-op——对齐 Python
-	// `if ctx is None: return`。
+	ctx := b.reliabilityClient()
+	if ctx == nil {
+		// 对齐 Python `if ctx is None: return`（本批 CLI adapter runtime 恒此分支）
+		return
+	}
+	if !ctx.HasFinalized() {
+		summary := b.memberName + " external runtime task exited unexpectedly"
+		_ = ctx.FinalizeFailure("sdk_error", "external runtime task exited unexpectedly",
+			"CancelledError", summary)
+	}
+	_ = ctx.MarkMemberError()
 }
 
 // finalizeCrashExit 为未映射崩溃 finalize 回退失败（若未做过）。
@@ -644,9 +767,19 @@ func (b *cliRuntimeBase) finalizeAbnormalExit(roundID int) {
 //
 // Python: _finalize_crash_exit (runtime.py:546)
 func (b *cliRuntimeBase) finalizeCrashExit(err error, roundID int) {
-	_ = err
 	_ = roundID
-	// 同上：reliabilityCtx 为 nil 时 no-op。
+	ctx := b.reliabilityClient()
+	if ctx == nil || ctx.HasFinalized() {
+		return
+	}
+	// Python: sdk_error_type=type(exc).__name__；Go 以反射类型名承载同一信息
+	excType := fmt.Sprintf("%T", err)
+	message := err.Error()
+	if message == "" {
+		message = excType
+	}
+	summary := fmt.Sprintf("%s external runtime turn crashed: %s", b.memberName, excType)
+	_ = ctx.FinalizeFailure("sdk_error", message, excType, summary)
 }
 
 // nextRoundIDLocked 返回本 runtime 实例的单调轮次 id（须持锁）。
@@ -914,6 +1047,13 @@ func (b *cliRuntimeBase) setDriveErr(err error) {
 	b.mu.Unlock()
 }
 
+// hasDriveErr 查询轮内错误是否已落（Reinvoke 重起循环的停止信号）。
+func (b *cliRuntimeBase) hasDriveErr() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.driveErr != nil
+}
+
 // peekStderrTail 不永久阻塞地读后台 stderr 排空的尾。
 // 排空在 stderr EOF 结束；死进程立即到达 EOF，所以通常立即返回。有界等待
 // 防护崩溃后 stderr 管道半开的边缘情况。
@@ -1054,6 +1194,12 @@ func (r *ReinvokeCliRuntime) SetTurnTimeoutS(seconds float64) {
 	r.hasTurnTimeout = true
 }
 
+// SetTransport 注入每轮启动用 transport（测试探针用；Python 无对应——
+// create_subprocess_exec 直启属 D-15.13-a 差异缝，Go 以本字段承载）。
+func (r *ReinvokeCliRuntime) SetTransport(t transport.ProcessTransport) {
+	r.transport = t
+}
+
 // SetInactivityTimeoutS 覆盖默认无输出上限（Python inactivity_timeout_s 参数）。
 func (r *ReinvokeCliRuntime) SetInactivityTimeoutS(seconds float64) {
 	r.inactivityTimeoutS = seconds
@@ -1073,7 +1219,10 @@ func (r *ReinvokeCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 		r.mu.Unlock()
 		chunkIndex := 0
 		prompt := query
-		for prompt != "" && !r.isAborted() {
+		// Python: while prompt is not None and not self._aborted（runtime.py:882）
+		// ——None 哨兵结束循环；空串是合法 prompt 照常重起。Go 以 drainPending
+		// 的 ok 位承载 None 语义（D-15.13-b 同源偏差）。
+		for !r.isAborted() {
 			// 单轮 stdout 排空与 stderr 排空、无活动 watchdog 并发运行
 			//（见 runOnce），不能直接产出。它把叙述摘要推到本通道；
 			// runOnce 在任何退出路径（完成/超时/abort/启动错误）上以关闭通道
@@ -1094,10 +1243,16 @@ func (r *ReinvokeCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 				}
 				forwardedCleanly = true
 			}()
-			if r.isAborted() {
+			// Python: await turn_task ——spawn/run 错误经 turn task 传播出
+			// 生成器（runtime.py:905-907）；Go 落 driveErr 后立即停止重起循环。
+			if r.isAborted() || r.hasDriveErr() {
 				return
 			}
-			prompt = r.drainPending()
+			next, ok := r.drainPending()
+			if !ok {
+				return
+			}
+			prompt = next
 		}
 	}()
 	return ch, cancel
@@ -1116,6 +1271,10 @@ func (r *ReinvokeCliRuntime) runOnce(ctx context.Context, prompt string) (<-chan
 			Msg("[external-cli] re-invoke for member")
 		proc, err := r.transport.Run(argv, r.env, r.cwd)
 		if err != nil {
+			// Python: spawn 异常经 _run_once → _drive 的 await turn_task 传播出
+			// 生成器，落 _drive_turn 的 except 分支（failed 事件）；Go 落
+			// driveErr（driveTurn 归入 crashed 分类）并停止重起循环。
+			r.setDriveErr(err)
 			return
 		}
 		r.mu.Lock()
@@ -1268,16 +1427,17 @@ func (r *ReinvokeCliRuntime) reportExit(returncode int, stderrTail string) {
 }
 
 // drainPending 取出缓冲的轮中消息（多条以 _FOLLOWUP_SEP 连接）。
+// ok=false 对应 Python None 哨兵（无缓冲消息，重起循环终止）。
 // Python: _drain_pending (runtime.py:1064)
-func (r *ReinvokeCliRuntime) drainPending() string {
+func (r *ReinvokeCliRuntime) drainPending() (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.pending) == 0 {
-		return ""
+		return "", false
 	}
 	combined := strings.Join(r.pending, followupSep)
 	r.pending = nil
-	return combined
+	return combined, true
 }
 
 // Steer 缓冲内容作为后续重起（无轮中 steer）。

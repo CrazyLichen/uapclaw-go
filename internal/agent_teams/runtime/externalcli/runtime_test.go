@@ -1,6 +1,7 @@
 package externalcli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,10 +185,10 @@ func TestReinvokeCliRuntime_轮中消息缓冲为followup(t *testing.T) {
 	rt.mu.Lock()
 	rt.phase = harnessprotocol.HarnessStateIdle
 	rt.mu.Unlock()
-	if got := rt.drainPending(); got != "mid-turn" {
-		t.Fatalf("缓冲: %q", got)
+	if got, ok := rt.drainPending(); !ok || got != "mid-turn" {
+		t.Fatalf("缓冲: %q %v", got, ok)
 	}
-	if rt.drainPending() != "" {
+	if _, ok := rt.drainPending(); ok {
 		t.Fatal("排空后应为空")
 	}
 }
@@ -230,4 +231,155 @@ func waitPhase(t *testing.T, rt phaseReader, want harnessprotocol.HarnessState, 
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("相位未达 %v（当前 %v）", want, rt.State())
+}
+
+// failingTransport spawn 必然失败的 transport 探针。
+type failingTransport struct{}
+
+func (f *failingTransport) Run(argv []string, env map[string]string, cwd string) (transport.ProcessLike, error) {
+	return nil, errors.New("spawn failed: binary not found")
+}
+func (f *failingTransport) Aclose() error { return nil }
+
+// TestReinvokeCliRuntime_spawn失败传播 对齐 runtime.py:944-966：spawn 异常经
+// turn task 传播出 _drive，落 _drive_turn 的 except 分支 → failed 轮次事件、
+// 相位回 IDLE（不吞错）。
+func TestReinvokeCliRuntime_spawn失败传播(t *testing.T) {
+	adapter, err := BuildAdapter("generic", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.Completion = CompletionNone
+	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
+	rt.SetTransport(&failingTransport{})
+	if err := rt.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var roundKinds []string
+	var mu sync.Mutex
+	rt.Subscribe(nil, func(kind string, roundID int) {
+		mu.Lock()
+		roundKinds = append(roundKinds, kind)
+		mu.Unlock()
+	})
+	if _, err := rt.Send("go", false); err != nil {
+		t.Fatal(err)
+	}
+	waitPhase(t, rt, harnessprotocol.HarnessStateIdle, 5*time.Second)
+	rt.Stop()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(roundKinds) < 2 || roundKinds[0] != "started" || roundKinds[len(roundKinds)-1] != "failed" {
+		t.Fatalf("spawn 失败应发 failed 轮次事件: %v", roundKinds)
+	}
+}
+
+// TestExternalCliRuntime_stop不因满输出挂死 对齐 D-15.13-j：输出队列无界
+// （Push 永不阻塞），Stop 不依赖消费者排空，恒在有限时间内返回；消费者之后
+// 仍能读回全部已缓冲叙述块（Python _END 前队列内容可消费语义）。
+func TestExternalCliRuntime_stop不因满输出挂死(t *testing.T) {
+	script := writeScript(t, "chatty_cli.sh", `i=0
+while [ $i -lt 20000 ]; do
+  echo "line:$i"
+  i=$((i+1))
+done
+echo "<<END_OF_TURN>>"`)
+	tr := &transport.LocalTransport{}
+	proc, err := tr.Run([]string{"/bin/sh", script}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := BuildAdapter("generic", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.Completion = CompletionMarkerPrefix + "<<END_OF_TURN>>"
+	rt := NewExternalCliRuntime("beta", adapter, NewStdinPipeInjector(proc.Stdin()),
+		proc.Stdout(), proc, tr, "agent-1")
+	if err := rt.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.Send("go", false); err != nil {
+		t.Fatal(err)
+	}
+	waitPhase(t, rt, harnessprotocol.HarnessStateIdle, 10*time.Second)
+	// 不启动消费者，直接 Stop；有界队列（容量 1024 < 20000 行）下此调用挂死。
+	done := make(chan struct{})
+	go func() {
+		rt.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop 挂死：输出队列有界导致轮次泵阻塞")
+	}
+	// Stop 后仍能读回全部缓冲叙述块（20000 行 + 完成哨兵行）
+	texts := collectOutputs(t, rt.Outputs(), 5*time.Second)
+	if len(texts) != 20001 {
+		t.Fatalf("Stop 后应读回全部缓冲块: %d", len(texts))
+	}
+}
+
+// TestCliRuntimeBase_resume空串仍发送 对齐 runtime.py:436 `query is not None`：
+// 空串是合法输入，照常投递（附时钟锚），开新一轮。
+func TestCliRuntimeBase_resume空串仍发送(t *testing.T) {
+	rt, _ := newEchoStreamingRuntime(t, "beta")
+	var roundKinds []string
+	var mu sync.Mutex
+	rt.Subscribe(nil, func(kind string, roundID int) {
+		mu.Lock()
+		roundKinds = append(roundKinds, kind)
+		mu.Unlock()
+	})
+	if err := rt.Resume(""); err != nil {
+		t.Fatal(err)
+	}
+	waitPhase(t, rt, harnessprotocol.HarnessStateIdle, 5*time.Second)
+	rt.Stop()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(roundKinds) < 2 || roundKinds[0] != "started" || roundKinds[len(roundKinds)-1] != "finished" {
+		t.Fatalf("空串 resume 应照常开轮: %v", roundKinds)
+	}
+}
+
+// TestCliRuntimeBase_resume终止后NoOp 对齐 runtime.py:436 TERMINATED 短路。
+func TestCliRuntimeBase_resume终止后NoOp(t *testing.T) {
+	rt, _ := newEchoStreamingRuntime(t, "beta")
+	rt.Stop()
+	if err := rt.Resume("late"); err != nil {
+		t.Fatalf("terminated 后 resume 应 no-op: %v", err)
+	}
+	if rt.State() != harnessprotocol.HarnessStateTerminated {
+		t.Fatal("相位应保持 TERMINATED")
+	}
+}
+
+// TestReinvokeCliRuntime_首轮空prompt照常重起 对齐 runtime.py:882
+// `while prompt is not None`：空串是合法 prompt，照常发起子进程。
+func TestReinvokeCliRuntime_首轮空prompt照常重起(t *testing.T) {
+	script := writeScript(t, "oneshot_cli.sh", `echo "out:$#"`)
+	adapter, err := BuildAdapter("generic", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.Completion = CompletionNone
+	adapter.PromptFlag = "--prompt"
+	adapter.Command = []string{script}
+	rt := NewReinvokeCliRuntime("gamma", adapter, nil, "", "", nil, "agent-2")
+	rt.SetInactivityTimeoutS(30)
+	if err := rt.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.Send("", false); err != nil {
+		t.Fatal(err)
+	}
+	waitPhase(t, rt, harnessprotocol.HarnessStateIdle, 10*time.Second)
+	rt.Stop()
+	texts := collectOutputs(t, rt.Outputs(), 10*time.Second)
+	// 空串 prompt 照常传参：子进程跑起来并输出（$# 为 2 = flag + 空参）
+	if len(texts) == 0 || !strings.Contains(texts[0], "out:2") {
+		t.Fatalf("空 prompt 应照常重起子进程: %v", texts)
+	}
 }

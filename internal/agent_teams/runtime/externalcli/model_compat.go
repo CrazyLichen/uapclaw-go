@@ -131,7 +131,9 @@ func TeamModelConfigToExternal(memberModel *hschema.TeamModelConfig, cliAgent st
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// emptyToNil 空串归一为 nil（Python `x or None` 语义）。
+// emptyToNil 承载 Python `x or None` 语义：Go 字段为 string（无 None 形态），
+// 空串即"未设置"，经 json omitempty 序列化时与 Python None 等价——本函数
+// 归一空串为未设置形状，非空串原样透传。
 func emptyToNil(s string) string {
 	if s == "" {
 		return ""
