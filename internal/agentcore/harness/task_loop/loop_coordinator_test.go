@@ -174,8 +174,8 @@ func TestLoopCoordinator_SetLastResult(t *testing.T) {
 	result := map[string]any{"status": "ok", "data": 42}
 	lc.SetLastResult(result)
 
-	// 通过 ExportState 验证 lastResult 被设置
-	_ = lc.ExportState()
+	// 通过 GetState 验证 lastResult 被设置
+	_ = lc.GetState()
 	// lastResult 不直接导出到 LoopCoordinatorState（Python 也不导出），
 	// 但我们可通过 CompletionPromiseEvaluator 间接验证
 }
@@ -234,7 +234,7 @@ func TestLoopCoordinator_Reset后ElapsedSeconds大于零(t *testing.T) {
 	}
 }
 
-func TestLoopCoordinator_ExportState_基本(t *testing.T) {
+func TestLoopCoordinator_GetState_基本(t *testing.T) {
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(10),
 		NewCompletionPromiseEvaluator("<promise>", 2),
@@ -244,7 +244,7 @@ func TestLoopCoordinator_ExportState_基本(t *testing.T) {
 	lc.IncrementIteration()
 	lc.AddTokenUsage(500)
 
-	state := lc.ExportState()
+	state := lc.GetState()
 	if state.Iteration != 2 {
 		t.Errorf("Iteration = %d, want 2", state.Iteration)
 	}
@@ -255,7 +255,7 @@ func TestLoopCoordinator_ExportState_基本(t *testing.T) {
 		t.Errorf("StopReason = %q, want empty", state.StopReason)
 	}
 
-	// MaxRoundsEvaluator 无状态 → ExportState 返回 nil，不包含在 evaluator_states 中
+	// MaxRoundsEvaluator 无状态 → GetState 返回 nil，不包含在 evaluator_states 中
 	if _, ok := state.EvaluatorStates["MaxRoundsEvaluator"]; ok {
 		t.Error("evaluator_states should not contain MaxRoundsEvaluator (stateless)")
 	}
@@ -266,7 +266,7 @@ func TestLoopCoordinator_ExportState_基本(t *testing.T) {
 	}
 }
 
-func TestLoopCoordinator_ImportState_恢复(t *testing.T) {
+func TestLoopCoordinator_LoadState_恢复(t *testing.T) {
 	cpe := NewCompletionPromiseEvaluator("<promise>", 3)
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(10),
@@ -279,23 +279,23 @@ func TestLoopCoordinator_ImportState_恢复(t *testing.T) {
 	lc.AddTokenUsage(300)
 	cpe.NotifyFulfilled("done")
 
-	exported := lc.ExportState()
+	exported := lc.GetState()
 
 	// 创建新的 coordinator 并导入
 	lc2 := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(10),
 		NewCompletionPromiseEvaluator("<promise>", 1), // requiredConfirmations 不同
 	})
-	lc2.ImportState(exported)
+	lc2.LoadState(exported)
 
 	if lc2.Iteration() != 2 {
-		t.Errorf("Iteration after ImportState = %d, want 2", lc2.Iteration())
+		t.Errorf("Iteration after LoadState = %d, want 2", lc2.Iteration())
 	}
 	if lc2.TokenUsage() != 300 {
-		t.Errorf("TokenUsage after ImportState = %d, want 300", lc2.TokenUsage())
+		t.Errorf("TokenUsage after LoadState = %d, want 300", lc2.TokenUsage())
 	}
 	if lc2.StopReason() != "" {
-		t.Errorf("StopReason after ImportState = %q, want empty", lc2.StopReason())
+		t.Errorf("StopReason after LoadState = %q, want empty", lc2.StopReason())
 	}
 
 	// CompletionPromiseEvaluator 应从导入状态恢复
@@ -308,14 +308,14 @@ func TestLoopCoordinator_ImportState_恢复(t *testing.T) {
 		t.Fatal("GetCompletionPromiseEvaluator() returned unexpected type")
 	}
 	if cpe2Concrete.Confirmations() != 1 {
-		t.Errorf("Confirmations after ImportState = %d, want 1", cpe2Concrete.Confirmations())
+		t.Errorf("Confirmations after LoadState = %d, want 1", cpe2Concrete.Confirmations())
 	}
 	if cpe2Concrete.RequiredConfirmations() != 3 {
-		t.Errorf("RequiredConfirmations after ImportState = %d, want 3", cpe2Concrete.RequiredConfirmations())
+		t.Errorf("RequiredConfirmations after LoadState = %d, want 3", cpe2Concrete.RequiredConfirmations())
 	}
 }
 
-func TestLoopCoordinator_ExportImportState_往返(t *testing.T) {
+func TestLoopCoordinator_GetLoadState_往返(t *testing.T) {
 	cpe := NewCompletionPromiseEvaluator("<promise>", 2)
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(5),
@@ -327,16 +327,16 @@ func TestLoopCoordinator_ExportImportState_往返(t *testing.T) {
 	cpe.NotifyFulfilled("done")
 	cpe.NotifyFulfilled("done again") // 2 次 → fulfilled
 
-	state1 := lc.ExportState()
+	state1 := lc.GetState()
 
 	// 导入到新 coordinator
 	lc2 := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(5),
 		NewCompletionPromiseEvaluator("<promise>", 2),
 	})
-	lc2.ImportState(state1)
+	lc2.LoadState(state1)
 
-	state2 := lc2.ExportState()
+	state2 := lc2.GetState()
 
 	// 验证两次导出一致
 	if state1.Iteration != state2.Iteration {
@@ -350,14 +350,14 @@ func TestLoopCoordinator_ExportImportState_往返(t *testing.T) {
 	}
 }
 
-func TestLoopCoordinator_ImportState_空数据(t *testing.T) {
+func TestLoopCoordinator_LoadState_空数据(t *testing.T) {
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewMaxRoundsEvaluator(5),
 	})
 
 	// 导入空状态不 panic
-	lc.ImportState(LoopCoordinatorState{})
-	lc.ImportState(LoopCoordinatorState{EvaluatorStates: nil})
+	lc.LoadState(LoopCoordinatorState{})
+	lc.LoadState(LoopCoordinatorState{EvaluatorStates: nil})
 }
 
 func TestLoopCoordinator_GetCompletionPromiseEvaluator_存在(t *testing.T) {
@@ -516,4 +516,25 @@ func TestLoopCoordinator_CustomPredicate_返回false继续循环(t *testing.T) {
 	if !lc.ShouldContinue() {
 		t.Error("ShouldContinue with always-false predicate, want true")
 	}
+}
+
+// TestD6_方法名对齐Python 断言两族方法使用 Python 名称 GetState/LoadState。
+// Python: loop_coordinator.py:153 get_state / :172 load_state
+//
+//	harness/schema/stop_condition.py:77/85 get_state/load_state
+func TestD6_方法名对齐Python(t *testing.T) {
+	lc := NewLoopCoordinator([]StopConditionEvaluator{NewMaxRoundsEvaluator(10)})
+	state := lc.GetState()
+	if state.Iteration != 0 {
+		t.Errorf("GetState().Iteration = %d, want 0", state.Iteration)
+	}
+	lc.LoadState(LoopCoordinatorState{Iteration: 2, TokenUsage: 300})
+	if lc.Iteration() != 2 || lc.TokenUsage() != 300 {
+		t.Errorf("LoadState 未生效: iteration=%d token=%d", lc.Iteration(), lc.TokenUsage())
+	}
+	var ev StopConditionEvaluator = NewMaxRoundsEvaluator(1)
+	if ev.GetState() != nil {
+		t.Error("无状态评估器 GetState 应返回 nil")
+	}
+	ev.LoadState(map[string]any{})
 }

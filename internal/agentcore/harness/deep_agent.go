@@ -3422,7 +3422,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 
 			// 更新状态
 			st = d.LoadState(sess)
-			exported := coord.ExportState()
+			exported := coord.GetState()
 			st.StopConditionState = map[string]any{
 				"iteration":        exported.Iteration,
 				"token_usage":      exported.TokenUsage,
@@ -4936,7 +4936,7 @@ func (d *DeepAgent) buildInteractionNextWork(
 	coord.SetLastResult(result)
 
 	state := d.LoadState(sess)
-	exported := coord.ExportState()
+	exported := coord.GetState()
 	state.StopConditionState = map[string]any{
 		"iteration":        exported.Iteration,
 		"token_usage":      exported.TokenUsage,
