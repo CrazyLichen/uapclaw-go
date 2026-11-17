@@ -189,9 +189,52 @@ type ExternalCliMemberSpec struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Validate 校验后端启动覆盖的归属（保持 SDK 二进制选择与 adapter argv 覆盖分离）。
-// 逐条对齐 Python _validate_backend_launch_override (team.py:492-534)。
+// Validate 校验 ExternalCliAgentSpec：数值域约束 + 后端启动覆盖归属。
+// pydantic 语义顺序：字段级约束（min_length/gt/ge）先于 model_validator；
+// 数值域逐条对齐 team.py 字段定义：
+//   - codex_turn_idle_timeout_s gt=0（team.py:417）
+//   - codex_turn_idle_retries ge=0（team.py:425）
+//   - claude_turn_idle_timeout_s gt=0（team.py:433）
+//   - claude_max_buffer_size ge=1（team.py:442）
+//   - ExternalCliBuiltinModel.name min_length=1（team.py:322）
+//
+// min_length=1 归属校验逐条对齐 _validate_backend_launch_override（team.py:492-534）。
 func (s *ExternalCliAgentSpec) Validate() error {
+	// mcp_server_command default_factory（team.py:458）：装载路径零值时施加
+	// Python 默认 ["openjiuwen-team-mcp"]。
+	if len(s.MCPServerCommand) == 0 {
+		s.MCPServerCommand = DefaultMCPServerCommand()
+	}
+	// ssh_transport 嵌套模型校验（pydantic 子模型先于父 model_validator）
+	if s.SshTransport != nil {
+		if err := s.SshTransport.Validate(); err != nil {
+			return err
+		}
+	}
+	// 数值域字段约束（pydantic 字段校验先于 model_validator）
+	if s.CodexTurnIdleTimeoutS != nil && *s.CodexTurnIdleTimeoutS <= 0 {
+		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+			exception.WithMsg("codex_turn_idle_timeout_s must be greater than 0"))
+	}
+	if s.CodexTurnIdleRetries != nil && *s.CodexTurnIdleRetries < 0 {
+		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+			exception.WithMsg("codex_turn_idle_retries must be greater than or equal to 0"))
+	}
+	if s.ClaudeTurnIdleTimeoutS != nil && *s.ClaudeTurnIdleTimeoutS <= 0 {
+		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+			exception.WithMsg("claude_turn_idle_timeout_s must be greater than 0"))
+	}
+	if s.ClaudeMaxBufferSize != nil && *s.ClaudeMaxBufferSize < 1 {
+		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+			exception.WithMsg("claude_max_buffer_size must be greater than or equal to 1"))
+	}
+	// 内置模型条目的子模型校验（name required + default_effort 归属，
+	// Python ExternalCliBuiltinModel model_validator，team.py:334）
+	for i := range s.BuiltinModels {
+		if err := s.BuiltinModels[i].ValidateDefaultEffort(); err != nil {
+			return err
+		}
+	}
 	// codex 成员默认开启 bypass（Python model_fields_set 判定，:473-476）
 	if s.CLIAgent == "codex" && s.CodexBypassApprovalsAndSandbox == nil {
 		def := true
@@ -272,9 +315,14 @@ func DefaultMCPServerCommand() []string {
 	return []string{"openjiuwen-team-mcp"}
 }
 
-// ValidateBuiltinModelDefaultEffort 校验 default_effort 必须属于 efforts。
+// ValidateDefaultEffort 校验 default_effort 必须属于 efforts，且 name 非空
+// （name min_length=1，team.py:322）。
 // Python: ExternalCliBuiltinModel._validate_default_effort (team.py:334)
-func (m *ExternalCliBuiltinModel) ValidateBuiltinModelDefaultEffort() error {
+func (m *ExternalCliBuiltinModel) ValidateDefaultEffort() error {
+	if m.Name == "" {
+		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
+			exception.WithMsg("name must be at least 1 character"))
+	}
 	if m.DefaultEffort == "" {
 		return nil
 	}

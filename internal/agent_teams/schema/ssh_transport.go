@@ -35,9 +35,22 @@ type SshTransportConfig struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Validate 校验至少配置了一种认证方式。
+// Validate 校验至少配置了一种认证方式，并施加 pydantic 字段默认值。
+// Python 字段默认（ssh_transport.py:29-34）：port=22 / connect_timeout_s=15.0 /
+// use_exec=True。Go 侧零值时施加（显式 false 的 use_exec 不可表达——偏差
+// D-15.13-i，登记于 spec §5）。
 // Python: SshTransportConfig._require_auth (ssh_transport.py:41)
 func (s *SshTransportConfig) Validate() error {
+	// Python 字段默认值：装载路径零值时施加
+	if s.Port == 0 {
+		s.Port = 22
+	}
+	if s.ConnectTimeoutS == 0 {
+		s.ConnectTimeoutS = 15.0
+	}
+	if !s.UseExec {
+		s.UseExec = true
+	}
 	if s.KeyFile == "" && s.Password == "" && !s.Agent {
 		return exception.RaiseError(exception.StatusAgentTeamConfigInvalid,
 			exception.WithMsg("SshTransportConfig requires at least one auth method (key_file / password set / agent=True)"))

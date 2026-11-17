@@ -147,12 +147,125 @@ func TestFindBuiltinModel(t *testing.T) {
 // TestBuiltinModelDefaultEffort校验 对齐 team.py:334-341。
 func TestBuiltinModelDefaultEffort校验(t *testing.T) {
 	ok := ExternalCliBuiltinModel{Name: "m", Efforts: []string{"low", "high"}, DefaultEffort: "low"}
-	if err := ok.ValidateBuiltinModelDefaultEffort(); err != nil {
+	if err := ok.ValidateDefaultEffort(); err != nil {
 		t.Fatalf("合法 default_effort 不应报错: %v", err)
 	}
 	bad := ExternalCliBuiltinModel{Name: "m", Efforts: []string{"low"}, DefaultEffort: "high"}
-	err := bad.ValidateBuiltinModelDefaultEffort()
+	err := bad.ValidateDefaultEffort()
 	if err == nil || !strings.Contains(err.Error(), "default_effort must be one of its efforts") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestBuiltinModelName必填 对齐 team.py:322 name min_length=1。
+func TestBuiltinModelName必填(t *testing.T) {
+	bad := ExternalCliBuiltinModel{Name: "", Efforts: []string{"low"}}
+	err := bad.ValidateDefaultEffort()
+	if err == nil || !strings.Contains(err.Error(), "name must be at least 1 character") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestExternalCliAgentSpecValidate_数值域 逐条对齐 team.py 数值域约束：
+// codex_turn_idle_timeout_s gt=0（:417）/ codex_turn_idle_retries ge=0（:425）/
+// claude_turn_idle_timeout_s gt=0（:433）/ claude_max_buffer_size ge=1（:442）。
+func TestExternalCliAgentSpecValidate_数值域(t *testing.T) {
+	cases := []struct {
+		spec ExternalCliAgentSpec
+		msg  string
+	}{
+		{ExternalCliAgentSpec{CLIAgent: "codex", CodexTurnIdleTimeoutS: ptrFloat(0)}, "codex_turn_idle_timeout_s must be greater than 0"},
+		{ExternalCliAgentSpec{CLIAgent: "codex", CodexTurnIdleTimeoutS: ptrFloat(-1)}, "codex_turn_idle_timeout_s must be greater than 0"},
+		{ExternalCliAgentSpec{CLIAgent: "codex", CodexTurnIdleRetries: ptrInt(-1)}, "codex_turn_idle_retries must be greater than or equal to 0"},
+		{ExternalCliAgentSpec{CLIAgent: "claude", ClaudeTurnIdleTimeoutS: ptrFloat(0)}, "claude_turn_idle_timeout_s must be greater than 0"},
+		{ExternalCliAgentSpec{CLIAgent: "claude", ClaudeMaxBufferSize: ptrInt(0)}, "claude_max_buffer_size must be greater than or equal to 1"},
+	}
+	for i, c := range cases {
+		err := c.spec.Validate()
+		if err == nil || !strings.Contains(err.Error(), c.msg) {
+			t.Fatalf("case %d: got %v, want %q", i, err, c.msg)
+		}
+	}
+	// 边界合法值：gt=0 取正、ge=0 取 0、ge=1 取 1
+	valid := []ExternalCliAgentSpec{
+		{CLIAgent: "codex", CodexTurnIdleTimeoutS: ptrFloat(0.1), CodexTurnIdleRetries: ptrInt(0)},
+		{CLIAgent: "claude", ClaudeTurnIdleTimeoutS: ptrFloat(1), ClaudeMaxBufferSize: ptrInt(1)},
+	}
+	for i, v := range valid {
+		if err := v.Validate(); err != nil {
+			t.Fatalf("valid case %d: %v", i, err)
+		}
+	}
+}
+
+// TestExternalCliAgentSpecValidate_defaultEffort并入Validate 对齐 team.py:334
+// model_validator 的构造期语义：spec 级 Validate 应触发内置模型 default_effort 校验。
+func TestExternalCliAgentSpecValidate_defaultEffort并入Validate(t *testing.T) {
+	spec := ExternalCliAgentSpec{CLIAgent: "codex", BuiltinModels: []ExternalCliBuiltinModel{
+		{Name: "sonnet", Efforts: []string{"low"}, DefaultEffort: "high"},
+	}}
+	err := spec.Validate()
+	if err == nil || !strings.Contains(err.Error(), "default_effort must be one of its efforts") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestExternalCliAgentSpecValidate_mcpServerCommand默认 对齐 team.py:458
+// default_factory：装载路径零值时施加 ["openjiuwen-team-mcp"]。
+func TestExternalCliAgentSpecValidate_mcpServerCommand默认(t *testing.T) {
+	spec := ExternalCliAgentSpec{CLIAgent: "codex"}
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(spec.MCPServerCommand) != 1 || spec.MCPServerCommand[0] != "openjiuwen-team-mcp" {
+		t.Fatalf("默认 mcp_server_command 未施加: %v", spec.MCPServerCommand)
+	}
+	// 显式配置不被覆盖
+	explicit := ExternalCliAgentSpec{CLIAgent: "codex", MCPServerCommand: []string{"custom-mcp"}}
+	if err := explicit.Validate(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(explicit.MCPServerCommand) != 1 || explicit.MCPServerCommand[0] != "custom-mcp" {
+		t.Fatalf("显式 mcp_server_command 被覆盖: %v", explicit.MCPServerCommand)
+	}
+}
+
+// TestSshTransportValidate_默认值 对齐 ssh_transport.py:29-34 字段默认：
+// port=22 / connect_timeout_s=15.0 / use_exec=True（零值时施加）。
+func TestSshTransportValidate_默认值(t *testing.T) {
+	cfg := &SshTransportConfig{Host: "h", Agent: true}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if cfg.Port != 22 {
+		t.Fatalf("port 默认应为 22: %d", cfg.Port)
+	}
+	if cfg.ConnectTimeoutS != 15.0 {
+		t.Fatalf("connect_timeout_s 默认应为 15.0: %v", cfg.ConnectTimeoutS)
+	}
+	if !cfg.UseExec {
+		t.Fatal("use_exec 默认应为 true")
+	}
+	// 显式值不被覆盖
+	explicit := &SshTransportConfig{Host: "h", Agent: true, Port: 2222, ConnectTimeoutS: 30}
+	if err := explicit.Validate(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if explicit.Port != 2222 || explicit.ConnectTimeoutS != 30 {
+		t.Fatalf("显式值被覆盖: %+v", explicit)
+	}
+}
+
+// TestTeamAgentSpecValidate_级联externalCli 对齐 pydantic 嵌套构造期校验：
+// TeamAgentSpec.Validate 应触发 external_cli_agents 条目的校验与默认值。
+func TestTeamAgentSpecValidate_级联externalCli(t *testing.T) {
+	spec := TeamAgentSpec{
+		ExternalCliAgents: []ExternalCliAgentSpec{
+			{CLIAgent: "codex", CodexTurnIdleTimeoutS: ptrFloat(0)},
+		},
+	}
+	err := spec.Validate()
+	if err == nil || !strings.Contains(err.Error(), "codex_turn_idle_timeout_s must be greater than 0") {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -295,6 +295,13 @@ func (s *TeamAgentSpec) Validate() error {
 	if err := s.validateBootstrapMode(); err != nil {
 		return err
 	}
+	// external_cli_agents 嵌套模型校验（pydantic 构造期逐条跑子模型
+	// model_validator 的 Go 等价面）
+	for i := range s.ExternalCliAgents {
+		if err := s.ExternalCliAgents[i].Validate(); err != nil {
+			return err
+		}
+	}
 	s.defaultTransportForSpawnMode()
 	return nil
 }
