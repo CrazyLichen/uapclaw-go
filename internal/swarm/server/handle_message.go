@@ -157,6 +157,9 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.handleTeamSnapshot(ctx, request)
 	case schema.ReqMethodTeamHistoryGet:
 		resp, err = s.handleTeamHistoryGet(ctx, request)
+	case schema.ReqMethodTeamMqPublish:
+		// 15.16b：外部团队事件 Gateway 中继（⤴️25.6 登记，随本批提前落地）
+		resp, err = s.handleTeamMqPublishRelay(ctx, request)
 	// 历史
 	case schema.ReqMethodHistoryGet:
 		if request.IsStream {

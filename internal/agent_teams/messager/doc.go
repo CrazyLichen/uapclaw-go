@@ -10,6 +10,7 @@
 //	├── doc.go           # 包文档
 //	├── messager.go      # Messager 接口定义 + MessagerHandler 类型 + EventListenerHandle
 //	├── inprocess.go     # InProcessMessager 实现 + 全局 Bus
+//	├── hybrid.go        # WebSocketEventPublisher + HybridMessager（publish-only，15.16b）
 //	└── base.go          # CreateMessager 工厂函数（配置结构体已迁移到 schema 包）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/messager/

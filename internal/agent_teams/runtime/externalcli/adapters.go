@@ -212,7 +212,7 @@ var builtinAdapters = map[string]*CliAgentAdapter{
 	// ——没有持续多 prompt 循环也没有结构化轮次分隔符（一轮在进程退出/stdout EOF
 	// 结束）。--yolo 绕过危险命令审批提示。跨轮连续性用 --continue / --resume
 	// <session_id>。团队 MCP server 带外注册：hermes mcp add <name> --command
-	// openjiuwen-team-mcp。prompt 是末位位置参数且进程每轮退出，所以跑在重起
+	// uapclawmcpserver。prompt 是末位位置参数且进程每轮退出，所以跑在重起
 	// runtime 下：每条入站消息一次 hermes -z --yolo [--continue] "<message>"，
 	// 读 stdout 到 EOF。--continue 恢复最近会话做跨轮上下文——注意并发 hermes
 	// 成员会竞争（该版本的命名会话支持可隔离；VERIFY）。

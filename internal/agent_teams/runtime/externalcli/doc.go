@@ -18,6 +18,7 @@
 //	├── injector.go          # StdinPipeInjector stdin 注入器
 //	├── model_compat.go      # provider/协议/模型配置映射共享原语
 //	├── session_cleanup.go   # 后端原生会话的尽力清理
+//	├── client.go            # ExternalTeamClient（team-mcp server 的客户端面，15.16b）
 //	├── runtime.go           # CliRuntimeBase/ExternalCliRuntime/ReinvokeCliRuntime
 //	├── spawn.go             # BuildCliRuntime spawn 主体（provider/adapter 路与守卫）
 //	├── member_runtime.go    # ExternalHarnessMemberRuntime 骨架（provider 路）

@@ -10,6 +10,8 @@
 //	├── handle.go           # SpawnHandle 统一接口
 //	├── inprocess_handle.go # InProcessSpawnHandle 进程内句柄
 //	├── inprocess_spawn.go  # InProcessSpawn 函数 + SpawnableAgent 接口
+//	├── external_cli_spawn.go # 外部 CLI 成员 spawn 编排主体（15.16b，D-15.16-b1 注入缝）
+//	├── external_cli_glue.go   # 上述编排的 Go 侧胶合类型（卡片视图 / 句柄构造）
 //	└── shared_resources.go # 进程级全局单例
 //
 // 对应 Python 代码：openjiuwen/agent_teams/spawn/

@@ -393,6 +393,29 @@ func (db *InMemoryTeamDatabase) UpdateMemberServedModel(_ context.Context, membe
 	return true
 }
 
+// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用（内存实现）。
+// Python: promote_member_fallback_model (member_dao.py:844-868)
+func (db *InMemoryTeamDatabase) PromoteMemberFallbackModel(_ context.Context, memberName, teamName string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists {
+		logger.Debug(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("member not found for fallback-model promote")
+		return false
+	}
+	promoted := PromoteMemberFallbackModel(member.Options)
+	if promoted == member.Options {
+		return false
+	}
+	member.Options = promoted
+	member.UpdatedAt = GetCurrentTime()
+	return true
+}
+
 // SetMemberMode 设置成员模式（仅用于测试）。
 // 绕过 FSM 校验，直接修改成员的 Mode 字段。
 func (db *InMemoryTeamDatabase) SetMemberMode(memberName, teamName, mode string) {

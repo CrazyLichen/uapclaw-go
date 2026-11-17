@@ -54,6 +54,12 @@ type AgentConfigurator struct {
 	onTeammateCreated func(ctx context.Context, memberName string) error
 	// lastBuildCtx 最近一次装配用的 BuildContext（诊断与测试断言用）
 	lastBuildCtx hschema.BuildContextInterface
+	// memberRuntime 外部成员运行时（external CLI 成员，15.16b）。非 nil 时
+	// SetupAgent 采用它作为成员大脑并跳过 DeepAgent / rail / memory 装配
+	// （Python: setup_agent 的 member_runtime 分支，agent_configurator.py:555-570）。
+	// workspace 演化缓存面未移植，_prepare_external_cli_workspace 降级跳过
+	// （D-15.16-b9）。
+	memberRuntime MemberRuntime
 }
 
 // setupInfraConfig SetupInfra 可选参数配置
@@ -295,7 +301,23 @@ func (c *AgentConfigurator) lastBuildContext() hschema.BuildContextInterface {
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
 // Python: AgentConfigurator.setup_agent(spec, ctx)
-func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*harness.TeamHarness, error) {
+// 15.16b：可选 memberRuntime（外部 CLI 成员运行时）——非 nil 时采用为成员
+// 大脑并跳过 DeepAgent / rail / memory 装配（Python setup_agent 的
+// member_runtime 分支，agent_configurator.py:540-570）；协调层仍经同一
+// MemberRuntime 表面驱动它。此时返回 (nil, nil)——调用方以 MemberRuntime()
+// 访问大脑，不得使用返回值。
+func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, memberRuntime ...MemberRuntime) (*harness.TeamHarness, error) {
+	// Python member_runtime 分支（agent_configurator.py:555-570）：
+	//   self.harness = member_runtime; self.memory_manager = None;
+	//   _prepare_external_cli_workspace(spec, ctx)
+	//   resolved_language...; _attach_workspace_cache(spec, ctx, resolved_language)
+	//   return member_runtime
+	// Go 侧 workspace 演化缓存面未移植（D-15.16-b9），两步降级跳过。
+	if len(memberRuntime) > 0 && memberRuntime[0] != nil {
+		c.memberRuntime = memberRuntime[0]
+		c.SetMemoryManager(nil)
+		return nil, nil
+	}
 	// 1. 解析 AgentSpec
 	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
@@ -851,6 +873,10 @@ func (c *AgentConfigurator) Harness() *harness.TeamHarness {
 // SetHarness 设置 TeamHarness。
 func (c *AgentConfigurator) SetHarness(v *harness.TeamHarness) { c.resources.Harness = v }
 
+// MemberRuntime 返回外部成员运行时（external CLI 成员）；nil 表示 DeepAgent 路。
+// Python: configurator.harness 承载 MemberRuntimeLike 联合（team_agent.py:332）。
+func (c *AgentConfigurator) MemberRuntime() MemberRuntime { return c.memberRuntime }
+
 // WorktreeManager 返回工作树管理器。
 // Python: AgentConfigurator.worktree_manager property
 // ⤴️ 9.66a 回填完成
@@ -1033,6 +1059,13 @@ func (c *AgentConfigurator) TeamName() string {
 //
 // 如果 spec.TeamMode 已设置则直接返回；
 // 否则检查非人类预定义成员，存在时返回 "hybrid"，否则 "default"。
+// ResolveTeamModeExported 解析团队模式（spawn 注入缝用）。
+// Python: _resolve_team_mode(spec)（模块级函数，external_cli_spawn 经
+// lazy import 引用）；Go 侧 spawn 经 deps 缝引用本导出包装。
+func ResolveTeamModeExported(spec atschema.TeamAgentSpec) string {
+	return resolveTeamMode(spec)
+}
+
 func resolveTeamMode(spec atschema.TeamAgentSpec) string {
 	if spec.TeamMode != "" {
 		return spec.TeamMode

@@ -149,6 +149,9 @@ const (
 	ReqMethodTeamSnapshot ReqMethod = "team.snapshot"
 	// ReqMethodTeamHistoryGet 获取团队历史
 	ReqMethodTeamHistoryGet ReqMethod = "team.history.get"
+	// ReqMethodTeamMqPublish 外部团队事件经 Gateway 中继投递（hybrid publisher）。
+	// Python: ReqMethod.TEAM_MQ_PUBLISH = "team.mq.publish"（dispatch.py:245）
+	ReqMethodTeamMqPublish ReqMethod = "team.mq.publish"
 
 	// ─── 路径 / 文件 / TTS / 内存 ───
 
@@ -489,6 +492,7 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodTeamDelete,
 		ReqMethodTeamSnapshot,
 		ReqMethodTeamHistoryGet,
+		ReqMethodTeamMqPublish,
 		// 路径 / 文件 / TTS / 内存
 		ReqMethodPathGet,
 		ReqMethodPathSet,

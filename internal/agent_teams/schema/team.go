@@ -47,6 +47,11 @@ type TeamMemberSpec struct {
 	PromptHint string `json:"prompt_hint,omitempty"`
 	// ModelName 模型名称（可选）
 	ModelName string `json:"model_name,omitempty"`
+	// ExternalCLI 预定义外部 CLI 成员的启动配置；nil 表示普通成员。
+	// Python 侧 ExternalCliMemberSpec 是 predefined_members union 的独立子类
+	// （team.py:536）；Go 以可选字段承载（偏差 D-15.16-b12：pydantic union →
+	// 可选字段，member_name 复用 TeamMemberSpec.MemberName）。
+	ExternalCLI *ExternalCliAgentSpec `json:"external_cli,omitempty"`
 }
 
 // TeamSpec 团队定义与目标。
@@ -143,7 +148,21 @@ type TeamRuntimeContext struct {
 	// DBConfig 数据库配置
 	DBConfig database.DBConfigProvider `json:"db_config,omitempty"`
 	// MemberModel 成员模型配置（可选）
+	// Python: member_model (team.py:676)
 	MemberModel *models.TeamModelConfig `json:"member_model,omitempty"`
+	// FallbackMemberModel 预留给原生外部 CLI 认证回退的成员模型配置（可选）。
+	// Python: fallback_member_model (team.py:678)
+	FallbackMemberModel *models.TeamModelConfig `json:"fallback_member_model,omitempty"`
+	// BuiltinModel 外部 CLI 成员用自身登录运行的内置模型与 effort（可选）。
+	// 来自 TeamMember.options.builtin_model；不带 endpoint，优先级高于
+	// 池分配与静态 model_config。
+	// Python: builtin_model (team.py:680)
+	BuiltinModel *ExternalCliModelConfig `json:"builtin_model,omitempty"`
+	// TemplateExternalCli 从专家模板生成的外部 CLI 成员的启动配置（可选）。
+	// 从 TeamMember.options.agent_template.external_cli 回读；外部 CLI spawn
+	// 路径优先于团队对同一 CLI kind 的声明配置。
+	// Python: template_external_cli (team.py:750)
+	TemplateExternalCli *ExternalCliAgentSpec `json:"template_external_cli,omitempty"`
 }
 
 // UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
