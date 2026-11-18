@@ -518,7 +518,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 8.13 | ☐ | Graph Visualization | 图可视化 | `openjiuwen/core/graph/visualization/` |
 | **8.x 工作流** | — | | | |
 | 8.14 | ☐ | Workflow 类 | 编排组件图，会话管理，流式输出 | `openjiuwen/core/workflow/workflow.py` · `_workflow.py` |
-| 8.15 | ☐ | WorkflowConfig | 工作流配置；⤴️ 8.12 已前置落地骨架 workflow/workflow_config.go（WorkflowSpec/NodeSpec/CompIOConfig/ExceptionConfig，D6 裁剪 WorkflowConfig 因依赖 8.16 WorkflowCard），实施时完整同步；⤴️ 8.11 ⤵️ 回填三件（2026-11-18）：① `session.NodeConfig() any` 收窄 `*workflow.NodeSpec`（NodeSessionFacade/node.go:241,296）+ `Vertex.applyNodeConfig` 断言随之收紧 + 偏差 D-3（applyNodeConfig 抽方法）内联回收；② tracer `getWorkflowMetadata` 从 wfc 提取 card.version/card.name（workflow.go:261-264 ⤵️ 悬挂）；③ Python `get_inputs_by_transformer` 返回契约 `-> dict`（workflow_state.py:127），Transformer 产出收窄为 map 时 `Vertex.preInvoke` any 可随之收窄 | `openjiuwen/core/workflow/workflow_config.py` |
+| 8.15 | ☐ | WorkflowConfig | 工作流配置；⤴️ 8.12 已前置落地骨架 workflow/workflow_config.go（WorkflowSpec/NodeSpec/CompIOConfig/ExceptionConfig，D6 裁剪 WorkflowConfig 因依赖 8.16 WorkflowCard），实施时完整同步；⤴️ 8.11 ⤵️ 回填三件（2026-11-18）：① `session.NodeConfig() any` 收窄 `*workflow.NodeSpec`（NodeSessionFacade/node.go:241,296）+ `Vertex.applyNodeConfig` 断言随之收紧 + 偏差 D-3（applyNodeConfig 抽方法）内联回收；② tracer `getWorkflowMetadata` 从 wfc 提取 card.version/card.name（workflow.go:261-264 ⤵️ 悬挂） | `openjiuwen/core/workflow/workflow_config.py` |
 | 8.16 | ☐ | WorkflowCard | 工作流元数据 | `openjiuwen/core/workflow/base.py` |
 | 8.17 | ☐ | StartComp / EndComp | 流程组件 | `openjiuwen/core/workflow/components/` |
 | 8.18 | ☐ | LLMComp | LLM 调用组件 | `openjiuwen/core/workflow/components/` |
