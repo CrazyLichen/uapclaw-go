@@ -33,15 +33,6 @@ func TestBaseCard_满足CardInterface(t *testing.T) {
 	}
 }
 
-// TestWorkflowCard_满足CardInterface 验证 *WorkflowCard 满足 CardInterface。
-func TestWorkflowCard_满足CardInterface(t *testing.T) {
-	card := NewWorkflowCard(WithID("wf-1"), WithName("wf-name"))
-	var iface CardInterface = card
-	if iface.GetID() != "wf-1" {
-		t.Errorf("GetID() = %q, want %q", iface.GetID(), "wf-1")
-	}
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func TestNewBaseCard_默认ID(t *testing.T) {
@@ -174,64 +165,6 @@ func TestBaseCard_JSON序列化(t *testing.T) {
 // isHexChar 判断字符是否为 hex 字符。
 func isHexChar(c rune) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-}
-
-func TestWorkflowCard_ToolInfo_有参数(t *testing.T) {
-	card := NewWorkflowCard(
-		WithName("my_workflow"),
-		WithDescription("我的工作流"),
-	)
-	card.Version = "1.0"
-	card.InputParams = map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"query": map[string]any{"type": "string"}},
-	}
-	info := card.ToolInfo()
-	if info.GetName() != "my_workflow" {
-		t.Errorf("Name = %q, want my_workflow", info.GetName())
-	}
-	if info.GetDescription() != "我的工作流" {
-		t.Errorf("Description = %q, want 我的工作流", info.GetDescription())
-	}
-	if card.Version != "1.0" {
-		t.Errorf("Version = %q, want 1.0", card.Version)
-	}
-}
-
-func TestWorkflowCard_ToolInfo_无参数(t *testing.T) {
-	card := NewWorkflowCard(WithName("empty_wf"))
-	info := card.ToolInfo()
-	if info.GetName() != "empty_wf" {
-		t.Errorf("Name = %q, want empty_wf", info.GetName())
-	}
-	props, ok := info.GetParameters()["properties"]
-	if ok {
-		// properties 存在时应为空 map
-		if m, ok2 := props.(map[string]any); ok2 && len(m) != 0 {
-			t.Errorf("无参数时 properties 应为空，实际 %v", m)
-		}
-	}
-	// 无参数时 InputParams 为 nil，ToolInfo 用 make(map[string]any)
-	// 所以 Parameters 是空 map，不含 properties 键也正常
-}
-
-func TestWorkflowCard_能力(t *testing.T) {
-	card := NewWorkflowCard(WithName("wf"), WithDescription("工作流"))
-	if card.AbilityName() != "wf" {
-		t.Errorf("AbilityName = %q, want wf", card.AbilityName())
-	}
-	if card.AbilityKind() != AbilityKindWorkflow {
-		t.Errorf("AbilityKind = %v, want AbilityKindWorkflow", card.AbilityKind())
-	}
-	var _ Ability = card // 编译期接口检查
-}
-
-// TestWorkflowCard_AbilityID 验证 WorkflowCard.AbilityID() 返回 card.ID。
-func TestWorkflowCard_AbilityID(t *testing.T) {
-	card := NewWorkflowCard(WithName("wf"))
-	if got := card.AbilityID(); got != card.ID {
-		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
-	}
 }
 
 // TestBaseCard_GoString 验证 GoString 输出格式。

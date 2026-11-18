@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -8,7 +9,6 @@ import (
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -57,7 +57,7 @@ type AgentTeamEntry struct {
 type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
 
 // WorkflowProvider 工作流提供者函数类型。
-type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error)
+type WorkflowProvider func(ctx context.Context, card *workflow.WorkflowCard) (interfaces.Workflow, error)
 
 // ModelProvider 模型提供者函数类型。
 type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)

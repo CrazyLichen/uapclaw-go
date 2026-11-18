@@ -1,11 +1,11 @@
 package interfaces
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -29,7 +29,7 @@ type Workflow interface {
 	//
 	// Python: Workflow.card 属性（@property）
 	// 用于 tracer 装饰器提取 instanceInfo.metadata（id/name/description/version）。
-	Card() *schema.WorkflowCard
+	Card() *workflow.WorkflowCard
 }
 
 // WorkflowOptions 工作流执行选项。

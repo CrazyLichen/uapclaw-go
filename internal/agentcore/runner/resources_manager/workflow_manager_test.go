@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"errors"
 	"testing"
@@ -16,7 +17,7 @@ func TestWorkflowMgr_添加获取正常(t *testing.T) {
 	mgr := NewWorkflowMgr()
 
 	mockWorkflow := &stubWorkflow{}
-	provider := func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	provider := func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return mockWorkflow, nil
 	}
 
@@ -39,11 +40,11 @@ func TestWorkflowMgr_Trace装饰(t *testing.T) {
 	mgr := NewWorkflowMgr()
 
 	mockWorkflow := &stubWorkflow{
-		card: &schema.WorkflowCard{
+		card: &workflow.WorkflowCard{
 			BaseCard: schema.BaseCard{ID: "wf-1", Name: "test-workflow"},
 		},
 	}
-	provider := func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	provider := func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return mockWorkflow, nil
 	}
 
@@ -69,13 +70,13 @@ func TestWorkflowMgr_批量添加(t *testing.T) {
 	entries := []WorkflowEntry{
 		{
 			ID: "wf-1",
-			Provider: func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+			Provider: func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 				return &stubWorkflow{}, nil
 			},
 		},
 		{
 			ID: "wf-2",
-			Provider: func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+			Provider: func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 				return &stubWorkflow{}, nil
 			},
 		},
@@ -116,7 +117,7 @@ func TestWorkflowMgr_获取不存在返回nil(t *testing.T) {
 func TestWorkflowMgr_Provider返回错误(t *testing.T) {
 	mgr := NewWorkflowMgr()
 
-	provider := func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	provider := func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return nil, errors.New("internal error")
 	}
 

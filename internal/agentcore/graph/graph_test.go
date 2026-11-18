@@ -96,28 +96,36 @@ func TestAddNode_校验分支(t *testing.T) {
 	}
 }
 
-// TestAddEdge_校验分支 对齐 graph.py:103-120 四个 error 分支
+// TestAddEdge_校验分支 对齐 graph.py:103-120 校验语义（源收窄 []string 后：
+// nil/空切片 → 空源错、含空项 → 列表空项错、空目标错）
 func TestAddEdge_校验分支(t *testing.T) {
 	g := NewPregelGraph()
 	cases := []struct {
 		name   string
-		source any
+		source []string
 		target string
 	}{
 		{"nil source", nil, "b"},
-		{"空串 source", "", "b"},
+		{"空串 source", []string{""}, "b"},
 		{"list 含空串", []string{"a", ""}, "b"},
-		{"空 target", "a", ""},
+		{"空 target", []string{"a"}, ""},
 	}
 	for _, c := range cases {
 		if err := catchErr(func() { g.AddEdge(c.source, c.target) }); err == nil {
 			t.Fatalf("%s 应报 EdgeInvalid", c.name)
 		}
 	}
-	g.AddEdge("a", "b")
+	// D-7 形态标记：单源（len==1）→ static（listForm=false）、多源 → barrier（listForm=true）
+	g.AddEdge([]string{"a"}, "b")
 	g.AddEdge([]string{"x", "y"}, "b")
 	if len(g.edges) != 2 {
 		t.Fatalf("应登记 2 条边, got %d", len(g.edges))
+	}
+	if g.edges[0].listForm {
+		t.Fatal("单源边应还原为 Python str 形态（listForm=false/static）")
+	}
+	if !g.edges[1].listForm {
+		t.Fatal("多源边应保持 Python list 形态（listForm=true/barrier）")
 	}
 }
 
@@ -128,8 +136,8 @@ func TestStartNode_EndNode(t *testing.T) {
 	if len(g.edges) != 1 {
 		t.Fatal("StartNode 应登记一条边")
 	}
-	if src, ok := g.edges[0].source.([]string); !ok || len(src) != 1 || src[0] != pregel.Start {
-		t.Fatalf("StartNode 源应为 []string{Start}, got %#v", g.edges[0].source)
+	if src := g.edges[0].source; len(src) != 1 || src[0] != pregel.Start || !g.edges[0].listForm {
+		t.Fatalf("StartNode 源应为 []string{Start} 且列表形态, got %#v listForm=%v", g.edges[0].source, g.edges[0].listForm)
 	}
 	g.AddNode("a", &fakeExec{})
 	g.EndNode("a")
@@ -198,12 +206,12 @@ func TestResolveBarrierGroups(t *testing.T) {
 	g := NewPregelGraph()
 	// branch 节点 "br" 两个出口 exit1/exit2；各自下游 t1/t2 汇入 wait 节点 "w"
 	g.RegisterBranchTargets("br", []string{"exit1", "exit2"})
-	g.AddEdge("exit1", "t1")
-	g.AddEdge("exit2", "t2")
+	g.AddEdge([]string{"exit1"}, "t1")
+	g.AddEdge([]string{"exit2"}, "t2")
 	// w 的前驱：t1（br 出口下游）、t2（br 出口下游）、common（共享）
-	g.AddEdge("t1", "w")
-	g.AddEdge("t2", "w")
-	g.AddEdge("common", "w")
+	g.AddEdge([]string{"t1"}, "w")
+	g.AddEdge([]string{"t2"}, "w")
+	g.AddEdge([]string{"common"}, "w")
 
 	sources := []map[string]struct{}{
 		{"t1": {}}, {"t2": {}}, {"common": {}},
@@ -234,9 +242,9 @@ func TestResolveBarrierGroups(t *testing.T) {
 // TestForwardReachable 对齐 graph.py:145-157 BFS 正向可达（visited 含起点自身，Python 行为）
 func TestForwardReachable(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddEdge("s", "m1")
-	g.AddEdge("m1", "m2")
-	g.AddEdge("m2", "sink")
+	g.AddEdge([]string{"s"}, "m1")
+	g.AddEdge([]string{"m1"}, "m2")
+	g.AddEdge([]string{"m2"}, "sink")
 	reach := g.forwardReachable("s")
 	if _, ok := reach["s"]; !ok {
 		t.Fatal("Python visited 首轮即 add 起点，应含 s")
@@ -326,8 +334,8 @@ func TestCompile_WaitsCNF(t *testing.T) {
 	g.AddNode("a", &fakeExec{})
 	g.AddNode("b", &fakeExec{})
 	g.AddNode("w", &fakeExec{}, WithWaitForAll())
-	g.AddEdge("a", "w")
-	g.AddEdge("b", "w")
+	g.AddEdge([]string{"a"}, "w")
+	g.AddEdge([]string{"b"}, "w")
 	sess := newFakeSession()
 	if cg := g.Compile(sess, nil); cg == nil {
 		t.Fatal("waits CNF 编译应成功")

@@ -1,13 +1,13 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -108,7 +108,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 	}
 
 	// 将 wrapped provider 还原为 WorkflowProvider
-	provider := func(ctx context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	provider := func(ctx context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return unwrapped(ctx)
 	}
 

@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -12,7 +13,6 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,7 +26,7 @@ type stubBaseModelClient struct{}
 // stubWorkflow 用于测试的 Workflow 桩实现
 type stubWorkflow struct {
 	// card 工作流卡片
-	card *schema.WorkflowCard
+	card *workflow.WorkflowCard
 }
 
 // stubTracerSession 用于测试的 TracerSession 桩实现
@@ -134,7 +134,7 @@ func (s *stubWorkflow) Stream(_ context.Context, _ map[string]any, _ ...sainterf
 	return nil, nil
 }
 
-func (s *stubWorkflow) Card() *schema.WorkflowCard {
+func (s *stubWorkflow) Card() *workflow.WorkflowCard {
 	return s.card
 }
 
