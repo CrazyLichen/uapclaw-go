@@ -9,21 +9,26 @@ import (
 
 // Graph 声明式构图接口：链式登记节点/边/条件边，Compile 产出可执行图。
 // Python: openjiuwen/core/graph/base.py:39-58 Graph(ABC)。
-// Self 返回类型收窄为 *PregelGraph（唯一实现者，spec 偏差 D-1）。
+// 构图方法返回 Graph 接口自返回（2026-11-16 用户拍板，D-1 改写）——
+// 对齐 Python typing.Self 的链式语义，链上每环仍走接口派发；
+// PregelGraph 特有方法（RegisterBranchTargets/Reset，Python 不在 Graph ABC 内）
+// 由消费方（_workflow.py 持具体类型的对应物）类型断言获取。
 type Graph interface {
 	// StartNode 登记起始边 START→node_id（Python start_node，base.py:40-42）
-	StartNode(nodeID string) *PregelGraph
+	StartNode(nodeID string) Graph
 	// EndNode 标记终节点并登记边 node_id→END（Python end_node，base.py:43-45）
-	EndNode(nodeID string) *PregelGraph
-	// AddNode 注册节点，waitForAll=true 时前驱汇聚成屏障（Python add_node，base.py:46-48；
-	// keyword-only 默认 False → Go 显式 bool 形参，spec 偏差 D-2）
-	AddNode(nodeID string, node GeneralExecutor, waitForAll bool) *PregelGraph
+	EndNode(nodeID string) Graph
+	// AddNode 注册节点，WithWaitForAll() 时前驱汇聚成屏障
+	// （Python add_node，base.py:46-48 keyword-only 默认 False；
+	// Go 变参 option 承载，零 option ≡ 默认 False，偏差 D-2）
+	AddNode(nodeID string, node GeneralExecutor, opts ...AddNodeOption) Graph
 	// AddEdge 登记边，sourceNodeID 为 string 或 []string（Python add_edge，base.py:49-50）
-	AddEdge(sourceNodeID any, targetNodeID string) *PregelGraph
+	AddEdge(sourceNodeID any, targetNodeID string) Graph
 	// AddConditionalEdges 登记条件边（Python add_conditional_edges，base.py:52-53）
-	AddConditionalEdges(sourceNodeID string, router Router) *PregelGraph
+	AddConditionalEdges(sourceNodeID string, router Router) Graph
 	// Compile 编译为可执行图（Python compile，base.py:55-56）
-	Compile(sess session.BaseSession, kwargs map[string]any) ExecutableGraph[map[string]any, map[string]any]
+	// I=any 对齐 Python Input TypeVar 无类型（信封 INPUTS_KEY 取出值可为 InteractiveInput）
+	Compile(sess session.BaseSession, kwargs map[string]any) ExecutableGraph[any, map[string]any]
 	// GetNodes 返回节点表浅拷贝（Python get_nodes，base.py:58-59）
 	GetNodes() map[string]*Vertex
 }

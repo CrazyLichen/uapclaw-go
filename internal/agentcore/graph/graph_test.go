@@ -9,6 +9,7 @@ import (
 	pregel "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -76,17 +77,17 @@ func TestNewPregelGraph_初始字段(t *testing.T) {
 // TestAddNode_校验分支 对齐 graph.py:86-98 的三个 error 分支与 waits 登记
 func TestAddNode_校验分支(t *testing.T) {
 	g := NewPregelGraph()
-	if err := catchErr(func() { g.AddNode("", nil, false) }); err == nil {
+	if err := catchErr(func() { g.AddNode("", nil) }); err == nil {
 		t.Fatal("空 nodeID 应报 NodeIDInvalid")
 	}
-	if err := catchErr(func() { g.AddNode("a", nil, false) }); err == nil {
+	if err := catchErr(func() { g.AddNode("a", nil) }); err == nil {
 		t.Fatal("node 为 nil 应报 NodeInvalid")
 	}
-	g.AddNode("a", &fakeExec{}, false)
-	if err := catchErr(func() { g.AddNode("a", &fakeExec{}, false) }); err == nil {
+	g.AddNode("a", &fakeExec{})
+	if err := catchErr(func() { g.AddNode("a", &fakeExec{}) }); err == nil {
 		t.Fatal("重复注册应报错（already exist）")
 	}
-	g.AddNode("b", &fakeExec{}, true)
+	g.AddNode("b", &fakeExec{}, WithWaitForAll())
 	if _, ok := g.waits["b"]; !ok {
 		t.Fatal("waitForAll=true 应登记 waits")
 	}
@@ -130,7 +131,7 @@ func TestStartNode_EndNode(t *testing.T) {
 	if src, ok := g.edges[0].source.([]string); !ok || len(src) != 1 || src[0] != pregel.Start {
 		t.Fatalf("StartNode 源应为 []string{Start}, got %#v", g.edges[0].source)
 	}
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	g.EndNode("a")
 	if len(g.edges) != 2 {
 		t.Fatal("EndNode 应再登记一条边")
@@ -267,7 +268,7 @@ func TestBranchRoot_嵌套提升(t *testing.T) {
 // TestVertexNodeFunc_适配器 NodeFunc 桥接 Vertex.Call：返回值丢弃（task.py:152）、错误上抛（task.py:171）
 func TestVertexNodeFunc_适配器(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	v := g.nodes["a"]
 	nf := vertexNodeFunc(v)
 	if nf == nil {
@@ -281,7 +282,7 @@ func TestVertexNodeFunc_适配器(t *testing.T) {
 // TestCompile_生命周期 对齐 graph.py:239-265
 func TestCompile_生命周期(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession()
@@ -310,7 +311,7 @@ func TestCompile_生命周期(t *testing.T) {
 // TestCompile_NodeInit_被调用 compile 对每个节点 init（graph.py:240-241）
 func TestCompile_NodeInit_被调用(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	sess := newFakeSession()
 	_ = g.Compile(sess, nil)
 	nodes := g.GetNodes()
@@ -322,9 +323,9 @@ func TestCompile_NodeInit_被调用(t *testing.T) {
 // TestCompile_WaitsCNF wait 节点前驱经 resolveBarrierGroups 后进 builder.AddEdge
 func TestCompile_WaitsCNF(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
-	g.AddNode("b", &fakeExec{}, false)
-	g.AddNode("w", &fakeExec{}, true)
+	g.AddNode("a", &fakeExec{})
+	g.AddNode("b", &fakeExec{})
+	g.AddNode("w", &fakeExec{}, WithWaitForAll())
 	g.AddEdge("a", "w")
 	g.AddEdge("b", "w")
 	sess := newFakeSession()
@@ -336,7 +337,7 @@ func TestCompile_WaitsCNF(t *testing.T) {
 // TestReset 对齐 graph.py:305-307
 func TestReset(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	g.Reset() // 不 panic 即通过（Vertex.Reset 内部复位状态）
 }
 
@@ -458,7 +459,7 @@ func (f *cancelExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ s
 // → post 被调且 exception 非 nil（canceled），快照现场保留（graph.py:377-385）
 func TestCompiledGraph_取消_可续跑保留快照(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &cancelExec{}, false)
+	g.AddNode("a", &cancelExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession()
@@ -467,7 +468,7 @@ func TestCompiledGraph_取消_可续跑保留快照(t *testing.T) {
 			"a": {NodeName: "a", Status: pregel.TaskStatusInterrupt}}},
 	}
 	cg := g.Compile(sess, nil)
-	_, err := cg.Invoke(map[string]any{}, sess)
+	_, err := cg.Invoke(context.Background(), map[string]any{}, sess)
 	if err == nil {
 		t.Fatal("取消应上抛")
 	}
@@ -492,12 +493,12 @@ func TestCompiledGraph_取消_可续跑保留快照(t *testing.T) {
 // TestCompiledGraph_取消_无快照不落盘 分支③：快照 nil → post 不被调（可重跑语义，graph.py:358-364）
 func TestCompiledGraph_取消_无快照不落盘(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &cancelExec{}, false)
+	g.AddNode("a", &cancelExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession() // gStore.st = nil
 	cg := g.Compile(sess, nil)
-	_, err := cg.Invoke(map[string]any{}, sess)
+	_, err := cg.Invoke(context.Background(), map[string]any{}, sess)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("取消应上抛, got %v", err)
 	}
@@ -509,13 +510,13 @@ func TestCompiledGraph_取消_无快照不落盘(t *testing.T) {
 // TestCompiledGraph_取消_查询失败按不可续跑 分支①：Get 返回 error → 不落盘不清除（graph.py:367-376）
 func TestCompiledGraph_取消_查询失败按不可续跑(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &cancelExec{}, false)
+	g.AddNode("a", &cancelExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession()
 	sess.checkpointer.gStore = &fakeGraphStore{getErr: errors.New("backend down"), failAfter: 1}
 	cg := g.Compile(sess, nil)
-	_, err := cg.Invoke(map[string]any{}, sess)
+	_, err := cg.Invoke(context.Background(), map[string]any{}, sess)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("查询失败仍应上抛原始取消链, got %v", err)
 	}
@@ -527,13 +528,13 @@ func TestCompiledGraph_取消_查询失败按不可续跑(t *testing.T) {
 // TestCompiledGraph_Invoke_非主流程异常上抛 isMain=false 且 run 报错 → 原样上抛、不走 post（graph.py:347-348）
 func TestCompiledGraph_Invoke_非主流程异常上抛(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &cancelExec{}, false)
+	g.AddNode("a", &cancelExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession()
 	cg := g.Compile(sess, nil)
 	// config 非 nil → isMain=false
-	_, err := cg.Invoke(map[string]any{InputsKey: map[string]any{},
+	_, err := cg.Invoke(context.Background(), map[string]any{InputsKey: map[string]any{},
 		ConfigKey: &pregel.PregelConfig{SessionID: "s1", Ns: "wf1"}}, sess)
 	if err == nil {
 		t.Fatal("非主流程异常应上抛")
@@ -546,12 +547,12 @@ func TestCompiledGraph_Invoke_非主流程异常上抛(t *testing.T) {
 // TestCompiledGraph_Invoke_主流程 对齐 graph.py:315-348：pre/post 各一次、exception nil
 func TestCompiledGraph_Invoke_主流程(t *testing.T) {
 	g := NewPregelGraph()
-	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("a", &fakeExec{})
 	g.StartNode("a")
 	g.EndNode("a")
 	sess := newFakeSession()
 	cg := g.Compile(sess, nil)
-	if _, err := cg.Invoke(map[string]any{}, sess); err != nil {
+	if _, err := cg.Invoke(context.Background(), map[string]any{}, sess); err != nil {
 		t.Fatalf("主流程不应报错: %v", err)
 	}
 	if sess.checkpointer.preCalls != 1 || sess.checkpointer.postCalls != 1 {
@@ -559,5 +560,38 @@ func TestCompiledGraph_Invoke_主流程(t *testing.T) {
 	}
 	if sess.checkpointer.postExceptions[0] != nil {
 		t.Fatal("正常完成 post 的 exception 应为 nil")
+	}
+}
+
+// TestCompiledGraph_Invoke_InteractiveInput跳过提交 D-5 改写锁定（graph.py:327）：
+// inputs 为 *InteractiveInput → 跳过 commit_user_inputs；普通 map → 提交进全局状态。
+// 判定在 Invoke_ 内局部进行（I=any 对齐 Python Input TypeVar 无类型）
+func TestCompiledGraph_Invoke_InteractiveInput跳过提交(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{})
+	g.StartNode("a")
+	g.EndNode("a")
+
+	// ① 普通 map 输入 → 提交：global_state 可读回
+	sess := newFakeSession()
+	cg := g.Compile(sess, nil)
+	if _, err := cg.Invoke(context.Background(),
+		map[string]any{InputsKey: map[string]any{"user_key": "v1"}}, sess); err != nil {
+		t.Fatalf("普通输入不应报错: %v", err)
+	}
+	if got := sess.st.GetGlobal(state.StringKey("user_key")); got != "v1" {
+		t.Fatalf("普通输入应提交进全局状态, got %v", got)
+	}
+
+	// ② InteractiveInput → 跳过提交：global_state 不被写入
+	sess2 := newFakeSession()
+	cg2 := g.Compile(sess2, nil)
+	if _, err := cg2.Invoke(context.Background(),
+		map[string]any{InputsKey: &interaction.InteractiveInput{
+			UserInputs: map[string]any{"user_key": "v2"}}}, sess2); err != nil {
+		t.Fatalf("交互输入不应报错: %v", err)
+	}
+	if got := sess2.st.GetGlobal(state.StringKey("user_key")); got != nil {
+		t.Fatalf("InteractiveInput 应跳过 commit_user_inputs, got %v", got)
 	}
 }

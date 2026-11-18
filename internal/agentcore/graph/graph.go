@@ -68,14 +68,14 @@ func NewPregelGraph() *PregelGraph {
 }
 
 // StartNode 登记起始边。Python: graph.py:69-72
-func (g *PregelGraph) StartNode(nodeID string) *PregelGraph {
+func (g *PregelGraph) StartNode(nodeID string) Graph {
 	g.validateNodeID(nodeID)
 	g.addEdgeSource([]string{pregel.Start}, nodeID)
 	return g
 }
 
 // EndNode 标记终节点并登记结束边。Python: graph.py:78-84
-func (g *PregelGraph) EndNode(nodeID string) *PregelGraph {
+func (g *PregelGraph) EndNode(nodeID string) Graph {
 	g.validateNodeID(nodeID)
 	if v, ok := g.nodes[nodeID]; ok {
 		v.SetEndNode(true)
@@ -84,8 +84,26 @@ func (g *PregelGraph) EndNode(nodeID string) *PregelGraph {
 	return g
 }
 
+// ──────────────────────────── 常量（AddNode option）────────────────────────────
+
+// addNodeConfig AddNode 变参 option 的承载结构（Python add_node keyword-only 形参集）
+type addNodeConfig struct {
+	// waitForAll 对应 Python wait_for_all，默认 False
+	waitForAll bool
+}
+
+// AddNodeOption AddNode 的变参选项（偏差 D-2：Python keyword-only 默认参数 →
+// Go 变参 option，零 option ≡ 默认 False）
+type AddNodeOption func(*addNodeConfig)
+
+// WithWaitForAll 置 wait_for_all=true：该节点前驱在编译期汇聚成屏障
+// （Python add_node(..., wait_for_all=True)，graph.py:96-97）
+func WithWaitForAll() AddNodeOption {
+	return func(c *addNodeConfig) { c.waitForAll = true }
+}
+
 // AddNode 注册节点。Python: graph.py:86-98
-func (g *PregelGraph) AddNode(nodeID string, node GeneralExecutor, waitForAll bool) *PregelGraph {
+func (g *PregelGraph) AddNode(nodeID string, node GeneralExecutor, opts ...AddNodeOption) Graph {
 	g.validateNodeID(nodeID)
 	if node == nil {
 		panic(exception.BuildError(exception.StatusPregelGraphNodeInvalid,
@@ -96,7 +114,11 @@ func (g *PregelGraph) AddNode(nodeID string, node GeneralExecutor, waitForAll bo
 			exception.WithParam("node_id", nodeID), exception.WithParam("reason", "already exist, can not add again")))
 	}
 	g.nodes[nodeID] = NewVertex(nodeID, node)
-	if waitForAll {
+	cfg := addNodeConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.waitForAll {
 		g.waits[nodeID] = struct{}{}
 	}
 	return g
@@ -112,13 +134,13 @@ func (g *PregelGraph) GetNodes() map[string]*Vertex {
 }
 
 // AddEdge 登记边。Python: graph.py:103-120（校验四分支顺序照抄）
-func (g *PregelGraph) AddEdge(sourceNodeID any, targetNodeID string) *PregelGraph {
+func (g *PregelGraph) AddEdge(sourceNodeID any, targetNodeID string) Graph {
 	g.addEdgeSource(sourceNodeID, targetNodeID)
 	return g
 }
 
 // AddConditionalEdges 登记条件边。Python: graph.py:122-132
-func (g *PregelGraph) AddConditionalEdges(sourceNodeID string, router Router) *PregelGraph {
+func (g *PregelGraph) AddConditionalEdges(sourceNodeID string, router Router) Graph {
 	if sourceNodeID == "" {
 		panic(exception.BuildError(exception.StatusPregelGraphConditionEdgeInvalid,
 			exception.WithParam("source_id", sourceNodeID), exception.WithParam("reason", "source_node_is is None or empty")))
@@ -137,8 +159,7 @@ func (g *PregelGraph) AddConditionalEdges(sourceNodeID string, router Router) *P
 
 // RegisterBranchTargets 登记分支节点的目标全集，编译期 CNF 屏障解析用。
 // Python: graph.py:134-143（branch_node_id 与 targets 非空且 len>1 才登记）
-func (g *PregelGraph) RegisterBranchTargets(branchNodeID string, targets []string) *PregelGraph {
-	if branchNodeID != "" && len(targets) > 1 {
+func (g *PregelGraph) RegisterBranchTargets(branchNodeID string, targets []string) *PregelGraph {	if branchNodeID != "" && len(targets) > 1 {
 		set := make(map[string]struct{}, len(targets))
 		for _, t := range targets {
 			set[t] = struct{}{}
@@ -374,7 +395,7 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 // Compile 编译构图产物。Python: graph.py:239-265
 // 步骤：①全节点 init（graph.py:240-241）②afterStep 回调（graph.py:243-256）
 // ③建图（graph.py:258-264）：首次取 checkpointer/store 全量编译并缓存；复用仅换 session。
-func (g *PregelGraph) Compile(sess session.BaseSession, kwargs map[string]any) ExecutableGraph[map[string]any, map[string]any] {
+func (g *PregelGraph) Compile(sess session.BaseSession, kwargs map[string]any) ExecutableGraph[any, map[string]any] {
 	// ① 逐节点 init（graph.py:240-241）
 	for _, node := range g.nodes {
 		node.Init(sess, kwargs)
@@ -495,13 +516,15 @@ func vertexNodeFunc(v *Vertex) pregel.NodeFunc {
 
 // CompiledGraph 编译产物，ExecutableGraph 的图实现。
 // Python: graph.py:310-400 CompiledGraph(ExecutableGraph)。
+// I=any 对齐 Python Input TypeVar 无类型（executable.py:9）——信封 INPUTS_KEY
+// 取出值可为 *InteractiveInput（2026-11-16 用户拍板，D-5 改写：判定回到
+// Invoke_ 方法体内局部判定，Python graph.py:327 isinstance 同位同形态，
+// 替代原实例字段 c.interactive 的竞态/残留落法）。
 // Executable 部分由内嵌 BaseExecutable 承载（fake 先例 executable_graph_test.go:17）。
 type CompiledGraph struct {
-	BaseExecutable[map[string]any, map[string]any]
+	BaseExecutable[any, map[string]any]
 	preg         *pregel.Pregel
 	checkpointer interfaces.Checkpointer
-	// interactive 信封 INPUTS_KEY 为 *interaction.InteractiveInput 时置位（偏差 D-5）
-	interactive bool
 }
 
 // NewCompiledGraph 构造。Python: graph.py:311-313 __init__
@@ -511,43 +534,35 @@ func NewCompiledGraph(p *pregel.Pregel, cp interfaces.Checkpointer) *CompiledGra
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Invoke 拆信封入口：先探 InteractiveInput（偏差 D-5），再走默认拆信封。
-// Python: base.py:13-14 invoke → _invoke；InteractiveInput isinstance 判定在 _invoke 内
-// （graph.py:327），Go 因 I=map 契约把判定上移到信封层。
-func (c *CompiledGraph) Invoke(inputs map[string]any, sess session.BaseSession) (map[string]any, error) {
-	c.interactive = false
-	if raw, ok := inputs[InputsKey]; ok {
-		if _, isII := raw.(*interaction.InteractiveInput); isII {
-			c.interactive = true
-		}
-	}
-	return DefaultGraphInvoke[map[string]any, map[string]any](c, inputs, sess)
+// Invoke 拆信封默认体（Python invoke 继承 base.py:13-14）
+func (c *CompiledGraph) Invoke(ctx context.Context, inputs map[string]any, sess session.BaseSession) (map[string]any, error) {
+	return DefaultGraphInvoke[any, map[string]any](c, ctx, inputs, sess)
 }
 
 // Stream pass 占位（Python graph.py:396-397）
-func (c *CompiledGraph) Stream(inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
-	return DefaultGraphStream[map[string]any, map[string]any](c, inputs, sess)
+func (c *CompiledGraph) Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+	return DefaultGraphStream[any, map[string]any](c, ctx, inputs, sess)
 }
 
 // Collect pass 占位（Python 未覆写 collect，继承 base.py:19-20）
-func (c *CompiledGraph) Collect(inputs <-chan map[string]any, sess session.BaseSession) (map[string]any, error) {
-	return DefaultGraphCollect[map[string]any, map[string]any](c, inputs, sess)
+func (c *CompiledGraph) Collect(ctx context.Context, inputs <-chan any, sess session.BaseSession) (map[string]any, error) {
+	return DefaultGraphCollect[any, map[string]any](c, ctx, inputs, sess)
 }
 
 // Transform pass 占位（Python 未覆写 transform，继承 base.py:22-23）
-func (c *CompiledGraph) Transform(inputs <-chan map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
-	return DefaultGraphTransform[map[string]any, map[string]any](c, inputs, sess)
+func (c *CompiledGraph) Transform(ctx context.Context, inputs <-chan any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+	return DefaultGraphTransform[any, map[string]any](c, ctx, inputs, sess)
 }
 
 // Interrupt pass 占位（Python graph.py:399-400 interrupt 直接 return）
-func (c *CompiledGraph) Interrupt(message map[string]any) error {
-	return DefaultGraphInterrupt[map[string]any, map[string]any](c, message)
+func (c *CompiledGraph) Interrupt(ctx context.Context, message map[string]any) error {
+	return DefaultGraphInterrupt[any, map[string]any](c, ctx, message)
 }
 
 // Invoke_ 图执行生命周期（Python _invoke，graph.py:315-394，步骤编号保留）。
-// ctx 来源偏差 D-6：8.2 契约 Invoke_ 无 ctx 形参，Pregel.Run 以 context.Background()
-// 起步；取消经 NodeFunc 返回 context.Canceled 传播（8.3b D5 先例）。
-func (c *CompiledGraph) Invoke_(inputs map[string]any, sess session.BaseSession, config any) (map[string]any, error) {
+// ctx 经契约传入（偏差 D-6 改写：Python asyncio 协程取消 → Go ctx 取消，
+// 五方法对称加 ctx），Pregel.Run 直收真实 ctx。
+func (c *CompiledGraph) Invoke_(ctx context.Context, inputs any, sess session.BaseSession, config any) (map[string]any, error) {
 	isMain := false
 	sessionID := sess.SessionID()
 	workflowID := ""
@@ -568,22 +583,31 @@ func (c *CompiledGraph) Invoke_(inputs map[string]any, sess session.BaseSession,
 		pc = &pregel.PregelConfig{SessionID: sessionID, Ns: workflowID, RecursionLimit: pregel.MaxRecursiveLimit}
 	}
 
+	// 非 InteractiveInput 判定（graph.py:327）——局部判定，无实例状态
+	_, isInteractive := inputs.(*interaction.InteractiveInput)
+
 	// 正常路径（graph.py:324-348）
 	if isMain {
-		if err := c.checkpointer.PreWorkflowExecute(context.Background(), sess, inputs); err != nil {
+		if err := c.checkpointer.PreWorkflowExecute(ctx, sess, inputs); err != nil {
 			return nil, err
 		}
 	}
-	// 非 InteractiveInput → commit_user_inputs（graph.py:327-328；判定来源见偏差 D-5）
-	if !c.interactive {
+	// 非 InteractiveInput → commit_user_inputs（graph.py:327-328）
+	// inputs 经 I=any 承载；Python 侧非交互输入即 dict，map 断言失败时传 nil
+	// （对齐 Python .get 宽容取值语义，非 dict 输入由 state 层零值承接）
+	if !isInteractive {
 		if wcs, ok := sess.State().(*state.WorkflowCommitState); ok {
-			wcs.CommitUserInputs(inputs)
+			var m map[string]any
+			if inputs != nil {
+				m, _ = inputs.(map[string]any)
+			}
+			wcs.CommitUserInputs(m)
 		}
 	}
 
 	inner := pregel.CreateInnerConfig(*pc)
 	result, exception, canceled := func() (map[string]any, error, bool) {
-		r, err := c.preg.Run(context.Background(), &inner)
+		r, err := c.preg.Run(ctx, &inner)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// graph.py:335-341：取消先记日志再 raise——raise 跳过下方正常 post
@@ -604,13 +628,13 @@ func (c *CompiledGraph) Invoke_(inputs map[string]any, sess session.BaseSession,
 	// 仅 isMain 走取消分流，最后 re-raise 原始取消链
 	if canceled {
 		if isMain {
-			c.handleCancellation(context.Background(), sess, sessionID, workflowID)
+			c.handleCancellation(ctx, sess, sessionID, workflowID)
 		}
 		return nil, exception
 	}
 
 	if isMain {
-		if err := c.checkpointer.PostWorkflowExecute(context.Background(), sess, result, exception); err != nil {
+		if err := c.checkpointer.PostWorkflowExecute(ctx, sess, result, exception); err != nil {
 			return nil, err
 		}
 	} else if exception != nil {

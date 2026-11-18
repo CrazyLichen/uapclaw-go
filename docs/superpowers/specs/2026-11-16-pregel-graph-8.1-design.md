@@ -165,6 +165,7 @@ func getCallableName(r Router) string
 | 4 | `getCallableName` 反射取名方案 A，匿名覆盖差异登记偏差 D-3 |
 | 5 | `AddConditionalEdges` 只收 `Router`，零新增便利 API（方案 A） |
 | 6 | `ExecutableGraph` 空方法（stream/collect/transform/interrupt）照实保留 pass 空方法 |
+| 7 | （审查后拍板 2026-11-16）`Graph` 构图方法返回 `Graph` 接口自返回（对齐 Python Self 链式语义）；`AddNode` 用变参 option 承载 `wait_for_all`；`CompiledGraph` 改 `I=any` 让 InteractiveInput 判定回 `Invoke_` 局部；`ExecutableGraph` 五方法对称加 ctx |
 
 ## 5. 语义澄清记录（讨论结论）
 
@@ -178,13 +179,17 @@ func getCallableName(r Router) string
 - 覆盖率目标：包整体 ≥85%，新文件 100%；
 - 全量回归：`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL。
 
-## 7. 已知偏差汇总
+## 7. 已知偏差汇总（2026-11-16 审查后改写）
 
 | 编号 | 内容 | 理由 | 回收条件 |
 |---|---|---|---|
-| D-1 | `Graph` 接口 Self 返回类型收窄为 `*PregelGraph` | Python `typing.Self` 唯一实现者即 PregelGraph，Go 泛型 Self 无对应物 | 出现第二个 Graph 实现者时改泛型接口 |
-| D-2 | `AddNode` 的 `wait_for_all` 为显式 bool 形参 | Go 无关键字默认参数 | 无（语言差异，永久） |
+| D-1 | `Graph` 构图方法返回 `Graph` 接口自返回（替代初版 `*PregelGraph` 收窄） | Python `typing.Self` 无对应物；接口自返回保住链式语义与未来实现者。PregelGraph 特有方法（RegisterBranchTargets/Reset，Python 不在 Graph ABC）由消费方类型断言（对应 `_workflow.py` 持具体类型） | 无（终态） |
+| D-2 | `AddNode(nodeID, node, opts ...AddNodeOption)` 变参 option 承载 `wait_for_all`，`WithWaitForAll()` 置 true | Go 无 keyword-only 默认参数；零 option ≡ 默认 False，调用点与 Python 同形 | 无（语言差异，永久） |
 | D-3 | 匿名闭包 selector 不触发同名覆盖 | funcN 为编译器命名，见 §2.4 | 上游增加显式命名机制时对齐 |
+| D-4 | `vertexNodeFunc` 鸭子类型桥（Vertex → pregel.NodeFunc 适配器） | Python builder 直存 Vertex 经 `__call__` 派发（task.py:135-152），Go 无鸭子类型；桥内返回值丢弃/错误上抛逐条对齐 task.py:152/171，零行为变更 | 无（结构适配，终态） |
+| D-5 | `CompiledGraph` 实现改 `I=any`，InteractiveInput 判定在 `Invoke_` 方法体内局部判定 | Python `Input` TypeVar 无类型（executable.py:9），信封取值可为 InteractiveInput 对象；`I=map[string]any` 选型导致 `*InteractiveInput` 被默认拆信封断言丢弃，初版实例字段 `c.interactive` 存在竞态/状态残留——2026-11-16 用户拍板改 I=any 根治，判定与 Python graph.py:327 isinstance 同位同形态 | 无（终态） |
+| D-6 | `ExecutableGraph` 五方法（Invoke/Stream/Collect/Transform/Interrupt/Invoke_）对称加 `ctx` 形参 | Python 经 asyncio 协程天然携带取消，Go 显式 ctx 传播（2026-11-16 用户拍板）；`Pregel.Run` 直收真实 ctx，取消不再依赖 NodeFunc 返回 canceled 单通道 | 无（终态） |
+| — | 8.3a A1 回填（非本节偏差，范围注记）：`pregel/builder.go` `AddEdge` 补 `[]any` CNF 组形态（string=单元素组/[]string=OR 组），一比一 builder.py:34-52 | 8.1 `_compile` Step3 传 `starts []any` 的硬前置；8.3a A1 原拍板「需时直用/回填」，本次按一比一兑现并补测试 | — |
 
 ## 8. 删除清单
 
