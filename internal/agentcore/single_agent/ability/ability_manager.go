@@ -47,7 +47,7 @@ type AbilityManager struct {
 	// tools 工具注册表
 	tools map[string]*tool.ToolCard
 	// workflows 工作流注册表
-	workflows map[string]*schema.WorkflowCard
+	workflows map[string]*workflow.WorkflowCard
 	// agents Agent 注册表
 	agents map[string]*agentschema.AgentCard
 	// mcpServers MCP 服务器注册表
@@ -89,7 +89,7 @@ const logComponent = logger.ComponentAgentCore
 func NewAbilityManager(resourceMgr *resourcesmanager.ResourceMgr) *AbilityManager {
 	return &AbilityManager{
 		tools:       make(map[string]*tool.ToolCard),
-		workflows:   make(map[string]*schema.WorkflowCard),
+		workflows:   make(map[string]*workflow.WorkflowCard),
 		agents:      make(map[string]*agentschema.AgentCard),
 		mcpServers:  make(map[string]*mcptypes.McpServerConfig),
 		resourceMgr: resourceMgr,
@@ -178,7 +178,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 		am.registryRevision++
 		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_tool"}
 
-	case *schema.WorkflowCard:
+	case *workflow.WorkflowCard:
 		existing, ok := am.workflows[a.Name]
 		if ok {
 			logger.Warn(logComponent).

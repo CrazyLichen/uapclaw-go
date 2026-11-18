@@ -40,15 +40,6 @@ type BaseCard struct {
 	Description string `json:"description"`
 }
 
-// WorkflowCard 工作流卡片，扩展 BaseCard 增加版本号和输入参数。
-type WorkflowCard struct {
-	BaseCard
-	// Version 工作流版本号
-	Version string `json:"version,omitempty"`
-	// InputParams 输入参数定义（JSON Schema 格式）
-	InputParams map[string]any `json:"input_params,omitempty"`
-}
-
 // CardOption BaseCard 构造选项函数。
 type CardOption func(*BaseCard)
 
@@ -72,12 +63,9 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 确保 BaseCard 和 WorkflowCard 实现 CardInterface 接口。
+// 确保 BaseCard 实现 CardInterface 接口。
 // _ 编译时验证 BaseCard 满足 CardInterface 接口
 var _ CardInterface = (*BaseCard)(nil)
-
-// _ 编译时验证 WorkflowCard 满足 CardInterface 接口
-var _ CardInterface = (*WorkflowCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -149,31 +137,6 @@ func (c *BaseCard) String() string {
 func (c *BaseCard) GoString() string {
 	return fmt.Sprintf("BaseCard{ID:%q, Name:%q, Description:%q}", c.ID, c.Name, c.Description)
 }
-
-// NewWorkflowCard 创建工作流卡片实例。
-func NewWorkflowCard(opts ...CardOption) *WorkflowCard {
-	return &WorkflowCard{
-		BaseCard: *NewBaseCard(opts...),
-	}
-}
-
-// ToolInfo 返回工具信息，将 InputParams 转换为 ToolInfoInterface。
-func (c *WorkflowCard) ToolInfo() ToolInfoInterface {
-	params := c.InputParams
-	if params == nil {
-		params = make(map[string]any)
-	}
-	return NewToolInfo(c.Name, c.Description, params)
-}
-
-// AbilityName 返回能力名称。
-func (c *WorkflowCard) AbilityName() string { return c.Name }
-
-// AbilityID 返回能力唯一标识。
-func (c *WorkflowCard) AbilityID() string { return c.ID }
-
-// AbilityKind 返回能力类型（工作流）。
-func (c *WorkflowCard) AbilityKind() AbilityKind { return AbilityKindWorkflow }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

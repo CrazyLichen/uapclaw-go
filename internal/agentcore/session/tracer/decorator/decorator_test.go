@@ -1,6 +1,7 @@
 package decorator
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"errors"
 	"testing"
@@ -138,7 +139,7 @@ type fakeWorkflow struct {
 	// invokeErr Invoke 返回的错误
 	invokeErr error
 	// card 工作流卡片
-	card *schema.WorkflowCard
+	card *workflow.WorkflowCard
 }
 
 // Invoke 实现 sainterfaces.Workflow 接口
@@ -154,7 +155,7 @@ func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...sainterf
 }
 
 // Card 实现 sainterfaces.Workflow 接口
-func (f *fakeWorkflow) Card() *schema.WorkflowCard {
+func (f *fakeWorkflow) Card() *workflow.WorkflowCard {
 	return f.card
 }
 
@@ -424,7 +425,7 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	innerWorkflow := &fakeWorkflow{
-		card: schema.NewWorkflowCard(
+		card: workflow.NewWorkflowCard(
 			schema.WithName("测试工作流"),
 			schema.WithDescription("测试描述"),
 		),
@@ -486,7 +487,7 @@ func TestTracedWorkflow_Invoke_成功(t *testing.T) {
 	expectedResult := map[string]any{"output": "done"}
 	inner := &fakeWorkflow{
 		invokeResult: expectedResult,
-		card:         schema.NewWorkflowCard(schema.WithName("wf-1")),
+		card:         workflow.NewWorkflowCard(schema.WithName("wf-1")),
 	}
 
 	tracedWf := &TracedWorkflow{
@@ -512,7 +513,7 @@ func TestTracedWorkflow_Invoke_失败(t *testing.T) {
 
 	inner := &fakeWorkflow{
 		invokeErr: errors.New("工作流执行失败"),
-		card:      schema.NewWorkflowCard(schema.WithName("wf-1")),
+		card:      workflow.NewWorkflowCard(schema.WithName("wf-1")),
 	}
 
 	tracedWf := &TracedWorkflow{
@@ -539,7 +540,7 @@ func TestTracedWorkflow_Card_委托(t *testing.T) {
 	tr := tracer.NewTracer()
 	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
-	expectedCard := schema.NewWorkflowCard(
+	expectedCard := workflow.NewWorkflowCard(
 		schema.WithName("my-workflow"),
 		schema.WithDescription("我的工作流"),
 	)
