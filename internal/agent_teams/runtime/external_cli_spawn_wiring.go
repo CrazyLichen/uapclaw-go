@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -227,7 +228,10 @@ func newExternalMemberTeamAgent(ctx context.Context, card spawn.ExternalCliAgent
 		agentschema.WithAgentDescription(card.Description),
 	)
 	teammate := agent.NewTeamAgent(ctx, agentCard)
-	memberRuntime, _ := runtimeValue.(agent.MemberRuntime)
+	memberRuntime, ok := runtimeValue.(agent.MemberRuntime)
+	if !ok {
+		return nil, fmt.Errorf("new external member team agent: runtime %T 未实现 agent.MemberRuntime，拒绝静默装配无大脑成员壳", runtimeValue)
+	}
 	if err := teammate.Configure(ctx, spec, rtc, memberRuntime); err != nil {
 		return nil, err
 	}
@@ -281,8 +285,12 @@ func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.Externa
 			binder.BindTrajectoryRecorder(recorder)
 		} else if err != nil {
 			// Python: incomplete subject → warning（external_cli_spawn.py:487）
-			// recorder 观测性未初始化 → nil（静默，对齐 Python ImportError 路径）
+			logger.Warn(logComponent).
+				Str("member_name", ta.MemberName()).
+				Err(err).
+				Msg("trajectory disabled for member: incomplete subject")
 		}
+		// recorder 为 nil（观测性未初始化）→ 静默，对齐 Python ImportError 路径
 	}
 	// 4. bind_reliability_context（Python :723-732）：五参调用点压实，
 	// 实现仍桩 ⤴️15.7/15.8（D-15.16-a7 不变）。
