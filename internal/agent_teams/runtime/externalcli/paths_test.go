@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	teamworkspace "github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	harnessschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 )
 
 // TestPathValue 对齐 _path_value（external_cli_spawn.py:239-243）。
