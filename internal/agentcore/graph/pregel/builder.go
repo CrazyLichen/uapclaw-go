@@ -55,7 +55,7 @@ func (b *PregelBuilder) AddEdge(start, end any) error {
 	switch s := start.(type) {
 	case []string:
 		if e, ok := end.(string); ok {
-			// barrier：每源节点独占一组（全 AND 形态，偏差 A1），建 BarrierChannel
+			// barrier：每源节点独占一组（全 AND 形态），建 BarrierChannel
 			// 追加进 channels，并给每个源节点挂 BarrierRouter（目标为合成键）。
 			// Python: builder.py:34-53（内联，按规则 9.4 不抽助手）
 			groups := make([][]string, 0, len(s))
@@ -70,6 +70,44 @@ func (b *PregelBuilder) AddEdge(start, end any) error {
 					return fmt.Errorf("unknown node: %s", item)
 				}
 				node.addRouter(NewBarrierRouter(barrier.Key()))
+			}
+			return nil
+		}
+	case []any:
+		// barrier CNF 组形态（8.3a 偏差 A1 回填，8.1 graph.py:294-296 消费）：
+		// start 每项为 string（单元素组）或 []string（OR 组），组间 AND、组内 OR。
+		// Python: builder.py:34-52（isinstance(item, (set, frozenset)) 分支的 Go 对应物）
+		if e, ok := end.(string); ok {
+			groups := make([][]string, 0, len(s))
+			for _, item := range s {
+				switch it := item.(type) {
+				case string:
+					groups = append(groups, []string{it})
+				case []string:
+					groups = append(groups, it)
+				default:
+					return fmt.Errorf("unsupported barrier source item type: %T", item)
+				}
+			}
+			barrier := NewBarrierChannel(e, groups)
+			b.channels = append(b.channels, barrier)
+			for _, item := range s {
+				switch it := item.(type) {
+				case string:
+					node, ok := b.nodes[it]
+					if !ok {
+						return fmt.Errorf("unknown node: %s", it)
+					}
+					node.addRouter(NewBarrierRouter(barrier.Key()))
+				case []string:
+					for _, n := range it {
+						node, ok := b.nodes[n]
+						if !ok {
+							return fmt.Errorf("unknown node: %s", n)
+						}
+						node.addRouter(NewBarrierRouter(barrier.Key()))
+					}
+				}
 			}
 			return nil
 		}

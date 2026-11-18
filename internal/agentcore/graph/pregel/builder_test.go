@@ -2,6 +2,7 @@ package pregel
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,4 +199,34 @@ func TestPregelBuilder_Build(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, res)
 	assert.Equal(t, 2, hooked) // step0(START)/step1(a)
+}
+
+// TestAddEdge_CNF组形态 A1 缺口回填（8.1 消费）：start 为 []any（每项 string 或 []string 组）
+// → BarrierChannel CNF(AND-of-OR) 判定 + BarrierRouter 全量挂载（builder.py:34-52）
+func TestAddEdge_CNF组形态(t *testing.T) {
+	b := NewPregelBuilder()
+	noop := func(context.Context, NodeInput) error { return nil }
+	b.AddNode("a", noop)
+	b.AddNode("b", noop)
+	b.AddNode("c", noop)
+	// (a|b)&c -> w
+	if err := b.AddEdge([]any{"a", []string{"b", "c"}}, "w"); err != nil {
+		t.Fatalf("CNF 组形态应被接受: %v", err)
+	}
+	// 校验 barrier 通道键含 OR 组：barrier:a|(b&c)->w 形态（组内升序、& 连接组、| 组间）
+	found := false
+	for _, ch := range b.channels {
+		if bc, ok := ch.(*BarrierChannel); ok && strings.Contains(bc.Key(), "|") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("应存在含 OR 组的 barrier 通道")
+	}
+	// 未知节点报错
+	b2 := NewPregelBuilder()
+	b2.AddNode("a", noop)
+	if err := b2.AddEdge([]any{"a", []string{"zzz"}}, "w"); err == nil {
+		t.Fatal("组内未知节点应报错")
+	}
 }

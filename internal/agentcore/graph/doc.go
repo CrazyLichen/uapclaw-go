@@ -24,6 +24,8 @@
 //
 //	graph/
 //	├── doc.go                 # 包文档
+//	├── base.go               # Graph 声明式构图接口 + Router 类型别名（8.1，Python base.py）
+//	├── graph.go              # Branch/PregelGraph/CompiledGraph 构图与编译门面（8.1，Python graph.py）
 //	├── executable.go          # Executable 泛型接口 + StreamChunk + BaseExecutable 基座（8.2）
 //	├── executable_graph.go    # ExecutableGraph 契约 + InputsKey/ConfigKey 信封常量（8.2）
 //	├── atomic_node.go         # AtomicNode 原子提交包装（8.10）
@@ -33,6 +35,14 @@
 // Vertex（vertex.go）为图顶点执行器（8.11，Python vertex.py）：双链模型——批入侧
 // （INVOKE/STREAM 同步链）+ 流入侧（COLLECT/TRANSFORM，StreamActor 首帧异步链），
 // 两半经当轮 streamDone channel 握手对齐；并发映射零锁，依赖引擎屏障定序不变式。
+//
+// PregelGraph（graph.go）为声明式构图门面（8.1，Python graph.py）：构图期登记
+// 节点/边/条件边（校验对齐 graph.py:103-132 四 error 分支），Compile 期三段翻译
+// 至 PregelBuilder（waits 前驱 CNF 屏障解析 graph.py:180-237 → builder.AddEdge
+// CNF 组形态），CompiledGraph 承载 invoke 生命周期（pre/post_workflow_execute、
+// commit_user_inputs、取消三分支保 HITL 快照 graph.py:349-394）。
+// Router（base.go）= pregel.Selector 纯别名；运行时判断靠捕获 session 引用，
+// state 形参恒 nil（对齐 router.py:37 字面量，8.5 D2 同源）。
 //
 // 对应 Python 代码：openjiuwen/core/graph/graph_state.py · atomic_node.py · executable.py · base.py · vertex.py
 package graph
