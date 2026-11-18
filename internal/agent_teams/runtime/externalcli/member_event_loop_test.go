@@ -40,7 +40,7 @@ func (f *fakeReliabilityCtx) PublishRetrying(category schema.ExternalRuntimeFail
 }
 
 func (f *fakeReliabilityCtx) FinalizeFailure(category schema.ExternalRuntimeFailureCategory,
-	reason *schema.ExternalRuntimeFailureReason, summary string) error {
+	reason *schema.ExternalRuntimeFailureReason, summary string) *schema.ExternalRuntimeFailure {
 	f.finalized++
 	return nil
 }

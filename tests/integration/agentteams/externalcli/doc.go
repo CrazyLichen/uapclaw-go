@@ -13,7 +13,10 @@
 //	├── external_lifecycle_test.go # ExternalCliLifecycleSuite：adapter 全生命周期
 //	├── dsh_provider_test.go      # DshProviderSuite：provider 路映射与 fake SDK
 //	├── session_cleanup_test.go   # SessionCleanupSuite：清理链编排
-//	└── config_roundtrip_test.go  # ConfigRoundtripSuite：校验器红绿 + seed 往返
+//	├── config_roundtrip_test.go  # ConfigRoundtripSuite：校验器红绿 + seed 往返
+//	├── member_event_loop_test.go # MemberEventLoopSuite：15.16a 成员事件循环
+//	├── team_mcp_client_test.go   # TeamMcpClientSuite：team-mcp 客户端面
+//	└── reliability_delivery_test.go # ReliabilityDeliverySuite：15.16b0 可靠性投递
 //
 // 对应 Python 代码：openjiuwen/agent_teams/external/（runtime/member_runtime/
 // session_cleanup）+ spawn/external_cli_spawn.py
