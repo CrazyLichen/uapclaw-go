@@ -91,3 +91,19 @@ func TestLocalAutoRemediator_Reset(t *testing.T) {
 	assert.NotEmpty(t, r.SteerMessage(a), "重置后预算恢复")
 	_ = now
 }
+
+func TestDefaultSteerText_兜底模板(t *testing.T) {
+	msg := DefaultSteerText(core.AnomalyKindToolErrorRate, "s")
+	assert.Contains(t, msg, "self-correction hint")
+	assert.Contains(t, msg, "tool_error_rate")
+	// 包内别名转调
+	assert.Equal(t, msg, defaultSteerText(core.AnomalyKindToolErrorRate, "s"))
+}
+
+func TestNewLocalAutoRemediator_NowFnNil兜底时钟(t *testing.T) {
+	// nil nowFn → time.Now 默认（对齐 Python now=time.time）；不 panic 即通过
+	r := NewLocalAutoRemediator(NewRemediationPolicy(nil), 1, 60.0, nil)
+	assert.NotPanics(t, func() {
+		r.SteerMessage(&core.Anomaly{Kind: core.AnomalyKindToolErrorRate, Severity: core.SeverityCritical, Summary: "s"})
+	})
+}

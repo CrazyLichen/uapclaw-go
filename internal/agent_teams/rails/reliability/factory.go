@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/detectors"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/remediation"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"time"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -65,6 +66,9 @@ type BuildComponentsDeps struct {
 // Python: factory.py build_member_detectors。按 enabled 逐个构造，顺序对齐
 // 上游：tool_error → repeat_tool → model_error → output_length → compaction。
 func BuildMemberDetectors(config core.DetectorsConfig, now func() float64, text detectors.TextRenderer) []detectors.Detector {
+	if now == nil {
+		now = defaultNow
+	}
 	var dets []detectors.Detector
 	if config.ToolError.Enabled {
 		dets = append(dets, detectors.NewToolErrorRateDetector(
@@ -201,6 +205,9 @@ type nopReporter struct{}
 func (nopReporter) Report(context.Context, *core.Anomaly) {}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultNow 默认时钟（Unix 秒浮点；对齐 Python time.time 默认参数）。
+func defaultNow() float64 { return float64(time.Now().UnixNano()) / 1e9 }
 
 // schemaTextRenderer i18n 默认渲染缝（dotted key + kwargs → schema.T）。
 func schemaTextRenderer(key string, kwargs map[string]any) string {
