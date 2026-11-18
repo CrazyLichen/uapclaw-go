@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -410,17 +411,153 @@ func newFakeSession() *fakeGraphSession {
 	}
 }
 
-// fakeGraphStore 可编程返回快照（Task 5 扩展）
+// fakeGraphStore 可编程返回快照（Task 5 扩展）。
+// failAfterN: 前 N 次 Get 正常返回，之后返回 getErr——模拟瞬态故障
+// （引擎 resume Init 与取消分流 inspect 共用同一 store，Python graph.py:260 同源）。
 type fakeGraphStore struct {
-	st     *pregel.GraphState
-	getErr error
+	st        *pregel.GraphState
+	getErr    error
+	failAfter int
+	getCalls  int
 }
 
 func (s *fakeGraphStore) Get(_ context.Context, _, _ string) (*pregel.GraphState, error) {
-	return s.st, s.getErr
+	s.getCalls++
+	if s.failAfter > 0 && s.getCalls > s.failAfter {
+		return nil, s.getErr
+	}
+	return s.st, nil
 }
 
 func (s *fakeGraphStore) Save(_ context.Context, _, _ string, _ *pregel.GraphState) error {
-	panic("未实现")
+	return nil
 }
-func (s *fakeGraphStore) Delete(_ context.Context, _, _ string) error { panic("未实现") }
+func (s *fakeGraphStore) Delete(_ context.Context, _, _ string) error { return nil }
+
+// ──────────────────────────── 取消分流用例（graph.py:349-394）────────────────
+
+// cancelExec OnInvoke 返回 context.Canceled 的执行器
+type cancelExec struct {
+	BaseExecutable[map[string]any, map[string]any]
+}
+
+func (f *cancelExec) OnInvoke(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
+	return nil, context.Canceled
+}
+func (f *cancelExec) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+	return nil, nil
+}
+func (f *cancelExec) OnCollect(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
+	return map[string]any{}, nil
+}
+func (f *cancelExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+	return nil, nil
+}
+
+// TestCompiledGraph_取消_可续跑保留快照 分支②：图侧有 resumable 快照
+// → post 被调且 exception 非 nil（canceled），快照现场保留（graph.py:377-385）
+func TestCompiledGraph_取消_可续跑保留快照(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &cancelExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession()
+	sess.checkpointer.gStore = &fakeGraphStore{
+		st: &pregel.GraphState{PendingNode: map[string]pregel.PendingNode{
+			"a": {NodeName: "a", Status: pregel.TaskStatusInterrupt}}},
+	}
+	cg := g.Compile(sess, nil)
+	_, err := cg.Invoke(map[string]any{}, sess)
+	if err == nil {
+		t.Fatal("取消应上抛")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("原始取消链应上抛, got %v", err)
+	}
+	cp := sess.checkpointer
+	if cp.postCalls != 1 {
+		t.Fatalf("可续跑取消应走一次 post 保存, got %d", cp.postCalls)
+	}
+	if cp.postExceptions[0] == nil {
+		t.Fatal("保存分支应带非 nil 异常（canceled）")
+	}
+	if !errors.Is(cp.postExceptions[0], context.Canceled) {
+		t.Fatalf("post 异常应为 canceled, got %v", cp.postExceptions[0])
+	}
+	if cp.postResults[0] == nil {
+		t.Fatal("post result 应为 {}（对齐 Python 传 {}）")
+	}
+}
+
+// TestCompiledGraph_取消_无快照不落盘 分支③：快照 nil → post 不被调（可重跑语义，graph.py:358-364）
+func TestCompiledGraph_取消_无快照不落盘(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &cancelExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession() // gStore.st = nil
+	cg := g.Compile(sess, nil)
+	_, err := cg.Invoke(map[string]any{}, sess)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("取消应上抛, got %v", err)
+	}
+	if sess.checkpointer.postCalls != 0 {
+		t.Fatalf("无快照不应走 post 保存, got %d", sess.checkpointer.postCalls)
+	}
+}
+
+// TestCompiledGraph_取消_查询失败按不可续跑 分支①：Get 返回 error → 不落盘不清除（graph.py:367-376）
+func TestCompiledGraph_取消_查询失败按不可续跑(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &cancelExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession()
+	sess.checkpointer.gStore = &fakeGraphStore{getErr: errors.New("backend down"), failAfter: 1}
+	cg := g.Compile(sess, nil)
+	_, err := cg.Invoke(map[string]any{}, sess)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("查询失败仍应上抛原始取消链, got %v", err)
+	}
+	if sess.checkpointer.postCalls != 0 {
+		t.Fatalf("查询失败不应走 post 保存, got %d", sess.checkpointer.postCalls)
+	}
+}
+
+// TestCompiledGraph_Invoke_非主流程异常上抛 isMain=false 且 run 报错 → 原样上抛、不走 post（graph.py:347-348）
+func TestCompiledGraph_Invoke_非主流程异常上抛(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &cancelExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession()
+	cg := g.Compile(sess, nil)
+	// config 非 nil → isMain=false
+	_, err := cg.Invoke(map[string]any{InputsKey: map[string]any{},
+		ConfigKey: &pregel.PregelConfig{SessionID: "s1", Ns: "wf1"}}, sess)
+	if err == nil {
+		t.Fatal("非主流程异常应上抛")
+	}
+	if sess.checkpointer.postCalls != 0 {
+		t.Fatalf("非主流程不应走 post, got %d", sess.checkpointer.postCalls)
+	}
+}
+
+// TestCompiledGraph_Invoke_主流程 对齐 graph.py:315-348：pre/post 各一次、exception nil
+func TestCompiledGraph_Invoke_主流程(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession()
+	cg := g.Compile(sess, nil)
+	if _, err := cg.Invoke(map[string]any{}, sess); err != nil {
+		t.Fatalf("主流程不应报错: %v", err)
+	}
+	if sess.checkpointer.preCalls != 1 || sess.checkpointer.postCalls != 1 {
+		t.Fatalf("isMain 应走 pre/post 各一次, pre=%d post=%d", sess.checkpointer.preCalls, sess.checkpointer.postCalls)
+	}
+	if sess.checkpointer.postExceptions[0] != nil {
+		t.Fatal("正常完成 post 的 exception 应为 nil")
+	}
+}

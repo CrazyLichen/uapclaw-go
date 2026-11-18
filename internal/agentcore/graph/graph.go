@@ -582,35 +582,41 @@ func (c *CompiledGraph) Invoke_(inputs map[string]any, sess session.BaseSession,
 	}
 
 	inner := pregel.CreateInnerConfig(*pc)
-	result, exception := func() (map[string]any, error) {
+	result, exception, canceled := func() (map[string]any, error, bool) {
 		r, err := c.preg.Run(context.Background(), &inner)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				// graph.py:335-341：取消先记日志再进入取消分流
+				// graph.py:335-341：取消先记日志再 raise——raise 跳过下方正常 post
 				logger.Warn(logComponent).
 					Str("event_type", "GRAPH_END").
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Bool("cancelled", true).
 					Msg("Pregel execution cancelled")
+				return nil, err, true
 			}
-			return nil, err
+			return nil, err, false
 		}
-		return r, nil
+		return r, nil, false
 	}()
 
-	if isMain {
-		if exception != nil && errors.Is(exception, context.Canceled) {
-			// 取消分流（graph.py:349-394）：三分支见 handleCancellation
+	// 取消路径（graph.py:349-394）：外层 except CancelledError——正常 post 被跳过，
+	// 仅 isMain 走取消分流，最后 re-raise 原始取消链
+	if canceled {
+		if isMain {
 			c.handleCancellation(context.Background(), sess, sessionID, workflowID)
 		}
+		return nil, exception
+	}
+
+	if isMain {
 		if err := c.checkpointer.PostWorkflowExecute(context.Background(), sess, result, exception); err != nil {
 			return nil, err
 		}
 	} else if exception != nil {
 		return nil, exception // graph.py:347-348
 	}
-	return result, exception
+	return result, nil
 }
 
 // handleCancellation 取消分流三分支（graph.py:349-394，HITL 快照语义逐条复刻）：
