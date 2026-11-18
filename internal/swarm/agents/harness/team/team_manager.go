@@ -100,13 +100,13 @@ type TeamManager struct {
 	// 对齐 Python: _team_evolution_watchers
 	teamEvolutionWatchers map[string]context.CancelFunc
 
+	// 每会话技能演进开关快照（slash 处理等请求热路径读快照而非重读 config.yaml）
+	// 对齐 Python: _team_evolution_enabled (team_manager.py:2013)
+	teamEvolutionEnabled map[string]bool
+
 	// 事件广播回调，由 adapter 层注入（将事件广播到 channel waiters）
 	// 对齐 Python: _broadcast_event(channel_id, session_id, event)
 	onEventBroadcast func(channelID, sessionID string, event map[string]any)
-
-	// code member 配置回调，由 adapter 层注入（code 模式 team member 配置）
-	// 对齐 Python: customizer 内 from interface_code import configure_code_team_member_agent（延迟 import）
-	codeMemberConfigurer CodeMemberConfigurer
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -131,9 +131,6 @@ var (
 	// defaultOnEventBroadcast 事件广播默认回调。
 	// 对齐 Python: 模块级函数 _broadcast_event（TeamManager 直接调用）。
 	defaultOnEventBroadcast func(channelID, sessionID string, event map[string]any)
-	// defaultCodeMemberConfigurer code member 配置默认回调。
-	// 对齐 Python: customizer 闭包内延迟 import 的 configure_code_team_member_agent。
-	defaultCodeMemberConfigurer CodeMemberConfigurer
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -141,15 +138,13 @@ var (
 // NewTeamManager 创建新的 TeamManager 实例。
 // 对齐 Python: TeamManager.__init__
 //
-// 实例创建时从包级默认回调继承 onEventBroadcast / codeMemberConfigurer——
-// Python 对应用模块级可直接调用的 _broadcast_event 与闭包内延迟 import 的
-// configure_code_team_member_agent；Go 因循环依赖（team → adapter → team）
+// 实例创建时从包级默认回调继承 onEventBroadcast——
+// Python 对应用模块级可直接调用的 _broadcast_event；Go 因循环依赖（team → adapter → team）
 // 改为包级注册，创建时一次性拷入实例字段，此后字段只读。
 func NewTeamManager() *TeamManager {
-	broadcast, configurer := snapshotTeamCallbackDefaults()
+	broadcast := snapshotTeamCallbackDefaults()
 	return &TeamManager{
 		onEventBroadcast:        broadcast,
-		codeMemberConfigurer:    configurer,
 		teamAgents:              make(map[string]*agent.TeamAgent),
 		runnerTeamAgents:        make(map[string]*agent.TeamAgent),
 		teamMonitors:            make(map[string]TeamMonitorHandler),
@@ -161,31 +156,23 @@ func NewTeamManager() *TeamManager {
 		teamLiveRails:           make(map[string][]LiveRailEntry),
 		teamSkillSyncTargets:    make(map[string]SkillSyncTarget),
 		teamEvolutionWatchers:   make(map[string]context.CancelFunc),
+		teamEvolutionEnabled:    make(map[string]bool),
 	}
 }
 
 // RegisterTeamCallbackDefaults 注册 TeamManager 的默认运行时回调。
-// 对齐 Python: _broadcast_event 为模块级函数、configure_code_team_member_agent
-// 在 customizer 闭包内延迟 import——两者对任意 TeamManager 实例恒可用。
+// 对齐 Python: _broadcast_event 为模块级函数，对任意 TeamManager 实例恒可用。
 // Go 因循环依赖改为由 adapter 包在 init() 时注册一次，NewTeamManager 继承。
 // 仅允许在进程初始化阶段调用（adapter 包 init），运行期不再变更，
-// 因此两个默认值写入后对所有实例只读，无并发写读竞态。
+// 因此默认值写入后对所有实例只读，无并发写读竞态。
+// 偏差（c8 收尾）：原第二形参 codeMemberConfigurer 随 customizer 链删除
+//（上游 configure_code_team_member_agent 死链，见 IMPLEMENTATION_PLAN 15.16c 行）。
 func RegisterTeamCallbackDefaults(
 	broadcast func(channelID, sessionID string, event map[string]any),
-	configurer CodeMemberConfigurer,
 ) {
 	teamCallbackDefaultsMu.Lock()
 	defer teamCallbackDefaultsMu.Unlock()
 	defaultOnEventBroadcast = broadcast
-	defaultCodeMemberConfigurer = configurer
-}
-
-// SetCodeMemberConfigurer 设置 code member 配置回调（由 adapter 层注入）。
-// 对齐 Python: build_agent_customizer 内延迟 import configure_code_team_member_agent——
-// Go 因循环依赖（team → adapter → team）改为注入回调，回调 nil 时 warning 跳过
-// （对齐 Python import 失败 except 跳过语义）。
-func (m *TeamManager) SetCodeMemberConfigurer(fn CodeMemberConfigurer) {
-	m.codeMemberConfigurer = fn
 }
 
 // GetTeamManager 获取指定 channel 的 TeamManager 实例（懒创建）。
@@ -339,12 +326,12 @@ func (m *TeamManager) GetTeamAgent(sessionID string) *agent.TeamAgent {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // snapshotTeamCallbackDefaults 读取包级默认回调的一致快照。
-// 对齐 Python: 模块级 _broadcast_event 与 customizer 内延迟 import 的函数
-// 对任意 TeamManager 实例恒可用；Go 用一次加锁读取保证成对值不撕裂。
-func snapshotTeamCallbackDefaults() (func(channelID, sessionID string, event map[string]any), CodeMemberConfigurer) {
+// 对齐 Python: 模块级 _broadcast_event 对任意 TeamManager 实例恒可用；
+// Go 用一次加锁读取保证值完整。
+func snapshotTeamCallbackDefaults() func(channelID, sessionID string, event map[string]any) {
 	teamCallbackDefaultsMu.RLock()
 	defer teamCallbackDefaultsMu.RUnlock()
-	return defaultOnEventBroadcast, defaultCodeMemberConfigurer
+	return defaultOnEventBroadcast
 }
 
 // displayStr 将 string 转为日志展示字符串（空字符串时返回 "<nil>"）。

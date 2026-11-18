@@ -2,130 +2,29 @@ package team
 
 import (
 	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"reflect"
-	"sort"
+	"fmt"
 	"strings"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	agentteamsmodels "github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
-	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentCustomizer Agent 定制器函数类型。
-// S-01: 全项目唯一类型定义在 agent_teams/schema 包（依赖最底层），
-// 此处保留类型别名供 team 包内使用，签名一致：ctx + error + memberName string。
+// S-01: 全项目唯一类型定义在 agent_teams/schema 包（依赖最底层）。
 type AgentCustomizer = atschema.AgentCustomizer
 
-// CodeMemberConfigurer code 模式 team member 配置回调（由 adapter 层注入）。
-// 对齐 Python: configure_code_team_member_agent(agent, *, parent_agent, skill_manager,
-// member_name, role, session_id, channel_id, project_dir, runtime_language,
-// force_english_runtime_prompt) (interface_code.py L1301)
-//
-// skillManager 为成员独立 SkillManager（步骤 b 构造），可能为 nil。
-// runtimeLanguage 为空串表示 None（Python 语义：非 team-plan leader 不传语言）。
-type CodeMemberConfigurer func(
-	ctx context.Context,
-	agent interfaces.DeepAgentInterface,
-	parentAgent interfaces.DeepAgentInterface,
-	skillManager *skillruntime.SkillManager,
-	memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-	forceEnglishRuntimePrompt bool,
-)
-
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
-// 对齐 Python: TeamManager.get_enriched_team_spec(session_id, deep_agent, ...) (team_manager.py L354-381)
-//
-// Python 步骤：
-//
-//	Python: 1. config_base = get_config()
-//	Python: 2. await self._ensure_postgresql_for_leader(config_base)
-//	Python: 3. spec = self._load_team_spec(session_id)
-//	Python: 4. self._apply_session_scoped_team_name(spec, session_id=session_id)
-//	Python: 5. self.apply_team_plan_mode(spec, request_metadata=)
-//	Python: 6. spec.agent_customizer = self.build_agent_customizer(...)
-//
-// S-03: 对齐 Python——get_enriched_team_spec 不调用 sync_team_identity_metadata；
-// 身份同步仅在 runtime_ready 处理路径（adapter 层 SyncTeamIdentityMetadata，
-// 含 activationKind 守卫）执行，原此处的无守卫调用已删除。
-func (m *TeamManager) GetEnrichedTeamSpec(
-	ctx context.Context,
-	sessionID string,
-	deepAgent interfaces.DeepAgentInterface,
-	requestID string,
-	channelID string,
-	requestMetadata map[string]any,
-) *atschema.TeamAgentSpec {
-	// 步骤 1-2: 加载 spec + PG 编排
-	// Go 差异：configBase 由 loadTeamSpec 内部获取或调用方注入
-	// 步骤 2: _ensure_postgresql_for_leader
-	// 对齐 Python: config_base = get_config(); await self._ensure_postgresql_for_leader(config_base)
-	if cfgMap, err := teamLoadConfig(); err == nil {
-		EnsurePostgresqlForLeader(ctx, cfgMap)
-	} else {
-		logger.Warn(logComponent).Err(err).
-			Msg("GetEnrichedTeamSpec: load config for PG check failed")
-	}
-	spec, specErr := loadTeamSpec(sessionID)
-	if specErr != nil {
-		// M-04: 对齐 Python raise 传播——配置错误（如非法端口）显式暴露给调用方
-		logger.Error(logComponent).Str("session_id", sessionID).Err(specErr).
-			Msg("GetEnrichedTeamSpec: loadTeamSpec failed")
-		return nil
-	}
-	if spec == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec returned nil, using default spec")
-		s := atschema.NewTeamAgentSpec()
-		spec = &s
-	}
-
-	// 步骤 3: 应用 session 作用域 team name
-	m.applySessionScopedTeamName(spec, sessionID)
-
-	// 步骤 4: 应用 team plan mode
-	m.ApplyTeamPlanMode(spec, requestMetadata)
-
-	// 步骤 5: 构建 agent customizer 并设置到 spec
-	customizer := m.BuildAgentCustomizer(spec, deepAgent, sessionID, requestID, channelID, requestMetadata)
-	if customizer != nil {
-		spec.AgentCustomizer = customizer
-	}
-
-	// 步骤 6: enrich seed 生产段（15.16c）。
-	// 对齐 Python: enrich_team_spec_for_swarm 的 context 构造段
-	//（assembly.py:456-541；活跃调用点 get_swarm_enriched_team_spec
-	// team_manager.py:1958-2033——偏差 D-15.16-c8：该 Python 方法未移植，
-	// 接线在 Go 活跃 leader 路径，mode/project_dir 按
-	// team_manager.py:2421-2426 的提取语义从 request_metadata 取）。
-	swarm.EnrichTeamSpecForSwarmSeed(spec, swarm.SeedParamsFromRequestMetadata(sessionID, requestMetadata))
-
-	logger.Info(logComponent).
-		Str("session_id", sessionID).
-		Str("team_name", spec.TeamName).
-		Bool("has_customizer", spec.AgentCustomizer != nil).
-		Msg("GetEnrichedTeamSpec completed")
-
-	return spec
-}
 
 // ApplyTeamPlanMode 应用 team plan mode。
 // 对齐 Python: TeamManager.apply_team_plan_mode(spec, *, request_metadata)
@@ -147,120 +46,127 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 	}
 }
 
-// BuildAgentCustomizer 构建 agent customizer 闭包。
-// 对齐 Python: TeamManager.build_agent_customizer(spec, deep_agent, session_id, ...) (L557-967)
+// GetSwarmEnrichedTeamSpec 基于 provider 装配构建团队 spec（无父 DeepAgent）。
+// 对齐 Python: TeamManager.get_swarm_enriched_team_spec (team_manager.py:1958-2077)
 //
-// 闭包六步（各步骤独立 panic 恢复 + warning，对齐 Python 各步骤独立 try/except）：
+// 成员能力全部来自共享配置源（enrich_team_spec_for_swarm），不再继承
+// 预构建的单 agent。偏差 D-15.16-c8 收尾：本方法是 Go 侧 seed 生产与
+// enrich 的唯一接线点（旧 GetEnrichedTeamSpec 路径已随本批删除——上游
+// get_enriched_team_spec 已被 provider 装配路径整体替代，build_agent_customizer
+// 链上游同删）。
 //
-//	a. 继承能力卡
-//	b. 技能同步（copy member skills + sync team skills + write skills_state）
-//	c. code adapter 配置（parent adapter mode == "code" 时注入回调）
-//	d. build_member_rails + 白名单 AddRail + 三类 rail 注册
-//	e. 注册 TeamRailContext（leader）
-//	f. 注册 member runtime tools（cron 11.10、SendFile 10.6.24b 已回填）
+// Python 步骤：
 //
-// 差异说明：Python L948-959 的 rail_manager 扩展 rail 循环，Go 无 get_rail_manager
-// 对应物（扩展 rail 加载机制属 10.5.7 ExtensionLoader 延后），空操作。
-// S-19: 与 DeepAdapter.loadUserRails 是同一缺口——Python 用 importlib 动态执行
-// 用户手写的 extensions/<name>/rail.py，Go 无等价能力（语言边界），需另立设计。
-func (m *TeamManager) BuildAgentCustomizer(
-	spec *atschema.TeamAgentSpec,
-	deepAgent interfaces.DeepAgentInterface,
+//	Python: 1. config_base = get_config()（:2009）
+//	Python: 2. self._team_evolution_enabled[session_id] = get_skill_evolution_enabled(config_base)（:2013）
+//	Python: 3. await self._ensure_postgresql_for_leader(config_base)（:2014）
+//	Python: 4. spec, has_binding = self._load_session_team_spec(...)（:2015）
+//	Python: 5. if not has_binding: self._apply_session_scoped_team_name(spec, session_id)（:2018-2019）
+//	Python: 6. self.apply_team_plan_mode(spec, request_metadata=)（:2021）
+//	Python: 7. enrich_team_spec_for_swarm(spec, ...)（:2023-2033）
+//	Python: 8. swarmflow_config 三段（:2035-2052）⤴️swarmflow 章节挂账
+//	Python: 9. dispatch_mode 段（:2053-2059）
+//	Python: 10. bootstrap_mode 段 + framework/scheduled 组合校验（:2060-2076）
+//
+// 挂账（IMPLEMENTATION_PLAN 15.16c 行登记）：
+//   - 步骤 4 的 binding store / session model selection 恢复段 ⤴️server runtime 章节
+//     （Go 暂按 has_binding=false 语义：恒 applySessionScopedTeamName）
+//   - 步骤 8 swarmflow_config 段 ⤴️swarmflow 章节
+//   - agent_group_name 形参 ⤴️15.16e
+//   - dispatch_mode/bootstrap_mode 的 session 级 resolver（_resolve_session_team_*）
+//     ⤴️25.2 调度模式章节（当前由调用方显式传参，空串=None 语义）
+func (m *TeamManager) GetSwarmEnrichedTeamSpec(
+	ctx context.Context,
 	sessionID string,
+	mode string,
+	projectDir string,
+	trustedDirs []string,
 	requestID string,
+	userID string,
 	channelID string,
 	requestMetadata map[string]any,
-) AgentCustomizer {
-	if spec == nil || deepAgent == nil {
-		return nil
+	dispatchMode string,
+	bootstrapMode string,
+) (*atschema.TeamAgentSpec, error) {
+	// 步骤 1-2: 配置加载 + 演进开关记账（:2009/:2013）
+	configBase, err := teamLoadConfig()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("session_id", sessionID).
+			Msg("GetSwarmEnrichedTeamSpec: load config failed")
+		configBase = nil
+	}
+	m.mu.Lock()
+	m.teamEvolutionEnabled[sessionID] = config.SkillEvolutionEnabled(configBase)
+	m.mu.Unlock()
+
+	// 步骤 3: leader PG 编排（:2014）
+	EnsurePostgresqlForLeader(ctx, configBase)
+
+	// 步骤 4-5: spec 加载 + session 作用域 team name（:2015-2019）。
+	// binding/model_selection 恢复段 ⤴️server runtime 章节，暂按无绑定语义。
+	spec, specErr := loadTeamSpec(sessionID, configBase)
+	if specErr != nil {
+		// 对齐 Python raise 沿调用链传播（_load_team_spec 无 try/except）
+		logger.Error(logComponent).Str("session_id", sessionID).Err(specErr).
+			Msg("GetSwarmEnrichedTeamSpec: loadTeamSpec failed")
+		return nil, specErr
+	}
+	if spec == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Msg("loadTeamSpec returned nil, using default spec")
+		s := atschema.NewTeamAgentSpec()
+		spec = &s
+	}
+	m.applySessionScopedTeamName(spec, sessionID)
+
+	// 步骤 6: team plan mode（:2021）
+	m.ApplyTeamPlanMode(spec, requestMetadata)
+
+	// 步骤 7: provider 装配 enrich——context 构造段（:2023-2033；assembly.py:456-541）。
+	// rails 目录注册 ⤵️15.7/15.8、成员 spec 重写/mcp/agent_group ⤵️15.16e（D-15.16-c3）。
+	params := swarm.SeedParamsFromRequestMetadata(sessionID, requestMetadata)
+	params.Mode = mode
+	if projectDir != "" {
+		params.ProjectDir = projectDir
+	}
+	params.TrustedDirs = trustedDirs
+	params.RequestID = requestID
+	params.UserID = userID
+	params.ChannelID = channelID
+	if enrichErr := swarm.EnrichTeamSpecForSwarmSeed(spec, params); enrichErr != nil {
+		logger.Error(logComponent).Str("session_id", sessionID).Err(enrichErr).
+			Msg("GetSwarmEnrichedTeamSpec: enrich seed failed")
+		return nil, enrichErr
 	}
 
-	// ── 前置解析（对齐 Python build_agent_customizer 闭包捕获变量 L567-579）──
-	globalSkillsDir := workspace.AgentSkillsDir()
-	globalSkillsStatePath := filepath.Join(globalSkillsDir, "skills_state.json")
-	resolvedChannel := channelID
-	if resolvedChannel == "" {
-		resolvedChannel = "default"
-	}
-	resolvedModelName := GetDefaultModelName(nil)
+	// 步骤 8: swarmflow_config 三段（:2035-2052）⤴️swarmflow 章节挂账
 
-	// team shared workspace（spec.Workspace.RootPath 回退 TeamHome/team-workspace）
-	teamWsRoot := ""
-	if spec.Workspace != nil && spec.Workspace.RootPath != "" {
-		teamWsRoot = spec.Workspace.RootPath
-	} else {
-		teamWsRoot = filepath.Join(agentteams.TeamHome(spec.TeamName), "team-workspace")
-	}
-	teamWsSkillsDir := filepath.Join(teamWsRoot, "skills")
-	teamTrajectoryRegistry := trajectory.NewInMemoryTrajectoryRegistry()
-
-	capturedRequestID := requestID
-	capturedRequestMetadata := requestMetadata
-	mgr := m
-
-	// ── customizer 闭包（对齐 Python L727-965）──
-	return func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error {
-		logger.Info(logComponent).
-			Str("channel", resolvedChannel).
-			Str("member_name", memberName).
-			Str("role", role).
-			Msg("[TeamManager] customizer called")
-
-		// member workspace 解析（对齐 L738-750）
-		memberDeepConfig := agent.DeepConfig()
-		var agentWsRootPath string
-		if memberDeepConfig != nil && memberDeepConfig.Workspace != nil {
-			agentWsRootPath = memberDeepConfig.Workspace.RootPath
-			logger.Debug(logComponent).Str("workspace_root_path", agentWsRootPath).
-				Msg("[TeamManager] member workspace resolved")
-		} else {
-			logger.Warn(logComponent).
-				Msg("[TeamManager] agent deep_config.workspace is None")
+	// 步骤 9: dispatch_mode 段（:2053-2059）：非空才覆盖；非 scheduled 时
+	// 任务验证、成员互信消息与子任务拆分全部关闭。
+	if dispatchMode != "" {
+		spec.DispatchMode = dispatchMode
+		if dispatchMode != "scheduled" {
+			spec.EnableTaskVerification = false
+			spec.EnableMemberMessaging = false
+			spec.MaxSubtaskDepth = 0
 		}
-
-		// parent 项目目录解析（对齐 L751-768）
-		parentAdapterMode := strings.ToLower(deepAgent.UapswarmAdapterMode())
-		parentProjectDir := firstNonEmpty(
-			deepAgent.UapswarmProjectDir(),
-			deepAgent.UapswarmCodeProjectDir(),
-			parentWorkspaceRootPath(deepAgent),
-		)
-		if parentProjectDir != "" && memberDeepConfig != nil {
-			agent.SetUapswarmProjectDir(parentProjectDir)
-		}
-
-		// ── 步骤 a：能力卡继承（对齐 L772-786）──
-		stepAInheritAbilities(agent, deepAgent)
-
-		// ── 步骤 b：技能同步（对齐 L788-827）──
-		memberSkillManager := stepBSyncSkills(spec, agent, memberName, role,
-			agentWsRootPath, globalSkillsDir, globalSkillsStatePath, teamWsSkillsDir)
-
-		// ── 步骤 c：code adapter 配置（对齐 L829-868）──
-		if parentAdapterMode == "code" {
-			stepCConfigureCodeMember(mgr, ctx, agent, deepAgent, memberSkillManager,
-				memberName, role, sessionID, resolvedChannel, parentProjectDir,
-				spec, capturedRequestMetadata)
-		}
-
-		// ── 步骤 d：member rails 构造与注册（对齐 L870-947）──
-		stepDMemberRails(mgr, agent, spec, memberName, role,
-			resolvedChannel, resolvedModelName, teamWsRoot, teamWsSkillsDir,
-			teamTrajectoryRegistry, globalSkillsDir, sessionID)
-
-		// ── 步骤 e：TeamRailContext（leader）（对齐 L932-945）──
-		stepERegisterRailContext(mgr, agent, spec, memberName, role,
-			resolvedChannel, resolvedModelName, teamWsRoot, teamWsSkillsDir,
-			teamTrajectoryRegistry, sessionID)
-
-		// Python L948-959 rail_manager 扩展 rail 循环：Go 无对应机制（10.5.7 延后），空操作
-		// （S-19 语言边界：Python 动态执行用户 .py rail，Go 无等价能力）
-
-		// ── 步骤 f：member runtime tools（cron 11.10、SendFile 10.6.24b 已回填）──
-		mgr.RegisterMemberRuntimeTools(agent, sessionID, &capturedRequestID, &resolvedChannel, capturedRequestMetadata)
-
-		return nil
 	}
+
+	// 步骤 10: bootstrap_mode 段（:2060-2076）：非空才覆盖；framework
+	// 必须搭配 scheduled dispatch，组合非法在请求边界直接拒绝（:2071-2076）。
+	if bootstrapMode != "" {
+		spec.BootstrapMode = bootstrapMode
+	}
+	if spec.BootstrapMode == "framework" && spec.DispatchMode != "scheduled" {
+		// 对齐 Python :2071-2076 内联 raise（消息形状见 Python 原文；
+		// spec 构造期同语义校验见 blueprint.validateBootstrapMode）
+		return nil, fmt.Errorf(
+			"team_bootstrap_mode='framework' requires scheduled dispatch (effective dispatch_mode=%q)",
+			spec.DispatchMode)
+	}
+
+	return spec, nil
 }
 
 // RegisterMemberRuntimeTools 注册成员运行时工具（CronRuntimeBridge + SendFileToolkit）。
@@ -525,479 +431,6 @@ func poolEntryToMap(entry *agentteamsmodels.ModelPoolEntry) map[string]any {
 	}
 }
 
-// stepAInheritAbilities 步骤 a：能力卡继承。
-// 对齐 Python L772-786：FilterInheritableAbilityCards → existingAbilityIds 去重 → Add。
-func stepAInheritAbilities(agent, deepAgent interfaces.DeepAgentInterface) {
-	defer recoverStep("inherit abilities")
-	inheritableCards := FilterInheritableAbilityCards(deepAgent)
-	existingAbilityIDs := map[string]bool{}
-	for _, ability := range agent.AbilityManager().List() {
-		existingAbilityIDs[ability.AbilityID()] = true
-	}
-	addedCount := 0
-	for _, card := range inheritableCards {
-		if existingAbilityIDs[card.ID] {
-			logger.Debug(logComponent).Str("ability", card.Name).
-				Msg("[TeamManager] Ability already exists, skipped")
-			continue
-		}
-		agent.AbilityManager().Add(card)
-		existingAbilityIDs[card.ID] = true
-		addedCount++
-	}
-	logger.Info(logComponent).
-		Int("added", addedCount).
-		Int("total", len(existingAbilityIDs)).
-		Msg("[TeamManager] Added inheritable abilities")
-}
-
-// stepBSyncSkills 步骤 b：技能同步（五函数主流程）。
-// 对齐 Python L788-827。返回成员 SkillManager（可能 nil）。
-func stepBSyncSkills(spec *atschema.TeamAgentSpec, agent interfaces.DeepAgentInterface,
-	memberName, role, agentWsRootPath, globalSkillsDir, globalSkillsStatePath, teamWsSkillsDir string) *skillruntime.SkillManager {
-
-	var memberSkillManager *skillruntime.SkillManager
-	if agentWsRootPath == "" {
-		// 对齐 Python：member_workspace 为 None 时跳过步骤 b 剩余部分
-		logger.Warn(logComponent).
-			Str("member_name", memberName).
-			Msg("[TeamManager] member workspace is None, skipping skill sync")
-		return nil
-	}
-	defer recoverStep("skill sync")
-
-	memberWorkspaceRoot := agentWsRootPath
-	memberSkillsDir := filepath.Join(memberWorkspaceRoot, "skills")
-
-	// 解析 skills_configured / selected_skills
-	skillsConfigured, selectedSkills := resolveMemberSkills(spec, memberName, role)
-
-	// 技能复制主流程（对齐 L799-808 try/except）
-	func() {
-		defer recoverStep("skill copy")
-		if err := os.MkdirAll(memberSkillsDir, 0o755); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Msg("[TeamManager] skill copy failed")
-			return
-		}
-		if skillsConfigured && len(selectedSkills) > 0 {
-			copyMemberConfiguredSkills(memberSkillsDir, selectedSkills, globalSkillsDir)
-		}
-		syncSkillsDir(teamWsSkillsDir, memberSkillsDir)
-		writeMemberSkillState(memberSkillsDir, globalSkillsStatePath)
-	}()
-
-	// 成员 SkillManager（对齐 L810-813）
-	func() {
-		defer recoverStep("member SkillManager setup")
-		memberSkillManager = skillruntime.NewSkillManager(memberWorkspaceRoot)
-	}()
-
-	// MemberSkillToolkitRail 挂载（对齐 L815-827）
-	func() {
-		defer recoverStep("MemberSkillToolkitRail setup")
-		agent.AddRail(NewMemberSkillToolkitRail(memberWorkspaceRoot))
-		logger.Info(logComponent).Str("workspace", memberWorkspaceRoot).
-			Msg("[TeamManager] MemberSkillToolkitRail queued for member workspace")
-	}()
-	return memberSkillManager
-}
-
-// stepCConfigureCodeMember 步骤 c：code adapter 配置（注入回调）。
-// 对齐 Python L829-868：延迟 import configure_code_team_member_agent + except 跳过。
-func stepCConfigureCodeMember(mgr *TeamManager, ctx context.Context,
-	agent, deepAgent interfaces.DeepAgentInterface, memberSkillManager *skillruntime.SkillManager,
-	memberName, role, sessionID, resolvedChannel, parentProjectDir string,
-	spec *atschema.TeamAgentSpec, requestMetadata map[string]any) {
-
-	defer recoverStep("code team member adapter setup")
-	configurer := mgr.codeMemberConfigurer
-	if configurer == nil {
-		// 对齐 Python: except Exception → warning 跳过
-		logger.Warn(logComponent).
-			Str("member_name", memberName).
-			Str("role", role).
-			Msg("[TeamManager] code member configurer not injected, skipping code team member adapter setup")
-		return
-	}
-
-	// team_plan 判定（对齐 L835-848）
-	requestMode := ""
-	if requestMetadata != nil {
-		if raw, ok := requestMetadata["mode"].(string); ok {
-			requestMode = strings.TrimSpace(strings.ToLower(raw))
-		}
-	}
-	roleName := strings.TrimSpace(strings.ToLower(role))
-	teamPlanEnabled := requestMode == "team.plan" || spec.EnableTeamPlan
-	isTeamPlanLeader := teamPlanEnabled && roleName == "leader"
-	teamPlanRuntimeLanguage := ""
-	if isTeamPlanLeader {
-		// spec.Language 回退 config preferred_language 默认 "zh"
-		lang := spec.Language
-		if lang == "" {
-			lang = configPreferredLanguage()
-		}
-		teamPlanRuntimeLanguage = lang
-	}
-
-	configurer(ctx, agent, deepAgent, memberSkillManager,
-		memberName, role, sessionID, resolvedChannel, parentProjectDir,
-		teamPlanRuntimeLanguage, !isTeamPlanLeader)
-}
-
-// stepDMemberRails 步骤 d：member rails 构造与注册。
-// 对齐 Python L870-947：BuildMemberRails → 白名单过滤 AddRail → 三类注册。
-func stepDMemberRails(mgr *TeamManager, agent interfaces.DeepAgentInterface,
-	spec *atschema.TeamAgentSpec, memberName, role, resolvedChannel, resolvedModelName,
-	teamWsRoot, teamWsSkillsDir string, teamTrajectoryRegistry trajectory.TrajectorySource,
-	globalSkillsDir, sessionID string) {
-
-	defer recoverStep("build_member_rails")
-
-	teamID := spec.TeamName
-	teamWorkspace := &TeamWorkspaceInfo{
-		RootDir:            &teamWsRoot,
-		SkillsDir:          &teamWsSkillsDir,
-		TeamID:             &teamID,
-		Config:             loadConfigForRails(),
-		TrajectoryRegistry: teamTrajectoryRegistry,
-	}
-
-	memberRails := BuildMemberRails(
-		&MemberInfo{
-			AgentName: agentCardName(agent, "team_member"),
-			ModelName: resolvedModelName,
-			Role:      &role,
-		},
-		&RuntimeInfo{Channel: resolvedChannel},
-		teamWorkspace,
-	)
-
-	var teamSkillRail *evolution.TeamSkillEvolutionRail
-	var teamSkillCreateRail *evolution.TeamSkillCreateRail
-	for _, rail := range memberRails {
-		railTypeName := reflect.TypeOf(rail).Elem().Name()
-		if railWhitelist[railTypeName] {
-			agent.AddRail(rail)
-			// TeamSkillEvolutionRail/TeamSkillCreateRail 需注册 live rail（热更新反注册用）
-			switch r := rail.(type) {
-			case *evolution.TeamSkillEvolutionRail:
-				GetTeamManager(resolvedChannel).RegisterTeamLiveRail(sessionID, agent, r)
-			case *evolution.TeamSkillCreateRail:
-				GetTeamManager(resolvedChannel).RegisterTeamLiveRail(sessionID, agent, r)
-			}
-		} else {
-			logger.Debug(logComponent).Str("rail", railTypeName).
-				Msg("[TeamManager] Skipping non-whitelisted rail")
-		}
-		switch r := rail.(type) {
-		case *evolution.TeamSkillEvolutionRail:
-			teamSkillRail = r
-		case *evolution.SkillEvolutionRail:
-			GetTeamManager(resolvedChannel).RegisterTeamMemberSkillEvolutionRail(sessionID, r)
-		case *evolution.TeamSkillCreateRail:
-			teamSkillCreateRail = r
-		}
-	}
-	logger.Info(logComponent).Int("count", len(memberRails)).
-		Msg("[TeamManager] Added rails for team member")
-
-	// TeamSkillEvolutionRail 注册（审批/同步用，对齐 L912-926）
-	if teamSkillRail != nil {
-		tm := GetTeamManager(resolvedChannel)
-		tm.RegisterTeamSkillRail(sessionID, teamSkillRail)
-		tm.RegisterTeamSkillSyncTarget(sessionID, teamWsSkillsDir, globalSkillsDir)
-		logger.Info(logComponent).
-			Str("skills_dir", teamWsSkillsDir).
-			Str("sync_target", globalSkillsDir).
-			Msg("[TeamManager] TeamSkillEvolutionRail mounted on leader")
-	}
-	if teamSkillCreateRail != nil {
-		GetTeamManager(resolvedChannel).RegisterTeamSkillCreateRail(sessionID, teamSkillCreateRail)
-	}
-}
-
-// stepERegisterRailContext 步骤 e：注册 TeamRailContext（仅 leader）。
-// 对齐 Python L932-945。
-func stepERegisterRailContext(mgr *TeamManager, agent interfaces.DeepAgentInterface,
-	spec *atschema.TeamAgentSpec, memberName, role, resolvedChannel, resolvedModelName,
-	teamWsRoot, teamWsSkillsDir string, teamTrajectoryRegistry trajectory.TrajectorySource,
-	sessionID string) {
-
-	if role != "leader" {
-		return
-	}
-	defer recoverStep("register_team_rail_context")
-
-	teamID := spec.TeamName
-	teamWorkspace := &TeamWorkspaceInfo{
-		RootDir:            &teamWsRoot,
-		SkillsDir:          &teamWsSkillsDir,
-		TeamID:             &teamID,
-		Config:             loadConfigForRails(),
-		TrajectoryRegistry: teamTrajectoryRegistry,
-	}
-	GetTeamManager(resolvedChannel).RegisterTeamRailContext(sessionID, &TeamRailMountContext{
-		Agent: agent,
-		MemberInfo: &MemberInfo{
-			AgentName: agentCardName(agent, "team_member"),
-			ModelName: resolvedModelName,
-			Role:      &role,
-		},
-		Runtime:       &RuntimeInfo{Channel: resolvedChannel},
-		TeamWorkspace: teamWorkspace,
-	})
-}
-
-// resolveMemberSkills 解析成员配置的技能列表。
-// 对齐 Python resolve_member_skills (L591-603)：
-// member_name → role → leader 回退查找 spec.Agents；Skills 为空时返回 (false, [])。
-func resolveMemberSkills(spec *atschema.TeamAgentSpec, memberName, role string) (bool, []string) {
-	memberSpec := resolveMemberSpec(spec, memberName, role)
-	if memberSpec == nil {
-		return false, []string{}
-	}
-	if memberSpec.Skills == nil {
-		return false, []string{}
-	}
-	selected := make([]string, 0, len(memberSpec.Skills))
-	for _, s := range memberSpec.Skills {
-		if trimmed := strings.TrimSpace(s); trimmed != "" {
-			selected = append(selected, trimmed)
-		}
-	}
-	return true, selected
-}
-
-// resolveMemberSpec 解析成员规格。
-// 对齐 Python resolve_member_spec (L581-589)：
-// member_name 命中 → role 命中 → leader 回退。
-func resolveMemberSpec(spec *atschema.TeamAgentSpec, memberName, role string) *atschema.DeepAgentSpec {
-	if spec.Agents == nil {
-		return nil
-	}
-	if memberName != "" {
-		if s, ok := spec.Agents[memberName]; ok {
-			return &s
-		}
-	}
-	if role != "" {
-		if s, ok := spec.Agents[role]; ok {
-			return &s
-		}
-	}
-	if s, ok := spec.Agents["leader"]; ok {
-		return &s
-	}
-	return nil
-}
-
-// copyMemberConfiguredSkills 复制成员配置的技能到成员技能目录。
-// 对齐 Python copy_member_configured_skills (L605-638)：
-// global 目录中 SKILL.md 有效且在 selected 集合 → 复制（dest 已存在跳过）→ missing warning。
-func copyMemberConfiguredSkills(memberSkillsDir string, selectedSkills []string, globalSkillsDir string) {
-	if info, err := os.Stat(globalSkillsDir); err != nil || !info.IsDir() {
-		logger.Warn(logComponent).Str("global_skills_dir", globalSkillsDir).
-			Msg("[TeamManager] global_skills_dir does not exist")
-		return
-	}
-	selectedSet := map[string]bool{}
-	for _, s := range selectedSkills {
-		selectedSet[s] = true
-	}
-	if err := os.MkdirAll(memberSkillsDir, 0o755); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamManager] mkdir member_skills_dir failed")
-		return
-	}
-	copiedCount := 0
-	entries, err := os.ReadDir(globalSkillsDir)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamManager] readdir global_skills_dir failed")
-		return
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		skillMD := filepath.Join(globalSkillsDir, entry.Name(), "SKILL.md")
-		if _, err := os.Stat(skillMD); err != nil {
-			continue
-		}
-		if !selectedSet[entry.Name()] {
-			continue
-		}
-		dest := filepath.Join(memberSkillsDir, entry.Name())
-		if _, err := os.Stat(dest); err == nil {
-			continue
-		}
-		if err := copyTreeMerge(filepath.Join(globalSkillsDir, entry.Name()), dest); err != nil {
-			logger.Warn(logComponent).Err(err).Str("skill", entry.Name()).
-				Msg("[TeamManager] copy skill to member workspace failed")
-			continue
-		}
-		copiedCount++
-		logger.Info(logComponent).Str("skill", entry.Name()).
-			Msg("[TeamManager] Copied skill to member workspace")
-	}
-
-	// missing 集合 warning
-	existingNames := map[string]bool{}
-	if entries, err := os.ReadDir(memberSkillsDir); err == nil {
-		for _, e := range entries {
-			if e.IsDir() {
-				existingNames[e.Name()] = true
-			}
-		}
-	}
-	missing := make([]string, 0)
-	for name := range selectedSet {
-		if !existingNames[name] {
-			missing = append(missing, name)
-		}
-	}
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		logger.Warn(logComponent).Strs("missing", missing).
-			Msg("[TeamManager] configured skills not found in global dir")
-	}
-	logger.Info(logComponent).Int("count", copiedCount).
-		Msg("[TeamManager] Total configured skills copied to member")
-}
-
-// buildMemberSkillState 构建成员技能状态（对齐 Python build_member_skill_state L640-716）。
-// 读全局 skills_state.json → NormalizeMarketplaces → installed_plugins/local_skills
-// 按 member 目录实际 SKILL.md 过滤 + 补全（project source 条目）。
-func buildMemberSkillState(memberSkillsDir, globalSkillsStatePath string) map[string]any {
-	state := map[string]any{
-		"marketplaces":      []any{},
-		"installed_plugins": []any{},
-		"local_skills":      []any{},
-	}
-	if data, err := os.ReadFile(globalSkillsStatePath); err == nil {
-		var loaded map[string]any
-		if jsonErr := json.Unmarshal(data, &loaded); jsonErr == nil {
-			for k, v := range loaded {
-				state[k] = v
-			}
-		}
-	} else {
-		logger.Warn(logComponent).Err(err).
-			Msg("[TeamManager] failed to load global skills_state.json")
-	}
-
-	if raw, ok := state["marketplaces"].([]any); ok {
-		normalized := skillruntime.NormalizeMarketplaces(raw)
-		converted := make([]any, 0, len(normalized))
-		for _, m := range normalized {
-			converted = append(converted, m)
-		}
-		state["marketplaces"] = converted
-	}
-
-	// member 目录实际技能名（SKILL.md 有效）
-	actualSkillNames := make([]string, 0)
-	entries, err := os.ReadDir(memberSkillsDir)
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			if _, err := os.Stat(filepath.Join(memberSkillsDir, e.Name(), "SKILL.md")); err == nil {
-				actualSkillNames = append(actualSkillNames, e.Name())
-			}
-		}
-	}
-	sort.Strings(actualSkillNames)
-	actualSkillSet := map[string]bool{}
-	for _, n := range actualSkillNames {
-		actualSkillSet[n] = true
-	}
-
-	// installed_plugins 过滤
-	installedPlugins := make([]any, 0)
-	if rawList, ok := state["installed_plugins"].([]any); ok {
-		for _, item := range rawList {
-			plugin, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			pluginName := strings.TrimSpace(mapStrField(plugin, "name"))
-			if pluginName == "" || !actualSkillSet[pluginName] {
-				continue
-			}
-			installedPlugins = append(installedPlugins, plugin)
-		}
-	}
-
-	// local_skills 过滤
-	localSkills := make([]any, 0)
-	if rawList, ok := state["local_skills"].([]any); ok {
-		for _, item := range rawList {
-			localSkill, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			skillName := strings.TrimSpace(mapStrField(localSkill, "name"))
-			if skillName == "" || !actualSkillSet[skillName] {
-				continue
-			}
-			localSkills = append(localSkills, localSkill)
-		}
-	}
-
-	// 补全缺失（project source 条目）
-	existingPluginNames := map[string]bool{}
-	for _, item := range installedPlugins {
-		if plugin, ok := item.(map[string]any); ok {
-			existingPluginNames[strings.TrimSpace(mapStrField(plugin, "name"))] = true
-		}
-	}
-	existingLocalNames := map[string]bool{}
-	for _, item := range localSkills {
-		if localSkill, ok := item.(map[string]any); ok {
-			existingLocalNames[strings.TrimSpace(mapStrField(localSkill, "name"))] = true
-		}
-	}
-	for _, skillName := range actualSkillNames {
-		if !existingPluginNames[skillName] {
-			installedPlugins = append(installedPlugins, map[string]any{
-				"name": skillName, "marketplace": "", "version": "",
-				"commit": "", "source": "project", "installed_at": "",
-			})
-		}
-		if !existingLocalNames[skillName] {
-			localSkills = append(localSkills, map[string]any{
-				"name":   skillName,
-				"origin": filepath.Join(memberSkillsDir, skillName),
-				"source": "project",
-			})
-		}
-	}
-
-	state["installed_plugins"] = installedPlugins
-	state["local_skills"] = localSkills
-	return state
-}
-
-// writeMemberSkillState 写成员 skills_state.json。
-// 对齐 Python write_member_skill_state (L718-725)。
-func writeMemberSkillState(memberSkillsDir, globalSkillsStatePath string) {
-	stateFile := filepath.Join(memberSkillsDir, "skills_state.json")
-	state := buildMemberSkillState(memberSkillsDir, globalSkillsStatePath)
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamManager] marshal member skills_state failed")
-		return
-	}
-	if err := os.WriteFile(stateFile, data, 0o644); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamManager] write member skills_state failed")
-		return
-	}
-	logger.Info(logComponent).Str("state_file", stateFile).
-		Msg("[TeamManager] Wrote member skills_state.json")
-}
-
 // recoverStep 步骤级 panic 恢复（对齐 Python 各步骤独立 try/except 吞错）。
 func recoverStep(stepName string) {
 	if r := recover(); r != nil {
@@ -1014,48 +447,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-// parentWorkspaceRootPath 解析 parent agent 的 workspace 根路径（可能为空）。
-// 对齐 Python L754-767 的 parent_workspace.root_path 回退。
-func parentWorkspaceRootPath(deepAgent interfaces.DeepAgentInterface) string {
-	cfg := deepAgent.DeepConfig()
-	if cfg == nil || cfg.Workspace == nil {
-		return ""
-	}
-	return cfg.Workspace.RootPath
-}
-
-// configPreferredLanguage 读取 config preferred_language（默认 "zh"）。
-// 对齐 Python: get_config().get("preferred_language", "zh")
-func configPreferredLanguage() string {
-	cfgMap, err := teamLoadConfig()
-	if err != nil {
-		return "zh"
-	}
-	if lang, ok := cfgMap["preferred_language"].(string); ok && lang != "" {
-		return lang
-	}
-	return "zh"
-}
-
-// loadConfigForRails 为 rails 构造加载完整 config（对齐 Python get_config()）。
-func loadConfigForRails() map[string]any {
-	cfgMap, err := teamLoadConfig()
-	if err != nil {
-		return map[string]any{}
-	}
-	return cfgMap
-}
-
-// agentCardName 读取 agent card name（回退默认值）。
-// 对齐 Python: getattr(agent.card, "name", "team_member")
-func agentCardName(agent interfaces.DeepAgentInterface, fallback string) string {
-	card := agent.Card()
-	if card == nil || card.Name == "" {
-		return fallback
-	}
-	return card.Name
 }
 
 // loadTeamSpec 加载团队配置并构建 TeamAgentSpec。

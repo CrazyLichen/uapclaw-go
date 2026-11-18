@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -16,7 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
@@ -24,8 +25,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // TestLoadTeamSpec_分布式normalize 缺依赖时回退 local（Go 恒无缺依赖，仅验证 normalize 路径）。
@@ -140,460 +139,6 @@ func TestParsePort_方法包装(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Task 13：BuildAgentCustomizer 六步回填 ────────────────────────────
-
-// fakeAbilityMgrForCustomizer customizer 测试用 AbilityManager（真实 Add/Remove/List 语义）。
-type fakeAbilityMgrForCustomizer struct {
-	abilities []cschema.Ability
-}
-
-// AddAbility 空实现（接口扩张后补齐，规则 10）。
-func (f *fakeAbilityMgrForCustomizer) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
-	if card == nil {
-		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
-	}
-	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
-}
-
-func (f *fakeAbilityMgrForCustomizer) Add(a cschema.Ability) agentschema.AddAbilityResult {
-	f.abilities = append(f.abilities, a)
-	return agentschema.AddAbilityResult{Added: true}
-}
-func (f *fakeAbilityMgrForCustomizer) AddMany(a []cschema.Ability) []agentschema.AddAbilityResult {
-	return nil
-}
-func (f *fakeAbilityMgrForCustomizer) Remove(name string) cschema.Ability {
-	for i, a := range f.abilities {
-		if a.AbilityName() == name {
-			removed := f.abilities[i]
-			f.abilities = append(f.abilities[:i], f.abilities[i+1:]...)
-			return removed
-		}
-	}
-	return nil
-}
-func (f *fakeAbilityMgrForCustomizer) RemoveMany(names []string) []cschema.Ability {
-	var removed []cschema.Ability
-	for _, n := range names {
-		if r := f.Remove(n); r != nil {
-			removed = append(removed, r)
-		}
-	}
-	return removed
-}
-func (f *fakeAbilityMgrForCustomizer) Get(name string) cschema.Ability {
-	for _, a := range f.abilities {
-		if a.AbilityName() == name {
-			return a
-		}
-	}
-	return nil
-}
-func (f *fakeAbilityMgrForCustomizer) List() []cschema.Ability { return f.abilities }
-func (f *fakeAbilityMgrForCustomizer) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]cschema.ToolInfoInterface, error) {
-	return nil, nil
-}
-func (f *fakeAbilityMgrForCustomizer) Execute(
-	ctx context.Context,
-	cbc *agentinterfaces.AgentCallbackContext,
-	toolCalls []*llmschema.ToolCall,
-	sess sessioninterfaces.SessionFacade,
-	tag string, parallelToolCalls bool) []agentschema.ExecuteResult {
-	return nil
-}
-func (f *fakeAbilityMgrForCustomizer) SetContextEngine(ce ceinterface.ContextEngine) {}
-func (f *fakeAbilityMgrForCustomizer) ReorderTools(orderedNames []string)            {}
-
-// has 检查能力名是否存在（测试辅助）。
-func (f *fakeAbilityMgrForCustomizer) has(name string) bool {
-	return f.Get(name) != nil
-}
-
-// fakeDeepAgentForCustomizer customizer 测试用 DeepAgentInterface fake。
-// 记录 AddRail 的 rail 列表 + 可配置 DeepConfig.Workspace / Card / AdapterMode。
-type fakeDeepAgentForCustomizer struct {
-	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
-	hinterfaces.UnimplementedDeepAgentInteraction
-	abilityMgr      *fakeAbilityMgrForCustomizer
-	rails           []agentinterfaces.AgentRail
-	deepConfig      *hschema.DeepAgentConfig
-	card            *agentschema.AgentCard
-	adapterMode     string
-	projectDir      string
-	setProjectDirOK string // 记录 SetUapswarmProjectDir 最后一次入参
-}
-
-func newCustomizerFakeAgent(name string) *fakeDeepAgentForCustomizer {
-	return &fakeDeepAgentForCustomizer{
-		abilityMgr: &fakeAbilityMgrForCustomizer{},
-		card:       agentschema.NewAgentCard(),
-	}
-}
-
-func (f *fakeDeepAgentForCustomizer) AbilityManager() agentinterfaces.AbilityManagerInterface {
-	return f.abilityMgr
-}
-func (f *fakeDeepAgentForCustomizer) ReactAgent() *agents.ReActAgent { return nil }
-func (f *fakeDeepAgentForCustomizer) Card() *agentschema.AgentCard   { return f.card }
-func (f *fakeDeepAgentForCustomizer) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) LoopController() controller.ControllerInterface {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) EventHandler() modules.EventHandler { return nil }
-func (f *fakeDeepAgentForCustomizer) LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
-	return &hschema.DeepAgentState{}
-}
-func (f *fakeDeepAgentForCustomizer) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
-func (f *fakeDeepAgentForCustomizer) IsInvokeActive() bool                 { return false }
-func (f *fakeDeepAgentForCustomizer) IsAutoInvokeScheduled() bool          { return false }
-func (f *fakeDeepAgentForCustomizer) SetAutoInvokeScheduled(bool)          {}
-func (f *fakeDeepAgentForCustomizer) ScheduleAutoInvokeOnSpawnDone(context.Context, string, float64) error {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) CreateSubagent(context.Context, string, string) (hinterfaces.DeepAgentInterface, error) {
-	return nil, nil
-}
-func (f *fakeDeepAgentForCustomizer) Invoke(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
-	return nil, nil
-}
-func (f *fakeDeepAgentForCustomizer) SwitchMode(sessioninterfaces.SessionFacade, string)       {}
-func (f *fakeDeepAgentForCustomizer) RestoreModeAfterPlanExit(sessioninterfaces.SessionFacade) {}
-func (f *fakeDeepAgentForCustomizer) GetPlanFilePath(sessioninterfaces.SessionFacade) string {
-	return ""
-}
-func (f *fakeDeepAgentForCustomizer) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {
-}
-func (f *fakeDeepAgentForCustomizer) FindRailsByType(...reflect.Type) []agentinterfaces.AgentRail {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) AddRail(r agentinterfaces.AgentRail) {
-	f.rails = append(f.rails, r)
-}
-func (f *fakeDeepAgentForCustomizer) UnregisterRail(context.Context, agentinterfaces.AgentRail) error {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) InnerInvokeOverride() func(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
-	return nil
-}
-func (f *fakeDeepAgentForCustomizer) UapswarmProjectDir() string { return f.projectDir }
-func (f *fakeDeepAgentForCustomizer) SetUapswarmProjectDir(d string) {
-	f.setProjectDirOK = d
-	f.projectDir = d
-}
-func (f *fakeDeepAgentForCustomizer) UapswarmCodeProjectDir() string     { return "" }
-func (f *fakeDeepAgentForCustomizer) SetUapswarmCodeProjectDir(string)   {}
-func (f *fakeDeepAgentForCustomizer) UapswarmAdapterMode() string        { return f.adapterMode }
-func (f *fakeDeepAgentForCustomizer) SetUapswarmAdapterMode(mode string) { f.adapterMode = mode }
-
-// 编译时验证
-var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForCustomizer)(nil)
-
-// TestSetCodeMemberConfigurer_注入与调用。
-func TestSetCodeMemberConfigurer_注入与调用(t *testing.T) {
-	mgr := NewTeamManager()
-	mgr.SetCodeMemberConfigurer(func(ctx context.Context, agent, parent hinterfaces.DeepAgentInterface,
-		skillManager *skillruntime.SkillManager, memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-		forceEnglishRuntimePrompt bool) {
-	})
-	if mgr.codeMemberConfigurer == nil {
-		t.Fatalf("configurer should be stored")
-	}
-}
-
-// TestCustomizer_能力卡继承 白名单工具去重添加。
-func TestCustomizer_能力卡继承(t *testing.T) {
-	mgr := NewTeamManager()
-	spec := &atschema.TeamAgentSpec{TeamName: "t"}
-	spec.Agents = map[string]atschema.DeepAgentSpec{}
-
-	parent := newCustomizerFakeAgent("parent")
-	visionCard := &tool.ToolCard{}
-	visionCard.Name = "vision"
-	visionCard.ID = "pv1"
-	parent.abilityMgr.abilities = append(parent.abilityMgr.abilities, visionCard)
-
-	member := newCustomizerFakeAgent("member")
-	memberWs := t.TempDir()
-	member.deepConfig = &hschema.DeepAgentConfig{
-		Workspace: &workspace.Workspace{RootPath: memberWs},
-	}
-
-	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess", "req-1", "web", nil)
-	if customizer == nil {
-		t.Fatalf("customizer should not be nil")
-	}
-	if err := customizer(context.Background(), member, "member-1", "teammate"); err != nil {
-		t.Fatalf("customizer failed: %v", err)
-	}
-	// vision 在白名单 → 应被继承
-	if !member.abilityMgr.has("vision") {
-		t.Fatalf("vision should be inherited")
-	}
-	// 隔离 UAPCLAW_DATA_DIR 防止技能同步写真实 ~/.uapclaw
-	// （customizer 步骤 b 会向 memberWs/skills 写文件，team_ws 指向 TeamHome 也可能写入）
-}
-
-// ──────────────────────────── Task 16：六步函数覆盖补齐 ────────────────────────────
-
-// TestCustomizer_六步全流程 leader 角色触发 stepD/stepE 注册路径。
-func TestCustomizer_六步全流程(t *testing.T) {
-	wsDir, _ := setupSkillTestEnv(t)
-	globalSkills := filepath.Join(wsDir, "agent", "workspace", "skills")
-	mkdir(t, filepath.Join(globalSkills, "shared-a"))
-	writeFile(t, filepath.Join(globalSkills, "shared-a", "SKILL.md"), "a")
-
-	mgr := NewTeamManager()
-	// spec 配置 leader 成员 + selected skills（触发 copyMemberConfiguredSkills）
-	leaderRole := "leader"
-	memberSpec := atschema.DeepAgentSpec{}
-	memberSpec.Skills = []string{"shared-a"}
-	spec := &atschema.TeamAgentSpec{
-		TeamName: "six-step-team",
-		Agents:   map[string]atschema.DeepAgentSpec{"member-1": memberSpec},
-	}
-
-	parent := newCustomizerFakeAgent("parent")
-	member := newCustomizerFakeAgent("member")
-	memberWs := filepath.Join(t.TempDir(), "member-ws")
-	member.deepConfig = &hschema.DeepAgentConfig{
-		Workspace: &workspace.Workspace{RootPath: memberWs},
-	}
-	parent.projectDir = "/tmp/parent-project"
-
-	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-6", "req-6", "web", map[string]any{"mode": "team.plan"})
-	if customizer == nil {
-		t.Fatalf("customizer should not be nil")
-	}
-	if err := customizer(context.Background(), member, "member-1", leaderRole); err != nil {
-		t.Fatalf("customizer failed: %v", err)
-	}
-
-	// 步骤 a+skill 同步后：成员 skills 目录应有 shared-a（copyMemberConfiguredSkills 路径）
-	if _, err := os.Stat(filepath.Join(memberWs, "skills", "shared-a", "SKILL.md")); err != nil {
-		t.Fatalf("member skills dir should contain shared-a: %v", err)
-	}
-	// skills_state.json 应存在（writeMemberSkillState 路径）
-	if _, err := os.Stat(filepath.Join(memberWs, "skills", "skills_state.json")); err != nil {
-		t.Fatalf("member skills_state.json should exist: %v", err)
-	}
-	// 步骤 d：member rails 应含白名单 rail（TeamWorkspaceReportPath/ContextProcessor 等）
-	if len(member.rails) == 0 {
-		t.Fatalf("member rails should be added via stepD")
-	}
-	// parent project dir 传递
-	if member.setProjectDirOK != "/tmp/parent-project" {
-		t.Fatalf("parent project dir should propagate, got %q", member.setProjectDirOK)
-	}
-	// leader 注册 TeamRailContext——stepD/stepE 内部经 GetTeamManager(resolvedChannel)
-	// 获取全局实例（channel="web"），断言需从同一全局实例读取
-	if GetTeamManager("web").GetTeamRailContext("sess-6") == nil {
-		t.Fatalf("leader should register TeamRailContext")
-	}
-}
-
-// TestCustomizer_code模式注入回调 stepC configurer 被调用。
-func TestCustomizer_code模式注入回调(t *testing.T) {
-	_, _ = setupSkillTestEnv(t)
-	mgr := NewTeamManager()
-	configured := false
-	var gotMemberName, gotRole, gotLang string
-	var gotForceEnglish bool
-	mgr.SetCodeMemberConfigurer(func(ctx context.Context, agent, parent hinterfaces.DeepAgentInterface,
-		skillManager *skillruntime.SkillManager, memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-		forceEnglishRuntimePrompt bool) {
-		configured = true
-		gotMemberName = memberName
-		gotRole = role
-		gotLang = runtimeLanguage
-		gotForceEnglish = forceEnglishRuntimePrompt
-	})
-
-	teammateRole := "teammate"
-	spec := &atschema.TeamAgentSpec{TeamName: "code-team"}
-	spec.Agents = map[string]atschema.DeepAgentSpec{}
-
-	parent := newCustomizerFakeAgent("parent")
-	parent.adapterMode = "code" // 触发步骤 c
-	member := newCustomizerFakeAgent("member")
-	memberWs := filepath.Join(t.TempDir(), "member-ws")
-	member.deepConfig = &hschema.DeepAgentConfig{
-		Workspace: &workspace.Workspace{RootPath: memberWs},
-	}
-
-	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-c", "req-c", "web", nil)
-	if err := customizer(context.Background(), member, "coder-1", teammateRole); err != nil {
-		t.Fatalf("customizer failed: %v", err)
-	}
-	if !configured {
-		t.Fatalf("code member configurer should be invoked for adapter mode code")
-	}
-	if gotMemberName != "coder-1" || gotRole != teammateRole {
-		t.Fatalf("configurer member/role mismatch: %q/%q", gotMemberName, gotRole)
-	}
-	// teammate 非 leader → forceEnglishRuntimePrompt = true（非 team-plan leader 恒 true）
-	if !gotForceEnglish {
-		t.Fatalf("non-leader should force english runtime prompt")
-	}
-	_ = gotLang
-}
-
-// TestCustomizer_code模式leader_teamPlan 语言解析。
-func TestCustomizer_code模式leader_teamPlan语言(t *testing.T) {
-	_, _ = setupSkillTestEnv(t)
-	mgr := NewTeamManager()
-	var gotLang string
-	var gotForceEnglish bool
-	mgr.SetCodeMemberConfigurer(func(ctx context.Context, agent, parent hinterfaces.DeepAgentInterface,
-		skillManager *skillruntime.SkillManager, memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-		forceEnglishRuntimePrompt bool) {
-		gotLang = runtimeLanguage
-		gotForceEnglish = forceEnglishRuntimePrompt
-	})
-
-	leaderRole := "leader"
-	spec := &atschema.TeamAgentSpec{TeamName: "lang-team", Language: "en"}
-	spec.Agents = map[string]atschema.DeepAgentSpec{}
-
-	parent := newCustomizerFakeAgent("parent")
-	parent.adapterMode = "code"
-	member := newCustomizerFakeAgent("member")
-	member.deepConfig = &hschema.DeepAgentConfig{
-		Workspace: &workspace.Workspace{RootPath: filepath.Join(t.TempDir(), "mw")},
-	}
-
-	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-l", "req-l", "web", map[string]any{"mode": "team.plan"})
-	if err := customizer(context.Background(), member, "leader-1", leaderRole); err != nil {
-		t.Fatalf("customizer failed: %v", err)
-	}
-	// team.plan 且 leader：runtimeLanguage 取 spec.Language="en"，forceEnglish=false
-	if gotLang != "en" {
-		t.Fatalf("team-plan leader language = %q, want en", gotLang)
-	}
-	if gotForceEnglish {
-		t.Fatalf("team-plan leader should not force english")
-	}
-}
-
-// TestResolveMemberSkills_三种查找路径。
-func TestResolveMemberSkills_三种查找路径(t *testing.T) {
-	byName := atschema.DeepAgentSpec{}
-	byName.Skills = []string{"s1"}
-	byRole := atschema.DeepAgentSpec{}
-	byRole.Skills = []string{"s2"}
-	leaderSpec := atschema.DeepAgentSpec{}
-	leaderSpec.Skills = []string{"s3"}
-	spec := &atschema.TeamAgentSpec{Agents: map[string]atschema.DeepAgentSpec{
-		"alice": byName, "worker": byRole, "leader": leaderSpec,
-	}}
-
-	// member_name 命中
-	ok, skills := resolveMemberSkills(spec, "alice", "")
-	if !ok || len(skills) != 1 || skills[0] != "s1" {
-		t.Fatalf("by-name lookup failed: %v %v", ok, skills)
-	}
-	// role 命中（member_name 不存在）
-	ok, skills = resolveMemberSkills(spec, "nobody", "worker")
-	if !ok || len(skills) != 1 || skills[0] != "s2" {
-		t.Fatalf("by-role lookup failed: %v %v", ok, skills)
-	}
-	// leader 回退
-	ok, skills = resolveMemberSkills(spec, "nobody", "nobody")
-	if !ok || len(skills) != 1 || skills[0] != "s3" {
-		t.Fatalf("leader fallback failed: %v %v", ok, skills)
-	}
-	// 无 Agents → false
-	ok, _ = resolveMemberSkills(&atschema.TeamAgentSpec{}, "x", "y")
-	if ok {
-		t.Fatalf("empty agents should return false")
-	}
-}
-
-// TestCopyMemberConfiguredSkills_缺失技能warning。
-func TestCopyMemberConfiguredSkills_缺失技能warning(t *testing.T) {
-	source := t.TempDir()
-	target := t.TempDir()
-	// global 有 skill-x；selected 含 skill-x + skill-missing
-	mkdir(t, filepath.Join(source, "skill-x"))
-	writeFile(t, filepath.Join(source, "skill-x", "SKILL.md"), "x")
-
-	copyMemberConfiguredSkills(target, []string{"skill-x", "skill-missing"}, source)
-
-	if _, err := os.Stat(filepath.Join(target, "skill-x", "SKILL.md")); err != nil {
-		t.Fatalf("skill-x should be copied: %v", err)
-	}
-	// skill-missing 不存在（missing warning 路径，不 panic 即通过）
-}
-
-// TestBuildMemberSkillState_补全project条目。
-func TestBuildMemberSkillState_补全project条目(t *testing.T) {
-	globalState := t.TempDir()
-	statePath := filepath.Join(globalState, "skills_state.json")
-	// global state 有 installed_plugins（含 name=extra 不在 member 目录 → 过滤掉）
-	writeFile(t, statePath, `{"marketplaces":[],"installed_plugins":[{"name":"extra"}],"local_skills":[]}`)
-
-	memberDir := t.TempDir()
-	mkdir(t, filepath.Join(memberDir, "real-skill"))
-	writeFile(t, filepath.Join(memberDir, "real-skill", "SKILL.md"), "r")
-
-	state := buildMemberSkillState(memberDir, statePath)
-	plugins, _ := state["installed_plugins"].([]any)
-	if len(plugins) != 1 {
-		t.Fatalf("installed_plugins should contain only real-skill, got %v", plugins)
-	}
-	plugin := plugins[0].(map[string]any)
-	if plugin["name"] != "real-skill" || plugin["source"] != "project" {
-		t.Fatalf("project entry mismatch: %v", plugin)
-	}
-	locals, _ := state["local_skills"].([]any)
-	if len(locals) != 1 || locals[0].(map[string]any)["name"] != "real-skill" {
-		t.Fatalf("local_skills project entry missing: %v", locals)
-	}
-}
-
-// TestCustomizer_无workspace跳过技能同步。
-func TestCustomizer_无workspace跳过技能同步(t *testing.T) {
-	_, _ = setupSkillTestEnv(t)
-	mgr := NewTeamManager()
-	spec := &atschema.TeamAgentSpec{TeamName: "no-ws-team"}
-	spec.Agents = map[string]atschema.DeepAgentSpec{}
-
-	parent := newCustomizerFakeAgent("parent")
-	member := newCustomizerFakeAgent("member")
-	// member.deepConfig 为 nil → agentWsRootPath 空 → 步骤 b 跳过
-
-	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-n", "", "", nil)
-	if err := customizer(context.Background(), member, "m", "teammate"); err != nil {
-		t.Fatalf("customizer failed: %v", err)
-	}
-	// 不 panic 即通过（warning 路径）
-}
-
-// TestGetEnrichedTeamSpec_装配链 覆盖 spec 加载+plan mode+customizer 装配。
-func TestGetEnrichedTeamSpec_装配链(t *testing.T) {
-	_, _ = setupSkillTestEnv(t)
-	mgr := NewTeamManager()
-
-	parent := newCustomizerFakeAgent("parent")
-	// configBase 无 team 段 → loadTeamSpec 走默认配置路径（内部 teamLoadConfig）
-	spec := mgr.GetEnrichedTeamSpec(context.Background(), "sess-ge", parent, "req-ge", "web", map[string]any{"mode": "team.plan"})
-	if spec == nil {
-		t.Fatalf("spec should not be nil")
-	}
-	// team.plan 模式启用 EnableTeamPlan
-	if !spec.EnableTeamPlan {
-		t.Fatalf("team.plan mode should enable team plan")
-	}
-	// deepAgent 非 nil → customizer 应已装配
-	if spec.AgentCustomizer == nil {
-		t.Fatalf("agent customizer should be set")
-	}
-}
-
 // TestApplyTeamPlanMode_显式teamPlan。
 func TestApplyTeamPlanMode_显式teamPlan(t *testing.T) {
 	mgr := NewTeamManager()
@@ -626,35 +171,6 @@ func TestApplySessionScopedTeamName_会话作用域(t *testing.T) {
 		t.Fatalf("scoped name should be idempotent, got %q", spec.TeamName)
 	}
 }
-
-// TestConfigPreferredLanguage_env隔离读config config.yaml 存在时读取 preferred_language，缺失回退 zh。
-func TestConfigPreferredLanguage_env隔离读config(t *testing.T) {
-	// 独立 workspace：UAPCLAW_DATA_DIR → 临时目录 + config/config.yaml
-	wsDir := t.TempDir()
-	t.Setenv("UAPCLAW_DATA_DIR", wsDir)
-	upath.ResetCache()
-	t.Cleanup(upath.ResetCache)
-
-	// 无 config.yaml（config 目录也未创建）→ Load 返回空 map → 回退 "zh"
-	if got := configPreferredLanguage(); got != "zh" {
-		t.Fatalf("missing config should default zh, got %q", got)
-	}
-
-	// 写入 preferred_language: en → 命中
-	cfgDir := filepath.Join(wsDir, "config")
-	mkdir(t, cfgDir)
-	writeFile(t, filepath.Join(cfgDir, "config.yaml"), "preferred_language: en\n")
-	if got := configPreferredLanguage(); got != "en" {
-		t.Fatalf("config preferred_language should be read, got %q", got)
-	}
-
-	// preferred_language 为空串 → 回退 zh
-	writeFile(t, filepath.Join(cfgDir, "config.yaml"), "preferred_language: \"\"\n")
-	if got := configPreferredLanguage(); got != "zh" {
-		t.Fatalf("empty preferred_language should default zh, got %q", got)
-	}
-}
-
 // ──────────────────────────── 11.10：RegisterMemberRuntimeTools cron 注册 ────────────────────────────
 
 // TestRegisterMemberRuntimeTools_cron工具注册 测试 cron 工具经 CronRuntimeBridge 注册到
@@ -849,6 +365,284 @@ func TestRegisterMemberRuntimeTools_SendFile重复注册前缀移除(t *testing.
 	}
 	if sfCount2 != 1 {
 		t.Errorf("二轮 send_file 卡应前缀移除后仍 1 张, got %d", sfCount2)
+	}
+}
+
+
+// ──────────────────────────── 团队测试通用 DeepAgent/AbilityManager fake ────────────────────────────
+// （原 Task13 customizer 测试桩，customizer 链删除后由 skill rail 测试族继续使用）
+
+// ──────────────────────────── Task 13：BuildAgentCustomizer 六步回填 ────────────────────────────
+
+// fakeAbilityMgrForCustomizer customizer 测试用 AbilityManager（真实 Add/Remove/List 语义）。
+type fakeAbilityMgrForCustomizer struct {
+	abilities []cschema.Ability
+}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityMgrForCustomizer) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
+func (f *fakeAbilityMgrForCustomizer) Add(a cschema.Ability) agentschema.AddAbilityResult {
+	f.abilities = append(f.abilities, a)
+	return agentschema.AddAbilityResult{Added: true}
+}
+func (f *fakeAbilityMgrForCustomizer) AddMany(a []cschema.Ability) []agentschema.AddAbilityResult {
+	return nil
+}
+func (f *fakeAbilityMgrForCustomizer) Remove(name string) cschema.Ability {
+	for i, a := range f.abilities {
+		if a.AbilityName() == name {
+			removed := f.abilities[i]
+			f.abilities = append(f.abilities[:i], f.abilities[i+1:]...)
+			return removed
+		}
+	}
+	return nil
+}
+func (f *fakeAbilityMgrForCustomizer) RemoveMany(names []string) []cschema.Ability {
+	var removed []cschema.Ability
+	for _, n := range names {
+		if r := f.Remove(n); r != nil {
+			removed = append(removed, r)
+		}
+	}
+	return removed
+}
+func (f *fakeAbilityMgrForCustomizer) Get(name string) cschema.Ability {
+	for _, a := range f.abilities {
+		if a.AbilityName() == name {
+			return a
+		}
+	}
+	return nil
+}
+func (f *fakeAbilityMgrForCustomizer) List() []cschema.Ability { return f.abilities }
+func (f *fakeAbilityMgrForCustomizer) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]cschema.ToolInfoInterface, error) {
+	return nil, nil
+}
+func (f *fakeAbilityMgrForCustomizer) Execute(
+	ctx context.Context,
+	cbc *agentinterfaces.AgentCallbackContext,
+	toolCalls []*llmschema.ToolCall,
+	sess sessioninterfaces.SessionFacade,
+	tag string, parallelToolCalls bool) []agentschema.ExecuteResult {
+	return nil
+}
+func (f *fakeAbilityMgrForCustomizer) SetContextEngine(ce ceinterface.ContextEngine) {}
+func (f *fakeAbilityMgrForCustomizer) ReorderTools(orderedNames []string)            {}
+
+// has 检查能力名是否存在（测试辅助）。
+func (f *fakeAbilityMgrForCustomizer) has(name string) bool {
+	return f.Get(name) != nil
+}
+
+// fakeDeepAgentForCustomizer customizer 测试用 DeepAgentInterface fake。
+// 记录 AddRail 的 rail 列表 + 可配置 DeepConfig.Workspace / Card / AdapterMode。
+type fakeDeepAgentForCustomizer struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
+	abilityMgr      *fakeAbilityMgrForCustomizer
+	rails           []agentinterfaces.AgentRail
+	deepConfig      *hschema.DeepAgentConfig
+	card            *agentschema.AgentCard
+	adapterMode     string
+	projectDir      string
+	setProjectDirOK string // 记录 SetUapswarmProjectDir 最后一次入参
+}
+
+func newCustomizerFakeAgent(name string) *fakeDeepAgentForCustomizer {
+	return &fakeDeepAgentForCustomizer{
+		abilityMgr: &fakeAbilityMgrForCustomizer{},
+		card:       agentschema.NewAgentCard(),
+	}
+}
+
+func (f *fakeDeepAgentForCustomizer) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return f.abilityMgr
+}
+func (f *fakeDeepAgentForCustomizer) ReactAgent() *agents.ReActAgent { return nil }
+func (f *fakeDeepAgentForCustomizer) Card() *agentschema.AgentCard   { return f.card }
+func (f *fakeDeepAgentForCustomizer) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) LoopController() controller.ControllerInterface {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) EventHandler() modules.EventHandler { return nil }
+func (f *fakeDeepAgentForCustomizer) LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
+	return &hschema.DeepAgentState{}
+}
+func (f *fakeDeepAgentForCustomizer) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
+func (f *fakeDeepAgentForCustomizer) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForCustomizer) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForCustomizer) SetAutoInvokeScheduled(bool)          {}
+func (f *fakeDeepAgentForCustomizer) ScheduleAutoInvokeOnSpawnDone(context.Context, string, float64) error {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) CreateSubagent(context.Context, string, string) (hinterfaces.DeepAgentInterface, error) {
+	return nil, nil
+}
+func (f *fakeDeepAgentForCustomizer) Invoke(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+func (f *fakeDeepAgentForCustomizer) SwitchMode(sessioninterfaces.SessionFacade, string)       {}
+func (f *fakeDeepAgentForCustomizer) RestoreModeAfterPlanExit(sessioninterfaces.SessionFacade) {}
+func (f *fakeDeepAgentForCustomizer) GetPlanFilePath(sessioninterfaces.SessionFacade) string {
+	return ""
+}
+func (f *fakeDeepAgentForCustomizer) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {
+}
+func (f *fakeDeepAgentForCustomizer) FindRailsByType(...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) AddRail(r agentinterfaces.AgentRail) {
+	f.rails = append(f.rails, r)
+}
+func (f *fakeDeepAgentForCustomizer) UnregisterRail(context.Context, agentinterfaces.AgentRail) error {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) InnerInvokeOverride() func(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
+func (f *fakeDeepAgentForCustomizer) UapswarmProjectDir() string { return f.projectDir }
+func (f *fakeDeepAgentForCustomizer) SetUapswarmProjectDir(d string) {
+	f.setProjectDirOK = d
+	f.projectDir = d
+}
+func (f *fakeDeepAgentForCustomizer) UapswarmCodeProjectDir() string     { return "" }
+func (f *fakeDeepAgentForCustomizer) SetUapswarmCodeProjectDir(string)   {}
+func (f *fakeDeepAgentForCustomizer) UapswarmAdapterMode() string        { return f.adapterMode }
+func (f *fakeDeepAgentForCustomizer) SetUapswarmAdapterMode(mode string) { f.adapterMode = mode }
+
+// 编译时验证
+var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForCustomizer)(nil)
+
+// ──────────────────────────── c8 收尾：GetSwarmEnrichedTeamSpec ────────────────────────────
+
+// newSwarmSpecTestManager 独立数据目录 + 清理，供 swarm 路径单测使用。
+func newSwarmSpecTestManager(t *testing.T) (*TeamManager, string) {
+	t.Helper()
+	wsDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", wsDir)
+	upath.ResetCache()
+	t.Cleanup(upath.ResetCache)
+	return NewTeamManager(), wsDir
+}
+
+// TestGetSwarmEnrichedTeamSpec_dispatch段 覆盖 :2053-2059——非 scheduled 关闭验证/互信/子任务。
+func TestGetSwarmEnrichedTeamSpec_dispatch段(t *testing.T) {
+	mgr, _ := newSwarmSpecTestManager(t)
+	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-dispatch",
+		"team", "", nil, "req-1", "", "web",
+		map[string]any{"mode": "team"}, "autonomous", "")
+	if err != nil {
+		t.Fatalf("enrich failed: %v", err)
+	}
+	if spec.DispatchMode != "autonomous" {
+		t.Fatalf("dispatch_mode should be set, got %q", spec.DispatchMode)
+	}
+	if spec.EnableTaskVerification || spec.EnableMemberMessaging || spec.MaxSubtaskDepth != 0 {
+		t.Fatalf("autonomous dispatch should disable verification/messaging/depth: %+v", spec)
+	}
+}
+
+// TestGetSwarmEnrichedTeamSpec_dispatchScheduled 覆盖 scheduled 不动三开关。
+func TestGetSwarmEnrichedTeamSpec_dispatchScheduled(t *testing.T) {
+	mgr, _ := newSwarmSpecTestManager(t)
+	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sched-1",
+		"team", "", nil, "req-2", "", "web",
+		map[string]any{"mode": "team"}, "scheduled", "")
+	if err != nil {
+		t.Fatalf("enrich failed: %v", err)
+	}
+	// 对齐 Python :2053-2059：scheduled 分支不写三开关——与空 dispatch 的
+	// 基线 run 对比，两轮除 DispatchMode 外逐字段一致。
+	base, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sched-base",
+		"team", "", nil, "req-2b", "", "web",
+		map[string]any{"mode": "team"}, "", "")
+	if err != nil {
+		t.Fatalf("base enrich failed: %v", err)
+	}
+	if spec.EnableTaskVerification != base.EnableTaskVerification ||
+		spec.EnableMemberMessaging != base.EnableMemberMessaging ||
+		spec.MaxSubtaskDepth != base.MaxSubtaskDepth {
+		t.Fatalf("scheduled dispatch must not touch the three switches: got %+v vs base %+v",
+			spec, base)
+	}
+}
+
+// TestGetSwarmEnrichedTeamSpec_bootstrap组合校验 覆盖 :2071-2076——framework 必须搭配 scheduled。
+func TestGetSwarmEnrichedTeamSpec_bootstrap组合校验(t *testing.T) {
+	mgr, _ := newSwarmSpecTestManager(t)
+	_, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "bs-1",
+		"team", "", nil, "req-3", "", "web",
+		map[string]any{"mode": "team"}, "autonomous", "framework")
+	if err == nil || !strings.Contains(err.Error(), "framework") {
+		t.Fatalf("framework+autonomous should be rejected at request boundary, err=%v", err)
+	}
+	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "bs-2",
+		"team", "", nil, "req-4", "", "web",
+		map[string]any{"mode": "team"}, "scheduled", "framework")
+	if err != nil {
+		t.Fatalf("framework+scheduled should pass: %v", err)
+	}
+	if spec.BootstrapMode != "framework" {
+		t.Fatalf("bootstrap_mode should be set, got %q", spec.BootstrapMode)
+	}
+}
+
+// TestGetSwarmEnrichedTeamSpec_enrich接线 覆盖 :2023-2033——seed 生产挂链（D-15.16-c8）。
+func TestGetSwarmEnrichedTeamSpec_enrich接线(t *testing.T) {
+	mgr, _ := newSwarmSpecTestManager(t)
+	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-enrich",
+		"team", "/tmp/nonexistent-proj", nil, "req-5", "", "web",
+		map[string]any{"mode": "team"}, "", "")
+	if err != nil {
+		t.Fatalf("enrich failed: %v", err)
+	}
+	if spec.BuildContext == nil {
+		t.Fatal("build_context should be attached by enrich")
+	}
+	if len(spec.BuildContextSeed) == 0 {
+		t.Fatal("build_context_seed should be generated (assembly.py:540)")
+	}
+	if spec.BuildContextSeed["project_dir"] != "/tmp/nonexistent-proj" {
+		t.Fatalf("project_dir should travel in seed, got %v", spec.BuildContextSeed["project_dir"])
+	}
+	if bc, ok := spec.BuildContext.(*swarm.SwarmBuildContext); !ok || bc.TeamID == "" {
+		t.Fatal("build_context should be platform subclass with session-scoped team_id")
+	}
+}
+
+// TestGetSwarmEnrichedTeamSpec_演进开关记账 覆盖 :2013——config 快照写入 per-session 槽位。
+func TestGetSwarmEnrichedTeamSpec_演进开关记账(t *testing.T) {
+	mgr, wsDir := newSwarmSpecTestManager(t)
+	// 写入 config：react.evolution.skill_evolution = true（config.py:335-337 语义）
+	cfgDir := filepath.Join(wsDir, "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"),
+		[]byte("react:\n  evolution:\n    skill_evolution: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-evo",
+		"team", "", nil, "req-6", "", "web",
+		map[string]any{"mode": "team"}, "", ""); err != nil {
+		t.Fatalf("enrich failed: %v", err)
+	}
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	if !mgr.teamEvolutionEnabled["sess-evo"] {
+		t.Fatal("skill_evolution=true config should be snapshotted per session")
 	}
 }
 

@@ -319,9 +319,15 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			return
 		}
 
-		// 步骤 6: 获取 enriched team spec（对齐 Python L694-706——在 slash 命令后、
-		// is_first_request 分支前执行，两分支共用）
-		// Python: team_spec = await team_manager.get_enriched_team_spec(session_id, deep_agent, ...)
+		// 步骤 6: 获取 swarm enriched team spec（对齐 Python L694-706 位置语义——
+		// 在 slash 命令后、is_first_request 分支前执行，两分支共用）
+		// Python（现役路径）: team_spec = await team_manager.get_swarm_enriched_team_spec(
+		//   session_id=..., mode=..., project_dir=..., ...)（team_helpers.py:3515 调用点）
+		// 偏差 D-15.16-c8 收尾：旧 GetEnrichedTeamSpec（父 DeepAgent + customizer，
+		// 对齐上游已删的 get_enriched_team_spec 旧快照）已随本批删除，leader 主链
+		// 切 provider 装配路径。project_dir/trusted_dirs/user_id 的 adapter 侧解析
+		// 面（_request_trusted_dirs 等，team_helpers.py:3516-3527）⤴️adapter 章节；
+		// dispatch/bootstrap 的 session 级 resolver ⤴️25.2 调度章节——两者当前空值。
 		var requestMetadata map[string]any
 		if req.Metadata != nil {
 			requestMetadata = make(map[string]any, len(req.Metadata))
@@ -344,10 +350,16 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 				}
 			}
 		}
-		teamSpec := teamManager.GetEnrichedTeamSpec(ctx, sessionID, d.instance, req.RequestID, channelID, requestMetadata)
-		if teamSpec == nil {
-			logger.Error(logComponent).Str("session_id", sessionID).
-				Msg("processTeamMessageStream: GetEnrichedTeamSpec returned nil")
+		resolvedMode := ""
+		if raw, ok := requestMetadata["mode"].(string); ok {
+			resolvedMode = raw
+		}
+		teamSpec, teamSpecErr := teamManager.GetSwarmEnrichedTeamSpec(
+			ctx, sessionID, resolvedMode, "", nil,
+			req.RequestID, "", channelID, requestMetadata, "", "")
+		if teamSpecErr != nil || teamSpec == nil {
+			logger.Error(logComponent).Str("session_id", sessionID).Err(teamSpecErr).
+				Msg("processTeamMessageStream: GetSwarmEnrichedTeamSpec failed")
 			ch <- &agentschema.AgentResponseChunk{
 				RequestID: req.RequestID, ChannelID: channelID,
 				Payload:    map[string]any{"event_type": "chat.error", "error": "TeamAgent 创建失败：无法获取 team spec"},
@@ -704,7 +716,7 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 	// Python 步骤 2: 调用 Runner.run_agent_team_streaming
 	// Go 差异：Python 通过 Runner.run_agent_team_streaming(agent_team=team_spec, inputs=..., session=..., envs=..., stream_logger=lg)
 	// S-71(A1): Go 端走具体类型入口 RunTeamAgentStreaming——路由函数已删除，
-	// teamSpec 即 *atschema.TeamAgentSpec（GetEnrichedTeamSpec 返回类型）。
+	// teamSpec 即 *atschema.TeamAgentSpec（GetSwarmEnrichedTeamSpec 返回类型）。
 	streamCh, err := ateamruntime.RunTeamAgentStreaming(ctx, teamSpec.(*atschema.TeamAgentSpec), map[string]any{"query": initialQuery}, sessionID, lg)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("session_id", sessionID).
@@ -1326,7 +1338,7 @@ func teamSpecTeamName(teamSpec any) string {
 	if teamSpec == nil {
 		return ""
 	}
-	// T-19: 直接断言 *atschema.TeamAgentSpec——GetEnrichedTeamSpec 的实际返回类型。
+	// T-19: 直接断言 *atschema.TeamAgentSpec——GetSwarmEnrichedTeamSpec 的实际返回类型。
 	// 该结构体只有 TeamName 公开字段（无 GetTeamName()/TeamName() 方法），
 	// 原先两个接口分支均无实现者（死代码），导致 runtime_ready 事件缺 team_name 时
 	// 此兜底恒返回空串。Python 直接访问 team_spec.team_name 属性，无此间接层。

@@ -7,8 +7,6 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
@@ -375,47 +373,8 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 // team.NewTeamManager 创建实例时一次性继承到实例字段，运行期字段只读——
 // 这样避免了原先"每个 team 请求都向 TeamManager 重写回调"造成的并发写读竞态。
 func init() {
-	team.RegisterTeamCallbackDefaults(broadcastEvent, newTeamCodeMemberConfigurer())
+	team.RegisterTeamCallbackDefaults(broadcastEvent)
 	team.SetShutdownCleanupNoticePusher(newShutdownCleanupNoticePusher())
-}
-
-// newTeamCodeMemberConfigurer 构造 code mode member 配置回调。
-// 对齐 Python: customizer 闭包内 from interface_code import configure_code_team_member_agent
-// （每次调用新建 JiuwenClawCodeAdapter 实例）。
-func newTeamCodeMemberConfigurer() team.CodeMemberConfigurer {
-	return func(
-		ctx context.Context,
-		agent hinterfaces.DeepAgentInterface,
-		parentAgent hinterfaces.DeepAgentInterface,
-		skillManager *skillruntime.SkillManager,
-		memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-		forceEnglishRuntimePrompt bool,
-	) {
-		// 接口 → 具体类型断言（对齐 Python：configure 接收 DeepAgent 实例；
-		// 断言失败 warning 跳过，等价 Python except）
-		agentImpl, ok := agent.(*harness.DeepAgent)
-		if !ok {
-			logger.Warn(logComponent).
-				Str("member_name", memberName).
-				Str("role", role).
-				Msg("code member configurer: agent is not *harness.DeepAgent, skipping")
-			return
-		}
-		parentImpl, ok := parentAgent.(*harness.DeepAgent)
-		if !ok {
-			logger.Warn(logComponent).
-				Str("member_name", memberName).
-				Str("role", role).
-				Msg("code member configurer: parentAgent is not *harness.DeepAgent, skipping")
-			return
-		}
-		// Python: adapter = JiuwenClawCodeAdapter()（每次调用新建实例）
-		NewCodeAdapter().ConfigureTeamMemberAgent(
-			ctx, agentImpl, parentImpl, skillManager,
-			memberName, role, sessionID, channelID, projectDir, runtimeLanguage,
-			forceEnglishRuntimePrompt,
-		)
-	}
 }
 
 // newShutdownCleanupNoticePusher 构造 shutdown cleanup 通知推送回调。

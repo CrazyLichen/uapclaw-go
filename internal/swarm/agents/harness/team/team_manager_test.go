@@ -6,9 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -589,31 +587,24 @@ func TestLoadTeamSpec_显式nil默认spec(t *testing.T) {
 }
 
 // TestRegisterTeamCallbackDefaults_实例继承 验证包级默认回调在创建实例时被继承。
-// 对齐 Python: _broadcast_event 为模块级函数、configure_code_team_member_agent
-// 在 customizer 内延迟 import——任意 TeamManager 创建后即可用，无需逐请求注入。
+// 对齐 Python: _broadcast_event 为模块级函数——任意 TeamManager 创建后即可用，
+// 无需逐请求注入。
 func TestRegisterTeamCallbackDefaults_实例继承(t *testing.T) {
 	// 恢复原默认值，避免污染其他测试
-	origBroadcast, origConfigurer := snapshotTeamCallbackDefaults()
+	origBroadcast := snapshotTeamCallbackDefaults()
 	t.Cleanup(func() {
-		RegisterTeamCallbackDefaults(origBroadcast, origConfigurer)
+		RegisterTeamCallbackDefaults(origBroadcast)
 	})
 
 	broadcastCalled := false
 	RegisterTeamCallbackDefaults(
 		func(channelID, sessionID string, event map[string]any) { broadcastCalled = true },
-		func(context.Context, interfaces.DeepAgentInterface, interfaces.DeepAgentInterface,
-			*skillruntime.SkillManager, string, string, string, string, string, string, bool) {
-		},
 	)
 
 	mgr := NewTeamManager()
 	if mgr.onEventBroadcast == nil {
 		t.Fatal("NewTeamManager 应继承包级 onEventBroadcast 默认值")
 	}
-	if mgr.codeMemberConfigurer == nil {
-		t.Fatal("NewTeamManager 应继承包级 codeMemberConfigurer 默认值")
-	}
-
 	// 实例字段在创建后只读——调用即触发注册的回调，无需再次 Set
 	mgr.onEventBroadcast("ch", "sess", map[string]any{"event_type": "x"})
 	if !broadcastCalled {
@@ -623,17 +614,14 @@ func TestRegisterTeamCallbackDefaults_实例继承(t *testing.T) {
 
 // TestNewTeamManager_未注册默认为nil 验证未注册默认回调时字段为 nil（走既有 nil 兜底）。
 func TestNewTeamManager_未注册默认为nil(t *testing.T) {
-	origBroadcast, origConfigurer := snapshotTeamCallbackDefaults()
+	origBroadcast := snapshotTeamCallbackDefaults()
 	t.Cleanup(func() {
-		RegisterTeamCallbackDefaults(origBroadcast, origConfigurer)
+		RegisterTeamCallbackDefaults(origBroadcast)
 	})
-	RegisterTeamCallbackDefaults(nil, nil)
+	RegisterTeamCallbackDefaults(nil)
 
 	mgr := NewTeamManager()
 	if mgr.onEventBroadcast != nil {
 		t.Error("未注册默认回调时 onEventBroadcast 应为 nil")
-	}
-	if mgr.codeMemberConfigurer != nil {
-		t.Error("未注册默认回调时 codeMemberConfigurer 应为 nil")
 	}
 }
