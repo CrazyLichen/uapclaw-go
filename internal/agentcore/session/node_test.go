@@ -289,7 +289,7 @@ func TestNodeSessionFacade_Trace_走真实逻辑(t *testing.T) {
 
 	// 先触发 TraceComponentBegin 创建 span，否则 Trace 写入的 span 不存在
 	tUtils := tracer.TracerWorkflowUtils{}
-	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+	tUtils.TraceComponentBegin(context.Background(), ns, nil, nil)
 
 	// 调用 Trace
 	traceData := map[string]any{"step": "processing", "token_count": 42}
@@ -335,7 +335,7 @@ func TestNodeSessionFacade_TraceError_走真实逻辑(t *testing.T) {
 
 	// 先触发 TraceComponentBegin 创建 span
 	tUtils := tracer.TracerWorkflowUtils{}
-	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+	tUtils.TraceComponentBegin(context.Background(), ns, nil, nil)
 
 	// 调用 TraceError
 	testErr := fmt.Errorf("something went wrong")
