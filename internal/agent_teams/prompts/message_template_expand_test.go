@@ -116,7 +116,7 @@ func TestTaskLine_UpstreamBrief(t *testing.T) {
 		t.Errorf("无上游应返回空串: %q", got)
 	}
 	got := UpstreamBrief([]*database.TeamTaskBase{task}, "cn")
-	if !strings.HasPrefix(got, "- t1 · T · · bob · ok") || !strings.Contains(got, "view_task(action='note'") {
+	if !strings.HasPrefix(got, "- t1 · T · bob · ok") || !strings.Contains(got, "view_task(action='note'") {
 		t.Errorf("UpstreamBrief 应含 bullet 与收尾提示: %q", got)
 	}
 }
