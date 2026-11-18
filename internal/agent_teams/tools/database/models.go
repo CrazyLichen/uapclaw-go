@@ -96,6 +96,39 @@ type TeamTaskBase struct {
 	// 格式 [{"reviewer_id":"bob","type":"verifier"}]；空表示完成时直接 COMPLETED，
 	// 非空则完成后先进 IN_REVIEW 走验收门（F_59/F_62）
 	Reviewer *string `json:"reviewer,omitempty" gorm:"column:reviewer"`
+	// ReviewRound 评审轮计数（F_62）：随每次 IN_PROGRESS→IN_REVIEW 原子 +1，
+	// 被取代轮次的票自然作废（票行记录其所在轮）。0 = 从未进评审。
+	// Python: review_round: int = Field(default=0, nullable=False)（models.py L155）
+	ReviewRound int64 `json:"review_round" gorm:"column:review_round;not null;default:0"`
+	// MaxReviewRounds 每任务评审轮上限（F_62）：超限仍 fail 则升级 leader 而非
+	// 循环返工；nil 回落 TeamAgentSpec.default_max_review_rounds。
+	// Python: max_review_rounds: Optional[int]（models.py L160）
+	MaxReviewRounds *int64 `json:"max_review_rounds,omitempty" gorm:"column:max_review_rounds"`
+	// Summary 作者的一行完成摘要（F_119）：交付了什么、在哪。轻量渲染位
+	// （leader digest、上游简报）使用；存储完整，仅渲染时截断。随 note 一起在
+	// 任务离开其 assignee（reassign / reset）时清空。
+	// Python: summary: Optional[str]（models.py L165）
+	Summary *string `json:"summary,omitempty" gorm:"column:summary"`
+	// Note 作者完成备注（F_118 / D7）：member_complete_task(note=...) 写入的
+	// artifact 路径与关键决策。下游成员、reviewer 与 leader（view_task）可读；
+	// 事件永不携带。F_119 后是 summary 背后的完整细节。
+	// Python: note: Optional[str]（models.py L171）
+	Note *string `json:"note,omitempty" gorm:"column:note"`
+	// ParentTaskID 成员子任务（F_128）：拆分时创建者正在执行的任务。NULL =
+	// 顶层（leader 建的）任务。由工具从调用方的活跃任务写入，永不由模型写。
+	// Python: parent_task_id: Optional[str]（models.py L177）
+	ParentTaskID *string `json:"parent_task_id,omitempty" gorm:"column:parent_task_id"`
+	// CreatedBy 创建任务的成员（F_128）。审计/展示用——无权限或路由决策读它。
+	// NULL 表示 leader。
+	// Python: created_by: Optional[str]（models.py L181）
+	CreatedBy *string `json:"created_by,omitempty" gorm:"column:created_by"`
+	// ResumePending owner 停车等子任务时置位（F_128）；下一次 start 消费它
+	// （恢复而非重新开始），reassign / reset 清除，其后 start 是全新开始。
+	// Python: resume_pending: bool = Field(default=False, nullable=False)（models.py L185）
+	ResumePending bool `json:"resume_pending" gorm:"column:resume_pending;not null;default:0"`
+	// ParentRevision 子任务派生自的父任务 revision（F_129）。落后即"陈旧"信号。
+	// Python: parent_revision: int = Field(default=0, nullable=False)（models.py L196）
+	ParentRevision int64 `json:"parent_revision" gorm:"column:parent_revision;not null;default:0"`
 	// Revision 正文修订号，每次 title/content 编辑 +1（F_129）
 	// Python: revision: int = Field(default=0, nullable=False)（models.py L182）
 	Revision int64 `json:"revision" gorm:"column:revision;not null;default:0"`
@@ -123,6 +156,32 @@ type TeamTaskDependencyBase struct {
 	TeamName string `json:"team_name" gorm:"column:team_name"`
 	// Resolved 依赖是否已解决（上游完成/取消时标记为 true）
 	Resolved bool `json:"resolved" gorm:"column:resolved"`
+}
+
+// UnseenRevisionRow get_unseen_revisions 的行投影（F_129）。
+// Python: task_dao.py L723-752 的五元组 (task_id, status, assignee, resume_pending, revision)。
+type UnseenRevisionRow struct {
+	// TaskID 任务标识
+	TaskID string
+	// Status 任务状态
+	Status string
+	// Assignee 当前 assignee
+	Assignee string
+	// ResumePending 是否停在等待子任务的 BLOCKED 挂起态（F_128）
+	ResumePending bool
+	// Revision 当前 revision 号
+	Revision int64
+}
+
+// RetirableMemberRow list_retirable_members 的行投影（F_118）。
+// Python: member_dao.py L338-367 的 (member_name, status, lifetime) 三元组。
+type RetirableMemberRow struct {
+	// MemberName 成员名
+	MemberName string
+	// Status 成员状态（恒 READY，SQL 侧过滤）
+	Status string
+	// Lifetime 退役策略（options JSON 内）
+	Lifetime string
 }
 
 // NewTaskSpec 图变更管线中待插入的新任务规范。
@@ -168,6 +227,10 @@ type TeamMessageBase struct {
 	ToMemberName *string `json:"to_member_name,omitempty" gorm:"column:to_member_name"`
 	// Content 消息内容
 	Content string `json:"content" gorm:"column:content"`
+	// Meta 框架投递载荷（F_63 两阶段渲染）：调度 handoff 的信箱行 content
+	// 为空、meta 携带 template key + refs/params，投递时按当前任务行现场渲染。
+	// Python: meta: Optional[str]（message 模型，message_manager.py L66 meta=）
+	Meta *string `json:"meta,omitempty" gorm:"column:meta"`
 	// Timestamp 毫秒时间戳
 	Timestamp int64 `json:"timestamp" gorm:"column:timestamp"`
 	// Broadcast 是否广播消息

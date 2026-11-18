@@ -59,8 +59,16 @@ const (
     assignee     TEXT,
     updated_at   INTEGER NOT NULL DEFAULT 0,
     reviewer          TEXT,
+    review_round      INTEGER NOT NULL DEFAULT 0,
+    max_review_rounds INTEGER,
+    summary           TEXT,
+    note              TEXT,
+    parent_task_id    TEXT,
+    created_by        TEXT,
+    resume_pending    INTEGER NOT NULL DEFAULT 0,
     revision          INTEGER NOT NULL DEFAULT 0,
     observed_revision INTEGER NOT NULL DEFAULT 0,
+    parent_revision   INTEGER NOT NULL DEFAULT 0,
     change_notes      TEXT
 )`
 	// Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
@@ -79,6 +87,7 @@ const (
     from_member_name TEXT NOT NULL DEFAULT '',
     to_member_name   TEXT,
     content          TEXT NOT NULL DEFAULT '',
+    meta             TEXT,
     timestamp        INTEGER NOT NULL DEFAULT 0,
     broadcast        INTEGER NOT NULL DEFAULT 0,
     is_read          INTEGER DEFAULT NULL
