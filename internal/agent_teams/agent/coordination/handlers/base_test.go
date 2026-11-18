@@ -43,6 +43,7 @@ func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error {
 	f.deliverCalled = true
 	return nil
 }
+func (f *fakeHost) AutoStartMember(_ context.Context, _ string) bool { return true }
 func (f *fakeHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
 }
@@ -62,6 +63,7 @@ type fakeBP struct {
 
 func (f *fakeBP) Role() schema.TeamRole        { return f.role }
 func (f *fakeBP) DispatcherMemberName() string { return f.memberName }
+func (f *fakeBP) DispatcherSpec() *schema.TeamAgentSpec { return nil }
 func (f *fakeBP) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
 	return f.reliability
 }

@@ -28,6 +28,7 @@ func (f *fakeDispatcherHost) HasPendingInterrupt() bool                         
 func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                 { return nil }
 func (f *fakeDispatcherHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
 func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
+func (f *fakeDispatcherHost) AutoStartMember(_ context.Context, _ string) bool { return true }
 func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
 }
@@ -43,6 +44,7 @@ type fakeDispatcherBlueprint struct {
 
 func (f *fakeDispatcherBlueprint) Role() schema.TeamRole        { return f.role }
 func (f *fakeDispatcherBlueprint) DispatcherMemberName() string { return f.memberName }
+func (f *fakeDispatcherBlueprint) DispatcherSpec() *schema.TeamAgentSpec { return nil }
 func (f *fakeDispatcherBlueprint) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
 	return f.reliability
 }
