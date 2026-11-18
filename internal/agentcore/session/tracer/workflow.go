@@ -78,16 +78,28 @@ func (TracerWorkflowUtils) TraceWorkflowStart(ctx context.Context, session Workf
 	})
 }
 
-// TraceComponentBegin 追踪组件开始，对应 Python TracerWorkflowUtils.trace_component_begin。
-// 调用 TriggerWorkflow(TraceWFCallStart, parentNodeID=session.ParentID(), invokeID=session.ExecutableID(), sourceIDs=sourceIDs, metadata=组件元数据)。
-func (TracerWorkflowUtils) TraceComponentBegin(ctx context.Context, session WorkflowNodeSession, sourceIDs []string) {
+// TraceComponentBegin 追踪组件开始，对应 Python TracerWorkflowUtils.trace_component_begin
+// （workflow_tracer.py:61-76）。调用 TriggerWorkflow(TraceWFCallStart, parentNodeID=session.ParentID(),
+// invokeID=session.ExecutableID(), sourceIDs=sourceIDs, metadata=组件元数据)；
+// extraMetadata 非空时合并进组件元数据（过滤 None 值，Python metadata.update 推导式）。
+func (TracerWorkflowUtils) TraceComponentBegin(ctx context.Context, session WorkflowNodeSession,
+	sourceIDs []string, extraMetadata map[string]any) {
 	if session.Tracer() == nil {
 		return
+	}
+	metadata := getComponentMetadata(session)
+	// Python: if extra_metadata: metadata.update({k: v for k, v in extra_metadata.items() if v is not None})
+	if extraMetadata != nil {
+		for k, v := range extraMetadata {
+			if v != nil {
+				metadata[k] = v
+			}
+		}
 	}
 	session.Tracer().TriggerWorkflow(ctx, TraceWFCallStart, session.ParentID(), &TriggerParams{
 		InvokeID:  session.ExecutableID(),
 		SourceIDs: sourceIDs,
-		Metadata:  getComponentMetadata(session),
+		Metadata:  metadata,
 	})
 }
 

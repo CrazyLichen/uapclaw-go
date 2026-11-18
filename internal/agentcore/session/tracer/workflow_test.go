@@ -129,7 +129,7 @@ func TestTracerWorkflowUtils_TraceComponentBegin(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 	sourceIDs := []string{"src-001", "src-002"}
 
-	utils.TraceComponentBegin(context.Background(), session, sourceIDs)
+	utils.TraceComponentBegin(context.Background(), session, sourceIDs, nil)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -143,6 +143,30 @@ func TestTracerWorkflowUtils_TraceComponentBegin(t *testing.T) {
 	}
 }
 
+// TestTracerWorkflowUtils_TraceComponentBegin_extraMetadata 合并 extraMetadata 进组件元数据
+// （Python trace_component_begin extra_metadata 形参，workflow_tracer.py:67-69）。
+// Python Span.update（span.py:28-32）对 span 上不存在的属性静默跳过——extra_metadata
+// 仅能覆盖既有 span 字段，未知键丢弃；Go setWorkflowMetadata 的 switch+default 语义一致。
+func TestTracerWorkflowUtils_TraceComponentBegin_extraMetadata(t *testing.T) {
+	session := newFakeSession()
+	utils := TracerWorkflowUtils{}
+	originWorkflowID := session.WorkflowID()
+
+	utils.TraceComponentBegin(context.Background(), session, nil, map[string]any{
+		"WorkflowID":   "override-id", // 覆盖既有 span 字段（Python **metadata 展开 setattr 语义）
+		"custom_top_k": 5,             // span 无此字段 → Python hasattr 跳过 / Go default 忽略
+	})
+
+	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
+	if span == nil {
+		t.Fatal("TraceComponentBegin 未创建 workflow span")
+	}
+	if span.WorkflowID != "override-id" {
+		t.Errorf("extraMetadata 覆盖 WorkflowID = %q, 期望 override-id", span.WorkflowID)
+	}
+	_ = originWorkflowID
+}
+
 // TestTracerWorkflowUtils_TraceComponentInputs 测试追踪组件输入
 func TestTracerWorkflowUtils_TraceComponentInputs(t *testing.T) {
 	session := newFakeSession()
@@ -150,7 +174,7 @@ func TestTracerWorkflowUtils_TraceComponentInputs(t *testing.T) {
 	inputs := map[string]any{"prompt": "test"}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.TraceComponentInputs(context.Background(), session, inputs, true)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -169,7 +193,7 @@ func TestTracerWorkflowUtils_TraceComponentOutputs(t *testing.T) {
 	outputs := map[string]any{"answer": "result"}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.TraceComponentOutputs(context.Background(), session, outputs)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -187,7 +211,7 @@ func TestTracerWorkflowUtils_TraceComponentDone(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 
 	// 验证 span 存在
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -214,7 +238,7 @@ func TestTracerWorkflowUtils_Trace(t *testing.T) {
 	data := map[string]any{"step": "processing"}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.Trace(context.Background(), session, data)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -233,7 +257,7 @@ func TestTracerWorkflowUtils_TraceError(t *testing.T) {
 	testErr := errors.New("something went wrong")
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.TraceError(context.Background(), session, testErr)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -261,7 +285,7 @@ func TestTracerWorkflowUtils_Tracer为nil_静默返回(t *testing.T) {
 
 	// 所有方法在 Tracer 为 nil 时都应静默返回，不 panic
 	utils.TraceWorkflowStart(context.Background(), session, nil)
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.TraceComponentInputs(context.Background(), session, nil, true)
 	utils.TraceComponentOutputs(context.Background(), session, nil)
 	utils.TraceComponentDone(context.Background(), session)
@@ -279,7 +303,7 @@ func TestTracerWorkflowUtils_TraceComponentStreamInput(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 
 	// chunk 为 string 时应跳过
 	utils.TraceComponentStreamInput(context.Background(), session, "string chunk", true)
@@ -306,7 +330,7 @@ func TestTracerWorkflowUtils_TraceComponentStreamOutput(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 
 	// chunk 为 string 时应跳过
 	utils.TraceComponentStreamOutput(context.Background(), session, "string chunk")
@@ -334,7 +358,7 @@ func TestTracerWorkflowUtils_TraceComponentInteractiveInputs(t *testing.T) {
 	inputs := map[string]any{"user_input": "confirm"}
 
 	// 先触发 begin 以创建 span
-	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
 	utils.TraceComponentInteractiveInputs(context.Background(), session, inputs, true)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())

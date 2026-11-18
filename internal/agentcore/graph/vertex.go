@@ -303,6 +303,7 @@ func (v *Vertex) traceComponentBegin(ctx context.Context) {
 		return
 	}
 	// 组件可导出静态事实（top_k、数据源 id 等）到 trace span；基类钩子默认 None
+	var extraMetadata map[string]any
 	if hook, ok := v.executable.(interface{ TraceMetadata() map[string]any }); ok {
 		func() {
 			defer func() {
@@ -315,10 +316,12 @@ func (v *Vertex) traceComponentBegin(ctx context.Context) {
 						Msgf("trace_metadata() failed for node [%s]", v.nodeID)
 				}
 			}()
-			_ = hook.TraceMetadata() // 偏差 D-4：返回值暂不透传
+			extraMetadata = hook.TraceMetadata()
 		}()
 	}
-	tracer.TracerWorkflowUtils{}.TraceComponentBegin(ctx, v.nodeSession, nil)
+	// Python: extra_metadata 透传给 trace_component_begin（workflow_tracer.py:61），
+	// D-4 已回收：TracerWorkflowUtils.TraceComponentBegin 已增加 extraMetadata 形参
+	tracer.TracerWorkflowUtils{}.TraceComponentBegin(ctx, v.nodeSession, nil, extraMetadata)
 }
 
 // traceComponentDone 组件完成埋点（Python __trace_component_done__，vertex.py:848-851）
