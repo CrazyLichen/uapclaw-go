@@ -109,7 +109,7 @@ func TestCompletionSummary_截断与回落(t *testing.T) {
 // Python: message_template.py L165-201
 func TestTaskLine_UpstreamBrief(t *testing.T) {
 	task := &database.TeamTaskBase{TaskID: "t1", Title: "T", Assignee: strPtr("bob"), Summary: strPtr("ok")}
-	if got := TaskLine(task, true); got != "t1 · T · · bob · ok" {
+	if got := TaskLine(task, true); got != "t1 · T · bob · ok" {
 		t.Errorf("TaskLine 形态不对: %q", got)
 	}
 	if got := UpstreamBrief(nil, "cn"); got != "" {

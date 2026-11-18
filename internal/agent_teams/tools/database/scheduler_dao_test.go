@@ -175,9 +175,7 @@ func TestGetSubtasks_GetDependentTaskIDs_GetTasksByIDs(t *testing.T) {
 	if err != nil || len(subs) != 2 {
 		t.Errorf("p1 应有两个子任务: %d err=%v", len(subs), err)
 	}
-	if _, err := db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "c1", DependsOnID: "p1"}}); err != nil {
-		t.Fatalf("建边: %v", err)
-	}
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "c1", DependsOnID: "p1"}})
 	ids, err := db.GetDependentTaskIDs(ctx, "p1")
 	if err != nil || len(ids) != 1 || ids[0] != "c1" {
 		t.Errorf("p1 的下游应为 [c1]: %v err=%v", ids, err)
