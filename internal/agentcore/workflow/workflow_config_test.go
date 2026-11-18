@@ -1,8 +1,11 @@
 package workflow
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 )
 
@@ -20,7 +23,10 @@ func TestNewWorkflowSpec_默认值(t *testing.T) {
 
 // TestNodeSpec_默认值 对齐 Python NodeSpec Field 默认值
 func TestNodeSpec_默认值(t *testing.T) {
-	spec := NewNodeSpec()
+	spec, err := NewNodeSpec()
+	if err != nil {
+		t.Fatalf("默认构造不应报错: %v", err)
+	}
 	if spec.Abilities == nil || len(spec.Abilities) != 0 {
 		t.Fatal("Abilities 默认应为空列表")
 	}
@@ -34,9 +40,103 @@ func TestNodeSpec_默认值(t *testing.T) {
 
 // TestNodeSpec_Abilities字段 供 ActorManager 消费
 func TestNodeSpec_Abilities字段(t *testing.T) {
-	spec := NewNodeSpec()
+	spec, _ := NewNodeSpec()
 	spec.Abilities = []components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform}
 	if len(spec.Abilities) != 2 || spec.Abilities[0] != components.ComponentAbilityCollect {
 		t.Fatal("Abilities 读写失败")
+	}
+}
+
+// TestNewWorkflowConfig_默认值 card 必填 + spec 补建 + 深度默认 5
+func TestNewWorkflowConfig_默认值(t *testing.T) {
+	wfc, err := NewWorkflowConfig(&WorkflowCard{Version: "v1"})
+	if err != nil {
+		t.Fatalf("合法构造不应报错: %v", err)
+	}
+	if wfc.Spec == nil || wfc.Spec.Edges == nil {
+		t.Fatal("spec 为 nil 应补建空 spec（default_factory）")
+	}
+	if wfc.WorkflowMaxNestingDepth != 5 {
+		t.Fatalf("默认嵌套深度应 5, got %d", wfc.WorkflowMaxNestingDepth)
+	}
+	if wfc.Card.Version != "v1" {
+		t.Fatal("card 应原样保留")
+	}
+}
+
+// TestNewWorkflowConfig_校验拒绝 复刻 pydantic ValidationError 拒绝语义
+func TestNewWorkflowConfig_校验拒绝(t *testing.T) {
+	if _, err := NewWorkflowConfig(nil); err == nil {
+		t.Fatal("card nil 应 error（缺必填）")
+	}
+	if _, err := NewWorkflowConfig(&WorkflowCard{}, WithMaxNestingDepth(-1)); err == nil {
+		t.Fatal("depth -1 应 error（ge=0）")
+	}
+	if _, err := NewWorkflowConfig(&WorkflowCard{}, WithMaxNestingDepth(11)); err == nil {
+		t.Fatal("depth 11 应 error（le=10）")
+	}
+	wfc, err := NewWorkflowConfig(&WorkflowCard{}, WithMaxNestingDepth(0))
+	if err != nil || wfc.WorkflowMaxNestingDepth != 0 {
+		t.Fatalf("depth 0 是合法值: err=%v depth=%d", err, wfc.WorkflowMaxNestingDepth)
+	}
+}
+
+// TestNewWorkflowConfig_WithWorkflowSpec nil 补建 / 非 nil 保留
+func TestNewWorkflowConfig_WithWorkflowSpec(t *testing.T) {
+	wfc, _ := NewWorkflowConfig(&WorkflowCard{}, WithWorkflowSpec(nil))
+	if wfc.Spec == nil {
+		t.Fatal("显式 nil spec 应补建")
+	}
+	spec := NewWorkflowSpec()
+	spec.StartNodes = []string{"a"}
+	wfc2, _ := NewWorkflowConfig(&WorkflowCard{}, WithWorkflowSpec(spec))
+	if len(wfc2.Spec.StartNodes) != 1 {
+		t.Fatal("非 nil spec 应原样保留")
+	}
+}
+
+// TestNewNodeSpec_校验 max_retries ge=0 越界拒绝
+func TestNewNodeSpec_校验(t *testing.T) {
+	if _, err := NewNodeSpec(WithMaxRetries(-1)); err == nil {
+		t.Fatal("负 retries 应 error")
+	}
+}
+
+// TestNodeSpec_序列化键名 json tag 对齐 pydantic snake_case
+func TestNodeSpec_序列化键名(t *testing.T) {
+	name := "comp"
+	ns, _ := NewNodeSpec(WithMaxRetries(3))
+	ns.Name = &name
+	ns.IOConfigs = &CompIOConfig{InputsSchema: map[string]any{"x": "1"}}
+	bs, err := json.Marshal(ns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"io_configs"`, `"max_retries"`, `"timeout"`, `"name"`, `"abilities"`, `"stream_io_configs"`, `"exception_config"`} {
+		if !strings.Contains(string(bs), key) {
+			t.Fatalf("缺键 %s: %s", key, bs)
+		}
+	}
+}
+
+// TestWorkflowConfig_序列化键名 snake_case tag 对齐 pydantic
+func TestWorkflowConfig_序列化键名(t *testing.T) {
+	card := &WorkflowCard{Version: "v1"}
+	card.Name = "wf"
+	wfc, _ := NewWorkflowConfig(card, WithMaxNestingDepth(3))
+	bs, _ := json.Marshal(wfc)
+	for _, key := range []string{`"card"`, `"spec"`, `"workflow_max_nesting_depth"`} {
+		if !strings.Contains(string(bs), key) {
+			t.Fatalf("缺键 %s: %s", key, bs)
+		}
+	}
+}
+
+// TestCompIOConfig_Transformer可承载 any 槽（D-15-1：Dict | Transformer 无 Go 对应）
+func TestCompIOConfig_Transformer可承载(t *testing.T) {
+	io := &CompIOConfig{InputsSchema: utils.MessageTransformer(
+		func(m map[string]any) map[string]any { return m })}
+	if _, ok := io.InputsSchema.(utils.MessageTransformer); !ok {
+		t.Fatal("Transformer 应可放入 any 槽")
 	}
 }
