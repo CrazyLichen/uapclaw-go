@@ -52,6 +52,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
+	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
@@ -661,6 +663,10 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	// 修复 S-04: 对齐 Python _register_team_completion_callbacks()
 	// 在 DeepAgent 完全构建后、dispatcher 存在时注册 TeamSkillRail 的完成回调
 	a.registerTeamCompletionCallbacks()
+
+	// 25.1g: 对齐 Python _register_reliability_local_sink()（team_agent.py:783）
+	// leader 自检的可靠性 rail 绑到进程内异常 sink，绕过 messager self-filter
+	a.registerReliabilityLocalSink()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent config")
@@ -1567,6 +1573,39 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 	}
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
 		Msg("registerTeamCompletionCallbacks completed")
+}
+
+// registerReliabilityLocalSink 把 leader 的可靠性轨绑到进程内异常 sink。
+//
+// leader 自检的异常直送 ReliabilityHandler（绕过 messager self-filter——
+// kernel 会丢弃 sender_id 等于本地成员的事件），其待发 route notices（leader
+// 自己的模型组切换）以同样方式绑定：rail 把它们折进 leader 下一次被受理的输入。
+// dispatcher 建好后调用一次，镜像 registerTeamCompletionCallbacks。多重守卫
+// 对齐上游：reliability 未启用（dispatcher 无 reliability handler）或非 leader
+// 成员（轨上无 local reporter）时 no-op。
+//
+// Python: TeamAgent._register_reliability_local_sink()（team_agent.py:807-838）
+func (a *TeamAgent) registerReliabilityLocalSink() {
+	harness := a.Harness()
+	// Python: if harness is None or dispatcher is None: return
+	if harness == nil || a.coordination == nil || a.coordination.Dispatcher() == nil {
+		return
+	}
+	handler := a.coordination.Dispatcher().Reliability
+	if handler == nil {
+		return
+	}
+	// Python: for rail in harness.find_rails(ReliabilityRail):
+	for _, railAny := range harness.FindRails(reflect.TypeOf((*reliability.ReliabilityRail)(nil))) {
+		if rail, ok := railAny.(*reliability.ReliabilityRail); ok {
+			rail.BindLocalSink(func(anomaly *reliabilitycore.Anomaly) {
+				handler.HandleLocalAnomaly(context.Background(), anomaly)
+			})
+			rail.BindRouteNoticeSource(handler.TakePendingRouteNotices)
+		}
+	}
+	logger.Debug(logComponent).Str("member_name", a.MemberName()).
+		Msg("registerReliabilityLocalSink completed")
 }
 
 // ── KernelHost 接口适配方法 ──
