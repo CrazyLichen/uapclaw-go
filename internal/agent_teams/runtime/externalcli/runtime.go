@@ -31,8 +31,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -54,31 +56,6 @@ type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 
 // roundCallback harness.round 事件的回调形状。
 type roundCallback func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult)
-
-// runtimeReliabilityContext 可靠性上下文投递面（RuntimeReliabilityContext，
-// external/reliability.py:54 的公有面）。实现类见 reliability.go（15.16b0 移植；
-// SDK 流内挂点与分类器仍 ⤴️15.7/15.8，偏差 D-15.13-x）；经
-// BindReliabilityContext 构造注入，未绑定时 `ctx is None` 分支。
-type runtimeReliabilityContext interface {
-	// BeginAttempt 一次尝试开始（startup 或某轮）。
-	// Python: begin_attempt(*, phase, round_id) (reliability.py:114)
-	BeginAttempt(phase schema.ExternalRuntimePhase, roundID *int)
-	// HasFinalized 本周期是否已 finalize 过失败。
-	// Python: has_finalized() (reliability.py:138)
-	HasFinalized() bool
-	// UpdateModel CLI/SDK 报告的实际服务模型。
-	// Python: update_model(model) (reliability.py:162)
-	UpdateModel(model *string)
-	// PublishRetrying 发布一次暂时性重试进度。
-	// Python: publish_retrying(...) (reliability.py:203)
-	PublishRetrying(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) error
-	// FinalizeFailure 以类别/结构化原因/摘要 finalize 一次失败；重复调用返回 nil
-	//（Python 返回 Optional[ExternalRuntimeFailure]，reliability.py:260）。
-	FinalizeFailure(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) *schema.ExternalRuntimeFailure
-	// MarkMemberError 把成员置 ERROR。
-	// Python: mark_member_error() (reliability.py:369)
-	MarkMemberError() error
-}
 
 // outputQueue 无界输出队列：对齐 Python 无界 asyncio.Queue（偏差 D-15.13-j）。
 // Push 永不阻塞（内部 slice 缓冲 + 单槽通知），使 driveTurn 泵送不会因消费者
@@ -205,9 +182,9 @@ type cliRuntimeBase struct {
 	// currentRoundID 在飞轮次的轮次 id。
 	currentRoundID int
 	// reliabilityCtx Claude/Codex SDK runtime 的可靠性上下文；经
-	// BindReliabilityContext 注入。CLI adapter runtime（传统 stdin/重起 CLI）
-	// 恒 nil——外部 runtime 可靠性循环的范围之外。
-	reliabilityCtx runtimeReliabilityContext
+	// BindReliabilityContext 注入（实现见 reliability.go）。CLI adapter runtime
+	//（传统 stdin/重起 CLI）恒 nil——外部 runtime 可靠性循环的范围之外。
+	reliabilityCtx *RuntimeReliabilityContext
 
 	// driveErr flavor 的 _drive 在轮内产生的错误（注入失败 / premature-EOF）。
 	// Python 经 async generator 异常传播到 _drive_turn 的 except 分支；Go 的
@@ -307,19 +284,15 @@ func (b *cliRuntimeBase) BindTaskOutcomeTracker(t tracker.TaskEventTracker) {
 }
 
 // BindReliabilityContext 绑定可靠性失败/重试投递面。
-// Claude 与 Codex SDK runtime 覆写它为各自 agent_kind 构造
-// RuntimeReliabilityContext。基础 CLI adapter runtime（传统 stdin/重起 CLI）
-// 保持 no-op——外部 runtime 可靠性循环范围之外。
+// Python 对 adapter 路 runtime 也调用本方法（external_cli_spawn.py:726），
+// 基类 no-op 无害——Go 侧签名与 ExternalHarnessMemberRuntime 同形，wiring 的
+// typed 断言对 adapter 路同样命中（no-op 直通），语义一致。
 // Python: bind_reliability_context (runtime.py:213)
 func (b *cliRuntimeBase) BindReliabilityContext(
-	sessionID string, teamBackend any, leaderName string,
-	updateStatusCb any, messager any,
+	string, *tools.TeamBackend, string, UpdateStatusCallback, messager.Messager,
 ) {
-	_ = sessionID
-	_ = teamBackend
-	_ = leaderName
-	_ = updateStatusCb
-	_ = messager
+	// 基础 CLI adapter runtime 不在 external-runtime 可靠性循环范围：no-op
+	//（Python 基类 return None，不存储上下文）。
 }
 
 // SetMemberSessionFactory 注入成员子会话工厂（Python duck-typing 的 Go 面）。
@@ -753,17 +726,15 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 }
 
 // hasFinalized 检查 reliabilityCtx（SDK runtime 注入）是否已 finalize 失败。
-// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil（未实现接口时 false）。
+// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil（false）。
 func (b *cliRuntimeBase) hasFinalized() bool {
 	b.mu.Lock()
-	rc := b.reliabilityCtx
-	b.mu.Unlock()
-	client, _ := rc.(runtimeReliabilityContext)
-	return client != nil && client.HasFinalized()
+	defer b.mu.Unlock()
+	return b.reliabilityCtx != nil && b.reliabilityCtx.HasFinalized()
 }
 
 // reliabilityClient 取 reliabilityCtx；未注入时 nil。
-func (b *cliRuntimeBase) reliabilityClient() runtimeReliabilityContext {
+func (b *cliRuntimeBase) reliabilityClient() *RuntimeReliabilityContext {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.reliabilityCtx

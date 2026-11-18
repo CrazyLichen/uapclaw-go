@@ -387,17 +387,19 @@ func (c *RuntimeReliabilityContext) recordSpan(failure *atschema.ExternalRuntime
 }
 
 // MarkMemberError 把成员翻 ERROR（仅 runtime 不可用路径）。
-// 回调失败只记错误日志并吞掉——状态更新不得掩盖失败本身（Python except Exception）。
+// 回调失败照常记错误日志并回传——调用方（finalizeStartupFailure 等收口路径）
+// 显式忽略返回值，可观测行为与 Python except Exception 等价且不丢失错误信息。
 // Python: mark_member_error (reliability.py:369)
 func (c *RuntimeReliabilityContext) MarkMemberError() error {
 	if c.statusCB == nil {
 		return nil
 	}
 	if err := c.statusCB(context.Background(), atschema.MemberStatusError); err != nil {
-		// Python: team_logger.exception（reliability.py:375-379）——吞掉不回传
+		// Python: team_logger.exception（reliability.py:375-379）
 		logger.Error(logger.ComponentAgentCore).Err(err).
 			Str("member", c.memberName).
 			Msg("failed to mark member ERROR after runtime failure")
+		return err
 	}
 	return nil
 }
