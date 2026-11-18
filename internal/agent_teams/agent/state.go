@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"time"
+
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
@@ -34,6 +36,15 @@ type TeamAgentState struct {
 	EventListeners []*messager.EventListenerHandle
 	// TeamCleaned clean_team 成功路径的一次性锁存标志
 	TeamCleaned bool
+	// IdleSince 成员进程本地 idle 时钟：runtime 落定 IDLE 时由
+	// StreamController.mapState 打点（喂 stale-task 扫描）。
+	// 零值表示成员在轮中（BUSY）或从未落定——恰是调用方想要的。
+	// Python: TeamAgentState.idle_since: Optional[float]（state.py L81，
+	// time.monotonic；Go time.Time 自带单调时钟语义）
+	IdleSince time.Time
+	// MemberRegistry leader 的成员活动名册（仅 leader 持有；非 leader 为 nil）。
+	// Python: TeamAgentState.member_registry（state.py L91）
+	MemberRegistry *MemberActivityRegistry
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

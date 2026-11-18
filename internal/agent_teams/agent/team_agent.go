@@ -146,11 +146,41 @@ func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 		// S-33: 对齐 Python team_agent.py L83-91，注入协调内核回调
 		WithWakeMailbox(a.coordination.WakeMailboxIfInterruptCleared),
 		WithRequestCompletionPoll(a.requestCompletionPoll),
+		// Python: task_board_probe=self.is_task_board_settled（team_agent.py L214）
+		WithTaskBoardProbe(a.isTaskBoardSettled),
 		// Python: team_agent.py:216-217——模型组名访问器与路由记账回调
 		WithModelGroupLabelGetter(a.modelGroupLabel),
 		WithServedModelRecorder(a.recordServedModel),
 	)
+	// Python: team_agent.py L777-780 —— 只有 leader 持团队级活动视图：它是唯一
+	// 观察每个成员转换的角色，也是 team-idle 标记所属的流。
+	// Python 位置在 configure(ctx) 内（role 已知）；Go 侧构造期即有 spec role，
+	// 等价地在装配尾部落位（幂等，非 leader 保持 nil）。
+	if a.configurator != nil {
+		if bp := a.configurator.Blueprint(); bp != nil &&
+			bp.Role() == atschema.TeamRoleLeader && bp.Ctx.MemberName != "" {
+			a.state.MemberRegistry = NewMemberActivityRegistry(bp.Ctx.MemberName)
+		}
+	}
 	return a
+}
+
+// ObserveMemberStatus 把一个成员的当前状态折入活动名册，并驱动 team-idle
+// 标记计时器。名册欠什么由 MemberActivityRegistry.Record 决定；流控制器拥有
+// 在安静保持之后投递它的计时器。非 leader（无名册）或空成员名 no-op。
+// Python: TeamAgent.observe_member_status（team_agent.py L1262-1281）
+func (a *TeamAgent) ObserveMemberStatus(memberName string, status atschema.MemberStatus) {
+	registry := a.state.MemberRegistry
+	if registry == nil || memberName == "" {
+		return
+	}
+	signal := registry.Record(memberName, status)
+	switch signal {
+	case IdleSignalSchedule:
+		a.streamController.ScheduleTeamIdle()
+	case IdleSignalCancel:
+		a.streamController.CancelTeamIdle()
+	}
 }
 
 // modelGroupLabel 团队模型组名；非组池或无 backend 返回空串。
@@ -438,11 +468,16 @@ func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStat
 	if backend == nil {
 		logger.Debug(logComponent).Str("member_name", a.MemberName()).
 			Str("member_status", string(status)).Msg("updatestate（no TeamBackend, skipped")
-		return nil
+	} else {
+		backend.DB().Member().UpdateMemberStatus(ctx, a.MemberName(), backend.TeamName(), string(status))
+		logger.Debug(logComponent).Str("member_name", a.MemberName()).
+			Str("member_status", string(status)).Msg("updatestate")
 	}
-	backend.DB().Member().UpdateMemberStatus(ctx, a.MemberName(), backend.TeamName(), string(status))
-	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("member_status", string(status)).Msg("updatestate")
+	// Python: _update_status 尾部无条件 observe（team_agent.py L1239-1244）——
+	// leader 自身的转换不会以事件形式回来（messager 自过滤丢弃它们），这里是
+	// 它们进入活动视图的唯一入口。DB 写是 no-op 也要折入：build_team 之前
+	// leader 没有行，但就 idle 而言它仍是自己团队的成员。
+	a.ObserveMemberStatus(a.MemberName(), status)
 	return nil
 }
 
@@ -1581,6 +1616,18 @@ func (a *TeamAgent) SubscribeTransport(ctx context.Context, teamName string) err
 			}
 			// Python: if local_member_name and event.sender_id == local_member_name: return
 			if localMemberName != "" && event.SenderID == localMemberName {
+				// F_62: 调度器必须观察到 leader 进程自己执行的板面变更
+				//（create_task、settle）。协调层不得重处理 echo，被丢弃的事件
+				// 降级为同一总线循环上的裸「板面已变」扫描提示。
+				// Python: kernel.py L646-658
+				if a.coordination != nil && a.coordination.EventBus() != nil {
+					if sched := a.coordination.Scheduler(); sched != nil && sched.IsActive() &&
+						len(event.EventType) >= 5 && event.EventType[:5] == "task_" {
+						a.coordination.EventBus().Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{
+							EventType: types.InnerEventTypeSchedulerScan,
+						}})
+					}
+				}
 				return nil
 			}
 			// Python: await self._event_bus.enqueue(event)
@@ -1791,6 +1838,75 @@ func (a *TeamAgent) DispatcherInfra() types.DispatcherInfra {
 	return inf
 }
 
+// isTaskBoardSettled 团队任务板是否没有开放任务（team-idle 判定的后半）。
+// 成员停了只说明「此刻」没人动——交接中的团队同样满足。每条任务都终态（完成
+// 或取消）或板面为空，才让安静意味着「没有东西可动」。
+// 一条聚合 COUNT，不是全量任务加载——它在每个撑过去抖窗口的 idle 边上跑。
+// 无 backend 的成员没有板，其板平凡静止；数据库错误答 False——只是把标记
+// 扣住，而不是宣告本进程无法确认的空闲。
+// Python: TeamAgent.is_task_board_settled（team_agent.py L1283-1307）
+func (a *TeamAgent) isTaskBoardSettled(ctx context.Context) (bool, error) {
+	backend := a.TeamBackend()
+	if backend == nil {
+		return true, nil
+	}
+	_, nonTerminal, err := backend.DB().Task().CountTasksTerminality(ctx, backend.TeamName())
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("member_name", a.MemberName()).
+			Msg("failed to probe the task board for team idleness")
+		return false, nil
+	}
+	return nonTerminal == 0, nil
+}
+
+// SeedMemberRegistry 每轮启动前从团队数据库重建 leader 的活动视图基线。
+// 冷启动、resume、recover 都从数据库实际持有的状态开始，而不是上一轮内存里
+// 留下的。未 build 的团队或没有成员行的团队种出空名册——普通状态而非错误，
+// leader 自己无论如何保留在名册里。
+// Python: TeamAgent.seed_member_registry（team_agent.py L1309-1334）
+func (a *TeamAgent) SeedMemberRegistry(ctx context.Context) {
+	registry := a.state.MemberRegistry
+	backend := a.TeamBackend()
+	if registry == nil || backend == nil {
+		return
+	}
+	rows, err := backend.DB().Member().GetTeamMembers(ctx, backend.TeamName(), "")
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("member_name", a.MemberName()).
+			Msg("failed to seed member activity registry")
+		return
+	}
+	seeded := make(map[string]atschema.MemberStatus, len(rows))
+	for _, row := range rows {
+		if status, ok := atschema.ParseMemberStatus(row.Status); ok {
+			seeded[row.MemberName] = status
+		}
+	}
+	registry.Seed(seeded)
+}
+
+// IdleSeconds 本成员连续 idle 的秒数；未 idle 返回 nil。
+// Python: TeamAgent.idle_seconds（team_agent.py L505-517）
+func (a *TeamAgent) IdleSeconds() *float64 {
+	if a.state.IdleSince.IsZero() {
+		return nil
+	}
+	secs := time.Since(a.state.IdleSince).Seconds()
+	return &secs
+}
+
+// RefreshIdleBaseline 重置 idle 时钟基线，使 pause 窗口不被计为 idle。
+// 团队 pause 时已经 idle 的成员，其 idle_since 打点在单调时钟跨越整个 pause
+// 窗口期间保持不动——而它没有挂起的轮可续，永远不会重进 IDLE 重新打点。
+// 不重置基线的话，resume 后第一次轮询会看到一段凭空捏造的超长 idle。
+// busy 成员持有零值，不动；冷启动也是零值，天然 no-op。
+// Python: TeamAgent.refresh_idle_baseline（team_agent.py L522-535）
+func (a *TeamAgent) RefreshIdleBaseline() {
+	if !a.state.IdleSince.IsZero() {
+		a.state.IdleSince = time.Now()
+	}
+}
+
 // onTeammateCreated 队友创建回调。
 // Python: TeamAgent._on_teammate_created(teammate_id)
 func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) error {
@@ -1818,6 +1934,12 @@ func (a *TeamAgent) markTeamCleaned(ctx context.Context) error {
 // Python: TeamAgent._mark_team_built()
 func (a *TeamAgent) markTeamBuilt(ctx context.Context) error {
 	a.persistTeamDbState(ctx, "created")
+	// F_62: build_team 物化团队后武装调度器——任何 teammate spawn 或任务创建
+	// 之前就活（对齐提示词承诺的「框架会启动承担者」）。无调度器时 no-op。
+	// Python: on_team_built 钩子 → CoordinationKernel.notify_team_built（kernel.py L314-326）
+	if a.coordination != nil {
+		a.coordination.NotifyTeamBuilt(ctx)
+	}
 	return nil
 }
 

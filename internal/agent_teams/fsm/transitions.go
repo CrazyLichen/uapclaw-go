@@ -14,7 +14,12 @@ const (
 	MemberStatusRestarting        = "restarting"
 	MemberStatusShutdownRequested = "shutdown_requested"
 	MemberStatusShutdown          = "shut_down"
-	MemberStatusError             = "error"
+	// MemberStatusDormant 退役后的休眠态（options.lifetime=="dormant" 的 retire
+	// 目标，F_118）：runtime 已拆除，会话保留；显式单收件人唤醒走
+	// DORMANT→RESTARTING→READY。deliverable——发给它的直发消息仍会投递。
+	// Python: MemberStatus.DORMANT（schema/status.py L55）
+	MemberStatusDormant = "dormant"
+	MemberStatusError   = "error"
 )
 
 // ExecutionStatus 常量 — 对齐 Python: ExecutionStatus
@@ -77,10 +82,15 @@ var MemberTransitions = map[string][]string{
 		MemberStatusReady, MemberStatusStopped, MemberStatusError, MemberStatusShutdown,
 	},
 	MemberStatusShutdownRequested: {
-		MemberStatusShutdown, MemberStatusError,
+		MemberStatusShutdown, MemberStatusDormant, MemberStatusError,
 	},
 	MemberStatusShutdown: {
 		MemberStatusRestarting,
+	},
+	// Python: status.py L153-157 —— DORMANT→RESTARTING 是显式单收件人唤醒；
+	// DORMANT→SHUTDOWN 是 leader shutdown_member：无 runtime，直接 settle。
+	MemberStatusDormant: {
+		MemberStatusRestarting, MemberStatusShutdown,
 	},
 	MemberStatusError: {
 		MemberStatusRestarting, MemberStatusReady, MemberStatusStopped,
@@ -89,12 +99,28 @@ var MemberTransitions = map[string][]string{
 }
 
 // MemberSettledStatuses 成员可以处于空闲时的状态集合（团队完成检查使用）。
-// Python: MEMBER_SETTLED_STATUSES
+// Python: MEMBER_SETTLED_STATUSES（status.py L172-180）
 var MemberSettledStatuses = map[string]bool{
 	MemberStatusReady:    true,
 	MemberStatusPaused:   true,
 	MemberStatusStopped:  true,
 	MemberStatusShutdown: true,
+	MemberStatusDormant:  true,
+}
+
+// MemberQuiescentStatuses 成员「未在动」状态集合（团队 idle 边判定使用）。
+// 补集 STARTING/BUSY/RESTARTING/SHUTDOWN_REQUESTED 是活跃集——各自都意味着
+// 工作正在运行或即将运行。DORMANT 成员必须保持 deliverable：唤醒它的直发
+// 消息仍会投递，故算静止。
+// Python: MEMBER_QUIESCENT_STATUSES（schema/status.py L202-213）
+var MemberQuiescentStatuses = map[string]bool{
+	MemberStatusUnstarted: true,
+	MemberStatusReady:     true,
+	MemberStatusPaused:    true,
+	MemberStatusStopped:   true,
+	MemberStatusShutdown:  true,
+	MemberStatusDormant:   true,
+	MemberStatusError:     true,
 }
 
 // ExecutionTransitions ExecutionStatus 状态转换表。

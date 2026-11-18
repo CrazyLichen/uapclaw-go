@@ -40,6 +40,9 @@ const (
 	MemberStatusRestarting MemberStatus = fsm.MemberStatusRestarting
 	// MemberStatusShutdownRequested 成员已收到关闭请求
 	MemberStatusShutdownRequested MemberStatus = fsm.MemberStatusShutdownRequested
+	// MemberStatusDormant 退役休眠态（options.lifetime=="dormant"，F_118）。
+	// Python: MemberStatus.DORMANT（schema/status.py L55）
+	MemberStatusDormant MemberStatus = fsm.MemberStatusDormant
 	// MemberStatusShutdown 成员已关闭
 	MemberStatusShutdown MemberStatus = fsm.MemberStatusShutdown
 	// MemberStatusError 成员处于错误状态
@@ -204,6 +207,30 @@ func MemberDepartedStatuses() map[MemberStatus]struct{} {
 		MemberStatusShutdownRequested: {},
 		MemberStatusShutdown:          {},
 	}
+}
+
+// IsMemberQuiescent 成员状态是否属于「未在动」集合。
+// Python: MEMBER_QUIESCENT_STATUSES 成员关系（schema/status.py L202-213）
+func IsMemberQuiescent(status MemberStatus) bool {
+	switch status {
+	case MemberStatusUnstarted, MemberStatusReady, MemberStatusPaused,
+		MemberStatusStopped, MemberStatusShutdown, MemberStatusDormant, MemberStatusError:
+		return true
+	}
+	return false
+}
+
+// ParseMemberStatus 解析状态值字符串为 MemberStatus；未知返回 ok=false。
+// Python: parse_member_status（member_activity.py L55-71）
+func ParseMemberStatus(value string) (MemberStatus, bool) {
+	switch MemberStatus(value) {
+	case MemberStatusUnstarted, MemberStatusStarting, MemberStatusReady,
+		MemberStatusBusy, MemberStatusPaused, MemberStatusStopped,
+		MemberStatusRestarting, MemberStatusShutdownRequested,
+		MemberStatusShutdown, MemberStatusDormant, MemberStatusError:
+		return MemberStatus(value), true
+	}
+	return "", false
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

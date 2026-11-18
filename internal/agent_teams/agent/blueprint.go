@@ -47,6 +47,14 @@ func (b *TeamAgentBlueprint) DispatcherMemberName() string {
 	return b.Ctx.MemberName
 }
 
+// DispatcherSpec 返回团队规格（25.2a 调度器装配读 DispatchMode/
+// DefaultMaxReviewRounds/ReviewStallTimeout/TeamName/Language）。
+// Python: kernel.setup() 直接读 blueprint.spec.*（kernel.py L91-104）——
+// Go 侧经 DispatcherBlueprint 窄接口传递。
+func (b *TeamAgentBlueprint) DispatcherSpec() *atschema.TeamAgentSpec {
+	return &b.Spec
+}
+
 // Lifecycle 返回生命周期模式。
 // Python: TeamAgentBlueprint.lifecycle property
 func (b *TeamAgentBlueprint) Lifecycle() atschema.TeamLifecycle {

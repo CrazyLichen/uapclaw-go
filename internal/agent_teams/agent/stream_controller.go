@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"sort"
+	"strings"
+
 	"context"
 	"fmt"
 	"reflect"
@@ -48,8 +51,20 @@ type StreamController struct {
 	wakeMailboxCb func(ctx context.Context) error
 	// requestCompletionPollCb 轮次干净结束时请求完成轮询的回调（仅 Leader 传入）
 	requestCompletionPollCb func(ctx context.Context) error
-	// reconcileMemberStartupCb 成员启动对账回调（⤵️ 25.2 提供实现，本阶段仅留钩子）
+	// reconcileMemberStartupCb 成员启动对账回调（调度器装配提供实现）
 	reconcileMemberStartupCb func(ctx context.Context) error
+	// taskBoardProbeCb 团队任务板静止探针（仅 Leader 传入；无探针时问题不可答，
+	// 以成员视角为全部答案）。Python: task_board_probe（stream_controller.py L214）
+	taskBoardProbeCb func(ctx context.Context) (bool, error)
+	// idleMarkerCancel pending 团队 idle 标记的撤销函数（nil = 无 pending）。
+	// Python: self._idle_marker_task: Optional[asyncio.Task]
+	// asyncio.Task→time.AfterFunc + goroutine 移植。
+	idleMarkerCancel context.CancelFunc
+	// idleDebounceSeconds 团队 idle 标记的去抖窗口（秒）。默认 2.0；测试注入
+	// 0 立即触发。Python: _TEAM_IDLE_DEBOUNCE_SECONDS = 2.0（stream_controller.py L64）
+	idleDebounceSeconds float64
+	// idleClock 时钟源（默认 time.Now；测试注入假时钟）。Python time.monotonic。
+	idleClock func() time.Time
 
 	// streamQueue 流式分块队列（nil sentinel 关闭流）
 	// Python: self.stream_queue: Optional[asyncio.Queue] = None
@@ -130,6 +145,18 @@ func WithRequestCompletionPoll(cb func(ctx context.Context) error) StreamControl
 	return func(sc *StreamController) { sc.requestCompletionPollCb = cb }
 }
 
+// WithTaskBoardProbe 设置团队任务板静止探针（仅 Leader）。
+// Python: task_board_probe=self.is_task_board_settled（team_agent.py L214）
+func WithTaskBoardProbe(cb func(ctx context.Context) (bool, error)) StreamControllerOption {
+	return func(sc *StreamController) { sc.taskBoardProbeCb = cb }
+}
+
+// WithIdleDebounceSeconds 覆盖 idle 去抖窗口（测试用；生产走默认 2.0 秒）。
+// Python: _TEAM_IDLE_DEBOUNCE_SECONDS（stream_controller.py L64）
+func WithIdleDebounceSeconds(seconds float64) StreamControllerOption {
+	return func(sc *StreamController) { sc.idleDebounceSeconds = seconds }
+}
+
 // WithModelGroupLabelGetter 设置模型组名访问器。
 // Python: StreamController.__init__ 的 model_group_label_getter 参数（py:165）
 func WithModelGroupLabelGetter(getter func() string) StreamControllerOption {
@@ -155,11 +182,13 @@ func NewStreamController(
 	opts ...StreamControllerOption,
 ) *StreamController {
 	sc := &StreamController{
-		getBlueprint:    getBlueprint,
-		state:           state,
-		resources:       resources,
-		updateStatus:    updateStatus,
-		updateExecution: updateExecution,
+		getBlueprint:        getBlueprint,
+		state:               state,
+		resources:           resources,
+		updateStatus:        updateStatus,
+		idleClock:           time.Now,
+		idleDebounceSeconds: 2.0,
+		updateExecution:     updateExecution,
 	}
 	for _, opt := range opts {
 		opt(sc)
@@ -286,6 +315,131 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 	default:
 	}
 	sc.CloseStream()
+}
+
+// ScheduleTeamIdle 武装去抖后的 team-idle 标记，替换任何 pending 的标记。
+// 团队刚刚安静下来。此时什么也不发：只有安静撑过 idleDebounceSeconds *且*
+// 随后发现任务板静止，标记才落地——这正是让轮间短暂停顿不被误报成 idle 团队
+// 的机制。窗口内的任何移动都会经 cancelTeamIdle 撤销它。
+// Python: schedule_team_idle（stream_controller.py L552-564）——asyncio.Task→
+// time.AfterFunc + goroutine 移植。
+func (sc *StreamController) ScheduleTeamIdle() {
+	sc.CancelTeamIdle()
+	ctx, cancel := context.WithCancel(context.Background())
+	sc.idleMarkerCancel = cancel
+	go func() {
+		timer := time.AfterFunc(time.Duration(sc.idleDebounceSeconds*float64(time.Second)), func() {
+			_ = sc.emitTeamIdleAfterDebounce(ctx)
+		})
+		<-ctx.Done()
+		timer.Stop()
+	}()
+}
+
+// CancelTeamIdle 撤销仍在等待触发的 team-idle 标记；幂等。
+// 任何观测到的移动都会调用它，两条流拆除路径（stop 与 CloseStream）也一样，
+// 所以不会有定时器活得比它本要写入的流更久。字段先清再撤。
+// Python: cancel_team_idle（stream_controller.py L566-578）
+func (sc *StreamController) CancelTeamIdle() {
+	cancel := sc.idleMarkerCancel
+	sc.idleMarkerCancel = nil
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// emitTeamIdleAfterDebounce 等过去抖窗口，然后团队仍静止才发标记。
+// 两个条件，严格按此顺序：每个成员在整个窗口内保持不动；然后才问任务板是否
+// 还有未竟之事。顺序不是装饰——板面查询是一次数据库往返，在成员仍在移动时
+// 问它既浪费也回答了一个还没人问的问题。
+// Python: _emit_team_idle_after_debounce（stream_controller.py L599-625）
+func (sc *StreamController) emitTeamIdleAfterDebounce(ctx context.Context) error {
+	// Python: CancelledError 不捕获——取消路径要让任务以 cancelled 终结。
+	// Go 侧 ctx.Done 检查等价：被撤销的标记不得发言。
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	registry := sc.state.MemberRegistry
+	if registry == nil || !registry.IsIdle() {
+		return nil
+	}
+	settled, err := sc.isTaskBoardSettled(ctx)
+	if err != nil {
+		return err
+	}
+	if !settled {
+		return nil
+	}
+	snapshot := registry.Snapshot()
+	logger.Info(logComponent).
+		Str("member_name", sc.memberName()).
+		Str("snapshot", mapRepr(snapshot)).
+		Msg("team went idle")
+	sc.EmitTeamIdle(snapshot)
+	return nil
+}
+
+// isTaskBoardSettled 任务板是否已无事可做。
+// 委派注入的探针：每条任务都终态*或*板面为空的板都答 true——从未被给过任务
+// 的团队在成员一停时就 idle，强求任务会让标记不可达。无探针（任意非 leader）
+// 时问题不可答，以成员视角为全部答案。
+// Python: _is_task_board_settled（stream_controller.py L627-643）
+func (sc *StreamController) isTaskBoardSettled(ctx context.Context) (bool, error) {
+	if sc.taskBoardProbeCb == nil {
+		return true, nil
+	}
+	return sc.taskBoardProbeCb(ctx)
+}
+
+// EmitTeamIdle 入队 team-idle 标记块；流保持打开。
+// 与 EmitCompletionAndClose 不同，这不是终结信号——团队只是安静了（没有成员
+// 在运行），很可能被下一条消息再次唤醒。消费者把它读作「此刻没有东西在动」；
+// 名册快照说明谁在什么状态，无需后续查询。队列已不在时 no-op（暂停/拆除的
+// 成员）。
+// Python: emit_team_idle（stream_controller.py L645-663）
+func (sc *StreamController) EmitTeamIdle(members map[string]string) {
+	q := sc.streamQueueSnapshot()
+	if q == nil {
+		return
+	}
+	bp := sc.getBlueprint()
+	marker := &atschema.TeamOutputSchema{
+		OutputSchema: streambase.OutputSchema{
+			Type:  "message",
+			Index: 0,
+			Payload: map[string]any{
+				"event_type":   "team.idle",
+				"member_count": len(members),
+				"members":      members,
+			},
+		},
+	}
+	if bp != nil {
+		name := bp.MemberName()
+		role := bp.Role()
+		marker.SourceMember = name
+		marker.Role = &role
+	}
+	select {
+	case q <- marker:
+	default:
+	}
+}
+
+// mapRepr map 的稳定日志表示（键序）。
+func mapRepr(m map[string]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+m[k])
+	}
+	return strings.Join(parts, ", ")
 }
 
 // DrainAgentTask 拆卸飞行中的轮次（用于协调生命周期暂停/停止）。
@@ -570,8 +724,16 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 func (sc *StreamController) mapState(ctx context.Context, ev harness.HarnessStateEvent) {
 	switch ev.New {
 	case harnessprotocol.HarnessStateRunning:
+		// Python: self._state.idle_since = None（stream_controller.py L453）
+		if sc.state != nil {
+			sc.state.IdleSince = time.Time{}
+		}
 		_ = sc.updateStatus(ctx, atschema.MemberStatusBusy)
 	case harnessprotocol.HarnessStateIdle:
+		// Python: self._state.idle_since = time.monotonic()（stream_controller.py L456）
+		if sc.state != nil {
+			sc.state.IdleSince = sc.idleClock()
+		}
 		_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
 		sc.onIdleSettled(ctx)
 	}
