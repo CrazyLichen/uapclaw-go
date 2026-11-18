@@ -161,9 +161,9 @@ func BuildReliabilityComponents(deps BuildComponentsDeps) *ReliabilityComponents
 // Python: factory.py reliability_rail_from_components。
 func ReliabilityRailFromComponents(components *ReliabilityComponents) *ReliabilityRail {
 	return &ReliabilityRail{
-		monitor:      components.Monitor,
-		member:       components.MemberName,
-		auto:         components.AutoRemediator,
+		monitor:       components.Monitor,
+		member:        components.MemberName,
+		auto:          components.AutoRemediator,
 		localReporter: components.LocalReporter,
 	}
 }

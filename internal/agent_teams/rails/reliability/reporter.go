@@ -5,8 +5,8 @@ package reliability
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	schemaevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
+	schemaevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -80,12 +80,12 @@ func (r *EventAnomalyReporter) SetTopicBuilder(fn func(sessionID, teamName strin
 func (r *EventAnomalyReporter) Report(anomaly *core.Anomaly) {
 	event := schemaevents.AnomalyDetectedEvent{
 		BaseEventMessage: schemaevents.BaseEventMessage{TeamName: r.teamName, MemberName: anomaly.MemberName},
-		Detector:   anomaly.Detector,
-		Kind:       string(anomaly.Kind),
-		Severity:   string(anomaly.Severity),
-		Summary:    anomaly.Summary,
-		Evidence:   anomaly.Evidence,
-		PeerMember: anomaly.PeerMember,
+		Detector:         anomaly.Detector,
+		Kind:             string(anomaly.Kind),
+		Severity:         string(anomaly.Severity),
+		Summary:          anomaly.Summary,
+		Evidence:         anomaly.Evidence,
+		PeerMember:       anomaly.PeerMember,
 	}
 	message := schemaevents.EventMessageFromEvent(event)
 	message.SenderID = r.senderId

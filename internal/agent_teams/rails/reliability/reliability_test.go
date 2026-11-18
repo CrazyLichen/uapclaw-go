@@ -24,9 +24,9 @@ func (f *fakeReporter) Report(a *core.Anomaly) { f.got = append(f.got, a) }
 // panicDetector observe 时 panic 的坏 detector。
 type panicDetector struct{}
 
-func (panicDetector) Name() string                         { return "panic" }
-func (panicDetector) Observe(*core.Signal) *core.Anomaly   { panic("boom") }
-func (panicDetector) Reset()                               {}
+func (panicDetector) Name() string                       { return "panic" }
+func (panicDetector) Observe(*core.Signal) *core.Anomaly { panic("boom") }
+func (panicDetector) Reset()                             {}
 
 // silentDetector 恒返回 nil。
 type silentDetector struct{}

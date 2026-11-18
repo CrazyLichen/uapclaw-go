@@ -10,10 +10,10 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/remediation"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
