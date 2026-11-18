@@ -136,6 +136,9 @@ func (f *fakeKernelHost) HasPendingInterrupt() bool                           { 
 func (f *fakeKernelHost) CancelAgent(_ context.Context) error                 { return nil }
 func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
 func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
+func (f *fakeKernelHost) AutoStartMember(_ context.Context, _ string) bool    { return true }
+func (f *fakeKernelHost) SeedMemberRegistry(_ context.Context)                {}
+func (f *fakeKernelHost) RefreshIdleBaseline()                                {}
 func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
 }
