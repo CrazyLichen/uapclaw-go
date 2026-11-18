@@ -32,6 +32,19 @@ func MarshalIndentNoEscape(v any) ([]byte, error) {
 	return marshalNoEscape(v, "  ")
 }
 
+// MarshalNoEscapeSpaced JSON 序列化（紧凑、不转义 HTML、默认分隔符带空格），
+// 对齐 Python json.dumps(v, ensure_ascii=False) 的**字节级**输出形态：
+// 默认 separators=(", ", ": ")——键/元素分隔符带空格。
+// 供哈希输入等字节级比较场景（如 reliability 稳定哈希）；
+// MarshalNoEscape 保持无空格紧凑形态，供非字节级场景（语义等价即可）。
+func MarshalNoEscapeSpaced(v any) ([]byte, error) {
+	b, err := marshalNoEscape(v, "")
+	if err != nil {
+		return nil, err
+	}
+	return pyJSONSpacing(b), nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // marshalNoEscape 统一实现：prefix 非空时启用缩进。
@@ -48,4 +61,39 @@ func marshalNoEscape(v any, indentPrefix string) ([]byte, error) {
 	// Encode 追加尾换行，去掉以对齐 Python json.dumps 字节输出
 	b := buf.Bytes()
 	return bytes.TrimSuffix(b, []byte("\n")), nil
+}
+
+// pyJSONSpacing 在字符串字面量之外把 `,` → `, `、`:` → `: `，
+// 复刻 Python json.dumps 默认 separators=(", ", ": ")。字符串字面量内部
+// 的逗号/冒号不动（引号状态机；Go JSON 串内引号必为 \" 转义，故用
+// 未转义引号计数即可判定字面量边界）。
+func pyJSONSpacing(compact []byte) []byte {
+	var out bytes.Buffer
+	inString := false
+	escaped := false
+	for _, b := range compact {
+		if inString {
+			out.WriteByte(b)
+			if escaped {
+				escaped = false
+			} else if b == '\\' {
+				escaped = true
+			} else if b == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch b {
+		case '"':
+			inString = true
+			out.WriteByte(b)
+		case ':':
+			out.WriteString(": ")
+		case ',':
+			out.WriteString(", ")
+		default:
+			out.WriteByte(b)
+		}
+	}
+	return out.Bytes()
 }
