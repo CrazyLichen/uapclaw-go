@@ -13,8 +13,8 @@ import (
 	agent "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
@@ -107,8 +107,8 @@ func externalCliMCPServerName(cliAgent string) string {
 }
 
 // buildExternalCliRuntime 构建 CLI runtime：cli_cfg 有/无两分支
-//（Python :604-667），实参逐项对位。skills 解析在此完成；安装门卫
-//（本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
+// （Python :604-667），实参逐项对位。skills 解析在此完成；安装门卫
+// （本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
 // 15.16c seed 工厂落地前门卫按 Python project_dir=None 短路（⤴️15.16c）。
 func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeContext, args spawn.ExternalCliRuntimeArgs) (spawn.ExternalCliMemberRuntime, error) {
 	opts := externalcli.Options{
@@ -222,13 +222,13 @@ func installSkillsShim(ctx context.Context, skills []any, provider, cwd, conflic
 // 含 Python :675 的 share_workspace_cache_with 同序调用——本文件原先的
 // 零消费副本 newExternalMemberTeamAgent 已按规则 8 删除。）
 //
-//	1. bind_team_context_tracker（BuildTeamContextTracker，15.13 已移植）
-//	2. bind_task_outcome_tracker（build_task_event_tracker）
-//	3. ExternalHarnessMemberRuntime：_bind_trajectory_recorder（15.11 recorder
-//	   + ObservabilityExecutionSubject）
-//	4. bind_reliability_context（五参调用点；实现仍桩 ⤴️15.7/15.8，D-15.16-a7）
-//	5. _bind_protocol_member_team_tools（claude ⤴️15.7 / codex ⤴️15.8，
-//	   swarmflow host ⤴️swarmflow 章节——D-15.16-b3 挂点）
+//  1. bind_team_context_tracker（BuildTeamContextTracker，15.13 已移植）
+//  2. bind_task_outcome_tracker（build_task_event_tracker）
+//  3. ExternalHarnessMemberRuntime：_bind_trajectory_recorder（15.11 recorder
+//     + ObservabilityExecutionSubject）
+//  4. bind_reliability_context（五参调用点；实现仍桩 ⤴️15.7/15.8，D-15.16-a7）
+//  5. _bind_protocol_member_team_tools（claude ⤴️15.7 / codex ⤴️15.8，
+//     swarmflow host ⤴️swarmflow 章节——D-15.16-b3 挂点）
 func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.ExternalCliTeamAgent, runtimeValue spawn.ExternalCliMemberRuntime, sessionID string) error {
 	ta, ok := teammate.(*agent.TeamAgent)
 	if !ok {

@@ -3,8 +3,8 @@ package agent
 import (
 	"testing"
 
-	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // newRouteTestController 构造带 label getter / recorder 的控制器。

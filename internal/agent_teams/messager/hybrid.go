@@ -137,8 +137,8 @@ func (p *WebSocketEventPublisher) buildRequest(topicID string, message *atevents
 		return nil, err
 	}
 	return map[string]any{
-		"type": "req",
-		"id":   requestID,
+		"type":   "req",
+		"id":     requestID,
 		"method": "team.mq.publish",
 		"params": map[string]any{
 			"session_id": p.sessionID,

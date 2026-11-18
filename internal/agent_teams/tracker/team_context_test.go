@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -888,7 +888,9 @@ func TestListRoster_ModelGroup(t *testing.T) {
 	// 非组池：两字段零值
 	plainPool := []models.ModelPoolEntry{*models.NewModelPoolEntry("m", "k", "b", "openai")}
 	plainBackend := tools.NewTeamBackend("t1", "leader", true, dbMem, nil,
-		func(b *tools.TeamBackend) { b.UpdateModelPoolProvider(func() []models.ModelPoolEntry { return plainPool }) })
+		func(b *tools.TeamBackend) {
+			b.UpdateModelPoolProvider(func() []models.ModelPoolEntry { return plainPool })
+		})
 	plainTracker := NewTeamContextTracker(plainBackend, "leader", atschema.TeamRoleLeader, "Leader", "", "", "", "", false, "cn", "", nil)
 	plain, ok := plainTracker.listRoster()
 	if !ok || len(plain) != 1 {

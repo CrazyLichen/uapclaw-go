@@ -78,13 +78,13 @@ func (e AnomalyDetectedEvent) EventTypeName() string { return TeamEventAnomalyDe
 // Python: pydantic model_dump（BaseEventMessage 含 team_name/member_name）。
 func (e AnomalyDetectedEvent) ToPayload() map[string]any {
 	payload := map[string]any{
-		"team_name":  e.TeamName,
+		"team_name":   e.TeamName,
 		"member_name": e.MemberName,
-		"detector":   e.Detector,
-		"kind":       e.Kind,
-		"severity":   e.Severity,
-		"summary":    e.Summary,
-		"evidence":   e.Evidence,
+		"detector":    e.Detector,
+		"kind":        e.Kind,
+		"severity":    e.Severity,
+		"summary":     e.Summary,
+		"evidence":    e.Evidence,
 	}
 	if e.PeerMember != nil {
 		payload["peer_member"] = *e.PeerMember

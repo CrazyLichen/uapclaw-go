@@ -1,6 +1,7 @@
 package agent
 
 import (
+	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -45,6 +46,12 @@ func (b *TeamAgentBlueprint) MemberName() *string {
 // 与既有 *string 方法签名不同，故新增派生方法而非改签名）。
 func (b *TeamAgentBlueprint) DispatcherMemberName() string {
 	return b.Ctx.MemberName
+}
+
+// DispatcherReliability 返回团队可靠性配置（未配置为 nil）。
+// Python: blueprint.spec.reliability（dispatcher.py:264）
+func (b *TeamAgentBlueprint) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
+	return b.Spec.Reliability
 }
 
 // Lifecycle 返回生命周期模式。

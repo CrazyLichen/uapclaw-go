@@ -1647,4 +1647,3 @@ func (r *ExternalHarnessMemberRuntime) openMemberTurn() harness.MemberTurn {
 	}
 	return turn
 }
-
