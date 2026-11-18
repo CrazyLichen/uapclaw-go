@@ -167,6 +167,31 @@ func TestTracerWorkflowUtils_TraceComponentBegin_extraMetadata(t *testing.T) {
 	_ = originWorkflowID
 }
 
+// TestTracerWorkflowUtils_TraceComponentBegin_metadata落span字段 端到端锁定：
+// getComponentMetadata（Camel 键）→ TriggerWorkflow(TraceWFCallStart) → setWorkflowMetadata
+// → span.ComponentID/WorkflowID 真实填充。曾因 producer snake 键与 switch Camel 键失配，
+// 元数据全落 default 被忽略（8.11 实施后审查发现并修正）。
+func TestTracerWorkflowUtils_TraceComponentBegin_metadata落span字段(t *testing.T) {
+	session := newFakeSession()
+	utils := TracerWorkflowUtils{}
+
+	utils.TraceComponentBegin(context.Background(), session, nil, nil)
+
+	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
+	if span == nil {
+		t.Fatal("TraceComponentBegin 未创建 workflow span")
+	}
+	if span.ComponentID != session.NodeID() {
+		t.Errorf("span.ComponentID = %q, 期望 %q（metadata 键名失配会落空）", span.ComponentID, session.NodeID())
+	}
+	if span.ComponentType != session.NodeType() {
+		t.Errorf("span.ComponentType = %q, 期望 %q", span.ComponentType, session.NodeType())
+	}
+	if span.WorkflowID != session.WorkflowID() {
+		t.Errorf("span.WorkflowID = %q, 期望 %q", span.WorkflowID, session.WorkflowID())
+	}
+}
+
 // TestTracerWorkflowUtils_TraceComponentInputs 测试追踪组件输入
 func TestTracerWorkflowUtils_TraceComponentInputs(t *testing.T) {
 	session := newFakeSession()
@@ -381,28 +406,28 @@ func TestGetComponentMetadata_无循环信息(t *testing.T) {
 
 	metadata := getComponentMetadata(session)
 
-	if metadata["component_id"] != "node-001" {
-		t.Errorf("component_id = %v, 期望 node-001", metadata["component_id"])
+	if metadata["ComponentID"] != "node-001" {
+		t.Errorf("component_id = %v, 期望 node-001", metadata["ComponentID"])
 	}
-	if metadata["component_name"] != "node-001" {
-		t.Errorf("component_name = %v, 期望 node-001", metadata["component_name"])
+	if metadata["ComponentName"] != "node-001" {
+		t.Errorf("component_name = %v, 期望 node-001", metadata["ComponentName"])
 	}
-	if metadata["component_type"] != "LLM" {
-		t.Errorf("component_type = %v, 期望 LLM", metadata["component_type"])
+	if metadata["ComponentType"] != "LLM" {
+		t.Errorf("component_type = %v, 期望 LLM", metadata["ComponentType"])
 	}
-	if metadata["workflow_id"] != "wf-001" {
-		t.Errorf("workflow_id = %v, 期望 wf-001", metadata["workflow_id"])
+	if metadata["WorkflowID"] != "wf-001" {
+		t.Errorf("workflow_id = %v, 期望 wf-001", metadata["WorkflowID"])
 	}
-	// 不在循环中，不应有 loop_node_id/loop_index
-	if _, ok := metadata["loop_node_id"]; ok {
-		t.Error("loop_node_id 不应存在")
+	// 不在循环中，不应有 LoopNodeID/LoopIndex
+	if _, ok := metadata["LoopNodeID"]; ok {
+		t.Error("LoopNodeID 不应存在")
 	}
-	if _, ok := metadata["loop_index"]; ok {
-		t.Error("loop_index 不应存在")
+	if _, ok := metadata["LoopIndex"]; ok {
+		t.Error("LoopIndex 不应存在")
 	}
 }
 
-// TestGetComponentMetadata_有循环信息 测试在循环中时额外返回 loop_node_id/loop_index
+// TestGetComponentMetadata_有循环信息 测试在循环中时额外返回 LoopNodeID/LoopIndex
 // Python: loop_id = state.get_global(LOOP_ID); index = state.get_global(loop_id + "." + "index")
 func TestGetComponentMetadata_有循环信息(t *testing.T) {
 	session := &fakeWorkflowSession{
@@ -417,11 +442,11 @@ func TestGetComponentMetadata_有循环信息(t *testing.T) {
 
 	metadata := getComponentMetadata(session)
 
-	if metadata["loop_node_id"] != "loop_node_1" {
-		t.Errorf("loop_node_id = %v, 期望 loop_node_1", metadata["loop_node_id"])
+	if metadata["LoopNodeID"] != "loop_node_1" {
+		t.Errorf("loop_node_id = %v, 期望 loop_node_1", metadata["LoopNodeID"])
 	}
-	if metadata["loop_index"] != 2 {
-		t.Errorf("loop_index = %v, 期望 2", metadata["loop_index"])
+	if metadata["LoopIndex"] != 2 {
+		t.Errorf("loop_index = %v, 期望 2", metadata["LoopIndex"])
 	}
 }
 
@@ -436,11 +461,11 @@ func TestGetComponentMetadata_State为nil(t *testing.T) {
 
 	metadata := getComponentMetadata(session)
 
-	if metadata["component_id"] != "node-001" {
-		t.Errorf("component_id = %v, 期望 node-001", metadata["component_id"])
+	if metadata["ComponentID"] != "node-001" {
+		t.Errorf("component_id = %v, 期望 node-001", metadata["ComponentID"])
 	}
-	if _, ok := metadata["loop_node_id"]; ok {
-		t.Error("loop_node_id 不应存在")
+	if _, ok := metadata["LoopNodeID"]; ok {
+		t.Error("LoopNodeID 不应存在")
 	}
 }
 
@@ -457,7 +482,7 @@ func TestGetComponentMetadata_LOOP_ID为空字符串(t *testing.T) {
 
 	metadata := getComponentMetadata(session)
 
-	if _, ok := metadata["loop_node_id"]; ok {
+	if _, ok := metadata["LoopNodeID"]; ok {
 		t.Error("loop_node_id 不应存在（空字符串等同于无循环）")
 	}
 }

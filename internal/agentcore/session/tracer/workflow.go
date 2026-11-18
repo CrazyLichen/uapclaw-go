@@ -249,10 +249,12 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 // Go 中 Config() 已返回 SessionConfig，GetWorkflowConfig 可调用，但 WorkflowConfig 尚未暴露 card.version/name。
 func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 	workflowID := session.WorkflowID()
+	// 键名与 setWorkflowMetadata 的 switch 键集一致（Python span.py 字段名的 Camel 对应物；
+	// Python 侧 snake 键经 Span.update setattr 对应 snake 字段，Go 侧经 switch 映射 Camel 字段）
 	metadata := map[string]any{
-		"workflow_id":      workflowID,
-		"workflow_version": "",
-		"workflow_name":    "",
+		"WorkflowID":      workflowID,
+		"WorkflowVersion": "",
+		"WorkflowName":    "",
 	}
 
 	cfg := session.Config()
@@ -268,8 +270,9 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 }
 
 // getComponentMetadata 获取组件元数据，对应 Python TracerWorkflowUtils._get_component_metadata。
-// 返回 component_id/component_name/component_type/workflow_id。
-// 当循环组件写入 LOOP_ID 后，额外返回 loop_node_id/loop_index。
+// 返回 ComponentID/ComponentName/ComponentType/WorkflowID（键名与 setWorkflowMetadata
+// switch 键集一致；Python 侧为 snake 字段名直接 setattr，Go 侧经 switch 映射 Camel 字段）。
+// 当循环组件写入 LOOP_ID 后，额外返回 LoopNodeID/LoopIndex。
 // Python:
 //
 //	Python: loop_id = state.get_global(LOOP_ID) — 获取循环标识
@@ -278,10 +281,10 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 //	Python: component_metadata.update({"loop_node_id": loop_id, "loop_index": index}) — 更新元数据
 func getComponentMetadata(session WorkflowNodeSession) map[string]any {
 	metadata := map[string]any{
-		"component_id":   session.NodeID(),
-		"component_name": session.NodeID(),
-		"component_type": session.NodeType(),
-		"workflow_id":    session.WorkflowID(),
+		"ComponentID":   session.NodeID(),
+		"ComponentName": session.NodeID(),
+		"ComponentType": session.NodeType(),
+		"WorkflowID":    session.WorkflowID(),
 	}
 
 	// Python: loop_id = state.get_global(LOOP_ID)
@@ -292,8 +295,8 @@ func getComponentMetadata(session WorkflowNodeSession) map[string]any {
 				// Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
 				indexKey := loopIDStr + loopIndexSuffix
 				indexVal := session.State().GetGlobal(state.StringKey(indexKey))
-				metadata["loop_node_id"] = loopIDStr
-				metadata["loop_index"] = indexVal
+				metadata["LoopNodeID"] = loopIDStr
+				metadata["LoopIndex"] = indexVal
 			}
 		}
 	}
