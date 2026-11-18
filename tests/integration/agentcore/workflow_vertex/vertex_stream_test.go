@@ -106,6 +106,12 @@ func (f *fakeInner) Checkpointer() interfaces.Checkpointer            { return n
 func (f *fakeInner) ActorManager() *stream_actor.ActorManager         { return f.am }
 func (f *fakeInner) Close() error                                     { return nil }
 
+// wfIDIntegration 集成测试默认 workflowID（NodeSession 经 getWorkflowID 继承）
+const wfIDIntegration = "wf-itest"
+
+// WorkflowID 返回工作流 ID（8.15 NodeConfig 管路）
+func (f *fakeInner) WorkflowID() string { return wfIDIntegration }
+
 // vertexWorld 真实 Vertex + ActorManager + 会话状态世界（A --stream--> B）
 type vertexWorld struct {
 	v      *graph.Vertex
@@ -121,11 +127,15 @@ func (s *VertexStreamSuite) newVertexWorld(abilities []components.ComponentAbili
 	parent := &fakeInner{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
 	exe := &fakeExe{}
 	v := graph.NewVertex("B", exe)
-	s.Require().True(v.Init(parent, nil))
-	v.ApplyNodeConfig(&workflow.NodeSpec{
+	// 8.15：经 NodeConfig 管路注入节点规格（真实 NodeSession.NodeConfig() 链路）
+	wfc, errWfc := workflow.NewWorkflowConfig(&workflow.WorkflowCard{})
+	s.Require().NoError(errWfc)
+	wfc.Spec.CompConfigs["B"] = &workflow.NodeSpec{
 		Abilities:       abilities,
 		StreamIOConfigs: &workflow.CompIOConfig{InputsSchema: streamSchema},
-	})
+	}
+	cfg.AddWorkflowConfig(wfIDIntegration, wfc)
+	s.Require().True(v.Init(parent, nil))
 	v.SetEndNode(isEnd)
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"B"}}

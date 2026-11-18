@@ -154,23 +154,6 @@ func collectRefSourceIDs(schema map[string]any) map[string]bool {
 	return ids
 }
 
-// applyNodeConfig 派生 nodeConfig 与能力面（Python init 的 vertex.py:92-97 段）。
-// 偏差 D-3：Python 内联于 init，Go 抽为独立方法以在 8.15 NodeConfig 管路回填前
-// 支持同包测试驱动；步骤顺序与判定不变。
-func (v *Vertex) applyNodeConfig(nc any) {
-	// ④ node_config（vertex.py:92）：any 断言 NodeSpec，nil/类型不符 → nil
-	v.nodeConfig, _ = nc.(*workflow.NodeSpec)
-	// ⑤ 能力面（vertex.py:93-95）：空则默认 [INVOKE]
-	if v.nodeConfig != nil && len(v.nodeConfig.Abilities) > 0 {
-		v.componentAbility = v.nodeConfig.Abilities
-	} else {
-		v.componentAbility = []components.ComponentAbility{components.ComponentAbilityInvoke}
-	}
-	// ⑥⑦ hasStreamCall/hasCall（vertex.py:96-97）
-	v.hasStreamCall = len(v.streamAbilities()) > 0
-	v.hasCall = len(v.componentAbility) > len(v.streamAbilities())
-}
-
 // ShouldHandleMessage 是否可处理流式消息（Python should_handle_message，vertex.py:805-807）
 func (v *Vertex) ShouldHandleMessage() bool {
 	return len(v.streamAbilities()) > 0
@@ -233,8 +216,17 @@ func (v *Vertex) Init(sess session.BaseSession, kwargs map[string]any) bool {
 	v.ctx, _ = kwargs["context"].(context.Context)
 	// ③ 流调用超时（vertex.py:91）
 	v.streamCalledTimeout = anyToFloat64(sess.Config().GetEnv(constants.CompStreamCallTimeoutKey))
-	// ④⑤⑥⑦ node_config 读取与能力派生（vertex.py:92-97，抽 applyNodeConfig 驱动，偏差 D-3）
-	v.applyNodeConfig(v.nodeSession.NodeConfig())
+	// ④⑤⑥⑦ node_config 读取与能力派生（vertex.py:92-97，✅ 8.15 D-3 内联回收）
+	v.nodeConfig = v.nodeSession.NodeConfig()
+	// ⑤ 能力面（vertex.py:93-95）：空则默认 [INVOKE]
+	if v.nodeConfig != nil && len(v.nodeConfig.Abilities) > 0 {
+		v.componentAbility = v.nodeConfig.Abilities
+	} else {
+		v.componentAbility = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	}
+	// ⑥⑦ hasStreamCall/hasCall（vertex.py:96-97）
+	v.hasStreamCall = len(v.streamAbilities()) > 0
+	v.hasCall = len(v.componentAbility) > len(v.streamAbilities())
 	// ⑧ 首初始化 debug 日志（vertex.py:99-105）：GRAPH_VERTEX_INIT + node_abilities
 	if v.isFirstInit.CompareAndSwap(true, false) {
 		abilities := make([]string, 0, len(v.componentAbility))
@@ -764,12 +756,6 @@ func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.Compon
 
 // 编译期断言：Vertex 实现 StreamConsumer（Python 双基类之一的 StreamConsumer ABC）
 var _ stream_actor.StreamConsumer = (*Vertex)(nil)
-
-// ApplyNodeConfig 装配期节点规格注入（偏差 D-3 的装配面：8.15 NodeConfig 管路
-// 回填前由构图层（8.1）与集成装配直接驱动 init 的派生逻辑；步骤与 init 一致）
-func (v *Vertex) ApplyNodeConfig(nc any) {
-	v.applyNodeConfig(nc)
-}
 
 // SetEndNode 装配期 End 节点标记（Python graph.py 构图期设置 is_end_node 的
 // 对应物；调用方为 8.1 PregelGraph.Compile）
