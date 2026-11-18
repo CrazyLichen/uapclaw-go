@@ -313,8 +313,15 @@ func (s *TeamAgentSpec) Validate() error {
 	if err := s.validateBootstrapMode(); err != nil {
 		return err
 	}
-	// 评审轮参数校验。
-	// Python: TeamAgentSpec.build() L753-760
+	// 评审轮参数：0 视为未设置，按 pydantic 默认值补齐（Python 字段默认
+	// 3 / 2400，构造即有值；Go 字面量构造可能跳过 NewTeamAgentSpec）。
+	// Python: TeamAgentSpec.build() L753-760 校验 >= 1 / > 0
+	if s.DefaultMaxReviewRounds == 0 {
+		s.DefaultMaxReviewRounds = 3
+	}
+	if s.ReviewStallTimeout == 0 {
+		s.ReviewStallTimeout = 2400
+	}
 	if s.DefaultMaxReviewRounds < 1 {
 		return fmt.Errorf("default_max_review_rounds must be >= 1, got %d", s.DefaultMaxReviewRounds)
 	}
