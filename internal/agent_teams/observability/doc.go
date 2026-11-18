@@ -19,6 +19,7 @@
 //	├── callback_handler.go  # OtelCallbackHandler
 //	├── monitor_handler.go   # OtelTeamMonitorHandler
 //	├── rail.go              # ObservabilityRail
+//	├── demand.go            # 全局 trajectory span processor 单例面（15.16c）
 //	└── setup.go             # 生命周期管理 + EventListenerRegistrar 接口
 //
 // 对应 Python 代码：openjiuwen/agent_teams/observability/
