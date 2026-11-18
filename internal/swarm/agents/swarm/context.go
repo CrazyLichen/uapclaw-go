@@ -273,6 +273,7 @@ func SwarmBuildContextFromSeed(seed map[string]any, config map[string]any, traje
 		TeamID:                  seedString(seed, "team_id"),
 		TeamWsRoot:              seedString(seed, "team_ws_root"),
 		TaskWorkspaceRoot:       seedString(seed, "task_workspace_root"),
+		TeamOutputsDir:          seedString(seed, "team_outputs_dir"),
 		TeamSkillVisibilityPath: seedString(seed, "team_skill_visibility_path"),
 		GlobalSkillsDir:         seedString(seed, "global_skills_dir"),
 		TrajectorySpanProcessor: trajectorySpanProcessor,
