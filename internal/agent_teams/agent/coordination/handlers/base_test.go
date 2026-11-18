@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
@@ -54,12 +55,16 @@ func (f *fakeHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { r
 
 // fakeBP 实现 types.DispatcherBlueprint 用于测试
 type fakeBP struct {
-	role       schema.TeamRole
-	memberName string
+	role        schema.TeamRole
+	memberName  string
+	reliability *railsreliabilitycore.ReliabilityConfig
 }
 
 func (f *fakeBP) Role() schema.TeamRole        { return f.role }
 func (f *fakeBP) DispatcherMemberName() string { return f.memberName }
+func (f *fakeBP) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
+	return f.reliability
+}
 
 // fakePollCtrl 实现 types.PollController 用于测试
 type fakePollCtrl struct {

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	reliability "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
+	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -51,24 +53,65 @@ func deriveMemberBuildContext(
 	}
 }
 
+// buildReliability 构造成员的可靠性组件与轨参数（门卫通过时）。
+//
+// 门卫对齐上游 agent_configurator.py:790-804：spec.reliability.enabled +
+// member_name 非空 + 角色值 ∈ monitor_roles +（leader 或有 messager）。
+// 有状态核心在此构建一次（extras 的单写者），每个 native 周期把它包进一条
+// 新 rail——detector 窗口 / leader sink 跨运行周期存活。
+//
+// Python: agent_configurator.py:790-821 reliability 段。
+func buildReliability(
+	spec atschema.TeamAgentSpec,
+	ctx atschema.TeamRuntimeContext,
+	c *AgentConfigurator,
+) (*reliability.ReliabilityComponents, bool) {
+	cfg := spec.Reliability
+	if cfg == nil || !cfg.Enabled || ctx.MemberName == "" {
+		return nil, false
+	}
+	isLeader := ctx.Role == atschema.TeamRoleLeader
+	roleIn := false
+	for _, r := range cfg.MonitorRoles {
+		if r == string(ctx.Role) {
+			roleIn = true
+			break
+		}
+	}
+	if !roleIn || (!isLeader && c.Messager() == nil) {
+		return nil, false
+	}
+	components := reliability.BuildReliabilityComponents(reliability.BuildComponentsDeps{
+		Config:     cfg,
+		MemberName: ctx.MemberName,
+		Messager:   c.Messager(),
+		TeamName:   c.TeamName(),
+		SenderId:   ctx.MemberName,
+		IsLeader:   isLeader,
+	})
+	return components, isLeader
+}
+
 // buildTeamHandles 收集 17 个团队活句柄。
 //
 // 对齐上游 agent_configurator.py:910-928 的 inject_team_handles(...) 实参。
-// swarmflow / reliability / expert 三个域在 Go 侧未迁（各字段保持零值），
-// 见 rails.TeamHandles 的 ⤵️ 标注。
+// swarmflow / expert 域在 Go 侧未迁（各字段保持零值），
+// 见 rails.TeamHandles 的 ⤵️ 标注。reliability 域已随 25.1g 落地。
 func buildTeamHandles(
 	c *AgentConfigurator,
 	ctx atschema.TeamRuntimeContext,
 	agentSpec atschema.DeepAgentSpec,
+	reliabilityComponents *reliability.ReliabilityComponents,
 ) rails.TeamHandles {
 	return rails.TeamHandles{
-		TeamBackend:         c.TeamBackend(),
-		WorkspaceManager:    c.WorkspaceManager(),
-		ModelAllocator:      c.ModelAllocator(),
-		Messager:            c.Messager(),
-		PermissionsOverride: ctx.PermissionsOverride,
-		WorktreeManager:     c.WorktreeManager(),
-		TaskEventTracker:    c.TaskEventTracker(),
+		TeamBackend:           c.TeamBackend(),
+		WorkspaceManager:      c.WorkspaceManager(),
+		ModelAllocator:        c.ModelAllocator(),
+		Messager:              c.Messager(),
+		PermissionsOverride:   ctx.PermissionsOverride,
+		WorktreeManager:       c.WorktreeManager(),
+		TaskEventTracker:      c.TaskEventTracker(),
+		ReliabilityComponents: reliabilityComponents,
 	}
 }
 
@@ -83,6 +126,8 @@ func buildTeamRailSpecInput(
 	isTeamPlanLeader bool,
 	approvalTools []string,
 	isCoordinatedTeammate bool,
+	reliabilityComps *reliability.ReliabilityComponents,
+	reliabilityIsLeader bool,
 	c *AgentConfigurator,
 ) rails.TeamRailSpecInput {
 	// 团队名优先取配置器持有的（旧路径 c.TeamName()），TeamSpec 兜底——
@@ -129,7 +174,18 @@ func buildTeamRailSpecInput(
 		IsCoordinatedTeammate: isCoordinatedTeammate,
 		HasTeamBackend:        c.TeamBackend() != nil,
 		HasMessager:           c.Messager() != nil,
+		// 门卫通过时透传可靠性配置（RailSpec.params 的 reliability_cfg）
+		Reliability:         reliabilityCompsInput(spec, reliabilityComps),
+		ReliabilityIsLeader: reliabilityIsLeader,
 	}
+}
+
+// reliabilityCompsInput 门卫通过时返回 spec.Reliability（nil = 不出 reliability 轨）。
+func reliabilityCompsInput(spec atschema.TeamAgentSpec, comps *reliability.ReliabilityComponents) *reliabilitycore.ReliabilityConfig {
+	if comps == nil {
+		return nil
+	}
+	return spec.Reliability
 }
 
 // predefinedExcludeTools 预定义团队要剔除动态 spawn 工具。

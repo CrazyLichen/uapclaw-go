@@ -502,10 +502,11 @@ func TestTeamAgentSpec_BuildContext槽位(t *testing.T) {
 	}
 }
 
-// TestTeamAgentSpec_MaterializeBuildContext_幂等 对齐 materialize_build_context
-// （blueprint.py:685-699）：活载体缺失且种子非空时经注册工厂重建；二次调用
-// 不重复构造（幂等）；回填③提取器依赖的 GetProjectDir/GetTeamOutputsDir 非 nil。
-func TestTeamAgentSpec_MaterializeBuildContext_幂等(t *testing.T) {
+// TestTeamAgentSpec_MaterializeBuildContext_无注册静默 对齐 Python
+// build_context_from_seed（build_context.py:146-160）：未注册平台工厂时
+// 静默返回 nil（上游明确语义）。D-15.13-k 过渡默认工厂已回收（15.16c），
+// 注册面归平台（internal/swarm/agents/swarm registry 测试覆盖重建链）。
+func TestTeamAgentSpec_MaterializeBuildContext_无注册静默(t *testing.T) {
 	spec := &TeamAgentSpec{BuildContextSeed: map[string]any{
 		"project_dir":      "/proj",
 		"team_outputs_dir": "/out",
@@ -513,18 +514,8 @@ func TestTeamAgentSpec_MaterializeBuildContext_幂等(t *testing.T) {
 	if err := spec.MaterializeBuildContext(); err != nil {
 		t.Fatalf("materialize: %v", err)
 	}
-	first := spec.BuildContext
-	if first == nil {
-		t.Fatal("materialize 后活载体应为非 nil")
-	}
-	if first.GetProjectDir() != "/proj" || first.GetTeamOutputsDir() != "/out" {
-		t.Fatalf("回填③提取器依赖字段未恢复: %q %q", first.GetProjectDir(), first.GetTeamOutputsDir())
-	}
-	if err := spec.MaterializeBuildContext(); err != nil {
-		t.Fatalf("二次 materialize: %v", err)
-	}
-	if spec.BuildContext != first {
-		t.Fatal("幂等：二次 materialize 不应重建活载体")
+	if spec.BuildContext != nil {
+		t.Fatal("未注册工厂时活载体应保持 nil（静默语义）")
 	}
 }
 

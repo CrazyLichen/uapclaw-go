@@ -1727,3 +1727,27 @@ func payloadFromWire(eventType, schemaVersion string, data map[string]any) (Harn
 	}
 	return UnknownEvent{EventType: eventType, SchemaVersion: schemaVersion, Payload: frozen}, nil
 }
+
+// ──────────────────────────── 导出函数：JSON 边界助手公共面 ────────────────────────────
+
+// AsInteger 校验并取出 JSON 整数（对应 serialization.py:502-506 _integer）。
+// 供 25.1f 等协议消费方复用；严格语义（拒 bool / NaN / Inf / 非整值 / 溢出）。
+func AsInteger(value any, fieldName string) (int, error) { return asInteger(value, fieldName) }
+
+// AsList 校验并取出 JSON 数组（对应 serialization.py:480-483 _list）。
+func AsList(value any, fieldName string) ([]any, error) { return asList(value, fieldName) }
+
+// AsMapping 校验并取出 JSON 对象（对应 serialization.py:476-477 _json_object）。
+func AsMapping(value any, fieldName string) (map[string]any, error) {
+	return asMapping(value, fieldName)
+}
+
+// AsOptionalString 取出可空字符串（对应 serialization.py:_optional_string）。
+func AsOptionalString(value any, fieldName string) (*string, error) {
+	return asOptionalString(value, fieldName)
+}
+
+// AsRequiredString 取出必填字符串。
+func AsRequiredString(value any, fieldName string) (string, error) {
+	return asRequiredString(value, fieldName)
+}

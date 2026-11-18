@@ -53,14 +53,14 @@ func TestMaxRoundsEvaluator_边界值(t *testing.T) {
 func TestMaxRoundsEvaluator_状态方法(t *testing.T) {
 	e := NewMaxRoundsEvaluator(5)
 
-	// 无状态评估器：ExportState 返回空 map
-	state := e.ExportState()
+	// 无状态评估器：GetState 返回空 map
+	state := e.GetState()
 	if len(state) != 0 {
-		t.Errorf("ExportState() = %v, want empty map", state)
+		t.Errorf("GetState() = %v, want empty map", state)
 	}
 
-	// ImportState 不 panic 即可
-	e.ImportState(map[string]any{"foo": "bar"})
+	// LoadState 不 panic 即可
+	e.LoadState(map[string]any{"foo": "bar"})
 
 	// Reset 不 panic 即可
 	e.Reset()
@@ -94,11 +94,11 @@ func TestTokenBudgetEvaluator_边界值(t *testing.T) {
 
 func TestTokenBudgetEvaluator_状态方法(t *testing.T) {
 	e := NewTokenBudgetEvaluator(100)
-	state := e.ExportState()
+	state := e.GetState()
 	if len(state) != 0 {
-		t.Errorf("ExportState() = %v, want empty map", state)
+		t.Errorf("GetState() = %v, want empty map", state)
 	}
-	e.ImportState(nil)
+	e.LoadState(nil)
 	e.Reset()
 }
 
@@ -135,11 +135,11 @@ func TestTimeoutEvaluator_边界值(t *testing.T) {
 
 func TestTimeoutEvaluator_状态方法(t *testing.T) {
 	e := NewTimeoutEvaluator(60.0)
-	state := e.ExportState()
+	state := e.GetState()
 	if len(state) != 0 {
-		t.Errorf("ExportState() = %v, want empty map", state)
+		t.Errorf("GetState() = %v, want empty map", state)
 	}
-	e.ImportState(nil)
+	e.LoadState(nil)
 	e.Reset()
 }
 
@@ -240,29 +240,29 @@ func TestCompletionPromiseEvaluator_状态导出导入(t *testing.T) {
 	e.NotifyFulfilled("done")
 	e.NotifyFulfilled("done again")
 
-	state := e.ExportState()
+	state := e.GetState()
 	if state["confirmation_count"] != 2 {
-		t.Errorf("ExportState confirmation_count = %v, want 2", state["confirmation_count"])
+		t.Errorf("GetState confirmation_count = %v, want 2", state["confirmation_count"])
 	}
 	if state["fulfilled"] != false {
-		t.Errorf("ExportState fulfilled = %v, want false", state["fulfilled"])
+		t.Errorf("GetState fulfilled = %v, want false", state["fulfilled"])
 	}
 	if state["required_confirmations"] != 3 {
-		t.Errorf("ExportState required_confirmations = %v, want 3", state["required_confirmations"])
+		t.Errorf("GetState required_confirmations = %v, want 3", state["required_confirmations"])
 	}
 
 	// 恢复到新评估器
 	e2 := NewCompletionPromiseEvaluator("<promise>", 1)
-	e2.ImportState(state)
+	e2.LoadState(state)
 	if e2.Confirmations() != 2 {
-		t.Errorf("Confirmations after ImportState = %d, want 2", e2.Confirmations())
+		t.Errorf("Confirmations after LoadState = %d, want 2", e2.Confirmations())
 	}
 	if e2.RequiredConfirmations() != 3 {
-		t.Errorf("RequiredConfirmations after ImportState = %d, want 3", e2.RequiredConfirmations())
+		t.Errorf("RequiredConfirmations after LoadState = %d, want 3", e2.RequiredConfirmations())
 	}
 	// confirmationCount(2) < requiredConfirmations(3)，所以 fulfilled 仍为 false
 	if e2.ShouldStop(StopEvaluationContext{}) {
-		t.Error("ShouldStop after ImportState with count=2 < required=3, want false")
+		t.Error("ShouldStop after LoadState with count=2 < required=3, want false")
 	}
 
 	// 再确认 1 次达到 3 次
@@ -276,14 +276,14 @@ func TestCompletionPromiseEvaluator_状态导入覆盖fulfilled(t *testing.T) {
 	e := NewCompletionPromiseEvaluator("<promise>", 2)
 
 	// 直接导入一个 fulfilled=true 的状态
-	e.ImportState(map[string]any{
+	e.LoadState(map[string]any{
 		"fulfilled":              true,
 		"matched_text":           "done",
 		"required_confirmations": 2,
 		"confirmation_count":     2,
 	})
 	if !e.ShouldStop(StopEvaluationContext{}) {
-		t.Error("ShouldStop after ImportState with fulfilled=true, want true")
+		t.Error("ShouldStop after LoadState with fulfilled=true, want true")
 	}
 }
 
@@ -292,10 +292,10 @@ func TestCompletionPromiseEvaluator_状态导入空数据(t *testing.T) {
 	e.NotifyFulfilled("done")
 
 	// 导入 nil 不 panic
-	e.ImportState(nil)
+	e.LoadState(nil)
 
 	// 导入空 map 不 panic
-	e.ImportState(map[string]any{})
+	e.LoadState(map[string]any{})
 }
 
 func TestCompletionPromiseEvaluator_Reset(t *testing.T) {
@@ -346,11 +346,11 @@ func TestCustomPredicateEvaluator_状态方法(t *testing.T) {
 	e := NewCustomPredicateEvaluator("test", func(ctx StopEvaluationContext) bool {
 		return false
 	})
-	state := e.ExportState()
+	state := e.GetState()
 	if len(state) != 0 {
-		t.Errorf("ExportState() = %v, want empty map", state)
+		t.Errorf("GetState() = %v, want empty map", state)
 	}
-	e.ImportState(nil)
+	e.LoadState(nil)
 	e.Reset()
 }
 
@@ -403,40 +403,40 @@ func TestToStr_类型分支(t *testing.T) {
 	}
 }
 
-// TestMaxRoundsEvaluator_ImportStateReset 验证 ImportState 和 Reset 为无操作
-func TestMaxRoundsEvaluator_ImportStateReset(t *testing.T) {
+// TestMaxRoundsEvaluator_LoadStateReset 验证 LoadState 和 Reset 为无操作
+func TestMaxRoundsEvaluator_LoadStateReset(t *testing.T) {
 	e := &MaxRoundsEvaluator{maxRounds: 5}
-	// ImportState 不应 panic
-	e.ImportState(map[string]any{"key": "value"})
+	// LoadState 不应 panic
+	e.LoadState(map[string]any{"key": "value"})
 	// Reset 不应 panic
 	e.Reset()
 }
 
-// TestTokenBudgetEvaluator_ImportStateReset 验证 ImportState 和 Reset 为无操作
-func TestTokenBudgetEvaluator_ImportStateReset(t *testing.T) {
+// TestTokenBudgetEvaluator_LoadStateReset 验证 LoadState 和 Reset 为无操作
+func TestTokenBudgetEvaluator_LoadStateReset(t *testing.T) {
 	e := &TokenBudgetEvaluator{maxTokens: 1000}
-	e.ImportState(map[string]any{"key": "value"})
+	e.LoadState(map[string]any{"key": "value"})
 	e.Reset()
 }
 
-// TestTimeoutEvaluator_ImportStateReset 验证 ImportState 和 Reset
-func TestTimeoutEvaluator_ImportStateReset(t *testing.T) {
+// TestTimeoutEvaluator_LoadStateReset 验证 LoadState 和 Reset
+func TestTimeoutEvaluator_LoadStateReset(t *testing.T) {
 	e := &TimeoutEvaluator{timeoutSeconds: 30}
-	e.ImportState(map[string]any{"key": "value"})
+	e.LoadState(map[string]any{"key": "value"})
 	e.Reset()
 }
 
-// TestCompletionPromiseEvaluator_ImportStateReset 验证 ImportState 和 Reset
-func TestCompletionPromiseEvaluator_ImportStateReset(t *testing.T) {
+// TestCompletionPromiseEvaluator_LoadStateReset 验证 LoadState 和 Reset
+func TestCompletionPromiseEvaluator_LoadStateReset(t *testing.T) {
 	e := &CompletionPromiseEvaluator{}
-	e.ImportState(map[string]any{"key": "value"})
+	e.LoadState(map[string]any{"key": "value"})
 	e.Reset()
 }
 
-// TestCustomPredicateEvaluator_ImportStateReset 验证 ImportState 和 Reset
-func TestCustomPredicateEvaluator_ImportStateReset(t *testing.T) {
+// TestCustomPredicateEvaluator_LoadStateReset 验证 LoadState 和 Reset
+func TestCustomPredicateEvaluator_LoadStateReset(t *testing.T) {
 	e := &CustomPredicateEvaluator{}
-	e.ImportState(map[string]any{"key": "value"})
+	e.LoadState(map[string]any{"key": "value"})
 	e.Reset()
 }
 
@@ -485,9 +485,9 @@ func TestNoProgressAnswerEvaluator_StateRoundTrip(t *testing.T) {
 	short := map[string]any{"result_type": "answer", "output": "ok"}
 	e.ShouldStop(StopEvaluationContext{LastResult: short})
 
-	state := e.ExportState()
+	state := e.GetState()
 	other := NewNoProgressAnswerEvaluator(3, 20)
-	other.ImportState(state)
+	other.LoadState(state)
 	if other.ShouldStop(StopEvaluationContext{LastResult: short}) {
 		t.Fatal("导入计数 1 后第 1 轮（累计 2）不应停止")
 	}

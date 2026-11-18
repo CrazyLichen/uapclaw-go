@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── fake 实现 ────────────────────────────
@@ -31,7 +32,7 @@ func (f *fakeInnerSession) ExecutableID() string                             { r
 func (f *fakeInnerSession) SessionID() string                                { return f.sessionID }
 func (f *fakeInnerSession) Config() config.SessionConfig                     { return f.config }
 func (f *fakeInnerSession) Tracer() *tracer.Tracer                           { return nil }
-func (f *fakeInnerSession) ActorManager() any                                { return nil }
+func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager                                { return nil }
 func (f *fakeInnerSession) Close() error                                     { return nil }
 
 // newFakeInnerSession 创建测试用 fake session
@@ -217,7 +218,7 @@ func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { retu
 func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
 func (f *fakeSessionWithoutExecID) Config() config.SessionConfig          { return f.cfgValue }
 func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                { return nil }
-func (f *fakeSessionWithoutExecID) ActorManager() any                     { return nil }
+func (f *fakeSessionWithoutExecID) ActorManager() *stream_actor.ActorManager                     { return nil }
 func (f *fakeSessionWithoutExecID) Close() error                          { return nil }
 
 // TestGetExecutableID_不满足接口 测试 session 不满足 ExecutableIDProvider 时返回空字符串

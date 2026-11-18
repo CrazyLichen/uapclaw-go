@@ -89,3 +89,62 @@ func DefaultTeamMemoryDir(teamName string) string {
 func IndependentMemberWorkspace(memberName string) string {
 	return filepath.Join(GetHome(), memberName+"_workspace")
 }
+
+// ──────────────────────────── 全局变量（skills 目录覆盖） ────────────────────────────
+
+var (
+	// configuredGlobalSkillsDir 平台覆盖的全局 Skill 库目录
+	// Python: _configured_global_skills_dir (paths.py:22)
+	configuredGlobalSkillsDir string
+)
+
+// ──────────────────────────── 导出函数（skills 可见性） ────────────────────────────
+
+// SKILL_VISIBILITY_FILENAME 团队/成员 Skill 可见性声明文件名。
+// Python: SKILL_VISIBILITY_FILENAME (paths.py:40)
+const SKILL_VISIBILITY_FILENAME = "skills-visibility.json"
+
+// ConfigureGlobalSkillsDir 把全局唯一的 Skill 库指到宿主拥有的目录。
+// Python: configure_global_skills_dir (paths.py:82-94)
+func ConfigureGlobalSkillsDir(path string) {
+	configuredGlobalSkillsDir = path
+}
+
+// ResetGlobalSkillsDir 清除 Skill 库覆盖，恢复默认布局。
+// Python: reset_global_skills_dir (paths.py:97-100)
+func ResetGlobalSkillsDir() {
+	configuredGlobalSkillsDir = ""
+}
+
+// GlobalSkillsDir 返回全体团队成员共享的唯一天然 Skill 库目录。
+// 没有按团队/成员的 Skill 目录：可见性是声明文件（见
+// MemberSkillVisibilityPath），不是第二份磁盘拷贝。
+// Python: global_skills_dir (paths.py:103-117)
+func GlobalSkillsDir() string {
+	if configuredGlobalSkillsDir != "" {
+		return configuredGlobalSkillsDir
+	}
+	return filepath.Join(GetHome(), "workspace", "skills")
+}
+
+// TeamMemberWorkspaceDir 返回团队成员稳定工作空间根目录。
+// Python: team_member_workspace_dir (paths.py:182-194)
+// 布局：{TeamHome(teamName)}/workspaces/{memberName}_workspace/
+func TeamMemberWorkspaceDir(teamName, memberName string) string {
+	return filepath.Join(TeamHome(teamName), "workspaces", memberName+"_workspace")
+}
+
+// MemberSkillVisibilityPath 返回团队成员的 Skill 可见性声明路径。
+// 文件位于工作空间根而非 skills/ 子目录：成员自己不拥有 Skill 目录，
+// 只拥有指向 GlobalSkillsDir 的视图。
+// Python: member_skill_visibility_path (paths.py:205-224)
+func MemberSkillVisibilityPath(teamName, memberName string) string {
+	return filepath.Join(TeamMemberWorkspaceDir(teamName, memberName), SKILL_VISIBILITY_FILENAME)
+}
+
+// TeamSkillVisibilityPath 返回团队级 Skill 可见性声明路径。
+// Python: team_skill_visibility_path (paths.py:227-241)
+// 布局：{TeamHome(teamName)}/team-workspace/skills-visibility.json
+func TeamSkillVisibilityPath(teamName string) string {
+	return filepath.Join(TeamWorkspaceDir(teamName), SKILL_VISIBILITY_FILENAME)
+}

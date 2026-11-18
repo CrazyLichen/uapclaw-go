@@ -2127,6 +2127,16 @@ func (d *DeepAgent) bindLiveGoalManager(rail *rails.TaskCompletionRail) {
 }
 
 // goalPromptLanguage 解析 GoalManager 与自动 TaskCompletionRail 的语言。
+// ContextEngineForCheckpoint 返回上下文引擎，供 25.1f checkpoint 捕获
+// save_contexts 结果。只加只读 getter，不改任何方法体、不扩接口面。
+// Python: protocol_adapter.py:390 agent.react_agent.context_engine.save_contexts(session)
+func (d *DeepAgent) ContextEngineForCheckpoint() ceinterface.ContextEngine {
+	if react := d.ReactAgent(); react != nil {
+		return react.ContextEngine()
+	}
+	return nil
+}
+
 // Python: DeepAgent._goal_prompt_language (deep_agent.py L518)
 func (d *DeepAgent) goalPromptLanguage() string {
 	d.configMu.RLock()
@@ -3422,7 +3432,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 
 			// 更新状态
 			st = d.LoadState(sess)
-			exported := coord.ExportState()
+			exported := coord.GetState()
 			st.StopConditionState = map[string]any{
 				"iteration":        exported.Iteration,
 				"token_usage":      exported.TokenUsage,
@@ -4936,7 +4946,7 @@ func (d *DeepAgent) buildInteractionNextWork(
 	coord.SetLastResult(result)
 
 	state := d.LoadState(sess)
-	exported := coord.ExportState()
+	exported := coord.GetState()
 	state.StopConditionState = map[string]any{
 		"iteration":        exported.Iteration,
 		"token_usage":      exported.TokenUsage,

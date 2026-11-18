@@ -1,6 +1,8 @@
 package rails
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
+	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -73,6 +75,12 @@ type TeamRailSpecInput struct {
 	HasTeamBackend bool
 	// HasMessager 是否有消息总线（审批轨门卫之一）
 	HasMessager bool
+	// Reliability 已通过门卫的可靠性配置（nil = 不出 reliability 轨）。
+	// 门卫在配置器侧（agent_configurator.py:790-804）：enabled + member_name +
+	// role ∈ monitor_roles + (is_leader 或有 messager)。
+	Reliability *reliabilitycore.ReliabilityConfig
+	// ReliabilityIsLeader 该成员是否 leader（rail params 透传）
+	ReliabilityIsLeader bool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -203,6 +211,22 @@ func TeamRailSpecs(in TeamRailSpecInput) []hschema.RailSpec {
 	// 5. team.plan_mode（team.plan Leader 才出）
 	if in.IsTeamPlanLeader {
 		specs = append(specs, hschema.RailSpec{Type: TeamPlanMode})
+	}
+
+	// 6. team.reliability（配置器门卫通过才出）。
+	// Python: agent_configurator.py:808-821 RailSpec(type=TEAM_RELIABILITY,
+	// params={reliability_cfg.model_dump(), team_name, sender_id=member_name,
+	// is_leader})——reliability_cfg 直接以 json tag 序列化（struct 本体入 params）。
+	if in.Reliability != nil {
+		specs = append(specs, hschema.RailSpec{
+			Type: TeamReliability,
+			Params: map[string]any{
+				"reliability_cfg": in.Reliability,
+				"team_name":       in.TeamName,
+				"sender_id":       in.MemberName,
+				"is_leader":       in.ReliabilityIsLeader,
+			},
+		})
 	}
 
 	return specs
@@ -357,16 +381,46 @@ func buildTeamPlanModeRail(params map[string]any, ctx hschema.BuildContextInterf
 	return NewTeamPlanModeRail(WithLanguageOverride(lang)), nil
 }
 
-// buildTeamReliabilityRail 占位工厂：可靠性轨的 Go 实现未落地。
+// buildTeamReliabilityRail 构造可靠性轨（优先复用注入的有状态组件）。
 //
-// ⤵️ 上游实现：agent_teams/rails/elements.py:365-433 → reliability/rail.py
-// 依赖 agent_teams/reliability/{factory,monitor,detectors,remediation,anomaly}.py，
-// 整域未迁。落地时把本函数体替换为真正的构造即可，签名与注册点都不变。
+// Python: elements.py:369-407 build_team_reliability_rail。有状态核心（detector
+// 窗口、修复器、leader sink）由配置器构建一次并注入；每个运行周期把它包进一条
+// 新 rail。无注入组件时从 params 重建（跨进程成员等无注入上下文的 fallback）。
+//
+// ⤴️ 25.1b 登记：本函数原为占位工厂（25.1g 回填，占位日志/哨兵已按规则 8 删除）。
 func buildTeamReliabilityRail(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
-	logger.Warn(logComponent).
-		Str("rail_type", TeamReliability).
-		Msg("team reliability rail provider is not implemented; skipping")
-	return nil, nil
+	// Python: inp = TeamReliabilityInput.resolve(params, context)
+	memberName := hschema.ContextString(ctx, "member_name", "")
+	cfgAny, hasCfg := params["reliability_cfg"]
+	if !hasCfg || cfgAny == nil {
+		return nil, nil
+	}
+	cfg, ok := cfgAny.(*reliabilitycore.ReliabilityConfig)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("rail_type", TeamReliability).
+			Msg("reliability_cfg param is not *ReliabilityConfig; skipping")
+		return nil, nil
+	}
+	teamName := hschema.ParamString(params, "team_name", "default")
+	senderID := hschema.ParamString(params, "sender_id", "")
+	isLeader := hschema.ParamBool(params, "is_leader", false)
+
+	// Python: components = get_reliability_components(context)
+	components := GetReliabilityComponents(ctx)
+	if components == nil {
+		// Python fallback: build_reliability_components(cfg, ...)
+		components = reliability.BuildReliabilityComponents(reliability.BuildComponentsDeps{
+			Config:     cfg,
+			MemberName: memberName,
+			Messager:   GetMessager(ctx),
+			TeamName:   teamName,
+			SenderId:   senderID,
+			IsLeader:   isLeader,
+		})
+	}
+	// Python: return reliability_rail_from_components(components)
+	return reliability.ReliabilityRailFromComponents(components), nil
 }
 
 // buildTeamSkillUseRail 占位工厂：团队技能轨的 Go 实现未落地。

@@ -10,6 +10,7 @@ import (
 	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -433,6 +434,10 @@ func TestTeamAgent_FromSpawnPayload(t *testing.T) {
 // from_spawn_payload 的 configure 前 materialize（team_agent.py:1467）：
 // payload 携带 build_context_seed 时，Configure 之前活载体由种子重建。
 func TestTeamAgent_FromSpawnPayload_materializeBuildContext(t *testing.T) {
+	// 15.16c：D-15.13-k 过渡工厂已回收——materialize 依赖平台注册的种子工厂
+	//（生产语义：接收进程经 enrich 注册，registry.py 唯一注册点）。测试侧
+	// 注册同一平台工厂（swarm/agents/swarm 不反向依赖本包，无环）。
+	swarm.RegisterSwarmBuildContextFactory()
 	spec := atschema.NewTeamAgentSpec()
 	spec.TeamName = "team_seed"
 	spec.Agents = map[string]atschema.DeepAgentSpec{"leader": {}}

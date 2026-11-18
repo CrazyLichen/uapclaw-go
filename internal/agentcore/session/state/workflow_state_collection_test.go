@@ -313,17 +313,17 @@ func TestGetByTransformer_组件状态(t *testing.T) {
 		t.Fatalf("UpdateByID 失败: %v", err)
 	}
 	compState.Commit("node1")
-	result := sc.GetByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("x"))
+	result := sc.GetByTransformer(func(r ReadableStateLike) map[string]any {
+		return map[string]any{"x": r.Get(StringKey("x"))}
 	})
-	if result != 42 {
-		t.Errorf("期望 42，实际=%v", result)
+	if result["x"] != 42 {
+		t.Errorf("期望 42，实际=%v", result["x"])
 	}
 
 	// compState 为 nil 时返回 nil
 	sc2 := &WorkflowStateCollection{}
-	result = sc2.GetByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("x"))
+	result = sc2.GetByTransformer(func(r ReadableStateLike) map[string]any {
+		return nil
 	})
 	if result != nil {
 		t.Errorf("期望 nil，实际=%v", result)

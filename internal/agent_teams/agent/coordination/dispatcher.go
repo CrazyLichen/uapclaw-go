@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
+	handlers "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	reliabilitypkg "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	callback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -45,6 +46,12 @@ type EventDispatcher struct {
 	StaleTask *handlers.StaleTaskHandler
 	// TeamCompletion 团队完成处理器
 	TeamCompletion *handlers.TeamCompletionHandler
+	// Reliability 可靠性处理器（未启用为 nil）。
+	// Python: dispatcher.reliability（dispatcher.py:263）
+	Reliability *handlers.ReliabilityHandler
+	// ExternalRuntime 外部运行时重试处理器（恒注册）。
+	// Python: dispatcher.external_runtime（dispatcher.py:286）
+	ExternalRuntime *handlers.ExternalRuntimeHandler
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -87,23 +94,43 @@ func NewEventDispatcher(
 	staleTask := handlers.NewStaleTaskHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
 	teamCompletion := handlers.NewTeamCompletionHandler(host, bp, inf, pollCtrl)
 
+	// Python: dispatcher.py:258-286 — reliability handler 仅在团队 opt-in
+	// （spec.reliability.enabled）时装配（含团队级 pingpong detector 的构造）；
+	// external runtime 重试 handler 恒注册（leader-only 方法内守卫）。
+	var reliabilityHandler *handlers.ReliabilityHandler
+	if cfg := bp.DispatcherReliability(); cfg != nil && cfg.Enabled {
+		reliabilityHandler = handlers.NewReliabilityHandler(
+			host, bp, inf, pollCtrl,
+			reliabilitypkg.BuildRemediationPolicy(cfg),
+			reliabilitypkg.BuildPingPongDetector(cfg),
+		)
+	}
+	externalRuntime := handlers.NewExternalRuntimeHandler(host, bp, inf, pollCtrl)
+
 	d := &EventDispatcher{
-		round:          host,
-		blueprint:      bp,
-		infra:          inf,
-		framework:      fw,
-		Lifecycle:      lifecycle,
-		Member:         member,
-		Message:        message,
-		TaskBoard:      taskBoard,
-		StaleTask:      staleTask,
-		TeamCompletion: teamCompletion,
+		round:           host,
+		blueprint:       bp,
+		infra:           inf,
+		framework:       fw,
+		Lifecycle:       lifecycle,
+		Member:          member,
+		Message:         message,
+		TaskBoard:       taskBoard,
+		StaleTask:       staleTask,
+		TeamCompletion:  teamCompletion,
+		Reliability:     reliabilityHandler,
+		ExternalRuntime: externalRuntime,
 	}
 
 	// 注册顺序决定 fan-out 顺序，与 Python 一致：
-	// 依次为 lifecycle、member、message、task_board、stale_task、team_completion
-	// 即：生命周期、成员、消息、任务面板、过期任务、团队完成
+	// 依次为 lifecycle、member、message、task_board、stale_task、team_completion，
+	// 之后 reliability（非 nil 时）、external_runtime 恒最后。
+	// 即：生命周期、成员、消息、任务面板、过期任务、团队完成、可靠性、外部运行时
 	handlerList := []types.CallbacksProvider{lifecycle, member, message, taskBoard, staleTask, teamCompletion}
+	if reliabilityHandler != nil {
+		handlerList = append(handlerList, reliabilityHandler)
+	}
+	handlerList = append(handlerList, externalRuntime)
 	for _, handler := range handlerList {
 		for eventKey, cb := range handler.GetCallbacks() {
 			fw.OnCustom(eventKey, wrapCallback(coordCallbackFunc(cb)))

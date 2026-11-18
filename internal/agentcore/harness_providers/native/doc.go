@@ -8,9 +8,11 @@
 // 文件目录：
 //
 //	native/
-//	├── doc.go        # 包文档
-//	├── harness.go    # DeepAgentHarness 适配器 + observationRail + turnState + 助手
-//	└── provider.go  # NativeHarnessProvider 工厂（可序列化配置 → 未启动 harness）
+//	├── doc.go              # 包文档
+//	├── harness.go          # DeepAgentHarness 适配器 + observationRail + turnState + 助手
+//	├── checkpoint.go       # NativeCheckpoint / SavedInput / EncodeContexts（Python: agent_teams/harness/checkpoint.py）
+//	├── protocolAdapter.go  # NativeHarnessProtocolAdapter / NativeV2HarnessProvider / CreateNativeHarnessProtocol（Python: agent_teams/harness/protocol_adapter.py）
+//	└── provider.go        # NativeHarnessProvider / NativeV2HarnessProvider 工厂注册
 //
 // 对应 Python 代码：openjiuwen/harness_providers/native/{__init__,harness,provider}.py
 package native

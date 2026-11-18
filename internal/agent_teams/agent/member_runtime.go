@@ -7,7 +7,7 @@ import (
 
 // MemberRuntime：团队成员「大脑缝」接口，一比一移植 Python
 // openjiuwen/agent_teams/agent/member_runtime.py:40-171 的
-// ``MemberRuntime`` Protocol（2026-11-03 上游快照，文件全文 192 行）。
+// “MemberRuntime“ Protocol（2026-11-03 上游快照，文件全文 192 行）。
 //
 // StreamController / coordination / configurator 只经本面驱动成员的大脑。
 // 默认实现是 TeamHarness（DeepAgent 背书）；外部 CLI 成员由
@@ -15,8 +15,8 @@ import (
 // 实现同一表面。Python 侧仅声明实例上实际被访问的成员；rail/记忆钩子在
 // 外部 runtime 上实现为 no-op（configurator 对此类成员不调用它们）。
 //
-// 承载方式差异（spec 15.13 §5 登记）：Python 以 ``MemberRuntimeLike =
-// CliRuntimeBase | ExternalHarnessMemberRuntime`` 联合别名承载同一鸭子面；
+// 承载方式差异（spec 15.13 §5 登记）：Python 以 “MemberRuntimeLike =
+// CliRuntimeBase | ExternalHarnessMemberRuntime“ 联合别名承载同一鸭子面；
 // Go 无联合类型，以本接口承载——外部第三方 provider 运行时未来也须满足。
 //
 // Python: MemberRuntime (member_runtime.py:40)
@@ -77,7 +77,7 @@ type MemberRuntime interface {
 	// Python: subscribe (member_runtime.py:97)
 	Subscribe(
 		onState func(old, new harnessprotocol.HarnessState, sessionID string),
-		onRound func(kind string, roundID int),
+		onRound func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult),
 	)
 
 	// ───── interrupt-resume helpers ─────

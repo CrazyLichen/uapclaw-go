@@ -53,25 +53,3 @@ func TestParentSysOperation转发_透传到core(t *testing.T) {
 
 	assert.Equal(t, "handle", atschema.ParentSysOperation(ctx))
 }
-
-// TestDefaultBuildContextFromSeed_基类字段重建 过渡默认工厂（偏差 D-15.13-k）：
-// 基类可序列化字段从种子恢复。Python 平台工厂（jiuwenswarm registry.py:198
-// _build_swarm_context_from_seed）携带本地 config/trajectory 句柄，Go 平台
-// 子类落地后经 RegisterBuildContextFactory 覆盖注册。
-func TestDefaultBuildContextFromSeed_基类字段重建(t *testing.T) {
-	bc, err := atschema.DefaultBuildContextFromSeed(map[string]any{
-		"language":         "en",
-		"member_name":      "beta",
-		"role":             "teammate",
-		"member_card_id":   "pay_beta",
-		"project_dir":      "/proj",
-		"team_outputs_dir": "/out",
-	})
-	if err != nil {
-		t.Fatalf("from seed: %v", err)
-	}
-	if bc.GetLanguage() != "en" || bc.GetMemberName() != "beta" || bc.GetRole() != "teammate" ||
-		bc.GetMemberCardID() != "pay_beta" || bc.GetProjectDir() != "/proj" || bc.GetTeamOutputsDir() != "/out" {
-		t.Fatalf("基类字段重建不符: %+v", bc)
-	}
-}

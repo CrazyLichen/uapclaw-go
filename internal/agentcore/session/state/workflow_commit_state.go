@@ -100,7 +100,7 @@ func (s *WorkflowCommitState) GetOutputs(nodeID ...string) any {
 }
 
 // GetInputsByTransformer 通过转换函数获取输入。
-func (s *WorkflowCommitState) GetInputsByTransformer(transformer Transformer) any {
+func (s *WorkflowCommitState) GetInputsByTransformer(transformer Transformer) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.ioState == nil {

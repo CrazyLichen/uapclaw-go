@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -71,6 +72,9 @@ type DispatcherBlueprint interface {
 	Role() schema.TeamRole
 	// DispatcherMemberName 返回成员名（空串表示未设置）
 	DispatcherMemberName() string
+	// DispatcherReliability 返回团队可靠性配置（未配置为 nil）。
+	// Python: blueprint.spec.reliability（dispatcher.py:264 读 spec.reliability.enabled）
+	DispatcherReliability() *railsreliabilitycore.ReliabilityConfig
 }
 
 // DispatcherInfra Dispatcher 构造所需的 infra 接口。

@@ -102,6 +102,9 @@ type MemberDao interface {
 	// 发生在 build_team 写入成员行之前）。
 	// Python: update_member_served_model (member_dao.py:807)
 	UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool
+	// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用。
+	// Python: MemberDao.promote_member_fallback_model (member_dao.py:844-868)
+	PromoteMemberFallbackModel(ctx context.Context, memberName, teamName string) bool
 	// GetMembersMaxUpdatedAt 获取 MAX(updated_at)（成员变更检测）。
 	// Python: get_members_max_updated_at() → int
 	GetMembersMaxUpdatedAt(ctx context.Context, teamName string) int64

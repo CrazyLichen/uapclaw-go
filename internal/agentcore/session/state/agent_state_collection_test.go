@@ -198,11 +198,11 @@ func TestAgentStateCollection_GetByTransformer(t *testing.T) {
 	coll := NewAgentStateCollection()
 	require.NoError(t, coll.Update(map[string]any{"x": 42}))
 
-	result := coll.GetByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("x"))
+	result := coll.GetByTransformer(func(r ReadableStateLike) map[string]any {
+		return map[string]any{"x": r.Get(StringKey("x"))}
 	})
-	if result != 42 {
-		t.Errorf("期望 42，实际 %v", result)
+	if result["x"] != 42 {
+		t.Errorf("期望 42，实际 %v", result["x"])
 	}
 }
 

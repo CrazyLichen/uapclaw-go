@@ -724,6 +724,95 @@ func (h *SerializedTurnHarness) TurnEvents(turnID *string) harnessprotocol.Harne
 	return h.cursorFor(expected, true)
 }
 
+// CycleStarted 返回本周期是否已开始。
+// Python: base.py:_cycle_started（只读探针，供 25.1f ExportCheckpoint 使用）
+func (h *SerializedTurnHarness) CycleStarted() bool {
+	h.lifecycleLock.Lock()
+	defer h.lifecycleLock.Unlock()
+	return h.cycleStarted
+}
+
+// LatestCheckpoint 返回最新快照（可能为 nil）。
+// Python: base.py:_latest_checkpoint（只读探针，供 25.1f ExportCheckpoint 使用）
+func (h *SerializedTurnHarness) LatestCheckpoint() *harnessprotocol.HarnessCheckpoint {
+	return h.latestCheckpoint
+}
+
+// SetLatestCheckpoint 在冷恢复装配时回填宿主提供的起始快照。
+// Python: protocol_adapter.py:204 self._latest_checkpoint = context.checkpoint
+func (h *SerializedTurnHarness) SetLatestCheckpoint(cp *harnessprotocol.HarnessCheckpoint) {
+	h.latestCheckpoint = cp
+}
+
+// PendingTurns 返回待决轮次的快照拷贝（不暴露内部切片）。
+// Python: base.py:_pending（只读探针，供 25.1f captureCheckpoint 使用）
+func (h *SerializedTurnHarness) PendingTurns() []*PendingTurn {
+	h.commandLock.Lock()
+	defer h.commandLock.Unlock()
+	out := make([]*PendingTurn, len(h.pending))
+	copy(out, h.pending)
+	return out
+}
+
+// RequireAccepting 校验当前可接收命令。
+// Python: base.py:425-427 _require_accepting（导出给 25.1f 的 Pause/Resume）
+func (h *SerializedTurnHarness) RequireAccepting() error {
+	return h.requireAccepting()
+}
+
+// EnqueueRestoredTurn 把冷恢复还原的轮次追加到待决队列。
+// Python: protocol_adapter.py:355 self._pending.extend([...])
+func (h *SerializedTurnHarness) EnqueueRestoredTurn(turn *PendingTurn) {
+	h.commandLock.Lock()
+	defer h.commandLock.Unlock()
+	h.pending = append(h.pending, turn)
+}
+
+// StartSupervisorForRestore 冷恢复装入待决轮次后启动监督协程。
+// Python: protocol_adapter.py:356 asyncio.create_task(self._supervise_turns(),
+//
+//	name="native_protocol_cold_resume")
+func (h *SerializedTurnHarness) StartSupervisorForRestore(ctx context.Context) error {
+	h.commandLock.Lock()
+	var handle *supervisorHandle
+	if h.supervisor == nil {
+		handle = &supervisorHandle{done: make(chan struct{})}
+		h.supervisor = handle
+	}
+	h.commandLock.Unlock()
+	if handle != nil {
+		go h.superviseTurns(context.WithoutCancel(ctx), handle)
+	}
+	return nil
+}
+
+// Transition 从 provider 侧驱动协议层相位转换。
+// Python: protocol_adapter.py:266/269/279/283 的 self._transition(...)
+func (h *SerializedTurnHarness) Transition(ctx context.Context, newState harnessprotocol.HarnessState) error {
+	return h.transition(ctx, newState)
+}
+
+// MarkCycleStartedForTest 仅供测试：标记周期已开始，使 RequireAccepting 通过。
+// 生产路径由 Start 设置，本方法不改任何方法体。
+func (h *SerializedTurnHarness) MarkCycleStartedForTest() {
+	h.lifecycleLock.Lock()
+	defer h.lifecycleLock.Unlock()
+	h.cycleStarted = true
+	idle := harnessprotocol.HarnessStateIdle
+	h.state.Store(&idle)
+}
+
+// SupervisorHandleForTest 返回当前监督协程句柄的 done channel（nil 表示无）。
+// 仅供测试断言 supervisor 是否退出，生产不改此字段。
+func (h *SerializedTurnHarness) SupervisorHandleForTest() <-chan struct{} {
+	h.commandLock.Lock()
+	defer h.commandLock.Unlock()
+	if h.supervisor == nil {
+		return nil
+	}
+	return h.supervisor.done
+}
+
 // ──────────────────────────── 非导出函数：Send 分支 ────────────────────────────
 
 // sendSteer STEER 分支：直接把内容注入活跃轮次。

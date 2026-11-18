@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	teamworkspace "github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	harnessschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 )
 
 // TestPathValue 对齐 _path_value（external_cli_spawn.py:239-243）。
@@ -116,6 +117,8 @@ func TestResolveExternalPaths(t *testing.T) {
 // ResolveExternalPaths 取 project_dir（external_cli_spawn.py:267-271），
 // BuildTeamContextTracker 取 team_outputs_dir（external_cli_spawn.py:231 附近）。
 func TestBuildContextSeed_materialize后提取器取值(t *testing.T) {
+	// 15.16c：D-15.13-k 过渡工厂已回收——materialize 依赖平台注册的种子工厂。
+	swarm.RegisterSwarmBuildContextFactory()
 	spec := &schema.TeamAgentSpec{BuildContextSeed: map[string]any{
 		"project_dir":      "/proj",
 		"team_outputs_dir": "/out",

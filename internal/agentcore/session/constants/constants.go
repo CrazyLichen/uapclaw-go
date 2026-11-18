@@ -93,6 +93,9 @@ const (
 	// InteractiveInputKey 交互输入在 session state 中的键。
 	// Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
 	InteractiveInputKey = "__interactive_input__"
+	// EndNodeStream End 节点流式信封类型标识。
+	// Python: openjiuwen/core/common/constants/constant.py:19 (END_NODE_STREAM)
+	EndNodeStream = "end node stream"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

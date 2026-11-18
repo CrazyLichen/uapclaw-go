@@ -77,6 +77,55 @@ func NormalizeSkills(values []SkillSource, conflict string) ([]SkillSource, erro
 	return values, nil
 }
 
+// NormalizeSkillsSchema 冻结 provider config 的 skills 声明（构造期不触碰源文件）。
+// schema 侧 cfg.Skills 为 []any（str / map / SkillSource 三形态，D-15.12-g 的
+// "dict/str→SkillSource 转 provider config unmarshal 层" 落点）；SkillSource
+// 直通、str→SkillSource(dir=v)、map→逐键还原。冲突策略校验同 NormalizeSkills。
+// Python: normalize_skills (skills.py:43-59)
+func NormalizeSkillsSchema(values []any, conflict string) ([]SkillSource, error) {
+	if conflict != "skip" && conflict != "replace" && conflict != "append" {
+		return nil, fmt.Errorf("skill_conflict must be skip, replace or append")
+	}
+	result := make([]SkillSource, 0, len(values))
+	for _, value := range values {
+		switch v := value.(type) {
+		case SkillSource:
+			result = append(result, v)
+		case *SkillSource:
+			if v == nil {
+				return nil, fmt.Errorf("skill source must be a directory or manifest skill declaration")
+			}
+			result = append(result, *v)
+		case string:
+			source, err := NewSkillSource(v, "", nil)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, source)
+		case map[string]any:
+			dir, _ := v["dir"].(string)
+			mode, _ := v["mode"].(string)
+			var enabled []string
+			if raw, ok := v["enabled_skills"].([]any); ok {
+				enabled = make([]string, 0, len(raw))
+				for _, item := range raw {
+					if s, ok := item.(string); ok {
+						enabled = append(enabled, s)
+					}
+				}
+			}
+			source, err := NewSkillSource(dir, mode, enabled)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, source)
+		default:
+			return nil, fmt.Errorf("skill source must be a directory or manifest skill declaration")
+		}
+	}
+	return result, nil
+}
+
 // InstallSkills 运行时启动前把完整技能包复制进发现目录，保留既有项目技能。
 // replace 在发现目录外暂存，rename 失败回滚；复制产物在 harness 停止后留存。
 // 内部软链物化；逃逸/环软链复制前拒绝。

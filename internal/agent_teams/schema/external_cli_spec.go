@@ -150,7 +150,7 @@ type ExternalCliAgentSpec struct {
 	// Python: claude_max_buffer_size (team.py:442)
 	ClaudeMaxBufferSize *int `json:"claude_max_buffer_size,omitempty"`
 	// MCPServerCommand 注册给 CLI 的团队 MCP stdio server 启动 argv。
-	// 默认为 openjiuwen-team-mcp console-script 入口。
+	// 默认为 uapclawmcpserver console-script 入口。
 	// Python: mcp_server_command (team.py:458)
 	MCPServerCommand []string `json:"mcp_server_command,omitempty"`
 	// Env CLI 子进程的额外环境变量，叠加在继承的进程 env 之上
@@ -201,7 +201,7 @@ type ExternalCliMemberSpec struct {
 // min_length=1 归属校验逐条对齐 _validate_backend_launch_override（team.py:492-534）。
 func (s *ExternalCliAgentSpec) Validate() error {
 	// mcp_server_command default_factory（team.py:458）：装载路径零值时施加
-	// Python 默认 ["openjiuwen-team-mcp"]。
+	// Python 默认 ["uapclawmcpserver"]。
 	if len(s.MCPServerCommand) == 0 {
 		s.MCPServerCommand = DefaultMCPServerCommand()
 	}
@@ -312,7 +312,7 @@ func (s *ExternalCliAgentSpec) FindBuiltinModel(name string) *ExternalCliBuiltin
 // DefaultMCPServerCommand 团队 MCP stdio server 的默认启动 argv。
 // Python: mcp_server_command default_factory (team.py:458)
 func DefaultMCPServerCommand() []string {
-	return []string{"openjiuwen-team-mcp"}
+	return []string{"uapclawmcpserver"}
 }
 
 // ValidateDefaultEffort 校验 default_effort 必须属于 efforts，且 name 非空

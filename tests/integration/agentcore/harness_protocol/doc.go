@@ -25,6 +25,8 @@
 //	harness_protocol/
 //	├── doc.go                            # 包文档
 //	├── harness_fake_test.go              # 跨子系统驱动端：fake 外部 CLI provider
+//	├── checkpoint_serialization_test.go  # 检查点序列化与控制面契约
 //	├── interaction_lifecycle_test.go     # 交互请求-应答全生命周期
-//	└── hooks_boundary_test.go            # 钩子四边界 × 并发 × ctx 取消
+//	├── hooks_boundary_test.go            # 钩子四边界 × 并发 × ctx 取消
+//	└── native_v2_test.go                 # 25.1f native_v2 工厂链 / 校验链 / checkpoint 往返 / Stop 契约
 package harness_protocol

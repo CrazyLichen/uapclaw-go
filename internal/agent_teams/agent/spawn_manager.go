@@ -104,7 +104,14 @@ func (m *SpawnManager) SpawnTeammate(
 	var handle spawn.SpawnHandle
 	var err error
 
-	if spawnMode == "inprocess" {
+	// Python: if ctx.cli_agent → external_cli_spawn 分叉（spawn_manager.py:161-180）：
+	// TeamAgent 壳进程内运行，第三方 CLI 二进制经 stdin/stdout 驱动。
+	if runtimeCtx.CLIAgent != "" {
+		if spawn.ExternalCliSpawnDepsOrNil() == nil {
+			return fmt.Errorf("生成 teammate %s 失败: external CLI spawn deps not wired", memberName)
+		}
+		handle, err = m.spawnExternalCLI(ctx, runtimeCtx, initialMessage, sessionID)
+	} else if spawnMode == "inprocess" {
 		handle, err = m.spawnInprocess(ctx, runtimeCtx, initialMessage, sessionID)
 	} else {
 		handle, err = m.spawnSubprocess(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
@@ -539,6 +546,66 @@ func (m *SpawnManager) spawnInprocess(
 	// 接入 chunk 转发观察者
 	m.wireInprocessChunkForward(handle)
 
+	return handle, nil
+}
+
+// spawnExternalCLI 以外部 CLI 成员模式生成 teammate。
+// Python: _spawn_teammate_inner 的 ctx.cli_agent 分叉（spawn_manager.py:161-180）：
+// 取 hitt_enabled → external_cli_spawn → _wire_inprocess_chunk_forward
+// （与进程内成员相同的 chunk 扇出——成员壳同进程）。
+func (m *SpawnManager) spawnExternalCLI(
+	ctx context.Context,
+	runtimeCtx atschema.TeamRuntimeContext,
+	initialMessage string,
+	sessionID string,
+) (*spawn.InProcessSpawnHandle, error) {
+	deps := spawn.ExternalCliSpawnDepsOrNil()
+	if deps == nil {
+		return nil, fmt.Errorf("external CLI spawn deps not wired")
+	}
+	// Python: team_backend.hitt_enabled()（spawn_manager.py:168-173）
+	hittEnabled := false
+	if m.configurator != nil {
+		hittEnabled = backendHittEnabled(m.configurator.TeamBackend())
+	}
+	leader := m.getTeamAgent()
+	spec := m.configurator.Spec()
+	if spec == nil {
+		return nil, fmt.Errorf("external CLI spawn: team spec unavailable")
+	}
+	handle, err := spawn.ExternalCliSpawn(
+		ctx, deps, runtimeCtx, *spec, hittEnabled,
+		initialMessage, sessionID, false,
+		func(ctx context.Context, card spawn.ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spc atschema.TeamAgentSpec, runtime spawn.ExternalCliMemberRuntime) (spawn.ExternalCliTeamAgent, error) {
+			// Python :669-688：_TeamAgent(card) → share_workspace_cache_with →
+			// configure(member_runtime=runtime)
+			agentCard := agentschema.NewAgentCard(
+				agentschema.WithAgentID(card.ID),
+				agentschema.WithAgentName(card.Name),
+				agentschema.WithAgentDescription(card.Description),
+			)
+			teammate := NewTeamAgent(ctx, agentCard)
+			// 与 inprocess_spawn 相同的团队级缓存共享，先于 configure（Python :675）
+			if leader != nil {
+				leader.ShareWorkspaceCacheWith(teammate)
+			}
+			// D-15.16-b1 注入缝收窄：spawn 侧以 spawn.ExternalCliMemberRuntime
+			// 窄接口传递（agent→spawn 成环不能引 agent.MemberRuntime）；
+			// 断言失败即报错，拒绝静默装配无大脑成员壳。
+			memberRuntime, ok := runtime.(MemberRuntime)
+			if !ok {
+				return nil, fmt.Errorf("external CLI spawn %s: runtime %T 未实现 MemberRuntime，拒绝装配无大脑成员壳", card.Name, runtime)
+			}
+			if err := teammate.Configure(ctx, spc, rtc, memberRuntime); err != nil {
+				return nil, err
+			}
+			return teammate, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	m.wireInprocessChunkForward(handle)
 	return handle, nil
 }
 

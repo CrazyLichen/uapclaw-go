@@ -52,12 +52,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
+	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	agentcoreharness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -117,6 +123,55 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// TeamMemberExecutionSubject 构建一次 Team 成员执行的轨迹归属主体。
+//
+// 每个以成员名执行的主体（长驻成员、swarmflow worker 与头像）共用它，
+// 从而落进同一条轨迹泳道。一次性 reviewer 用 TeamReviewerExecutionSubject。
+//
+// Python: team_member_execution_subject (team_agent.py:80-101)
+// 偏差：Python 关键字参数无默认值处 Go 以显式形参表达；is_leader 缺省
+// Python =false，Go 以布尔形参由调用方传入（无可选参数机制）。
+// 暂缺：TeamReviewerExecutionSubject（team_agent.py:113-168）随其唯一消费方
+// scheduling/scheduler.py（Go 侧未移植）⤵️ 一并回填，不丢失。
+func TeamMemberExecutionSubject(sessionID, teamName, memberName, displayName string, isLeader bool) agentcoreharness.ExecutionSubject {
+	kind := "team_member"
+	if isLeader {
+		kind = "team_leader"
+	}
+	return agentcoreharness.ExecutionSubject{
+		SubjectID:       "team-member:" + sessionID + ":" + teamName + ":" + memberName,
+		DisplayName:     displayName,
+		Kind:            kind,
+		ParentSubjectID: "",
+		SessionID:       sessionID,
+	}
+}
+
+// ObservabilityExecutionSubject 返回本 Team 成员的稳定轨迹归属主体。
+// Python: TeamAgent.observability_execution_subject (team_agent.py:889-899)
+func (a *TeamAgent) ObservabilityExecutionSubject(sessionID string) agentcoreharness.ExecutionSubject {
+	memberName := a.MemberName()
+	if memberName == "" {
+		if a.card != nil {
+			memberName = a.card.Name
+		}
+		if memberName == "" && a.card != nil {
+			memberName = a.card.ID
+		}
+	}
+	displayName := memberName
+	if rc := a.RuntimeContext(); rc != nil && rc.DisplayName != "" {
+		displayName = rc.DisplayName
+	}
+	return TeamMemberExecutionSubject(
+		sessionID,
+		a.TeamName(),
+		memberName,
+		displayName,
+		a.Role() == atschema.TeamRoleLeader,
+	)
+}
 
 // NewTeamAgent 创建新的 TeamAgent 实例。
 // Python: TeamAgent.__init__(card)
@@ -230,6 +285,43 @@ func (a *TeamAgent) Harness() *harness.TeamHarness {
 	return nil
 }
 
+// MemberRuntime 返回外部成员运行时（external CLI 成员）；nil 表示 DeepAgent 路。
+// Python: TeamAgent.harness property（team_agent.py:325-333）——
+// 默认是 DeepAgent 背书的 TeamHarness，外部 CLI 成员携带 ExternalCliRuntime。
+// 所有轮次/runtime 访问都应经本 MemberRuntime 表面。
+func (a *TeamAgent) MemberRuntime() MemberRuntime {
+	if a.configurator != nil {
+		return a.configurator.MemberRuntime()
+	}
+	return nil
+}
+
+// ShareWorkspaceCacheWith 与进程内 teammate 共享团队级 workspace manager。
+// leader 只持一个 TeamWorkspaceManager（装配期构建），进程内成员按引用复用
+// 同一 manager（镜像 share_checkpoints_with）——它们的成员 workspace 装配
+// 复用检查命中 leader 的缓存，不会自建。必须在 teammate.Configure 之前调：
+// 之后 teammate 已建好自己的 manager。
+// Python: share_workspace_cache_with (team_agent.py:1702-1715)
+func (a *TeamAgent) ShareWorkspaceCacheWith(other *TeamAgent) {
+	if a.configurator == nil {
+		return
+	}
+	own := a.configurator.WorkspaceManager()
+	if own != nil {
+		other.AttachWorkspaceManager(own)
+	}
+}
+
+// AttachWorkspaceManager 采用共享 workspace manager（进程内成员共享）。
+// 由 leader 的 ShareWorkspaceCacheWith 调——teammate 按引用复用 leader 的
+// manager（含驻留 WorkspaceCache），不再自建。
+// Python: attach_workspace_manager (team_agent.py:1717-1722)
+func (a *TeamAgent) AttachWorkspaceManager(manager *team_workspace.TeamWorkspaceManager) {
+	if a.configurator != nil {
+		a.configurator.SetWorkspaceManager(manager)
+	}
+}
+
 // Spec 返回 TeamAgentSpec。
 // Python: TeamAgent.spec property
 func (a *TeamAgent) Spec() *atschema.TeamAgentSpec {
@@ -326,6 +418,16 @@ func (a *TeamAgent) TaskManager() *tools.TeamTaskManager {
 func (a *TeamAgent) TeamBackend() *tools.TeamBackend {
 	if a.configurator != nil {
 		return a.configurator.TeamBackend()
+	}
+	return nil
+}
+
+// Messager 返回成员 infra 的 messager（未配置为 nil）。
+// Python: teammate.infra.messager —— spawn 经 bind_reliability_context 消费
+// （external_cli_spawn.py:732，重试进度事件发布面）。
+func (a *TeamAgent) Messager() messager.Messager {
+	if a.configurator != nil {
+		return a.configurator.Messager()
 	}
 	return nil
 }
@@ -503,7 +605,8 @@ func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
 // Python: TeamAgent.is_agent_ready()
 func (a *TeamAgent) IsAgentReady() bool {
 	if a.configurator != nil {
-		return a.configurator.Harness() != nil
+		// Python: configurator.harness is not None——外部成员 runtime 同样算就绪
+		return a.configurator.Harness() != nil || a.configurator.MemberRuntime() != nil
 	}
 	return false
 }
@@ -538,7 +641,7 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 // Configure 配置 TeamAgent。
 // 装配失败（角色策略/提示词模板缺失等）时返回错误，不再静默降级。
 // Python: TeamAgent.configure(spec, context)
-func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) error {
+func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext, memberRuntime ...MemberRuntime) error {
 	// Phase 1: 基础设施搭建
 	if err := a.configurator.SetupInfra(spec, runtimeCtx,
 		WithOnTeammateCreated(a.onTeammateCreated),
@@ -549,7 +652,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	}
 
 	// Phase 2: Agent 组装
-	if _, err := a.configurator.SetupAgent(spec, runtimeCtx); err != nil {
+	if _, err := a.configurator.SetupAgent(spec, runtimeCtx, memberRuntime...); err != nil {
 		return err
 	}
 
@@ -570,6 +673,10 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	// 修复 S-04: 对齐 Python _register_team_completion_callbacks()
 	// 在 DeepAgent 完全构建后、dispatcher 存在时注册 TeamSkillRail 的完成回调
 	a.registerTeamCompletionCallbacks()
+
+	// 25.1g: 对齐 Python _register_reliability_local_sink()（team_agent.py:783）
+	// leader 自检的可靠性 rail 绑到进程内异常 sink，绕过 messager self-filter
+	a.registerReliabilityLocalSink()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent config")
@@ -800,6 +907,12 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // 运行时的单 supervisor 串行化所有输入：idle 开轮，running 转向或排队。
 // 因为没有状态转换窗口的竞态，这里不需要手写分支，也不需要 pending 队列。
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
+	if mr := a.MemberRuntime(); mr != nil {
+		// 外部成员：MemberRuntime.Send(content, immediate)，无 ctx 形参
+		// （Python send(content, immediate) 为协程调用；Go 外部 runtime 自持 ctx）
+		_, err := mr.Send(content, useSteer)
+		return err
+	}
 	h := a.Harness()
 	if h == nil {
 		return nil
@@ -810,6 +923,10 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 // StartAgent 启动成员首轮。
 // Python: TeamAgent.start_agent(content) → _start_agent → harness.send(initial_message)
 func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
+	if mr := a.MemberRuntime(); mr != nil {
+		_, err := mr.Send(content, false)
+		return err
+	}
 	h := a.Harness()
 	if h == nil {
 		return nil
@@ -820,6 +937,10 @@ func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
 // FollowUp 追加输入，等本轮结束后再跑。
 // Python: TeamAgent.follow_up(content)（team_agent.py:604）
 func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
+	if mr := a.MemberRuntime(); mr != nil {
+		_, err := mr.Send(content, false)
+		return err
+	}
 	h := a.Harness()
 	if h == nil {
 		return nil
@@ -841,6 +962,10 @@ func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 // Steer 转向当前轮。
 // Python: TeamAgent.steer(content)（team_agent.py:676）
 func (a *TeamAgent) Steer(ctx context.Context, content string) error {
+	if mr := a.MemberRuntime(); mr != nil {
+		_, err := mr.Send(content, true)
+		return err
+	}
 	h := a.Harness()
 	if h == nil {
 		return nil
@@ -852,6 +977,15 @@ func (a *TeamAgent) Steer(ctx context.Context, content string) error {
 // Python: TeamAgent.resume_interrupt(user_input)（team_agent.py:688-700）
 // 校验有效后直接 send：排队与否由 supervisor 决定，不再手写 pendingInterruptResumes。
 func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error {
+	if mr := a.MemberRuntime(); mr != nil {
+		// 外部成员：MemberRuntime 表面（Python: harness.is_pending_interrupt_resume_valid
+		// + send——两个实现同一鸭子面）
+		if !mr.IsPendingInterruptResumeValid(userInput) {
+			return nil
+		}
+		_, err := mr.Send(userInput, false)
+		return err
+	}
 	h := a.Harness()
 	if h == nil {
 		return nil
@@ -1451,6 +1585,39 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 		Msg("registerTeamCompletionCallbacks completed")
 }
 
+// registerReliabilityLocalSink 把 leader 的可靠性轨绑到进程内异常 sink。
+//
+// leader 自检的异常直送 ReliabilityHandler（绕过 messager self-filter——
+// kernel 会丢弃 sender_id 等于本地成员的事件），其待发 route notices（leader
+// 自己的模型组切换）以同样方式绑定：rail 把它们折进 leader 下一次被受理的输入。
+// dispatcher 建好后调用一次，镜像 registerTeamCompletionCallbacks。多重守卫
+// 对齐上游：reliability 未启用（dispatcher 无 reliability handler）或非 leader
+// 成员（轨上无 local reporter）时 no-op。
+//
+// Python: TeamAgent._register_reliability_local_sink()（team_agent.py:807-838）
+func (a *TeamAgent) registerReliabilityLocalSink() {
+	harness := a.Harness()
+	// Python: if harness is None or dispatcher is None: return
+	if harness == nil || a.coordination == nil || a.coordination.Dispatcher() == nil {
+		return
+	}
+	handler := a.coordination.Dispatcher().Reliability
+	if handler == nil {
+		return
+	}
+	// Python: for rail in harness.find_rails(ReliabilityRail):
+	for _, railAny := range harness.FindRails(reflect.TypeOf((*reliability.ReliabilityRail)(nil))) {
+		if rail, ok := railAny.(*reliability.ReliabilityRail); ok {
+			rail.BindLocalSink(func(ctx context.Context, anomaly *reliabilitycore.Anomaly) {
+				handler.HandleLocalAnomaly(ctx, anomaly)
+			})
+			rail.BindRouteNoticeSource(handler.TakePendingRouteNotices)
+		}
+	}
+	logger.Debug(logComponent).Str("member_name", a.MemberName()).
+		Msg("registerReliabilityLocalSink completed")
+}
+
 // ── KernelHost 接口适配方法 ──
 
 // SessionController 返回会话控制器。
@@ -1525,11 +1692,60 @@ func (a *TeamAgent) MemoryManager() *memory.TeamMemoryManager {
 // 满足 types.ResourceAccessor 接口。
 // *harness.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
 func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
+	// 15.16b：外部 CLI 成员——MemberRuntime 即大脑（Python: configurator.harness
+	// 联合承载 ExternalCliRuntime，kernel 经同一面 start/stop）。Go 以适配器
+	// 把 MemberRuntime 装进 HarnessAccessor 面；rail/记忆钩子在适配器上 no-op
+	//（configurator 对外部成员不调它们，member_runtime.go 头注同源）。
+	if mr := a.MemberRuntime(); mr != nil {
+		return &memberRuntimeAccessor{runtime: mr}
+	}
 	// 防御 typed-nil：a.Harness() 返回 *harness.TeamHarness 具体类型，
 	// nil 时赋值给 HarnessAccessor 接口会得到非 nil 接口值。
 	if h := a.Harness(); h != nil {
 		return h
 	}
+	return nil
+}
+
+// memberRuntimeAccessor 把外部成员 MemberRuntime 适配成 kernel 的
+// HarnessAccessor 面。Start/Stop/State 直转；rail/记忆/paused-query 钩子
+// no-op（外部 CLI 成员的 DeepAgent rails 不适用）。
+type memberRuntimeAccessor struct {
+	runtime MemberRuntime
+}
+
+// RegisterMemberTools no-op（外部成员无本地 rail 工具面）。
+func (a *memberRuntimeAccessor) RegisterMemberTools(*memory.TeamMemoryManager) {}
+
+// InjectMemberMemory no-op（外部成员无记忆注入）。
+func (a *memberRuntimeAccessor) InjectMemberMemory(context.Context, *memory.TeamMemoryManager, string) error {
+	return nil
+}
+
+// Model no-op 返回 nil（外部成员无本地模型对象）。
+func (a *memberRuntimeAccessor) Model() *llm.Model { return nil }
+
+// Start 转发 MemberRuntime.Start(teamSession)。
+// Python: ExternalCliRuntime.start(team_session=session)。
+func (a *memberRuntimeAccessor) Start(_ context.Context, teamSession any) error {
+	return a.runtime.Start(teamSession)
+}
+
+// Stop 转发 MemberRuntime.Stop()。
+func (a *memberRuntimeAccessor) Stop(context.Context) error {
+	a.runtime.Stop()
+	return nil
+}
+
+// PausedQuery 外部成员无暂停轮（Python ExternalCliRuntime 无 paused_query）。
+func (a *memberRuntimeAccessor) PausedQuery() (string, bool) { return "", false }
+
+// State 转发生命周期相位。
+func (a *memberRuntimeAccessor) State() harnessprotocol.HarnessState { return a.runtime.State() }
+
+// Dispose 转发 Stop（外部成员无进程级资源回收面）。
+func (a *memberRuntimeAccessor) Dispose(context.Context) error {
+	a.runtime.Stop()
 	return nil
 }
 

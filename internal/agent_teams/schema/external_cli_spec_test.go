@@ -211,13 +211,13 @@ func TestExternalCliAgentSpecValidate_defaultEffort并入Validate(t *testing.T) 
 }
 
 // TestExternalCliAgentSpecValidate_mcpServerCommand默认 对齐 team.py:458
-// default_factory：装载路径零值时施加 ["openjiuwen-team-mcp"]。
+// default_factory：装载路径零值时施加 ["uapclawmcpserver"]（D-15.16-b6 入口改名）。
 func TestExternalCliAgentSpecValidate_mcpServerCommand默认(t *testing.T) {
 	spec := ExternalCliAgentSpec{CLIAgent: "codex"}
 	if err := spec.Validate(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if len(spec.MCPServerCommand) != 1 || spec.MCPServerCommand[0] != "openjiuwen-team-mcp" {
+	if len(spec.MCPServerCommand) != 1 || spec.MCPServerCommand[0] != "uapclawmcpserver" {
 		t.Fatalf("默认 mcp_server_command 未施加: %v", spec.MCPServerCommand)
 	}
 	// 显式配置不被覆盖

@@ -173,11 +173,11 @@ func TestInMemoryCommitState_GetByTransformer(t *testing.T) {
 	inner := NewInMemoryStateLike()
 	require.NoError(t, inner.Update(map[string]any{"a": 1}))
 	cs := NewInMemoryCommitState(inner)
-	result := cs.GetByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("a"))
+	result := cs.GetByTransformer(func(r ReadableStateLike) map[string]any {
+		return map[string]any{"a": r.Get(StringKey("a"))}
 	})
-	if result != 1 {
-		t.Errorf("GetByTransformer = %v, 期望 1", result)
+	if result["a"] != 1 {
+		t.Errorf("GetByTransformer = %v, 期望 1", result["a"])
 	}
 }
 

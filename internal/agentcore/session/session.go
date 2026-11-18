@@ -6,6 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -71,7 +72,7 @@ func (p *ProxySession) Checkpointer() interfaces.Checkpointer {
 }
 
 // ActorManager 获取底层会话的 Actor 管理器
-func (p *ProxySession) ActorManager() any {
+func (p *ProxySession) ActorManager() *stream_actor.ActorManager {
 	return p.stub.ActorManager()
 }
 

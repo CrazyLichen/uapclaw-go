@@ -20,6 +20,7 @@
 //	├── task.go              # 任务视图响应类型（TaskOpResult/TaskDetail/NewTaskSpec 等）
 //	├── transport_config.go  # MessagerTransportConfig/MessagerPeerConfig 消息通信配置
 //	├── memory_config.go     # TeamMemoryConfig 团队记忆配置
+//	├── external_runtime_reliability.go # 第三方外部成员可靠性词汇（类别闭合集/UserActionRequired/FailureReason/Failure）
 //	├── session_context.go   # SessionState/GetSessionID 委托（定义已迁移至 sessionctx 包）
 //	├── constants.go         # 保留成员名常量（HumanAgentMemberName 等）
 //	├── i18n.go              # 国际化字符串字典与 T() 函数

@@ -175,6 +175,21 @@ func NewAsyncTool(card *tool.ToolCard, parent tools.AsyncToolHost, lang atschema
 	}
 }
 
+// HasAnyRunning 返回 registry 中是否存在任意在飞任务。
+// Python: protocol_adapter.py:388 any(record.status == "running" for record in
+//
+//	agent.async_tool_runtime.registry.values())——checkpoint 边界守卫。
+func (rt *AsyncToolRuntime) HasAnyRunning() bool {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	for _, rec := range rt.registry {
+		if rec.Status == AsyncToolStatusRunning {
+			return true
+		}
+	}
+	return false
+}
+
 // HasRunning 返回某工具是否有在飞任务。
 // Python: AsyncToolRuntime.has_running (async_tools.py:186-191)
 func (rt *AsyncToolRuntime) HasRunning(toolName string) bool {

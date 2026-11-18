@@ -34,6 +34,9 @@ type MessagerTransportConfig struct {
 	PubsubSubscribeAddr string `json:"pubsub_subscribe_addr,omitempty"`
 	// ListenAddrs 监听地址列表
 	ListenAddrs []string `json:"listen_addrs,omitempty"`
+	// ExternalPublishURL Gateway 中继 WebSocket 端点（hybrid 后端必填）。
+	// Python: external_publish_url (messager/base.py:37)
+	ExternalPublishURL string `json:"external_publish_url,omitempty"`
 	// BootstrapPeers 引导对等节点列表
 	BootstrapPeers []MessagerPeerConfig `json:"bootstrap_peers,omitempty"`
 	// KnownPeers 已知对等节点列表

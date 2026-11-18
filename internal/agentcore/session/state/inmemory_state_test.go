@@ -132,11 +132,11 @@ func TestInMemoryStateLike_Update_覆盖(t *testing.T) {
 func TestInMemoryStateLike_GetByTransformer(t *testing.T) {
 	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1, "b": 2}))
-	result := s.GetByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("a"))
+	result := s.GetByTransformer(func(r ReadableStateLike) map[string]any {
+		return map[string]any{"a": r.Get(StringKey("a"))}
 	})
-	if result != 1 {
-		t.Errorf("GetByTransformer = %v, 期望 1", result)
+	if result["a"] != 1 {
+		t.Errorf("GetByTransformer = %v, 期望 1", result["a"])
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -130,17 +130,24 @@ func (s *ConfigRoundtripSuite) TestTeamAgentSpecValidate_嵌套校验与mcp默�
 
 // TestBuildContextSeed_往返与materialize BuildContextSeed 的序列化往返：
 // seed 随 JSON 往返保留（BuildContext 以 json:"-" 排除，blueprint.py:645/660），
-// MaterializeBuildContext 经注册工厂重建活载体（幂等），提取器取回路径。
+// MaterializeBuildContext 经平台工厂（swarm.RegisterSwarmBuildContextFactory，
+// registry.py:160-198）重建活载体，提取器取回路径。
+//
+// 15.16c：D-15.13-k 过渡默认工厂已回收——平台工厂是唯一注册面，
+// per-member 键（language/member_name/role/member_card_id）不入 seed
+//（context.py:199-205），由 derive() 填充。
 //
 // Python: materialize_build_context (blueprint.py:685-699)。
 func (s *ConfigRoundtripSuite) TestBuildContextSeed_往返与materialize() {
+	swarm.RegisterSwarmBuildContextFactory()
 	seed := map[string]any{
-		"language":         "cn",
-		"member_name":      "beta",
-		"role":             "external_cli",
-		"member_card_id":   "pay_beta",
-		"project_dir":      "/proj/dir",
-		"team_outputs_dir": "/proj/outputs",
+		"session_id":        "sess-1",
+		"team_id":           "pay",
+		"mode":              "team",
+		"project_dir":       "/proj/dir",
+		"team_outputs_dir":  "/proj/outputs",
+		"team_ws_root":      "/ws/root",
+		"channel":           "web",
 	}
 	spec := &schema.TeamAgentSpec{TeamName: "pay", BuildContextSeed: seed}
 
@@ -152,14 +159,17 @@ func (s *ConfigRoundtripSuite) TestBuildContextSeed_往返与materialize() {
 	s.Equal(seed, received.BuildContextSeed, "seed 必须随序列化往返保留")
 	s.Nil(received.BuildContext, "活载体不参与序列化")
 
-	// materialize：工厂重建活载体，提取器取回路径
+	// materialize：平台工厂重建活载体，提取器取回路径
 	s.Require().NoError(received.MaterializeBuildContext())
 	s.Require().NotNil(received.BuildContext, "materialize 必须重建活载体")
-	bc := received.BuildContext.(*hschema.BuildContext)
-	s.Equal("cn", bc.GetLanguage())
-	s.Equal("beta", bc.GetMemberName())
-	s.Equal("/proj/dir", bc.GetProjectDir(), "GetProjectDir 提取器")
+	bc := received.BuildContext.(*swarm.SwarmBuildContext)
+	s.Equal("sess-1", bc.SessionID)
+	s.Equal("pay", bc.TeamID)
+	s.Equal("/proj/dir", bc.GetProjectDir(), "GetProjectDir 提取器（install_skills 门卫依赖）")
 	s.Equal("/proj/outputs", bc.GetTeamOutputsDir(), "GetTeamOutputsDir 提取器")
+	s.Equal("/ws/root", bc.TeamWsRoot)
+	s.Equal("web", bc.Channel)
+	s.Equal("team", bc.Mode)
 
 	// 幂等：二次 materialize 不替换活载体
 	first := received.BuildContext

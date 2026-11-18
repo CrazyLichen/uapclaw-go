@@ -13,7 +13,9 @@ package externalcli
 // claude/codex SDK 分支体（spawn.py:308-466）依赖 15.7/15.8 的 harness
 // 构造，本批以入口守卫拦截（偏差 D-15.13-x）；build_cli_workflow_runtime
 // （:540-648）⤵️ swarmflow 相关章节；spawn/external_cli_spawn.py 的
-// external_cli_spawn 编排主体（TeamAgent.configure / Runner 等）⤵️15.16。
+// external_cli_spawn 编排主体已随 15.16b 落 spawn 包（external_cli_spawn.go
+// + runtime/external_cli_spawn_wiring.go 注入缝）；本文件保留 build_cli_runtime
+// 装配面（15.13 交付）。
 
 import (
 	"context"
@@ -44,7 +46,7 @@ import (
 // 三个有 Python 默认值的布尔/切片字段以零值语义收窄（注释逐项标注）：
 //   - InjectMCP：*bool，nil 取 Python 默认 true
 //   - MCPServerName："" 取 TEAM_MCP_SERVER_NAME
-//   - MCPServerCommand：nil 取 ["openjiuwen-team-mcp"]
+//   - MCPServerCommand：nil 取 ["uapclawmcpserver"]
 //   - SkillConflict："" 取 "skip"
 //   - CommandOverride：nil ≈ Python None（Go ""≈None 合并语义，同 D-15.13-h）
 type Options struct {
@@ -457,7 +459,7 @@ func BuildTeamContextTracker(
 // 认证回退只在同时声明 AUTH_FALLBACK 时交出；切换像 Claude/Codex 一样持久化。
 // provider 只收到所有生成 provider 包共享的配置键（cwd/env/inherit_process_env/
 // skills/skill_conflict），外加团队配置了的 cli_path 与 system_prompt_mode。
-// 团队工具经 openjiuwen-team-mcp stdio server 抵达成员，它从环境继承入团
+// 团队工具经 uapclawmcpserver stdio server 抵达成员，它从环境继承入团
 // 描述符；card 不声明 MCP 工具的 provider 无团队工具运行。
 //
 // Python: _build_provider_member_runtime (spawn.py:897-985)

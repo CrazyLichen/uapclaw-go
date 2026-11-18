@@ -8,11 +8,13 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -84,6 +86,9 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 	defer globalTeamRuntimeMu.Unlock()
 	if globalTeamRuntimeManager == nil {
 		globalTeamRuntimeManager = NewTeamRuntimeManager()
+		// 15.16b：注入外部 CLI spawn 依赖（spawn.D-15.16-b1 缝 + externalcli
+		// shared DB 工厂缝）
+		WireExternalCliSpawn()
 		// 同步到 Runner.teamRuntimeManager（any 类型）
 		runner.SetTeamRuntimeManager(globalTeamRuntimeManager)
 		// 注入 RunTeamMember 函数到 spawn 包（打破 spawn ↔ runtime 循环依赖）
@@ -185,6 +190,12 @@ func (m *TeamRuntimeManager) Interact(
 	// Python 步骤 3: InteractiveInput → 恢复中断
 	if interactiveInput, ok := payload.(*sessioninteraction.InteractiveInput); ok {
 		return m.handleInteractiveInput(ctx, entry, interactiveInput)
+	}
+
+	// Python 步骤 3.5（manager.py:591-595）: ExternalTeamEvent wire 载荷 →
+	// 经 _route_external_team_event 发布到活跃 runtime 的本地总线
+	if externalEvent, parsed := parseExternalTeamEventPayload(payload); parsed {
+		return m.routeExternalTeamEvent(ctx, entry, externalEvent)
 	}
 
 	// Python 步骤 4-5: 解析 payloads
@@ -728,6 +739,53 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 		return nil
 	}
 	return entry
+}
+
+// parseExternalTeamEventPayload 判别并解析 ExternalTeamEvent 载荷。
+// Python: external_event = payload if isinstance(payload, ExternalTeamEvent)
+// else ExternalTeamEvent.from_wire(payload)，ValueError → invalid（manager.py:591-595）。
+// 解析失败返回 (nil, false)——调用方继续走既有分发链（Python 的 try/except
+// 到不了 group_input 分支时返回 failure，Go 侧按 wire 形状判别：形状不匹配
+// 即非外部事件，回落原链）。
+func parseExternalTeamEventPayload(payload any) (*atevents.ExternalTeamEvent, bool) {
+	if payload == nil {
+		return nil, false
+	}
+	if typed, ok := payload.(*atevents.ExternalTeamEvent); ok {
+		return typed, true
+	}
+	// 仅对 map 载荷尝试 wire 解析（str/InteractiveInput 走原链）
+	event, err := atevents.ExternalTeamEventFromWire(payload)
+	if err != nil || event == nil {
+		return nil, false
+	}
+	return event, true
+}
+
+// routeExternalTeamEvent 把一条外部收到的团队事件发布到活跃 runtime 的本地总线。
+// Python: _route_external_team_event (manager.py:697-720)
+func (m *TeamRuntimeManager) routeExternalTeamEvent(ctx context.Context, entry *ActiveTeam, externalEvent *atevents.ExternalTeamEvent) (*interaction.DeliverResult, error) {
+	if externalEvent.Event == nil {
+		return interaction.NewDeliverResultFailure("invalid_external_event"), nil
+	}
+	// Python: event_payload.team_name != entry.team_name → failure
+	if eventTeamName, _ := externalEvent.Event.Payload["team_name"].(string); eventTeamName != entry.TeamName {
+		return interaction.NewDeliverResultFailure("external_event_team_mismatch"), nil
+	}
+
+	backend := getTeamBackend(entry.Agent)
+	var msg messager.Messager
+	if backend != nil {
+		msg = backend.Messager()
+	}
+	if msg == nil {
+		return interaction.NewDeliverResultFailure("no_messager"), nil
+	}
+	topic := externalEvent.Topic.Build(entry.SessionID, entry.TeamName)
+	if err := msg.Publish(ctx, topic, externalEvent.Event); err != nil {
+		return nil, err
+	}
+	return interaction.NewDeliverResultSuccess(nil), nil
 }
 
 // handleInteractiveInput 处理 InteractiveInput（恢复中断）。

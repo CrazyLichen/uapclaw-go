@@ -86,14 +86,14 @@ func (s *LoopCoordinatorSuite) TestLoopCoordinator_Abort() {
 	s.True(lc.IsAborted())
 }
 
-// TestLoopCoordinator_GetState 验证 ExportState 返回 LoopCoordinatorState
+// TestLoopCoordinator_GetState 验证 GetState 返回 LoopCoordinatorState
 func (s *LoopCoordinatorSuite) TestLoopCoordinator_GetState() {
 	eval := &fakeEvaluator{shouldStop: false, name: "fake"}
 	lc := task_loop.NewLoopCoordinator([]task_loop.StopConditionEvaluator{eval})
 	lc.IncrementIteration()
 	lc.AddTokenUsage(200)
 
-	state := lc.ExportState()
+	state := lc.GetState()
 	s.Equal(1, state.Iteration)
 	s.Equal(200, state.TokenUsage)
 	s.Empty(state.StopReason)
@@ -157,13 +157,13 @@ func (e *fakeEvaluator) Name() string {
 	return e.name
 }
 
-// ExportState 实现 StopConditionEvaluator 接口
-func (e *fakeEvaluator) ExportState() map[string]any {
+// GetState 实现 StopConditionEvaluator 接口
+func (e *fakeEvaluator) GetState() map[string]any {
 	return map[string]any{"should_stop": e.shouldStop}
 }
 
-// ImportState 实现 StopConditionEvaluator 接口
-func (e *fakeEvaluator) ImportState(_ map[string]any) {}
+// LoadState 实现 StopConditionEvaluator 接口
+func (e *fakeEvaluator) LoadState(_ map[string]any) {}
 
 // Reset 实现 StopConditionEvaluator 接口
 func (e *fakeEvaluator) Reset() {}

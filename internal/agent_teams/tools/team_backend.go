@@ -538,6 +538,10 @@ func (tb *TeamBackend) LeaderMemberName() string { return tb.leaderMemberName }
 // Python: TeamBackend.db
 func (tb *TeamBackend) DB() database.TeamDatabase { return tb.db }
 
+// Messager 返回消息发送器。
+// Python: TeamBackend.messager（manager.py:712 getattr(backend, "messager")）
+func (tb *TeamBackend) Messager() messager.Messager { return tb.messager }
+
 // TaskManager 返回任务管理器。
 // Python: TeamBackend.task_manager
 func (tb *TeamBackend) TaskManager() *TeamTaskManager { return tb.taskManager }

@@ -165,6 +165,31 @@ func (d *SQLMemberDao) UpdateMemberServedModel(ctx context.Context, memberName, 
 	return true
 }
 
+// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用。
+// 成员行不存在或 options 无变化返回 false。
+// Python: promote_member_fallback_model (member_dao.py:844-868)
+func (d *SQLMemberDao) PromoteMemberFallbackModel(ctx context.Context, memberName, teamName string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		logger.Error(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("member not found for fallback-model promote")
+		return false
+	}
+	promoted := PromoteMemberFallbackModel(member.Options)
+	if promoted == member.Options {
+		return false
+	}
+	now := GetCurrentTime()
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Updates(map[string]any{"options": promoted, "updated_at": now})
+	return true
+}
+
 // TryTransitionMemberStatus CAS 原子状态转换。
 // Python: try_transition_member_status() → bool
 // 仅当当前状态 == fromStatus 时才更新为 toStatus，否则返回 false。

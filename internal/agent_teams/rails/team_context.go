@@ -3,6 +3,7 @@ package rails
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	reliability "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
@@ -98,9 +99,9 @@ type TeamHandles struct {
 	// SwarmflowBudget swarmflow 预算账本
 	// ⤵️ swarmflow 域未迁，保持 any
 	SwarmflowBudget any
-	// ReliabilityComponents 可靠性核心组件
-	// ⤵️ 可靠性域未迁（core.team.reliability 为占位 rail）
-	ReliabilityComponents any
+	// ReliabilityComponents 可靠性核心组件（检测器/修复器/上报器的有状态核）。
+	// 25.1g 回填后收窄为具体类型：rails→reliability 无反向依赖，无循环。
+	ReliabilityComponents *reliability.ReliabilityComponents
 	// PermissionsOverride 成员级权限收窄
 	PermissionsOverride map[string]string
 	// WorktreeManager worktree 管理器
@@ -285,11 +286,10 @@ func GetSwarmflowBudget(ctx hschema.BuildContextInterface) any {
 }
 
 // GetReliabilityComponents 返回可靠性组件，缺失返回 nil。
-// Python: get_reliability_components
-//
-// ⤵️ 可靠性域未迁，返回 any。
-func GetReliabilityComponents(ctx hschema.BuildContextInterface) any {
-	return getHandle(ctx, TeamHandleReliabilityComponents)
+// Python: get_reliability_components（25.1g 回填后收窄具体类型）
+func GetReliabilityComponents(ctx hschema.BuildContextInterface) *reliability.ReliabilityComponents {
+	comps, _ := getHandle(ctx, TeamHandleReliabilityComponents).(*reliability.ReliabilityComponents)
+	return comps
 }
 
 // GetPermissionsOverride 返回权限收窄，缺失返回 nil。

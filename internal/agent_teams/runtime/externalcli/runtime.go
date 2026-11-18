@@ -31,7 +31,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -52,19 +55,7 @@ type memberSessionFactory func() (sessioninterfaces.SessionFacade, error)
 type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 
 // roundCallback harness.round 事件的回调形状。
-type roundCallback func(kind string, roundID int)
-
-// runtimeReliabilityContext 可靠性上下文的最小投递面（RuntimeReliabilityContext
-// 归属 external/reliability.py，Go 侧 ⤵️15.7/15.8 落地后实现本接口并注入
-// reliabilityCtx；本批 CLI adapter runtime 恒 nil，对齐 Python `ctx is None` 分支）。
-type runtimeReliabilityContext interface {
-	// HasFinalized 本轮是否已 finalize 过失败。
-	HasFinalized() bool
-	// FinalizeFailure 以类别/原因/摘要 finalize 一次失败。
-	FinalizeFailure(category, message, sdkErrorType, summary string) error
-	// MarkMemberError 把成员置 ERROR。
-	MarkMemberError() error
-}
+type roundCallback func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult)
 
 // outputQueue 无界输出队列：对齐 Python 无界 asyncio.Queue（偏差 D-15.13-j）。
 // Push 永不阻塞（内部 slice 缓冲 + 单槽通知），使 driveTurn 泵送不会因消费者
@@ -191,9 +182,9 @@ type cliRuntimeBase struct {
 	// currentRoundID 在飞轮次的轮次 id。
 	currentRoundID int
 	// reliabilityCtx Claude/Codex SDK runtime 的可靠性上下文；经
-	// BindReliabilityContext 注入。CLI adapter runtime（传统 stdin/重起 CLI）
-	// 恒 nil——外部 runtime 可靠性循环的范围之外。
-	reliabilityCtx any
+	// BindReliabilityContext 注入（实现见 reliability.go）。CLI adapter runtime
+	//（传统 stdin/重起 CLI）恒 nil——外部 runtime 可靠性循环的范围之外。
+	reliabilityCtx *RuntimeReliabilityContext
 
 	// driveErr flavor 的 _drive 在轮内产生的错误（注入失败 / premature-EOF）。
 	// Python 经 async generator 异常传播到 _drive_turn 的 except 分支；Go 的
@@ -293,19 +284,15 @@ func (b *cliRuntimeBase) BindTaskOutcomeTracker(t tracker.TaskEventTracker) {
 }
 
 // BindReliabilityContext 绑定可靠性失败/重试投递面。
-// Claude 与 Codex SDK runtime 覆写它为各自 agent_kind 构造
-// RuntimeReliabilityContext。基础 CLI adapter runtime（传统 stdin/重起 CLI）
-// 保持 no-op——外部 runtime 可靠性循环范围之外。
+// Python 对 adapter 路 runtime 也调用本方法（external_cli_spawn.py:726），
+// 基类 no-op 无害——Go 侧签名与 ExternalHarnessMemberRuntime 同形，wiring 的
+// typed 断言对 adapter 路同样命中（no-op 直通），语义一致。
 // Python: bind_reliability_context (runtime.py:213)
 func (b *cliRuntimeBase) BindReliabilityContext(
-	sessionID string, teamBackend any, leaderName string,
-	updateStatusCb any, messager any,
+	string, *tools.TeamBackend, string, UpdateStatusCallback, messager.Messager,
 ) {
-	_ = sessionID
-	_ = teamBackend
-	_ = leaderName
-	_ = updateStatusCb
-	_ = messager
+	// 基础 CLI adapter runtime 不在 external-runtime 可靠性循环范围：no-op
+	//（Python 基类 return None，不存储上下文）。
 }
 
 // SetMemberSessionFactory 注入成员子会话工厂（Python duck-typing 的 Go 面）。
@@ -562,7 +549,7 @@ func (b *cliRuntimeBase) sendRaw(text string, immediate bool) (any, error) {
 	b.transitionLocked(harnessprotocol.HarnessStateRunning)
 	onRound := append([]roundCallback(nil), b.onRound...)
 	b.mu.Unlock()
-	b.emitRound(onRound, "started", roundID)
+	b.emitRound(onRound, "started", roundID, "", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	b.mu.Lock()
@@ -631,7 +618,7 @@ func (b *cliRuntimeBase) Resume(query any) error {
 // Python: subscribe (runtime.py:440)
 func (b *cliRuntimeBase) Subscribe(
 	onState func(old, new harnessprotocol.HarnessState, sessionID string),
-	onRound func(kind string, roundID int),
+	onRound func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult),
 ) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -727,11 +714,11 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 	}
 	switch {
 	case aborted:
-		b.emitRound(onRound, "aborted", roundID)
+		b.emitRound(onRound, "aborted", roundID, "", nil)
 	case finalizedByTurn || abnormalExit || driveErr != nil:
-		b.emitRound(onRound, "failed", roundID)
+		b.emitRound(onRound, "failed", roundID, "", nil)
 	default:
-		b.emitRound(onRound, "finished", roundID)
+		b.emitRound(onRound, "finished", roundID, "", nil)
 	}
 	if transitionIdle {
 		b.transition(harnessprotocol.HarnessStateIdle)
@@ -739,22 +726,18 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 }
 
 // hasFinalized 检查 reliabilityCtx（SDK runtime 注入）是否已 finalize 失败。
-// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil（未实现接口时 false）。
+// 基础 CLI adapter runtime 的 reliabilityCtx 恒 nil（false）。
 func (b *cliRuntimeBase) hasFinalized() bool {
 	b.mu.Lock()
-	rc := b.reliabilityCtx
-	b.mu.Unlock()
-	client, _ := rc.(runtimeReliabilityContext)
-	return client != nil && client.HasFinalized()
+	defer b.mu.Unlock()
+	return b.reliabilityCtx != nil && b.reliabilityCtx.HasFinalized()
 }
 
-// reliabilityClient 取 reliabilityCtx 的最小投递面；未注入或未实现接口时 nil。
-func (b *cliRuntimeBase) reliabilityClient() runtimeReliabilityContext {
+// reliabilityClient 取 reliabilityCtx；未注入时 nil。
+func (b *cliRuntimeBase) reliabilityClient() *RuntimeReliabilityContext {
 	b.mu.Lock()
-	rc := b.reliabilityCtx
-	b.mu.Unlock()
-	client, _ := rc.(runtimeReliabilityContext)
-	return client
+	defer b.mu.Unlock()
+	return b.reliabilityCtx
 }
 
 // finalizeAbnormalExit 为意外任务退出 finalize 一个 sdk_error 失败。
@@ -770,8 +753,9 @@ func (b *cliRuntimeBase) finalizeAbnormalExit(roundID int) {
 	}
 	if !ctx.HasFinalized() {
 		summary := b.memberName + " external runtime task exited unexpectedly"
-		_ = ctx.FinalizeFailure("sdk_error", "external runtime task exited unexpectedly",
-			"CancelledError", summary)
+		reason := schema.NewExternalRuntimeFailureReason(
+			"external runtime task exited unexpectedly", "CancelledError", "", nil)
+		_ = ctx.FinalizeFailure(schema.ExternalRuntimeFailureCategorySDKError, reason, summary)
 	}
 	_ = ctx.MarkMemberError()
 }
@@ -794,7 +778,8 @@ func (b *cliRuntimeBase) finalizeCrashExit(err error, roundID int) {
 		message = excType
 	}
 	summary := fmt.Sprintf("%s external runtime turn crashed: %s", b.memberName, excType)
-	_ = ctx.FinalizeFailure("sdk_error", message, excType, summary)
+	reason := schema.NewExternalRuntimeFailureReason(message, excType, "", nil)
+	_ = ctx.FinalizeFailure(schema.ExternalRuntimeFailureCategorySDKError, reason, summary)
 }
 
 // nextRoundIDLocked 返回本 runtime 实例的单调轮次 id（须持锁）。
@@ -817,14 +802,14 @@ func (b *cliRuntimeBase) transition(newPhase harnessprotocol.HarnessState) {
 	onState := append([]stateCallback(nil), b.onState...)
 	b.mu.Unlock()
 	for _, cb := range onState {
-	// Python 回调收到 session_id（base 恒 None）；Go 回调签名为 string，
-	// nil 以空串承载（同旧基线行为）。
-	sid := b.SessionID()
-	if sid != nil {
-		cb(old, newPhase, *sid)
-	} else {
-		cb(old, newPhase, "")
-	}
+		// Python 回调收到 session_id（base 恒 None）；Go 回调签名为 string，
+		// nil 以空串承载（同旧基线行为）。
+		sid := b.SessionID()
+		if sid != nil {
+			cb(old, newPhase, *sid)
+		} else {
+			cb(old, newPhase, "")
+		}
 	}
 }
 
@@ -838,9 +823,9 @@ func (b *cliRuntimeBase) transitionLocked(newPhase harnessprotocol.HarnessState)
 
 // emitRound 为一次轮次生命周期迁移触发 harness.round。
 // Python: _emit_round (runtime.py:589)
-func (b *cliRuntimeBase) emitRound(onRound []roundCallback, kind string, roundID int) {
+func (b *cliRuntimeBase) emitRound(onRound []roundCallback, kind string, roundID int, turnID string, result *harnessprotocol.TurnResult) {
 	for _, cb := range onRound {
-		cb(kind, roundID)
+		cb(kind, roundID, turnID, result)
 	}
 }
 

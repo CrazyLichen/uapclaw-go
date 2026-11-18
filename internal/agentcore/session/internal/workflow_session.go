@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -36,8 +37,8 @@ type WorkflowSession struct {
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
 	streamWriterManager *stream.StreamWriterManager
 	// actorManager Actor 管理器
-	// ⤵️ 后续回填：any → ActorManager
-	actorManager any
+	// ✅ 8.12 已回填：any → *stream_actor.ActorManager
+	actorManager *stream_actor.ActorManager
 	// workflowID 工作流 ID
 	workflowID string
 }
@@ -77,8 +78,8 @@ type SubWorkflowSession struct {
 	// NodeSession 嵌入节点会话
 	NodeSession
 	// actorManager 子工作流专属 Actor 管理器
-	// ⤵️ 后续回填：any → ActorManager
-	actorManager any
+	// ✅ 8.12 已回填：any → *stream_actor.ActorManager
+	actorManager *stream_actor.ActorManager
 	// workflowNestingDepth2 工作流嵌套深度（覆盖 NodeSession 的值）
 	workflowNestingDepth2 int
 	// workflowID2 子工作流 ID（覆盖 NodeSession 的值）
@@ -207,7 +208,7 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 // 构造时以传入 NodeSession 的 parent() 作为父级 session，
 // 使用原 NodeSession 的 nodeID 和 nodeType。
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
-func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorManager any) *SubWorkflowSession {
+func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorManager *stream_actor.ActorManager) *SubWorkflowSession {
 	logger.Info(logComponent).
 		Str("action", "new_sub_workflow_session").
 		Str("workflow_id", workflowID).
@@ -287,14 +288,16 @@ func (s *WorkflowSession) Checkpointer() interfaces.Checkpointer {
 }
 
 // ActorManager 获取 Actor 管理器
-func (s *WorkflowSession) ActorManager() any {
+func (s *WorkflowSession) ActorManager() *stream_actor.ActorManager {
 	return s.actorManager
 }
 
 // Close 关闭会话。如果 actorManager 不为 nil，调用其 Shutdown。
-// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
-// 待 actorManager 接口确定后回填 Shutdown 逻辑
+// ✅ 8.12 已回填：ActorManager 类型化后兑现 Shutdown 调用（Python internal/workflow.py:89-90）
 func (s *WorkflowSession) Close() error {
+	if s.actorManager != nil {
+		return s.actorManager.Shutdown()
+	}
 	return nil
 }
 
@@ -313,7 +316,8 @@ func (s *WorkflowSession) SetTracer(t *tracer.Tracer) {
 }
 
 // SetActorManager 幂等注入 Actor 管理器。已设置则不覆盖。
-func (s *WorkflowSession) SetActorManager(mgr any) {
+// ✅ 8.12 已回填：参数类型从 any 改为 *stream_actor.ActorManager（Python set_actor_manager）
+func (s *WorkflowSession) SetActorManager(mgr *stream_actor.ActorManager) {
 	if s.actorManager == nil {
 		s.actorManager = mgr
 	}
@@ -437,7 +441,7 @@ func (n *NodeSession) Checkpointer() interfaces.Checkpointer {
 }
 
 // ActorManager 委托给父 session
-func (n *NodeSession) ActorManager() any {
+func (n *NodeSession) ActorManager() *stream_actor.ActorManager {
 	return n.delegate.ActorManager()
 }
 
@@ -462,21 +466,24 @@ func (s *SubWorkflowSession) WorkflowNestingDepth() int {
 }
 
 // ActorManager 返回自己的 ActorManager（覆写 NodeSession 的委托）
-func (s *SubWorkflowSession) ActorManager() any {
+func (s *SubWorkflowSession) ActorManager() *stream_actor.ActorManager {
 	return s.actorManager
 }
 
 // SetActorManager 幂等注入 Actor 管理器。已设置则不覆盖。
-func (s *SubWorkflowSession) SetActorManager(mgr any) {
+// ✅ 8.12 已回填：参数类型从 any 改为 *stream_actor.ActorManager
+func (s *SubWorkflowSession) SetActorManager(mgr *stream_actor.ActorManager) {
 	if s.actorManager == nil {
 		s.actorManager = mgr
 	}
 }
 
 // Close 关闭子工作流会话。如果 actorManager 不为 nil，调用其 Shutdown。
-// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
-// 待 actorManager 接口确定后回填 Shutdown 逻辑
+// ✅ 8.12 已回填：ActorManager 类型化后兑现 Shutdown 调用（Python internal/workflow.py:208-209）
 func (s *SubWorkflowSession) Close() error {
+	if s.actorManager != nil {
+		return s.actorManager.Shutdown()
+	}
 	return nil
 }
 
