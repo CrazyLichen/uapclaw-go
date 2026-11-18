@@ -31,8 +31,8 @@ func TestRemediationPolicy_构造拷贝隔离(t *testing.T) {
 
 func TestBuildRemediationPolicy_字符串形状(t *testing.T) {
 	p := BuildRemediationPolicy(map[string][]string{
-		"low":      {"local_steer", "observe_only"},
-		"bogus":    {"report_leader"}, // 未知 severity 丢弃
+		"low":   {"local_steer", "observe_only"},
+		"bogus": {"report_leader"}, // 未知 severity 丢弃
 	})
 	assert.Equal(t, []RemediationAction{RemediationActionLocalSteer, RemediationActionObserveOnly}, p.ActionsFor(core.SeverityLow))
 	assert.Empty(t, p.ActionsFor(core.Severity("bogus")))
