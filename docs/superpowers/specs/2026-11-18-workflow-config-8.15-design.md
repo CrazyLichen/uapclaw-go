@@ -81,3 +81,4 @@ Python `model_config = {"extra": "allow"}`：未声明字段平铺进模型并�
 | D-15-1 | CompIOConfig.InputsSchema/OutputsSchema 用 `any` | Python `Dict \| Transformer` Union 无 Go 对应 | 无（终态，与 8.12 骨架既定口径一致） |
 | D-15-2 | `Name *string` vs Python `Optional[str]` | Go 指针承载 Optional；nil ≡ None | 无（终态） |
 | D-15-3 | ExceptionConfig Extra 平铺由定制 MarshalJSON/UnmarshalJSON 承载 | pydantic extra=allow 动态字段 Go 无原生对应 | 无（终态） |
+| D-15-4 | 直接构造 `ExceptionConfig{}` 零值时 HandleType 为 `""` 而非 `"interrupt"`；默认值由 `NewExceptionConfig()` 构造函数承载 | Go 无 pydantic 构造期默认值注入，零值 struct 不经构造函数 | 8.14 `add_node(exception_config=...)` 消费路径统一走 `NewExceptionConfig()`；若发现绕过构造函数的裸构造再收紧 |

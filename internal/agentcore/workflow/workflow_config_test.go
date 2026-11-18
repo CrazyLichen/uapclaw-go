@@ -172,3 +172,19 @@ func TestExceptionConfig_平铺序列化(t *testing.T) {
 		t.Fatalf("无附加字段: handle=%q extra=%v", ec3.HandleType, ec3.Extra)
 	}
 }
+
+// TestNewExceptionConfig_默认值 对齐 Python handle_type 默认 "interrupt"
+func TestNewExceptionConfig_默认值(t *testing.T) {
+	ec := NewExceptionConfig()
+	if ec.HandleType != "interrupt" {
+		t.Fatalf("handle_type 默认应为 interrupt, got %q", ec.HandleType)
+	}
+	if ec.Extra != nil {
+		t.Fatal("Extra 默认应为 nil")
+	}
+	// 序列化应输出 Python 默认值形态
+	bs, _ := json.Marshal(ec)
+	if !strings.Contains(string(bs), `"handle_type":"interrupt"`) {
+		t.Fatalf("序列化应含默认 handle_type: %s", bs)
+	}
+}
