@@ -140,3 +140,56 @@ func TestIndependentMemberWorkspace_空成员名(t *testing.T) {
 		t.Errorf("IndependentMemberWorkspace(\"\") = %q, want %q", result, expected)
 	}
 }
+
+// TestConfigureGlobalSkillsDir_SetGetReset 对齐 paths.py:82-120 三函数。
+func TestConfigureGlobalSkillsDir_SetGetReset(t *testing.T) {
+	orig := configuredGlobalSkillsDir
+	defer func() { configuredGlobalSkillsDir = orig }()
+
+	ResetGlobalSkillsDir()
+	ConfigureGlobalSkillsDir("/tmp/fake-lib")
+	if got := GlobalSkillsDir(); got != "/tmp/fake-lib" {
+		t.Fatalf("configured: got %q", got)
+	}
+	ResetGlobalSkillsDir()
+	want := filepath.Join(GetHome(), "workspace", "skills")
+	if got := GlobalSkillsDir(); got != want {
+		t.Fatalf("fallback: got %q want %q", got, want)
+	}
+}
+
+// TestTeamMemberWorkspaceDir 对齐 paths.py:182-194 布局。
+func TestTeamMemberWorkspaceDir(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+	ConfigureHome("/custom/home")
+	got := TeamMemberWorkspaceDir("team-a", "m1")
+	want := "/custom/home/.agent_teams/team-a/workspaces/m1_workspace"
+	if got != want {
+		t.Fatalf("TeamMemberWorkspaceDir = %q, want %q", got, want)
+	}
+}
+
+// TestMemberSkillVisibilityPath 对齐 paths.py:205-224。
+func TestMemberSkillVisibilityPath(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+	ConfigureHome("/custom/home")
+	got := MemberSkillVisibilityPath("team-a", "m1")
+	want := "/custom/home/.agent_teams/team-a/workspaces/m1_workspace/skills-visibility.json"
+	if got != want {
+		t.Fatalf("MemberSkillVisibilityPath = %q, want %q", got, want)
+	}
+}
+
+// TestTeamSkillVisibilityPath 对齐 paths.py:227-241。
+func TestTeamSkillVisibilityPath(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+	ConfigureHome("/custom/home")
+	got := TeamSkillVisibilityPath("team-a")
+	want := "/custom/home/.agent_teams/team-a/team-workspace/skills-visibility.json"
+	if got != want {
+		t.Fatalf("TeamSkillVisibilityPath = %q, want %q", got, want)
+	}
+}
