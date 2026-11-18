@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -132,7 +133,7 @@ func (r *RouterSessionFacade) GetEnv(key string, defaultValue ...any) any {
 
 // GetNodeConfig 获取节点级配置 — 禁止操作
 // Python: RouterSession.get_workflow_config / get_agent_config: pass
-func (r *RouterSessionFacade) GetNodeConfig() any {
+func (r *RouterSessionFacade) GetNodeConfig() *workflow.NodeSpec {
 	// 路由场景禁止读取配置，返回 nil
 	return nil
 }

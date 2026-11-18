@@ -11,6 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 )
 
 // ──────────────────────────── WorkflowSession 测试 ────────────────────────────
@@ -473,14 +475,7 @@ func TestNodeSession_SkipTrace(t *testing.T) {
 	}
 }
 
-// TestNodeSession_NodeConfig 测试 NodeConfig 桩方法
-func TestNodeSession_NodeConfig(t *testing.T) {
-	ws := NewWorkflowSession()
-	ns := NewNodeSession(ws, "node1", "Test", false)
-	if ns.NodeConfig() != nil {
-		t.Errorf("NodeConfig 桩应返回 nil，实际=%v", ns.NodeConfig())
-	}
-}
+// （原 NodeConfig 桩测试并入下方 TestNodeSession_NodeConfig）
 
 // TestNodeSession_StreamWriterManager 测试委托给父会话
 func TestNodeSession_StreamWriterManager(t *testing.T) {
@@ -611,5 +606,33 @@ func TestWorkflowSession_Close_兑现ActorManagerShutdown(t *testing.T) {
 	ws.SetActorManager(&stream_actor.ActorManager{})
 	if err := ws.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestNodeSession_NodeConfig 从 workflow config 取节点规格（Python node_config() 一比一）
+// ✅ 8.15 已回填：config.get_workflow_config(workflow_id).spec.comp_configs.get(node_id)
+func TestNodeSession_NodeConfig(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf1"))
+	wfc, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{Version: "v1"})
+	nsSpec, _ := workflow.NewNodeSpec()
+	nsSpec.Abilities = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	wfc.Spec.CompConfigs["node1"] = nsSpec
+	ws.Config().AddWorkflowConfig("wf1", wfc)
+
+	sess := NewNodeSession(ws, "node1", "exec", false)
+	got := sess.NodeConfig()
+	if got == nil || len(got.Abilities) != 1 {
+		t.Fatalf("应取到 node1 的规格: %v", got)
+	}
+
+	// 未知节点应 nil（comp_configs.get）
+	if sess2 := NewNodeSession(ws, "nodeX", "exec", false); sess2.NodeConfig() != nil {
+		t.Fatal("未知节点应 nil")
+	}
+	// 未注册 workflowID 应 nil
+	ws2 := NewWorkflowSession(WithWorkflowID("other"))
+	s3 := NewNodeSession(ws2, "node1", "exec", false)
+	if s3.NodeConfig() != nil {
+		t.Fatal("未知 workflowID 应 nil")
 	}
 }
