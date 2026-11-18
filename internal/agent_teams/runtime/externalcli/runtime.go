@@ -56,9 +56,9 @@ type stateCallback func(old, new harnessprotocol.HarnessState, sessionID string)
 type roundCallback func(kind string, roundID int, turnID string, result *harnessprotocol.TurnResult)
 
 // runtimeReliabilityContext 可靠性上下文投递面（RuntimeReliabilityContext，
-// external/reliability.py:54 的公有面）。实现类 ⤴️15.7/15.8（构造逻辑随
-// claude/codex SDK 分支落地，偏差 D-15.13-m/D-15.16-a7）；本批 CLI adapter
-// runtime 恒 nil，对齐 Python `ctx is None` 分支。
+// external/reliability.py:54 的公有面）。实现类见 reliability.go（15.16b0 移植；
+// SDK 流内挂点与分类器仍 ⤴️15.7/15.8，偏差 D-15.13-x）；经
+// BindReliabilityContext 构造注入，未绑定时 `ctx is None` 分支。
 type runtimeReliabilityContext interface {
 	// BeginAttempt 一次尝试开始（startup 或某轮）。
 	// Python: begin_attempt(*, phase, round_id) (reliability.py:114)
@@ -72,9 +72,9 @@ type runtimeReliabilityContext interface {
 	// PublishRetrying 发布一次暂时性重试进度。
 	// Python: publish_retrying(...) (reliability.py:203)
 	PublishRetrying(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) error
-	// FinalizeFailure 以类别/结构化原因/摘要 finalize 一次失败。
-	// Python: finalize_failure(...) (reliability.py:260)
-	FinalizeFailure(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) error
+	// FinalizeFailure 以类别/结构化原因/摘要 finalize 一次失败；重复调用返回 nil
+	//（Python 返回 Optional[ExternalRuntimeFailure]，reliability.py:260）。
+	FinalizeFailure(category schema.ExternalRuntimeFailureCategory, reason *schema.ExternalRuntimeFailureReason, summary string) *schema.ExternalRuntimeFailure
 	// MarkMemberError 把成员置 ERROR。
 	// Python: mark_member_error() (reliability.py:369)
 	MarkMemberError() error

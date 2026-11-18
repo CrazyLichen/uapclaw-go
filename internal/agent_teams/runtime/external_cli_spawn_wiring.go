@@ -11,11 +11,13 @@ import (
 	"fmt"
 
 	agent "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -274,18 +276,21 @@ func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.Externa
 		}
 		// recorder 为 nil（观测性未初始化）→ 静默，对齐 Python ImportError 路径
 	}
-	// 4. bind_reliability_context（Python :723-732）：五参调用点压实，
-	// 实现仍桩 ⤴️15.7/15.8（D-15.16-a7 不变）。
-	if binder, ok := runtimeValue.(interface {
-		BindReliabilityContext(string, any, string, any, any)
-	}); ok {
-		binder.BindReliabilityContext(
-			sessionID,
-			ta.TeamBackend(),
-			ta.TeamBackend().ResolveLeaderMemberName(ctx),
-			ta.UpdateStatus,
-			nil, // messager：teammate.infra.messager，infra 缝待接线 ⤴️（登记）
-		)
+	// 4. bind_reliability_context（Python :719-732）：仅 teammate_backend 非空时
+	// 绑定（SDK 支撑的成员才注入可靠性投递面：failed 消息进 leader 信箱 +
+	// 成员 ERROR 状态 + 重试进度事件）。
+	if tb := ta.TeamBackend(); tb != nil {
+		if binder, ok := runtimeValue.(interface {
+			BindReliabilityContext(string, *tools.TeamBackend, string, externalcli.UpdateStatusCallback, messager.Messager)
+		}); ok {
+			binder.BindReliabilityContext(
+				sessionID,
+				tb,
+				tb.ResolveLeaderMemberName(ctx),
+				ta.UpdateStatus,
+				ta.Messager(), // Python: teammate.infra.messager（external_cli_spawn.py:732）
+			)
+		}
 	}
 	// 5. _bind_protocol_member_team_tools（Python :712-722）：claude/codex
 	// 分支体 ⤴️15.7/15.8（D-15.13-x / D-15.16-b3 挂点）；injectMCP 门卫由

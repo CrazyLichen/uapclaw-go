@@ -22,7 +22,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -208,9 +210,10 @@ type ExternalHarnessMemberRuntime struct {
 	extraMCPServers []harness_protocol.McpServerConfig
 	// boundTools 下一次 start 挂载的原生工具网关
 	boundTools harness_protocol.ToolGateway
-	// reliabilityCtx 可靠性上下文（RuntimeReliabilityContext 未移植，
-	// external/reliability.py 430 行 ⤵️15.7/15.8，偏差 D-15.13-m：本批恒 nil，
-	// 对齐 Python `ctx is not None` 不命中分支）
+	// reliabilityCtx 可靠性上下文（RuntimeReliabilityContext 实现见 reliability.go，
+	// external/reliability.py 430 行已随 15.16b0 移植；SDK 流内 record_pending/
+	// publish_retrying 挂点与 claude/codex 分类器仍 ⤴️15.7/15.8；经
+	// BindReliabilityContext 构造注入，未绑定为 nil 对齐 Python `ctx is None` 分支）
 	reliabilityCtx runtimeReliabilityContext
 	// trajectory 把本成员事件流转成轨迹 span 的记录器
 	trajectory *harnessproviders.HarnessTrajectoryRecorder
@@ -428,16 +431,33 @@ func (r *ExternalHarnessMemberRuntime) AddTeardownHook(hook func(ctx context.Con
 }
 
 // BindReliabilityContext 绑定可靠性失败/重试投递面。
-// agent_kind 为空（可靠循环关闭）时直接返回；RuntimeReliabilityContext 归属
-// external/reliability.py，Go 侧未移植——构造逻辑 ⤵️15.7/15.8（D-15.13-x 关联）。
-// Python: bind_reliability_context (member_runtime.py:398)
+// agent_kind 为空（可靠循环关闭）时直接返回；team_backend 为 None 时 team_name
+// 为空串、message_manager 为 nil（失败消息走未投递日志路径）。
+// Python: bind_reliability_context (member_runtime.py:398-421)
 func (r *ExternalHarnessMemberRuntime) BindReliabilityContext(
-	_ string, _ any, _ string, _ any, _ any,
+	sessionID string,
+	teamBackend *tools.TeamBackend,
+	leaderName string,
+	updateStatusCB UpdateStatusCallback,
+	msgr messager.Messager,
 ) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.agentKind == "" {
 		return
 	}
-	// Python: self._reliability_ctx = RuntimeReliabilityContext(...) ⤵️15.7/15.8
+	teamName := ""
+	var messageMgr *tools.TeamMessageManager
+	if teamBackend != nil {
+		teamName = teamBackend.TeamName()
+		messageMgr = teamBackend.MessageManager()
+	}
+	// Python: self._reliability_ctx = RuntimeReliabilityContext(...) (member_runtime.py:412-421)
+	r.reliabilityCtx = NewRuntimeReliabilityContext(
+		r.memberName, teamName, sessionID, r.agentKind,
+		messageMgr, msgr, leaderName, updateStatusCB,
+		r.trajectory, r.cliPath,
+	)
 }
 
 // CheckpointToDict 把 checkpoint 信封序列化成纯 JSON 数据。
