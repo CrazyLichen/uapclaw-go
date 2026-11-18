@@ -310,8 +310,8 @@ func TestTaskManager_SubmitPlan(t *testing.T) {
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusInProgress {
-		t.Errorf("提交计划后任务应为 claimed: got %q", got.Status)
+	if got.Status != fsm.TaskStatusPlanning {
+		t.Errorf("提交计划后任务应为 planning（PENDING 预留进计划闸）: got %q", got.Status)
 	}
 }
 
@@ -358,8 +358,8 @@ func TestTaskManager_ApprovePlan_拒绝(t *testing.T) {
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusInProgress {
-		t.Errorf("审批拒绝后任务应保持 claimed: got %q", got.Status)
+	if got.Status != fsm.TaskStatusPlanning {
+		t.Errorf("审批拒绝后任务应保持 planning（返工自环）: got %q", got.Status)
 	}
 }
 
@@ -583,7 +583,9 @@ func TestTaskManager_SubmitPlan_已完成任务(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "已完成任务", "")
-	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
+	// 不预 Assign：condition-named 状态机下审批只从 PLANNING 出发，
+	// PENDING 由 submit_plan 预留进计划闸（对齐 Python submit_plan L60-66）；
+	// IN_PROGRESS 任务补交计划不改变状态，审批无从发起
 
 	// PLAN_MODE 成员只能完成 plan_approved 任务，需先提交计划并审批
 	planFile := filepath.Join(t.TempDir(), "plan.md")
