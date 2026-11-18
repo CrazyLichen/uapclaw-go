@@ -423,7 +423,6 @@ func TestPreInvoke_双轨取数(t *testing.T) {
 		}
 		t.Fatalf("dict 轨应返回 schema 形状 map, got %v", in2)
 	}
-	}
 	if val, exists := in2["x"]; exists && val != nil {
 		t.Fatalf("无上游输出引用键应为 nil, got %v", val)
 	}
