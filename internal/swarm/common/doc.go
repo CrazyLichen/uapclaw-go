@@ -27,6 +27,7 @@
 //	├── model_vendor_registry.go      # 厂商预设注册表（裁决 B）
 //	├── model_routing_registry.go     # ModelSelectionResolver 五级回退与 Resolve
 //	├── model_resource_ops.go         # 模型资源 upsert/delete（config.py:2791-2825）
+//	├── projectless_workspace.go      # 无项目任务工作空间分配与注册（15.16c）
 //	└── model_migration.go           # 旧配置迁移
 //
 // 对应 Python 代码：jiuwenswarm/common/{model_errors,model_catalog,model_routing_registry,
