@@ -42,7 +42,9 @@ func (d *ToolErrorRateDetector) Name() string { return d.burst.Name() }
 // Observe 转调共享爆发检测器。
 //
 // Python: 继承 ErrorBurstDetector.observe。
-func (d *ToolErrorRateDetector) Observe(signal *core.Signal) *core.Anomaly { return d.burst.Observe(signal) }
+func (d *ToolErrorRateDetector) Observe(signal *core.Signal) *core.Anomaly {
+	return d.burst.Observe(signal)
+}
 
 // Reset 重置。
 //
