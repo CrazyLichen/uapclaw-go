@@ -202,6 +202,10 @@ type TaskDao interface {
 	// owner 启动任务，不（重）指派。resume_pending 由本次 start 消费（F_128）。
 	// Python: start_task（task_dao.py L855-905）
 	StartTaskCAS(ctx context.Context, taskID, memberName, toStatus string) (bool, error)
+	// ObserveRevision 记录 member（任务 assignee）被展示了 revision（F_129）。
+	// 单调（永不回退）且绑定 owner：投给不再持有任务的人不记账。
+	// Python: observe_revision（task_dao.py L1493-1511）
+	ObserveRevision(ctx context.Context, taskID, memberName string, revision int64) (bool, error)
 	// GetUnseenRevisions 全队级「已指派、未终态、assignee 未见过当前 revision」
 	// 的 (task_id, status, assignee, resume_pending, revision) 窄投影——调度器
 	// revision scan 每次板面唤醒都跑，不读正文。

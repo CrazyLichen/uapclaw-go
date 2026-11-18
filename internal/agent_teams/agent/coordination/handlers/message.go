@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	ateamprompts "github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -199,7 +200,17 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 					Msg("deferring mailbox message until pending interrupt is resolved")
 				return
 			}
-			text := formatTeamMessage(msg, isHumanAgent)
+			// F_63 两阶段渲染：普通消息原样通过；框架模板消息携带 meta，
+			// 文档在此按*当下*的任务行渲染——在离线成员信箱里滞留的 handoff
+			// 永不投递过时的任务简报。
+			// Python: expanded = await self._expand(msg)（message.py L293）
+			expanded := h.expandMessage(ctx, msg)
+			var text string
+			if expanded.IsTemplate {
+				text = expanded.Body
+			} else {
+				text = formatTeamMessage(msg, isHumanAgent)
+			}
 			logger.Debug(logComponent).
 				Str("member_name", memberName).
 				Str("from", msg.FromMemberName).
@@ -212,8 +223,65 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 					Msg("deliver_input failed")
 			}
 			mm.MarkMessageRead(ctx, msg.MessageID, memberName)
+			// F_129：handoff 按投递时任务现状渲染，其 revision 正是 assignee
+			// 眼前的东西——记录为已见。DAO 只对任务当前 assignee 记账。
+			// Python: await self._observe_shown_revision(expanded)（message.py L303-304）
+			h.observeShownRevision(ctx, expanded)
 		}
 	}
+}
+
+// expandMessage 渲染一条消息行的投递文本（F_63 两阶段模板化）。
+// 普通消息 content 原样通过；框架模板消息只携带 meta，文档在此渲染——
+// 对照任务行的当前状态，因此 offline 成员信箱滞留的 handoff 永不投递过时简报。
+// Python: MessageHandler._expand（message.py L352-375）
+func (h *MessageHandler) expandMessage(ctx context.Context, msg *database.TeamMessageBase) ateamprompts.ExpandedMessage {
+	backend := h.infra.TeamBackend()
+	getters := ateamprompts.ExpandGetters{Language: h.deliveryLanguage()}
+	if backend != nil {
+		db := backend.DB()
+		getters.TaskGetter = func(ctx context.Context, taskID string) (*database.TeamTaskBase, error) {
+			return db.Task().GetTask(ctx, taskID)
+		}
+		getters.MemberGetter = func(ctx context.Context, name string) (*database.TeamMember, error) {
+			return db.Member().GetMember(ctx, name, backend.TeamName())
+		}
+		getters.TaskLinksGetter = func(ctx context.Context, taskID string) ([]*database.TeamTaskBase, []*database.TeamTaskBase, error) {
+			return ateamprompts.TaskLinks(ctx, db.Task(), taskID)
+		}
+		snapshotGetter, subtasksGetter := ateamprompts.RevisionGetters(db.Task(), backend.TeamName())
+		getters.RevisionSnapshotGetter = snapshotGetter
+		getters.SubtasksGetter = subtasksGetter
+	}
+	expanded, err := ateamprompts.ExpandMessage(ctx, msg, getters)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("message_id", msg.MessageID).
+			Msg("expand_message failed")
+		return ateamprompts.ExpandedMessage{Body: msg.Content}
+	}
+	return expanded
+}
+
+// observeShownRevision 记录已投递 handoff 展示的任务 revision 为已见（F_129）。
+// handoff 按投递时的任务行渲染，其 revision 恰是 assignee 眼前的东西；
+// DAO 只对任务当前 assignee 记账。
+// Python: MessageHandler._observe_shown_revision（message.py L311-323）
+func (h *MessageHandler) observeShownRevision(ctx context.Context, expanded ateamprompts.ExpandedMessage) {
+	if !expanded.HasShownRevision {
+		return
+	}
+	if tm := h.infra.TaskManager(); tm != nil {
+		tm.ObserveRevision(ctx, expanded.ShownTaskID, expanded.ShownRevision)
+	}
+}
+
+// deliveryLanguage 投递时模板渲染的团队语言。
+// Python: MessageHandler._language（message.py L325-330）
+func (h *MessageHandler) deliveryLanguage() string {
+	if spec := h.bp.DispatcherSpec(); spec != nil && spec.Language != "" {
+		return spec.Language
+	}
+	return "cn"
 }
 
 // formatTeamMessage 格式化一条 TeamMessage 为 agent 输入。

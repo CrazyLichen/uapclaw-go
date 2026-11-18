@@ -553,6 +553,20 @@ func (d *SQLTaskDao) StartTaskCAS(ctx context.Context, taskID, memberName, toSta
 	return started, nil
 }
 
+// ObserveRevision 记录 assignee 被展示了 revision（F_129）。
+// 谓词 assignee=member AND observed_revision<revision 使记录单调且 owner 绑定。
+// Python: observe_revision（task_dao.py L1493-1511）
+func (d *SQLTaskDao) ObserveRevision(ctx context.Context, taskID, memberName string, revision int64) (bool, error) {
+	table := d.taskTableName(ctx)
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND assignee = ? AND observed_revision < ?", taskID, memberName, revision).
+		Update("observed_revision", revision)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
 // GetUnseenRevisions 全队级「已指派、未终态、assignee 未见过当前 revision」窄投影。
 // Python: get_unseen_revisions（task_dao.py L723-752）
 func (d *SQLTaskDao) GetUnseenRevisions(ctx context.Context, teamName string) ([]UnseenRevisionRow, error) {

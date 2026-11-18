@@ -391,6 +391,18 @@ func (tm *TeamTaskManager) UnseenRevisions(ctx context.Context) ([]database.Unse
 	return tm.db.Task().GetUnseenRevisions(ctx, tm.teamName)
 }
 
+// ObserveRevision 记录本成员（任务 assignee）被展示了 revision（F_129）。
+// 框架把任务内容交给 assignee 的地方调用：模板化 handoff 投递、自认领通知、
+// 自己的 view_task(get)。尽力而为：失败只意味着 assignee 会再多被告知一次。
+// Python: TeamTaskManager.observe_revision（task_manager.py L1731-1742）
+func (tm *TeamTaskManager) ObserveRevision(ctx context.Context, taskID string, revision int64) {
+	if _, err := tm.db.Task().ObserveRevision(ctx, taskID, tm.memberName, revision); err != nil {
+		logger.Error(logComponent).
+			Str("task_id", taskID).Int64("revision", revision).Err(err).
+			Msgf("Failed to record observed revision %d of task %s", revision, taskID)
+	}
+}
+
 // GetOtherActiveTaskID 成员持有的另一条活跃任务（三活跃态），one-active-task
 // 不变量的存在式探测。
 // Python: TeamTaskManager.get_other_active_task_id (task_manager.py L1768-1790)

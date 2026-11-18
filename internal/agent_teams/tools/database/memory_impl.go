@@ -853,6 +853,19 @@ func (db *InMemoryTeamDatabase) StartTaskCAS(_ context.Context, taskID, memberNa
 	return true, nil
 }
 
+// ObserveRevision 记录 assignee 被展示了 revision（F_129）：单调且 owner 绑定。
+// Python: observe_revision（task_dao.py L1493-1511）
+func (db *InMemoryTeamDatabase) ObserveRevision(_ context.Context, taskID, memberName string, revision int64) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists || task.Assignee == nil || *task.Assignee != memberName || task.ObservedRevision >= revision {
+		return false, nil
+	}
+	task.ObservedRevision = revision
+	return true, nil
+}
+
 // GetUnseenRevisions 全队级未见过当前 revision 的已指派未终态任务窄投影。
 // Python: get_unseen_revisions（task_dao.py L723-752）
 func (db *InMemoryTeamDatabase) GetUnseenRevisions(_ context.Context, teamName string) ([]UnseenRevisionRow, error) {
