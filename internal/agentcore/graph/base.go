@@ -22,8 +22,10 @@ type Graph interface {
 	// （Python add_node，base.py:46-48 keyword-only 默认 False；
 	// Go 变参 option 承载，零 option ≡ 默认 False，偏差 D-2）
 	AddNode(nodeID string, node GeneralExecutor, opts ...AddNodeOption) Graph
-	// AddEdge 登记边，sourceNodeID 为 string 或 []string（Python add_edge，base.py:49-50）
-	AddEdge(sourceNodeID any, targetNodeID string) Graph
+	// AddEdge 登记边（Python add_edge，base.py:49-50 Union[str, list[str]]；
+	// 2026-11-16 用户拍板收窄为 []string 单形态——单源调用点包一层 []string{src}，
+	// 编译期即拦非法源类型，偏差 D-7）
+	AddEdge(sourceNodeIDs []string, targetNodeID string) Graph
 	// AddConditionalEdges 登记条件边（Python add_conditional_edges，base.py:52-53）
 	AddConditionalEdges(sourceNodeID string, router Router) Graph
 	// Compile 编译为可执行图（Python compile，base.py:55-56）

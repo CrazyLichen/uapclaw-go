@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 
+	pregel "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -47,8 +48,10 @@ type ExecutableGraph[I, O any] interface {
 	// Interrupt 中断图执行（Python interrupt，base.py:25-26 默认 pass）；默认实现见 DefaultGraphInterrupt
 	Interrupt(ctx context.Context, message map[string]any) error
 	// Invoke_ 拆信封后的抽象执行入口（Python 抽象方法 _invoke，base.py:28-30；
-	// Go 接口方法须导出，下划线后缀保留 Python 名字痕迹，偏差 D4）
-	Invoke_(ctx context.Context, inputs I, sess session.BaseSession, config any) (O, error)
+	// Go 接口方法须导出，下划线后缀保留 Python 名字痕迹，偏差 D4）。
+	// config 收窄为 *PregelConfig（2026-11-16 用户拍板，D-8：Python 形参注解 Any
+	// 但全仓唯一合法类型即 PregelConfig/None——None→nil，信封断言失败即 nil 宽容）
+	Invoke_(ctx context.Context, inputs I, sess session.BaseSession, config *pregel.PregelConfig) (O, error)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -63,7 +66,9 @@ func DefaultGraphInvoke[I, O any](g ExecutableGraph[I, O], ctx context.Context, 
 	if raw, ok := envelope[InputsKey].(I); ok {
 		inputs = raw
 	}
-	return g.Invoke_(ctx, inputs, sess, envelope[ConfigKey])
+	// config 收窄 *PregelConfig（D-8）：断言失败（含缺失）即 nil，对齐 .get 宽容
+	cfg, _ := envelope[ConfigKey].(*pregel.PregelConfig)
+	return g.Invoke_(ctx, inputs, sess, cfg)
 }
 
 // DefaultGraphStream Python stream 的默认实现（base.py:16-17）：

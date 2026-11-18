@@ -28,10 +28,15 @@ type Branch struct {
 	Condition Router
 }
 
-// edge 二元组，对应 Python edges: list[Tuple[str | list[str], str]]（graph.py:61）
+// edge 二元组，对应 Python edges: list[Tuple[str | list[str], str]]（graph.py:61）。
+// 源收窄为 []string 单形态（偏差 D-7：Python Union[str, list[str]]），
+// listForm 记录 Python 原始形态（str→false=static 边、list→true=barrier 边——
+// builder 按形态分派：[]string→string 是 barrier、string→string 是 static，
+// StartNode/EndNode 传 [x] 列表即 barrier 形态，归一后靠此标记还原）。
 type edge struct {
-	source any // string 或 []string
-	target string
+	source   []string
+	target   string
+	listForm bool
 }
 
 // PregelGraph 声明式构图实现。Python: graph.py:57-67
@@ -67,20 +72,20 @@ func NewPregelGraph() *PregelGraph {
 	}
 }
 
-// StartNode 登记起始边。Python: graph.py:69-72
+// StartNode 登记起始边。Python: graph.py:69-72（add_edge([START], node_id)——列表形态=barrier）
 func (g *PregelGraph) StartNode(nodeID string) Graph {
 	g.validateNodeID(nodeID)
-	g.addEdgeSource([]string{pregel.Start}, nodeID)
+	g.addEdgeSource([]string{pregel.Start}, nodeID, true)
 	return g
 }
 
-// EndNode 标记终节点并登记结束边。Python: graph.py:78-84
+// EndNode 标记终节点并登记结束边。Python: graph.py:78-84（add_edge([node_id], END)——列表形态=barrier）
 func (g *PregelGraph) EndNode(nodeID string) Graph {
 	g.validateNodeID(nodeID)
 	if v, ok := g.nodes[nodeID]; ok {
 		v.SetEndNode(true)
 	}
-	g.addEdgeSource([]string{nodeID}, pregel.End)
+	g.addEdgeSource([]string{nodeID}, pregel.End, true)
 	return g
 }
 
@@ -133,9 +138,9 @@ func (g *PregelGraph) GetNodes() map[string]*Vertex {
 	return out
 }
 
-// AddEdge 登记边。Python: graph.py:103-120（校验四分支顺序照抄）
-func (g *PregelGraph) AddEdge(sourceNodeID any, targetNodeID string) Graph {
-	g.addEdgeSource(sourceNodeID, targetNodeID)
+// AddEdge 登记边。Python: graph.py:103-120（校验分支顺序照抄；源形态收窄见偏差 D-7）
+func (g *PregelGraph) AddEdge(sourceNodeIDs []string, targetNodeID string) Graph {
+	g.addEdgeSource(sourceNodeIDs, targetNodeID, len(sourceNodeIDs) > 1)
 	return g
 }
 
@@ -180,37 +185,27 @@ func (g *PregelGraph) validateNodeID(nodeID string) {
 }
 
 // addEdgeSource 校验并登记边（AddEdge/StartNode/EndNode 共用落点）。
-// 校验四分支顺序对齐 graph.py:104-119。
-func (g *PregelGraph) addEdgeSource(sourceNodeID any, targetNodeID string) {
+// 校验分支顺序对齐 graph.py:104-119（空源/空项/空目标）；
+// 源形态收窄为 []string（偏差 D-7）后，Python 的 str 分支归一进切片统一校验。
+func (g *PregelGraph) addEdgeSource(sourceNodeIDs []string, targetNodeID string, listForm bool) {
 	edgeInvalid := func(reason string) {
 		panic(exception.BuildError(exception.StatusPregelGraphEdgeInvalid,
-			exception.WithParam("source_id", sourceNodeID),
+			exception.WithParam("source_id", sourceNodeIDs),
 			exception.WithParam("target_id", targetNodeID),
 			exception.WithParam("reason", reason)))
 	}
-	switch src := sourceNodeID.(type) {
-	case string:
-		if src == "" {
-			edgeInvalid("source_node_id is None or empty")
-		}
-	case []string:
-		if len(src) == 0 {
-			edgeInvalid("source_node_id is None or empty")
-		}
-		for _, item := range src {
-			if item == "" {
-				edgeInvalid("source_node_id list has None or empty")
-			}
-		}
-	default:
-		if sourceNodeID == nil {
-			edgeInvalid("source_node_id is None or empty")
+	if len(sourceNodeIDs) == 0 {
+		edgeInvalid("source_node_id is None or empty")
+	}
+	for _, item := range sourceNodeIDs {
+		if item == "" {
+			edgeInvalid("source_node_id list has None or empty")
 		}
 	}
 	if targetNodeID == "" {
 		edgeInvalid("target_node_id is None or empty")
 	}
-	g.edges = append(g.edges, edge{source: sourceNodeID, target: targetNodeID})
+	g.edges = append(g.edges, edge{source: sourceNodeIDs, target: targetNodeID, listForm: listForm})
 }
 
 // getCallableName 反射取名，对应 Python graph.py:403-409 _get_callable_name 三级回退。
@@ -255,7 +250,9 @@ func (g *PregelGraph) forwardReachable(startNode string) map[string]struct{} {
 		}
 		visited[node] = struct{}{}
 		for _, e := range g.edges {
-			if src, ok := e.source.(string); ok && src == node {
+			// Python `src == node` 对 list 源恒 False（list==str 不等）——
+			// 仅 str 形态（!listForm）的边参与 BFS
+			if !e.listForm && e.source[0] == node {
 				if _, seen := visited[e.target]; !seen {
 					queue = append(queue, e.target)
 				}
@@ -450,16 +447,12 @@ func (g *PregelGraph) compile(graphStore *store.GraphStore, stepCallback pregel.
 		builder.AddNode(nodeID, vertexNodeFunc(g.nodes[nodeID]))
 	}
 
-	// Step 1: waits 前驱收集为单元素组（graph.py:274-285）
+	// Step 1: waits 前驱收集为单元素组（graph.py:274-285；str→{str}、list 逐项 {s}，
+	// D-7 归一后两形态统一为逐项单元素组）
 	for _, e := range g.edges {
 		if _, isWait := g.waits[e.target]; isWait {
-			switch src := e.source.(type) {
-			case string:
-				sources[e.target] = append(sources[e.target], map[string]struct{}{src: {}})
-			case []string:
-				for _, s := range src {
-					sources[e.target] = append(sources[e.target], map[string]struct{}{s: {}})
-				}
+			for _, s := range e.source {
+				sources[e.target] = append(sources[e.target], map[string]struct{}{s: {}})
 			}
 		} else {
 			edges = append(edges, e)
@@ -488,7 +481,14 @@ func (g *PregelGraph) compile(graphStore *store.GraphStore, stepCallback pregel.
 		}
 	}
 	for _, e := range edges {
-		if err := builder.AddEdge(e.source, e.target); err != nil {
+		// D-7：按 Python 原始形态还原——str 源→string（static）、list 源→[]string（barrier）
+		var start any
+		if e.listForm {
+			start = e.source
+		} else {
+			start = e.source[0]
+		}
+		if err := builder.AddEdge(start, e.target); err != nil {
 			panic(err)
 		}
 	}
@@ -560,9 +560,9 @@ func (c *CompiledGraph) Interrupt(ctx context.Context, message map[string]any) e
 }
 
 // Invoke_ 图执行生命周期（Python _invoke，graph.py:315-394，步骤编号保留）。
-// ctx 经契约传入（偏差 D-6 改写：Python asyncio 协程取消 → Go ctx 取消，
-// 五方法对称加 ctx），Pregel.Run 直收真实 ctx。
-func (c *CompiledGraph) Invoke_(ctx context.Context, inputs any, sess session.BaseSession, config any) (map[string]any, error) {
+// ctx 经契约传入（偏差 D-6：Python asyncio 协程取消 → Go ctx 取消）；
+// config 收窄 *PregelConfig（偏差 D-8），nil → isMain 默认配置。
+func (c *CompiledGraph) Invoke_(ctx context.Context, inputs any, sess session.BaseSession, config *pregel.PregelConfig) (map[string]any, error) {
 	isMain := false
 	sessionID := sess.SessionID()
 	workflowID := ""
@@ -570,14 +570,8 @@ func (c *CompiledGraph) Invoke_(ctx context.Context, inputs any, sess session.Ba
 		workflowID = wp.WorkflowID()
 	}
 
-	// config 为 nil → isMain + 默认配置（graph.py:320-322）
-	var pc *pregel.PregelConfig
-	switch cfg := config.(type) {
-	case *pregel.PregelConfig:
-		pc = cfg
-	case pregel.PregelConfig:
-		pc = &cfg
-	}
+	// config 为 nil → isMain + 默认配置（graph.py:320-322；D-8 收窄后无 switch 断言）
+	pc := config
 	if pc == nil {
 		isMain = true
 		pc = &pregel.PregelConfig{SessionID: sessionID, Ns: workflowID, RecursionLimit: pregel.MaxRecursiveLimit}

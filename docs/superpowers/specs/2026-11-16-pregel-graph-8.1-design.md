@@ -166,6 +166,7 @@ func getCallableName(r Router) string
 | 5 | `AddConditionalEdges` 只收 `Router`，零新增便利 API（方案 A） |
 | 6 | `ExecutableGraph` 空方法（stream/collect/transform/interrupt）照实保留 pass 空方法 |
 | 7 | （审查后拍板 2026-11-16）`Graph` 构图方法返回 `Graph` 接口自返回（对齐 Python Self 链式语义）；`AddNode` 用变参 option 承载 `wait_for_all`；`CompiledGraph` 改 `I=any` 让 InteractiveInput 判定回 `Invoke_` 局部；`ExecutableGraph` 五方法对称加 ctx |
+| 8 | （any 收口拍板 2026-11-16）边源收窄 `AddEdge([]string, string)` 单形态（单源包一层，形态区分靠 listForm 标记还原 builder 分派）；`Invoke_` config 收窄 `*PregelConfig`；NodeInput.State/Config 透传与 kwargs map[string]any 维持不动 |
 
 ## 5. 语义澄清记录（讨论结论）
 
@@ -189,6 +190,8 @@ func getCallableName(r Router) string
 | D-4 | `vertexNodeFunc` 鸭子类型桥（Vertex → pregel.NodeFunc 适配器） | Python builder 直存 Vertex 经 `__call__` 派发（task.py:135-152），Go 无鸭子类型；桥内返回值丢弃/错误上抛逐条对齐 task.py:152/171，零行为变更 | 无（结构适配，终态） |
 | D-5 | `CompiledGraph` 实现改 `I=any`，InteractiveInput 判定在 `Invoke_` 方法体内局部判定 | Python `Input` TypeVar 无类型（executable.py:9），信封取值可为 InteractiveInput 对象；`I=map[string]any` 选型导致 `*InteractiveInput` 被默认拆信封断言丢弃，初版实例字段 `c.interactive` 存在竞态/状态残留——2026-11-16 用户拍板改 I=any 根治，判定与 Python graph.py:327 isinstance 同位同形态 | 无（终态） |
 | D-6 | `ExecutableGraph` 五方法（Invoke/Stream/Collect/Transform/Interrupt/Invoke_）对称加 `ctx` 形参 | Python 经 asyncio 协程天然携带取消，Go 显式 ctx 传播（2026-11-16 用户拍板）；`Pregel.Run` 直收真实 ctx，取消不再依赖 NodeFunc 返回 canceled 单通道 | 无（终态） |
+| D-7 | 边源收窄：`AddEdge(sourceNodeIDs []string, targetNodeID string)` 单形态，Python `Union[str, list[str]]` 的 str 调用点包一层 `[]string{src}`；edge 结构以 `listForm` 标记记录 Python 原始形态，转手 builder 时还原（str→string=static、list→[]string=barrier；StartNode/EndNode 传 `[x]` 保持 barrier）；BFS `forwardReachable` 仅遍历非 listForm 边（对齐 Python `src == node` 对 list 恒 False） | 2026-11-16 用户拍板：闭联集收窄编译期拦非法源类型（Python 对非法源静默收下、builder 期才炸——Go 侧加严一处） | 无（终态） |
+| D-8 | `Invoke_` config 形参收窄 `*pregel.PregelConfig`（`DefaultGraphInvoke` 对信封 ConfigKey 断言，失败即 nil 宽容） | Python 形参注解 `Any`（base.py:29）但全仓唯一合法类型即 PregelConfig/None——2026-11-16 用户拍板"没有其他类型为啥用 any" | 上游信封出现第二种 config 类型时放宽回 any |
 | — | 8.3a A1 回填（非本节偏差，范围注记）：`pregel/builder.go` `AddEdge` 补 `[]any` CNF 组形态（string=单元素组/[]string=OR 组），一比一 builder.py:34-52 | 8.1 `_compile` Step3 传 `starts []any` 的硬前置；8.3a A1 原拍板「需时直用/回填」，本次按一比一兑现并补测试 | — |
 
 ## 8. 删除清单

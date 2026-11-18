@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	pregel "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -15,10 +16,10 @@ import (
 type fakeGraph struct {
 	BaseExecutable[map[string]any, map[string]any]
 	invokeArgs map[string]any
-	config     any
+	config     *pregel.PregelConfig
 }
 
-func (f *fakeGraph) Invoke_(ctx context.Context, inputs map[string]any, _ session.BaseSession, config any) (map[string]any, error) {
+func (f *fakeGraph) Invoke_(ctx context.Context, inputs map[string]any, _ session.BaseSession, config *pregel.PregelConfig) (map[string]any, error) {
 	f.invokeArgs = inputs
 	f.config = config
 	return map[string]any{"ok": true}, nil
@@ -66,7 +67,7 @@ func Test信封常量(t *testing.T) {
 // 外层调用一律走接口方法，DefaultGraphInvoke 仅作实现者默认体）
 func TestExecutableGraph_Invoke拆信封(t *testing.T) {
 	g := &fakeGraph{}
-	cfg := map[string]any{"recursion_limit": 25}
+	cfg := &pregel.PregelConfig{RecursionLimit: 25}
 	got, err := g.Invoke(context.Background(),
 		map[string]any{InputsKey: map[string]any{"q": "hi"}, ConfigKey: cfg}, nil)
 	if err != nil {
@@ -78,7 +79,8 @@ func TestExecutableGraph_Invoke拆信封(t *testing.T) {
 	if g.invokeArgs["q"] != "hi" {
 		t.Errorf("Invoke_ 应收到拆出的业务输入, got %v", g.invokeArgs)
 	}
-	if g.config == nil || g.config.(map[string]any)["recursion_limit"] != 25 {
+	// D-8：config 收窄 *PregelConfig，断言失败（非该类型）即 nil 宽容
+	if g.config == nil || g.config.RecursionLimit != 25 {
 		t.Errorf("Invoke_ 应收到拆出的 config, got %v", g.config)
 	}
 }
