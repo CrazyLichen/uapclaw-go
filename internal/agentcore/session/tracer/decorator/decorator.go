@@ -1,6 +1,7 @@
 package decorator
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"fmt"
 	"runtime/debug"
@@ -12,7 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -326,7 +326,7 @@ func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts
 
 // Card 返回工作流配置卡片，直接委托 inner。
 // Python: workflow.card 属性
-func (w *TracedWorkflow) Card() *schema.WorkflowCard {
+func (w *TracedWorkflow) Card() *workflow.WorkflowCard {
 	return w.inner.Card()
 }
 

@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"reflect"
 	"testing"
@@ -79,7 +80,7 @@ func stubModelProvider() ModelProvider {
 
 // stubWorkflowProvider 创建返回 stubWorkflow 的 WorkflowProvider
 func stubWorkflowProvider() WorkflowProvider {
-	return func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	return func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return &stubWorkflow{}, nil
 	}
 }
@@ -145,7 +146,7 @@ func TestResourceMgr_RemoveAgent_正常(t *testing.T) {
 // TestResourceMgr_AddWorkflow_正常 测试正常添加 Workflow
 func TestResourceMgr_AddWorkflow_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := schema.NewWorkflowCard(schema.WithID("wf-1"), schema.WithName("测试Workflow"))
+	card := workflow.NewWorkflowCard(schema.WithID("wf-1"), schema.WithName("测试Workflow"))
 	err := mgr.AddWorkflow(card, stubWorkflowProvider())
 	if err != nil {
 		t.Fatalf("AddWorkflow 失败: %v", err)
@@ -158,7 +159,7 @@ func TestResourceMgr_AddWorkflow_正常(t *testing.T) {
 // TestResourceMgr_GetWorkflow_正常 测试正常获取 Workflow
 func TestResourceMgr_GetWorkflow_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := schema.NewWorkflowCard(schema.WithID("wf-1"), schema.WithName("测试Workflow"))
+	card := workflow.NewWorkflowCard(schema.WithID("wf-1"), schema.WithName("测试Workflow"))
 	_ = mgr.AddWorkflow(card, stubWorkflowProvider())
 
 	workflows, err := mgr.GetWorkflow(context.Background(), []string{"wf-1"})
@@ -589,7 +590,7 @@ func TestResourceMgr_AddAgents_批量(t *testing.T) {
 // TestResourceMgr_RemoveWorkflow_正常 测试正常移除 Workflow
 func TestResourceMgr_RemoveWorkflow_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := schema.NewWorkflowCard(schema.WithID("wf-rm-1"), schema.WithName("移除Workflow"))
+	card := workflow.NewWorkflowCard(schema.WithID("wf-rm-1"), schema.WithName("移除Workflow"))
 	_ = mgr.AddWorkflow(card, stubWorkflowProvider())
 
 	removed, err := mgr.RemoveWorkflow([]string{"wf-rm-1"})
@@ -1433,7 +1434,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	}
 
 	// 先添加 workflow
-	wfCard := schema.NewWorkflowCard(schema.WithID("dr-wf-1"), schema.WithName("移除Workflow"))
+	wfCard := workflow.NewWorkflowCard(schema.WithID("dr-wf-1"), schema.WithName("移除Workflow"))
 	_ = mgr.AddWorkflow(wfCard, stubWorkflowProvider())
 
 	// 移除 workflow
@@ -1502,7 +1503,7 @@ func TestDispatchGet_各资源类型(t *testing.T) {
 	}
 
 	// 添加 workflow 并获取（传 session）
-	wfCard := schema.NewWorkflowCard(schema.WithID("dg-wf-1"), schema.WithName("获取Workflow"))
+	wfCard := workflow.NewWorkflowCard(schema.WithID("dg-wf-1"), schema.WithName("获取Workflow"))
 	_ = mgr.AddWorkflow(wfCard, stubWorkflowProvider())
 	session := &stubTracerSession{}
 	result, err = mgr.dispatchGet(ctx, "workflow", "dg-wf-1", session)
@@ -1597,7 +1598,7 @@ func TestInnerAddResource_默认TagGlobal(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	modelProvider := stubModelProvider()
-	wfCard := schema.NewWorkflowCard(schema.WithID("iar-model-g"), schema.WithName("默认Tag"))
+	wfCard := workflow.NewWorkflowCard(schema.WithID("iar-model-g"), schema.WithName("默认Tag"))
 	err := mgr.innerAddResource("iar-model-g", "model", modelProvider, wfCard, "", "")
 	if err != nil {
 		t.Fatalf("innerAddResource 失败: %v", err)
@@ -1929,7 +1930,7 @@ func TestGetCardType_各种Card类型(t *testing.T) {
 	}
 
 	// WorkflowCard → "workflow" 类型
-	wfCard := schema.NewWorkflowCard(schema.WithID("wf-1"))
+	wfCard := workflow.NewWorkflowCard(schema.WithID("wf-1"))
 	if got := getCardType(wfCard); got != "workflow" {
 		t.Fatalf("getCardType(WorkflowCard) 期望 workflow，实际 %s", got)
 	}

@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"fmt"
 	"reflect"
@@ -320,7 +321,7 @@ func (m *ResourceMgr) GetAgent(ctx context.Context, agentIDs []string, opts ...R
 
 // AddWorkflow 注册 Workflow，将 provider 存入 workflowMgr，缓存 card，标记 tag。
 // Python: ResourceManager.add_workflow(workflow_card, provider, **kwargs)
-func (m *ResourceMgr) AddWorkflow(card *schema.WorkflowCard, provider WorkflowProvider, opts ...ResourceOption) error {
+func (m *ResourceMgr) AddWorkflow(card *workflow.WorkflowCard, provider WorkflowProvider, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(card.ID, "workflow"); err != nil {
 		return err
@@ -337,7 +338,7 @@ func (m *ResourceMgr) AddWorkflow(card *schema.WorkflowCard, provider WorkflowPr
 func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOption) []Result {
 	results := make([]Result, 0, len(workflows))
 	for _, entry := range workflows {
-		card := schema.NewWorkflowCard(schema.WithID(entry.ID))
+		card := workflow.NewWorkflowCard(schema.WithID(entry.ID))
 		if err := m.AddWorkflow(card, entry.Provider, opts...); err != nil {
 			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_ADD_WORKFLOWS_ERROR").
@@ -354,19 +355,19 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 
 // RemoveWorkflow 注销 Workflow，返回被注销的 WorkflowCard 列表。
 // Python: ResourceManager.remove_workflow(workflow_id, **kwargs)
-func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOption) ([]*schema.WorkflowCard, error) {
+func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOption) ([]*workflow.WorkflowCard, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(workflowIDs, "workflow", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
 	if err != nil {
 		return nil, err
 	}
-	removed := make([]*schema.WorkflowCard, 0, len(results))
+	removed := make([]*workflow.WorkflowCard, 0, len(results))
 	for _, r := range results {
 		if r.Err != nil {
 			continue
 		}
-		// G11 修复：直接断言为 *schema.WorkflowCard，保留完整字段
-		if card, ok := r.Value.(*schema.WorkflowCard); ok && card != nil {
+		// G11 修复：直接断言为 *workflow.WorkflowCard，保留完整字段
+		if card, ok := r.Value.(*workflow.WorkflowCard); ok && card != nil {
 			removed = append(removed, card)
 		}
 	}
@@ -1662,7 +1663,7 @@ func getCardType(card schema.CardInterface) string {
 		return "team"
 	case *maschema.EventDrivenTeamCard:
 		return "team"
-	case *schema.WorkflowCard:
+	case *workflow.WorkflowCard:
 		return "workflow"
 	case *agentschema.AgentCard:
 		return "agent"

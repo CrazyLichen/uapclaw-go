@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
@@ -51,7 +52,7 @@ func TestWorkflowSessionFacade_GetParent(t *testing.T) {
 func TestWorkflowSessionFacade_SetGetWorkflowCard(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	card := schema.NewWorkflowCard(schema.WithName("test_workflow"), schema.WithID("wf-001"))
+	card := workflow.NewWorkflowCard(schema.WithName("test_workflow"), schema.WithID("wf-001"))
 	ws.SetWorkflowCard(card)
 	got := ws.GetWorkflowCard()
 	if got == nil {

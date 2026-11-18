@@ -1,6 +1,7 @@
 package resources_manager
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"context"
 	"testing"
 
@@ -62,8 +63,8 @@ func TestAgentProvider_调用(t *testing.T) {
 
 // TestWorkflowProvider_调用 测试 WorkflowProvider 函数类型可调用
 func TestWorkflowProvider_调用(t *testing.T) {
-	wfCard := schema.NewWorkflowCard(schema.WithName("test-wf"), schema.WithDescription("测试"))
-	provider := WorkflowProvider(func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+	wfCard := workflow.NewWorkflowCard(schema.WithName("test-wf"), schema.WithDescription("测试"))
+	provider := WorkflowProvider(func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
 		return nil, nil
 	})
 	_, err := provider(context.Background(), wfCard)
