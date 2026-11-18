@@ -158,6 +158,7 @@ type fakeInnerSession struct {
 	swm *stream.StreamWriterManager
 	am  *stream_actor.ActorManager
 	cp  interfaces.Checkpointer
+	wfID string
 }
 
 func (f *fakeInnerSession) Config() config.SessionConfig                     { return f.cfg }
@@ -168,6 +169,33 @@ func (f *fakeInnerSession) SessionID() string                                { r
 func (f *fakeInnerSession) Checkpointer() interfaces.Checkpointer            { return f.cp }
 func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager         { return f.am }
 func (f *fakeInnerSession) Close() error                                     { return nil }
+
+// parentWFID 测试默认 workflowID（NodeSession 经 getWorkflowID 继承）
+const parentWFID = "wf-test"
+
+// WorkflowID 返回工作流 ID（8.15 NodeConfig 管路：NodeSession.workflowID 来源）
+func (f *fakeInnerSession) WorkflowID() string {
+	if f.wfID == "" {
+		return parentWFID
+	}
+	return f.wfID
+}
+
+// driveNodeSpec 8.15 NodeConfig 管路驱动：向 parent config 注册节点规格并重跑 Init
+// （能力派生逻辑已内联回 Init，对齐 Python init 的 vertex.py:92-97 段经真实
+// NodeSession.NodeConfig() 链路驱动；替代已删除的 applyNodeConfig 直测）
+func driveNodeSpec(t *testing.T, v *Vertex, parent *fakeInnerSession, spec *workflow.NodeSpec) {
+	t.Helper()
+	wfc, err := workflow.NewWorkflowConfig(&workflow.WorkflowCard{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wfc.Spec.CompConfigs[v.nodeID] = spec
+	parent.cfg.AddWorkflowConfig(parent.WorkflowID(), wfc)
+	if !v.Init(parent, nil) {
+		t.Fatal("Init 应成功")
+	}
+}
 
 func TestInit_主干默认能力(t *testing.T) {
 	cfg := config.NewSessionConfig(context.Background())
@@ -217,19 +245,16 @@ func TestInit_主干默认能力(t *testing.T) {
 }
 
 func TestInit_能力判定_流批混合(t *testing.T) {
-	// NodeSession.NodeConfig() ⤵️ 8.15 回填前恒 nil；能力派生逻辑经
-	// applyNodeConfig 直测（Init 内联步骤，测试经同包字段注入驱动）
+	// ✅ 8.15 已回填：能力派生经真实 NodeSession.NodeConfig() 管路驱动（D-3 内联回收）
 	v := NewVertex("n", &fakeVertexExecutable{})
 	parent := &fakeInnerSession{cfg: config.NewSessionConfig(context.Background()),
 		st: state.NewInMemoryWorkflowState()}
-	_ = v.Init(parent, nil)
-	// 直接驱动派生逻辑（Init 的 vertex.py:93-97 段）
-	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
 		components.ComponentAbilityInvoke, components.ComponentAbilityTransform}})
 	if !v.hasStreamCall || !v.hasCall {
 		t.Fatalf("混合能力应双真, stream=%v call=%v", v.hasStreamCall, v.hasCall)
 	}
-	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
 		components.ComponentAbilityCollect}})
 	if !v.hasStreamCall || v.hasCall {
 		t.Fatal("纯流能力：hasStreamCall true / hasCall false")
@@ -462,8 +487,8 @@ func TestPostInvoke_None过滤与Merge(t *testing.T) {
 // ──────────────────────────── Task8: preStream / postStream / processChunk ────────────────────────────
 
 func TestStreamAbilities与ShouldHandleMessage(t *testing.T) {
-	v, _ := newTraceVertex(t, false)
-	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+	v, parent := newTraceVertex(t, false)
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
 		components.ComponentAbilityInvoke, components.ComponentAbilityCollect,
 		components.ComponentAbilityTransform}})
 	ab := v.streamAbilities()
@@ -488,8 +513,10 @@ func newVertexWithActor(t *testing.T, abilities ...components.ComponentAbility) 
 	cfg := config.NewSessionConfig(context.Background())
 	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
 	v := NewVertex("n1", &fakeVertexExecutable{})
+	wfcReg, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{})
+	wfcReg.Spec.CompConfigs["n1"] = &workflow.NodeSpec{Abilities: abilities}
+	parent.cfg.AddWorkflowConfig(parent.WorkflowID(), wfcReg)
 	_ = v.Init(parent, nil)
-	v.applyNodeConfig(&workflow.NodeSpec{Abilities: abilities})
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"n1"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
@@ -1057,8 +1084,7 @@ func TestVertex_双链并发_race(t *testing.T) {
 			return map[string]any{"invoked": true}, nil
 		},
 	})
-	_ = v.Init(parent, nil)
-	v.applyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
 		components.ComponentAbilityInvoke, components.ComponentAbilityCollect}})
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"n1"}}
@@ -1112,7 +1138,7 @@ type fakeTemplate struct{ count int }
 func (t *fakeTemplate) SetDataSourceCount(n int) { t.count = n }
 
 func TestSanitizeEndNodeInputs_混合模式(t *testing.T) {
-	v, _ := newTraceVertex(t, false)
+	v, parent := newTraceVertex(t, false)
 	v.isEndNode = true
 	v.hasCall = true
 	v.hasStreamCall = true
@@ -1124,7 +1150,7 @@ func TestSanitizeEndNodeInputs_混合模式(t *testing.T) {
 	// 有模板 + 流侧源全部未执行 → set_data_source_count(0)（vertex.py:460-464）
 	exe := &templateExe{tpl: &fakeTemplate{}}
 	v.executable = exe
-	v.applyNodeConfig(&workflow.NodeSpec{
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{
 		StreamIOConfigs: &workflow.CompIOConfig{InputsSchema: map[string]any{
 			"x": "${A.out}"}}})
 	got := v.sanitizeEndNodeInputs(context.Background(), in, map[string]any{})
@@ -1200,9 +1226,9 @@ func TestIsStreamSourceStillPending_分支(t *testing.T) {
 	}
 }
 
-func TestApplyNodeConfig与SetEndNode(t *testing.T) {
-	v, _ := newTraceVertex(t, false)
-	v.ApplyNodeConfig(&workflow.NodeSpec{Abilities: []components.ComponentAbility{
+func TestInit_节点规格派生与SetEndNode(t *testing.T) {
+	v, parent := newTraceVertex(t, false)
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
 		components.ComponentAbilityTransform}})
 	v.SetEndNode(true)
 	if !v.isEndNode {
@@ -1272,10 +1298,16 @@ func TestSecondsToDuration_非正值(t *testing.T) {
 func TestPostStream_Transformer轨与StreamOutput(t *testing.T) {
 	// transformer 轨（非 dict outputs_schema）+ get_stream_output 钩子（vertex.py:597-598/625-628）
 	v, am := newVertexAsProducer(t)
-	v.applyNodeConfig(&workflow.NodeSpec{StreamIOConfigs: &workflow.CompIOConfig{
-		OutputsSchema: sutils.MessageTransformer(func(m map[string]any) map[string]any {
-			return map[string]any{"t": "x"}
-		})}})
+	// 8.15：经 Init 管路注入 StreamIOConfigs（driveNodeSpec 需要 parent，经 producer helper 内部 fake 取不到，
+	// 改直接驱动 Init 内联步骤等价物：注册 spec 后重 Init）
+	{
+		parent := &fakeInnerSession{cfg: config.NewSessionConfig(context.Background()),
+			st: state.NewInMemoryWorkflowState(), am: am}
+		driveNodeSpec(t, v, parent, &workflow.NodeSpec{StreamIOConfigs: &workflow.CompIOConfig{
+			OutputsSchema: sutils.MessageTransformer(func(m map[string]any) map[string]any {
+				return map[string]any{"t": "x"}
+			})}})
+	}
 	// get_stream_output 钩子
 	v.executable = &streamOutExe{}
 	ch := make(chan StreamChunk[map[string]any], 1)

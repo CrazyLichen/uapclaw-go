@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -238,7 +239,7 @@ func (f *NodeSessionFacade) GetEnv(key string, defaultValue ...any) any {
 
 // GetNodeConfig 获取节点级配置。
 // Python: Session.get_node_config()
-func (f *NodeSessionFacade) GetNodeConfig() any {
+func (f *NodeSessionFacade) GetNodeConfig() *workflow.NodeSpec {
 	return f.inner.NodeConfig()
 }
 
@@ -292,8 +293,8 @@ type WorkflowVertexSession interface {
 	StreamWriterManager() *stream.StreamWriterManager
 	// ActorManager Actor 管理器（Python: actor_manager()）
 	ActorManager() *stream_actor.ActorManager
-	// NodeConfig 节点规格（Python: node_config()，any 承载 ⤵️ 8.15 回填）
-	NodeConfig() any
+	// NodeConfig 节点规格（Python: node_config()）
+	NodeConfig() *workflow.NodeSpec
 	// SkipTrace 是否跳过追踪（Python: skip_trace）
 	SkipTrace() bool
 }

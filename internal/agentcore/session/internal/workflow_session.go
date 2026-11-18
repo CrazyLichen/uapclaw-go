@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -395,17 +396,17 @@ func (n *NodeSession) Parent() interfaces.InnerSession {
 
 // NodeConfig 获取节点级配置。
 // Python: NodeSession.node_config() → config.get_workflow_config(workflow_id).spec.comp_configs.get(node_id)
-func (n *NodeSession) NodeConfig() any {
+// ✅ 8.15 已回填：从 WorkflowConfig.Spec.CompConfigs 取 nodeID 对应配置
+func (n *NodeSession) NodeConfig() *workflow.NodeSpec {
 	cfg := n.delegate.Config()
 	if cfg == nil {
 		return nil
 	}
 	wfc := cfg.GetWorkflowConfig(n.workflowID)
-	if wfc == nil {
+	if wfc == nil || wfc.Spec == nil {
 		return nil
 	}
-	// ⤵️ 8.15 回填：WorkflowConfig 实现后，从 spec.comp_configs 获取 nodeID 对应的配置
-	return nil
+	return wfc.Spec.CompConfigs[n.nodeID]
 }
 
 // Config 委托给父 session
