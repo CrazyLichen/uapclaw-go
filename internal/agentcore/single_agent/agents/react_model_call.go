@@ -11,9 +11,9 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -826,7 +826,7 @@ func extraInt(cbc *interfaces.AgentCallbackContext, key string) int {
 // 处理器体一比一复刻 Python write_llm_route（model.py:42-54）：payload 取
 // route_metadata 拷贝、result_type 缺省 "answer"，写入
 // OutputSchema{type="llm_route", index=0, payload}；session 为 nil 时跳过
-//（对齐 Python session is None → return）。
+// （对齐 Python session is None → return）。
 // Python: model.py:30-56 _ensure_llm_route_stream_writer_registered
 // 结构偏差 D-7：Python 全局注册一次 + contextvar 注入 session；Go 无
 // contextvar，改为每次模型调用临时注册、闭包捕获 sess——触发时机（路由器
