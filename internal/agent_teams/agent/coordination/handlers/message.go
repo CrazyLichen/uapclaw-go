@@ -278,7 +278,7 @@ func (h *MessageHandler) observeShownRevision(ctx context.Context, expanded atea
 // deliveryLanguage 投递时模板渲染的团队语言。
 // Python: MessageHandler._language（message.py L325-330）
 func (h *MessageHandler) deliveryLanguage() string {
-	if spec := h.bp.DispatcherSpec(); spec != nil && spec.Language != "" {
+	if spec := h.blueprint.DispatcherSpec(); spec != nil && spec.Language != "" {
 		return spec.Language
 	}
 	return "cn"
