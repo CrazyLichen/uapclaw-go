@@ -11,11 +11,13 @@ import (
 	"fmt"
 
 	agent "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -107,8 +109,8 @@ func externalCliMCPServerName(cliAgent string) string {
 }
 
 // buildExternalCliRuntime 构建 CLI runtime：cli_cfg 有/无两分支
-//（Python :604-667），实参逐项对位。skills 解析在此完成；安装门卫
-//（本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
+// （Python :604-667），实参逐项对位。skills 解析在此完成；安装门卫
+// （本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
 // 15.16c seed 工厂落地前门卫按 Python project_dir=None 短路（⤴️15.16c）。
 func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeContext, args spawn.ExternalCliRuntimeArgs) (spawn.ExternalCliMemberRuntime, error) {
 	opts := externalcli.Options{
@@ -222,13 +224,13 @@ func installSkillsShim(ctx context.Context, skills []any, provider, cwd, conflic
 // 含 Python :675 的 share_workspace_cache_with 同序调用——本文件原先的
 // 零消费副本 newExternalMemberTeamAgent 已按规则 8 删除。）
 //
-//	1. bind_team_context_tracker（BuildTeamContextTracker，15.13 已移植）
-//	2. bind_task_outcome_tracker（build_task_event_tracker）
-//	3. ExternalHarnessMemberRuntime：_bind_trajectory_recorder（15.11 recorder
-//	   + ObservabilityExecutionSubject）
-//	4. bind_reliability_context（五参调用点；实现仍桩 ⤴️15.7/15.8，D-15.16-a7）
-//	5. _bind_protocol_member_team_tools（claude ⤴️15.7 / codex ⤴️15.8，
-//	   swarmflow host ⤴️swarmflow 章节——D-15.16-b3 挂点）
+//  1. bind_team_context_tracker（BuildTeamContextTracker，15.13 已移植）
+//  2. bind_task_outcome_tracker（build_task_event_tracker）
+//  3. ExternalHarnessMemberRuntime：_bind_trajectory_recorder（15.11 recorder
+//     + ObservabilityExecutionSubject）
+//  4. bind_reliability_context（五参调用点；实现仍桩 ⤴️15.7/15.8，D-15.16-a7）
+//  5. _bind_protocol_member_team_tools（claude ⤴️15.7 / codex ⤴️15.8，
+//     swarmflow host ⤴️swarmflow 章节——D-15.16-b3 挂点）
 func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.ExternalCliTeamAgent, runtimeValue spawn.ExternalCliMemberRuntime, sessionID string) error {
 	ta, ok := teammate.(*agent.TeamAgent)
 	if !ok {
@@ -274,18 +276,21 @@ func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.Externa
 		}
 		// recorder 为 nil（观测性未初始化）→ 静默，对齐 Python ImportError 路径
 	}
-	// 4. bind_reliability_context（Python :723-732）：五参调用点压实，
-	// 实现仍桩 ⤴️15.7/15.8（D-15.16-a7 不变）。
-	if binder, ok := runtimeValue.(interface {
-		BindReliabilityContext(string, any, string, any, any)
-	}); ok {
-		binder.BindReliabilityContext(
-			sessionID,
-			ta.TeamBackend(),
-			ta.TeamBackend().ResolveLeaderMemberName(ctx),
-			ta.UpdateStatus,
-			nil, // messager：teammate.infra.messager，infra 缝待接线 ⤴️（登记）
-		)
+	// 4. bind_reliability_context（Python :719-732）：仅 teammate_backend 非空时
+	// 绑定（SDK 支撑的成员才注入可靠性投递面：failed 消息进 leader 信箱 +
+	// 成员 ERROR 状态 + 重试进度事件）。
+	if tb := ta.TeamBackend(); tb != nil {
+		if binder, ok := runtimeValue.(interface {
+			BindReliabilityContext(string, *tools.TeamBackend, string, externalcli.UpdateStatusCallback, messager.Messager)
+		}); ok {
+			binder.BindReliabilityContext(
+				sessionID,
+				tb,
+				tb.ResolveLeaderMemberName(ctx),
+				ta.UpdateStatus,
+				ta.Messager(), // Python: teammate.infra.messager（external_cli_spawn.py:732）
+			)
+		}
 	}
 	// 5. _bind_protocol_member_team_tools（Python :712-722）：claude/codex
 	// 分支体 ⤴️15.7/15.8（D-15.13-x / D-15.16-b3 挂点）；injectMCP 门卫由

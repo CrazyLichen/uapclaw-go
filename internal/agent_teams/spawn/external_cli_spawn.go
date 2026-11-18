@@ -22,10 +22,10 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -367,7 +367,11 @@ type atomicValue struct {
 }
 
 // Store 存值。
-func (a *atomicValue) Store(v any) { externalCliSpawnRefMu.Lock(); a.v = v; externalCliSpawnRefMu.Unlock() }
+func (a *atomicValue) Store(v any) {
+	externalCliSpawnRefMu.Lock()
+	a.v = v
+	externalCliSpawnRefMu.Unlock()
+}
 
 // Load 取值。
 func (a *atomicValue) Load() any {

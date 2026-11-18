@@ -25,15 +25,15 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
-	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	inboundtags "github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -70,12 +70,12 @@ type InboxObserver func(ctx context.Context, view *InboxView) error
 // ExternalTeamClient 经共享 db + messager 把外部 agent 挂到运行中的团队。
 // Python: ExternalTeamClient (client.py:94-117)
 type ExternalTeamClient struct {
-	descriptor  *TeamJoinDescriptor
-	messager    messager.Messager
-	backend     *tools.TeamBackend
-	tasks       *tools.TeamTaskManager
-	messages    *tools.TeamMessageManager
-	db          database.TeamDatabase
+	descriptor   *TeamJoinDescriptor
+	messager     messager.Messager
+	backend      *tools.TeamBackend
+	tasks        *tools.TeamTaskManager
+	messages     *tools.TeamMessageManager
+	db           database.TeamDatabase
 	workspaceMgr *team_workspace.TeamWorkspaceManager
 	// teamTools member scope 真团队工具，按 card.Name 索引。member scope 的
 	// connect() 时构建，外部 CLI 成员调用与原生进程内 teammate 完全相同的
@@ -209,11 +209,11 @@ func (c *ExternalTeamClient) Connect(ctx context.Context) error {
 		realTools := tools.CreateTeamTools(
 			backend,
 			tools.TeamToolOptions{
-				Role:          "teammate",
-				TeammateMode:  c.descriptor.TeammateMode,
-				DispatchMode:  c.descriptor.DispatchMode,
-				Lifecycle:     "temporary",
-				Language:      c.descriptor.Language,
+				Role:         "teammate",
+				TeammateMode: c.descriptor.TeammateMode,
+				DispatchMode: c.descriptor.DispatchMode,
+				Lifecycle:    "temporary",
+				Language:     c.descriptor.Language,
 			},
 			nil,
 			exclude,
@@ -336,7 +336,7 @@ func (c *ExternalTeamClient) CompleteTask(ctx context.Context, taskID string) (*
 // Python: update_task (client.py:397-406)
 func (c *ExternalTeamClient) UpdateTask(ctx context.Context, taskID string, title, content *string) (*atschema.TaskOpResult, error) {
 	ctx = c.BindSessionContext(ctx)
-		updateTitle, updateContent := "", ""
+	updateTitle, updateContent := "", ""
 	hasTitle, hasContent := title != nil, content != nil
 	if hasTitle {
 		updateTitle = *title

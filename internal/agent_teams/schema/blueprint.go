@@ -1,6 +1,10 @@
 package schema
 
 import (
+	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
+)
+
+import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -173,6 +177,10 @@ type TeamAgentSpec struct {
 	AgentCustomizer AgentCustomizer `json:"-"`
 	// Memory 团队记忆配置
 	Memory *TeamMemoryConfig `json:"memory,omitempty"`
+	// Reliability 团队可靠性框架配置（可选）。
+	// opt-in：enabled 默认 False；给配置角色挂监测轨（默认 leader + teammate）。
+	// Python: reliability (blueprint.py:674, Optional[ReliabilityConfig])
+	Reliability *railsreliabilitycore.ReliabilityConfig `json:"reliability,omitempty"`
 }
 
 // AgentCustomizer 用户自定义 Agent 配置钩子（全项目唯一类型定义）。

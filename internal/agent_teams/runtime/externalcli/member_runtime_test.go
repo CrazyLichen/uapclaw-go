@@ -256,6 +256,28 @@ func TestExternalHarnessMemberRuntime_绑定槽位(t *testing.T) {
 	}
 }
 
+// TestBindReliabilityContext_真构造 对齐 Python bind_reliability_context
+// （member_runtime.py:398-421）：agent_kind 非空时构造并注入上下文；
+// team_backend 为 nil 时 team_name=""、message_manager=nil。
+func TestBindReliabilityContext_真构造(t *testing.T) {
+	r2, _ := NewExternalHarnessMemberRuntime(&fakeHarnessProtocol{},
+		func(_ any) (*harness_protocol.HarnessContext, error) {
+			return &harness_protocol.HarnessContext{}, nil
+		}, ExternalHarnessMemberRuntimeOptions{AgentKind: "claude", CLIPath: "/bin/fake-cli"})
+	r2.BindReliabilityContext("sess-1", nil, "leader", nil, nil)
+	ctx := r2.reliabilityCtxSnap()
+	if ctx == nil {
+		t.Fatal("agent_kind 非空必须构造可靠性上下文")
+	}
+	rc, ok := ctx.(*RuntimeReliabilityContext)
+	if !ok {
+		t.Fatalf("reliabilityCtx 类型 = %T", ctx)
+	}
+	if rc.cliPath != "/bin/fake-cli" {
+		t.Fatalf("cliPath = %q", rc.cliPath)
+	}
+}
+
 func TestExternalHarnessMemberRuntime_成员会话助手(t *testing.T) {
 	r, _ := NewExternalHarnessMemberRuntime(&fakeHarnessProtocol{},
 		func(_ any) (*harness_protocol.HarnessContext, error) {

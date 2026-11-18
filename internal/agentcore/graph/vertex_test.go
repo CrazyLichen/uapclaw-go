@@ -414,9 +414,15 @@ func TestPreInvoke_双轨取数(t *testing.T) {
 	// dict schema 轨（vertex.py:426）：io_state 无上游输出 → 引用键取 nil 缺省
 	v.nodeConfig = &workflow.NodeSpec{IOConfigs: &workflow.CompIOConfig{
 		InputsSchema: map[string]any{"x": "${A.out}"}}}
+	// preInvoke 返回具体类型 map[string]any（cdac01647 契约收窄后直接判 nil/长度，
+	// 不再对具体类型做类型断言——那是对接口值才合法的语法）
 	in2 := v.preInvoke(context.Background())
-	if len(in2) > 1 || (in2 == nil) {
-		return // 上游无输出时整体为 nil 亦合法
+	if len(in2) != 1 {
+		if in2 == nil {
+			return // 上游无输出时整体为 nil 亦合法
+		}
+		t.Fatalf("dict 轨应返回 schema 形状 map, got %v", in2)
+	}
 	}
 	if val, exists := in2["x"]; exists && val != nil {
 		t.Fatalf("无上游输出引用键应为 nil, got %v", val)

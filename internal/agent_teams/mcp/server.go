@@ -37,8 +37,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // logComponent 组件常量。

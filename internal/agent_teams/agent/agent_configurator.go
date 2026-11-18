@@ -424,12 +424,15 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 
 	memberBuildCtx := deriveMemberBuildContext(nil, ctx, resolvedLanguage, cardIDOf(c.card))
 
-	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec))
+	// 25.1g: 可靠性组件构建一次并注入 extras（agent_configurator.py:790-806）
+	reliabilityComps, reliabilityIsLeader := buildReliability(spec, ctx, c)
+
+	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec, reliabilityComps))
 	c.lastBuildCtx = memberBuildCtx
 
 	teamSpecs := rails.TeamRailSpecs(buildTeamRailSpecInput(
 		spec, ctx, agentSpec, resolvedLanguage, isTeamPlanLeader,
-		approvalTools, isCoordinatedTeammate, c,
+		approvalTools, isCoordinatedTeammate, reliabilityComps, reliabilityIsLeader, c,
 	))
 	// 上游："Fold the team rails into the spec rails (after the user rails)"
 	// 用户声明的 rails 在前，团队 rails 在后，保持既有挂载顺序语义。
