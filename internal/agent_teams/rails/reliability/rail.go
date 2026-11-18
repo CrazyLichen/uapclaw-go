@@ -67,6 +67,12 @@ func NewReliabilityRail(monitor *ReliabilityMonitor, member string, auto *remedi
 // Python: rail.py ReliabilityRail.priority = 5。
 func (r *ReliabilityRail) Priority() int { return RailPriority }
 
+// MemberName 返回本 rail 绑定的成员名（跨包测试/断言用）。
+func (r *ReliabilityRail) MemberName() string { return r.member }
+
+// Monitor 返回本 rail 的 detector 聚合器（跨包测试/断言用；同文件语义，非偏差）。
+func (r *ReliabilityRail) Monitor() *ReliabilityMonitor { return r.monitor }
+
 // BindLocalSink 绑定 leader 的进程内异常 sink（非 leader 轨为 no-op）。
 //
 // Python: rail.py ReliabilityRail.bind_local_sink。leader 自检的异常直达进程内

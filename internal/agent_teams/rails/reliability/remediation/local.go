@@ -5,6 +5,7 @@ package remediation
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -52,6 +53,9 @@ type LocalAutoRemediator struct {
 //
 // Python: local.py LocalAutoRemediator.__init__（intensity=5, period=60s）。
 func NewLocalAutoRemediator(policy *RemediationPolicy, intensity int, periodSeconds float64, nowFn func() float64) *LocalAutoRemediator {
+	if nowFn == nil {
+		nowFn = func() float64 { return float64(time.Now().UnixNano()) / 1e9 }
+	}
 	return &LocalAutoRemediator{
 		policy:        policy,
 		intensity:     intensity,
@@ -105,9 +109,15 @@ func (r *LocalAutoRemediator) Reset() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultSteerText 默认纠偏文案（i18n 未接线时的兜底；对齐
-// reliability.steer_self_correct 模板形状）。
-func defaultSteerText(kind core.AnomalyKind, summary string) string {
+// reliability.steer_self_correct 模板形状）。导出为 DefaultSteerText：
+// standalone 纠偏器（rsi runtime_reliability）的 super() 语义需要它。
+func DefaultSteerText(kind core.AnomalyKind, summary string) string {
 	msg := fmt.Sprintf("[reliability] self-correction hint (%s): %s", kind, summary)
 	logger.Warn(logComponent).Str("kind", string(kind)).Msg("reliability steer text via fallback template")
 	return msg
+}
+
+// defaultSteerText 包内别名（保持既有调用点不变）。
+func defaultSteerText(kind core.AnomalyKind, summary string) string {
+	return DefaultSteerText(kind, summary)
 }

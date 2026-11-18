@@ -68,6 +68,9 @@ func (m *ReliabilityMonitor) Reset() {
 	}
 }
 
+// Reporter 返回异常上报缝（跨包测试与 standalone 断言用；同文件语义，非偏差）。
+func (m *ReliabilityMonitor) Reporter() AnomalyReporter { return m.reporter }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // observeSafe 单 detector 隔离执行：panic 记日志跳过。
