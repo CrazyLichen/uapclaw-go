@@ -467,10 +467,12 @@ func TestTaskManager_UpdateTask_失败(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	_, _ = tm.Claim(ctx, task.TaskID)
-	// CLAIMED 状态下禁止编辑
+	// IN_REVIEW 冻结（评审按稳定正文验收）；PLANNING/IN_PROGRESS 可编辑（F_129）。
+	// IN_REVIEW 进入路径属 25.2b submit_for_review，这里直接经 dao 置状态构造
+	_, _ = tm.db.Task().UpdateTaskStatus(ctx, task.TaskID, fsm.TaskStatusInReview)
 	err := tm.UpdateTask(ctx, task.TaskID, "新标题", "新内容")
 	if err == nil {
-		t.Error("CLAIMED 状态下应禁止编辑")
+		t.Error("IN_REVIEW 状态下应禁止编辑")
 	}
 }
 
@@ -1160,10 +1162,14 @@ func TestTaskManager_Complete_PLAN_MODE_非PLAN_APPROVED(t *testing.T) {
 	task, _ := tm.Add(ctx, "任务", "")
 	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
-	// PLAN_MODE 成员只能完成 PLAN_APPROVED 任务，CLAIMED 应失败
+	// PLAN_MODE 成员只能完成 IN_PROGRESS 任务（审批把任务从 planning 推进到
+	// in_progress 后才可完成）；PLANNING 状态下完成应失败
+	planFile := filepath.Join(t.TempDir(), "plan.md")
+	os.WriteFile(planFile, []byte("# 计划"), 0o644)
+	_, _ = tm.SubmitPlan(ctx, task.TaskID, planFile, "call_1")
 	result, err := tm.Complete(ctx, task.TaskID)
 	if err == nil && result.OK {
-		t.Error("PLAN_MODE 成员完成 CLAIMED 任务应返回错误")
+		t.Error("PLAN_MODE 成员完成 PLANNING 任务应返回错误")
 	}
 }
 
