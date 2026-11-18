@@ -619,10 +619,9 @@ func TestApprovePlan(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
-	// 创建任务
+	// 创建任务（不预 Claim：condition-named 状态机下审批只从 PLANNING 出发，
+	// PENDING 由 submit_plan 预留进计划闸——对齐 Python submit_plan L60-66）
 	task, _ := tb.taskManager.Add(ctx, "Plan Task", "desc")
-	// Claim 任务
-	_, _ = tb.taskManager.Claim(ctx, task.TaskID)
 	// 设置成员为 PLAN_MODE
 	memDB := tb.DB().(*database.InMemoryTeamDatabase)
 	memDB.SetMemberMode("leader", tb.TeamName(), "plan_mode")

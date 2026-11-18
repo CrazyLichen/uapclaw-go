@@ -1162,7 +1162,6 @@ func TestTaskManager_Complete_PLAN_MODE_非PLAN_APPROVED(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
 	// PLAN_MODE 成员只能完成 IN_PROGRESS 任务（审批把任务从 planning 推进到
 	// in_progress 后才可完成）；PLANNING 状态下完成应失败

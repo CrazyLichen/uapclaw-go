@@ -159,9 +159,12 @@ func TestSQLTaskDao_UpdateTask(t *testing.T) {
 	assert.Equal(t, "New Title", got.Title)
 	assert.Equal(t, "New Content", got.Content)
 
-	// Python: IN_REVIEW 冻结（评审按稳定正文验收）
-	_, err = dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusInReview)
+	// Python: IN_REVIEW 冻结（评审按稳定正文验收）。经转换表两步推进：
+	// pending→in_progress→in_review（pending→in_review 非法，这正是状态机的守卫）
+	_, _ = dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusInProgress)
+	ok2, err := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusInReview)
 	require.NoError(t, err)
+	assert.True(t, ok2)
 	ok, err = dao.UpdateTask(ctx, "t1", "Should Fail", "")
 	require.NoError(t, err)
 	assert.False(t, ok)
