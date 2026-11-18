@@ -519,7 +519,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **8.x 工作流** | — | | | |
 | 8.14 | ☐ | Workflow 类 | 编排组件图，会话管理，流式输出 | `openjiuwen/core/workflow/workflow.py` · `_workflow.py` |
 | 8.15 | ☐ | WorkflowConfig | 工作流配置；⤴️ 8.12 已前置落地骨架 workflow/workflow_config.go（WorkflowSpec/NodeSpec/CompIOConfig/ExceptionConfig，D6 裁剪 WorkflowConfig 因依赖 8.16 WorkflowCard），实施时完整同步；⤴️ 8.11 ⤵️ 回填三件（2026-11-18）：① `session.NodeConfig() any` 收窄 `*workflow.NodeSpec`（NodeSessionFacade/node.go:241,296）+ `Vertex.applyNodeConfig` 断言随之收紧 + 偏差 D-3（applyNodeConfig 抽方法）内联回收；② tracer `getWorkflowMetadata` 从 wfc 提取 card.version/card.name（workflow.go:261-264 ⤵️ 悬挂） | `openjiuwen/core/workflow/workflow_config.py` |
-| 8.16 | ☐ | WorkflowCard | 工作流元数据 | `openjiuwen/core/workflow/base.py` |
+| 8.16 | ✅ | WorkflowCard | 工作流元数据 | ✅ Go 事实（2026-11-18）：`internal/agentcore/workflow/base.go` 一比一对应 `workflow/base.py` 全部七符号：`WORKFLOW_DRAWABLE` 常量 + `WorkflowCard`（嵌入 `schema.BaseCard` 承载继承 + Version + InputParams any（偏差 D-1：Python dict\|Type[BaseModel] Union Go 无对应）+ `ToolInfo()` nil→空 map 对齐 `if self.input_params else {}` + Ability 三方法）+ `WorkflowChunkType`（interaction/output/error）+ `WorkflowExecutionState`（COMPLETED/INPUT_REQUIRED/ERROR）+ `WorkflowChunk = any`（偏差 D-2：Go 无 Union，8.14 真实消费时定稿）+ `WorkflowOutput` + `GenerateWorkflowKey`（空 version 产生尾下划线逐字对齐 f-string）；方案 B：WorkflowCard 自 `common/schema/card.go` 迁入（2026-11-18 拍板严格对齐文件归属），同改动删除旧实现（结构体/NewWorkflowCard/四方法/编译断言/专属测试用例），`schema\.WorkflowCard` 锚点 0 命中，15 个消费方文件改引用（无包环：workflow→schema 单向，session/stream 不依赖 workflow）；4 处 ⤵️8.15 回填钩子保留未做（session/config 类型收窄、tracer getWorkflowMetadata 提取 card.version/name、8.12 D6 WorkflowConfig 完整同步、8.11 D-3 NodeConfig 收窄）；包测试全绿、全量回归 395 包零 FAIL；设计 docs/superpowers/specs/2026-11-18-workflow-card-8.16-design.md；计划 docs/superpowers/plans/2026-11-18-workflow-card-8.16.md | `openjiuwen/core/workflow/base.py` |
 | 8.17 | ☐ | StartComp / EndComp | 流程组件 | `openjiuwen/core/workflow/components/` |
 | 8.18 | ☐ | LLMComp | LLM 调用组件 | `openjiuwen/core/workflow/components/` |
 | 8.19 | ☐ | BranchComp / BranchRouter | 分支组件 | `openjiuwen/core/workflow/components/` |
@@ -567,6 +567,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 > **8.x 实施顺序（2026-11-16 十一次调整）**：方案 B 拍板，新实施序 8.2 → 8.11 → 8.1 → 8.12（8.2 前移理由=零上游依赖的纯契约层先定型接口形状；8.11 Vertex 六处消费 Executable 四钩子 vertex.py:89/368/576/666/811/819；8.1 的 CompiledGraph 继承 ExecutableGraph 属编译期依赖；8.12 StreamActor 与 8.2 无类型依赖排其后无阻塞）。依据见 8.2 spec docs/superpowers/specs/2026-11-16-executable-8.2-design.md §2。原注记保留。
 >
 > **8.x 实施顺序（2026-11-19 十二次记录）**：方案 B 撤销，换回 8.12 → 8.11 → 8.1/8.2（8.11 Vertex 依赖 StreamConsumer 属 8.12，先落真类型免占位回填；依据见 8.12 spec docs/superpowers/specs/2026-11-19-stream-actor-8.12-design.md §2）。原注记保留。
+>
+> **8.x 实施顺序（2026-11-18 十三次记录）**：8.16 提前于 8.15 实施（8.16 是 8.15 WorkflowConfig.card 字段的地基且体量小、无前置阻塞；依据见 8.16 spec docs/superpowers/specs/2026-11-18-workflow-card-8.16-design.md §6）。原注记保留。
 
 ---
 
