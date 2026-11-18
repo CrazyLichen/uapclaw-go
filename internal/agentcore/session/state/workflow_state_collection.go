@@ -156,7 +156,7 @@ func (s *WorkflowStateCollection) GetByPrefix(key StateKey, nestedPrefix string)
 }
 
 // GetByTransformer 通过转换函数获取组件状态值。
-func (s *WorkflowStateCollection) GetByTransformer(transformer Transformer) any {
+func (s *WorkflowStateCollection) GetByTransformer(transformer Transformer) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.compState == nil {

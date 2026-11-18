@@ -148,7 +148,7 @@ func (s *AgentStateCollection) GetByPrefix(key StateKey, nestedPrefix string) an
 }
 
 // GetByTransformer 通过转换函数获取状态值。委托到 agentState。
-func (s *AgentStateCollection) GetByTransformer(transformer Transformer) any {
+func (s *AgentStateCollection) GetByTransformer(transformer Transformer) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.agentState.GetByTransformer(transformer)

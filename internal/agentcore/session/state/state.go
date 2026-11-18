@@ -28,7 +28,8 @@ type StateLike interface {
 	// Update 更新状态数据
 	Update(data map[string]any) error
 	// GetByTransformer 通过转换函数获取状态值
-	GetByTransformer(transformer Transformer) any
+	// Python: StateLike.get_by_transformer()（具体契约 workflow_state.py:127 为 dict）
+	GetByTransformer(transformer Transformer) map[string]any
 }
 
 // CommitStateLike 事务性状态接口，支持按节点 ID 的提交/回滚
@@ -108,8 +109,8 @@ type WorkflowState interface {
 	// Python: CommitState.get_inputs()
 	GetInputs(schema StateKey) any
 	// GetInputsByTransformer 通过转换函数获取输入
-	// Python: CommitState.get_inputs_by_transformer()
-	GetInputsByTransformer(transformer Transformer) any
+	// Python: CommitState.get_inputs_by_transformer()（workflow_state.py:127，返回 dict）
+	GetInputsByTransformer(transformer Transformer) map[string]any
 	// SetOutputs 向 io_state 写入当前节点的输出
 	// Python: CommitState.set_outputs()
 	SetOutputs(data map[string]any)
@@ -118,8 +119,11 @@ type WorkflowState interface {
 	GetOutputs(nodeID ...string) any
 }
 
-// Transformer 状态转换函数，接受只读状态视图返回任意值
-type Transformer func(readable ReadableStateLike) any
+// Transformer 状态转换函数，接受只读状态视图返回输入 map。
+// Python base.py:22 注解 Callable[[ReadableStateLike], Any]（抽象层宽化），
+// 具体层 workflow_state.py:127 get_inputs_by_transformer 契约为 dict——Go 按具体契约收窄
+// （用户 2026-11-18 拍板，回收条件：上游出现非 dict transformer 用例时放宽回 any）。
+type Transformer func(readable ReadableStateLike) map[string]any
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (

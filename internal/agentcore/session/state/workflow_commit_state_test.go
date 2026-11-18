@@ -136,11 +136,11 @@ func TestGetInputsByTransformer(t *testing.T) {
 	cs.ioState.Commit(DefaultNodeID)
 
 	// 通过 transformer 获取
-	result := cs.GetInputsByTransformer(func(r ReadableStateLike) any {
-		return r.Get(StringKey("key1"))
+	result := cs.GetInputsByTransformer(func(r ReadableStateLike) map[string]any {
+		return map[string]any{"key1": r.Get(StringKey("key1"))}
 	})
-	if result != "val1" {
-		t.Errorf("期望通过 transformer 获取 'val1'，实际=%v", result)
+	if result["key1"] != "val1" {
+		t.Errorf("期望通过 transformer 获取 'val1'，实际=%v", result["key1"])
 	}
 }
 
@@ -560,13 +560,9 @@ func TestGetOutputs_ioStateNil(t *testing.T) {
 // TestGetInputsByTransformer_ioStateNil 验证 ioState 为 nil 时返回空 map。
 func TestGetInputsByTransformer_ioStateNil(t *testing.T) {
 	cs := &WorkflowCommitState{}
-	result := cs.GetInputsByTransformer(func(r ReadableStateLike) any { return nil })
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("期望 map[string]any，实际=%T", result)
-	}
-	if len(m) != 0 {
-		t.Errorf("期望空 map，实际=%v", m)
+	result := cs.GetInputsByTransformer(func(r ReadableStateLike) map[string]any { return nil })
+	if result == nil || len(result) != 0 {
+		t.Errorf("期望空 map，实际=%v", result)
 	}
 }
 

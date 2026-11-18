@@ -41,7 +41,7 @@ func (s *InMemoryStateLike) GetByPrefix(key StateKey, nestedPrefix string) any {
 }
 
 // GetByTransformer 通过转换函数获取状态值
-func (s *InMemoryStateLike) GetByTransformer(transformer Transformer) any {
+func (s *InMemoryStateLike) GetByTransformer(transformer Transformer) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return transformer(s)

@@ -53,7 +53,7 @@ func (s *InMemoryCommitState) GetByPrefix(key StateKey, nestedPrefix string) any
 }
 
 // GetByTransformer 委托给底层 state
-func (s *InMemoryCommitState) GetByTransformer(transformer Transformer) any {
+func (s *InMemoryCommitState) GetByTransformer(transformer Transformer) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state.GetByTransformer(transformer)

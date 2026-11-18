@@ -1084,7 +1084,7 @@ func (v *Vertex) atomicInvoke(ctx context.Context, kwargs map[string]any) (any, 
 // ──────────────────────────── 批入前/后处理（Python _pre_invoke/_post_invoke，vertex.py:421-567） ────────────────────────────
 
 // preInvoke 批入取数（Python _pre_invoke，vertex.py:421-432 步骤一比一）
-func (v *Vertex) preInvoke(ctx context.Context) any {
+func (v *Vertex) preInvoke(ctx context.Context) map[string]any {
 	// ① 组件开始埋点（vertex.py:422）
 	v.traceComponentBegin(ctx)
 	// ② 输入 schema（vertex.py:423）
@@ -1093,22 +1093,22 @@ func (v *Vertex) preInvoke(ctx context.Context) any {
 		inputsSchema = v.nodeConfig.IOConfigs.InputsSchema
 	}
 	// ③ 双轨取数（vertex.py:424-428）：dict → GetInputs 轨；非 dict → transformer 轨。
-	//    契约注记：transformer 产出按 Python workflow_state.py:127 为 dict（base.py:42
-	//    的 any 仅是抽象层宽化），any 保持以复刻"非 dict 透传"的运行时行为；
-	//    收窄为 map[string]any 挂 8.15 回填（IMPLEMENTATION_PLAN 8.15 行 ③）。
-	var inputs any
+	//    Transformer 契约已按 Python workflow_state.py:127（-> dict）收窄为 map[string]any
+	//    （用户 2026-11-18 拍板；state.Transformer 类型注释载明回收条件）
+	var inputs map[string]any
 	if _, isDict := inputsSchema.(map[string]any); !isDict && inputsSchema != nil {
 		if tr, ok := inputsSchema.(state.Transformer); ok {
 			inputs = v.stateView().GetInputsByTransformer(tr)
 		}
 	} else if inputsSchema != nil {
-		inputs = v.stateView().GetInputs(state.SchemaKey(inputsSchema.(map[string]any)))
+		if d, ok := v.stateView().GetInputs(state.SchemaKey(inputsSchema.(map[string]any))).(map[string]any); ok {
+			inputs = d
+		}
 	}
 	// ④ End 节点批量输入清洗（vertex.py:429-430）
-	if d, ok := inputs.(map[string]any); ok {
-		if sd, ok2 := inputsSchema.(map[string]any); ok2 && v.isEndNode {
-			d = v.sanitizeEndNodeInputs(ctx, d, sd)
-			inputs = d
+	if inputs != nil {
+		if sd, ok := inputsSchema.(map[string]any); ok && v.isEndNode {
+			inputs = v.sanitizeEndNodeInputs(ctx, inputs, sd)
 		}
 	}
 	// ⑤ 输入埋点（vertex.py:431）
@@ -1342,8 +1342,8 @@ func (v *Vertex) postInvoke(ctx context.Context, results map[string]any) (map[st
 		if tr, ok := outputsSchema.(sutils.MessageTransformer); ok {
 			results = tr(results)
 		} else if tr, ok := outputsSchema.(state.Transformer); ok {
-			r := tr(nil)
-			results, _ = r.(map[string]any)
+			// Transformer 已按 workflow_state.py:127 契约收窄为 map[string]any，直接赋值
+			results = tr(nil)
 		}
 	} else if outputsSchema != nil && len(results) > 0 {
 		results = state.GetBySchemaMap(outputsSchema.(map[string]any), results)
