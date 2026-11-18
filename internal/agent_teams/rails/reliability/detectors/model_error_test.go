@@ -4,6 +4,7 @@
 package detectors
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,11 +12,16 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 )
 
-// fallbackText i18n 兜底渲染：key+kwargs 拼接，便于断言。
+// fallbackText i18n 兜底渲染：key+kwargs 拼接（键按排序保证断言确定性）。
 func fallbackText(key string, kwargs map[string]any) string {
 	s := key
-	for k, v := range kwargs {
-		s += "|" + k + "=" + strOf2(v)
+	keys := make([]string, 0, len(kwargs))
+	for k := range kwargs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		s += "|" + k + "=" + strOf2(kwargs[k])
 	}
 	return s
 }
@@ -87,9 +93,10 @@ func TestModelStreamErrorDetector_用户介入升级CRITICAL只发一次(t *test
 	assert.NotNil(t, a1)
 	assert.Equal(t, core.AnomalyKindModelUnavailable, a1.Kind)
 	assert.Equal(t, core.SeverityCritical, a1.Severity)
-	assert.Equal(t, "reliability.model_unavailable|model=m1|reason="+
-		"reliability.model_failure|model=reliability.model_label|name=m1|where=|reason=reliability.reason_rate_limited"+
-		"|no_substitute=reliability.model_no_substitute_group", a1.Summary)
+	// kwargs 键序：model / no_substitute / reason（fallbackText 排序遍历）
+	assert.Equal(t, "reliability.model_unavailable|model=m1|no_substitute=reliability.model_no_substitute_group|reason="+
+		"reliability.model_failure|model=reliability.model_label|name=m1|where=|reason=reliability.reason_rate_limited",
+		a1.Summary)
 	// 第二次同裁决：已 CRITICAL，不重复发
 	assert.Nil(t, d.Observe(verdictSignal(verdict)))
 }
@@ -158,7 +165,7 @@ func TestReasonText_错误类型与状态码分支(t *testing.T) {
 		{map[string]any{"status_code": 403}, "reliability.reason_api_key|status=403"},
 		{map[string]any{"status_code": 404}, "reliability.reason_not_found"},
 		{map[string]any{"status_code": 502}, "reliability.reason_server_error|status=502"},
-		{map[string]any{"status_code": 400, "message": "bad: 提供商解释"}, "reliability.reason_rejected_detail|status=400|detail=提供商解释"},
+		{map[string]any{"status_code": 400, "message": "bad: 提供商解释"}, "reliability.reason_rejected_detail|detail=提供商解释|status=400"},
 		{map[string]any{"status_code": 400, "message": "bad", "category": "stream_interrupted"}, "reliability.reason_rejected|status=400"},
 		{map[string]any{"status_code": 400}, "reliability.reason_rejected|status=400"},
 		{map[string]any{"error_type": "OtherError"}, "reliability.reason_failed"},
@@ -171,7 +178,7 @@ func TestReasonText_错误类型与状态码分支(t *testing.T) {
 func TestModelLabel_名与顺位(t *testing.T) {
 	assert.Equal(t, "reliability.model_label|name=m1|where=prov, http://e",
 		modelLabel(fallbackText, map[string]any{"model_name": "m1", "provider": "prov", "endpoint": "http://e"}))
-	assert.Equal(t, "reliability.model_label_ranked|position=2|name=m2|where=",
+	assert.Equal(t, "reliability.model_label_ranked|name=m2|position=2|where=",
 		modelLabel(fallbackText, map[string]any{"model_name": "m2", "position": 2}))
 	// 无模型名回退 deployment_id，再回退「组内其他模型」
 	assert.Equal(t, "reliability.model_label|name=dep9|where=",
