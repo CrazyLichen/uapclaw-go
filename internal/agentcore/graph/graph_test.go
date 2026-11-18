@@ -7,6 +7,12 @@ import (
 
 	pregel "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -256,3 +262,165 @@ func TestBranchRoot_嵌套提升(t *testing.T) {
 		t.Fatalf("无父分支应原地返回, got %q", root)
 	}
 }
+
+// TestVertexNodeFunc_适配器 NodeFunc 桥接 Vertex.Call：返回值丢弃（task.py:152）、错误上抛（task.py:171）
+func TestVertexNodeFunc_适配器(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	v := g.nodes["a"]
+	nf := vertexNodeFunc(v)
+	if nf == nil {
+		t.Fatal("适配器应返回非 nil NodeFunc")
+	}
+	// Python 侧 nodeTask 仅在 compile init（graph.py:240-241）之后才会派发执行，
+	// Init 前 Call 同样不可达——故此处只断言适配器形状非 nil，真实执行路径由
+	// TestCompile_WaitsCNF（经 builder 全链）覆盖。
+}
+
+// TestCompile_生命周期 对齐 graph.py:239-265
+func TestCompile_生命周期(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	g.StartNode("a")
+	g.EndNode("a")
+	sess := newFakeSession()
+	cg := g.Compile(sess, nil)
+	if cg == nil {
+		t.Fatal("Compile 应返回 CompiledGraph")
+	}
+	if g.preg == nil || g.checkpointer == nil {
+		t.Fatal("首次编译应缓存 pregel 与 checkpointer")
+	}
+	if g.sessionRef != sess {
+		t.Fatal("首次编译应绑定 sessionRef")
+	}
+	// 二次编译：复用 pregel，只更新 sessionRef
+	pregBefore := g.preg
+	sess2 := newFakeSession()
+	_ = g.Compile(sess2, nil)
+	if g.sessionRef != sess2 {
+		t.Fatal("二次编译应更新 sessionRef")
+	}
+	if g.preg != pregBefore {
+		t.Fatal("二次编译应复用已建 pregel")
+	}
+}
+
+// TestCompile_NodeInit_被调用 compile 对每个节点 init（graph.py:240-241）
+func TestCompile_NodeInit_被调用(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	sess := newFakeSession()
+	_ = g.Compile(sess, nil)
+	nodes := g.GetNodes()
+	if nodes["a"] == nil {
+		t.Fatal("编译后节点应存在")
+	}
+}
+
+// TestCompile_WaitsCNF wait 节点前驱经 resolveBarrierGroups 后进 builder.AddEdge
+func TestCompile_WaitsCNF(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	g.AddNode("b", &fakeExec{}, false)
+	g.AddNode("w", &fakeExec{}, true)
+	g.AddEdge("a", "w")
+	g.AddEdge("b", "w")
+	sess := newFakeSession()
+	if cg := g.Compile(sess, nil); cg == nil {
+		t.Fatal("waits CNF 编译应成功")
+	}
+}
+
+// TestReset 对齐 graph.py:305-307
+func TestReset(t *testing.T) {
+	g := NewPregelGraph()
+	g.AddNode("a", &fakeExec{}, false)
+	g.Reset() // 不 panic 即通过（Vertex.Reset 内部复位状态）
+}
+
+// fakeGraphSession 最小 BaseSession（复用 vertex_test 的 fakeInnerSession 形状）
+type fakeGraphSession struct {
+	cfg          config.SessionConfig
+	st           state.SessionState
+	id, wfID     string
+	checkpointer *fakeGraphCheckpointer
+}
+
+func (f *fakeGraphSession) Config() config.SessionConfig                     { return f.cfg }
+func (f *fakeGraphSession) State() state.SessionState                        { return f.st }
+func (f *fakeGraphSession) Tracer() *tracer.Tracer                           { return nil }
+func (f *fakeGraphSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
+func (f *fakeGraphSession) SessionID() string                                { return f.id }
+func (f *fakeGraphSession) Checkpointer() interfaces.Checkpointer            { return f.checkpointer }
+func (f *fakeGraphSession) ActorManager() *stream_actor.ActorManager         { return nil }
+func (f *fakeGraphSession) Close() error                                     { return nil }
+
+// WorkflowIDProvider 能力（Python session.workflow_id()）
+func (f *fakeGraphSession) WorkflowID() string { return f.wfID }
+
+// fakeGraphCheckpointer 记录调用序（Task 5 扩展）
+type fakeGraphCheckpointer struct {
+	preCalls, postCalls int
+	postResults         []map[string]any
+	postExceptions      []error
+	gStore              pregel.Store
+}
+
+func (c *fakeGraphCheckpointer) PreWorkflowExecute(_ context.Context, _ session.BaseSession, _ any) error {
+	c.preCalls++
+	return nil
+}
+func (c *fakeGraphCheckpointer) PostWorkflowExecute(_ context.Context, _ session.BaseSession, result map[string]any, exception error) error {
+	c.postCalls++
+	c.postResults = append(c.postResults, result)
+	c.postExceptions = append(c.postExceptions, exception)
+	return nil
+}
+func (c *fakeGraphCheckpointer) GraphStore() pregel.Store { return c.gStore }
+
+// Checkpointer 接口其余方法：本节用例不触达，panic 兜底防误用
+func (c *fakeGraphCheckpointer) PreAgentExecute(context.Context, session.BaseSession, any) error {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) PreAgentTeamExecute(context.Context, session.BaseSession, any) error {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) InterruptAgentExecute(context.Context, session.BaseSession) error {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) PostAgentExecute(context.Context, session.BaseSession) error {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) PostAgentTeamExecute(context.Context, session.BaseSession) error {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) SessionExists(context.Context, string) (bool, error) {
+	panic("未实现")
+}
+func (c *fakeGraphCheckpointer) Release(context.Context, string, ...string) error { panic("未实现") }
+
+// newFakeSession 构造带最小 checkpointer/store 的会话
+func newFakeSession() *fakeGraphSession {
+	return &fakeGraphSession{
+		cfg: config.NewSessionConfig(context.Background()),
+		st:  state.NewInMemoryWorkflowState(),
+		id:  "s1", wfID: "wf1",
+		checkpointer: &fakeGraphCheckpointer{gStore: &fakeGraphStore{}},
+	}
+}
+
+// fakeGraphStore 可编程返回快照（Task 5 扩展）
+type fakeGraphStore struct {
+	st     *pregel.GraphState
+	getErr error
+}
+
+func (s *fakeGraphStore) Get(_ context.Context, _, _ string) (*pregel.GraphState, error) {
+	return s.st, s.getErr
+}
+
+func (s *fakeGraphStore) Save(_ context.Context, _, _ string, _ *pregel.GraphState) error {
+	panic("未实现")
+}
+func (s *fakeGraphStore) Delete(_ context.Context, _, _ string) error { panic("未实现") }

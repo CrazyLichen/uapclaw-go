@@ -2,6 +2,8 @@ package graph
 
 import (
 	"cmp"
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -9,9 +11,13 @@ import (
 	"strings"
 
 	pregel "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -361,4 +367,287 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+// ──────────────────────────── 导出函数（Compile/Reset）────────────────────────
+
+// Compile 编译构图产物。Python: graph.py:239-265
+// 步骤：①全节点 init（graph.py:240-241）②afterStep 回调（graph.py:243-256）
+// ③建图（graph.py:258-264）：首次取 checkpointer/store 全量编译并缓存；复用仅换 session。
+func (g *PregelGraph) Compile(sess session.BaseSession, kwargs map[string]any) ExecutableGraph[map[string]any, map[string]any] {
+	// ① 逐节点 init（graph.py:240-241）
+	for _, node := range g.nodes {
+		node.Init(sess, kwargs)
+	}
+
+	// ② afterStep 回调（graph.py:243-256）：session commit + SUPER_STEP_END 日志
+	afterStep := func(_ context.Context, loop *pregel.PregelLoop) {
+		if g.sessionRef != nil {
+			if ws, ok := g.sessionRef.State().(state.WorkflowState); ok {
+				ws.Commit()
+			}
+		}
+		logger.Debug(logComponent).
+			Str("event_type", "GRAPH_SUPER_STEP_END").
+			Str("graph_id", loop.Config.Ns).
+			Str("session_id", loop.Config.SessionID).
+			Str("ns", loop.Config.Ns).
+			Int("step", loop.Step).
+			Strs("active_nodes", loop.ActiveNodes).
+			Msgf("Finished to run graph super-step [%d]", loop.Step)
+	}
+
+	// ③ 建图（graph.py:258-264）
+	if g.preg == nil {
+		g.checkpointer = sess.Checkpointer()
+		graphStore := store.NewGraphStore(g.checkpointer.GraphStore())
+		g.preg = g.compile(graphStore, afterStep)
+		g.sessionRef = sess
+	} else {
+		g.sessionRef = sess
+	}
+	return NewCompiledGraph(g.preg, g.checkpointer)
+}
+
+// Reset 重置全部节点。Python: graph.py:305-307
+func (g *PregelGraph) Reset() {
+	for _, node := range g.nodes {
+		node.Reset()
+	}
+}
+
+// ──────────────────────────── 非导出函数（compile 三段编译）────────────────────
+
+// compile 三段编译（graph.py:267-303，步骤编号保留）。
+// Python builder.add_node(node_id, action) 直存 Vertex（鸭子类型）；
+// Go 经 vertexNodeFunc 适配器桥接（偏差 D-4，见函数注释）。
+func (g *PregelGraph) compile(graphStore *store.GraphStore, stepCallback pregel.AfterStepFunc) *pregel.Pregel {
+	edges := []edge{}
+	sources := map[string][]map[string]struct{}{}
+	builder := pregel.NewPregelBuilder()
+	for _, nodeID := range sortedKeys(g.nodes) {
+		builder.AddNode(nodeID, vertexNodeFunc(g.nodes[nodeID]))
+	}
+
+	// Step 1: waits 前驱收集为单元素组（graph.py:274-285）
+	for _, e := range g.edges {
+		if _, isWait := g.waits[e.target]; isWait {
+			switch src := e.source.(type) {
+			case string:
+				sources[e.target] = append(sources[e.target], map[string]struct{}{src: {}})
+			case []string:
+				for _, s := range src {
+					sources[e.target] = append(sources[e.target], map[string]struct{}{s: {}})
+				}
+			}
+		} else {
+			edges = append(edges, e)
+		}
+	}
+
+	// Step 2: 互斥前驱 CNF 解析（graph.py:287-291）
+	for targetID := range sources {
+		sources[targetID] = g.resolveBarrierGroups(targetID, sources[targetID])
+	}
+
+	// Step 3: 传入 builder——wait 组在前、普通边在后（graph.py:293-298）
+	for _, targetID := range sortedKeys(sources) {
+		starts := make([]any, 0, len(sources[targetID]))
+		for _, grp := range sources[targetID] {
+			if len(grp) == 1 {
+				for k := range grp {
+					starts = append(starts, k)
+				}
+			} else {
+				starts = append(starts, sortedKeys(grp))
+			}
+		}
+		if err := builder.AddEdge(starts, targetID); err != nil {
+			panic(err)
+		}
+	}
+	for _, e := range edges {
+		if err := builder.AddEdge(e.source, e.target); err != nil {
+			panic(err)
+		}
+	}
+
+	for _, src := range sortedKeys(g.branches) {
+		for _, name := range sortedKeys(g.branches[src]) {
+			builder.AddBranch(src, g.branches[src][name].Condition)
+		}
+	}
+	return builder.Build(graphStore, stepCallback)
+}
+
+// vertexNodeFunc 把 Vertex 桥接为 builder 的 NodeFunc。
+// Python: builder.add_node 直存 Vertex，nodeTask 经 func.__call__ 派发（task.py:135-152）；
+// Go 无鸭子类型，显式适配：Call 返回值丢弃（task.py:152 不读返回值）、错误上抛（task.py:171）。
+// 偏差 D-4：适配器为 Go 侧新增的鸭子类型桥，无行为变更。
+func vertexNodeFunc(v *Vertex) pregel.NodeFunc {
+	return func(ctx context.Context, in pregel.NodeInput) error {
+		_, err := v.Call(ctx, in.State, in.Config)
+		return err
+	}
+}
+
+// ──────────────────────────── 结构体（CompiledGraph）────────────────────────
+
+// CompiledGraph 编译产物，ExecutableGraph 的图实现。
+// Python: graph.py:310-400 CompiledGraph(ExecutableGraph)。
+// Executable 部分由内嵌 BaseExecutable 承载（fake 先例 executable_graph_test.go:17）。
+type CompiledGraph struct {
+	BaseExecutable[map[string]any, map[string]any]
+	preg         *pregel.Pregel
+	checkpointer interfaces.Checkpointer
+	// interactive 信封 INPUTS_KEY 为 *interaction.InteractiveInput 时置位（偏差 D-5）
+	interactive bool
+}
+
+// NewCompiledGraph 构造。Python: graph.py:311-313 __init__
+func NewCompiledGraph(p *pregel.Pregel, cp interfaces.Checkpointer) *CompiledGraph {
+	return &CompiledGraph{preg: p, checkpointer: cp}
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Invoke 拆信封入口：先探 InteractiveInput（偏差 D-5），再走默认拆信封。
+// Python: base.py:13-14 invoke → _invoke；InteractiveInput isinstance 判定在 _invoke 内
+// （graph.py:327），Go 因 I=map 契约把判定上移到信封层。
+func (c *CompiledGraph) Invoke(inputs map[string]any, sess session.BaseSession) (map[string]any, error) {
+	c.interactive = false
+	if raw, ok := inputs[InputsKey]; ok {
+		if _, isII := raw.(*interaction.InteractiveInput); isII {
+			c.interactive = true
+		}
+	}
+	return DefaultGraphInvoke[map[string]any, map[string]any](c, inputs, sess)
+}
+
+// Stream pass 占位（Python graph.py:396-397）
+func (c *CompiledGraph) Stream(inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+	return DefaultGraphStream[map[string]any, map[string]any](c, inputs, sess)
+}
+
+// Collect pass 占位（Python 未覆写 collect，继承 base.py:19-20）
+func (c *CompiledGraph) Collect(inputs <-chan map[string]any, sess session.BaseSession) (map[string]any, error) {
+	return DefaultGraphCollect[map[string]any, map[string]any](c, inputs, sess)
+}
+
+// Transform pass 占位（Python 未覆写 transform，继承 base.py:22-23）
+func (c *CompiledGraph) Transform(inputs <-chan map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+	return DefaultGraphTransform[map[string]any, map[string]any](c, inputs, sess)
+}
+
+// Interrupt pass 占位（Python graph.py:399-400 interrupt 直接 return）
+func (c *CompiledGraph) Interrupt(message map[string]any) error {
+	return DefaultGraphInterrupt[map[string]any, map[string]any](c, message)
+}
+
+// Invoke_ 图执行生命周期（Python _invoke，graph.py:315-394，步骤编号保留）。
+// ctx 来源偏差 D-6：8.2 契约 Invoke_ 无 ctx 形参，Pregel.Run 以 context.Background()
+// 起步；取消经 NodeFunc 返回 context.Canceled 传播（8.3b D5 先例）。
+func (c *CompiledGraph) Invoke_(inputs map[string]any, sess session.BaseSession, config any) (map[string]any, error) {
+	isMain := false
+	sessionID := sess.SessionID()
+	workflowID := ""
+	if wp, ok := sess.(interfaces.WorkflowIDProvider); ok { // Python session.workflow_id() hasattr 模式
+		workflowID = wp.WorkflowID()
+	}
+
+	// config 为 nil → isMain + 默认配置（graph.py:320-322）
+	var pc *pregel.PregelConfig
+	switch cfg := config.(type) {
+	case *pregel.PregelConfig:
+		pc = cfg
+	case pregel.PregelConfig:
+		pc = &cfg
+	}
+	if pc == nil {
+		isMain = true
+		pc = &pregel.PregelConfig{SessionID: sessionID, Ns: workflowID, RecursionLimit: pregel.MaxRecursiveLimit}
+	}
+
+	// 正常路径（graph.py:324-348）
+	if isMain {
+		if err := c.checkpointer.PreWorkflowExecute(context.Background(), sess, inputs); err != nil {
+			return nil, err
+		}
+	}
+	// 非 InteractiveInput → commit_user_inputs（graph.py:327-328；判定来源见偏差 D-5）
+	if !c.interactive {
+		if wcs, ok := sess.State().(*state.WorkflowCommitState); ok {
+			wcs.CommitUserInputs(inputs)
+		}
+	}
+
+	inner := pregel.CreateInnerConfig(*pc)
+	result, exception := func() (map[string]any, error) {
+		r, err := c.preg.Run(context.Background(), &inner)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// graph.py:335-341：取消先记日志再进入取消分流
+				logger.Warn(logComponent).
+					Str("event_type", "GRAPH_END").
+					Str("session_id", sessionID).
+					Str("workflow_id", workflowID).
+					Bool("cancelled", true).
+					Msg("Pregel execution cancelled")
+			}
+			return nil, err
+		}
+		return r, nil
+	}()
+
+	if isMain {
+		if exception != nil && errors.Is(exception, context.Canceled) {
+			// 取消分流（graph.py:349-394）：三分支见 handleCancellation
+			c.handleCancellation(context.Background(), sess, sessionID, workflowID)
+		}
+		if err := c.checkpointer.PostWorkflowExecute(context.Background(), sess, result, exception); err != nil {
+			return nil, err
+		}
+	} else if exception != nil {
+		return nil, exception // graph.py:347-348
+	}
+	return result, exception
+}
+
+// handleCancellation 取消分流三分支（graph.py:349-394，HITL 快照语义逐条复刻）：
+// ①查询失败按不可续跑——不落盘不清除，仅 warning（graph.py:367-376）；
+// ②快照可续跑——带非 nil 异常走保存分支保留现场，保存分支的取消吞掉、
+//
+//	其他失败不顶替原始取消链（graph.py:377-393）；
+//
+// ③快照为 nil（全新执行中途取消）——不落盘，保留可重跑语义（graph.py:358-364）。
+func (c *CompiledGraph) handleCancellation(ctx context.Context, sess session.BaseSession, sessionID, workflowID string) {
+	graphState, err := c.checkpointer.GraphStore().Get(ctx, sessionID, workflowID)
+	if err != nil {
+		// 分支①
+		logger.Warn(logComponent).
+			Str("event_type", "GRAPH_END").
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Err(err).
+			Msg("Failed to inspect graph checkpoint on workflow cancellation")
+		return
+	}
+	if graphState != nil && graphState.IsResumable() {
+		// 分支②：canceled 异常对齐 asyncio.CancelledError("workflow execution cancelled")
+		saveErr := c.checkpointer.PostWorkflowExecute(ctx, sess, map[string]any{}, context.Canceled)
+		if errors.Is(saveErr, context.Canceled) {
+			return // 保存分支 re-raise 的取消吞掉，保原始取消链（graph.py:382-385）
+		}
+		if saveErr != nil {
+			// 保存失败不顶替原始取消链（graph.py:386-393）
+			logger.Error(logComponent).
+				Str("event_type", "GRAPH_END").
+				Str("session_id", sessionID).
+				Str("workflow_id", workflowID).
+				Err(saveErr).
+				Msg("Failed to preserve checkpoint on workflow cancellation")
+			return
+		}
+	}
+	// 分支③：graphState == nil 或不可续跑 → 不落盘，保留可重跑语义
 }
