@@ -12,7 +12,6 @@ func TestRouterAlias(t *testing.T) {
 }
 
 // 编译期断言：*PregelGraph 满足 Graph 接口（Task 2/3/4 落地后应通过）
-func TestPregelGraphImplementsGraph_pending(t *testing.T) { // Task 4 落 Compile 后改名启用
-	t.Skip("PregelGraph 于 Task 2/4 落地后启用本断言")
-	// var _ Graph = (*PregelGraph)(nil)
+func TestPregelGraphImplementsGraph(t *testing.T) {
+	var _ Graph = (*PregelGraph)(nil)
 }
