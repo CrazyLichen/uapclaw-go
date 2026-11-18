@@ -24,17 +24,17 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	mockllm "github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 
-	coordtypes "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	handlers "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	handlers "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
+	coordtypes "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -186,14 +186,14 @@ func (h *fullChainHost) IsAgentRunning() bool {
 	defer h.mu.Unlock()
 	return false
 }
-func (h *fullChainHost) HasInFlightRound() bool                            { return false }
-func (h *fullChainHost) HasPendingInterrupt() bool                         { return false }
-func (h *fullChainHost) CancelAgent(context.Context) error                 { return nil }
+func (h *fullChainHost) HasInFlightRound() bool            { return false }
+func (h *fullChainHost) HasPendingInterrupt() bool         { return false }
+func (h *fullChainHost) CancelAgent(context.Context) error { return nil }
 func (h *fullChainHost) ResumeInterrupt(context.Context, *interaction.InteractiveInput) error {
 	return nil
 }
-func (h *fullChainHost) AnnounceTaskRevisions(context.Context) error { return nil }
-func (h *fullChainHost) ShutdownSelf(context.Context) error          { return nil }
+func (h *fullChainHost) AnnounceTaskRevisions(context.Context) error            { return nil }
+func (h *fullChainHost) ShutdownSelf(context.Context) error                     { return nil }
 func (h *fullChainHost) ConcludeCompletedRound(context.Context, int, int) error { return nil }
 func (h *fullChainHost) DeliverInput(_ context.Context, content any, _ bool) error {
 	h.mu.Lock()

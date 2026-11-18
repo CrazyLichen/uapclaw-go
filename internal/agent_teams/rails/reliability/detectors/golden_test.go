@@ -26,19 +26,19 @@ import (
 //
 //	python3 -c "import importlib.util,types,sys,json; ... " # 见 spec 附录 A
 var goldenValues = map[string]string{
-	"call_hash_basic":    "51775c08377a2b6e6f4cce845a64f0678d0aa61981edaf36b9fba3e04b534d2a",
-	"call_hash_reversed": "d09af1acebb117c880b28f429ea4e649d8ff6d4d2028df9d51047d7339cc452e",
+	"call_hash_basic":     "51775c08377a2b6e6f4cce845a64f0678d0aa61981edaf36b9fba3e04b534d2a",
+	"call_hash_reversed":  "d09af1acebb117c880b28f429ea4e649d8ff6d4d2028df9d51047d7339cc452e",
 	"call_hash_none_args": "9b751a138bd7788d4842702ada5167ed489887ca9cf0a3d37ecbc3ab3c5dfd45",
-	"call_hash_unicode":  "141e649be3595344c7adc18a310f8333591624965cb4332c304b3ed9ba06fec2",
-	"result_hash_str":    "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73",
-	"result_hash_dict":   "e1f864311fc0857f3fa94c5fa04a70052a6c477757897bd24efed7031ea1194c",
-	"result_hash_number": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
-	"burst_summary":      "2 consecutive failures (2 within 60s)",
-	"burst_evidence":     `{"consecutive": 2, "last_error": null, "window_count": 2, "window_seconds": 60.0}`,
-	"output_summary":     "output_too_long: 200 chars exceeds 100",
-	"output_kind":        "output_too_long",
-	"repeat_summary":     "repeat_tool_call detected: {'call_repeats': 3}",
-	"repeat_evidence":    `{"call_repeats": 3}`,
+	"call_hash_unicode":   "141e649be3595344c7adc18a310f8333591624965cb4332c304b3ed9ba06fec2",
+	"result_hash_str":     "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73",
+	"result_hash_dict":    "e1f864311fc0857f3fa94c5fa04a70052a6c477757897bd24efed7031ea1194c",
+	"result_hash_number":  "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
+	"burst_summary":       "2 consecutive failures (2 within 60s)",
+	"burst_evidence":      `{"consecutive": 2, "last_error": null, "window_count": 2, "window_seconds": 60.0}`,
+	"output_summary":      "output_too_long: 200 chars exceeds 100",
+	"output_kind":         "output_too_long",
+	"repeat_summary":      "repeat_tool_call detected: {'call_repeats': 3}",
+	"repeat_evidence":     `{"call_repeats": 3}`,
 }
 
 // ──────────────────────────── 稳定哈希对拍 ────────────────────────────
