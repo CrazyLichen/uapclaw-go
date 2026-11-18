@@ -1598,8 +1598,8 @@ func (a *TeamAgent) registerReliabilityLocalSink() {
 	// Python: for rail in harness.find_rails(ReliabilityRail):
 	for _, railAny := range harness.FindRails(reflect.TypeOf((*reliability.ReliabilityRail)(nil))) {
 		if rail, ok := railAny.(*reliability.ReliabilityRail); ok {
-			rail.BindLocalSink(func(anomaly *reliabilitycore.Anomaly) {
-				handler.HandleLocalAnomaly(context.Background(), anomaly)
+			rail.BindLocalSink(func(ctx context.Context, anomaly *reliabilitycore.Anomaly) {
+				handler.HandleLocalAnomaly(ctx, anomaly)
 			})
 			rail.BindRouteNoticeSource(handler.TakePendingRouteNotices)
 		}

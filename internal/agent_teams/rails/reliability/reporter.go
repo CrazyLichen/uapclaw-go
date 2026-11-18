@@ -4,9 +4,11 @@
 package reliability
 
 import (
+	"context"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	schemaevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -17,8 +19,9 @@ import (
 // Python: reporter.py AnomalyReporter(Protocol)。monitor（成员进程）与
 // remediation handler（leader 进程）之间的缝。
 type AnomalyReporter interface {
-	// Report 上报一个检出异常
-	Report(anomaly *core.Anomaly)
+	// Report 上报一个检出异常。
+	// ctx 携带会话作用域（Python get_session_id contextvar 的 Go 等价传播，spec D-g6）
+	Report(ctx context.Context, anomaly *core.Anomaly)
 }
 
 // EventAnomalyReporter 把异常包装为 AnomalyDetectedEvent 发布到团队 TEAM topic。
@@ -33,10 +36,8 @@ type EventAnomalyReporter struct {
 	teamName string
 	// senderId 本成员的 messager 节点 id
 	senderId string
-	// topicBuilder TEAM topic 构造（sessionID, teamName → topic 串），测试可注入
-	topicBuilder func(sessionID, teamName string) string
-	// sessionID 会话 id（构造期取，跨进程事件归属本 session）
-	sessionID string
+	// topicBuilder TEAM topic 构造（ctx 取 session id + teamName → topic 串），测试可注入
+	topicBuilder func(ctx context.Context, teamName string) string
 }
 
 // LocalAnomalyReporter leader 自检的进程内异常 sink。
@@ -48,7 +49,7 @@ type EventAnomalyReporter struct {
 // 异常带告警丢弃而非静默丢失。
 type LocalAnomalyReporter struct {
 	// sink 绑定的本地异常处理入口
-	sink func(*core.Anomaly)
+	sink func(context.Context, *core.Anomaly)
 	// routeNoticeSource leader 待发 route notices 的 drain 缝
 	routeNoticeSource func() []string
 }
@@ -58,18 +59,19 @@ type LocalAnomalyReporter struct {
 // NewEventAnomalyReporter 构造跨进程事件上报器。
 //
 // Python: reporter.py EventAnomalyReporter.__init__。
-func NewEventAnomalyReporter(msgr messager.Messager, teamName, senderID, sessionID string) *EventAnomalyReporter {
+func NewEventAnomalyReporter(msgr messager.Messager, teamName, senderID string) *EventAnomalyReporter {
 	return &EventAnomalyReporter{
-		messager:     msgr,
-		teamName:     teamName,
-		senderId:     senderID,
-		sessionID:    sessionID,
-		topicBuilder: func(sessionID, tn string) string { return schemaevents.TeamTopicTeam.Build(sessionID, tn) },
+		messager: msgr,
+		teamName: teamName,
+		senderId: senderID,
+		topicBuilder: func(ctx context.Context, tn string) string {
+			return schemaevents.TeamTopicTeam.Build(sessionctx.GetSessionID(ctx), tn)
+		},
 	}
 }
 
 // SetTopicBuilder 注入 topic 构造（测试缝）。
-func (r *EventAnomalyReporter) SetTopicBuilder(fn func(sessionID, teamName string) string) {
+func (r *EventAnomalyReporter) SetTopicBuilder(fn func(ctx context.Context, teamName string) string) {
 	r.topicBuilder = fn
 }
 
@@ -77,7 +79,7 @@ func (r *EventAnomalyReporter) SetTopicBuilder(fn func(sessionID, teamName strin
 //
 // Python: reporter.py EventAnomalyReporter.report。发布失败仅 Error 日志
 // （DB 为事实源时另有轮询兜底；此处对齐上游 except 只告警）。
-func (r *EventAnomalyReporter) Report(anomaly *core.Anomaly) {
+func (r *EventAnomalyReporter) Report(ctx context.Context, anomaly *core.Anomaly) {
 	event := schemaevents.AnomalyDetectedEvent{
 		BaseEventMessage: schemaevents.BaseEventMessage{TeamName: r.teamName, MemberName: anomaly.MemberName},
 		Detector:         anomaly.Detector,
@@ -89,7 +91,7 @@ func (r *EventAnomalyReporter) Report(anomaly *core.Anomaly) {
 	}
 	message := schemaevents.EventMessageFromEvent(event)
 	message.SenderID = r.senderId
-	if err := r.messager.Publish(nil, r.topicBuilder(r.sessionID, r.teamName), message); err != nil {
+	if err := r.messager.Publish(ctx, r.topicBuilder(ctx, r.teamName), message); err != nil {
 		logger.Error(logComponent).
 			Str("member", anomaly.MemberName).
 			Err(err).
@@ -107,7 +109,7 @@ func NewLocalAnomalyReporter() *LocalAnomalyReporter {
 // Bind 绑定把异常路由给 handler 的本地 sink。
 //
 // Python: reporter.py LocalAnomalyReporter.bind。
-func (r *LocalAnomalyReporter) Bind(sink func(*core.Anomaly)) {
+func (r *LocalAnomalyReporter) Bind(sink func(context.Context, *core.Anomaly)) {
 	r.sink = sink
 }
 
@@ -131,12 +133,12 @@ func (r *LocalAnomalyReporter) TakeRouteNotices() []string {
 // Report 把异常路由给绑定的本地 sink（若有）。
 //
 // Python: reporter.py LocalAnomalyReporter.report。未绑定时告警丢弃。
-func (r *LocalAnomalyReporter) Report(anomaly *core.Anomaly) {
+func (r *LocalAnomalyReporter) Report(ctx context.Context, anomaly *core.Anomaly) {
 	if r.sink == nil {
 		logger.Warn(logComponent).
 			Str("member", anomaly.MemberName).
 			Msg("local anomaly sink not bound; dropping anomaly")
 		return
 	}
-	r.sink(anomaly)
+	r.sink(ctx, anomaly)
 }

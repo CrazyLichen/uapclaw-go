@@ -72,7 +72,7 @@ func (r *ReliabilityRail) Priority() int { return RailPriority }
 // Python: rail.py ReliabilityRail.bind_local_sink。leader 自检的异常直达进程内
 // handler，而不是发布一个会被 leader 自己的 messager self-filter 丢弃的事件。
 // dispatcher 建好后调用一次（TeamAgent._register_reliability_local_sink 等价物）。
-func (r *ReliabilityRail) BindLocalSink(sink func(*core.Anomaly)) {
+func (r *ReliabilityRail) BindLocalSink(sink func(context.Context, *core.Anomaly)) {
 	if r.localReporter != nil {
 		r.localReporter.Bind(sink)
 	}
@@ -145,7 +145,7 @@ func (r *ReliabilityRail) OnUserMessage(_ context.Context, cbc *agentinterfaces.
 // BeforeToolCall 在工具执行前采集工具名 + 参数。
 //
 // Python: rail.py ReliabilityRail.before_tool_call。
-func (r *ReliabilityRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ReliabilityRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, _ := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	name := ""
 	args := map[string]any(nil)
@@ -153,7 +153,7 @@ func (r *ReliabilityRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces
 		name = inputs.ToolName
 		args = argsAsDict(inputs.ToolArgs)
 	}
-	r.emit(&core.Signal{
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:       core.SignalKindBeforeToolCall,
 		MemberName: r.member,
 		ToolName:   strPtr(name),
@@ -167,7 +167,7 @@ func (r *ReliabilityRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces
 // Python: rail.py ReliabilityRail.after_tool_call。after_tool_call 也会在失败
 // （由 on_tool_exception 上报）和暂停调用（尚无结果）后运行——两者都不是成功，
 // 成功信号会错误重置错误连击，故 exception 非空时直接返回。
-func (r *ReliabilityRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ReliabilityRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if cbc.Exception() != nil {
 		return nil
 	}
@@ -178,7 +178,7 @@ func (r *ReliabilityRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.
 		name = inputs.ToolName
 		result = inputs.ToolResult
 	}
-	r.emit(&core.Signal{
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:       core.SignalKindAfterToolCall,
 		MemberName: r.member,
 		ToolName:   strPtr(name),
@@ -190,13 +190,13 @@ func (r *ReliabilityRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.
 // OnToolException 采集一次工具失败。
 //
 // Python: rail.py ReliabilityRail.on_tool_exception。
-func (r *ReliabilityRail) OnToolException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ReliabilityRail) OnToolException(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, _ := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	name := ""
 	if inputs != nil {
 		name = inputs.ToolName
 	}
-	r.emit(&core.Signal{
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:       core.SignalKindToolException,
 		MemberName: r.member,
 		ToolName:   strPtr(name),
@@ -208,8 +208,8 @@ func (r *ReliabilityRail) OnToolException(_ context.Context, cbc *agentinterface
 // OnModelException 采集一次模型调用失败。
 //
 // Python: rail.py ReliabilityRail.on_model_exception。
-func (r *ReliabilityRail) OnModelException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	r.emit(&core.Signal{
+func (r *ReliabilityRail) OnModelException(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:         core.SignalKindModelException,
 		MemberName:   r.member,
 		Error:        errText(cbc.Exception()),
@@ -221,13 +221,13 @@ func (r *ReliabilityRail) OnModelException(_ context.Context, cbc *agentinterfac
 // BeforeModelCall 采集当前上下文消息数（压缩推断依据）。
 //
 // Python: rail.py ReliabilityRail.before_model_call。
-func (r *ReliabilityRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ReliabilityRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	var count *int
 	if inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs); ok {
 		c := len(inputs.Messages)
 		count = &c
 	}
-	r.emit(&core.Signal{
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:         core.SignalKindBeforeModelCall,
 		MemberName:   r.member,
 		MessageCount: count,
@@ -238,9 +238,9 @@ func (r *ReliabilityRail) BeforeModelCall(_ context.Context, cbc *agentinterface
 // AfterModelCall 从响应采集输出文本/思考长度。
 //
 // Python: rail.py ReliabilityRail.after_model_call。
-func (r *ReliabilityRail) AfterModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ReliabilityRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	textLen, thinkingLen := measureResponse(cbc)
-	r.emit(&core.Signal{
+	r.emitCBC(ctx, cbc, &core.Signal{
 		Kind:        core.SignalKindAfterModelCall,
 		MemberName:  r.member,
 		TextLen:     textLen,
@@ -251,32 +251,23 @@ func (r *ReliabilityRail) AfterModelCall(_ context.Context, cbc *agentinterfaces
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// emit 喂信号，然后对返回的每个异常做本地纠偏。
+// emitCBC 喂信号，然后对返回的每个异常做本地纠偏。
 //
-// Python: rail.py ReliabilityRail._emit。
-func (r *ReliabilityRail) emit(signal *core.Signal) {
-	anomalies := r.monitor.Feed(signal)
+// Python: rail.py ReliabilityRail._emit（ctx.push_steering）。
+func (r *ReliabilityRail) emitCBC(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, signal *core.Signal) {
+	anomalies := r.monitor.Feed(ctx, signal)
 	if r.auto == nil {
 		return
 	}
 	for _, anomaly := range anomalies {
 		message := r.auto.SteerMessage(anomaly)
-		if message != "" {
-			cbc := currentCBC
-			if cbc != nil {
-				if err := cbc.PushSteering(message); err != nil {
-					logger.Warn(logComponent).Err(err).Msg("push steering failed")
-				}
+		if message != "" && cbc != nil {
+			if err := cbc.PushSteering(message); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("push steering failed")
 			}
 		}
 	}
 }
-
-// currentCBC emit 上下文桥（见 PushSteering 传递说明）。
-//
-// ⚠️ Python _emit 直接持有 ctx.push_steering；Go 的 emit 由钩子调用、钩子持有
-// cbc——此处通过钩子闭包传递（见 emitWithCBC）而非包级变量。
-var currentCBC *agentinterfaces.AgentCallbackContext
 
 // measureResponse 尽力提取输出文本/思考长度。
 //

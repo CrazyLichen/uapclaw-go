@@ -4,6 +4,7 @@
 package reliability
 
 import (
+	"context"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/detectors"
@@ -45,8 +46,6 @@ type BuildComponentsDeps struct {
 	TeamName string
 	// SenderId 本成员 messager 节点 id
 	SenderId string
-	// SessionId 会话 id（TEAM topic 构造）
-	SessionId string
 	// IsLeader 是否 leader
 	IsLeader bool
 	// Now 时间戳缝（nil 用 time.Now 秒值）
@@ -55,8 +54,8 @@ type BuildComponentsDeps struct {
 	Text detectors.TextRenderer
 	// SteerText 纠偏文案渲染缝（nil 用 remediation 默认兜底）
 	SteerText func(kind core.AnomalyKind, summary string) string
-	// TopicBuilder TEAM topic 构造缝（nil 用 schema/events 默认）
-	TopicBuilder func(sessionID, teamName string) string
+	// TopicBuilder TEAM topic 构造缝（nil 用 schema/events 默认；ctx 取 session id）
+	TopicBuilder func(ctx context.Context, teamName string) string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -130,7 +129,7 @@ func BuildReliabilityComponents(deps BuildComponentsDeps) *ReliabilityComponents
 		localReporter = NewLocalAnomalyReporter()
 		reporter = localReporter
 	} else if deps.Messager != nil {
-		r := NewEventAnomalyReporter(deps.Messager, deps.TeamName, deps.SenderId, deps.SessionId)
+		r := NewEventAnomalyReporter(deps.Messager, deps.TeamName, deps.SenderId)
 		if deps.TopicBuilder != nil {
 			r.SetTopicBuilder(deps.TopicBuilder)
 		}
@@ -199,7 +198,7 @@ func BuildPingPongDetector(config *core.ReliabilityConfig) *detectors.PingPongDe
 type nopReporter struct{}
 
 // Report no-op。
-func (nopReporter) Report(*core.Anomaly) {}
+func (nopReporter) Report(context.Context, *core.Anomaly) {}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

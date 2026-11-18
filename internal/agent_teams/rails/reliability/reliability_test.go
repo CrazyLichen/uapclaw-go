@@ -4,6 +4,7 @@
 package reliability
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -19,7 +20,7 @@ import (
 // fakeReporter 记录上报的异常。
 type fakeReporter struct{ got []*core.Anomaly }
 
-func (f *fakeReporter) Report(a *core.Anomaly) { f.got = append(f.got, a) }
+func (f *fakeReporter) Report(_ context.Context, a *core.Anomaly) { f.got = append(f.got, a) }
 
 // panicDetector observe 时 panic 的坏 detector。
 type panicDetector struct{}
@@ -47,8 +48,8 @@ func TestReliabilityMonitor_扇出并按策略路由(t *testing.T) {
 	// 默认策略 MEDIUM → report_leader；借 ToolErrorRateDetector 两次失败触发
 	d := detectors.NewToolErrorRateDetector(60, 5, 2, func() float64 { return 0 })
 	m2 := NewReliabilityMonitor([]detectors.Detector{silentDetector{}, d}, rep, remediation.NewRemediationPolicy(nil))
-	m2.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
-	produced := m2.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	m2.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	produced := m2.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
 	assert.Len(t, produced, 1)
 	assert.Len(t, rep.got, 1, "MEDIUM 按默认策略上报 leader")
 }
@@ -60,8 +61,8 @@ func TestReliabilityMonitor_ObserveOnly仅日志(t *testing.T) {
 	})
 	d := detectors.NewToolErrorRateDetector(60, 5, 2, func() float64 { return 0 })
 	m := NewReliabilityMonitor([]detectors.Detector{d}, rep, p)
-	m.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
-	m.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	m.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	m.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
 	assert.Empty(t, rep.got, "observe-only 不上报")
 }
 
@@ -69,8 +70,8 @@ func TestReliabilityMonitor_坏detector隔离(t *testing.T) {
 	rep := &fakeReporter{}
 	d := detectors.NewToolErrorRateDetector(60, 5, 2, func() float64 { return 0 })
 	m := NewReliabilityMonitor([]detectors.Detector{panicDetector{}, d}, rep, remediation.NewRemediationPolicy(nil))
-	m.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
-	produced := m.Feed(&core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	m.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
+	produced := m.Feed(context.Background(), &core.Signal{Kind: core.SignalKindToolException, MemberName: "c"})
 	assert.Len(t, produced, 1, "坏 detector panic 被隔离，好 detector 正常产出")
 }
 
@@ -84,16 +85,16 @@ func TestReliabilityMonitor_Reset(t *testing.T) {
 
 func TestLocalAnomalyReporter_未绑定时告警丢弃(t *testing.T) {
 	r := NewLocalAnomalyReporter()
-	assert.NotPanics(t, func() { r.Report(mediumAnomaly()) })
+	assert.NotPanics(t, func() { r.Report(context.Background(), mediumAnomaly()) })
 	assert.Nil(t, r.TakeRouteNotices(), "未 bind source 返回空")
 }
 
 func TestLocalAnomalyReporter_绑定后直达sink(t *testing.T) {
 	r := NewLocalAnomalyReporter()
 	got := 0
-	r.Bind(func(*core.Anomaly) { got++ })
+	r.Bind(func(context.Context, *core.Anomaly) { got++ })
 	r.BindRouteNoticeSource(func() []string { return []string{"n1", "n2"} })
-	r.Report(mediumAnomaly())
+	r.Report(context.Background(), mediumAnomaly())
 	assert.Equal(t, 1, got)
 	assert.Equal(t, []string{"n1", "n2"}, r.TakeRouteNotices())
 }
@@ -128,7 +129,7 @@ func TestBuildReliabilityComponents_leader走本地sink(t *testing.T) {
 	cfg := core.DefaultReliabilityConfig()
 	cfg.Enabled = true
 	comps := BuildReliabilityComponents(BuildComponentsDeps{
-		Config: cfg, MemberName: "leader", TeamName: "t", SenderId: "leader", SessionId: "s", IsLeader: true,
+		Config: cfg, MemberName: "leader", TeamName: "t", SenderId: "leader", IsLeader: true,
 	})
 	assert.NotNil(t, comps.LocalReporter, "leader 得 LocalAnomalyReporter")
 	assert.NotNil(t, comps.AutoRemediator)
@@ -139,7 +140,7 @@ func TestBuildReliabilityComponents_leader走本地sink(t *testing.T) {
 func TestBuildReliabilityComponents_成员走事件上报(t *testing.T) {
 	cfg := core.DefaultReliabilityConfig()
 	comps := BuildReliabilityComponents(BuildComponentsDeps{
-		Config: cfg, MemberName: "coder", TeamName: "t", SenderId: "coder", SessionId: "s",
+		Config: cfg, MemberName: "coder", TeamName: "t", SenderId: "coder",
 	})
 	assert.Nil(t, comps.LocalReporter)
 	assert.NotNil(t, comps.Monitor)
@@ -148,7 +149,7 @@ func TestBuildReliabilityComponents_成员走事件上报(t *testing.T) {
 func TestBuildReliabilityRail_一步构建(t *testing.T) {
 	cfg := core.DefaultReliabilityConfig()
 	rail := BuildReliabilityRail(BuildComponentsDeps{
-		Config: cfg, MemberName: "m", TeamName: "t", SenderId: "m", SessionId: "s",
+		Config: cfg, MemberName: "m", TeamName: "t", SenderId: "m",
 	})
 	assert.Equal(t, RailPriority, rail.Priority())
 	assert.Equal(t, "m", rail.member)
@@ -181,7 +182,7 @@ func TestReliabilityRail_Priority五(t *testing.T) {
 func TestReliabilityRail_BindLocalSink非leaderNoOp(t *testing.T) {
 	cfg := core.DefaultReliabilityConfig()
 	rail := BuildReliabilityRail(BuildComponentsDeps{Config: cfg, MemberName: "coder"})
-	assert.NotPanics(t, func() { rail.BindLocalSink(func(*core.Anomaly) {}) }, "localReporter 为 nil 时 no-op")
+	assert.NotPanics(t, func() { rail.BindLocalSink(func(context.Context, *core.Anomaly) {}) }, "localReporter 为 nil 时 no-op")
 	assert.NotPanics(t, func() { rail.BindRouteNoticeSource(func() []string { return nil }) })
 }
 

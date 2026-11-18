@@ -4,6 +4,7 @@
 package reliability
 
 import (
+	"context"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/detectors"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/remediation"
@@ -46,14 +47,14 @@ func NewReliabilityMonitor(det []detectors.Detector, reporter AnomalyReporter, p
 //
 // Python: monitor.py ReliabilityMonitor.feed。detector panic 等价 except
 // Exception：记 error 日志并 continue（recover 包裹，异常路径防御性日志）。
-func (m *ReliabilityMonitor) Feed(signal *core.Signal) (produced []*core.Anomaly) {
+func (m *ReliabilityMonitor) Feed(ctx context.Context, signal *core.Signal) (produced []*core.Anomaly) {
 	for _, detector := range m.detectors {
 		anomaly := m.observeSafe(detector, signal)
 		if anomaly == nil {
 			continue
 		}
 		produced = append(produced, anomaly)
-		m.route(anomaly)
+		m.route(ctx, anomaly)
 	}
 	return produced
 }
@@ -88,7 +89,7 @@ func (m *ReliabilityMonitor) observeSafe(detector detectors.Detector, signal *co
 // route 上报 leader，或按策略 observe-only 时记日志。
 //
 // Python: monitor.py ReliabilityMonitor._route。
-func (m *ReliabilityMonitor) route(anomaly *core.Anomaly) {
+func (m *ReliabilityMonitor) route(ctx context.Context, anomaly *core.Anomaly) {
 	actions := m.policy.ActionsFor(anomaly.Severity)
 	report := false
 	observe := false
@@ -101,7 +102,7 @@ func (m *ReliabilityMonitor) route(anomaly *core.Anomaly) {
 		}
 	}
 	if report {
-		m.reporter.Report(anomaly)
+		m.reporter.Report(ctx, anomaly)
 	} else if observe {
 		logger.Info(logComponent).
 			Str("member", anomaly.MemberName).
