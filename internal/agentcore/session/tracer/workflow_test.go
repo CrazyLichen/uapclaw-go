@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -484,5 +485,29 @@ func TestGetComponentMetadata_LOOP_ID为空字符串(t *testing.T) {
 
 	if _, ok := metadata["LoopNodeID"]; ok {
 		t.Error("loop_node_id 不应存在（空字符串等同于无循环）")
+	}
+}
+
+// TestGetWorkflowMetadata_card提取 WorkflowConfig 实现后提取 card.version/name（Python workflow.py:261-264）
+func TestGetWorkflowMetadata_card提取(t *testing.T) {
+	cfg := config.NewSessionConfig(context.Background())
+	wfc, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{Version: "v2"})
+	wfc.Card.Name = "主流程"
+	cfg.AddWorkflowConfig("wf1", wfc)
+	sess := &fakeWorkflowSession{workflowID: "wf1", config: cfg}
+
+	md := getWorkflowMetadata(sess)
+	if md["WorkflowVersion"] != "v2" || md["WorkflowName"] != "主流程" {
+		t.Fatalf("应提取 card 字段: %v", md)
+	}
+}
+
+// TestGetWorkflowMetadata_无config兜底 无配置时空串兜底
+func TestGetWorkflowMetadata_无config兜底(t *testing.T) {
+	sess := &fakeWorkflowSession{workflowID: "wf1",
+		config: config.NewSessionConfig(context.Background())}
+	md := getWorkflowMetadata(sess)
+	if md["WorkflowVersion"] != "" || md["WorkflowName"] != "" {
+		t.Fatalf("无配置应空串兜底: %v", md)
 	}
 }

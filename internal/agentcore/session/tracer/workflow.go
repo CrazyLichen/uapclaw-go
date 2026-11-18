@@ -243,10 +243,9 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getWorkflowMetadata 获取工作流元数据，对应 Python TracerWorkflowUtils._get_workflow_metadata。
-// 返回 workflow_id/workflow_version/workflow_name。
-// ⤵️ 8.15 回填：workflow_version/workflow_name 当前硬编码为空字符串，
-// Python 从 session.config().get_workflow_config(executable_id).card 提取 version 和 name，
-// Go 中 Config() 已返回 SessionConfig，GetWorkflowConfig 可调用，但 WorkflowConfig 尚未暴露 card.version/name。
+// 返回 workflow_id/workflow_version/workflow_name；
+// Python 从 session.config().get_workflow_config(executable_id).card 提取 version 和 name。
+// ✅ 8.15 已回填：从 WorkflowConfig.Card 提取 card.version/card.name
 func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 	workflowID := session.WorkflowID()
 	// 键名与 setWorkflowMetadata 的 switch 键集一致（Python span.py 字段名的 Camel 对应物；
@@ -262,10 +261,11 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 		return metadata
 	}
 	wfc := cfg.GetWorkflowConfig(workflowID)
-	if wfc == nil {
+	if wfc == nil || wfc.Card == nil {
 		return metadata
 	}
-	// ⤵️ 8.15 回填：WorkflowConfig 实现后，从 wfc 提取 card.version 和 card.name
+	metadata["WorkflowVersion"] = wfc.Card.Version
+	metadata["WorkflowName"] = wfc.Card.Name
 	return metadata
 }
 
