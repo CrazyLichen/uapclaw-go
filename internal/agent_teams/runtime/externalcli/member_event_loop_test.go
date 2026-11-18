@@ -10,46 +10,6 @@ import (
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 )
 
-// fakeReliabilityCtx runtimeReliabilityContext 测试替身（记账各方法调用）。
-type fakeReliabilityCtx struct {
-	runtimeReliabilityContext
-	beginPhase    string
-	beginRound    *int
-	models        []string
-	retries       []string
-	finalized     int
-	memberErrored bool
-}
-
-func (f *fakeReliabilityCtx) HasFinalized() bool { return false }
-
-func (f *fakeReliabilityCtx) BeginAttempt(phase schema.ExternalRuntimePhase, roundID *int) {
-	f.beginPhase, f.beginRound = phase, roundID
-}
-
-func (f *fakeReliabilityCtx) UpdateModel(model *string) {
-	if model != nil {
-		f.models = append(f.models, *model)
-	}
-}
-
-func (f *fakeReliabilityCtx) PublishRetrying(category schema.ExternalRuntimeFailureCategory,
-	reason *schema.ExternalRuntimeFailureReason, summary string) error {
-	f.retries = append(f.retries, string(category)+":"+summary)
-	return nil
-}
-
-func (f *fakeReliabilityCtx) FinalizeFailure(category schema.ExternalRuntimeFailureCategory,
-	reason *schema.ExternalRuntimeFailureReason, summary string) *schema.ExternalRuntimeFailure {
-	f.finalized++
-	return nil
-}
-
-func (f *fakeReliabilityCtx) MarkMemberError() error {
-	f.memberErrored = true
-	return nil
-}
-
 // newEventTestRuntime 构造带订阅收集的事件测试 runtime。
 func newEventTestRuntime(t *testing.T) (*ExternalHarnessMemberRuntime, *[]string) {
 	t.Helper()
@@ -85,9 +45,26 @@ func envelopeWithID(t *testing.T, payload harness_protocol.HarnessEventPayload) 
 	return harness_protocol.HarnessEvent{Event: payload, TurnID: "t-1"}
 }
 
+// newRecordingReliabilityCtx 真实 RuntimeReliabilityContext（无接口替身）：
+// 记账面经 status 回调与 PublishRetrying 收集承担，begin/model/finalize 状态
+// 直接读上下文访问器（Phase/RoundID/Model/HasFinalized）。
+// messager 复用同包 fakeReliabilityMessager（reliability_test.go）。
+func newRecordingReliabilityCtx(t *testing.T) (*RuntimeReliabilityContext, *fakeReliabilityMessager, *[]schema.MemberStatus) {
+	t.Helper()
+	msgr := &fakeReliabilityMessager{}
+	statuses := &[]schema.MemberStatus{}
+	ctx := NewRuntimeReliabilityContext("member", "team", "sess", "claude",
+		nil, msgr, "leader",
+		func(_ context.Context, st schema.MemberStatus) error {
+			*statuses = append(*statuses, st)
+			return nil
+		}, nil, "")
+	return ctx, msgr, statuses
+}
+
 func TestOnTurnEvent_Started与Failed(t *testing.T) {
 	r, got := newEventTestRuntime(t)
-	ctx := &fakeReliabilityCtx{}
+	ctx, _, _ := newRecordingReliabilityCtx(t)
 	r.mu.Lock()
 	r.reliabilityCtx = ctx
 	r.mu.Unlock()
@@ -97,14 +74,14 @@ func TestOnTurnEvent_Started与Failed(t *testing.T) {
 	if r.roundSeq != 1 {
 		t.Fatalf("started 未递增 roundSeq: %d", r.roundSeq)
 	}
-	if ctx.beginPhase != schema.ExternalRuntimePhaseTurn || ctx.beginRound == nil || *ctx.beginRound != 1 {
-		t.Fatalf("begin_attempt 参数不符: %s %v", ctx.beginPhase, ctx.beginRound)
+	if ctx.Phase() != schema.ExternalRuntimePhaseTurn || ctx.RoundID() == nil || *ctx.RoundID() != 1 {
+		t.Fatalf("begin_attempt 参数不符: %s %v", ctx.Phase(), ctx.RoundID())
 	}
 	res := &harness_protocol.TurnResult{}
 	r.onEvent(context.Background(), envelopeOf(t,
 		harness_protocol.TurnLifecycleEvent{Kind: harness_protocol.TurnEventKindFailed, Result: res}))
 	r.asyncWG.Wait() // finalize 经 asyncGo 异步派发（D-15.16-a2），等收口
-	if ctx.finalized != 1 {
+	if !ctx.HasFinalized() {
 		t.Fatal("failed 未 finalize")
 	}
 	if len(*got) != 2 || (*got)[0] != "round:started" || (*got)[1] != "round:failed" {
@@ -114,7 +91,7 @@ func TestOnTurnEvent_Started与Failed(t *testing.T) {
 
 func TestOnEvent_StateChanged与模型事件(t *testing.T) {
 	r, got := newEventTestRuntime(t)
-	ctx := &fakeReliabilityCtx{}
+	ctx, _, _ := newRecordingReliabilityCtx(t)
 	r.mu.Lock()
 	r.reliabilityCtx = ctx
 	r.mu.Unlock()
@@ -137,8 +114,8 @@ func TestOnEvent_StateChanged与模型事件(t *testing.T) {
 	if m != "deepseek-v3" {
 		t.Fatalf("reported_model 未 TrimSpace 记录: %q", m)
 	}
-	if len(ctx.models) != 1 || ctx.models[0] != "deepseek-v3" {
-		t.Fatalf("reliability update_model 未收到: %v", ctx.models)
+	if ctx.Model() != "deepseek-v3" {
+		t.Fatalf("reliability update_model 未收到: %q", ctx.Model())
 	}
 }
 
@@ -161,7 +138,7 @@ func TestOnEvent_AuthFallback日志面(t *testing.T) {
 
 func TestOnDiagnostic_Retrying(t *testing.T) {
 	r, _ := newEventTestRuntime(t)
-	ctx := &fakeReliabilityCtx{}
+	ctx, msgr, _ := newRecordingReliabilityCtx(t)
 	r.mu.Lock()
 	r.reliabilityCtx = ctx
 	r.mu.Unlock()
@@ -173,8 +150,8 @@ func TestOnDiagnostic_Retrying(t *testing.T) {
 	}
 	r.onEvent(context.Background(), envelopeOf(t,
 		harness_protocol.DiagnosticEvent{Message: "sdk hiccup", Data: data}))
-	if len(ctx.retries) != 1 || !strings.Contains(ctx.retries[0], "rate_limited") {
-		t.Fatalf("retrying 未发布: %v", ctx.retries)
+	if len(msgr.events) != 1 || msgr.events[0].Payload["category"] != "rate_limited" {
+		t.Fatalf("retrying 未发布: %v", msgr.events)
 	}
 	// kind != retrying 不发布
 	other, err := harness_protocol.FreezeJsonObject(map[string]any{"kind": "other"})
@@ -183,7 +160,7 @@ func TestOnDiagnostic_Retrying(t *testing.T) {
 	}
 	r.onEvent(context.Background(), envelopeOf(t,
 		harness_protocol.DiagnosticEvent{Data: other}))
-	if len(ctx.retries) != 1 {
+	if len(msgr.events) != 1 {
 		t.Fatal("非 retrying 不应发布")
 	}
 	// ctx nil 短路
@@ -305,7 +282,7 @@ func TestEmitActivity_sinkNil与异常吞(t *testing.T) {
 
 func TestFinalizeTurnFailure(t *testing.T) {
 	r, _ := newEventTestRuntime(t)
-	ctx := &fakeReliabilityCtx{}
+	ctx, _, _ := newRecordingReliabilityCtx(t)
 	// ctx nil 短路
 	r.mu.Lock()
 	r.reliabilityCtx = nil
@@ -316,14 +293,14 @@ func TestFinalizeTurnFailure(t *testing.T) {
 	r.mu.Unlock()
 	r.finalizeTurnFailure(&harness_protocol.TurnResult{
 		Error: &harness_protocol.TurnError{Message: "boom", Category: strPtrT("auth_required")}})
-	if ctx.finalized != 1 {
+	if !ctx.HasFinalized() {
 		t.Fatal("未 finalize")
 	}
 }
 
 func TestFinalizeStartupFailure(t *testing.T) {
 	r, _ := newEventTestRuntime(t)
-	ctx := &fakeReliabilityCtx{}
+	ctx, _, statuses := newRecordingReliabilityCtx(t)
 	r.mu.Lock()
 	r.reliabilityCtx = ctx
 	r.mu.Unlock()
@@ -332,16 +309,17 @@ func TestFinalizeStartupFailure(t *testing.T) {
 		Err: harness_protocol.TurnError{Message: "no binary", Category: strPtrT("process_start_failed")},
 	}
 	r.finalizeStartupFailure(pse)
-	if ctx.finalized != 1 || !ctx.memberErrored {
-		t.Fatalf("startup finalize/mark 不符: finalized=%d errored=%v", ctx.finalized, ctx.memberErrored)
+	sErr := len(*statuses)
+	if !ctx.HasFinalized() || sErr == 0 || (*statuses)[sErr-1] != schema.MemberStatusError {
+		t.Fatalf("startup finalize/mark 不符: finalized=%v statuses=%v", ctx.HasFinalized(), *statuses)
 	}
 	// 非 ProviderStartupError：reason 由 str(exc) 构造
-	ctx2 := &fakeReliabilityCtx{}
+	ctx2, _, statuses2 := newRecordingReliabilityCtx(t)
 	r.mu.Lock()
 	r.reliabilityCtx = ctx2
 	r.mu.Unlock()
 	r.finalizeStartupFailure(context.DeadlineExceeded)
-	if ctx2.finalized != 1 || !ctx2.memberErrored {
+	if !ctx2.HasFinalized() || len(*statuses2) == 0 {
 		t.Fatal("非启动错误形状 finalize 不符")
 	}
 }

@@ -214,7 +214,7 @@ type ExternalHarnessMemberRuntime struct {
 	// external/reliability.py 430 行已随 15.16b0 移植；SDK 流内 record_pending/
 	// publish_retrying 挂点与 claude/codex 分类器仍 ⤴️15.7/15.8；经
 	// BindReliabilityContext 构造注入，未绑定为 nil 对齐 Python `ctx is None` 分支）
-	reliabilityCtx runtimeReliabilityContext
+	reliabilityCtx *RuntimeReliabilityContext
 	// trajectory 把本成员事件流转成轨迹 span 的记录器
 	trajectory *harnessproviders.HarnessTrajectoryRecorder
 	// promoteFallbackModel 认证回退晋升回调
@@ -1424,7 +1424,7 @@ func (r *ExternalHarnessMemberRuntime) triggerRound(kind string, roundID int, tu
 }
 
 // reliabilityCtxSnap 快照 reliabilityCtx（锁内读）。
-func (r *ExternalHarnessMemberRuntime) reliabilityCtxSnap() runtimeReliabilityContext {
+func (r *ExternalHarnessMemberRuntime) reliabilityCtxSnap() *RuntimeReliabilityContext {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.reliabilityCtx

@@ -269,12 +269,8 @@ func TestBindReliabilityContext_真构造(t *testing.T) {
 	if ctx == nil {
 		t.Fatal("agent_kind 非空必须构造可靠性上下文")
 	}
-	rc, ok := ctx.(*RuntimeReliabilityContext)
-	if !ok {
-		t.Fatalf("reliabilityCtx 类型 = %T", ctx)
-	}
-	if rc.cliPath != "/bin/fake-cli" {
-		t.Fatalf("cliPath = %q", rc.cliPath)
+	if ctx.cliPath != "/bin/fake-cli" {
+		t.Fatalf("cliPath = %q", ctx.cliPath)
 	}
 }
 

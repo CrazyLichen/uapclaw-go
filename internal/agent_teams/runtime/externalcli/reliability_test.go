@@ -27,9 +27,11 @@ func newTestMessageManagerFor(member string) *tools.TeamMessageManager {
 	return tools.NewTeamMessageManager(db, "team1", member, nil)
 }
 
-// fakeReliabilityMessager 最小 Messager 桩：只收集 Publish 的 topicID；进程边界 mock（合规）。
+// fakeReliabilityMessager 最小 Messager 桩：收集 Publish 的 topicID 与事件；
+// 进程边界 mock（合规）。
 type fakeReliabilityMessager struct {
 	topicIDs []string
+	events   []*atevents.EventMessage
 	fail     bool
 }
 
@@ -49,11 +51,12 @@ func (f *fakeReliabilityMessager) UnregisterDirectMessageHandler(context.Context
 	return nil
 }
 
-func (f *fakeReliabilityMessager) Publish(_ context.Context, topicID string, _ *atevents.EventMessage) error {
+func (f *fakeReliabilityMessager) Publish(_ context.Context, topicID string, message *atevents.EventMessage) error {
 	if f.fail {
 		return errors.New("bus down")
 	}
 	f.topicIDs = append(f.topicIDs, topicID)
+	f.events = append(f.events, message)
 	return nil
 }
 
@@ -223,10 +226,11 @@ func TestRuntimeReliabilityContext_MarkMemberError(t *testing.T) {
 	if got != atschema.MemberStatusError {
 		t.Fatalf("status = %v", got)
 	}
+	// 回调失败照常回传（调用方 _ = 显式忽略），不吞错误信息
 	ctxFail := NewRuntimeReliabilityContext("m", "team1", "s", "claude", nil, nil, "leader",
 		func(context.Context, atschema.MemberStatus) error { return errors.New("db down") }, nil, "")
-	if err := ctxFail.MarkMemberError(); err != nil {
-		t.Fatalf("status-cb failure must be logged not raised: %v", err)
+	if err := ctxFail.MarkMemberError(); err == nil || err.Error() != "db down" {
+		t.Fatalf("status-cb failure 应回传: %v", err)
 	}
 }
 
