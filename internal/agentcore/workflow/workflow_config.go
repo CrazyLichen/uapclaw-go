@@ -76,6 +76,12 @@ type WorkflowConfig struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewExceptionConfig 创建带 Python 默认值的 ExceptionConfig（handle_type 默认 "interrupt"）。
+// Python: workflow_config.py ExceptionConfig handle_type: str = Field(default="interrupt")。
+func NewExceptionConfig() *ExceptionConfig {
+	return &ExceptionConfig{HandleType: "interrupt"}
+}
+
 // WorkflowConfigOption WorkflowConfig 构造选项。
 type WorkflowConfigOption func(*WorkflowConfig)
 
