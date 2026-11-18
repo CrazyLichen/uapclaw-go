@@ -63,8 +63,9 @@
 
 | 编号 | Python | Go | 性质/理由 | 回收条件 |
 |---|---|---|---|---|
-| D-1 | `input_params: Optional[dict \| Type[BaseModel]]` | `InputParams any` | Go 无 Union/pydantic 元类型；既有消费方按 map[string]any 使用 | 8.14 Workflow 消费时若出现 Type[BaseModel] 形态再收窄 |
-| D-2 | `WorkflowChunk = Union[...]` | 类型别名 `any` 或 `SchemaType()` 接口（实施时定） | Go 无 Union 类型 | workflow.py（8.14）真实消费时定稿 |
+| D-1 | `input_params: Optional[dict \| Type[BaseModel]]` | `InputParams map[string]any`（2026-11-18 审查修订：由 any 收窄） | Go 无 Union/pydantic 元类型；Type[BaseModel] 形态由外层调用方自行转 JSON Schema map 后传入；WorkflowCard.InputParams 全仓零消费方，收窄无波及 | 无（终态） |
+| D-2 | `WorkflowChunk = Union[...]` | `type WorkflowChunk = stream.Schema`（2026-11-18 审查修订：由 any 收窄） | stream.Schema 接口（session/stream/base.go:15）已被三类型实现；workflow→session/stream 经 go list -deps 验证无环，any 非环所迫 | 无（终态） |
+| D-4 | `WorkflowOutput.result: Any` | `Result any` | Python 字段本为 Any 的直译，非破环非 Union 占位：四个写入方分别放单个 chunk / chunk 列表 / dict / str（workflow_task_executor.py:215,261、workflow_controller.py:332,337），读取方靠 isinstance(list) 运行时分派（llm_controller.py:1317） | 8.14 Workflow 消费时若发现 Go 侧实际只用某几形态再讨论收窄 |
 | D-3 | pydantic 模型序列化字段名（snake_case） | 导出字段 + json tag（version/input_params） | 与 BaseCard 既有 Go 惯例一致 | 无（终态） |
 
 ## 5. 回填项（保留，不提前做）
