@@ -424,7 +424,7 @@ func (a *TeamAgent) TeamBackend() *tools.TeamBackend {
 
 // Messager 返回成员 infra 的 messager（未配置为 nil）。
 // Python: teammate.infra.messager —— spawn 经 bind_reliability_context 消费
-//（external_cli_spawn.py:732，重试进度事件发布面）。
+// （external_cli_spawn.py:732，重试进度事件发布面）。
 func (a *TeamAgent) Messager() messager.Messager {
 	if a.configurator != nil {
 		return a.configurator.Messager()
