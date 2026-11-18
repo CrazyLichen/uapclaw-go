@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -108,6 +109,14 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 	if customizer != nil {
 		spec.AgentCustomizer = customizer
 	}
+
+	// 步骤 6: enrich seed 生产段（15.16c）。
+	// 对齐 Python: enrich_team_spec_for_swarm 的 context 构造段
+	//（assembly.py:456-541；活跃调用点 get_swarm_enriched_team_spec
+	// team_manager.py:1958-2033——偏差 D-15.16-c8：该 Python 方法未移植，
+	// 接线在 Go 活跃 leader 路径，mode/project_dir 按
+	// team_manager.py:2421-2426 的提取语义从 request_metadata 取）。
+	swarm.EnrichTeamSpecForSwarmSeed(spec, swarm.SeedParamsFromRequestMetadata(sessionID, requestMetadata))
 
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
