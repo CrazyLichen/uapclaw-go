@@ -53,9 +53,9 @@ type EnrichSeedParams struct {
 // 偏差 D-15.16-c5：尾日志 mcps/agent_group 两字段本节无输入，按 Python
 // 无该输入时的字面值（0/None）记录，随对应章节落地改为真实输入驱动。
 //
-// 偏差 D-15.16-c8：接线点为 Go 活跃 leader 路径 GetEnrichedTeamSpec；
-// Python 活跃调用点 get_swarm_enriched_team_spec（team_manager.py:1958-2033，
-// mode/project_dir 提取语义见 :2422-2426）尚未移植，其章节落地时迁移。
+// 偏差 D-15.16-c8 收尾：接线点为 TeamManager.GetSwarmEnrichedTeamSpec
+//（对齐 Python 活跃路径 get_swarm_enriched_team_spec，team_manager.py:1958；
+// 旧 GetEnrichedTeamSpec/GetEnrichedTeamSpec 路径已随 c8 收尾批删除）。
 func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams) error {
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）
 	RegisterSwarmBuildContextFactory()
