@@ -81,8 +81,13 @@ func TestIsValidTaskTransition_合法转换(t *testing.T) {
 		current string
 		target  string
 	}{
-		{TaskStatusPending, TaskStatusClaimed},
-		{TaskStatusClaimed, TaskStatusCompleted},
+		{TaskStatusPending, TaskStatusInProgress},
+		{TaskStatusInProgress, TaskStatusCompleted},
+		{TaskStatusInProgress, TaskStatusInReview},
+		{TaskStatusInReview, TaskStatusCompleted},
+		{TaskStatusInReview, TaskStatusInProgress},
+		{TaskStatusPlanning, TaskStatusInProgress},
+		{TaskStatusPlanning, TaskStatusPlanning},
 		{TaskStatusBlocked, TaskStatusPending},
 	}
 	for _, tt := range tests {
@@ -97,8 +102,11 @@ func TestIsValidTaskTransition_非法转换(t *testing.T) {
 	if IsValidTaskTransition(TaskStatusCompleted, TaskStatusPending) {
 		t.Error("completed → pending 应非法")
 	}
-	if IsValidTaskTransition(TaskStatusCancelled, TaskStatusClaimed) {
-		t.Error("cancelled → claimed 应非法")
+	if IsValidTaskTransition(TaskStatusCancelled, TaskStatusInProgress) {
+		t.Error("cancelled → in_progress 应非法")
+	}
+	if IsValidTaskTransition(TaskStatusCompleted, TaskStatusInReview) {
+		t.Error("completed → in_review 应非法")
 	}
 }
 
@@ -135,8 +143,8 @@ func TestExecutionTransitions_完整性(t *testing.T) {
 // TestTaskTransitions_完整性 每个状态都应在转换表中。
 func TestTaskTransitions_完整性(t *testing.T) {
 	expectedStates := []string{
-		TaskStatusPending, TaskStatusClaimed, TaskStatusPlanApproved,
-		TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked,
+		TaskStatusPending, TaskStatusPlanning, TaskStatusInProgress,
+		TaskStatusInReview, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked,
 	}
 	for _, state := range expectedStates {
 		if _, ok := TaskTransitions[state]; !ok {

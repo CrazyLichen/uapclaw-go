@@ -34,7 +34,10 @@ const (
 	TeamEventTaskUpdated      = "task_updated"
 	TeamEventTaskClaimed      = "task_claimed"
 	TeamEventTaskCompleted    = "task_completed"
-	TeamEventTaskCancelled    = "task_cancelled"
+	// TeamEventTaskVerified 验收通过事件（verify gate pass，F_62）。
+	// Python: TeamEvent.TASK_VERIFIED = "task_verified" (schema/events.py L170)
+	TeamEventTaskVerified    = "task_verified"
+	TeamEventTaskCancelled   = "task_cancelled"
 	TeamEventTaskUnblocked    = "task_unblocked"
 	TeamEventTaskListDrained  = "task_list_drained"
 

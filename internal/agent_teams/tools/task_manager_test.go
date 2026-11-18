@@ -51,7 +51,7 @@ func TestTaskManager_Claim(t *testing.T) {
 		t.Fatalf("Claim 失败: %s", result.Reason)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusClaimed {
+	if got.Status != fsm.TaskStatusInProgress {
 		t.Errorf("认领后状态应为 claimed: got %q", got.Status)
 	}
 	if got.Assignee == nil || *got.Assignee != "agent1" {
@@ -310,7 +310,7 @@ func TestTaskManager_SubmitPlan(t *testing.T) {
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusClaimed {
+	if got.Status != fsm.TaskStatusInProgress {
 		t.Errorf("提交计划后任务应为 claimed: got %q", got.Status)
 	}
 }
@@ -334,7 +334,7 @@ func TestTaskManager_ApprovePlan_通过(t *testing.T) {
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusPlanApproved {
+	if got.Status != fsm.TaskStatusInProgress {
 		t.Errorf("审批通过后任务应为 plan_approved: got %q", got.Status)
 	}
 }
@@ -358,7 +358,7 @@ func TestTaskManager_ApprovePlan_拒绝(t *testing.T) {
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Status != fsm.TaskStatusClaimed {
+	if got.Status != fsm.TaskStatusInProgress {
 		t.Errorf("审批拒绝后任务应保持 claimed: got %q", got.Status)
 	}
 }

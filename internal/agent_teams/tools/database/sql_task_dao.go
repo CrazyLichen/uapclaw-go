@@ -187,9 +187,10 @@ func (d *SQLTaskDao) AppendChangeNote(ctx context.Context, taskID string, revisi
 	return ok, err
 }
 
-// ClaimTask 认领任务：设置 assignee + pending→claimed FSM 校验。
-// Python: claim_task(task_id, member_name) → bool
-func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bool, error) {
+// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+// Python: claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING) → bool
+// —— autonomous 自认领与 scheduled start 走 IN_PROGRESS，计划闸预留走 PLANNING。
+func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee, toStatus string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -204,15 +205,15 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 			return nil
 		}
-		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusClaimed).Msg("Invalid task status transition")
+		if !fsm.IsValidTaskTransition(task.Status, toStatus) {
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", toStatus).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: toStatus, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("Task claimed")
+		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Str("to_status", toStatus).Msg("Task claimed")
 		return nil
 	})
 	return ok, err
@@ -229,9 +230,10 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 		if result.Error != nil {
 			return nil
 		}
-		// Python: if task.status != claimed → error
-		if task.Status != fsm.TaskStatusClaimed {
-			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Can only reset claimed tasks")
+		// Python: reset 的合法来源是活跃态（IN_PROGRESS/PLANNING/IN_REVIEW，
+		// condition-named 状态机后转换表各自有 → PENDING）
+		if task.Status != fsm.TaskStatusInProgress && task.Status != fsm.TaskStatusPlanning && task.Status != fsm.TaskStatusInReview {
+			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Can only reset active tasks")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
@@ -248,8 +250,8 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 	return ok, err
 }
 
-// ApprovePlanTask 计划审批：claimed→plan_approved FSM 校验。
-// Python: approve_plan_task(task_id) → Optional[TeamTaskBase]
+// ApprovePlanTask 计划审批：PLANNING→IN_PROGRESS FSM 校验。
+// Python: approve_plan_task(task_id)：leader 审批放行
 func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -259,13 +261,13 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 		if result.Error != nil {
 			return nil
 		}
-		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPlanApproved) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPlanApproved).Msg("Invalid task status transition")
+		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusInProgress) {
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusInProgress).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusPlanApproved, UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusInProgress, UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Msg("Task plan approved")
 		return nil
@@ -324,8 +326,8 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 		if result.Error != nil {
 			return nil
 		}
-		// Python: if task.status in (claimed, plan_approved) → error
-		if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
+		// Python: 仅 IN_REVIEW 冻结（PLANNING/IN_PROGRESS 可编辑，F_129）
+		if task.Status == fsm.TaskStatusInReview {
 			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Cannot edit task in current status")
 			return nil
 		}
@@ -865,10 +867,11 @@ func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []Edge
 		taskMap[tasks[i].TaskID] = &tasks[i]
 	}
 
-	// Python: TASK_DEPENDENCY_REJECT_STATUSES
+	// Python: TASK_DEPENDENCY_REJECT_STATUSES（graph.py L21-29：终态 + 三活跃态）
 	rejectStatuses := map[string]bool{
 		fsm.TaskStatusCompleted: true, fsm.TaskStatusCancelled: true,
-		fsm.TaskStatusClaimed: true, fsm.TaskStatusPlanApproved: true,
+		fsm.TaskStatusPlanning: true, fsm.TaskStatusInProgress: true,
+		fsm.TaskStatusInReview: true,
 	}
 	for _, e := range addEdges {
 		if _, ok := taskMap[e.TaskID]; !ok {

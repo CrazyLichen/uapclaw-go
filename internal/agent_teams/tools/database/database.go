@@ -145,10 +145,10 @@ type TaskDao interface {
 	// Python: update_task 内 revision += 1 + change_notes 追加
 	// note 为编辑说明正文，by 为修改人（空串表示未知）。
 	AppendChangeNote(ctx context.Context, taskID string, revision int64, note, by string) (bool, error)
-	// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
-	// Python: claim_task() → bool
-	ClaimTask(ctx context.Context, taskID, assignee string) (bool, error)
-	// ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
+	// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+	// Python: claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING) → bool
+	ClaimTask(ctx context.Context, taskID, assignee, toStatus string) (bool, error)
+	// ResetTask 重置任务：活跃态→PENDING，清除 assignee。
 	// Python: reset_task() → bool
 	ResetTask(ctx context.Context, taskID string) (bool, error)
 	// ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。

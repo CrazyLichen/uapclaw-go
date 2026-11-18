@@ -42,13 +42,13 @@ func TestSQLTaskDao_GetTeamTasks(t *testing.T) {
 
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusClaimed})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusInProgress})
 
 	tasks, err := dao.GetTeamTasks(ctx, "team1", "")
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(tasks))
 
-	claimed, err := dao.GetTeamTasks(ctx, "team1", fsm.TaskStatusClaimed)
+	claimed, err := dao.GetTeamTasks(ctx, "team1", fsm.TaskStatusInProgress)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(claimed))
 }
@@ -58,7 +58,7 @@ func TestSQLTaskDao_GetTasksByAssignee(t *testing.T) {
 	ctx := newTestCtx("assignee-test")
 
 	dao := db.Task()
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m1")})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("m1")})
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending, Assignee: StringPtr("m2")})
 
 	// 查询 m1 的任务
@@ -68,7 +68,7 @@ func TestSQLTaskDao_GetTasksByAssignee(t *testing.T) {
 	assert.Equal(t, "t1", tasks[0].TaskID)
 
 	// 按状态过滤
-	claimedTasks, err := dao.GetTasksByAssignee(ctx, "team1", "m1", fsm.TaskStatusClaimed)
+	claimedTasks, err := dao.GetTasksByAssignee(ctx, "team1", "m1", fsm.TaskStatusInProgress)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(claimedTasks))
 }
@@ -81,12 +81,12 @@ func TestSQLTaskDao_ClaimTask(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 
 	// Python: pending → claimed
-	ok, err := dao.ClaimTask(ctx, "t1", "member1")
+	ok, err := dao.ClaimTask(ctx, "t1", "member1", fsm.TaskStatusInProgress)
 	require.NoError(t, err)
 	assert.True(t, ok)
 
 	got, _ := dao.GetTask(ctx, "t1")
-	assert.Equal(t, fsm.TaskStatusClaimed, got.Status)
+	assert.Equal(t, fsm.TaskStatusInProgress, got.Status)
 	assert.Equal(t, "member1", *got.Assignee)
 }
 
@@ -98,7 +98,7 @@ func TestSQLTaskDao_ResetTask(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 
 	// 先认领
-	dao.ClaimTask(ctx, "t1", "member1")
+	dao.ClaimTask(ctx, "t1", "member1", fsm.TaskStatusInProgress)
 
 	// Python: claimed → pending
 	ok, err := dao.ResetTask(ctx, "t1")
@@ -116,15 +116,15 @@ func TestSQLTaskDao_ApprovePlanTask(t *testing.T) {
 
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
-	dao.ClaimTask(ctx, "t1", "member1")
+	dao.ClaimTask(ctx, "t1", "member1", fsm.TaskStatusPlanning)
 
-	// Python: claimed → plan_approved
+	// Python: PLANNING → IN_PROGRESS
 	ok, err := dao.ApprovePlanTask(ctx, "t1")
 	require.NoError(t, err)
 	assert.True(t, ok)
 
 	got, _ := dao.GetTask(ctx, "t1")
-	assert.Equal(t, fsm.TaskStatusPlanApproved, got.Status)
+	assert.Equal(t, fsm.TaskStatusInProgress, got.Status)
 }
 
 func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
@@ -132,7 +132,7 @@ func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
 	ctx := newTestCtx("update-status-test")
 
 	dao := db.Task()
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusInProgress})
 
 	// Python: claimed → completed
 	ok, err := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusCompleted)
@@ -159,8 +159,9 @@ func TestSQLTaskDao_UpdateTask(t *testing.T) {
 	assert.Equal(t, "New Title", got.Title)
 	assert.Equal(t, "New Content", got.Content)
 
-	// Python: claimed 状态下禁止编辑
-	dao.ClaimTask(ctx, "t1", "m1")
+	// Python: IN_REVIEW 冻结（评审按稳定正文验收）
+	_, err = dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusInReview)
+	require.NoError(t, err)
 	ok, err = dao.UpdateTask(ctx, "t1", "Should Fail", "")
 	require.NoError(t, err)
 	assert.False(t, ok)
@@ -274,7 +275,7 @@ func TestSQLTaskDao_CompleteTask(t *testing.T) {
 	ctx := newTestCtx("complete-test")
 
 	dao := db.Task()
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusInProgress})
 
 	_, unblocked, err := dao.CompleteTask(ctx, "t1")
 	require.NoError(t, err)
@@ -291,7 +292,7 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending, Assignee: StringPtr("m1")})
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m2")})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("m2")})
 
 	// Python: cancel_all_tasks(team_name, skip_assignees=[])
 	result, err := dao.CancelAllTasks(ctx, "team1", nil)
@@ -394,11 +395,11 @@ func TestSQLTaskDao_GetUnseenEdits(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	mk("t-1", fsm.TaskStatusClaimed, 2, 1)      // 未读 → 返回
-	mk("t-2", fsm.TaskStatusClaimed, 1, 1)      // 已读 → 不返回
+	mk("t-1", fsm.TaskStatusInProgress, 2, 1)      // 未读 → 返回
+	mk("t-2", fsm.TaskStatusInProgress, 1, 1)      // 已读 → 不返回
 	mk("t-3", fsm.TaskStatusCompleted, 2, 0)    // 终态 → 不返回
 	mk("t-4", fsm.TaskStatusCancelled, 3, 0)    // 终态 → 不返回
-	mk("t-5", fsm.TaskStatusPlanApproved, 5, 0) // 未读非终态 → 返回
+	mk("t-5", fsm.TaskStatusInProgress, 5, 0) // 未读非终态 → 返回
 
 	rows, err := dao.GetUnseenEdits(ctx, "team1", "alice")
 	require.NoError(t, err)

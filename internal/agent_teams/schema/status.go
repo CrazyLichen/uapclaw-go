@@ -77,18 +77,20 @@ const (
 )
 
 const (
-	// TaskStatusPending 任务等待被认领
+	// TaskStatusPending 任务等待被认领（autonomous）或已分配未开始（scheduled）
 	TaskStatusPending TaskStatus = fsm.TaskStatusPending
-	// TaskStatusClaimed 任务已被成员认领
-	TaskStatusClaimed TaskStatus = fsm.TaskStatusClaimed
-	// TaskStatusPlanApproved 任务计划已批准（仅 PLAN_MODE 成员）
-	TaskStatusPlanApproved TaskStatus = fsm.TaskStatusPlanApproved
-	// TaskStatusCompleted 任务已完成
-	TaskStatusCompleted TaskStatus = fsm.TaskStatusCompleted
-	// TaskStatusCancelled 任务已取消
-	TaskStatusCancelled TaskStatus = fsm.TaskStatusCancelled
 	// TaskStatusBlocked 任务因依赖被阻塞
 	TaskStatusBlocked TaskStatus = fsm.TaskStatusBlocked
+	// TaskStatusPlanning plan 闸门：成员准备计划等待 leader 审批（可选，PLAN_MODE）
+	TaskStatusPlanning TaskStatus = fsm.TaskStatusPlanning
+	// TaskStatusInProgress 执行中（统一旧模型 CLAIMED/STARTED/PLAN_APPROVED）
+	TaskStatusInProgress TaskStatus = fsm.TaskStatusInProgress
+	// TaskStatusInReview verify 闸门：成员已提交结果，reviewer 验收中（可选，有 reviewer 时）
+	TaskStatusInReview TaskStatus = fsm.TaskStatusInReview
+	// TaskStatusCompleted 任务已完成（终态）
+	TaskStatusCompleted TaskStatus = fsm.TaskStatusCompleted
+	// TaskStatusCancelled 任务已取消（终态）
+	TaskStatusCancelled TaskStatus = fsm.TaskStatusCancelled
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -172,12 +174,21 @@ var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 // TaskTransitions TaskStatus 状态转换表。
 // Python: TASK_TRANSITIONS
 var TaskTransitions = map[TaskStatus][]TaskStatus{
-	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
-	TaskStatusPlanApproved: {TaskStatusCompleted, TaskStatusPending, TaskStatusCancelled},
+	TaskStatusPending:      {TaskStatusPlanning, TaskStatusInProgress, TaskStatusBlocked, TaskStatusCancelled},
 	TaskStatusBlocked:      {TaskStatusPending, TaskStatusCancelled},
+	TaskStatusPlanning:     {TaskStatusPlanning, TaskStatusInProgress, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInProgress:   {TaskStatusInReview, TaskStatusCompleted, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInReview:     {TaskStatusCompleted, TaskStatusInProgress, TaskStatusPending, TaskStatusCancelled},
 	TaskStatusCompleted:    {},
 	TaskStatusCancelled:    {},
+}
+
+// TaskReassignableStatuses 任务 owner 可原位交换的状态集合。
+// Python: TASK_REASSIGNABLE_STATUSES (schema/status.py L399-405)
+var TaskReassignableStatuses = map[TaskStatus]bool{
+	TaskStatusPending:    true,
+	TaskStatusBlocked:    true,
+	TaskStatusInProgress: true,
 }
 
 // MemberDepartedStatuses 返回"leader 已释放该成员"的状态集合。

@@ -461,7 +461,7 @@ func TestOpenTaskCountsByAssignee_内存实现(t *testing.T) {
 		_, err := db.Task().CreateTask(ctx, task)
 		require.NoError(t, err)
 	}
-	mk("k1", "alice", fsm.TaskStatusClaimed)
+	mk("k1", "alice", fsm.TaskStatusInProgress)
 	mk("k2", "alice", fsm.TaskStatusPending)
 	mk("k3", "alice", fsm.TaskStatusCompleted) // 终态不计
 	mk("k4", "bob", fsm.TaskStatusCancelled)   // 终态不计

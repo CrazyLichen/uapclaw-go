@@ -109,7 +109,7 @@ func (h *StaleTaskHandler) checkStaleClaimedTasks(ctx context.Context) {
 	if taskMgr == nil {
 		return
 	}
-	claimed, err := taskMgr.ListTasks(ctx, string(schema.TaskStatusClaimed))
+	claimed, err := taskMgr.ListTasks(ctx, string(schema.TaskStatusInProgress))
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("checkStaleClaimedTasks: list claimed tasks failed")
 		return

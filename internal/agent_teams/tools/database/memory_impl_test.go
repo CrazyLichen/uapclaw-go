@@ -661,7 +661,7 @@ func TestGetTeamTasks_按状态过滤(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "P1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "C1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Title: "C1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t3", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "P2"})
 
 	pending, _ := db.GetTeamTasks(ctx, "alpha", fsm.TaskStatusPending)
@@ -680,8 +680,8 @@ func TestGetTasksByAssignee(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: StringPtr("agent1"), Status: fsm.TaskStatusClaimed, Title: "A1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: StringPtr("agent2"), Status: fsm.TaskStatusClaimed, Title: "A2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: StringPtr("agent1"), Status: fsm.TaskStatusInProgress, Title: "A1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: StringPtr("agent2"), Status: fsm.TaskStatusInProgress, Title: "A2"})
 
 	result, _ := db.GetTasksByAssignee(ctx, "alpha", "agent1", "")
 	if len(result) != 1 {
@@ -711,7 +711,7 @@ func TestClaimTask_成功(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务"})
 
-	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
+	ok, _ := db.ClaimTask(ctx, "t1", "agent1", fsm.TaskStatusInProgress)
 	if !ok {
 		t.Error("ClaimTask PENDING→CLAIMED 应返回 true")
 	}
@@ -727,7 +727,7 @@ func TestClaimTask_非法转换(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 
-	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
+	ok, _ := db.ClaimTask(ctx, "t1", "agent1", fsm.TaskStatusInProgress)
 	if ok {
 		t.Error("ClaimTask COMPLETED→CLAIMED 应返回 false")
 	}
@@ -737,7 +737,7 @@ func TestResetTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("agent1"), Title: "任务"})
 
 	ok, _ := db.ResetTask(ctx, "t1")
 	if !ok {
@@ -753,15 +753,15 @@ func TestApprovePlanTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "任务"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanning, Title: "任务"})
 
 	ok, _ := db.ApprovePlanTask(ctx, "t1")
 	if !ok {
-		t.Error("ApprovePlanTask CLAIMED→PLAN_APPROVED 应返回 true")
+		t.Error("ApprovePlanTask PLANNING→IN_PROGRESS 应返回 true")
 	}
 	task, _ := db.GetTask(ctx, "t1")
-	if task.Status != fsm.TaskStatusPlanApproved {
-		t.Errorf("Status: got %q, want %q", task.Status, fsm.TaskStatusPlanApproved)
+	if task.Status != fsm.TaskStatusInProgress {
+		t.Errorf("Status: got %q, want %q", task.Status, fsm.TaskStatusInProgress)
 	}
 }
 
@@ -835,7 +835,7 @@ func TestCompleteTask_终止传播(t *testing.T) {
 	}
 
 	// 先认领上游，然后完成（对齐 Python FSM：pending→claimed→completed）
-	db.ClaimTask(ctx, "upstream", "leader1")
+	db.ClaimTask(ctx, "upstream", "leader1", fsm.TaskStatusInProgress)
 	refreshed, unblocked, _ := db.CompleteTask(ctx, "upstream")
 	if refreshed == nil {
 		t.Error("完成上游应返回任务对象")
@@ -877,7 +877,7 @@ func TestCancelAllTasks(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("agent1"), Title: "任务2"})
 
 	result, _ := db.CancelAllTasks(ctx, "alpha", nil)
 	if len(result.Cancelled) != 2 {
@@ -891,7 +891,7 @@ func TestCancelAllTasks_skipAssignees(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("agent1"), Title: "任务2"})
 
 	result, _ := db.CancelAllTasks(ctx, "alpha", []string{"agent1"})
 	if len(result.Cancelled) != 1 {
@@ -904,7 +904,7 @@ func TestVerifyAndFixTaskConsistency(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "A"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("agent1"), Title: "A"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
 
 	// 通过管线添加依赖，t2→t1
@@ -916,7 +916,7 @@ func TestVerifyAndFixTaskConsistency(t *testing.T) {
 	}
 
 	// 完成上游 t1 → 下游依赖被解决
-	db.ClaimTask(ctx, "t1", "leader1")
+	db.ClaimTask(ctx, "t1", "leader1", fsm.TaskStatusInProgress)
 	db.CompleteTask(ctx, "t1")
 
 	// 此时 t2 应从 blocked→pending（已被 terminateTaskInSession 刷新）
@@ -930,11 +930,11 @@ func TestUpdateTask_禁止编辑CLAIMED(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "已认领"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInReview, Title: "评审中"})
 
 	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
 	if ok {
-		t.Error("CLAIMED 状态下应禁止编辑")
+		t.Error("IN_REVIEW 状态下应禁止编辑（评审按稳定正文验收）")
 	}
 }
 
@@ -969,7 +969,7 @@ func TestGetUnresolvedDependenciesCount(t *testing.T) {
 	}
 
 	// 完成上游后 t2 的依赖变为已解决
-	db.ClaimTask(ctx, "t1", "leader1")
+	db.ClaimTask(ctx, "t1", "leader1", fsm.TaskStatusInProgress)
 	db.CompleteTask(ctx, "t1")
 	count, _ = db.GetUnresolvedDependenciesCount(ctx, "t2")
 	if count != 0 {
@@ -1000,7 +1000,7 @@ func TestUpdateTaskStatus_终态传播(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("agent1"), Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
 	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
 
@@ -1047,23 +1047,23 @@ func TestApprovePlanTask_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "未认领"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 
 	ok, _ := db.ApprovePlanTask(ctx, "t1")
 	if ok {
-		t.Error("PENDING→PLAN_APPROVED 应返回 false（需先 CLAIMED）")
+		t.Error("COMPLETED→IN_PROGRESS 应返回 false（终态无出边）")
 	}
 }
 
-func TestUpdateTask_禁止编辑PLAN_APPROVED(t *testing.T) {
+func TestUpdateTask_允许编辑IN_PROGRESS(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Title: "已审批"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Title: "执行中"})
 
 	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
-	if ok {
-		t.Error("PLAN_APPROVED 状态下应禁止编辑")
+	if !ok {
+		t.Error("IN_PROGRESS 状态下应允许编辑（PLANNING/IN_PROGRESS 可编辑，F_129）")
 	}
 }
 
@@ -1118,7 +1118,7 @@ func TestMutateDependencyGraph_CLAIMED源拒绝(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m1"), Title: "已认领"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("m1"), Title: "已认领"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	// 尝试让已认领任务 t1 依赖 t2（给 CLAIMED 源任务加依赖）
 	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
@@ -1133,7 +1133,7 @@ func TestMutateDependencyGraph_PLAN_APPROVED源拒绝(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Assignee: StringPtr("m1"), Title: "计划已批准"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusInProgress, Assignee: StringPtr("m1"), Title: "计划已批准"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
 	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)

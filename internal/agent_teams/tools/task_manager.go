@@ -418,11 +418,11 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) (schema.Tas
 
 	// 3. PLAN_MODE 检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
 	if member.Mode == "plan_mode" {
-		return schema.TaskOpResult{}.Fail("PLAN_MODE 成员必须先调用 submit_plan，leader 审批后任务从 claimed 变为 plan_approved"), nil
+		return schema.TaskOpResult{}.Fail("PLAN_MODE 成员必须先调用 submit_plan，leader 审批后任务从 planning 变为 in_progress"), nil
 	}
 
-	// 4. 幂等性检查（对齐 Python: if task.assignee == member_name and task.status == CLAIMED）
-	if task.Assignee != nil && *task.Assignee == tm.memberName && task.Status == fsm.TaskStatusClaimed {
+	// 4. 幂等性检查（对齐 Python: if task.assignee == member_name and task.status == IN_PROGRESS）
+	if task.Assignee != nil && *task.Assignee == tm.memberName && task.Status == fsm.TaskStatusInProgress {
 		return schema.TaskOpResult{}.Success(), nil // 已认领，幂等返回成功
 	}
 
@@ -431,13 +431,13 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) (schema.Tas
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 已被 %s 认领，%s 无法认领", taskID, *task.Assignee, tm.memberName)), nil
 	}
 
-	// 6. FSM 状态转换合法性检查（对齐 Python: is_valid_transition(task.status, CLAIMED, TASK_TRANSITIONS)）
-	if !database.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
+	// 6. FSM 状态转换合法性检查（对齐 Python: is_valid_transition(task.status, IN_PROGRESS, TASK_TRANSITIONS)）
+	if !database.IsValidTaskTransition(task.Status, fsm.TaskStatusInProgress) {
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 无法从状态 '%s' 认领（只有 pending 任务可认领）", taskID, task.Status)), nil
 	}
 
 	// 7. 执行认领（对齐 Python: success = await self.db.task.claim_task(task_id, member_name)）
-	ok, err := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName)
+	ok, err := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName, fsm.TaskStatusInProgress)
 	if err != nil {
 		return schema.TaskOpResult{}, err
 	}
@@ -473,8 +473,8 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("成员 %s 在团队 %s 中不存在", assignee, tm.teamName)), nil
 	}
 
-	// 3. 幂等性检查（对齐 Python: if task.assignee == assignee and task.status == CLAIMED）
-	if task.Assignee != nil && *task.Assignee == assignee && task.Status == fsm.TaskStatusClaimed {
+	// 3. 幂等性检查（对齐 Python: if task.assignee == assignee and task.status == IN_PROGRESS）
+	if task.Assignee != nil && *task.Assignee == assignee && task.Status == fsm.TaskStatusInProgress {
 		return schema.TaskOpResult{}.Success(), nil // 已分配给同一成员，幂等返回成功
 	}
 
@@ -484,7 +484,7 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 	}
 
 	// 5. 执行分配（对齐 Python: success = await self.db.task.claim_task(task_id, assignee)）
-	ok, err := tm.db.Task().ClaimTask(ctx, taskID, assignee)
+	ok, err := tm.db.Task().ClaimTask(ctx, taskID, assignee, fsm.TaskStatusInProgress)
 	if err != nil {
 		return schema.TaskOpResult{}, err
 	}
@@ -522,9 +522,10 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) (schema.
 		if preCompleteTask == nil {
 			return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 不存在", taskID)), nil
 		}
-		// PLAN_MODE 成员只能完成 PLAN_APPROVED 状态的任务
-		if preCompleteTask.Status != fsm.TaskStatusPlanApproved {
-			return schema.TaskOpResult{}.Fail(fmt.Sprintf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", preCompleteTask.Status, taskID)), nil
+		// PLAN_MODE 成员只能完成 IN_PROGRESS 任务（对齐 Python：审批已把任务
+		// 从 planning 推进到 in_progress；完成统一只从 in_progress 出发）
+		if preCompleteTask.Status != fsm.TaskStatusInProgress {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 in_progress 任务）", preCompleteTask.Status, taskID)), nil
 		}
 	}
 
@@ -883,10 +884,12 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	if task == nil {
 		return nil, fmt.Errorf("任务不存在: %s", taskID)
 	}
-	if task.Status != fsm.TaskStatusPending && task.Status != fsm.TaskStatusClaimed {
+	// 对齐 Python: PENDING（首次提交，下方预留进 PLANNING）/ PLANNING（拒绝后
+	// 重提，保持 PLANNING）/ IN_PROGRESS（scheduled owner 对已开始任务补交计划）
+	if task.Status != fsm.TaskStatusPending && task.Status != fsm.TaskStatusPlanning && task.Status != fsm.TaskStatusInProgress {
 		return nil, fmt.Errorf("任务状态不允许提交计划: %s (当前: %s)", taskID, task.Status)
 	}
-	if task.Status == fsm.TaskStatusClaimed && (task.Assignee == nil || *task.Assignee != tm.memberName) {
+	if task.Status != fsm.TaskStatusPending && (task.Assignee == nil || *task.Assignee != tm.memberName) {
 		assigneeName := ""
 		if task.Assignee != nil {
 			assigneeName = *task.Assignee
@@ -894,9 +897,9 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		return nil, fmt.Errorf("任务 %s 已被 %s 认领，当前成员无法提交计划", taskID, assigneeName)
 	}
 
-	// 3. 如果 PENDING → 先 claim
+	// 3. 如果 PENDING → 预留进 PLANNING（对齐 Python: claim_task(..., to_status=PLANNING)）
 	if task.Status == fsm.TaskStatusPending {
-		ok, _ := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName)
+		ok, _ := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName, fsm.TaskStatusPlanning)
 		if !ok {
 			return nil, fmt.Errorf("提交计划前认领任务失败: %s", taskID)
 		}
@@ -941,7 +944,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		TaskID:       taskID,
 		TeamPlanID:   tm.teamPlanID,
 		MemberName:   tm.memberName,
-		Status:       fsm.TaskStatusClaimed,
+		Status:       fsm.TaskStatusPlanning,
 		MemberPlanMD: destPath,
 		Decision:     "pending",
 		SubmittedAt:  nowISO,
@@ -961,7 +964,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	tm.publishTaskEvent(ctx, events.TaskPlanRequestEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
 		TaskID:           taskID,
-		Status:           fsm.TaskStatusClaimed,
+		Status:           fsm.TaskStatusPlanning,
 		PlanID:           planID,
 		MemberPlanMD:     destPath,
 		ToolCallID:       toolCallID,
@@ -997,8 +1000,8 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	if task == nil {
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务不存在: %s", planRecord.TaskID)), nil
 	}
-	if task.Status != fsm.TaskStatusClaimed {
-		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务状态应为 CLAIMED: 当前 %s", task.Status)), nil
+	if task.Status != fsm.TaskStatusPlanning {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务状态应为 PLANNING: 当前 %s", task.Status)), nil
 	}
 	// Python: if not existing.assignee: return TaskOpResult.fail(f"Task {task_id} has no assignee")
 	if task.Assignee == nil || *task.Assignee == "" {
@@ -1024,18 +1027,18 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	}
 
 	if approved {
-		// 审批通过：CLAIMED→PLAN_APPROVED
+		// 审批通过：PLANNING→IN_PROGRESS
 		ok, _ := tm.db.Task().ApprovePlanTask(ctx, planRecord.TaskID)
 		if !ok {
 			return schema.TaskOpResult{}.Fail(fmt.Sprintf("审批 FSM 转换失败: %s", planRecord.TaskID)), nil
 		}
 		planRecord.Decision = "approve"
-		planRecord.Status = fsm.TaskStatusPlanApproved
+		planRecord.Status = fsm.TaskStatusInProgress
 	} else {
-		// 审批拒绝：任务保持 CLAIMED
+		// 审批拒绝：任务保持 PLANNING（返工自环）
 		planRecord.Decision = "reject"
 		planRecord.Feedback = feedback
-		planRecord.Status = fsm.TaskStatusClaimed
+		planRecord.Status = fsm.TaskStatusPlanning
 	}
 	planRecord.DecidedAt = time.Now().Format(time.RFC3339)
 	planRecord.UpdatedAt = time.Now().Format(time.RFC3339)

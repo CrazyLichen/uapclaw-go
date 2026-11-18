@@ -204,17 +204,24 @@ func TestIsValidTaskTransition_合法转换(t *testing.T) {
 		current TaskStatus
 		target  TaskStatus
 	}{
-		{"pending→claimed", TaskStatusPending, TaskStatusClaimed},
+		{"pending→planning", TaskStatusPending, TaskStatusPlanning},
+		{"pending→in_progress", TaskStatusPending, TaskStatusInProgress},
 		{"pending→blocked", TaskStatusPending, TaskStatusBlocked},
 		{"pending→cancelled", TaskStatusPending, TaskStatusCancelled},
-		{"claimed→plan_approved", TaskStatusClaimed, TaskStatusPlanApproved},
-		{"claimed→completed", TaskStatusClaimed, TaskStatusCompleted},
-		{"claimed→cancelled", TaskStatusClaimed, TaskStatusCancelled},
-		{"claimed→blocked", TaskStatusClaimed, TaskStatusBlocked},
-		{"claimed→pending", TaskStatusClaimed, TaskStatusPending},
-		{"plan_approved→completed", TaskStatusPlanApproved, TaskStatusCompleted},
-		{"plan_approved→pending", TaskStatusPlanApproved, TaskStatusPending},
-		{"plan_approved→cancelled", TaskStatusPlanApproved, TaskStatusCancelled},
+		{"planning→planning(返工自环)", TaskStatusPlanning, TaskStatusPlanning},
+		{"planning→in_progress", TaskStatusPlanning, TaskStatusInProgress},
+		{"planning→pending", TaskStatusPlanning, TaskStatusPending},
+		{"planning→blocked", TaskStatusPlanning, TaskStatusBlocked},
+		{"planning→cancelled", TaskStatusPlanning, TaskStatusCancelled},
+		{"in_progress→in_review", TaskStatusInProgress, TaskStatusInReview},
+		{"in_progress→completed", TaskStatusInProgress, TaskStatusCompleted},
+		{"in_progress→pending", TaskStatusInProgress, TaskStatusPending},
+		{"in_progress→blocked", TaskStatusInProgress, TaskStatusBlocked},
+		{"in_progress→cancelled", TaskStatusInProgress, TaskStatusCancelled},
+		{"in_review→completed", TaskStatusInReview, TaskStatusCompleted},
+		{"in_review→in_progress(返工环)", TaskStatusInReview, TaskStatusInProgress},
+		{"in_review→pending", TaskStatusInReview, TaskStatusPending},
+		{"in_review→cancelled", TaskStatusInReview, TaskStatusCancelled},
 		{"blocked→pending", TaskStatusBlocked, TaskStatusPending},
 		{"blocked→cancelled", TaskStatusBlocked, TaskStatusCancelled},
 	}
@@ -235,19 +242,19 @@ func TestIsValidTaskTransition_非法转换(t *testing.T) {
 		target  TaskStatus
 	}{
 		// 终态不可转换
-		{"completed→claimed", TaskStatusCompleted, TaskStatusClaimed},
+		{"completed→in_progress", TaskStatusCompleted, TaskStatusInProgress},
 		{"completed→pending", TaskStatusCompleted, TaskStatusPending},
 		{"completed→blocked", TaskStatusCompleted, TaskStatusBlocked},
-		{"cancelled→claimed", TaskStatusCancelled, TaskStatusClaimed},
+		{"cancelled→in_progress", TaskStatusCancelled, TaskStatusInProgress},
 		{"cancelled→pending", TaskStatusCancelled, TaskStatusPending},
 		{"cancelled→blocked", TaskStatusCancelled, TaskStatusBlocked},
 		// 非法跳转
 		{"pending→completed", TaskStatusPending, TaskStatusCompleted},
-		{"pending→plan_approved", TaskStatusPending, TaskStatusPlanApproved},
-		{"blocked→claimed", TaskStatusBlocked, TaskStatusClaimed},
-		{"blocked→plan_approved", TaskStatusBlocked, TaskStatusPlanApproved},
-		{"plan_approved→claimed", TaskStatusPlanApproved, TaskStatusClaimed},
-		{"plan_approved→blocked", TaskStatusPlanApproved, TaskStatusBlocked},
+		{"pending→in_review", TaskStatusPending, TaskStatusInReview},
+		{"blocked→in_progress", TaskStatusBlocked, TaskStatusInProgress},
+		{"blocked→planning", TaskStatusBlocked, TaskStatusPlanning},
+		{"in_review→blocked", TaskStatusInReview, TaskStatusBlocked},
+		{"in_review→planning", TaskStatusInReview, TaskStatusPlanning},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -260,7 +267,7 @@ func TestIsValidTaskTransition_非法转换(t *testing.T) {
 
 // TestIsValidTaskTransition_未知状态 测试未注册的 TaskStatus
 func TestIsValidTaskTransition_未知状态(t *testing.T) {
-	if IsValidTaskTransition(TaskStatus("unknown"), TaskStatusClaimed) {
+	if IsValidTaskTransition(TaskStatus("unknown"), TaskStatusInProgress) {
 		t.Error("期望未知状态转换返回 false")
 	}
 	if IsValidTaskTransition(TaskStatusPending, TaskStatus("unknown")) {

@@ -629,9 +629,9 @@ func (db *InMemoryTeamDatabase) AppendChangeNote(_ context.Context, taskID strin
 	return true, nil
 }
 
-// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
-// Python: TaskDao.claim_task()
-func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee string) (bool, error) {
+// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+// Python: TaskDao.claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING)
+func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee, toStatus string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	task, exists := db.tasks[taskID]
@@ -643,17 +643,18 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 		logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 		return false, nil
 	}
-	if !IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
+	if !IsValidTaskTransition(task.Status, toStatus) {
 		return false, nil // Python: invalid transition → False
 	}
-	task.Status = fsm.TaskStatusClaimed
+	task.Status = toStatus
 	task.Assignee = StringPtr(assignee)
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
 
-// ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
-// Python: TaskDao.reset_task()
+// ResetTask 重置任务：活跃态→PENDING，清除 assignee。
+// Python: TaskDao.reset_task()（condition-named 状态机后 reset 的合法来源
+// 是 IN_PROGRESS / PLANNING / IN_REVIEW，转换表各自有 → PENDING）
 func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -661,8 +662,8 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 	if !exists {
 		return false, nil
 	}
-	// 只允许 CLAIMED 状态重置（对齐 Python + SQL 实现）
-	if task.Status != fsm.TaskStatusClaimed {
+	// 只允许活跃态重置（对齐 Python + SQL 实现）
+	if task.Status != fsm.TaskStatusInProgress && task.Status != fsm.TaskStatusPlanning && task.Status != fsm.TaskStatusInReview {
 		return false, nil
 	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
@@ -674,7 +675,7 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 	return true, nil
 }
 
-// ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。
+// ApprovePlanTask 计划审批：PLANNING→IN_PROGRESS FSM 校验。
 // Python: TaskDao.approve_plan_task()
 func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
@@ -683,15 +684,16 @@ func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string
 	if !exists {
 		return false, nil
 	}
-	if !IsValidTaskTransition(task.Status, fsm.TaskStatusPlanApproved) {
+	if !IsValidTaskTransition(task.Status, fsm.TaskStatusInProgress) {
 		return false, nil
 	}
-	task.Status = fsm.TaskStatusPlanApproved
+	task.Status = fsm.TaskStatusInProgress
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
 
-// UpdateTask 更新标题/内容。CLAIMED/PLAN_APPROVED 状态下禁止编辑。
+// UpdateTask 更新标题/内容。IN_REVIEW 冻结（评审按稳定正文验收），
+// PLANNING/IN_PROGRESS 可编辑（leader 修订活任务，assignee 经 F_129 得知）。
 // Python: TaskDao.update_task()
 func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, content string) (bool, error) {
 	db.mu.Lock()
@@ -700,8 +702,8 @@ func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, con
 	if !exists {
 		return false, nil
 	}
-	// Python: PENDING/BLOCKED 状态才允许编辑；CLAIMED/PLAN_APPROVED 禁止
-	if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
+	// Python: 仅 IN_REVIEW 冻结（PLANNING/IN_PROGRESS 可编辑，F_129）
+	if task.Status == fsm.TaskStatusInReview {
 		return false, nil
 	}
 	task.Title = title
@@ -1223,7 +1225,8 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 		// 源任务（edge.TaskID）处于终态或已执行状态时拒绝添加依赖
 		srcStatus := downstream.Status
 		if srcStatus == fsm.TaskStatusCompleted || srcStatus == fsm.TaskStatusCancelled ||
-			srcStatus == fsm.TaskStatusClaimed || srcStatus == fsm.TaskStatusPlanApproved {
+			srcStatus == fsm.TaskStatusPlanning || srcStatus == fsm.TaskStatusInProgress ||
+			srcStatus == fsm.TaskStatusInReview {
 			mc.failReason = "cannot add dependency to " + edge.TaskID + " in terminal or executing status: " + srcStatus
 			mc.rollbackStagedTasks()
 			return

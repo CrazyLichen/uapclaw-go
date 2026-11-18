@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
 	"github.com/stretchr/testify/assert"
@@ -1488,7 +1489,7 @@ func TestStartup_taskScoped有开放任务时启动(t *testing.T) {
 	assignee := "scoped"
 	task, addErr := tb.taskManager.Add(ctx, "任务", "内容")
 	require.NoError(t, addErr)
-	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee)
+	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee, fsm.TaskStatusInProgress)
 	require.NoError(t, claimErr)
 	require.True(t, ok)
 
