@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
@@ -146,6 +147,35 @@ func NewWorkflowConfig(card *WorkflowCard, opts ...WorkflowConfigOption) (*Workf
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// MarshalJSON 平铺序列化：handle_type 与 Extra 键同层输出（对齐 pydantic extra=allow）。
+func (e *ExceptionConfig) MarshalJSON() ([]byte, error) {
+	m := make(map[string]any, len(e.Extra)+1)
+	m["handle_type"] = e.HandleType
+	for k, v := range e.Extra {
+		m[k] = v
+	}
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON 平铺反序列化：handle_type 归位、其余键进 Extra（对齐 extra=allow）。
+func (e *ExceptionConfig) UnmarshalJSON(data []byte) error {
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	e.Extra = make(map[string]any, len(m))
+	for k, v := range m {
+		if k == "handle_type" {
+			if s, ok := v.(string); ok {
+				e.HandleType = s
+			}
+			continue
+		}
+		e.Extra[k] = v
+	}
+	return nil
+}
 
 // errWorkflowConfig 构造校验错误。
 func errWorkflowConfig(format string, args ...any) error {

@@ -140,3 +140,35 @@ func TestCompIOConfig_Transformer可承载(t *testing.T) {
 		t.Fatal("Transformer 应可放入 any 槽")
 	}
 }
+
+// TestExceptionConfig_平铺序列化 extra=allow 平铺进 JSON
+func TestExceptionConfig_平铺序列化(t *testing.T) {
+	ec := &ExceptionConfig{HandleType: "retry", Extra: map[string]any{"strategy": "fallback"}}
+	bs, err := json.Marshal(ec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(bs, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["handle_type"] != "retry" || m["strategy"] != "fallback" {
+		t.Fatalf("Extra 应平铺: %s", bs)
+	}
+	// 往返
+	var ec2 ExceptionConfig
+	if err := json.Unmarshal(bs, &ec2); err != nil {
+		t.Fatal(err)
+	}
+	if ec2.HandleType != "retry" || ec2.Extra["strategy"] != "fallback" {
+		t.Fatalf("往返失败: handle=%q extra=%v", ec2.HandleType, ec2.Extra)
+	}
+	// 无 Extra：handle_type 归位、Extra 空
+	var ec3 ExceptionConfig
+	if err := json.Unmarshal([]byte(`{"handle_type":"interrupt"}`), &ec3); err != nil {
+		t.Fatal(err)
+	}
+	if ec3.HandleType != "interrupt" || len(ec3.Extra) != 0 {
+		t.Fatalf("无附加字段: handle=%q extra=%v", ec3.HandleType, ec3.Extra)
+	}
+}
