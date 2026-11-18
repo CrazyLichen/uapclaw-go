@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -9,13 +10,14 @@ import (
 // WorkflowCard 工作流元数据卡片。
 // Python: openjiuwen/core/workflow/base.py WorkflowCard(BaseCard)；
 // 继承以嵌入 schema.BaseCard 承载（对应 openjiuwen/core/common/schema/card.py BaseCard）。
-// 偏差 D-1：Python input_params 为 dict|Type[BaseModel] Union，Go 用 any 承载。
+// 偏差 D-1：Python input_params 为 dict|Type[BaseModel] Union，Go 用 map[string]any 承载，
+// Type[BaseModel] 形态由外层调用方自行转换为 JSON Schema map 后再传入。
 type WorkflowCard struct {
 	schema.BaseCard
 	// Version 工作流版本号（Python 默认 ''）
 	Version string `json:"version,omitempty"`
-	// InputParams 输入参数定义（map[string]any 或其他形态；Python Optional，空值语义=缺省）
-	InputParams any `json:"input_params,omitempty"`
+	// InputParams 输入参数定义（JSON Schema map）；Python Optional，nil 语义=缺省
+	InputParams map[string]any `json:"input_params,omitempty"`
 }
 
 // WorkflowOutput 工作流执行结果。
@@ -60,8 +62,8 @@ const (
 
 // WorkflowChunk 工作流输出数据块类型别名。
 // Python: base.py WorkflowChunk = Union[OutputSchema, CustomSchema, TraceSchema]；
-// 偏差 D-2：Go 无 Union，先用 any 承载，8.14 Workflow 真实消费时再定稿。
-type WorkflowChunk = any
+// Go 收窄为 stream.Schema 接口（三类型均已实现 SchemaType()），workflow→session/stream 无环。
+type WorkflowChunk = stream.Schema
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -80,8 +82,8 @@ func NewWorkflowCard(opts ...schema.CardOption) *WorkflowCard {
 
 // ToolInfo 返回工具信息，InputParams 为 nil 时传空 map（对齐 Python tool_info 的 `if self.input_params else {}`）。
 func (c *WorkflowCard) ToolInfo() schema.ToolInfoInterface {
-	params, ok := c.InputParams.(map[string]any)
-	if !ok || params == nil {
+	params := c.InputParams
+	if params == nil {
 		params = map[string]any{}
 	}
 	return schema.NewToolInfo(c.Name, c.Description, params)

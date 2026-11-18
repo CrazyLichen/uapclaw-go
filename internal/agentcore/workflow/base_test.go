@@ -96,7 +96,7 @@ func TestWorkflowCard_CardInterface接口(t *testing.T) {
 	assert.Equal(t, "id=abc,name=n", card.String())
 }
 
-// TestWorkflowChunk_别名 测试 D-2：WorkflowChunk 别名能容纳三种 stream schema
+// TestWorkflowChunk_别名 测试 WorkflowChunk=stream.Schema 别名能容纳三种 stream schema
 func TestWorkflowChunk_别名(t *testing.T) {
 	var chunks []WorkflowChunk
 	chunks = append(chunks,
