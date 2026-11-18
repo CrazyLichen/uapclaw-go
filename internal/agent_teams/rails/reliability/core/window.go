@@ -1,7 +1,7 @@
-// Package reliability 滑动窗口计数与稳定调用哈希（25.1g 算法层）。
+// Package core 团队可靠性数据层：滑动窗口计数与稳定调用哈希。
 //
 // 对应 Python：openjiuwen/agent_teams/reliability/window.py
-package reliability
+package core
 
 import (
 	"crypto/sha256"

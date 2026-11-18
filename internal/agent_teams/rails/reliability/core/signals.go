@@ -1,7 +1,7 @@
-// Package reliability 统一信号流（25.1g 数据层）。
+// Package core 团队可靠性数据层：统一信号流。
 //
 // 对应 Python：openjiuwen/agent_teams/reliability/signals.py
-package reliability
+package core
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

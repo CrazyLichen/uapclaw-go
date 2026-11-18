@@ -1,7 +1,7 @@
-// Package reliability 异常模型（25.1g 数据层）。
+// Package core 团队可靠性数据层：异常模型。
 //
 // 对应 Python：openjiuwen/agent_teams/reliability/anomaly.py
-package reliability
+package core
 
 // ──────────────────────────── 结构体 ────────────────────────────
 

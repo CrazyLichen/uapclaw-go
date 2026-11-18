@@ -1,7 +1,7 @@
-// Package reliability 配置层单元测试。
+// Package core 配置层单元测试。
 //
 // 对应 Python：config.py pydantic 默认值链。
-package reliability
+package core
 
 import (
 	"testing"

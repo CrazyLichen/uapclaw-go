@@ -15,10 +15,11 @@
 //
 //	reliability/
 //	├── doc.go              # 包文档
-//	├── anomaly.go          # Anomaly / AnomalyKind / Severity（异常模型）
-//	├── signals.go          # Signal / SignalKind（统一信号流）
-//	├── window.go           # SlidingWindowCounter + 稳定哈希
-//	├── config.go           # ReliabilityConfig 及各 detector 阈值配置
+//	├── core/               # 叶子数据层（循环依赖下沉，spec D-g5，先例 25.0c D-9）
+//	│   ├── anomaly.go      # Anomaly / AnomalyKind / Severity（异常模型）
+//	│   ├── signals.go      # Signal / SignalKind（统一信号流）
+//	│   ├── window.go       # SlidingWindowCounter + 稳定哈希
+//	│   └── config.go       # ReliabilityConfig 及各 detector 阈值配置
 //	├── monitor.go          # ReliabilityMonitor（扇出 + 隔离 + 策略路由）
 //	├── rail.go             # ReliabilityRail（7 钩子采集 + 本地纠偏）
 //	├── reporter.go         # AnomalyReporter 接口 + Event/Local 两实现

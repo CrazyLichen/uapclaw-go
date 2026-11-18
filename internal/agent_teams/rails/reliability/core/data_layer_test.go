@@ -1,7 +1,7 @@
-// Package reliability 数据层单元测试。
+// Package core 数据层单元测试。
 //
 // 对应 Python：tests 于上游各模块内联；此处按 Go 测试函数规范组织。
-package reliability
+package core
 
 import (
 	"testing"

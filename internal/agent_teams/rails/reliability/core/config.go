@@ -1,9 +1,9 @@
-// Package reliability 团队可靠性配置（25.1g）。
+// Package core 团队可靠性数据层：配置。
 //
 // 对应 Python：openjiuwen/agent_teams/reliability/config.py。
 // 挂 TeamAgentSpec.reliability，enabled 默认 False（既有团队零影响）；
 // 每团队一份配置，成员级阈值覆写为后续扩展。
-package reliability
+package core
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
