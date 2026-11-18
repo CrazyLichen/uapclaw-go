@@ -576,7 +576,7 @@ func (m *SpawnManager) spawnExternalCLI(
 	handle, err := spawn.ExternalCliSpawn(
 		ctx, deps, runtimeCtx, *spec, hittEnabled,
 		initialMessage, sessionID, false,
-		func(ctx context.Context, card spawn.ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spc atschema.TeamAgentSpec, runtime any) (spawn.ExternalCliTeamAgent, error) {
+		func(ctx context.Context, card spawn.ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spc atschema.TeamAgentSpec, runtime spawn.ExternalCliMemberRuntime) (spawn.ExternalCliTeamAgent, error) {
 			// Python :669-688：_TeamAgent(card) → share_workspace_cache_with →
 			// configure(member_runtime=runtime)
 			agentCard := agentschema.NewAgentCard(
@@ -585,18 +585,22 @@ func (m *SpawnManager) spawnExternalCLI(
 				agentschema.WithAgentDescription(card.Description),
 			)
 			teammate := NewTeamAgent(ctx, agentCard)
-			// 与 inprocess_spawn 相同的团队级缓存共享，先于 configure
+			// 与 inprocess_spawn 相同的团队级缓存共享，先于 configure（Python :675）
 			if leader != nil {
 				leader.ShareWorkspaceCacheWith(teammate)
 			}
-			memberRuntime, _ := runtime.(MemberRuntime)
+			// D-15.16-b1 注入缝收窄：spawn 侧以 spawn.ExternalCliMemberRuntime
+			// 窄接口传递（agent→spawn 成环不能引 agent.MemberRuntime）；
+			// 断言失败即报错，拒绝静默装配无大脑成员壳。
+			memberRuntime, ok := runtime.(MemberRuntime)
+			if !ok {
+				return nil, fmt.Errorf("external CLI spawn %s: runtime %T 未实现 MemberRuntime，拒绝装配无大脑成员壳", card.Name, runtime)
+			}
 			if err := teammate.Configure(ctx, spc, rtc, memberRuntime); err != nil {
 				return nil, err
 			}
 			return teammate, nil
 		},
-		nil, // shareWorkspace：并入 newTeammate（同序 Python :675）
-		nil, // leader：同上
 	)
 	if err != nil {
 		return nil, err

@@ -44,7 +44,7 @@ type ExternalCliSpawnDeps struct {
 	BuildMemberSystemPrompt func(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext, memberName string, hittEnabled bool) (string, error)
 	// BuildCliRuntime 构建 CLI runtime（Python: build_cli_runtime 调用，
 	// 两分支逐项参数由注入侧对位）
-	BuildCliRuntime func(ctx context.Context, rtc *atschema.TeamRuntimeContext, cfg ExternalCliRuntimeArgs) (any, error)
+	BuildCliRuntime func(ctx context.Context, rtc *atschema.TeamRuntimeContext, cfg ExternalCliRuntimeArgs) (ExternalCliMemberRuntime, error)
 	// BackendFor 后端查找（Python: backend_for(ctx.cli_agent)）
 	BackendFor func(cliAgent string) *ExternalCliBackendView
 	// TeamModelToExternal 池模型转换（Python: _team_model_config_to_external）
@@ -59,9 +59,9 @@ type ExternalCliSpawnDeps struct {
 	InstallSkills func(ctx context.Context, skills []any, provider, cwd, conflict string) error
 	// BindOrchestration 四路绑定（tracker / task tracker / trajectory /
 	// reliability / team tools；externalcli 侧各 Bind 缝的组装）
-	BindOrchestration func(ctx context.Context, teammate ExternalCliTeamAgent, runtime any, sessionID string) error
+	BindOrchestration func(ctx context.Context, teammate ExternalCliTeamAgent, runtime ExternalCliMemberRuntime, sessionID string) error
 	// StopRuntime 停止 runtime（Python: runtime.stop()）
-	StopRuntime func(runtime any)
+	StopRuntime func(runtime ExternalCliMemberRuntime)
 	// RunMemberTask 以成员身份运行团队（Python: Runner.run_agent_team(member=True)）
 	RunMemberTask func(ctx context.Context, teammate ExternalCliTeamAgent, inputs map[string]any, sessionID string) (map[string]any, error)
 }
@@ -111,6 +111,19 @@ type ExternalCliTeamAgent interface {
 	TeamBackend() *tools.TeamBackend
 }
 
+// ExternalCliMemberRuntime 外部成员 runtime 的窄接口（D-15.16-b1 注入缝）。
+//
+// spawn 包不能 import agent（agent→spawn 已成环），`agent.MemberRuntime`
+// 无法直接引用；本包对 runtime 只作不透明句柄传递（BuildCliRuntime →
+// newTeammate → BindOrchestration → StopRuntime），具体能力面在注入侧
+// 收窄为 agent.MemberRuntime（运行时守卫，断言失败即报错拒装）。
+// Python 对应位置本为 Any 注解（external_cli_spawn.py:308/:362/:453）；
+// Go 以本窄接口替代 any，消除缝上的无类型传递。
+type ExternalCliMemberRuntime interface {
+	// Stop 停止 runtime（Python: stop；spawn 仅在 goroutine 收尾转调）
+	Stop()
+}
+
 // externalCliSpawnDeps 进程级注入实例。
 var externalCliSpawnDeps *ExternalCliSpawnDeps
 
@@ -131,8 +144,8 @@ func ExternalCliSpawnDepsOrNil() *ExternalCliSpawnDeps { return externalCliSpawn
 // 四路绑定）→ 首条消息组装 → task + handle。
 //
 // 卡片构造 / TeamAgent 构造 / configure / workspace 共享属 agent 包能力，
-// 经 newTeammate / shareWorkspace / configureTeammate 回调由注入侧完成
-// （D-15.16-b1），回调序与 Python :525-688 逐条对位。
+// 经 newTeammate 回调由注入侧完成（D-15.16-b1）；Python :675 的
+// share_workspace_cache_with 同序并入 newTeammate 缝内（先共享后 configure）。
 func ExternalCliSpawn(
 	ctx context.Context,
 	deps *ExternalCliSpawnDeps,
@@ -142,9 +155,7 @@ func ExternalCliSpawn(
 	initialMessage string,
 	sessionID string,
 	resumeExternalBackend bool,
-	newTeammate func(ctx context.Context, card ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spec atschema.TeamAgentSpec, runtime any) (ExternalCliTeamAgent, error),
-	shareWorkspace func(leader, teammate any),
-	leader any,
+	newTeammate func(ctx context.Context, card ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spec atschema.TeamAgentSpec, runtime ExternalCliMemberRuntime) (ExternalCliTeamAgent, error),
 ) (*InProcessSpawnHandle, error) {
 	// Python 步骤 1：team_name / member_name / card（:522-529）
 	teamName := spec.TeamName
@@ -231,7 +242,6 @@ func ExternalCliSpawn(
 		}
 		return teammateBackend.DB().Member().PromoteMemberFallbackModel(ctx, memberName, teamName)
 	}
-	_ = promoteFallbackModel
 
 	// Python 步骤 5-6：路径解析 + skills 安装 + build_cli_runtime（:604-667）
 	cwd, addDirs := resolveExternalPaths(&spec, &rtc, externalCliCfgCwd(cliCfg), teamName)
@@ -276,8 +286,6 @@ func ExternalCliSpawn(
 			return nil, err
 		}
 	}
-	_ = shareWorkspace
-	_ = leader
 
 	// Python 步骤 9：首条消息组装（:734-743）
 	baseQuery := initialMessage

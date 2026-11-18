@@ -18,7 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -111,7 +110,7 @@ func externalCliMCPServerName(cliAgent string) string {
 //（Python :604-667），实参逐项对位。skills 解析在此完成；安装门卫
 //（本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
 // 15.16c seed 工厂落地前门卫按 Python project_dir=None 短路（⤴️15.16c）。
-func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeContext, args spawn.ExternalCliRuntimeArgs) (any, error) {
+func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeContext, args spawn.ExternalCliRuntimeArgs) (spawn.ExternalCliMemberRuntime, error) {
 	opts := externalcli.Options{
 		Cwd:                         args.Cwd,
 		AddDirs:                     args.AddDirs,
@@ -178,7 +177,7 @@ func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeConte
 	if err != nil {
 		return nil, err
 	}
-	return runtime, nil
+	return runtime, nil // agent.MemberRuntime 满足 spawn.ExternalCliMemberRuntime（Stop）
 }
 
 // backendViewFor 后端能力视图（Python: backend_for(ctx.cli_agent)）。
@@ -218,27 +217,10 @@ func installSkillsShim(ctx context.Context, skills []any, provider, cwd, conflic
 	return err
 }
 
-// newExternalMemberTeamAgent 构造成员 TeamAgent 壳并装配
-//（Python :669-688：_TeamAgent(card) → share_workspace_cache_with →
-// configure(member_runtime=runtime)）。
-func newExternalMemberTeamAgent(ctx context.Context, card spawn.ExternalCliAgentCard, rtc atschema.TeamRuntimeContext, spec atschema.TeamAgentSpec, runtimeValue any) (spawn.ExternalCliTeamAgent, error) {
-	agentCard := agentschema.NewAgentCard(
-		agentschema.WithAgentID(card.ID),
-		agentschema.WithAgentName(card.Name),
-		agentschema.WithAgentDescription(card.Description),
-	)
-	teammate := agent.NewTeamAgent(ctx, agentCard)
-	memberRuntime, ok := runtimeValue.(agent.MemberRuntime)
-	if !ok {
-		return nil, fmt.Errorf("new external member team agent: runtime %T 未实现 agent.MemberRuntime，拒绝静默装配无大脑成员壳", runtimeValue)
-	}
-	if err := teammate.Configure(ctx, spec, rtc, memberRuntime); err != nil {
-		return nil, err
-	}
-	return teammate, nil
-}
-
 // bindExternalMemberOrchestration 成员壳装配后的四路绑定（Python :689-732）：
+// （成员壳构造 newTeammate 缝由 spawn_manager.spawnExternalCLI 内联承担，
+// 含 Python :675 的 share_workspace_cache_with 同序调用——本文件原先的
+// 零消费副本 newExternalMemberTeamAgent 已按规则 8 删除。）
 //
 //	1. bind_team_context_tracker（BuildTeamContextTracker，15.13 已移植）
 //	2. bind_task_outcome_tracker（build_task_event_tracker）
@@ -247,7 +229,7 @@ func newExternalMemberTeamAgent(ctx context.Context, card spawn.ExternalCliAgent
 //	4. bind_reliability_context（五参调用点；实现仍桩 ⤴️15.7/15.8，D-15.16-a7）
 //	5. _bind_protocol_member_team_tools（claude ⤴️15.7 / codex ⤴️15.8，
 //	   swarmflow host ⤴️swarmflow 章节——D-15.16-b3 挂点）
-func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.ExternalCliTeamAgent, runtimeValue any, sessionID string) error {
+func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.ExternalCliTeamAgent, runtimeValue spawn.ExternalCliMemberRuntime, sessionID string) error {
 	ta, ok := teammate.(*agent.TeamAgent)
 	if !ok {
 		return fmt.Errorf("bind orchestration: teammate 必须是 *agent.TeamAgent，实际 %T", teammate)
@@ -329,7 +311,7 @@ func rtcOf(ta *agent.TeamAgent) atschema.TeamRuntimeContext {
 }
 
 // stopExternalRuntime 停止 runtime（Python finally: await runtime.stop()）。
-func stopExternalRuntime(runtimeValue any) {
+func stopExternalRuntime(runtimeValue spawn.ExternalCliMemberRuntime) {
 	if stopper, ok := runtimeValue.(interface{ Stop() }); ok {
 		stopper.Stop()
 	}
