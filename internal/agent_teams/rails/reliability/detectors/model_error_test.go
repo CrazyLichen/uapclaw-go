@@ -189,7 +189,9 @@ func TestModelLabel_逻辑星号不直传(t *testing.T) {
 func TestFrequentCompactionDetector_骤降推断(t *testing.T) {
 	now := 0.0
 	d := NewFrequentCompactionDetector(300, 3, 0.3, func() float64 { return now })
-	mc := func(n int) *core.Signal { return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n} }
+	mc := func(n int) *core.Signal {
+		return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n}
+	}
 	assert.Nil(t, d.Observe(mc(10)))
 	// 10 → 4：降幅 60% ≥ 30%，第 1 次压缩
 	assert.Nil(t, d.Observe(mc(4)), "窗口内第 1 次压缩 < 频次阈值")
@@ -210,7 +212,9 @@ func TestFrequentCompactionDetector_骤降推断(t *testing.T) {
 func TestFrequentCompactionDetector_小幅裁剪不算(t *testing.T) {
 	now := 0.0
 	d := NewFrequentCompactionDetector(300, 3, 0.3, func() float64 { return now })
-	mc := func(n int) *core.Signal { return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n} }
+	mc := func(n int) *core.Signal {
+		return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n}
+	}
 	assert.Nil(t, d.Observe(mc(10)))
 	assert.Nil(t, d.Observe(mc(8)), "10→8 降幅 20% < 30%：正常多轮裁剪")
 }
@@ -228,7 +232,9 @@ func TestFrequentCompactionDetector_基线为负不发射(t *testing.T) {
 func TestFrequentCompactionDetector_Reset(t *testing.T) {
 	now := 0.0
 	d := NewFrequentCompactionDetector(300, 1, 0.3, func() float64 { return now })
-	mc := func(n int) *core.Signal { return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n} }
+	mc := func(n int) *core.Signal {
+		return &core.Signal{Kind: core.SignalKindBeforeModelCall, MemberName: "c", MessageCount: &n}
+	}
 	d.Observe(mc(10))
 	a := d.Observe(mc(1))
 	assert.NotNil(t, a)

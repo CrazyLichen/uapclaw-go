@@ -162,9 +162,9 @@ func (d *ModelStreamErrorDetector) unavailable(signal *core.Signal, verdict map[
 		}
 	}
 	return &core.Anomaly{
-		Detector: d.Name(),
-		Kind:     core.AnomalyKindModelUnavailable,
-		Severity: core.SeverityCritical,
+		Detector:   d.Name(),
+		Kind:       core.AnomalyKindModelUnavailable,
+		Severity:   core.SeverityCritical,
 		MemberName: signal.MemberName,
 		Summary: d.t("reliability.model_unavailable", map[string]any{
 			"model": model, "reason": reason, "no_substitute": noSubstitute,
@@ -345,4 +345,3 @@ func dictSlice(v any) []map[string]any {
 	}
 	return out
 }
-
