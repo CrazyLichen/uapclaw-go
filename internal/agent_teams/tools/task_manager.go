@@ -368,6 +368,115 @@ func (tm *TeamTaskManager) OpenTaskCountsByAssignee(ctx context.Context) (map[st
 	return tm.db.Task().OpenTaskCountsByAssignee(ctx, tm.teamName)
 }
 
+// BoardCounts 一条聚合查询返回 (total, non_terminal) 板面计数（B_09）。
+// Python: TeamTaskManager.board_counts (task_manager.py L1556-1558)
+func (tm *TeamTaskManager) BoardCounts(ctx context.Context) (int64, int64, error) {
+	return tm.db.Task().CountTasksTerminality(ctx, tm.teamName)
+}
+
+// HasOpenTasks 板面是否仍有非终态任务（B_09）。
+// Python: TeamTaskManager.has_open_tasks (task_manager.py L1560-1563)
+func (tm *TeamTaskManager) HasOpenTasks(ctx context.Context) (bool, error) {
+	_, nonTerminal, err := tm.BoardCounts(ctx)
+	if err != nil {
+		return false, err
+	}
+	return nonTerminal > 0, nil
+}
+
+// UnseenRevisions 全队级「已指派、未终态、assignee 未见过当前 revision」窄投影
+// （F_129）——调度器 revision scan 每次板面唤醒都跑，不读正文。
+// Python: TeamTaskManager.unseen_revisions (task_manager.py L1744-1746)
+func (tm *TeamTaskManager) UnseenRevisions(ctx context.Context) ([]database.UnseenRevisionRow, error) {
+	return tm.db.Task().GetUnseenRevisions(ctx, tm.teamName)
+}
+
+// GetOtherActiveTaskID 成员持有的另一条活跃任务（三活跃态），one-active-task
+// 不变量的存在式探测。
+// Python: TeamTaskManager.get_other_active_task_id (task_manager.py L1768-1790)
+func (tm *TeamTaskManager) GetOtherActiveTaskID(ctx context.Context, memberName, excludeTaskID string) (string, error) {
+	id, err := tm.db.Task().GetOtherActiveTaskID(ctx, tm.teamName, memberName, excludeTaskID)
+	if err != nil {
+		return "", err
+	}
+	if id == nil {
+		return "", nil
+	}
+	return *id, nil
+}
+
+// StartTask 把 scheduled 已指派任务从 PENDING 推进到执行（F_62）。
+// 指派（建队时）与执行开始是两个独立事件。入队门镜像 assign：BUILD_MODE owner
+// 直接执行（IN_PROGRESS），PLAN_MODE owner 进计划闸（PLANNING，F_59 scheduled·plan
+// 边）。CAS 前强制 one-active-task 不变量：owner 不得已持有另一条活跃任务。
+// Python: TeamTaskManager.start_task (task_manager.py L1791-1853)
+func (tm *TeamTaskManager) StartTask(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
+	// 1. 任务存在（Python: task = await self.get(task_id)）
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if task == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s not found", taskID)), nil
+	}
+	// 2. 无 assignee 拒绝
+	memberName := ""
+	if task.Assignee != nil {
+		memberName = *task.Assignee
+	}
+	if memberName == "" {
+		return schema.TaskOpResult{}.Fail("Task " + taskID + " has no assignee; cannot start an unassigned task"), nil
+	}
+	// 3. 防御性 owner 校验（陈旧/手工行的护栏；常规 create/assign 路径更早校验）。
+	// Python: owner_result = await self._validate_task_owner(member_name)
+	member, err := tm.db.Member().GetMember(ctx, memberName, tm.teamName)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if member == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Member %s is not on team %s", memberName, tm.teamName)), nil
+	}
+	// 4. 入队门：plan-mode owner 落计划闸；F_128 恢复的父任务首轮已审批过
+	planGate := member.Mode == "plan_mode" && !task.ResumePending
+	entryStatus := fsm.TaskStatusInProgress
+	if planGate {
+		entryStatus = fsm.TaskStatusPlanning
+	}
+	// 5. 幂等重启动：已在其 owner 的入队门 → no-op
+	if task.Status == entryStatus {
+		logger.Debug(logComponent).Str("task_id", taskID).Str("member", memberName).
+			Msg("Task already started by member; no-op")
+		return schema.TaskOpResult{}.Success(), nil
+	}
+	// 6. 每成员一条活跃任务（PLANNING / IN_PROGRESS / IN_REVIEW）
+	busyTaskID, err := tm.GetOtherActiveTaskID(ctx, memberName, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if busyTaskID != "" {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+			"Member %s already has an active task %s; finish it before starting %s",
+			memberName, busyTaskID, taskID)), nil
+	}
+	// 7. CAS 启动
+	started, err := tm.db.Task().StartTaskCAS(ctx, taskID, memberName, entryStatus)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !started {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+			"Task %s cannot be started from status '%s' (only a pending task assigned to %s can start)",
+			taskID, task.Status, memberName)), nil
+	}
+	// 8. 发布 TaskStartedEvent
+	tm.publishTaskEvent(ctx, events.TaskStartedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
+		MemberName:       memberName,
+	})
+	return schema.TaskOpResult{}.Success(), nil
+}
+
 // GetClaimableTasks 获取可认领任务（PENDING + 无未解决依赖）。
 // Python: TeamTaskManager.get_claimable_tasks()
 func (tm *TeamTaskManager) GetClaimableTasks(ctx context.Context) ([]*database.TeamTaskBase, error) {
