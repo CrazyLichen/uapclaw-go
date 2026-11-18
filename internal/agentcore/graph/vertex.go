@@ -1092,7 +1092,10 @@ func (v *Vertex) preInvoke(ctx context.Context) any {
 	if v.nodeConfig != nil && v.nodeConfig.IOConfigs != nil {
 		inputsSchema = v.nodeConfig.IOConfigs.InputsSchema
 	}
-	// ③ 双轨取数（vertex.py:424-428）：dict → GetInputs 轨；非 dict → transformer 轨
+	// ③ 双轨取数（vertex.py:424-428）：dict → GetInputs 轨；非 dict → transformer 轨。
+	//    契约注记：transformer 产出按 Python workflow_state.py:127 为 dict（base.py:42
+	//    的 any 仅是抽象层宽化），any 保持以复刻"非 dict 透传"的运行时行为；
+	//    收窄为 map[string]any 挂 8.15 回填（IMPLEMENTATION_PLAN 8.15 行 ③）。
 	var inputs any
 	if _, isDict := inputsSchema.(map[string]any); !isDict && inputsSchema != nil {
 		if tr, ok := inputsSchema.(state.Transformer); ok {
