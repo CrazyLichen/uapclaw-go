@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/detectors"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/remediation"
+	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -141,6 +142,13 @@ func BuildReliabilityComponents(deps BuildComponentsDeps) *ReliabilityComponents
 	if reporter == nil {
 		reporter = nopReporter{}
 	}
+	// i18n 未注入时默认接 schema.T（reliability.* 键组，Task 10 落表）
+	if deps.Text == nil {
+		deps.Text = schemaTextRenderer
+	}
+	if deps.SteerText == nil {
+		deps.SteerText = schemaSteerText
+	}
 	monitor := NewReliabilityMonitor(dets, reporter, policy)
 	auto := remediation.NewLocalAutoRemediator(policy,
 		deps.Config.RestartIntensity.Intensity,
@@ -192,3 +200,25 @@ type nopReporter struct{}
 
 // Report no-op。
 func (nopReporter) Report(*core.Anomaly) {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// schemaTextRenderer i18n 默认渲染缝（dotted key + kwargs → schema.T）。
+func schemaTextRenderer(key string, kwargs map[string]any) string {
+	s, err := schema.T(key, kwargs)
+	if err != nil {
+		return key
+	}
+	return s
+}
+
+// schemaSteerText 纠偏文案默认渲染（reliability.steer_self_correct）。
+func schemaSteerText(kind core.AnomalyKind, summary string) string {
+	s, err := schema.T("reliability.steer_self_correct", map[string]any{
+		"kind": string(kind), "summary": summary,
+	})
+	if err != nil {
+		return s
+	}
+	return s
+}
