@@ -43,8 +43,8 @@ func TestSlidingWindowCounter_窗口驱逐(t *testing.T) {
 	w.Add(1)
 	w.Add(5)
 	// cutoff = ts - window；事件严格小于 cutoff 才驱逐（对齐 events[0] < cutoff）
-	assert.Equal(t, 1, w.Count(14), "cutoff=4：ts=1 < 4 被驱逐，ts=5 保留")
 	assert.Equal(t, 2, w.Count(11), "cutoff=1：ts=1 不小于 cutoff，两个都保留")
+	assert.Equal(t, 1, w.Count(14), "cutoff=4：ts=1 被驱逐，ts=5 保留")
 	assert.Equal(t, 0, w.Count(16), "cutoff=6：ts=5 也被驱逐")
 	assert.Equal(t, 1, w.Add(16), "add 后窗口内仅 [16]")
 }
