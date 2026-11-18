@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
 // TestNewSessionConfig_默认值加载 测试默认配置加载
@@ -69,7 +70,7 @@ func TestNewSessionConfig_GetEnvs深拷贝(t *testing.T) {
 }
 
 // TestNewSessionConfig_WorkflowConfig 测试工作流配置的存取
-// ⤵️ 8.15 回填：WorkflowConfig 实现后 AddWorkflowConfig 参数从 any 改为具体类型
+// ✅ 8.15 已回填：AddWorkflowConfig 参数收窄为 *workflow.WorkflowConfig
 func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 	cfg := NewSessionConfig(context.Background())
 
@@ -81,14 +82,22 @@ func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 	assert.Nil(t, cfg.GetWorkflowConfig("wf1"))
 
 	// 空字符串 workflowID 跳过
-	cfg.AddWorkflowConfig("", "some_config")
+	wfcValid, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{Version: "v1"})
+	cfg.AddWorkflowConfig("", wfcValid)
 
 	// 空 workflowID 的 GetWorkflowConfig 返回 nil
 	assert.Nil(t, cfg.GetWorkflowConfig(""))
 
 	// 添加有效配置
-	cfg.AddWorkflowConfig("wf1", "test_workflow_config")
-	assert.Equal(t, "test_workflow_config", cfg.GetWorkflowConfig("wf1"))
+	wfc2, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{Version: "v2"})
+	cfg.AddWorkflowConfig("wf1", wfc2)
+	got := cfg.GetWorkflowConfig("wf1")
+	assert.NotNil(t, got)
+	assert.Equal(t, "v2", got.Card.Version)
+
+	// 默认值语义：spec 补建、深度 5
+	assert.NotNil(t, got.Spec)
+	assert.Equal(t, 5, got.WorkflowMaxNestingDepth)
 }
 
 // TestNewSessionConfig_ContextEnvs 测试 context 注入环境变量

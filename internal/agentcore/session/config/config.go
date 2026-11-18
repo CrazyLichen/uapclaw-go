@@ -5,6 +5,7 @@ import (
 	"maps"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,11 +33,11 @@ type SessionConfig interface {
 	// SetEnvs 合并环境变量
 	SetEnvs(envs map[string]any)
 	// GetWorkflowConfig 按 workflowID 获取工作流配置。
-	// ⤵️ 8.15 回填：WorkflowConfig 实现后返回类型从 any 改为 WorkflowConfig
-	GetWorkflowConfig(workflowID string) any
+	// Python: Config.get_workflow_config(workflow_id)
+	GetWorkflowConfig(workflowID string) *workflow.WorkflowConfig
 	// AddWorkflowConfig 添加工作流配置。
-	// ⤵️ 8.15 回填：WorkflowConfig 实现后参数类型从 any 改为 WorkflowConfig
-	AddWorkflowConfig(workflowID string, workflowConfig any)
+	// Python: Config.add_workflow_config(workflow_id, workflow_config)
+	AddWorkflowConfig(workflowID string, workflowConfig *workflow.WorkflowConfig)
 }
 
 // MetadataLike 回调元数据结构体。
@@ -56,8 +57,7 @@ type defaultSessionConfig struct {
 	// callbackMetadata 回调元数据（预留，后续回调系统实现时回填）
 	callbackMetadata map[string]MetadataLike
 	// workflowConfigs 按 workflowID 索引的工作流配置
-	// ⤵️ 8.15 回填：map[string]any → map[string]WorkflowConfig
-	workflowConfigs map[string]any
+	workflowConfigs map[string]*workflow.WorkflowConfig
 	// loader 内置配置加载钩子
 	loader BuiltinConfigLoader
 }
@@ -84,7 +84,7 @@ func NewSessionConfigWithLoader(ctx context.Context, loader BuiltinConfigLoader)
 	cfg := &defaultSessionConfig{
 		env:              make(map[string]any),
 		callbackMetadata: make(map[string]MetadataLike),
-		workflowConfigs:  make(map[string]any),
+		workflowConfigs:  make(map[string]*workflow.WorkflowConfig),
 		loader:           loader,
 	}
 	cfg.loadEnvs(ctx)
@@ -122,7 +122,7 @@ func (c *defaultSessionConfig) SetEnvs(envs map[string]any) {
 
 // GetWorkflowConfig 按 workflowID 获取工作流配置。
 // Python: Config.get_workflow_config(workflow_id)
-func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) any {
+func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) *workflow.WorkflowConfig {
 	if workflowID == "" {
 		return nil
 	}
@@ -131,7 +131,7 @@ func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) any {
 
 // AddWorkflowConfig 添加工作流配置。
 // Python: Config.add_workflow_config(workflow_id, workflow_config)
-func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConfig any) {
+func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConfig *workflow.WorkflowConfig) {
 	if workflowID == "" {
 		return
 	}
