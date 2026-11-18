@@ -641,8 +641,12 @@ func (r *ExternalHarnessMemberRuntime) Start(teamSession any) error {
 		r.mu.Unlock()
 	}
 	// Python: context = self._host_context(context)（:449）——宿主能力注入
-	// 已并入 resolveContext（spec A.4）；reliability begin_attempt（:450-451）
-	// 因 ctx 恒 nil 跳过（D-15.13-m）。
+	// 已并入 resolveContext（spec A.4）。
+	// Python: if self._reliability_ctx is not None: begin_attempt(phase="startup",
+	// round_id=None)（member_runtime.py:448-449）
+	if ctx := r.reliabilityCtxSnap(); ctx != nil {
+		ctx.BeginAttempt(schema.ExternalRuntimePhaseStartup, nil)
+	}
 	// Python: await self._adapter.start(context)（:452）
 	if err := r.adapter.Start(context.Background(), *hctx); err != nil {
 		// Python except 分支：_finalize_startup_failure + 成员会话收尾（:453-458）。
