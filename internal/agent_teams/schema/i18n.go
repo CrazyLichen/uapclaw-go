@@ -60,6 +60,9 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_broadcast": "广播消息",
 		"dispatcher.msg_type_direct":    "单播消息",
 		"dispatcher.msg_received":       "[收到{msg_type}] message_id={message_id}, 来自: {sender}\n内容: {content}\n提示: 如果对方在提问或等待回复，请务必通过 send_message 工具回复 {sender}",
+		// scheduled 派发：无可认领池，下一个任务以 start 通知到达（task_board.py L726-728）
+		"dispatcher.task_revoked_from_self_scheduled": "[任务撤回] 任务 [{task_id}] 已被转交给其他成员。请立即停止该任务的工作，不要再为它提交结果；新任务指派给你时会另行通知开工，无需轮询看板。",
+		"dispatcher.task_cancelled_to_self_scheduled": "[任务取消] 你正在执行的任务 [{task_id}] 已被取消。请立即停止该任务的工作，不要再为它提交结果；新任务指派给你时会另行通知开工，无需轮询看板。",
 		// ── 25.2a：调度半区 leader 侧 digest / escalation（i18n.py L260-308 逐字复制）──
 		// 成员 handoff 不在这里：它们是信箱消息，投递时从 prompts/<lang>/scheduler_*.md
 		// 渲染（F_63）。leader digest 绕过信箱（直接输入注入），无 meta 通道，单行 i18n。
@@ -159,6 +162,9 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_broadcast": "broadcast",
 		"dispatcher.msg_type_direct":    "direct message",
 		"dispatcher.msg_received":       "[Received {msg_type}] message_id={message_id}, from: {sender}\ncontent: {content}\ntip: If the sender is asking or waiting for a reply, make sure to reply to {sender} via send_message",
+		// Scheduled dispatch: no claimable pool, the next task arrives as a start notice
+		"dispatcher.task_revoked_from_self_scheduled": "[Task Revoked] Task [{task_id}] has been reassigned to another member. Stop working on it now and do not submit results for it; a new task assigned to you arrives with its own start notice, so there is no need to poll the board.",
+		"dispatcher.task_cancelled_to_self_scheduled": "[Task Cancelled] Task [{task_id}] you were working on has been cancelled. Stop working on it now and do not submit results for it; a new task assigned to you arrives with its own start notice, so there is no need to poll the board.",
 		// ── 25.2a: scheduler half leader-side digests / escalations（i18n.py L786-838 逐字复制）──
 		"scheduler.leader_task_done":                "[Scheduler] Task [{task_id}] \"{title}\" completed ({how}).",
 		"scheduler.leader_task_done_summary":        "Completion summary: {summary}",

@@ -39,10 +39,11 @@ type EventDispatcher struct {
 	Member *handlers.MemberHandler
 	// Message 消息处理器
 	Message *handlers.MessageHandler
-	// TaskBoard 任务面板处理器
-	TaskBoard *handlers.TaskBoardHandler
-	// StaleTask 过期任务处理器
-	StaleTask *handlers.StaleTaskHandler
+	// TaskBoard 任务面板处理器（autonomous/scheduled 变体二选一，F_62）
+	// 两者都实现 GetCallbacks；按 dispatch_mode 在装配处选择。
+	TaskBoard types.CallbacksProvider
+	// StaleTask 过期任务处理器（autonomous/scheduled 变体二选一）
+	StaleTask types.CallbacksProvider
 	// TeamCompletion 团队完成处理器
 	TeamCompletion *handlers.TeamCompletionHandler
 }
@@ -83,8 +84,23 @@ func NewEventDispatcher(
 	lifecycle := handlers.NewAgentLifecycleHandler(host, bp, inf, pollCtrl)
 	member := handlers.NewMemberHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
 	message := handlers.NewMessageHandler(host, bp, inf, pollCtrl)
-	taskBoard := handlers.NewTaskBoardHandler(host, bp, inf, pollCtrl)
-	staleTask := handlers.NewStaleTaskHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
+	// F_62: dispatch mode 是静态 spec 配置——每个角色直接从它装配模式自有的
+	// handler 变体。选择发生在装配处，从不发生在 handler 方法内部。
+	// Python: EventDispatcher.__init__ 的 _TASK_BOARD_CLASS/_STALE_TASK_CLASS
+	// 按 dispatch_mode 选类（dispatcher.py L215/L219）。
+	var taskBoard types.CallbacksProvider
+	var staleTask types.CallbacksProvider
+	dispatchMode := ""
+	if spec := bp.DispatcherSpec(); spec != nil {
+		dispatchMode = spec.DispatchMode
+	}
+	if dispatchMode == "scheduled" {
+		taskBoard = handlers.NewScheduledTaskBoardHandler(host, bp, inf, pollCtrl)
+		staleTask = handlers.NewScheduledStaleTaskHandler(host, bp, inf, pollCtrl)
+	} else {
+		taskBoard = handlers.NewTaskBoardHandler(host, bp, inf, pollCtrl)
+		staleTask = handlers.NewStaleTaskHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
+	}
 	teamCompletion := handlers.NewTeamCompletionHandler(host, bp, inf, pollCtrl)
 
 	d := &EventDispatcher{
