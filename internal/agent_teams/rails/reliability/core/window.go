@@ -4,6 +4,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -90,7 +91,8 @@ func StableCallHash(toolName string, toolArgs map[string]any) string {
 //
 // Python: window.py stable_result_hash。区分「同调用同结果」（真循环）与
 // 「同调用不同结果」（正当迭代）。分支优先序逐一对齐：nil→"none"、string
-// 原文、其余 json 序列化（失败→str 兜底）。
+// 原文、其余 json 序列化（sort_keys + ensure_ascii=False + 默认分隔符，
+// 失败→str 兜底）。
 func StableResultHash(result any) string {
 	if result == nil {
 		return "none"
@@ -98,22 +100,64 @@ func StableResultHash(result any) string {
 	if s, ok := result.(string); ok {
 		return sha256Hex([]byte(s))
 	}
-	payload, err := json.Marshal(result)
-	if err != nil {
-		payload = []byte(fmt.Sprintf("%v", result))
-	}
+	payload := marshalSorted(result)
 	return sha256Hex(payload)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// marshalSorted 序列化为 UTF-8 JSON（map 键递归有序，对齐 ensure_ascii=False）。
+// marshalSorted 序列化为 UTF-8 JSON，逐字符对齐 Python
+// json.dumps(v, sort_keys=True, ensure_ascii=False) 的默认形态：
+//   - map 键递归有序（Go encoding/json 对 map 天然按键排序）
+//   - 不转义 HTML 字符（Go 默认把 <>& 编成 \u003c 等，须 SetEscapeHTML(false)）
+//   - 默认分隔符 ", " 与 ": "（Go 紧凑输出无空格，须 pyJSONSpacing 补回）
+//
+// 非可序列化值以 %v 兜底对齐 default=str（不报错）。哈希输入直接序列化
+// 本体（json tag 生效），无独立 marshal 包装层。
 func marshalSorted(v any) []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return []byte(fmt.Sprintf("%v", v))
 	}
-	return b
+	// Encoder.Encode 追加换行，剥掉
+	return pyJSONSpacing(bytes.TrimRight(buf.Bytes(), "\n"))
+}
+
+// pyJSONSpacing 在字符串字面量之外把 `,` → `, `、`:` → `: `，
+// 复刻 Python json.dumps 默认 separators=(", ", ": ")。字符串字面量内部
+// 的逗号/冒号不动（引号状态机；Go JSON 串内引号必为 \" 转义，故用
+// 未转义引号计数即可判定字面量边界）。
+func pyJSONSpacing(compact []byte) []byte {
+	var out bytes.Buffer
+	inString := false
+	escaped := false
+	for _, b := range compact {
+		if inString {
+			out.WriteByte(b)
+			if escaped {
+				escaped = false
+			} else if b == '\\' {
+				escaped = true
+			} else if b == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch b {
+		case '"':
+			inString = true
+			out.WriteByte(b)
+		case ':':
+			out.WriteString(": ")
+		case ',':
+			out.WriteString(", ")
+		default:
+			out.WriteByte(b)
+		}
+	}
+	return out.Bytes()
 }
 
 // sha256Hex 计算字节切片的 SHA-256 十六进制摘要。

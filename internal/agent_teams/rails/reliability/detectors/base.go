@@ -128,7 +128,8 @@ func (d *ErrorBurstDetector) Observe(signal *core.Signal) *core.Anomaly {
 			"consecutive":    d.consecutive,
 			"window_count":   windowCount,
 			"window_seconds": d.windowSeconds,
-			"last_error":     signal.Error,
+			// 对齐 Python None：*string nil 指针须转 nil interface（typed-nil 实锤）
+			"last_error": errTextOrNil(signal.Error),
 		},
 	}
 }
@@ -175,4 +176,12 @@ func (d *ErrorBurstDetector) classify(windowCount int) *core.Severity {
 		return nil
 	}
 	return &s
+}
+
+// errTextOrNil 错误文本或 nil（typed-nil 防御：*string nil 指针对齐 Python None）。
+func errTextOrNil(s *string) any {
+	if s == nil {
+		return nil
+	}
+	return *s
 }

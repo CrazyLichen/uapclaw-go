@@ -407,7 +407,7 @@ func buildTeamReliabilityRail(params map[string]any, ctx hschema.BuildContextInt
 	isLeader := hschema.ParamBool(params, "is_leader", false)
 
 	// Python: components = get_reliability_components(context)
-	components, _ := GetReliabilityComponents(ctx).(*reliability.ReliabilityComponents)
+	components := GetReliabilityComponents(ctx)
 	if components == nil {
 		// Python fallback: build_reliability_components(cfg, ...)
 		components = reliability.BuildReliabilityComponents(reliability.BuildComponentsDeps{

@@ -124,8 +124,20 @@ func BuildRemediationPolicy(config *core.ReliabilityConfig) *remediation.Remedia
 // ——自身异常进程内路由、绕过 messager self-filter；其余角色得到
 // EventAnomalyReporter 跨进程发布给 leader。
 func BuildReliabilityComponents(deps BuildComponentsDeps) *ReliabilityComponents {
+	// i18n 未注入时默认接 schema.T（reliability.* 键组）——必须在
+	// BuildMemberDetectors 之前接线：model_error detector 的 notice/unavailable
+	// 渲染依赖 renderer，nil 会 panic 被 monitor.observeSafe 吞掉。
+	if deps.Text == nil {
+		deps.Text = schemaTextRenderer
+	}
+	if deps.SteerText == nil {
+		deps.SteerText = schemaSteerText
+	}
 	policy := BuildRemediationPolicy(deps.Config)
 	now := deps.Now
+	if now == nil {
+		now = defaultNow
+	}
 	dets := BuildMemberDetectors(deps.Config.Detectors, now, deps.Text)
 	var localReporter *LocalAnomalyReporter
 	var reporter AnomalyReporter
@@ -144,13 +156,6 @@ func BuildReliabilityComponents(deps BuildComponentsDeps) *ReliabilityComponents
 	// 行为等价且更安全（偏差注释，无独立 Python 符号）。
 	if reporter == nil {
 		reporter = nopReporter{}
-	}
-	// i18n 未注入时默认接 schema.T（reliability.* 键组，Task 10 落表）
-	if deps.Text == nil {
-		deps.Text = schemaTextRenderer
-	}
-	if deps.SteerText == nil {
-		deps.SteerText = schemaSteerText
 	}
 	monitor := NewReliabilityMonitor(dets, reporter, policy)
 	auto := remediation.NewLocalAutoRemediator(policy,

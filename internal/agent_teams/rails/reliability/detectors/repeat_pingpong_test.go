@@ -42,7 +42,8 @@ func TestRepeatToolCallDetector_同参同结果到LOW(t *testing.T) {
 	assert.Equal(t, core.AnomalyKindRepeatToolCall, got.Kind)
 	assert.Equal(t, core.SeverityLow, got.Severity)
 	assert.Equal(t, map[string]any{"call_repeats": 10}, got.Evidence)
-	assert.Equal(t, "repeat_tool_call detected: call_repeats=10", got.Summary)
+	assert.Equal(t, "repeat_tool_call detected: {'call_repeats': 10}", got.Summary,
+		"evidence 渲染对齐 Python dict repr（golden 对拍锚定）")
 }
 
 func TestRepeatToolCallDetector_结果变化不算重复(t *testing.T) {

@@ -223,12 +223,16 @@ func ptrStr(s *string) string {
 	return *s
 }
 
-// formatEvidence 把 evidence map 渲染进 summary（对齐 Python f-string 的
-// dict 展开；上游 _classify 的 evidence 恒为单键 map，按键名固定渲染）。
+// formatEvidence 把 evidence map 渲染进 summary。
+//
+// Python: repeat_tool.py summary=f"{kind.value} detected: {evidence}"——evidence
+// 是 dict，f-string 展开为 Python repr 形如 "{'call_repeats': 3}"（单引号键、
+// int 值不加引号）。上游 _classify 的 evidence 恒为单键 int map，按键名固定
+// 渲染顺序对齐 repr 单键形态（golden 对拍锚定，见 golden_test.go）。
 func formatEvidence(evidence map[string]any) string {
 	for _, key := range []string{"trailing_identical", "trailing_alternation", "call_repeats"} {
 		if v, ok := evidence[key]; ok {
-			return key + "=" + strconv.Itoa(v.(int))
+			return "{'" + key + "': " + strconv.Itoa(v.(int)) + "}"
 		}
 	}
 	return ""
