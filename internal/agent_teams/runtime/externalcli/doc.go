@@ -23,6 +23,7 @@
 //	├── spawn.go             # BuildCliRuntime spawn 主体（provider/adapter 路与守卫）
 //	├── member_runtime.go    # ExternalHarnessMemberRuntime 骨架（provider 路）
 //	├── activity_emitter.go  # 结构化 AGENT_ACTIVITY 事件构造器（归包偏差 D-15.16-a4）
+//	├── reliability.go      # RuntimeReliabilityContext 投递半区（external/reliability.py）
 //	└── transport/           # 进程启动与驱动抽象子包（base/local）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/spawn/external_cli_spawn.py、

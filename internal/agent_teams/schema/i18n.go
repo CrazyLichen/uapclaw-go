@@ -144,6 +144,17 @@ var STRINGS = map[Language]map[string]string{
 		"reliability.route_notice_scope_group":   "这是模型组的状态，不是某个成员的：没有指定模型的成员（包括你）都已改用新模型，不要说成某个成员原来在用这个模型。",
 		"reliability.route_notice_scope_pinned":  "这只影响指定使用 {model} 的成员，它们已改用新模型；其他成员不受这条通知影响，不要说成整个团队都已切换。",
 		"reliability.external_runtime_retrying":  "[三方运行时] 成员 {member_name}（{agent_kind}，模型 {model}）正在自动重试：{category}。进度 {attempt}/{max_attempts}，原因：{reason_message}。诊断字段：http_status={http_status}，sdk_error_code={sdk_error_code}。本轮不结束，成员状态不变，等待 SDK 后续结果。{summary}",
+		// Python: i18n.py:174-183 —— reliability/external message 的 suggested_action
+		"reliability.suggested_action.auth_required":           "请登录 CLI 或配置有效的 API key",
+		"reliability.suggested_action.quota_exceeded":          "请检查账户额度或更换 API key",
+		"reliability.suggested_action.rate_limited":            "请稍后重试",
+		"reliability.suggested_action.codex_429_cause_unknown": "Codex 未提供具体的上游 429 原因；若任务仍未完成，请检查任务与成员状态并显式触发新的 round",
+		"reliability.suggested_action.request_rejected":        "模型服务拒绝了请求，请结合诊断字段和运行日志检查请求配置及服务端错误详情",
+		"reliability.suggested_action.server_unavailable":      "服务端暂时不可用，请稍后重试",
+		"reliability.suggested_action.network_timeout":         "请检查网络连接和 API 地址是否可达",
+		"reliability.suggested_action.process_start_failed":    "成员运行时启动失败，请检查配置或重试",
+		"reliability.suggested_action.sdk_error":               "运行时异常，请重试或检查日志",
+		"reliability.suggested_action.unknown":                 "运行时异常，请重试或检查日志",
 	},
 	LanguageEN: {
 		// Python: schema/blueprint.py
@@ -257,6 +268,17 @@ var STRINGS = map[Language]map[string]string{
 		"reliability.route_notice_scope_group":   "This is the state of the model group, not of one member: every member not pinned to a model (you included) now uses the replacement model, so do not say a particular member was using the failed model. ",
 		"reliability.route_notice_scope_pinned":  "This only affects the members pinned to {model}, which now use the replacement model; other members are not affected by this notice, so do not say the whole team switched. ",
 		"reliability.external_runtime_retrying":  "[external runtime] Member {member_name} ({agent_kind}, model {model}) is auto-retrying: {category}. Progress: {attempt}/{max_attempts}. Reason: {reason_message}. Diagnostics: http_status={http_status}, sdk_error_code={sdk_error_code}. The round stays open and member status is unchanged; awaiting the next SDK result. {summary}",
+		// Python: i18n.py:681-698 —— reliability/external message 的 suggested_action
+		"reliability.suggested_action.auth_required":           "Log in to the CLI or configure a valid API key",
+		"reliability.suggested_action.quota_exceeded":          "Check account quota or switch to a different API key",
+		"reliability.suggested_action.rate_limited":            "Please retry later",
+		"reliability.suggested_action.codex_429_cause_unknown": "Codex did not provide the specific upstream cause for HTTP 429; if the task remains incomplete, inspect task and member state and explicitly trigger a new round",
+		"reliability.suggested_action.request_rejected":        "The model service rejected the request; inspect diagnostics and runtime logs for request configuration and server details",
+		"reliability.suggested_action.server_unavailable":      "Server temporarily unavailable; please retry later",
+		"reliability.suggested_action.network_timeout":         "Check network connectivity and API endpoint reachability",
+		"reliability.suggested_action.process_start_failed":    "Member runtime failed to start; check configuration or retry",
+		"reliability.suggested_action.sdk_error":               "Runtime error; retry or check logs",
+		"reliability.suggested_action.unknown":                 "Runtime error; retry or check logs",
 	},
 }
 
