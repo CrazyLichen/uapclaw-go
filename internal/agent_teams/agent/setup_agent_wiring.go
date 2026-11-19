@@ -1,6 +1,7 @@
 package agent
 
 import (
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	reliability "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
 	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
@@ -102,7 +103,18 @@ func buildTeamHandles(
 	ctx atschema.TeamRuntimeContext,
 	agentSpec atschema.DeepAgentSpec,
 	reliabilityComponents *reliability.ReliabilityComponents,
+	teamSpec *atschema.TeamAgentSpec,
 ) rails.TeamHandles {
+	// Python: agent_configurator.py:892-899——host 注入的专家 catalog 支撑
+	// leader 的专家工具；成员侧不走 catalog 门控，恒 nil。
+	var expertCatalog any
+	var expertBinding *rails.ExpertBinding
+	if ctx.Role == "leader" {
+		if catalog := experts.GetProcessExpertCatalog(); catalog != nil {
+			expertCatalog = catalog
+			expertBinding = deriveExpertBinding(teamSpec)
+		}
+	}
 	return rails.TeamHandles{
 		TeamBackend:           c.TeamBackend(),
 		WorkspaceManager:      c.WorkspaceManager(),
@@ -112,6 +124,33 @@ func buildTeamHandles(
 		WorktreeManager:       c.WorktreeManager(),
 		TaskEventTracker:      c.TaskEventTracker(),
 		ReliabilityComponents: reliabilityComponents,
+		ExpertCatalog:         expertCatalog,
+		ExpertBinding:         expertBinding,
+	}
+}
+
+// deriveExpertBinding leader 的 spawn_expert 所需的团队 spec 数据。
+// Python: _derive_expert_binding (agent_configurator.py:196-207)
+func deriveExpertBinding(spec *atschema.TeamAgentSpec) *rails.ExpertBinding {
+	if spec == nil {
+		return nil
+	}
+	base, ok := spec.Agents["teammate"]
+	if !ok {
+		base, ok = spec.Agents["leader"]
+	}
+	personaWorkspace := ""
+	personaLanguage := ""
+	if ok {
+		if base.Workspace != nil {
+			personaWorkspace = base.Workspace.RootPath
+		}
+		personaLanguage = base.Language
+	}
+	return &rails.ExpertBinding{
+		BoundGroup:       experts.BoundAgentGroupOf(spec),
+		PersonaWorkspace: personaWorkspace,
+		PersonaLanguage:  personaLanguage,
 	}
 }
 

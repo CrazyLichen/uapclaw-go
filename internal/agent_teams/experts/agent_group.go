@@ -722,3 +722,19 @@ func skillSpecFrom(values map[string]any) (hschema.SkillSpec, error) {
 	}
 	return spec, nil
 }
+
+// TagsAsText 组卡 tags 的全部语言文本拼接（检索文档用）。
+// Python: _localized_values(card.tags)（tool_expert.py:113 经 _search_document）
+func (c *AgentGroupCard) TagsAsText() string {
+	texts := []string{}
+	for _, tag := range c.Tags {
+		if tag.Map != nil {
+			for _, text := range tag.Map {
+				texts = append(texts, text)
+			}
+		} else if tag.Str != "" {
+			texts = append(texts, tag.Str)
+		}
+	}
+	return strings.Join(texts, " ")
+}

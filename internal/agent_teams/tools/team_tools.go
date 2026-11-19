@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"regexp"
 	"strings"
 
@@ -74,6 +75,15 @@ type TeamToolOptions struct {
 	// ForkEnabled 上下文继承开关（TeamAgentSpec.enable_fork）——门控
 	// spawn_teammate 的 fork 参数面与描述槽（tool_member.py:703-714）。
 	ForkEnabled bool
+	// ExpertCatalog host 注入的专家定位协议（nil = 不注册专家三件）
+	ExpertCatalog experts.ExpertCatalog
+	// ExpertBoundGroup / ExpertPersonaWorkspace / ExpertPersonaLanguage
+	// 专家绑定信息拆字段（rails.ExpertBinding 类型化后的消环拆解——
+	// Python create_team_tools(expert_binding=) 收 rails 对象；Go tools 包
+	// 不 import rails，三字段直传，语义逐项对齐 ExpertBinding）。
+	ExpertBoundGroup       *experts.BoundAgentGroup
+	ExpertPersonaWorkspace string
+	ExpertPersonaLanguage  string
 }
 
 // CleanTeamTool 清理团队工具。
@@ -208,6 +218,10 @@ const (
 // Python: _MEMBER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 var memberNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
+// expertTools 专家工具三件（catalog 门控）。
+// Python: EXPERT_TOOLS (tool_factory.py)
+var expertTools = []string{"view_experts", "view_expert_groups", "spawn_expert"}
+
 // leaderOnlySet Leader 专用工具名集合。
 var leaderOnlySet = commaStrToSet(LeaderOnlyToolsStr)
 
@@ -270,6 +284,17 @@ func CreateTeamTools(
 		allTools["list_members"] = newListMembersTool(teamBackend, t)
 		allTools["create_task"] = newTaskCreateTool(teamBackend, t)
 		allTools["update_task"] = newUpdateTaskTool(teamBackend, t)
+		// 专家三件一起注册：host 注入 catalog 时才有，leader 永不缺角。
+		// Python: tool_factory.py:479-529 _expert_tools + :495-497 门控。
+		if opts.ExpertCatalog != nil {
+			boundGroup := opts.ExpertBoundGroup
+			allTools["view_experts"] = newViewExpertsTool(opts.ExpertCatalog, t, opts.Language, boundGroup, opts.DispatchMode, teamBackend.DeclaredCLIKinds())
+			allTools["view_expert_groups"] = newViewExpertGroupsTool(opts.ExpertCatalog, t, opts.Language, boundGroup, teamBackend.DeclaredCLIKinds())
+			allTools["spawn_expert"] = newSpawnExpertTool(teamBackend, t, opts.ExpertCatalog, opts.Language,
+				boundGroup,
+				opts.ExpertPersonaWorkspace, opts.ExpertPersonaLanguage,
+				modelConfigAlloc, nil)
+		}
 	}
 	if taskMgr != nil {
 		allTools["view_task"] = newViewTaskTool(taskMgr, t)
@@ -302,6 +327,14 @@ func CreateTeamTools(
 	// persistent 生命周期下移除 clean_team
 	if lifecycle == "persistent" {
 		delete(allowed, "clean_team")
+	}
+
+	// 专家三件仅当 host 注入 catalog——三件一起，leader 永不缺角。
+	// Python: tool_factory.py:495-497
+	if opts.ExpertCatalog == nil {
+		for _, name := range expertTools {
+			delete(allowed, name)
+		}
 	}
 
 	// 排除指定工具

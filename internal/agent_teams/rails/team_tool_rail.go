@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -62,6 +63,10 @@ type TeamToolRail struct {
 	memberName string
 	// registeredTools 已注册的工具实例列表
 	registeredTools []tool.Tool
+	// expertCatalog host 注入的专家定位协议（leader 专家工具三件的门控）
+	expertCatalog experts.ExpertCatalog
+	// expertBinding 专家绑定信息
+	expertBinding *ExpertBinding
 }
 
 // TeamToolRailOption TeamToolRail 构造选项。
@@ -118,14 +123,18 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	toolList := tools.CreateTeamTools(
 		r.teamBackend,
 		tools.TeamToolOptions{
-			Role:             r.role,
-			TeammateMode:     r.teammateMode,
-			Lifecycle:        r.lifecycle,
-			Language:         r.language,
-			DispatchMode:     r.dispatchMode,
-			TeamMode:         r.teamMode,
-			BootstrapMode:    r.bootstrapMode,
-			SwarmflowEnabled: r.swarmflowEnabled,
+			Role:                   r.role,
+			TeammateMode:           r.teammateMode,
+			Lifecycle:              r.lifecycle,
+			Language:               r.language,
+			DispatchMode:           r.dispatchMode,
+			TeamMode:               r.teamMode,
+			BootstrapMode:          r.bootstrapMode,
+			SwarmflowEnabled:       r.swarmflowEnabled,
+			ExpertCatalog:          r.expertCatalog,
+			ExpertBoundGroup:       expertBoundGroupOf(r.expertBinding),
+			ExpertPersonaWorkspace: expertPersonaWorkspaceOf(r.expertBinding),
+			ExpertPersonaLanguage:  expertPersonaLanguageOf(r.expertBinding),
 		},
 		r.modelConfigAlloc,
 		r.excludeTools,
@@ -294,6 +303,16 @@ func WithToolSwarmflowEnabled(enabled bool) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.swarmflowEnabled = enabled }
 }
 
+// WithExpertCatalog 设置专家定位协议。
+func WithExpertCatalog(c experts.ExpertCatalog) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.expertCatalog = c }
+}
+
+// WithExpertBinding 设置专家绑定信息。
+func WithExpertBinding(b *ExpertBinding) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.expertBinding = b }
+}
+
 // WithModelConfigAllocator 设置模型配置分配器。
 func WithModelConfigAllocator(fn func(modelName string) *models.Allocation) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.modelConfigAlloc = fn }
@@ -322,4 +341,28 @@ func WithTeamName(name string) TeamToolRailOption {
 // WithMemberName 设置成员名。
 func WithMemberName(name string) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.memberName = name }
+}
+
+// expertBoundGroupOf nil 安全取绑定组。
+func expertBoundGroupOf(b *ExpertBinding) *experts.BoundAgentGroup {
+	if b == nil {
+		return nil
+	}
+	return b.BoundGroup
+}
+
+// expertPersonaWorkspaceOf nil 安全取 persona 工作区。
+func expertPersonaWorkspaceOf(b *ExpertBinding) string {
+	if b == nil {
+		return ""
+	}
+	return b.PersonaWorkspace
+}
+
+// expertPersonaLanguageOf nil 安全取 persona 语言。
+func expertPersonaLanguageOf(b *ExpertBinding) string {
+	if b == nil {
+		return ""
+	}
+	return b.PersonaLanguage
 }

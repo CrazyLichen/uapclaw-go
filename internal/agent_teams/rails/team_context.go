@@ -1,6 +1,7 @@
 package rails
 
 import (
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	reliability "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
@@ -111,12 +112,10 @@ type TeamHandles struct {
 	SwarmflowExternalCLIAgents any
 	// SwarmflowExpertSpecs swarmflow 专家表
 	SwarmflowExpertSpecs map[string]any
-	// ExpertCatalog 专家定位协议
-	// ⤵️ experts 域未迁，保持 any
+	// ExpertCatalog 专家定位协议（experts.ExpertCatalog）
 	ExpertCatalog any
-	// ExpertBinding 专家绑定信息
-	// ⤵️ experts 域未迁，保持 any
-	ExpertBinding any
+	// ExpertBinding 专家绑定信息（*ExpertBinding）
+	ExpertBinding *ExpertBinding
 	// TaskEventTracker 任务通知器
 	TaskEventTracker tracker.TaskEventTracker
 }
@@ -324,20 +323,34 @@ func GetSwarmflowExpertSpecs(ctx hschema.BuildContextInterface) any {
 	return raw
 }
 
+// ExpertBinding leader 的 spawn_expert 所需的团队 spec 数据。
+// Python: ExpertBinding (team_context.py:47-59)
+type ExpertBinding struct {
+	// BoundGroup 团队装配自的 AgentGroup（可 nil）
+	BoundGroup *experts.BoundAgentGroup
+	// PersonaWorkspace 模板 persona 渲染时替换 {{ workspace }} 的工作区根
+	// （teammate 基础 spec 的）
+	PersonaWorkspace string
+	// PersonaLanguage persona 渲染语言（基础 spec 自身，与
+	// compose_template_member 同款）
+	PersonaLanguage string
+}
+
 // GetExpertCatalog 返回专家定位协议，缺失返回 nil。
 // Python: get_expert_catalog
-//
-// ⤵️ experts 域未迁，返回 any。
 func GetExpertCatalog(ctx hschema.BuildContextInterface) any {
 	return getHandle(ctx, TeamHandleExpertCatalog)
 }
 
 // GetExpertBinding 返回专家绑定信息，缺失返回 nil。
 // Python: get_expert_binding
-//
-// ⤵️ experts 域未迁，返回 any。
-func GetExpertBinding(ctx hschema.BuildContextInterface) any {
-	return getHandle(ctx, TeamHandleExpertBinding)
+func GetExpertBinding(ctx hschema.BuildContextInterface) *ExpertBinding {
+	if h := getHandle(ctx, TeamHandleExpertBinding); h != nil {
+		if binding, ok := h.(*ExpertBinding); ok {
+			return binding
+		}
+	}
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

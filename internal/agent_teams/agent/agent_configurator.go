@@ -427,7 +427,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 25.1g: 可靠性组件构建一次并注入 extras（agent_configurator.py:790-806）
 	reliabilityComps, reliabilityIsLeader := buildReliability(spec, ctx, c)
 
-	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec, reliabilityComps))
+	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec, reliabilityComps, &spec))
 	c.lastBuildCtx = memberBuildCtx
 
 	teamSpecs := rails.TeamRailSpecs(buildTeamRailSpecInput(
