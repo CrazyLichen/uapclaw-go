@@ -1931,3 +1931,6 @@ func derefString(value *string) string {
 	}
 	return *value
 }
+
+// TaskDB 返回任务 DAO（scheduling 半区读取 task_links / upstream 简报）。
+func (tm *TeamTaskManager) TaskDB() database.TaskDao { return tm.db.Task() }

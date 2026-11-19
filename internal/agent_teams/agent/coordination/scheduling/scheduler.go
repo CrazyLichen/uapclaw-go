@@ -71,6 +71,17 @@ type SchedulerTaskManager interface {
 	GetOtherActiveTaskID(ctx context.Context, memberName, excludeTaskID string) (string, error)
 	// HasOpenTasks 板面是否仍有非终态任务（一条聚合 COUNT，B_09）。
 	HasOpenTasks(ctx context.Context) (bool, error)
+	// GetReviewTally 一条 IN_REVIEW 任务当前轮的票计快照（F_62，25.2b）。
+	// Python: get_review_tally。
+	GetReviewTally(task *database.TeamTaskBase) map[string]any
+	// SettleReview 框架侧结算一轮评审（F_62，25.2b）。
+	// Python: settle_review。
+	SettleReview(ctx context.Context, taskID, decision, feedback string) (schema.TaskOpResult, error)
+	// GetPreviousRoundVote 返回某 reviewer 上一轮的最新票（25.2b）。
+	// Python: get_previous_round_vote。
+	GetPreviousRoundVote(ctx context.Context, task *database.TeamTaskBase, reviewer string) (*database.TeamTaskReviewVoteBase, error)
+	// TaskDB 返回任务 DAO（task_links/upstream 简报读取）。
+	TaskDB() database.TaskDao
 	// BoardCounts (total, non_terminal) 聚合（B_09）。
 	BoardCounts(ctx context.Context) (int64, int64, error)
 	// OpenTaskCountsByAssignee 各成员名下未终态任务计数。
@@ -181,6 +192,10 @@ type TeamScheduler struct {
 	// templateLoader 绑定团队后端 workspace cache 的 A 类加载器（懒绑定；
 	// reviewer_* 模板读演进值）。Python: _template_loader_cache（scheduler.py L157-169）。
 	templateLoader TemplateLoaderFunc
+	// reviewerRunner 临时 reviewer 运行体（装配点注入，D-25.2b-13①）。
+	reviewerRunner ReviewerRunnerFunc
+	// reviewFeedbackRounds 评审反馈 rail 已派发的 (task_id, round)（25.2b）。
+	reviewFeedbackRounds map[[2]string]struct{}
 }
 
 // TemplateLoaderFunc 模板加载器函数形（框架只读 LoadTemplate 或绑定 workspace
@@ -193,23 +208,24 @@ type TemplateLoaderFunc func(name, language string) (*ateamprompts.PromptTemplat
 // Python: __init__（scheduler.py L110-159）
 func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend SchedulerBackend, msgSender LeaderMessageSender, defaultMaxRounds, stallTimeoutSeconds int64, teamName, language string) *TeamScheduler {
 	return &TeamScheduler{
-		host:                host,
-		taskMgr:             taskMgr,
-		backend:             backend,
-		msgSender:           msgSender,
-		defaultMaxRounds:    defaultMaxRounds,
-		stallTimeoutSeconds: stallTimeoutSeconds,
-		teamName:            teamName,
-		language:            language,
-		reviewDispatched:    map[[3]string]struct{}{},
-		reviewRuns:          map[[3]string]int{},
-		escalated:           map[escalateKey]struct{}{},
-		summaryRequested:    map[[2]string]struct{}{},
-		digestedTasks:       map[string]struct{}{},
-		handoffKnown:        map[handoffKey]struct{}{},
-		policyRetired:       map[string]struct{}{},
-		strandedEscalated:   map[handoffKey]struct{}{},
-		revisionPushed:      map[revisionKey]struct{}{},
+		host:                 host,
+		taskMgr:              taskMgr,
+		backend:              backend,
+		msgSender:            msgSender,
+		defaultMaxRounds:     defaultMaxRounds,
+		stallTimeoutSeconds:  stallTimeoutSeconds,
+		teamName:             teamName,
+		language:             language,
+		reviewDispatched:     map[[3]string]struct{}{},
+		reviewRuns:           map[[3]string]int{},
+		escalated:            map[escalateKey]struct{}{},
+		summaryRequested:     map[[2]string]struct{}{},
+		digestedTasks:        map[string]struct{}{},
+		handoffKnown:         map[handoffKey]struct{}{},
+		policyRetired:        map[string]struct{}{},
+		strandedEscalated:    map[handoffKey]struct{}{},
+		revisionPushed:       map[revisionKey]struct{}{},
+		reviewFeedbackRounds: map[[2]string]struct{}{},
 	}
 }
 
@@ -326,6 +342,11 @@ func (s *TeamScheduler) scan(ctx context.Context) error {
 		acted = handoffActed || acted
 		// 25.2b 接缝：_reconcile_reviews 按 Python _scan L248 原顺序插在此处
 		// （handoffs 与 retirements 之间）。Python: acted = await self._reconcile_reviews(task_manager) or acted
+		reviewActed, reviewErr := s.reconcileReviews(ctx)
+		if reviewErr != nil {
+			return reviewErr
+		}
+		acted = reviewActed || acted
 		retireActed, err := s.reconcileRetirements(ctx)
 		if err != nil {
 			return err
