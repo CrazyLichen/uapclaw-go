@@ -85,6 +85,7 @@ func (m *TeamManager) GetSwarmEnrichedTeamSpec(
 	userID string,
 	channelID string,
 	requestMetadata map[string]any,
+	agentGroupName string,
 	dispatchMode string,
 	bootstrapMode string,
 ) (*atschema.TeamAgentSpec, error) {
@@ -123,8 +124,8 @@ func (m *TeamManager) GetSwarmEnrichedTeamSpec(
 	// 步骤 6: team plan mode（:2021）
 	m.ApplyTeamPlanMode(spec, requestMetadata)
 
-	// 步骤 7: provider 装配 enrich——context 构造段（:2023-2033；assembly.py:456-541）。
-	// rails 目录注册 ⤵️15.7/15.8、成员 spec 重写/mcp/agent_group ⤵️15.16e（D-15.16-c3）。
+	// 步骤 7: provider 装配 enrich（:2023-2033；assembly.py:456-541）。
+	// rails 目录注册段仍 ⤵️15.7/15.8（D-15.16-c3 余量）；其余段已随 15.16e T3 并入。
 	params := swarm.SeedParamsFromRequestMetadata(sessionID, requestMetadata)
 	params.Mode = mode
 	if projectDir != "" {
@@ -134,6 +135,8 @@ func (m *TeamManager) GetSwarmEnrichedTeamSpec(
 	params.RequestID = requestID
 	params.UserID = userID
 	params.ChannelID = channelID
+	// agent_group_name 形参（c8③ 回收；Python :2024 显式传入）。
+	params.AgentGroupName = agentGroupName
 	if enrichErr := swarm.EnrichTeamSpecForSwarmSeed(spec, params); enrichErr != nil {
 		logger.Error(logComponent).Str("session_id", sessionID).Err(enrichErr).
 			Msg("GetSwarmEnrichedTeamSpec: enrich seed failed")

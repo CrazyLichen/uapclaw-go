@@ -542,7 +542,7 @@ func TestGetSwarmEnrichedTeamSpec_dispatch段(t *testing.T) {
 	mgr, _ := newSwarmSpecTestManager(t)
 	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-dispatch",
 		"team", "", nil, "req-1", "", "web",
-		map[string]any{"mode": "team"}, "autonomous", "")
+		map[string]any{"mode": "team"}, "", "autonomous", "")
 	if err != nil {
 		t.Fatalf("enrich failed: %v", err)
 	}
@@ -559,7 +559,7 @@ func TestGetSwarmEnrichedTeamSpec_dispatchScheduled(t *testing.T) {
 	mgr, _ := newSwarmSpecTestManager(t)
 	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sched-1",
 		"team", "", nil, "req-2", "", "web",
-		map[string]any{"mode": "team"}, "scheduled", "")
+		map[string]any{"mode": "team"}, "", "scheduled", "")
 	if err != nil {
 		t.Fatalf("enrich failed: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestGetSwarmEnrichedTeamSpec_dispatchScheduled(t *testing.T) {
 	// 基线 run 对比，两轮除 DispatchMode 外逐字段一致。
 	base, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sched-base",
 		"team", "", nil, "req-2b", "", "web",
-		map[string]any{"mode": "team"}, "", "")
+		map[string]any{"mode": "team"}, "", "", "")
 	if err != nil {
 		t.Fatalf("base enrich failed: %v", err)
 	}
@@ -584,13 +584,13 @@ func TestGetSwarmEnrichedTeamSpec_bootstrap组合校验(t *testing.T) {
 	mgr, _ := newSwarmSpecTestManager(t)
 	_, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "bs-1",
 		"team", "", nil, "req-3", "", "web",
-		map[string]any{"mode": "team"}, "autonomous", "framework")
+		map[string]any{"mode": "team"}, "", "autonomous", "framework")
 	if err == nil || !strings.Contains(err.Error(), "framework") {
 		t.Fatalf("framework+autonomous should be rejected at request boundary, err=%v", err)
 	}
 	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "bs-2",
 		"team", "", nil, "req-4", "", "web",
-		map[string]any{"mode": "team"}, "scheduled", "framework")
+		map[string]any{"mode": "team"}, "", "scheduled", "framework")
 	if err != nil {
 		t.Fatalf("framework+scheduled should pass: %v", err)
 	}
@@ -604,7 +604,7 @@ func TestGetSwarmEnrichedTeamSpec_enrich接线(t *testing.T) {
 	mgr, _ := newSwarmSpecTestManager(t)
 	spec, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-enrich",
 		"team", "/tmp/nonexistent-proj", nil, "req-5", "", "web",
-		map[string]any{"mode": "team"}, "", "")
+		map[string]any{"mode": "team"}, "", "", "")
 	if err != nil {
 		t.Fatalf("enrich failed: %v", err)
 	}
@@ -636,7 +636,7 @@ func TestGetSwarmEnrichedTeamSpec_演进开关记账(t *testing.T) {
 	}
 	if _, err := mgr.GetSwarmEnrichedTeamSpec(context.Background(), "sess-evo",
 		"team", "", nil, "req-6", "", "web",
-		map[string]any{"mode": "team"}, "", ""); err != nil {
+		map[string]any{"mode": "team"}, "", "", ""); err != nil {
 		t.Fatalf("enrich failed: %v", err)
 	}
 	mgr.mu.Lock()

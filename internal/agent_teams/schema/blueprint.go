@@ -2,6 +2,7 @@ package schema
 
 import (
 	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 import (
@@ -167,6 +168,13 @@ type TeamAgentSpec struct {
 	//
 	// Python: bootstrap_mode (blueprint.py L395)
 	BootstrapMode string `json:"bootstrap_mode,omitempty"`
+	// ReviewerAgent scheduled dispatch 的一次性评审基座（由 enrich 的
+	// build_reviewer_deep_agent_spec 产出）。25.2b 评审链消费。
+	// Python: reviewer_agent (blueprint.py:208)
+	ReviewerAgent *hschema.DeepAgentSpec `json:"reviewer_agent,omitempty"`
+	// EnablePermissions 生效的团队权限开关（TeamAgentSpec 级）。
+	// Python: enable_permissions (blueprint.py:623)
+	EnablePermissions bool `json:"enable_permissions"`
 	// AgentGroupName 本次 enrich 选定的 AgentGroup 名。
 	// Python: agent_group_name (blueprint.py:253)；_apply_agent_group 写入，
 	// core 的 spawn_expert 读它孵化同款成员。

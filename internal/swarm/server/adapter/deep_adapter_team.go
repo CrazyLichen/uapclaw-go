@@ -354,9 +354,15 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		if raw, ok := requestMetadata["mode"].(string); ok {
 			resolvedMode = raw
 		}
+		// agent_group_name：请求侧 scoped 提取（Python team_helpers.py:234
+		// metadata 键；params/变更校验语义 ⤴️adapter 章节，D-15.16-e5）。
+		agentGroupName := ""
+		if raw, ok := requestMetadata["agent_group_name"].(string); ok {
+			agentGroupName = raw
+		}
 		teamSpec, teamSpecErr := teamManager.GetSwarmEnrichedTeamSpec(
 			ctx, sessionID, resolvedMode, "", nil,
-			req.RequestID, "", channelID, requestMetadata, "", "")
+			req.RequestID, "", channelID, requestMetadata, agentGroupName, "", "")
 		if teamSpecErr != nil || teamSpec == nil {
 			logger.Error(logComponent).Str("session_id", sessionID).Err(teamSpecErr).
 				Msg("processTeamMessageStream: GetSwarmEnrichedTeamSpec failed")

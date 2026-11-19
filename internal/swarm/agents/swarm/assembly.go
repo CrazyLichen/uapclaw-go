@@ -1,6 +1,11 @@
 package swarm
 
 import (
+	"errors"
+
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
+	externalPkg "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"os"
 	"strings"
 
@@ -19,8 +24,8 @@ const logComponent = logger.ComponentAgentServer
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EnrichSeedParams EnrichTeamSpecForSwarmSeed 的入参。
-// 对齐 Python enrich_team_spec_for_swarm（assembly.py:391-437）签名中本节
-// 消费的子集；agent_group_name/agent_group_package ⤵️15.16e 不入参。
+// 对齐 Python enrich_team_spec_for_swarm（assembly.py:391-437）签名全集；
+// agent_group_package 由调用方预载（Python :435 同名形参）。
 type EnrichSeedParams struct {
 	// SessionID 当前会话 id
 	SessionID string
@@ -38,6 +43,12 @@ type EnrichSeedParams struct {
 	ChannelID string
 	// RequestMetadata 请求元数据（携带 mode 等）
 	RequestMetadata map[string]any
+	// AgentGroupName 本 Team 选定的 AgentGroup 名（可空）。
+	// Python: agent_group_name (assembly.py:397)
+	AgentGroupName string
+	// AgentGroupPackage 预载的 AgentGroup 包（可空；nil 时按名解析加载）。
+	// Python: agent_group_package (assembly.py:398)
+	AgentGroupPackage *experts.LoadedAgentGroupPackage
 }
 
 // externalTeamPublishURL 按渠道算外部团队事件发布 URL。
@@ -93,21 +104,24 @@ func orDefault(v, fallback string) string {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// EnrichTeamSpecForSwarmSeed 就地 enrich 团队 spec 的 context 构造段：
-// 构建每团队基础 SwarmBuildContext、挂活载体、携带可序列化种子。
+// EnrichTeamSpecForSwarmSeed 就地 enrich 团队 spec 的 provider 化装配全链：
+// 注册 swarm providers、构建每团队基础 context、按 config 源改写成员 spec、
+// 装配 AgentGroup roster、挂活载体并携带可序列化种子。就地修改 spec，无返回
+// spec（Python 原语义）。
 //
-// 偏差 D-15.16-c3：Python enrich_team_spec_for_swarm（assembly.py:391-570）
-// 单函数跨 rails/mcp/experts 多章内容——本节只承担 context 构造子链
-// （:456-541）；rails 目录注册 ⤵️15.7/15.8、成员 spec 重写/mcp/agent_group
-// ⤵️15.16e 及成员配置源装配章节，届时并入同一 Go 函数并删除本拆分壳。
-// _ensure_external_team_transport 已随 15.16d 并入本函数（步骤 2）。
+// 偏差 D-15.16-c3 已随本批回收（T3）：成员 spec 重写/mcp_configs/reviewer/
+// agent_group 应用/group_members 段全部并入本函数，拆分壳注释删除。
+// rails 目录注册段（register_from_catalog）仍 ⤵️15.7/15.8（D-15.16-c3 余量）。
 //
-// 偏差 D-15.16-c5：尾日志 mcps/agent_group 两字段本节无输入，按 Python
-// 无该输入时的字面值（0/None）记录，随对应章节落地改为真实输入驱动。
+// 偏差 D-15.16-c5 已随本批回收：尾日志 mcps/agent_group 用真实输入驱动。
 //
-// 偏差 D-15.16-c8 收尾：接线点为 TeamManager.GetSwarmEnrichedTeamSpec
-// （对齐 Python 活跃路径 get_swarm_enriched_team_spec，team_manager.py:1958；
-// 旧 GetEnrichedTeamSpec/GetEnrichedTeamSpec 路径已随 c8 收尾批删除）。
+// 偏差 D-15.16-c8：接线点为 TeamManager.GetSwarmEnrichedTeamSpec
+// （team_manager.py:1958）。
+//
+// 偏差 D-15.16-e1：_apply_design_agent_group 分支体留缝（判断与步骤位置
+// 保留，designer profile 装配体不落，⤴️25.12）。
+// 偏差 D-15.16-e2：group_members 段走报错路径（group_chat.py 未迁，
+// ⤴️群聊章节），步骤位置与分支结构保留。
 func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams) error {
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）
 	RegisterSwarmBuildContextFactory()
@@ -182,15 +196,66 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 		HeartbeatJobService:     GetHeartbeatJobService(),
 	})
 
-	// 步骤 8: 挂活载体 + 携带可序列化种子（:536/:540 ★）
+	// 步骤 8: mcp_configs（assembly.py:537-540 区段）
+	// config.yaml 的已启用 MCP servers，按团队 scope 派生稳定 id 并解析凭据
+	// 占位符——只注入 native 成员（外部 CLI 成员走 panel/catalog 自己的路径）。
+	mcpConfigs := common.BuildEnabledMCPServerConfigs(legacyConfigMap(), "team:"+spec.TeamName, true)
+
+	// 步骤 9: 成员能力装配循环（assembly.py:515-523）
+	// _MEMBER_ROLES = ("leader", "teammate")——只处理 spec.agents 两个内置
+	// native 角色；外部 CLI 成员不经此段（rail 只进 native 成员）。
+	for _, role := range memberRoles {
+		if base, ok := spec.Agents[role]; ok {
+			memberSpec := BuildMemberDeepAgentSpec(
+				legacyConfigMap(),
+				p.Mode,
+				role,
+				&base,
+				spec.EnablePermissions,
+				mcpConfigs,
+			)
+			memberSpec = WithProjectCwd(memberSpec, p.ProjectDir)
+			spec.Agents[role] = *memberSpec
+		}
+	}
+
+	// 步骤 10: reviewer 基座（assembly.py:525-526）
+	if _, ok := spec.Agents["teammate"]; ok {
+		teammate := spec.Agents["teammate"]
+		spec.ReviewerAgent = BuildReviewerDeepAgentSpec(p.Mode, &teammate)
+	}
+
+	// 步骤 11: AgentGroup 装配（assembly.py:531-534）
+	if p.AgentGroupName != "" {
+		if isDesignTeamMode(p.Mode) {
+			applyDesignAgentGroup(spec, p.AgentGroupName)
+		} else {
+			if err := applyAgentGroup(spec, p.AgentGroupName, p.AgentGroupPackage); err != nil {
+				return err
+			}
+		}
+	}
+
+	// 步骤 12: 挂活载体 + 携带可序列化种子（:536/:540 ★）
 	// 种子随活载体同行，跨序列化边界（spawned teammate / 分布式远端 / 冷
 	// 恢复）重建的成员经注册工厂还原上下文。
 	spec.BuildContext = base
 	spec.BuildContextSeed = base.ToSeed()
 
-	// 步骤 9: 尾日志（:563-570；mcps/agent_group 按 c5 记字面值）
-	roles := make([]string, 0, len(spec.Agents))
-	for _, role := range []string{"leader", "teammate"} {
+	// 步骤 13: group_members 群聊段（:552-564；偏差 D-15.16-e2）
+	// 步骤位置与分支结构保留；group_chat.py（assemble_group_members /
+	// GROUP_MEMBER_TEMPLATE）未迁，走报错路径。
+	if groupMembers, ok := (p.RequestMetadata["group_members"]).([]any); ok && groupMembers != nil {
+		if p.AgentGroupName != "" {
+			// Python: "a public group roster cannot also select a single AgentGroup"
+			return errors.New("a public group roster cannot also select a single AgentGroup")
+		}
+		return errors.New("group_members roster assembly requires group_chat (D-15.16-e2, pending group chat chapter)")
+	}
+
+	// 步骤 14: 尾日志（:563-570；c5 回收：mcps/agent_group 真实输入）
+	roles := make([]string, 0, len(memberRoles))
+	for _, role := range memberRoles {
 		if _, ok := spec.Agents[role]; ok {
 			roles = append(roles, role)
 		}
@@ -199,8 +264,8 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 		Str("team_name", spec.TeamName).
 		Str("roles", strings.Join(roles, ",")).
 		Str("session_id", p.SessionID).
-		Int("mcps", 0).
-		Str("agent_group", "").
+		Int("mcps", len(mcpConfigs)).
+		Str("agent_group", p.AgentGroupName).
 		Msg("[swarm.assembly] enriched team spec")
 	return nil
 }
@@ -246,4 +311,152 @@ func strFromAny(v any) string {
 		return s
 	}
 	return ""
+}
+
+// ──────────────────────────── AgentGroup 装配（assembly.py:140-360） ────────────────────────────
+
+// memberRoles enrich 装配循环的角色集。
+// Python: _MEMBER_ROLES (assembly.py:76)
+var memberRoles = []string{"leader", "teammate"}
+
+// legacyConfigMap 取 config.yaml 规范快照（Python get_config() 的 dict 形态）。
+// Python: get_config (assembly.py:445)——Go 侧 config 读取面（D-15.16-c2①
+// 约定：config=map[string]any）。经既有 config 加载器取规范 map
+// （teamLoadConfig 同款形态，runtime_inheritance.go:642）。
+func legacyConfigMap() map[string]any {
+	c, err := configutil.New("", configutil.WithNormalize(configutil.NormalizeConfig))
+	if err != nil {
+		return map[string]any{}
+	}
+	m, err := c.Load()
+	if err != nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+// mergeTeamPrompt 追加专家 prompt 不丢既有 Team prompt。
+// Python: _merge_team_prompt (assembly.py:132-136)
+func mergeTeamPrompt(existing string, expertPrompt string) string {
+	parts := []string{}
+	if strings.TrimSpace(existing) != "" {
+		parts = append(parts, strings.TrimSpace(existing))
+	}
+	if strings.TrimSpace(expertPrompt) != "" {
+		parts = append(parts, strings.TrimSpace(expertPrompt))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// isDesignTeamMode 本轮 enrich 是否服务 team.design（设计画布）团队。
+// Python: _is_design_team_mode (assembly.py:275-278)
+func isDesignTeamMode(mode string) bool {
+	return string(swschema.CanonicalizeMode(mode)) == string(swschema.ModeTeamDesign)
+}
+
+// applyAgentGroup 从一个解析的 AgentGroup 包播种团队。
+// leader 恒取组的 leader 模板。scheduled dispatch 下团队以空名册起步：组内
+// 其他成员不在此装配，leader 按需 spawn 任务所需成员（core 从已安装包按需
+// 加载：spawn_expert / 内联 create_task 成员 / swarmflow agent_template）。
+// 否则它们成为 hybrid 预定义名册。
+// Python: _apply_agent_group (assembly.py:140-246)
+func applyAgentGroup(spec *atschema.TeamAgentSpec, agentGroupName string, pkg *experts.LoadedAgentGroupPackage) error {
+	var packageDir string
+	if pkg == nil {
+		// Python: 懒加载（assembly.py:146-154）——resolve_agent_group_dir
+		// → load_agent_group_package_bundle。
+		dir, err := experts.ResolveAgentGroupDir(agentGroupName)
+		if err != nil {
+			return err
+		}
+		loaded, loadErr := experts.LoadAgentGroupPackageBundle(dir)
+		if loadErr != nil {
+			return loadErr
+		}
+		pkg = loaded
+	}
+	templates := pkg.Templates
+	packageDir = pkg.PackageDir
+	// metadata 键保留给既有读者；agent_group_name 是 core spawn_expert 读的
+	// 孵化字段（assembly.py:157-161）。
+	if spec.Metadata == nil {
+		spec.Metadata = map[string]any{}
+	}
+	spec.Metadata["agent_group_name"] = agentGroupName
+	if caps := pkg.Capabilities(); len(caps) > 0 {
+		spec.Metadata["capabilities"] = caps
+	}
+	spec.AgentGroupName = agentGroupName
+
+	leaderBase, hasLeader := spec.Agents["leader"]
+	teammateBase, hasTeammate := spec.Agents["teammate"]
+	if !hasLeader || !hasTeammate {
+		// Python: leader_base/teammate_base 缺一即报错（:165-168）；Go LeaderSpec
+		// 是值类型无 nil 形态。
+		return errors.New("AgentGroup assembly requires both base 'leader' and 'teammate' specs")
+	}
+	leaderMember := experts.ComposeTemplateMember(leaderBase, templates["leader"], "cn")
+	// Python: spec.leader.prompt = _merge_team_prompt(spec.leader.prompt, persona)
+	// （:169-174）——leader 卡的 prompt 合并专家 persona。
+	spec.Leader.Persona = mergeTeamPrompt(spec.Leader.Persona, leaderMember.Persona)
+	spec.Agents["leader"] = leaderMember.Spec
+	if spec.DispatchMode == "scheduled" {
+		// scheduled：空名册起步，成员等 leader 按需 spawn。
+		return nil
+	}
+
+	predefinedMembers := []atschema.TeamMemberSpec{}
+	for agentName, template := range templates {
+		if agentName == experts.LeaderMember {
+			continue
+		}
+		teammateCopy := teammateBase
+		assembled := experts.ComposeTemplateMember(teammateCopy, template, "cn")
+		memberPrompt := assembled.Persona
+		externalConfig, extErr := externalPkg.ExternalCliAgentSpecFromTemplate(&template)
+		if extErr != nil {
+			return extErr
+		}
+		displayName := experts.ResolveAgentGroupMemberDisplayName(packageDir, agentName, template.AgentCard.BaseCard.Name)
+		desc := template.AgentCard.BaseCard.Description
+		if externalConfig == nil {
+			spec.Agents[agentName] = assembled.Spec
+			predefinedMembers = append(predefinedMembers, atschema.TeamMemberSpec{
+				MemberName:  agentName,
+				DisplayName: displayName,
+				Desc:        desc,
+				Prompt:      memberPrompt,
+				RoleType:    atschema.TeamRoleTeammate,
+			})
+		} else {
+			spec.Agents[agentName] = teammateBase
+			predefinedMembers = append(predefinedMembers, atschema.TeamMemberSpec{
+				MemberName:  agentName,
+				DisplayName: displayName,
+				Desc:        desc,
+				Prompt:      memberPrompt,
+				RoleType:    atschema.TeamRoleTeammate,
+				ExternalCLI: externalConfig,
+			})
+		}
+	}
+	spec.PredefinedMembers = predefinedMembers
+	spec.TeamMode = "hybrid"
+	return nil
+}
+
+// applyDesignAgentGroup 从一个解析的 AgentGroup 包装配 team.design 名册。
+// 设计团队（team.design）只应用 leader 模板：成员模板留在包内作为 worker 基座
+// 由 TeamWorkerBackend 逐节点消费——它们从不进入 spawn 名册——leader 的协作
+// 工具面被 DesignerSurfaceSanitizerRail 剥除（执行由服务驱动；leader 无运行
+// 控制面）。
+// 偏差 D-15.16-e1：分支体留缝——保留判断与步骤位置，designer profile 装配体
+// （tools/rails/mcps/subagents 清空重建 + _DESIGN_LEADER_SYSTEM_PROMPT +
+// build_member_capability_specs(NEW_TEAM_DESIGN) 调用）不落，⤴️25.12
+// （designer 工具/rail 真实现同点回收）。
+// Python: _apply_design_agent_group (assembly.py:277-360)
+func applyDesignAgentGroup(spec *atschema.TeamAgentSpec, agentGroupName string) {
+	// Python: load_agent_group_package(resolve_agent_group_dir(...))（:285-292）
+	// ——留缝版本不加载包，走显式未实现路径（错误信息指向 25.12）。
+	panic("design profile assembly not ported (D-15.16-e1, pending 25.12 designer chapter)")
 }

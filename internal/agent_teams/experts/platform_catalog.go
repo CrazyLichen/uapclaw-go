@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
@@ -229,4 +230,63 @@ func rejectPackageName(name any, kind string) (string, error) {
 		return "", fmt.Errorf("invalid %s name (absolute): %s", kind, raw)
 	}
 	return raw, nil
+}
+
+// ──────────────────────────── 装配链 scoped 符号（D-15.16-e5） ────────────────────────────
+
+// ResolveAgentGroupDir 解析一个已安装的 AgentGroup 包目录（Team 装配用）：
+// 名校验 → marketplace installed 查询 → 目录定位 → manifest 校验。
+// Python: resolve_agent_group_dir (extension_package_manager.py:1321-1355)；
+// scoped 取用（D-15.16-e12：extension_package_manager 主体 ⤴️扩展包管理章节）。
+func ResolveAgentGroupDir(name string) (string, error) {
+	safeName, err := rejectPackageName(name, "agent_group")
+	if err != nil {
+		return "", err
+	}
+	loc, locErr := locateInstalled(agentGroupKind, safeName)
+	if locErr != nil {
+		// Python: AgentGroupPackageError("agent_group package not installed", ...)
+		return "", fmt.Errorf("agent_group package not installed: %s", safeName)
+	}
+	manifest, mErr := ReadManifestFile(filepath.Join(loc.Path, "manifest.json"))
+	if mErr != nil {
+		return "", fmt.Errorf("agent_group package missing/corrupt manifest.json: %s", safeName)
+	}
+	if manifest["package_type"] != "agent_group" {
+		return "", fmt.Errorf("agent_group package wrong package_type: %s (expected 'agent_group', got %v)", safeName, manifest["package_type"])
+	}
+	if manifestName, _ := manifest["name"].(string); manifestName != safeName {
+		return "", fmt.Errorf("agent_group package name mismatch: directory=%q, manifest=%q", safeName, manifestName)
+	}
+	return loc.Path, nil
+}
+
+// ReadManifestFile 读 JSON 映射文件的导出包装（供同链跨文件校验）。
+func ReadManifestFile(path string) (map[string]any, error) {
+	return readMapping(path, "agent_group manifest")
+}
+
+// ResolveAgentGroupMemberDisplayName 解析成员的中文兼容展示名：
+// display_name 优先 → 成员名 → fallback；取 zh 值。
+// 完整 i18n 面（多语言 helper）⤴️扩展包管理章节（D-15.16-e5）。
+// Python: resolve_agent_group_member_display_name
+// (extension_package_manager.py:376-388 → :339-360)
+func ResolveAgentGroupMemberDisplayName(packageDir string, memberID string, fallback string) string {
+	card, err := ReadAgentGroupCard(packageDir)
+	if err != nil {
+		return strings.TrimSpace(fallback)
+	}
+	member := card.Member(memberID)
+	if member == nil {
+		return strings.TrimSpace(fallback)
+	}
+	// Python: localized zh 取值链（display_name → name → fallback）
+	zh := resources.LocalizedTextOf(member.Card.DisplayName, "zh")
+	if strings.TrimSpace(zh) == "" {
+		zh = member.Card.Name
+	}
+	if strings.TrimSpace(zh) == "" {
+		zh = fallback
+	}
+	return strings.TrimSpace(zh)
 }
