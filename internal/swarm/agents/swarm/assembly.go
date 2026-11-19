@@ -1,6 +1,7 @@
 package swarm
 
 import (
+	"os"
 	"strings"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -39,6 +40,57 @@ type EnrichSeedParams struct {
 	RequestMetadata map[string]any
 }
 
+// externalTeamPublishURL 按渠道算外部团队事件发布 URL。
+// Python: _external_team_publish_url (assembly.py:85-92)
+// tui → ws://127.0.0.1:{GATEWAY_PORT:-19001}/tui；web（含空渠道）→
+// ws://127.0.0.1:{WEB_PORT:-19000}{WEB_PATH:-/ws}。
+func externalTeamPublishURL(channelID string) string {
+	channel := strings.ToLower(strings.TrimSpace(orDefault(channelID, "web")))
+	if channel == "tui" {
+		port := orDefault(os.Getenv("GATEWAY_PORT"), "19001")
+		return "ws://127.0.0.1:" + port + "/tui"
+	}
+	port := orDefault(os.Getenv("WEB_PORT"), "19000")
+	path := strings.TrimSpace(os.Getenv("WEB_PATH"))
+	if path == "" {
+		path = "/ws"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return "ws://127.0.0.1:" + port + path
+}
+
+// ensureExternalTeamTransport 给跨进程 CLI 成员一条回到 Gateway 的实时事件路径。
+// Python: _ensure_external_team_transport (assembly.py:97-112)；调用位 :425。
+// spec.external_transport 已配置则幂等返回。
+func ensureExternalTeamTransport(spec *atschema.TeamAgentSpec, channelID string) {
+	if spec.ExternalTransport != nil {
+		return
+	}
+	publishURL := externalTeamPublishURL(channelID)
+	spec.ExternalTransport = &atschema.TransportSpec{
+		Type: "hybrid",
+		Params: map[string]any{
+			"team_name":            spec.TeamName,
+			"external_publish_url": publishURL,
+		},
+	}
+	logger.Info(logComponent).
+		Str("team_name", spec.TeamName).
+		Str("channel", orDefault(channelID, "web")).
+		Str("url", publishURL).
+		Msg("[swarm.assembly] configured external team relay")
+}
+
+// orDefault Python `x or default` 语义：空串取默认。
+func orDefault(v, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EnrichTeamSpecForSwarmSeed 就地 enrich 团队 spec 的 context 构造段：
@@ -46,9 +98,9 @@ type EnrichSeedParams struct {
 //
 // 偏差 D-15.16-c3：Python enrich_team_spec_for_swarm（assembly.py:391-570）
 // 单函数跨 rails/mcp/experts 多章内容——本节只承担 context 构造子链
-//（:456-541）；rails 目录注册 ⤵️15.7/15.8、_ensure_external_team_transport
-// ⤵️15.16d/swarmflow、成员 spec 重写/mcp/agent_group ⤵️15.16e 及成员配置
-// 源装配章节，届时并入同一 Go 函数并删除本拆分壳。
+//（:456-541）；rails 目录注册 ⤵️15.7/15.8、成员 spec 重写/mcp/agent_group
+// ⤵️15.16e 及成员配置源装配章节，届时并入同一 Go 函数并删除本拆分壳。
+// _ensure_external_team_transport 已随 15.16d 并入本函数（步骤 2）。
 //
 // 偏差 D-15.16-c5：尾日志 mcps/agent_group 两字段本节无输入，按 Python
 // 无该输入时的字面值（0/None）记录，随对应章节落地改为真实输入驱动。
@@ -60,7 +112,9 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）
 	RegisterSwarmBuildContextFactory()
 
-	// 步骤 2: _ensure_external_team_transport（:457）⤵️15.16d/swarmflow
+	// 步骤 2: _ensure_external_team_transport（:425 调用位；:457 原行号）
+	// 给跨进程 CLI 成员挂 hybrid 回传通道（15.16d）。
+	ensureExternalTeamTransport(spec, p.ChannelID)
 
 	// 步骤 3: 把 openjiuwen 唯一 Skill 库指到平台拥有目录（:459-467）。
 	// 不做则回落默认布局，平台与成员读两套不同的库。幂等。

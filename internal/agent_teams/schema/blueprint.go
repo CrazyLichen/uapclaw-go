@@ -80,6 +80,9 @@ type TeamAgentSpec struct {
 	TeamMode string `json:"team_mode,omitempty"`
 	// Transport 传输层规格
 	Transport *TransportSpec `json:"transport,omitempty"`
+	// ExternalTransport 跨进程外部成员的回传通道规格。
+	// Python: external_transport (blueprint.py:479)；与 Transport（inprocess 默认）独立。
+	ExternalTransport *TransportSpec `json:"external_transport,omitempty"`
 	// Storage 存储层规格
 	Storage *StorageSpec `json:"storage,omitempty"`
 	// Worktree 工作树配置
