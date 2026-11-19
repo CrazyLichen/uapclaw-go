@@ -7,6 +7,7 @@ package external
 import (
 	"encoding/json"
 	"fmt"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"sort"
 	"strings"
 
@@ -60,8 +61,9 @@ func ExternalCliAgentSpecFromTemplate(template *hschema.AgentTemplateSpec) (*ats
 		return nil, fmt.Errorf("runtime.provider_name must be 'codex' or 'claudecode'")
 	}
 	// Python: resolve_provider(provider).card.implementation_version——已安装
-	// provider 卡片的实现版本。15.7/15.8 前经探测面（15.16d catalog）取；
-	// D-15.16-d1 缝沿用：内置 provider 版本校验 ⤴️15.7/15.8。
+	// provider 卡片的实现版本。经 harness_providers 注册表查询（dsh 已注册
+	// 即得正确校验；claudecode/codex SDK provider 15.7/15.8 注册后自动生效，
+	// 未链接时降级空串保持"声明版本必须为空"语义）。
 	expectedVersion := BuiltinProviderImplementationVersion(provider)
 	if runtime.ProviderVersion != "" && runtime.ProviderVersion != expectedVersion {
 		return nil, fmt.Errorf("runtime requires %s %q; installed version is %q", provider, runtime.ProviderVersion, expectedVersion)
@@ -160,13 +162,19 @@ func templateHasAny(template *hschema.AgentTemplateSpec, name string) bool {
 	return false
 }
 
-// BuiltinProviderImplementationVersion 内置 provider 的实现版本查询缝
-// （D-15.16-d1 延续：claude/codex 探测分支 ⤴️15.7/15.8，当前按 15.16d 探测
-// 跳过语义返回空串——版本校验退化为「声明版本必须为空」）。
+// BuiltinProviderImplementationVersion 内置 provider 的实现版本查询——经
+// harness_providers 注册表（ResolveProvider）取卡片实现版本。
 // Python: resolve_provider(provider).card.implementation_version
+//   - dsh 等已注册 provider：真实版本参与校验（15.9 注册表面）
+//   - claudecode/codex：SDK provider 15.7/15.8 注册前 ResolveProvider 报
+//     "not yet linked"，降级空串保持「声明版本必须为空」语义（原 D-15.16-d1
+//     恒空串缝的理由已随 dsh 注册表面落地而失效，本实现替代之）。
 func BuiltinProviderImplementationVersion(provider string) string {
-	// Python 侧无对应桩；Go 无 provider 卡片注册表（15.7/15.8 落地时替换）。
-	return ""
+	resolved, err := harnessproviders.ResolveProvider(provider)
+	if err != nil {
+		return ""
+	}
+	return resolved.Card().ImplementationVersion
 }
 
 // applyRuntimeConfig 白名单键覆写 ExternalCliAgentSpec（Python **runtime.config）。
