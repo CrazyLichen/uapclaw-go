@@ -1,5 +1,36 @@
 package components
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// WorkflowComponentMetadata 组件元数据
+// Python: components/base.py:43-46 (WorkflowComponentMetadata dataclass)
+type WorkflowComponentMetadata struct {
+	// NodeID 节点标识
+	NodeID string
+	// NodeType 节点类型
+	NodeType string
+	// NodeName 节点名称
+	NodeName string
+}
+
+// ComponentConfig 组件配置
+// Python: components/base.py:50-51 (ComponentConfig dataclass)
+type ComponentConfig struct {
+	// Metadata 组件元数据（可空）
+	Metadata *WorkflowComponentMetadata
+}
+
+// ComponentState 组件运行状态
+// Python: components/base.py:55-56 (ComponentState dataclass)
+// 偏差 D-17-7：Python status 字段类型为 Enum 但上游未定义任何成员，
+// Go 以 any 承载、零消费留档，待上游定义成员后收窄。
+type ComponentState struct {
+	// CompID 组件标识
+	CompID string
+	// Status 状态枚举（Python status: Enum，成员上游未定义，偏差 D-17-7）
+	Status any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ComponentAbility 组件能力，表示组件执行支持的 I/O 模式。
