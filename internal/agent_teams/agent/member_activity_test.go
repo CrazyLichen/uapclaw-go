@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
