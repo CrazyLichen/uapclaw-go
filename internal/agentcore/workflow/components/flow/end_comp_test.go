@@ -272,6 +272,16 @@ func TestConsumeAllIterators_递归耗尽(t *testing.T) {
 }
 
 // codeOf 提取错误码（测试辅助：对齐 StatusCode 100010 断言）。
+// mustConfig 构造合法 EndConfig（测试辅助）。
+func mustConfig(tpl string) *EndConfig {
+	c, err := NewEndConfig(tpl)
+	if err != nil {
+		panic(err)
+	}
+	return c
+}
+
+// codeOf 提取错误码（测试辅助：对齐 StatusCode 100010 断言）。
 func codeOf(t *testing.T, err error) int {
 	t.Helper()
 	var be *exception.BaseError
@@ -283,7 +293,7 @@ func codeOf(t *testing.T, err error) int {
 
 // TestNewEnd_带配置 验证模板处理器建立（end_comp.py:42-44）。
 func TestNewEnd_带配置(t *testing.T) {
-	e, err := NewEnd(NewEndConfig("Hi {{n}}"))
+	e, err := NewEnd(mustConfig("Hi {{n}}"))
 	if err != nil || e.template == nil || e.conf == nil {
 		t.Fatalf("构造失败: err=%v template=%v", err, e.template)
 	}
@@ -291,7 +301,8 @@ func TestNewEnd_带配置(t *testing.T) {
 
 // TestNewEnd_配置无效 验证 100010 错误（end_comp.py:45-46）。
 func TestNewEnd_配置无效(t *testing.T) {
-	_, err := NewEnd(NewEndConfig(""))
+	// 直接构造空模板配置（不走 mustConfig，其 panic 会先于 NewEnd 校验触发）
+	_, err := NewEnd(&EndConfig{})
 	if err == nil || codeOf(t, err) != 100010 {
 		t.Fatalf("期望 COMPONENT_END_PARAM_INVALID(100010), got %v", err)
 	}
@@ -307,7 +318,7 @@ func TestNewEnd_无配置(t *testing.T) {
 
 // TestEnd_SetMix 验证 mix 置位与模板数据源计数（end_comp.py:53-57）。
 func TestEnd_SetMix(t *testing.T) {
-	e, _ := NewEnd(NewEndConfig("Hi {{n}}"))
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
 	e.SetMix()
 	if !e.mix || e.template.dataSourceCount != 2 {
 		t.Fatalf("SetMix 不符: mix=%v count=%d", e.mix, e.template.dataSourceCount)

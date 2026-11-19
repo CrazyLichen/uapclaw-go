@@ -441,3 +441,56 @@ func (e *End) SetMix() {
 		e.template.mu.Unlock()
 	}
 }
+
+// ──────────────────────────── TemplateBatchProcessor ────────────────────────────
+
+// TemplateBatchProcessor 批渲染处理器。
+// Python: end_comp.py:447-467 (TemplateBatchProcessor)。
+type TemplateBatchProcessor struct {
+	// template 模板处理器
+	template *TemplateProcessor
+	// inputs 首拍输入
+	inputs map[string]any
+	// isRendered 是否已渲染过
+	isRendered bool
+	// mu 互斥锁（condition 配套）
+	mu sync.Mutex
+	// notify 条件广播通道（notifyAll 时 close+换新）
+	notify chan struct{}
+}
+
+// IsRendered 是否已渲染过。Python: is_rendered（end_comp.py:454-455）。
+func (b *TemplateBatchProcessor) IsRendered() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.isRendered
+}
+
+// notifyAll 广播唤醒等待方（Python: condition.notify_all，end_comp.py:240-241）。
+func (b *TemplateBatchProcessor) notifyAll() {
+	close(b.notify)
+	b.notify = make(chan struct{})
+}
+
+// Render 合并 inputs（Python self._inputs | inputs：调用方 inputs 优先）并逐帧拼接。
+// Python: render（end_comp.py:457-467）。
+func (b *TemplateBatchProcessor) Render(ctx context.Context, extra map[string]any, sess *session.NodeSessionFacade) (string, error) {
+	b.mu.Lock()
+	b.isRendered = true
+	b.mu.Unlock()
+	merged := make(map[string]any, len(b.inputs)+len(extra))
+	for k, v := range b.inputs {
+		merged[k] = v
+	}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	var sb strings.Builder
+	for chunk := range b.template.RenderStream(ctx, merged, sess, 0) {
+		if chunk.Err != nil {
+			return "", chunk.Err
+		}
+		sb.WriteString(fmt.Sprintf("%v", chunk.Val.Data))
+	}
+	return sb.String(), nil
+}
