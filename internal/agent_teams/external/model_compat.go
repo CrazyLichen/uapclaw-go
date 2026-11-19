@@ -79,7 +79,7 @@ func CompatiblePoolModelNames(cliAgent string, pool []models.ModelPoolEntry) []s
 
 // ModelAPIProtocol 返回模型 provider 的外部 CLI 协议标签。
 // Python: model_api_protocol (model_compat.py:60)
-func ModelAPIProtocol(provider string) string {
+func ModelApiProtocol(provider string) string {
 	if IsAnthropicProvider(provider) {
 		return "Anthropic"
 	}
