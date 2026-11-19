@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -155,7 +154,7 @@ func TestTeamRail_IsActiveRequestSubject(t *testing.T) {
 // 注意：该实现末尾直接读 traj.SessionID，traj 为 nil 会 panic，故传非 nil 轨迹。
 func TestTeamRail_SnapshotForEvolution_autoScan开(t *testing.T) {
 	r := newTeamRail(t)
-	traj := &trajectory.Trajectory{SessionID: "sess-snap"}
+	traj := testTrajectoryFromSteps("sess-snap", nil)
 	snap := r.SnapshotForEvolution(context.Background(), traj, nil)
 	require.NotNil(t, snap, "auto_scan 开启时应返回快照")
 	require.NotNil(t, snap.SkillName, "SkillName 不应为 nil")

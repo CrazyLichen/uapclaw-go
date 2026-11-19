@@ -61,34 +61,8 @@ func TestNewEvolutionRail_WithDisabledSkills(t *testing.T) {
 	assert.True(t, rail.DisabledSkills()["skill_b"])
 }
 
-// ──────────────────────────── EvolutionRail SetTrajectorySink 测试 ────────────────────────────
-
-func TestSetTrajectorySink_正常绑定(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	sink := &fakeTrajectorySink{}
-	err := rail.SetTrajectorySink(sink, "team-1", "leader")
-	assert.NoError(t, err)
-	assert.Equal(t, sink, rail.trajectorySink)
-	assert.Equal(t, "team-1", rail.teamID)
-	assert.Equal(t, "leader", rail.memberRole)
-}
-
-func TestSetTrajectorySink_空TeamID返回错误(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	sink := &fakeTrajectorySink{}
-	err := rail.SetTrajectorySink(sink, "", "leader")
-	assert.Error(t, err)
-	assert.Nil(t, rail.trajectorySink)
-}
-
-func TestSetTrajectorySink_nilSink不绑定(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	err := rail.SetTrajectorySink(nil, "team-1")
-	assert.NoError(t, err)
-	assert.Nil(t, rail.trajectorySink)
-}
-
-// ──────────────────────────── EvolutionRail EmitHostEvent / Drain 测试 ────────────────────────────
+// ──────────────────────────── 【12-04】SetTrajectorySink 测试已删除 ────────────────────────────
+// sink 链为 Go 侧 registry 遗产，上游无对应物（规则 8）。
 
 func TestEmitHostEvent_正常缓存(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
@@ -265,10 +239,10 @@ func TestAfterInvoke_保存轨迹(t *testing.T) {
 	err := rail.AfterInvoke(context.Background(), cbcInvoke)
 	assert.NoError(t, err)
 
-	// 通过 buildTrajectory 验证步骤已被记录
+	// 通过 buildTrajectory 验证 span 已被记录
 	traj := rail.buildTrajectory()
 	assert.NotNil(t, traj)
-	assert.NotEmpty(t, traj.Steps)
+	assert.NotEmpty(t, trajectory.IterSpans(traj))
 }
 
 func TestAfterInvoke_builder为空跳过(t *testing.T) {
@@ -344,62 +318,16 @@ func TestBuildTrajectory_正常构建(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.InvokeInputs{ConversationID: "sess-1"})
 	require.NoError(t, rail.BeforeInvoke(context.Background(), cbc))
 
-	// 记录步骤
-	rail.Builder().RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindLLM,
-		Detail: &trajectory.LLMCallDetail{
-			Model:    "test-model",
-			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
-		},
-	})
+	// 记录一个 LLM span（span 模型）
+	require.NoError(t, rail.Builder().RecordTestStep(trajectory.TestStep{Kind: "llm", Messages: baseMsgMaps([]llmschema.BaseMessage{llmschema.NewUserMessage("hi")})}))
 
 	traj := rail.buildTrajectory()
 	assert.NotNil(t, traj)
-	assert.Equal(t, "sess-1", traj.SessionID)
-	assert.Len(t, traj.Steps, 1)
+	assert.Equal(t, "sess-1", *traj.SessionID())
+	assert.Len(t, trajectory.IterSpans(traj), 1)
 }
 
-// ──────────────────────────── publishTrajectorySnapshot 测试 ────────────────────────────
-
-func TestPublishTrajectorySnapshot_无Sink跳过(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	traj := &trajectory.Trajectory{SessionID: "sess-1", Meta: map[string]any{"member_id": "m-1"}}
-	// 不绑定 sink，不应 panic
-	rail.publishTrajectorySnapshot(traj)
-}
-
-func TestPublishTrajectorySnapshot_无TeamID跳过(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	sink := &fakeTrajectorySink{}
-	// teamID 为空时 sink 不生效
-	rail.trajectorySink = sink
-	rail.teamID = ""
-	traj := &trajectory.Trajectory{SessionID: "sess-1", Meta: map[string]any{"member_id": "m-1"}}
-	rail.publishTrajectorySnapshot(traj)
-}
-
-func TestPublishTrajectorySnapshot_无MemberID跳过(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	sink := &fakeTrajectorySink{}
-	rail.trajectorySink = sink
-	rail.teamID = "team-1"
-	traj := &trajectory.Trajectory{SessionID: "sess-1", Meta: map[string]any{}}
-	rail.publishTrajectorySnapshot(traj)
-}
-
-func TestPublishTrajectorySnapshot_正常发布(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	sink := &fakeTrajectorySink{}
-	rail.trajectorySink = sink
-	rail.teamID = "team-1"
-	rail.memberRole = "leader"
-	traj := &trajectory.Trajectory{
-		SessionID: "sess-1",
-		Meta:      map[string]any{"member_id": "m-1", "member_role": "worker"},
-	}
-	rail.publishTrajectorySnapshot(traj)
-	// 不会 panic 即成功
-}
+// ──────────────────────────── 【12-04】publishTrajectorySnapshot 测试已删除 ────────────────────────────
 
 // ──────────────────────────── emitBackgroundOutcomeEvent 测试 ────────────────────────────
 
@@ -445,14 +373,8 @@ func TestAfterInvoke_同步模式触发演化(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.InvokeInputs{ConversationID: "sess-sync"})
 	require.NoError(t, rail.BeforeInvoke(context.Background(), cbc))
 
-	// 记录步骤使 builder 非空
-	rail.Builder().RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindLLM,
-		Detail: &trajectory.LLMCallDetail{
-			Model:    "test",
-			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
-		},
-	})
+	// 记录 span 使 builder 非空（span 模型）
+	rail.Builder().RecordTestStep(trajectory.TestStep{Kind: "llm", Messages: baseMsgMaps([]llmschema.BaseMessage{llmschema.NewUserMessage("hi")})})
 
 	err := rail.AfterInvoke(context.Background(), cbc)
 	assert.NoError(t, err)
@@ -489,16 +411,7 @@ func TestIsSkillDisabled(t *testing.T) {
 // ──────────────────────────── collectMessagesFromTrajectory 测试 ────────────────────────────
 
 func TestCollectMessagesFromTrajectory(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
-				},
-			},
-		},
-	}
+	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{llmStep(llmschema.NewUserMessage("hi"))})
 	msgs := collectMessagesFromTrajectory(traj)
 	assert.Len(t, msgs, 1)
 }
@@ -551,7 +464,7 @@ func TestAfterModelCall_从Config获取ModelName(t *testing.T) {
 // fakeTrajectorySink 用于测试的模拟轨迹写入端点
 type fakeTrajectorySink struct{}
 
-func (f *fakeTrajectorySink) PublishMemberTrajectory(_ *trajectory.MemberTrajectorySnapshot) {}
+// 【12-04】fakeTrajectorySink 已删除（sink 链规则 8）。
 
 // fakeSessionFacade 用于测试的模拟 SessionFacade
 type fakeSessionFacade struct {
@@ -573,7 +486,6 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
 
 // 确保实现接口
-var _ trajectory.TrajectorySink = (*fakeTrajectorySink)(nil)
 var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
 
 // countingExtension 用于测试演化触发计数的扩展点实现

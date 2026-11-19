@@ -96,7 +96,7 @@ func TestEvolutionHostEventMeta_ToPayload_部分可选字段(t *testing.T) {
 func TestEvolutionSnapshot_ToLegacyDict_全字段(t *testing.T) {
 	skill := "my_skill"
 	snap := EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{ExecutionID: "exec_1"},
+		Trajectory: trajectory.NewTestTrajectoryWithID("exec_1"),
 		Messages:   []map[string]any{{"role": "user", "content": "hello"}},
 		SkillName:  &skill,
 	}
@@ -114,7 +114,7 @@ func TestEvolutionSnapshot_ToLegacyDict_全字段(t *testing.T) {
 
 func TestEvolutionSnapshot_ToLegacyDict_无SkillName(t *testing.T) {
 	snap := EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{ExecutionID: "exec_1"},
+		Trajectory: trajectory.NewTestTrajectoryWithID("exec_1"),
 		Messages:   []map[string]any{},
 	}
 	dict := snap.ToLegacyDict()
@@ -126,12 +126,12 @@ func TestEvolutionSnapshot_ToLegacyDict_无SkillName(t *testing.T) {
 func TestEvolutionSnapshot_FromLegacyDict_全字段(t *testing.T) {
 	skill := "my_skill"
 	dict := map[string]any{
-		"trajectory": &trajectory.Trajectory{ExecutionID: "exec_1"},
+		"trajectory": trajectory.NewTestTrajectoryWithID("exec_1"),
 		"messages":   []map[string]any{{"role": "user"}},
 		"skill_name": skill,
 	}
 	snap := FromLegacyDict(dict)
-	if snap.Trajectory == nil || snap.Trajectory.ExecutionID != "exec_1" {
+	if snap.Trajectory == nil || snap.Trajectory.TrajectoryID() != "exec_1" {
 		t.Error("Trajectory 未正确恢复")
 	}
 	if len(snap.Messages) != 1 {

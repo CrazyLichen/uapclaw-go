@@ -96,24 +96,14 @@ func TestCollectMessagesFromTrajectory_nil(t *testing.T) {
 }
 
 func TestCollectMessagesFromTrajectory_空轨迹(t *testing.T) {
-	traj := &trajectory.Trajectory{Steps: []*trajectory.TrajectoryStep{}}
+	traj := testTrajectoryFromSteps("test", nil)
 	assert.Equal(t, []map[string]any{}, collectMessagesFromTrajectory(traj))
 }
 
 func TestCollectMessagesFromTrajectory_含LLM步骤(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Messages: []llmschema.BaseMessage{
-						llmschema.NewUserMessage("hi"),
-						llmschema.NewAssistantMessage("hello"),
-					},
-				},
-			},
-		},
-	}
+	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{
+		llmStep(llmschema.NewUserMessage("hi"), llmschema.NewAssistantMessage("hello")),
+	})
 	msgs := collectMessagesFromTrajectory(traj)
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, "user", msgs[0]["role"])
@@ -121,19 +111,9 @@ func TestCollectMessagesFromTrajectory_含LLM步骤(t *testing.T) {
 }
 
 func TestCollectMessagesFromTrajectory_去重(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Messages: []llmschema.BaseMessage{
-						llmschema.NewUserMessage("hi"),
-						llmschema.NewUserMessage("hi"),
-					},
-				},
-			},
-		},
-	}
+	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{
+		llmStep(llmschema.NewUserMessage("hi"), llmschema.NewUserMessage("hi")),
+	})
 	msgs := collectMessagesFromTrajectory(traj)
 	assert.Len(t, msgs, 1)
 }

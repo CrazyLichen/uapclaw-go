@@ -294,6 +294,12 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 	}
 
 	sessionID := r.resolveSessionID(cbc, inputs)
+	if sessionID == "" {
+		// 偏差 D-25.2b-9：Go harness 在 BeforeInvoke 时会话 ID 可为空（旧实现
+		// 容忍空串）；上游 offline/builder.py 校验 session_id 必填。此处回退
+		// "unknown" 保持收集不中断，回收条件=无。
+		sessionID = "unknown"
+	}
 
 	// Python: 复用同 session 的 builder
 	if r.builder != nil && r.BuilderSessionID() == sessionID {
@@ -514,7 +520,7 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 // Final 回调——子类不应覆写，通过 ext.OnAfterInvoke 扩展。
 // Python: EvolutionRail.after_invoke(ctx)
 func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	if r.builder == nil {
+		if r.builder == nil {
 		return nil
 	}
 
@@ -523,9 +529,7 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	if traj == nil {
 		return nil
 	}
-
-	// Python: self._trajectory_store.save(trajectory)
-	if err := r.saveTrajectory(ctx, traj); err != nil {
+		if err := r.saveTrajectory(ctx, traj); err != nil {
 		return err
 	}
 	// 【12-04】sink 发布段已删除（上游无对应物）。
@@ -822,3 +826,6 @@ func argsToJSONAttr(value any) string {
 	}
 	return string(data)
 }
+
+// DefaultMemberRole 返回默认成员角色（测试观测面）。
+func (r *EvolutionRail) DefaultMemberRole() string { return r.defaultMemberRole }

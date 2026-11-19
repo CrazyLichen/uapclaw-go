@@ -131,25 +131,10 @@ func TestCountSpawnMemberCalls_有Builder(t *testing.T) {
 	r := NewTeamSkillCreateRail("/tmp/skills")
 
 	// 手动设置 builder 和步骤
-	builder := trajectory.NewTrajectoryBuilder("test-session", "online")
-	builder.RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindTool,
-		Detail: &trajectory.ToolCallDetail{
-			ToolName: "spawn_member",
-		},
-	})
-	builder.RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindTool,
-		Detail: &trajectory.ToolCallDetail{
-			ToolName: "other_tool",
-		},
-	})
-	builder.RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindTool,
-		Detail: &trajectory.ToolCallDetail{
-			ToolName: "spawn_member_team_a",
-		},
-	})
+	builder := mustNewTestBuilder("test-session", "online")
+	builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: "spawn_member"})
+	builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: "other_tool"})
+	builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: "spawn_member_team_a"})
 
 	// 需要设置 builder — 同包测试可直接访问非导出字段
 	r.EvolutionRail.builder = builder

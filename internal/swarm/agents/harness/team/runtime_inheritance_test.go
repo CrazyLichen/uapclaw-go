@@ -452,7 +452,7 @@ func TestBuildContextProcessorRail_空配置(t *testing.T) {
 // TestBuildSkillEvolutionRail_失败返回nil。
 func TestBuildSkillEvolutionRail_失败返回nil(t *testing.T) {
 	// 缺 api_key 的 config → BuildEvolutionLLM 失败 → 返回 nil
-	rail := BuildSkillEvolutionRail("/tmp/x", map[string]any{}, nil, "")
+	rail := BuildSkillEvolutionRail("/tmp/x", map[string]any{})
 	if rail != nil {
 		t.Fatalf("invalid config should return nil rail")
 	}
@@ -468,7 +468,7 @@ func TestBuildSkillEvolutionRail_合法配置(t *testing.T) {
 			},
 		},
 	}}
-	rail := BuildSkillEvolutionRail("/tmp/skills", cfg, nil, "")
+	rail := BuildSkillEvolutionRail("/tmp/skills", cfg)
 	if rail == nil {
 		t.Fatalf("valid config should build rail")
 	}

@@ -596,13 +596,11 @@ func TestTeamSkillExperienceOptimizer_Backward_正常(t *testing.T) {
 
 	skillName := "team_skill"
 	skillNamePtr := skillName
-	traj := &trajectory.Trajectory{
-		ExecutionID: "exec-1",
-		SessionID:   "sess-1",
-		Source:      "online",
-		Steps: []*trajectory.TrajectoryStep{
-			{Kind: trajectory.StepKindTool},
-		},
+	traj, trajErr := trajectory.NewTestTrajectory("sess-1", map[string]any{"source": "online"}, []trajectory.TestStep{
+		{Kind: "tool", ToolName: "some_tool"},
+	})
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	evoCtx := &experience.EvolutionContext{
 		SkillName:    skillName,
@@ -645,12 +643,8 @@ func TestTeamSkillExperienceOptimizer_Backward_逐信号Patch(t *testing.T) {
 		SkillName:    skillName,
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "agent issue"}},
-		Trajectory: &trajectory.Trajectory{
-			ExecutionID: "exec-1",
-			SessionID:   "sess-1",
-			Source:      "online",
-			Steps:       []*trajectory.TrajectoryStep{}, // 空 Steps → 走逐信号 patch
-		},
+		// 空 span 轨迹 → 走逐信号 patch（span 模型下等价旧空 Steps 语义）。
+		Trajectory: trajectory.NewTestTrajectoryWithID("exec-1"),
 	}
 
 	dummyOp := &dummyOperator{id: "skill_experience_team_skill"}
@@ -680,9 +674,7 @@ func TestTeamSkillExperienceOptimizer_Step(t *testing.T) {
 		SkillName:    skillName,
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr}},
-		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-		},
+		Trajectory: mustTestTrajectoryWithToolSpan(),
 	}
 	dummyOp := &dummyOperator{id: "skill_experience_team_skill"}
 	operators := map[string]operator.Operator{"skill_experience_team_skill": dummyOp}
@@ -711,9 +703,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_聚合路径(t *testing.T)
 		SkillName:    "team_skill",
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "failed"}},
-		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-		},
+		Trajectory: mustTestTrajectoryWithToolSpan(),
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -749,8 +739,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号patch(t *testing.
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "issue"}},
 		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{}, // 空 steps → 走逐信号路径
-		},
+					},
 	}
 
 	_, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -765,12 +754,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch(t *testing.T) {
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{
-		ExecutionID: "exec-1",
-		SessionID:   "sess-1",
-		Source:      "online",
-		Steps:       []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-	}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "用户想更快速地完成分析")
 	assert.NoError(t, err)
@@ -786,12 +770,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_不需要(t *testing.T) 
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{
-		ExecutionID: "exec-1",
-		SessionID:   "sess-1",
-		Source:      "online",
-		Steps:       []*trajectory.TrajectoryStep{},
-	}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "用户意图")
 	assert.NoError(t, err)
@@ -805,12 +784,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch(t *testing.T) {
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{
-		ExecutionID: "exec-1",
-		SessionID:   "sess-1",
-		Source:      "online",
-		Steps:       []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-	}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	issues := []map[string]string{{"type": "communication_failure", "description": "agent A 和 agent B 通信断开"}}
 
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "skill content", issues)
@@ -827,11 +801,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_不需要(t *testi
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{
-		ExecutionID: "exec-1",
-		SessionID:   "sess-1",
-		Source:      "online",
-	}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	issues := []map[string]string{}
 
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "content", issues)
@@ -965,7 +935,7 @@ func TestTeamSkillExperienceOptimizer_buildEvolutionContext_有上下文(t *test
 	model := newMockSkillModel(t, nil)
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	evoCtx := &experience.EvolutionContext{
 		SkillName:    "team_skill",
 		SkillContent: "content",
@@ -973,7 +943,7 @@ func TestTeamSkillExperienceOptimizer_buildEvolutionContext_有上下文(t *test
 	}
 	opt.onlineContexts = map[string]*experience.EvolutionContext{"team_skill": evoCtx}
 
-	defaultTraj := &trajectory.Trajectory{ExecutionID: "default"}
+	defaultTraj := trajectory.NewTestTrajectoryWithID("default")
 	result, err := opt.buildEvolutionContext("team_skill", nil, nil, defaultTraj)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -992,7 +962,7 @@ func TestTeamSkillExperienceOptimizer_buildEvolutionContext_填充trajectory(t *
 	}
 	opt.onlineContexts = map[string]*experience.EvolutionContext{"team_skill": evoCtx}
 
-	defaultTraj := &trajectory.Trajectory{ExecutionID: "default", SessionID: "default"}
+	defaultTraj := trajectory.NewTestTrajectoryWithID("default")
 	result, err := opt.buildEvolutionContext("team_skill", nil, nil, defaultTraj)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -1387,9 +1357,7 @@ func TestTeamSkillExperienceOptimizer_Backward_LLM失败(t *testing.T) {
 		SkillName:    skillName,
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr}},
-		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-		},
+		Trajectory: mustTestTrajectoryWithToolSpan(),
 	}
 	dummyOp := &dummyOperator{id: "skill_experience_team_fail"}
 	operators := map[string]operator.Operator{"skill_experience_team_fail": dummyOp}
@@ -1459,9 +1427,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_英文(t *testing.T) {
 		SkillName:    "team_skill",
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "failed"}},
-		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-		},
+		Trajectory: mustTestTrajectoryWithToolSpan(),
 		UserQuery: "How to collaborate better",
 	}
 
@@ -1482,9 +1448,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_已有记录(t *testing.T)
 		SkillName:    "team_skill",
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "issue"}},
-		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
-		},
+		Trajectory: mustTestTrajectoryWithToolSpan(),
 		ExistingDescRecords:   []checkpointing.EvolutionRecord{{ID: "ev_1", Change: checkpointing.EvolutionPatch{Section: "Description"}}},
 		ExistingBodyRecords:   []checkpointing.EvolutionRecord{{ID: "ev_2", Change: checkpointing.EvolutionPatch{Section: "Instructions"}}},
 		ExistingScriptRecords: []checkpointing.EvolutionRecord{{ID: "ev_3", Change: checkpointing.EvolutionPatch{Section: "Scripts"}}},
@@ -1508,8 +1472,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号用户意图(t *t
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "user_intent", SkillName: &skillNamePtr, Excerpt: "更快完成分析"}},
 		Trajectory: &trajectory.Trajectory{
-			Steps: []*trajectory.TrajectoryStep{},
-		},
+					},
 		UserQuery: "快速分析",
 	}
 
@@ -1529,7 +1492,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_LLM失败(t *testing.T) 
 	}
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
-	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "用户意图")
 	assert.Error(t, err)
 	assert.Nil(t, record)
@@ -1542,7 +1505,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_空内容(t *testing.T) 
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "意图")
 	assert.Error(t, err)
 	assert.Nil(t, record)
@@ -1555,7 +1518,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_空内容(t *testi
 	})
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
-	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "content", nil)
 	assert.Error(t, err)
 	assert.Nil(t, record)
@@ -1573,7 +1536,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_LLM失败(t *testi
 	}
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
-	traj := &trajectory.Trajectory{ExecutionID: "exec-1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "content", nil)
 	assert.Error(t, err)
 	assert.Nil(t, record)
@@ -1711,4 +1674,15 @@ func (m *mockBaseModelClient) SupportsKVCacheAffinity() bool { return false }
 // BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
 func (m *mockBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
 	return map[string]any{}
+}
+
+// mustTestTrajectoryWithToolSpan 构造带一个工具 span 的测试轨迹（模型迁移期助手）。
+func mustTestTrajectoryWithToolSpan() *trajectory.Trajectory {
+	traj, err := trajectory.NewTestTrajectory("sess-1", map[string]any{"source": "online"}, []trajectory.TestStep{
+		{Kind: "tool", ToolName: "some_tool"},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return traj
 }

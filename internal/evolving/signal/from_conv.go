@@ -608,8 +608,8 @@ func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[st
 		if len(matched) >= 2 && d.isSkillMDReadTool(name) {
 			skillName = matched[1]
 		} else if name == "skill_tool" {
-			// 尝试解析 arguments
-			rawArgs := tc["arguments"]
+			// 尝试解析 arguments（12-04：经 toolCallArgumentsOf 兼容嵌套形态）
+			rawArgs := any(arguments)
 			if rawArgs != nil {
 				var argsDict map[string]any
 				if argsStr, ok := rawArgs.(string); ok {
@@ -779,3 +779,6 @@ func toolCallArgumentsOf(tc map[string]any) string {
 	}
 	return ""
 }
+
+// GetToolCallsOf 导出消息 tool_calls 读取（rails 调试/消费面）。
+func GetToolCallsOf(m map[string]any) []map[string]any { return getToolCalls(m) }

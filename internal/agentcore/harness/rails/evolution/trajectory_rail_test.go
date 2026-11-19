@@ -45,10 +45,10 @@ func TestTrajectoryRail_收集轨迹(t *testing.T) {
 	err = rail.AfterModelCall(context.Background(), cbcModel)
 	require.NoError(t, err)
 
-	// 验证 builder 有步骤
+	// 验证 builder 有 span（span 模型）
 	traj := rail.buildTrajectory()
 	assert.NotNil(t, traj)
-	assert.Len(t, traj.Steps, 1)
+	assert.Len(t, trajectory.IterSpans(traj), 1)
 }
 
 func TestTrajectoryRail_RunEvolution不执行任何操作(t *testing.T) {

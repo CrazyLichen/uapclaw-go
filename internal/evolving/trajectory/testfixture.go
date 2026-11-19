@@ -122,3 +122,38 @@ func jsonStringOf(value any) string {
 	}
 	return string(data)
 }
+
+// NewTestTrajectoryWithID 构造带固定 trajectory_id 的空测试轨迹。
+func NewTestTrajectoryWithID(trajectoryID string) *Trajectory {
+	builder, err := NewTrajectoryBuilder("test-session", "offline", nil, nil, nil, nil, 0, &trajectoryID, nil)
+	if err != nil {
+		panic(err)
+	}
+	traj, err := builder.Build()
+	if err != nil {
+		panic(err)
+	}
+	return traj
+}
+
+// RecordTestStep 把一条测试步骤记入组装器（迁移期测试支持）。
+func (b *TrajectoryBuilder) RecordTestStep(step TestStep) error {
+	span := testSpanOf(step, len(b.spans))
+	if span == nil {
+		return nil
+	}
+	return b.RecordSpan(span)
+}
+
+// NewTestTrajectoryWithIDWithSession 构造带固定 ID 与会话的空测试轨迹。
+func NewTestTrajectoryWithIDWithSession(sessionID string) *Trajectory {
+	builder, err := NewTrajectoryBuilder(sessionID, "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	traj, err := builder.Build()
+	if err != nil {
+		panic(err)
+	}
+	return traj
+}

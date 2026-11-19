@@ -110,7 +110,7 @@ func TestTeamSkillEvolutionRail_OnAfterEvolutionTriggered(t *testing.T) {
 	// 匹配 sessionID → 清除 hostCompletionPendingSessionID
 	sessionID := "sess-1"
 	r := &TeamSkillEvolutionRail{hostCompletionPendingSessionID: &sessionID}
-	traj := &trajectory.Trajectory{SessionID: "sess-1"}
+	traj := testTrajectoryFromSteps("sess-1", nil)
 	err := r.OnAfterEvolutionTriggered(context.TODO(), traj, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, r.hostCompletionPendingSessionID)
@@ -216,28 +216,17 @@ func TestInferTeamSkillFromTrajectory(t *testing.T) {
 	assert.Equal(t, "", inferTeamSkillFromTrajectory(nil, knownSkills))
 
 	// 空轨迹
-	assert.Equal(t, "", inferTeamSkillFromTrajectory(&trajectory.Trajectory{}, knownSkills))
+	assert.Equal(t, "", inferTeamSkillFromTrajectory(testTrajectoryFromSteps("", nil), knownSkills))
 
 	// 空已知技能
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{Kind: trajectory.StepKindTool, Detail: &trajectory.ToolCallDetail{ToolName: "skill_tool"}},
-		},
-	}
+	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{toolStep("skill_tool", nil)})
 	assert.Equal(t, "", inferTeamSkillFromTrajectory(traj, []string{}))
 
 	// 有 skill_tool 调用但 args 不包含技能名
 	assert.Equal(t, "", inferTeamSkillFromTrajectory(traj, knownSkills))
 
 	// 有 skill_tool 调用且 args 包含技能名
-	trajWithSkill := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind:   trajectory.StepKindTool,
-				Detail: &trajectory.ToolCallDetail{ToolName: "skill_tool", CallArgs: map[string]any{"skill_name": "team-planner"}},
-			},
-		},
-	}
+	trajWithSkill := testTrajectoryFromSteps("test", []trajectory.TestStep{toolStep("skill_tool", map[string]any{"skill_name": "team-planner"})})
 	result := inferTeamSkillFromTrajectory(trajWithSkill, knownSkills)
 	assert.Equal(t, "team-planner", result)
 }
@@ -635,15 +624,6 @@ func TestWithTeamSkillTrajectorySource(t *testing.T) {
 	src := &fakeTrajectorySource{}
 	WithTeamSkillTrajectorySource(src)(r)
 	assert.Equal(t, src, r.trajectorySource)
-}
-
-// TestWithTeamSkillTrajectorySink 验证 WithTeamSkillTrajectorySink 选项。
-func TestWithTeamSkillTrajectorySink(t *testing.T) {
-	r := &TeamSkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
-	sink := &fakeTrajectorySink{}
-	WithTeamSkillTrajectorySink(sink, "team-1", "leader")(r)
-	assert.Equal(t, "team-1", r.teamID)
-	assert.Equal(t, sink, r.trajectorySink)
 }
 
 // fakeTrajectorySource 用于测试的模拟轨迹聚合源

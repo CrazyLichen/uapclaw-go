@@ -194,7 +194,7 @@ func TestContractsSuite(t *testing.T) {
 func (s *ContractsSuite) TestEvolutionSnapshot_ToLegacyDict() {
 	skillName := "my-skill"
 	snapshot := evolution.EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{SessionID: "session-1"},
+		Trajectory: trajectory.NewTestTrajectoryWithIDWithSession("session-1"),
 		Messages:   []map[string]any{{"role": "user", "content": "hello"}},
 		SkillName:  &skillName,
 		SessionID:  "session-1",
@@ -210,7 +210,7 @@ func (s *ContractsSuite) TestEvolutionSnapshot_ToLegacyDict() {
 // TestEvolutionSnapshot_ToLegacyDict空字段 测试空字段不写入 dict。
 func (s *ContractsSuite) TestEvolutionSnapshot_ToLegacyDict空字段() {
 	snapshot := evolution.EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{SessionID: "s1"},
+		Trajectory: trajectory.NewTestTrajectoryWithIDWithSession("s1"),
 	}
 
 	dict := snapshot.ToLegacyDict()
@@ -225,7 +225,7 @@ func (s *ContractsSuite) TestEvolutionSnapshot_ToLegacyDict空字段() {
 func (s *ContractsSuite) TestFromLegacyDict() {
 	skillName := "test-skill"
 	dict := map[string]any{
-		"trajectory": &trajectory.Trajectory{SessionID: "s2"},
+		"trajectory": trajectory.NewTestTrajectoryWithIDWithSession("s2"),
 		"messages":   []map[string]any{{"role": "user", "content": "hi"}},
 		"skill_name": skillName,
 		"session_id": "s2",
@@ -233,7 +233,9 @@ func (s *ContractsSuite) TestFromLegacyDict() {
 
 	snapshot := evolution.FromLegacyDict(dict)
 	s.NotNil(snapshot.Trajectory)
-	s.Equal("s2", snapshot.Trajectory.SessionID)
+	if snapshot.Trajectory.SessionID() != nil {
+		s.Equal("s2", *snapshot.Trajectory.SessionID())
+	}
 	s.Equal("test-skill", *snapshot.SkillName)
 	s.Equal("s2", snapshot.SessionID)
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
@@ -123,4 +125,44 @@ func argsJSONAnyString(value any) string {
 		return fmt.Sprint(value)
 	}
 	return string(data)
+}
+
+// testTrajectoryFromSteps 构造 span 模型测试轨迹（llmschema 消息 → 扁平 map）。
+// 迁移期测试支持；Python 无对应实现。
+func testTrajectoryFromSteps(sessionID string, steps []trajectory.TestStep) *trajectory.Trajectory {
+	traj, err := trajectory.NewTestTrajectory(sessionID, nil, steps)
+	if err != nil {
+		panic(err)
+	}
+	return traj
+}
+
+// baseMsgMaps BaseMessage 列表 → 扁平消息 map 列表。
+func baseMsgMaps(messages []llmschema.BaseMessage) []map[string]any {
+	result := make([]map[string]any, 0, len(messages))
+	for _, msg := range messages {
+		if msgMap := llmschema.BaseMessageToMap(msg); msgMap != nil {
+			result = append(result, msgMap)
+		}
+	}
+	return result
+}
+
+// llmStep LLM 测试步骤（消息集）。
+func llmStep(messages ...llmschema.BaseMessage) trajectory.TestStep {
+	return trajectory.TestStep{Kind: "llm", Messages: baseMsgMaps(messages)}
+}
+
+// toolStep 工具测试步骤。
+func toolStep(toolName string, callArgs map[string]any) trajectory.TestStep {
+	return trajectory.TestStep{Kind: "tool", ToolName: toolName, CallArgs: callArgs}
+}
+
+// mustNewTestBuilder 测试用组装器构造（新签名简化封装）。
+func mustNewTestBuilder(sessionID, source string) *trajectory.TrajectoryBuilder {
+	builder, err := trajectory.NewTrajectoryBuilder(sessionID, source, nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return builder
 }

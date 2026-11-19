@@ -603,7 +603,7 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	r.emitProgress("started", "开始常规技能演进分析")
 
 	if len(messages) == 0 {
-		logger.Info(logComponent).Msg("[SkillEvolutionRail] no messages, skipping")
+			logger.Info(logComponent).Msg("[SkillEvolutionRail] no messages, skipping")
 		r.emitProgress("cancelled", "无对话消息，取消常规技能演进分析")
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
 		return nil
