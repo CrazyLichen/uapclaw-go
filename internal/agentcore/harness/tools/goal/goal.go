@@ -4,9 +4,9 @@ package goal
 // 提供 GoalReportSink（报告暂存）与 submit_goal_report / get_current_goal 两个工具。
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"

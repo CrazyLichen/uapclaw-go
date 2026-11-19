@@ -1621,11 +1621,11 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 
 	// 落盘用的精简结构：只留排查需要的字段（span 读面）。
 	type stepEntry struct {
-		Kind            string         `json:"kind"`
-		ToolName        string         `json:"tool_name,omitempty"`
-		CallArgs        string         `json:"call_args,omitempty"`
-		CallResult      string         `json:"call_result,omitempty"`
-		ResponsePreview string         `json:"response_preview,omitempty"`
+		Kind            string `json:"kind"`
+		ToolName        string `json:"tool_name,omitempty"`
+		CallArgs        string `json:"call_args,omitempty"`
+		CallResult      string `json:"call_result,omitempty"`
+		ResponsePreview string `json:"response_preview,omitempty"`
 	}
 
 	// 逐 span 转换：工具 span 留名字和参数/结果的前 500 字，LLM span 留最后一条回复的前 300 字。
