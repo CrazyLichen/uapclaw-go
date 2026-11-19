@@ -461,9 +461,6 @@ func TestAfterModelCall_从Config获取ModelName(t *testing.T) {
 
 // ──────────────────────────── 辅助类型 ────────────────────────────
 
-// fakeTrajectorySink 用于测试的模拟轨迹写入端点
-type fakeTrajectorySink struct{}
-
 // 【12-04】fakeTrajectorySink 已删除（sink 链规则 8）。
 
 // fakeSessionFacade 用于测试的模拟 SessionFacade
