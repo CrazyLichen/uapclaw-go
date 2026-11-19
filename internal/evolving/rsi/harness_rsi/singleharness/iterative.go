@@ -14,11 +14,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
+	hresources "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/data_loader"
 	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/improver_evolution"
+	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -2168,6 +2171,1116 @@ func skillNamesMatch(planned, invoked string) bool {
 	return canonical(planned) != "" && canonical(planned) == canonical(invoked)
 }
 
+// ──────────────────────────── 检查点过滤物化段（Python 3614-4138） ────────────────────────────
+
+// materializeCheckpointFilteredHarness 把保留改动组合到 epoch 的安全起点 Harness 上。
+// Python: _materialize_checkpoint_filtered_harness。
+func materializeCheckpointFilteredHarness(
+	outputDir string,
+	epoch int,
+	baseHarnessRefsPath, replayedHarnessRefsPath string,
+	retainedGates, removedGates []map[string]any,
+	fullEvalRefPath string,
+) (string, error) {
+	baseRefs, err := resolvePath(baseHarnessRefsPath)
+	if err != nil {
+		return "", err
+	}
+	replayedRefs, err := resolvePath(replayedHarnessRefsPath)
+	if err != nil {
+		return "", err
+	}
+	basePayload, err := readYAMLFile(baseRefs)
+	if err != nil {
+		return "", err
+	}
+	baseRoles, _ := basePayload["harness_refs"].(map[string]any)
+	if len(baseRoles) == 0 {
+		return "", errors.New("Cannot filter epoch checkpoint: base refs contain no harness_refs")
+	}
+
+	selectionRoot := filepath.Join(outputDir, "epoch_selections", fmt.Sprintf("e%03d", epoch))
+	stagingRoot := filepath.Join(filepath.Dir(selectionRoot), filepath.Base(selectionRoot)+".filter_tmp")
+	if _, err := os.Stat(stagingRoot); err == nil {
+		if err := os.RemoveAll(stagingRoot); err != nil {
+			return "", err
+		}
+	}
+	if err := os.MkdirAll(stagingRoot, 0o755); err != nil {
+		return "", err
+	}
+	stagedRoles := map[string]string{}
+	success := false
+	defer func() {
+		if !success {
+			os.RemoveAll(stagingRoot)
+		}
+	}()
+	rolesSorted := make([]string, 0, len(baseRoles))
+	for role := range baseRoles {
+		rolesSorted = append(rolesSorted, role)
+	}
+	sort.Strings(rolesSorted)
+	for _, role := range rolesSorted {
+		source, err := resolvePath(toString(baseRoles[role]))
+		if err != nil {
+			return "", err
+		}
+		if info, err := os.Stat(source); err != nil || !info.IsDir() {
+			return "", fmt.Errorf(
+				"Cannot filter epoch checkpoint role '%s': source package does not exist: %s", role, source)
+		}
+		roleDir := filepath.Join(stagingRoot, "harnesses", checkpointRoleDirName(role))
+		if err := copyTreePreserve(source, roleDir); err != nil {
+			return "", err
+		}
+		// 组合前先播种 H0 声明；否则同步 delta-only 注册表会擦除基线能力。
+		if err := memberoptimizer.PreparePluginRegistries(roleDir); err != nil {
+			return "", err
+		}
+		stagedRoles[role] = roleDir
+	}
+
+	retainedRecords := []map[string]string{}
+	for _, gate := range retainedGates {
+		candidateRoles := checkpointHarnessRolePaths(toString(gate["candidate_harness_refs_path"]))
+		for _, rawCapability := range toAnySlice(gate["capabilities"]) {
+			capability, ok := rawCapability.(map[string]any)
+			if !ok {
+				continue
+			}
+			role := toString(capability["role"])
+			if _, staged := stagedRoles[role]; !staged && len(stagedRoles) == 1 {
+				for onlyRole := range stagedRoles {
+					role = onlyRole
+					break
+				}
+			}
+			targetRel := checkpointRelativePath(toString(capability["target_path"]))
+			if _, staged := stagedRoles[role]; !staged || targetRel == "" {
+				return "", fmt.Errorf(
+					"Cannot filter epoch checkpoint capability without a "+
+						"resolvable role and target path: %v", capability)
+			}
+			operation := toString(capability["operation"])
+			actionGroup := toString(capability["action_group"])
+			runtimeName := toString(capability["runtime_name"])
+			candidateRole := candidateRoles[role]
+			if candidateRole == "" && len(candidateRoles) == 1 {
+				for _, only := range candidateRoles {
+					candidateRole = only
+					break
+				}
+			}
+			if operation == "add" || operation == "modify" {
+				if candidateRole == "" {
+					return "", fmt.Errorf(
+						"Cannot compose retained capability without its candidate role package: %s:%s",
+						role, targetRel)
+				}
+				if err := checkpointCopyCapability(
+					stagedRoles[role], candidateRole,
+					actionGroup, targetRel, runtimeName); err != nil {
+					return "", err
+				}
+			} else if operation == "remove" {
+				if err := checkpointRemoveAddedCapability(
+					stagedRoles[role], actionGroup, targetRel, runtimeName); err != nil {
+					return "", err
+				}
+			} else {
+				return "", fmt.Errorf(
+					"Checkpoint filtering supports retained add/modify/remove capabilities, got %s:%s",
+					actionGroup, operation)
+			}
+			retainedRecords = append(retainedRecords, map[string]string{
+				"action_id":    toString(capability["action_id"]),
+				"role":         role,
+				"action_group": actionGroup,
+				"operation":    operation,
+				"target_path":  targetRel,
+			})
+		}
+	}
+
+	for _, roleDir := range stagedRoles {
+		if err := memberoptimizer.SynchronizePluginManifest(roleDir); err != nil {
+			return "", err
+		}
+		manifest := filepath.Join(roleDir, "manifest.json")
+		if fileExists(manifest) {
+			if _, err := hresources.LoadPluginPackage(manifest); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	if _, err := os.Stat(selectionRoot); err == nil {
+		if err := os.RemoveAll(selectionRoot); err != nil {
+			return "", err
+		}
+	}
+	if err := os.Rename(stagingRoot, selectionRoot); err != nil {
+		return "", err
+	}
+	success = true
+
+	removedRecords := []map[string]string{}
+	for _, gate := range removedGates {
+		for _, rawCapability := range toAnySlice(gate["capabilities"]) {
+			capability, ok := rawCapability.(map[string]any)
+			if !ok {
+				continue
+			}
+			removedRecords = append(removedRecords, map[string]string{
+				"action_id":    toString(capability["action_id"]),
+				"role":         toString(capability["role"]),
+				"action_group": toString(capability["action_group"]),
+				"operation":    toString(capability["operation"]),
+				"target_path":  checkpointRelativePath(toString(capability["target_path"])),
+			})
+		}
+	}
+	selectedRoles := map[string]any{}
+	roleOrder := make([]string, 0, len(stagedRoles))
+	for role := range stagedRoles {
+		roleOrder = append(roleOrder, role)
+	}
+	sort.Strings(roleOrder)
+	for _, role := range roleOrder {
+		selectedRoles[role] = filepath.Join(selectionRoot, "harnesses", filepath.Base(stagedRoles[role]))
+	}
+	selectedPayload := map[string]any{}
+	for key, value := range basePayload {
+		selectedPayload[key] = value
+	}
+	roleResults := map[string]any{}
+	for _, role := range roleOrder {
+		roleResults[role] = map[string]any{
+			"status":                  "checkpoint_filtered",
+			"before_harness_ref_path": toString(baseRoles[role]),
+			"after_harness_ref_path":  selectedRoles[role],
+		}
+	}
+	roleIDentities := []any{}
+	for _, rawRole := range toAnySlice(basePayload["roles"]) {
+		rawRoleMap, ok := rawRole.(map[string]any)
+		if !ok {
+			continue
+		}
+		identity := map[string]any{}
+		for key, value := range rawRoleMap {
+			identity[key] = value
+		}
+		roleName := defaultString(identity["member_name"], toString(identity["role"]))
+		if selected, ok := selectedRoles[roleName]; ok {
+			identity["harness_ref_path"] = selected
+		}
+		roleIDentities = append(roleIDentities, identity)
+	}
+	retainedActionIDs := []any{}
+	for _, id := range capabilityActionIDs(retainedGates) {
+		retainedActionIDs = append(retainedActionIDs, id)
+	}
+	retainedActionsAny := []any{}
+	for _, record := range retainedRecords {
+		retainedActionsAny = append(retainedActionsAny, record)
+	}
+	removedActionsAny := []any{}
+	for _, record := range removedRecords {
+		removedActionsAny = append(removedActionsAny, record)
+	}
+	selectedPayload["source_harness_refs_path"] = baseRefs
+	selectedPayload["harness_refs"] = selectedRoles
+	selectedPayload["promotion_status"] = "checkpoint_filtered"
+	selectedPayload["role_results"] = roleResults
+	selectedPayload["checkpoint_filter"] = map[string]any{
+		"full_eval_ref_path":               fullEvalRefPath,
+		"replayed_harness_refs_path":       replayedRefs,
+		"post_checkpoint_replay_performed": false,
+		"retained_action_ids":              retainedActionIDs,
+		"retained_actions":                 retainedActionsAny,
+		"removed_actions":                  removedActionsAny,
+	}
+	if len(roleIDentities) > 0 {
+		selectedPayload["roles"] = roleIDentities
+	}
+	selectedRefPath := filepath.Join(selectionRoot, "harness_refs.yaml")
+	if err := writeYAMLAtomic(selectedRefPath, selectedPayload); err != nil {
+		return "", err
+	}
+	if err := validateSingleHarnessRefs(selectedRefPath); err != nil {
+		return "", err
+	}
+	return selectedRefPath, nil
+}
+
+// checkpointHarnessRolePaths 引用文件的 role→路径映射（Python: _checkpoint_harness_role_paths）。
+func checkpointHarnessRolePaths(refsPath string) map[string]string {
+	result := map[string]string{}
+	payload, err := readYAMLFile(refsPath)
+	if err != nil {
+		return result
+	}
+	refs, ok := payload["harness_refs"].(map[string]any)
+	if !ok {
+		return result
+	}
+	for role, rawPath := range refs {
+		roleStr := toString(role)
+		pathStr := toString(rawPath)
+		if roleStr == "" || pathStr == "" {
+			continue
+		}
+		if resolved, err := resolvePath(pathStr); err == nil {
+			result[roleStr] = resolved
+		}
+	}
+	return result
+}
+
+// checkpointRoleDirName 角色目录名（Python: _checkpoint_role_dir_name——字母数字保留小写、其余转下划线、去首尾下划线）。
+func checkpointRoleDirName(role string) string {
+	var normalized strings.Builder
+	for _, char := range role {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			normalized.WriteRune(unicode.ToLower(char))
+		} else {
+			normalized.WriteRune('_')
+		}
+	}
+	normalizedStr := strings.Trim(normalized.String(), "_")
+	digest := sha256.Sum256([]byte(role))
+	return fmt.Sprintf("%s_%s", defaultString(normalizedStr, "role"), hex.EncodeToString(digest[:])[:8])
+}
+
+// checkpointRelativePath 相对路径规范化（Python: _checkpoint_relative_path）。
+func checkpointRelativePath(rawPath string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(rawPath), "\\", "/")
+	if normalized == "" || path.IsAbs(normalized) {
+		return ""
+	}
+	parts := strings.Split(normalized, "/")
+	for _, part := range parts {
+		if part == ".." {
+			return ""
+		}
+	}
+	return path.Join(parts...)
+}
+
+// checkpointRemoveAddedCapability 移除新增能力（Python: _checkpoint_remove_added_capability）。
+func checkpointRemoveAddedCapability(
+	harnessRoot string, actionGroup, targetRel, runtimeName string,
+) error {
+	if actionGroup == "config" {
+		return checkpointRemovePath(harnessRoot, "runtime.yaml")
+	}
+	if actionGroup == "skill" {
+		parts := strings.Split(targetRel, "/")
+		skillRoot := targetRel
+		if len(parts) >= 2 && parts[0] == "skills" {
+			skillRoot = path.Join(parts[0], parts[1])
+		}
+		if err := checkpointRemovePath(harnessRoot, skillRoot); err != nil {
+			return err
+		}
+		return checkpointRemoveManifestEntries(
+			filepath.Join(harnessRoot, "skills", "skills.yaml"),
+			"skills", skillRoot, runtimeName, true)
+	}
+	if actionGroup == "prompt" {
+		if err := checkpointRemovePath(harnessRoot, targetRel); err != nil {
+			return err
+		}
+		return checkpointRemovePromptEntry(
+			filepath.Join(harnessRoot, "prompt_sections", "sections.yaml"),
+			targetRel, runtimeName)
+	}
+	if actionGroup == "tool" || actionGroup == "rail" {
+		registry := actionGroup + "s"
+		manifestName := registry + "/" + registry + ".yaml"
+		if targetRel == manifestName {
+			return fmt.Errorf("Cannot remove an added %s whose target is only %s", actionGroup, manifestName)
+		}
+		if err := checkpointRemovePath(harnessRoot, targetRel); err != nil {
+			return err
+		}
+		return checkpointRemoveManifestEntries(
+			filepath.Join(harnessRoot, manifestName),
+			registry, targetRel, runtimeName, false)
+	}
+	return fmt.Errorf("Checkpoint filtering does not support action_group=%q", actionGroup)
+}
+
+// checkpointCopyCapability 复制保留能力（Python: _checkpoint_copy_capability）。
+func checkpointCopyCapability(
+	harnessRoot, candidateHarnessRoot, actionGroup, targetRel, runtimeName string,
+) error {
+	if actionGroup == "config" {
+		return checkpointCopyPath(harnessRoot, candidateHarnessRoot, "runtime.yaml")
+	}
+	copyRel := targetRel
+	manifestName := ""
+	manifestKey := ""
+	switch actionGroup {
+	case "skill":
+		parts := strings.Split(targetRel, "/")
+		if len(parts) >= 2 && parts[0] == "skills" {
+			copyRel = path.Join(parts[0], parts[1])
+		}
+		manifestName = "skills/skills.yaml"
+		manifestKey = "skills"
+	case "prompt":
+		manifestName = "prompt_sections/sections.yaml"
+		manifestKey = "sections"
+	case "tool", "rail":
+		manifestKey = actionGroup + "s"
+		manifestName = manifestKey + "/" + manifestKey + ".yaml"
+	default:
+		return fmt.Errorf("Checkpoint filtering does not support action_group=%q", actionGroup)
+	}
+	if targetRel != manifestName {
+		if err := checkpointCopyPath(harnessRoot, candidateHarnessRoot, copyRel); err != nil {
+			return err
+		}
+	}
+	return checkpointCopyManifestEntries(
+		filepath.Join(harnessRoot, manifestName),
+		filepath.Join(candidateHarnessRoot, manifestName),
+		manifestKey, copyRel, runtimeName)
+}
+
+// checkpointCopyPath 复制路径（Python: _checkpoint_copy_path）。
+func checkpointCopyPath(harnessRoot, sourceHarnessRoot, targetRel string) error {
+	destination := filepath.Join(harnessRoot, targetRel)
+	source := filepath.Join(sourceHarnessRoot, targetRel)
+	if _, err := os.Stat(source); err != nil {
+		return fmt.Errorf("Cannot compose retained capability: source path is missing: %s", source)
+	}
+	if err := checkpointRemovePath(harnessRoot, targetRel); err != nil {
+		return err
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return copyTreePreserve(source, destination)
+	}
+	return copyFilePreserve(source, destination)
+}
+
+// checkpointCopyManifestEntries 复制 manifest 条目（Python: _checkpoint_copy_manifest_entries）。
+func checkpointCopyManifestEntries(
+	destination, source string,
+	listKey, targetRel, runtimeName string,
+) error {
+	nativeManifest := filepath.Join(filepath.Dir(filepath.Dir(source)), "manifest.json")
+	var sourceEntries []any
+	if fileExists(nativeManifest) {
+		// 已发布的原生候选无需携带 RSI 可编辑 sidecar。
+		raw, err := os.ReadFile(nativeManifest)
+		if err != nil {
+			return err
+		}
+		var nativeData map[string]any
+		if err := json.Unmarshal(raw, &nativeData); err != nil {
+			return err
+		}
+		nativeKey := listKey
+		if listKey == "sections" {
+			nativeKey = "prompt_sections"
+		}
+		sourceEntries = toAnySlice(nativeData[nativeKey])
+	} else if fileExists(source) {
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			return err
+		}
+		var sourceData any
+		if err := yaml.Unmarshal(raw, &sourceData); err != nil {
+			return err
+		}
+		if sourceMap, ok := sourceData.(map[string]any); ok {
+			sourceEntries = toAnySlice(sourceMap[listKey])
+		} else if sourceList, ok := sourceData.([]any); ok {
+			sourceEntries = sourceList
+		}
+	} else {
+		return nil
+	}
+	if sourceEntries == nil {
+		sourceEntries = []any{nil}
+		if len(sourceEntries) == 1 && sourceEntries[0] == nil {
+			sourceEntries = []any{}
+		}
+	}
+
+	matches := func(entry any) bool {
+		if entryStr, ok := entry.(string); ok {
+			return checkpointManifestPathMatches(entryStr, targetRel, true)
+		}
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			return false
+		}
+		if runtimeName != "" && toString(entryMap["name"]) == runtimeName {
+			return true
+		}
+		for _, key := range []string{"file", "file_path", "path", "dir"} {
+			if checkpointManifestPathMatches(toString(entryMap[key]), targetRel, true) {
+				return true
+			}
+		}
+		return false
+	}
+
+	selected := []any{}
+	for _, entry := range sourceEntries {
+		if matches(entry) {
+			selected = append(selected, entry)
+		}
+	}
+	if len(selected) == 0 {
+		display := runtimeName
+		if display == "" {
+			display = targetRel
+		}
+		return fmt.Errorf(
+			"Cannot compose retained capability: candidate manifest has no matching entry for %s", display)
+	}
+
+	var destinationData any
+	if fileExists(destination) {
+		raw, err := os.ReadFile(destination)
+		if err != nil {
+			return err
+		}
+		if err := yaml.Unmarshal(raw, &destinationData); err != nil {
+			return err
+		}
+	} else {
+		destinationData = map[string]any{listKey: []any{}}
+	}
+	var destinationEntries []any
+	dataMap, isMap := destinationData.(map[string]any)
+	if isMap {
+		destinationEntries = toAnySlice(dataMap[listKey])
+	} else if dataList, isList := destinationData.([]any); isList {
+		destinationEntries = dataList
+		dataMap = map[string]any{listKey: destinationEntries}
+		isMap = true
+	} else {
+		destinationEntries = []any{}
+		dataMap = map[string]any{listKey: destinationEntries}
+		isMap = true
+	}
+	if _, isNil := dataMap[listKey]; !isNil && destinationEntries == nil {
+		destinationEntries = []any{}
+	}
+	if destinationEntries == nil {
+		destinationEntries = []any{}
+	}
+	position := len(destinationEntries)
+	for index, entry := range destinationEntries {
+		if matches(entry) {
+			position = index
+			break
+		}
+	}
+	kept := []any{}
+	for _, entry := range destinationEntries {
+		if !matches(entry) {
+			kept = append(kept, entry)
+		}
+	}
+	// Python: destination_entries[position:position] = selected——位置插入
+	newEntries := make([]any, 0, len(kept)+len(selected))
+	if position > len(kept) {
+		position = len(kept)
+	}
+	newEntries = append(newEntries, kept[:position]...)
+	newEntries = append(newEntries, selected...)
+	newEntries = append(newEntries, kept[position:]...)
+	dataMap[listKey] = newEntries
+	return writeYAMLAtomic(destination, dataMap)
+}
+
+// checkpointRemovePath 删除路径（Python: _checkpoint_remove_path）。
+func checkpointRemovePath(harnessRoot, targetRel string) error {
+	target := filepath.Join(harnessRoot, targetRel)
+	info, err := os.Stat(target)
+	if err != nil {
+		return nil
+	}
+	if info.IsDir() {
+		return os.RemoveAll(target)
+	}
+	return os.Remove(target)
+}
+
+// checkpointRemovePromptEntry 移除提示词条目（Python: _checkpoint_remove_prompt_entry）。
+func checkpointRemovePromptEntry(manifestPath string, targetRel, sectionName string) error {
+	if !fileExists(manifestPath) {
+		return nil
+	}
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	var parsed any
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	var data map[string]any
+	var entries []any
+	key := "prompt_sections"
+	if dataMap, ok := parsed.(map[string]any); ok {
+		data = dataMap
+		if _, hasSections := dataMap["sections"]; hasSections {
+			key = "sections"
+		}
+		entries = toAnySlice(dataMap[key])
+	} else if dataList, ok := parsed.([]any); ok {
+		key = "sections"
+		entries = dataList
+		data = map[string]any{key: entries}
+	} else {
+		return nil
+	}
+	if entries == nil {
+		entries = []any{data[key]}
+	}
+	kept := []any{}
+	for _, entry := range entries {
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			kept = append(kept, entry)
+			continue
+		}
+		nameMatches := sectionName != "" && toString(entryMap["name"]) == sectionName
+		pathValue := toString(entryMap["file"])
+		if pathValue == "" {
+			pathValue = toString(entryMap["path"])
+		}
+		pathMatches := checkpointManifestPathMatches(pathValue, targetRel, true)
+		if !nameMatches && !pathMatches {
+			kept = append(kept, entry)
+		}
+	}
+	data[key] = kept
+	return writeYAMLAtomic(manifestPath, data)
+}
+
+// checkpointRemoveManifestEntries 移除 manifest 条目（Python: _checkpoint_remove_manifest_entries）。
+func checkpointRemoveManifestEntries(
+	manifestPath string, listKey, targetRel, runtimeName string, exactOnly bool,
+) error {
+	if !fileExists(manifestPath) {
+		return nil
+	}
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	var parsed any
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	var data map[string]any
+	var entries []any
+	if dataMap, ok := parsed.(map[string]any); ok {
+		data = dataMap
+		entries = toAnySlice(dataMap[listKey])
+	} else if dataList, ok := parsed.([]any); ok {
+		entries = dataList
+		data = map[string]any{listKey: entries}
+	} else {
+		return nil
+	}
+	if entries == nil {
+		entries = []any{data[listKey]}
+	}
+	matches := func(entry any) bool {
+		if entryStr, ok := entry.(string); ok {
+			return checkpointManifestPathMatches(entryStr, targetRel, exactOnly)
+		}
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			return false
+		}
+		if runtimeName != "" && toString(entryMap["name"]) == runtimeName {
+			return true
+		}
+		for _, key := range []string{"file", "file_path", "path", "dir"} {
+			if checkpointManifestPathMatches(toString(entryMap[key]), targetRel, exactOnly) {
+				return true
+			}
+		}
+		return false
+	}
+	kept := []any{}
+	for _, entry := range entries {
+		if !matches(entry) {
+			kept = append(kept, entry)
+		}
+	}
+	data[listKey] = kept
+	return writeYAMLAtomic(manifestPath, data)
+}
+
+// checkpointManifestPathMatches manifest 路径匹配（Python: _checkpoint_manifest_path_matches）。
+func checkpointManifestPathMatches(rawPath, targetRel string, exactOnly bool) bool {
+	normalized := checkpointRelativePath(rawPath)
+	target := checkpointRelativePath(targetRel)
+	if normalized == "" || target == "" {
+		return false
+	}
+	if normalized == target {
+		return true
+	}
+	if exactOnly {
+		return false
+	}
+	return strings.HasPrefix(normalized, target+"/") || strings.HasPrefix(target, normalized+"/")
+}
+
+// missingCapabilityInvocations 缺失能力调用（Python: _missing_capability_invocations）。
+func missingCapabilityInvocations(
+	capabilities []map[string]any,
+	actionGroup string,
+	invokedNamesByCase map[string]map[string]struct{},
+	fallbackTargetCaseIDs map[string]struct{},
+	namesMatch func(planned, invoked string) bool,
+	laterEditNamesByCase map[string]map[string]struct{},
+) []map[string]string {
+	missing := []map[string]string{}
+	for _, capability := range capabilities {
+		runtimeName := toString(capability["runtime_name"])
+		operation := toString(capability["operation"])
+		if toString(capability["action_group"]) != actionGroup ||
+			(operation != "add" && operation != "modify") ||
+			runtimeName == "" {
+			continue
+		}
+		targetCaseIDs := map[string]struct{}{}
+		for _, rawCaseID := range toAnySlice(capability["target_case_ids"]) {
+			if caseID := toString(rawCaseID); caseID != "" {
+				targetCaseIDs[caseID] = struct{}{}
+			}
+		}
+		if len(targetCaseIDs) == 0 {
+			for caseID := range fallbackTargetCaseIDs {
+				targetCaseIDs[caseID] = struct{}{}
+			}
+		}
+		eligibleNames := invokedNamesByCase
+		activationPhase := toString(capability["activation_phase"])
+		if activationPhase == "post_diagnosis" || activationPhase == "pre_submission" {
+			eligibleNames = laterEditNamesByCase
+			if eligibleNames == nil {
+				eligibleNames = map[string]map[string]struct{}{}
+			}
+		}
+		for _, caseID := range sortedStringSet(targetCaseIDs) {
+			invokedNames := eligibleNames[caseID]
+			matched := false
+			for invoked := range invokedNames {
+				if namesMatch(runtimeName, invoked) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				missing = append(missing, map[string]string{
+					"runtime_name":   runtimeName,
+					"target_case_id": caseID,
+				})
+			}
+		}
+	}
+	return missing
+}
+
+// missingInvocationsWereLate 缺失调用是否发生在激活窗口之外（Python: _missing_invocations_were_late）。
+func missingInvocationsWereLate(
+	missingInvocations []map[string]string,
+	invokedNamesByCase map[string]map[string]struct{},
+	namesMatch func(planned, invoked string) bool,
+) bool {
+	for _, item := range missingInvocations {
+		for invoked := range invokedNamesByCase[item["target_case_id"]] {
+			if namesMatch(item["runtime_name"], invoked) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// copyTreePreserve 递归复制目录（Python: shutil.copytree——copyTree 为 Task 2 既有实现）。
+func copyTreePreserve(source, destination string) error {
+	return copyTree(source, destination)
+}
+
+// copyFilePreserve 复制文件（Python: shutil.copy2——保留 mtime）。
+func copyFilePreserve(source, destination string) error {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(destination, data, 0o644); err != nil {
+		return err
+	}
+	sourceInfo, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(destination, sourceInfo.ModTime(), sourceInfo.ModTime())
+}
+
+// ──────────────────────────── 报告与最终发布段（Python 4209-4405） ────────────────────────────
+
+// buildReport 构建运行报告（Python: _build_report）。
+func buildReport(state map[string]any, dataset harnessrsi.DatasetArtifact) map[string]any {
+	accepted := []any{}
+	analysisFailures := []any{}
+	for _, rawFailure := range toAnySlice(state["analysis_failures"]) {
+		analysisFailures = append(analysisFailures, rawFailure)
+	}
+	gates, _ := state["candidate_gates"].([]any)
+	for _, rawGate := range gates {
+		gate, ok := rawGate.(map[string]any)
+		if !ok {
+			continue
+		}
+		if truthy(gate["accepted"]) && toString(gate["status"]) == "accepted" {
+			accepted = append(accepted, gate)
+		}
+		if toString(gate["candidate_failure_analysis_status"]) == "unavailable" {
+			failure := map[string]any{}
+			if errMap, ok := gate["candidate_failure_analysis_error"].(map[string]any); ok {
+				for key, value := range errMap {
+					failure[key] = value
+				}
+			}
+			failure["epoch"] = gate["epoch"]
+			failure["batch_index"] = gate["batch_index"]
+			failure["batch_attempt_index"] = gate["batch_attempt_index"]
+			failure["candidate_eval_ref_path"] = defaultString(gate["candidate_eval_ref_path"], "")
+			failure["target_case_ids"] = toAnySlice(gate["target_case_ids"])
+			analysisFailures = append(analysisFailures, failure)
+		}
+	}
+	completedBatches := mappingOrNil(state["completed_batches"])
+	improvementInstances := mappingOrNil(state["improvement_instances"])
+	epochCheckpoints, _ := state["epoch_checkpoints"].([]any)
+	iteration := len(epochCheckpoints)
+	usage := state["usage"]
+	promotionPolicy := mappingOrNil(state["promotion_policy"])
+	leverScoreboard := mappingOrNil(state["lever_scoreboard"])
+	return map[string]any{
+		"task_id":                        defaultString(state["task_id"], ""),
+		"mode":                           "single_harness_benchmark",
+		"status":                         state["status"],
+		"max_iteration":                  state["max_iteration"],
+		"iteration":                      iteration,
+		"usage":                          usage,
+		"model_calls_path":               defaultString(state["model_calls_path"], ""),
+		"dataset_id":                     dataset.DatasetID,
+		"dataset_cases":                  dataset.Cases,
+		"allowed_action_groups":          state["allowed_action_groups"],
+		"allowed_prompt_surfaces":        state["allowed_prompt_surfaces"],
+		"completed_batch_count":          len(completedBatches),
+		"candidate_count":                len(gates),
+		"accepted_candidate_count":       len(accepted),
+		"analysis_unavailable_count":     len(analysisFailures),
+		"analysis_failures":              analysisFailures,
+		"baseline_score":                 state["baseline_score"],
+		"baseline_eval_ref_path":         defaultString(state["baseline_eval_ref_path"], ""),
+		"best_score":                     state["best_score"],
+		"best_reference_score":           state["best_reference_score"],
+		"best_reference_eval_ref_path":   state["best_reference_eval_ref_path"],
+		"historical_peak_score":          state["historical_peak_score"],
+		"promotion_policy":               promotionPolicy,
+		"best_improvement_proof":         state["best_improvement_proof"],
+		"best_eval_ref_path":             defaultString(state["best_eval_ref_path"], ""),
+		"best_harness_refs_path":         state["best_harness_refs_path"],
+		"published_harness_refs_path":    state["published_harness_refs_path"],
+		"publication_status":             defaultString(state["publication_status"], "not_published"),
+		"current_harness_refs_path":      state["current_harness_refs_path"],
+		"working_harness_refs_path":      state["working_harness_refs_path"],
+		"retained_case_ids":              state["retained_case_ids"],
+		"epoch_checkpoints":              state["epoch_checkpoints"],
+		"candidate_gates":                state["candidate_gates"],
+		"improvement_instances":          improvementInstances,
+		"candidate_feedback_ledger_path": defaultString(state["candidate_feedback_ledger_path"], ""),
+		"improver_policy":                state["improver_policy"],
+		"optimization_journal_path":      defaultString(state["optimization_journal_path"], ""),
+		"lever_scoreboard_path":          defaultString(state["lever_scoreboard_path"], ""),
+		"lever_scoreboard":               leverScoreboard,
+	}
+}
+
+// ensureFinalPublication 把最佳受门 harness 复制到稳定的独立发布位置。
+// Python: _ensure_final_publication。
+func ensureFinalPublication(state map[string]any, outputDir string) error {
+	resolvedOutputDir, err := resolvePath(outputDir)
+	if err != nil {
+		return err
+	}
+	acceptedGates := []map[string]any{}
+	for _, rawGate := range toAnySlice(state["candidate_gates"]) {
+		gate, ok := rawGate.(map[string]any)
+		if !ok {
+			continue
+		}
+		if truthy(gate["accepted"]) && toString(gate["status"]) == "accepted" {
+			acceptedGates = append(acceptedGates, gate)
+		}
+	}
+	policyVersion := toString(mappingOrNil(state["promotion_policy"])["policy_version"])
+	continuous := policyVersion == "continuous_margin_v1" || policyVersion == "continuous_two_stage_v2"
+	bestIdentity := ""
+	if continuous {
+		proof := mappingOrNil(state["best_improvement_proof"])
+		bestIdentity, err = PackageFingerprint(toString(state["best_harness_refs_path"]))
+		if err != nil {
+			return err
+		}
+		evaluationField := "confirmation_eval_ref_path"
+		if policyVersion == "continuous_two_stage_v2" {
+			evaluationField = "full_eval_ref_path"
+		}
+		matchingGates := []map[string]any{}
+		for _, gate := range acceptedGates {
+			sameRefs := gate["candidate_harness_refs_path"] == state["best_harness_refs_path"]
+			sameEval := gate[evaluationField] == state["best_eval_ref_path"]
+			sameProof := anyEqual(gate["improvement_proof"], proof)
+			qualified := proof["qualified"] == true
+			samePackage := toString(proof["package_fingerprint"]) == bestIdentity
+			if sameRefs && sameEval && sameProof && qualified && samePackage {
+				matchingGates = append(matchingGates, gate)
+			}
+		}
+		acceptedGates = matchingGates
+		if policyVersion == "continuous_two_stage_v2" {
+			engineeringGates := []map[string]any{}
+			for _, gate := range acceptedGates {
+				engineeringOK := gate["full_engineering_passed"] == true
+				checksOK := mappingOrNil(gate["full_checks"])["accepted"] == true
+				targetScope := toString(proof["scope"]) == "target_cases"
+				if engineeringOK && checksOK && targetScope {
+					engineeringGates = append(engineeringGates, gate)
+				}
+			}
+			acceptedGates = engineeringGates
+		}
+		sourceIdentity, err := PackageFingerprint(toString(state["source_harness_refs_path"]))
+		if err != nil {
+			return err
+		}
+		if bestIdentity == sourceIdentity {
+			acceptedGates = nil
+		}
+	}
+	if len(acceptedGates) == 0 {
+		state["published_harness_refs_path"] = ""
+		state["publication_status"] = "not_published_no_improvement"
+		return nil
+	}
+
+	existingRef := expandUser(toString(state["published_harness_refs_path"]))
+	if fileExists(existingRef) {
+		if err := validateSingleHarnessRefs(existingRef); err != nil {
+			return err
+		}
+		existingPayload, err := readYAMLFile(existingRef)
+		if err != nil {
+			return err
+		}
+		existingPackages := []string{}
+		for _, rawPath := range mappingOrNil(existingPayload["harness_refs"]) {
+			if resolved, err := resolvePath(filepath.Join(filepath.Dir(existingRef), toString(rawPath))); err == nil {
+				existingPackages = append(existingPackages, resolved)
+			}
+		}
+		existingResolved, err := resolvePath(existingRef)
+		if err != nil {
+			return err
+		}
+		withinOutput := strings.HasPrefix(existingResolved+string(filepath.Separator), resolvedOutputDir+string(filepath.Separator)) ||
+			existingResolved == resolvedOutputDir
+		allPackagesWithin := len(existingPackages) > 0
+		for _, pkg := range existingPackages {
+			if !strings.HasPrefix(pkg+string(filepath.Separator), resolvedOutputDir+string(filepath.Separator)) {
+				allPackagesWithin = false
+				break
+			}
+		}
+		if withinOutput && allPackagesWithin {
+			if !continuous {
+				state["publication_status"] = "published"
+				return nil
+			}
+			existingIdentity, err := PackageFingerprint(existingRef)
+			if err != nil {
+				return err
+			}
+			if existingIdentity == bestIdentity {
+				state["publication_status"] = "published"
+				return nil
+			}
+		}
+	}
+
+	bestRefsPath, err := resolvePath(toString(state["best_harness_refs_path"]))
+	if err != nil {
+		return err
+	}
+	bestPayload, err := readYAMLFile(bestRefsPath)
+	if err != nil {
+		return err
+	}
+	harnessRefs, ok := bestPayload["harness_refs"].(map[string]any)
+	if !ok || len(harnessRefs) == 0 {
+		return errors.New("Cannot publish final single harness: best refs contain no harness_refs")
+	}
+
+	memberOutputRoot := filepath.Join(resolvedOutputDir, "member_optimizations")
+	// 优化器 worktree 可能使用短兄弟 mh/ 目录。最终包必须留在 run/ 内以满足安装边界。
+	pathLayout := memberoptimizer.NewMemberOptimizerPathLayout(memberOutputRoot)
+	pathLayout.RuntimeRoot = filepath.Join(resolvedOutputDir, "published")
+	publishedRefs := map[string]any{}
+	rolesSorted := make([]string, 0, len(harnessRefs))
+	for role := range harnessRefs {
+		rolesSorted = append(rolesSorted, role)
+	}
+	sort.Strings(rolesSorted)
+	for _, role := range rolesSorted {
+		source, err := resolvePath(toString(harnessRefs[role]))
+		if err != nil {
+			return err
+		}
+		if info, err := os.Stat(source); err != nil || !info.IsDir() {
+			return fmt.Errorf(
+				"Cannot publish final single harness role '%s': source package does not exist: %s",
+				role, source)
+		}
+		destination := pathLayout.CurrentHarnessDir(role)
+		staging := filepath.Join(filepath.Dir(destination), filepath.Base(destination)+".publish_tmp")
+		for _, target := range []string{destination, staging} {
+			resolved, err := filepath.Abs(target)
+			if err != nil {
+				return err
+			}
+			if !strings.HasPrefix(resolved+string(filepath.Separator), resolvedOutputDir+string(filepath.Separator)) {
+				return errors.New("Cannot publish final single harness outside its run directory")
+			}
+		}
+		if err := pathLayout.WriteRoleMapping(role); err != nil {
+			return err
+		}
+		if _, err := os.Stat(staging); err == nil {
+			if err := os.RemoveAll(staging); err != nil {
+				return err
+			}
+		}
+		if err := copyTreePreserve(source, staging); err != nil {
+			return err
+		}
+		manifest := filepath.Join(staging, "manifest.json")
+		if fileExists(manifest) {
+			if _, err := hresources.LoadPluginPackage(manifest); err != nil {
+				return err
+			}
+		}
+		if _, err := os.Stat(destination); err == nil {
+			if err := os.RemoveAll(destination); err != nil {
+				return err
+			}
+		}
+		if err := os.Rename(staging, destination); err != nil {
+			return err
+		}
+		publishedRefs[role] = destination
+	}
+
+	publishedPayload := map[string]any{}
+	for key, value := range bestPayload {
+		publishedPayload[key] = value
+	}
+	publishedRoles := make([]string, 0, len(publishedRefs))
+	for role := range publishedRefs {
+		publishedRoles = append(publishedRoles, role)
+	}
+	sort.Strings(publishedRoles)
+	publishedRolesAny := []any{}
+	for _, role := range publishedRoles {
+		publishedRolesAny = append(publishedRolesAny, role)
+	}
+	publishedRoleResults := map[string]any{}
+	for _, role := range publishedRoles {
+		publishedRoleResults[role] = map[string]any{
+			"status":                  "published",
+			"before_harness_ref_path": toString(harnessRefs[role]),
+			"after_harness_ref_path":  publishedRefs[role],
+		}
+	}
+	roleIDentities := []any{}
+	for _, rawRole := range toAnySlice(bestPayload["roles"]) {
+		rawRoleMap, ok := rawRole.(map[string]any)
+		if !ok {
+			continue
+		}
+		roleIdentity := map[string]any{}
+		for key, value := range rawRoleMap {
+			roleIdentity[key] = value
+		}
+		roleName := defaultString(roleIdentity["member_name"], toString(roleIdentity["role"]))
+		if published, ok := publishedRefs[roleName]; ok {
+			roleIdentity["harness_ref_path"] = published
+		}
+		roleIDentities = append(roleIDentities, roleIdentity)
+	}
+	publishedPayload["source_harness_refs_path"] = bestRefsPath
+	publishedPayload["harness_refs"] = publishedRefs
+	publishedPayload["published_roles"] = publishedRolesAny
+	publishedPayload["candidate_ready_roles"] = publishedRolesAny
+	publishedPayload["staged_roles"] = publishedRolesAny
+	publishedPayload["verified_roles"] = publishedRolesAny
+	publishedPayload["promoted_roles"] = publishedRolesAny
+	publishedPayload["promotion_status"] = "published"
+	publishedPayload["role_results"] = publishedRoleResults
+	publishedPayload["last_attempt"] = map[string]any{
+		"published_roles": publishedRolesAny,
+		"failed_roles":    []any{},
+		"skipped_roles":   []any{},
+		"role_results":    publishedRoleResults,
+	}
+	publishedPayload["published_from_harness_refs_path"] = bestRefsPath
+	publishedPayload["published_best_score"] = state["best_score"]
+	publishedPayload["promotion_policy"] = state["promotion_policy"]
+	publishedPayload["improvement_proof"] = state["best_improvement_proof"]
+	if len(roleIDentities) > 0 {
+		publishedPayload["roles"] = roleIDentities
+	}
+	publishedRefPath := filepath.Join(memberOutputRoot, "current_harness_refs.yaml")
+	if err := writeYAMLAtomic(publishedRefPath, publishedPayload); err != nil {
+		return err
+	}
+	if err := validateSingleHarnessRefs(publishedRefPath); err != nil {
+		return err
+	}
+	state["published_harness_refs_path"] = publishedRefPath
+	state["publication_status"] = "published"
+	return nil
+}
+
 // ──────────────────────────── 评估信号与用量段（Python 2821-3400） ────────────────────────────
 
 // evalCaseScores 用例分数映射（Python: _eval_case_scores）。
@@ -2550,8 +3663,16 @@ func requirementKeyList(index map[evaluatorpkg.RequirementKey]map[string]any) []
 // requirementResultIndex 需求结果索引（Python: _requirement_result_index）。
 func requirementResultIndex(value any) map[evaluatorpkg.RequirementKey]map[string]any {
 	index := map[evaluatorpkg.RequirementKey]map[string]any{}
-	rawList, ok := value.([]any)
-	if !ok {
+	var rawList []any
+	switch typed := value.(type) {
+	case []any:
+		rawList = typed
+	case []map[string]any:
+		rawList = make([]any, 0, len(typed))
+		for _, item := range typed {
+			rawList = append(rawList, item)
+		}
+	default:
 		return index
 	}
 	for _, raw := range rawList {
