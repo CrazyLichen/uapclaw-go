@@ -19,7 +19,7 @@ func TestCustomAgentSuite(t *testing.T) {
 }
 
 // root 返回注入的临时注册表根；断言走显式 root 的未导出面
-//（WorkspaceDir 有 slot.once 进程级缓存，env 注入在包内多套件下不可靠）。
+// （WorkspaceDir 有 slot.once 进程级缓存，env 注入在包内多套件下不可靠）。
 func (s *CustomAgentSuite) root() string {
 	return s.T().TempDir()
 }

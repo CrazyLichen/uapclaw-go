@@ -30,7 +30,6 @@ const (
 // 该预设的 anthropic_base 非空。
 const AnthropicClientProvider = "Anthropic"
 
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VendorPreset 单个 (厂商, 套餐) 预设条目。
@@ -77,12 +76,12 @@ var presets = []*VendorPreset{
 	// ── Token Plan ──────────────────────────────────────────────────────────
 	{
 		VendorKey: "alibaba", DisplayName: "阿里云百炼", Plan: PlanKindTokenPlan,
-		ClientProvider: "OpenAI",
-		APIBase:        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+		ClientProvider:  "OpenAI",
+		APIBase:         "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
 		EndpointProfile: "dashscope",
-		DefaultModel:   "qwen3.7-max",
-		ModelOptions:   []string{"qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3.6-max-preview"},
-		IconKey:        "qwen",
+		DefaultModel:    "qwen3.7-max",
+		ModelOptions:    []string{"qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3.6-max-preview"},
+		IconKey:         "qwen",
 		// token-plan key 只在 token-plan 域名有效，通用 dashscope 域名 401 invalid_api_key，
 		// 所以拉列表也必须走 token-plan maas 域名（实测 200，12 个模型）。
 		ModelsEndpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models",
@@ -102,15 +101,15 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "maas", DisplayName: "Maas盘古", Plan: PlanKindTokenPlan,
-		ClientProvider: "ModelArts",
-		APIBase:        "https://api.modelarts-maas.com/plan/v2",
+		ClientProvider:  "ModelArts",
+		APIBase:         "https://api.modelarts-maas.com/plan/v2",
 		EndpointProfile: "modelarts",
-		DefaultModel:   "glm-5.1",
-		ModelOptions:   []string{"glm-5.1", "kimi-k2.6", "deepseek-v4-flash"},
-		IconKey:        "pangu",
-		ModelsEndpoint: "https://api.modelarts-maas.com/v2/models",
-		ModelsNeedsKey: true,
-		AnthropicBase:  "https://api.modelarts-maas.com/plan/anthropic",
+		DefaultModel:    "glm-5.1",
+		ModelOptions:    []string{"glm-5.1", "kimi-k2.6", "deepseek-v4-flash"},
+		IconKey:         "pangu",
+		ModelsEndpoint:  "https://api.modelarts-maas.com/v2/models",
+		ModelsNeedsKey:  true,
+		AnthropicBase:   "https://api.modelarts-maas.com/plan/anthropic",
 	},
 	{
 		VendorKey: "baidu", DisplayName: "百度智能云", Plan: PlanKindTokenPlan,
@@ -127,12 +126,12 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "mimo", DisplayName: "小米Mimo", Plan: PlanKindTokenPlan,
-		ClientProvider: "MiMo",
-		APIBase:        "https://token-plan-cn.xiaomimimo.com/v1", // 套餐调用走套餐域名（需套餐 key）
+		ClientProvider:  "MiMo",
+		APIBase:         "https://token-plan-cn.xiaomimimo.com/v1", // 套餐调用走套餐域名（需套餐 key）
 		EndpointProfile: "mimo",
-		DefaultModel:   "mimo-v2.5-pro",
-		ModelOptions:   []string{"mimo-v2.5-pro", "mimo-v2.5"},
-		IconKey:        "mimo",
+		DefaultModel:    "mimo-v2.5-pro",
+		ModelOptions:    []string{"mimo-v2.5-pro", "mimo-v2.5"},
+		IconKey:         "mimo",
 		// 拉列表也必须走套餐域名：通用 api.xiaomimimo.com 对套餐 key 返回 401 Invalid API Key，
 		// 套餐域名 token-plan-cn.xiaomimimo.com/v1/models 才 200。
 		ModelsEndpoint: "https://token-plan-cn.xiaomimimo.com/v1/models",
@@ -143,12 +142,12 @@ var presets = []*VendorPreset{
 	// ── Coding Plan ─────────────────────────────────────────────────────────
 	{
 		VendorKey: "alibaba", DisplayName: "阿里云百炼", Plan: PlanKindCodingPlan,
-		ClientProvider: "OpenAI",
-		APIBase:        "https://coding.dashscope.aliyuncs.com/v1", // xlsx 写 aliyun.com 是笔误，实测 aliyuncs.com 才存在（401）
+		ClientProvider:  "OpenAI",
+		APIBase:         "https://coding.dashscope.aliyuncs.com/v1", // xlsx 写 aliyun.com 是笔误，实测 aliyuncs.com 才存在（401）
 		EndpointProfile: "dashscope",
-		DefaultModel:   "qwen3-coder-next",
-		ModelOptions:   []string{"qwen3-coder-next", "qwen3.7-max", "qwen3.6-max-preview"},
-		IconKey:        "qwen",
+		DefaultModel:    "qwen3-coder-next",
+		ModelOptions:    []string{"qwen3-coder-next", "qwen3.7-max", "qwen3.6-max-preview"},
+		IconKey:         "qwen",
 		// coding key 只在 coding 域名有效，通用 dashscope 域名 401。coding 域名 /v1/models 实测 200（公开）。
 		ModelsEndpoint: "https://coding.dashscope.aliyuncs.com/v1/models",
 		ModelsNeedsKey: true,
@@ -208,10 +207,10 @@ var presets = []*VendorPreset{
 	// ── 自定义 API（通用 Token / 按量计费）────────────────────────────────────
 	{
 		VendorKey: "alibaba", DisplayName: "阿里云百炼", Plan: PlanKindCustomAPI,
-		ClientProvider: "OpenAI",
-		APIBase:        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		ClientProvider:  "OpenAI",
+		APIBase:         "https://dashscope.aliyuncs.com/compatible-mode/v1",
 		EndpointProfile: "dashscope",
-		DefaultModel:   "qwen3.8-max",
+		DefaultModel:    "qwen3.8-max",
 		ModelOptions: []string{
 			// 通义旗舰/通用
 			"qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.7-plus",
@@ -243,15 +242,15 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "deepseek", DisplayName: "DeepSeek", Plan: PlanKindCustomAPI,
-		ClientProvider: "OpenAI",
-		APIBase:        "https://api.deepseek.com",
+		ClientProvider:  "OpenAI",
+		APIBase:         "https://api.deepseek.com",
 		EndpointProfile: "deepseek",
-		DefaultModel:   "deepseek-v4-pro",
-		ModelOptions:   []string{"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-latest"},
-		IconKey:        "deepseek",
-		ModelsEndpoint: "https://api.deepseek.com/models",
-		ModelsNeedsKey: true,
-		AnthropicBase:  "https://api.deepseek.com/anthropic",
+		DefaultModel:    "deepseek-v4-pro",
+		ModelOptions:    []string{"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-latest"},
+		IconKey:         "deepseek",
+		ModelsEndpoint:  "https://api.deepseek.com/models",
+		ModelsNeedsKey:  true,
+		AnthropicBase:   "https://api.deepseek.com/anthropic",
 	},
 	{
 		VendorKey: "kimi", DisplayName: "Kimi(月之暗面)", Plan: PlanKindCustomAPI,
@@ -266,10 +265,10 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "openrouter", DisplayName: "OpenRouter", Plan: PlanKindCustomAPI,
-		ClientProvider: "OpenAI",
-		APIBase:        "https://openrouter.ai/api/v1",
+		ClientProvider:  "OpenAI",
+		APIBase:         "https://openrouter.ai/api/v1",
 		EndpointProfile: "openrouter", // 归因头由 core 按 profile 注入
-		DefaultModel:   "anthropic/claude-sonnet-4.5",
+		DefaultModel:    "anthropic/claude-sonnet-4.5",
 		ModelOptions: []string{
 			"anthropic/claude-sonnet-4.5", "qwen/qwen3.8-max", "z-ai/glm-5.2",
 			"deepseek/deepseek-v4-pro", "openai/gpt-5.6-terra", "google/gemini-2.5-flash",
@@ -304,15 +303,15 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "maas", DisplayName: "Maas盘古", Plan: PlanKindCustomAPI,
-		ClientProvider: "ModelArts",
-		APIBase:        "https://api.modelarts-maas.com/v2",
+		ClientProvider:  "ModelArts",
+		APIBase:         "https://api.modelarts-maas.com/v2",
 		EndpointProfile: "modelarts",
-		DefaultModel:   "openpangu-2.0-pro",
-		ModelOptions:   []string{"openpangu-2.0-pro", "openpangu-2.0-flash", "glm-5.2", "glm-5.1", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash"},
-		IconKey:        "pangu",
-		ModelsEndpoint: "https://api.modelarts-maas.com/v2/models",
-		ModelsNeedsKey: true,
-		AnthropicBase:  "https://api.modelarts-maas.com/anthropic",
+		DefaultModel:    "openpangu-2.0-pro",
+		ModelOptions:    []string{"openpangu-2.0-pro", "openpangu-2.0-flash", "glm-5.2", "glm-5.1", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash"},
+		IconKey:         "pangu",
+		ModelsEndpoint:  "https://api.modelarts-maas.com/v2/models",
+		ModelsNeedsKey:  true,
+		AnthropicBase:   "https://api.modelarts-maas.com/anthropic",
 	},
 	{
 		VendorKey: "volcengine", DisplayName: "火山引擎", Plan: PlanKindCustomAPI,
@@ -338,15 +337,15 @@ var presets = []*VendorPreset{
 	},
 	{
 		VendorKey: "mimo", DisplayName: "小米Mimo", Plan: PlanKindCustomAPI,
-		ClientProvider: "MiMo",
-		APIBase:        "https://api.xiaomimimo.com/v1",
+		ClientProvider:  "MiMo",
+		APIBase:         "https://api.xiaomimimo.com/v1",
 		EndpointProfile: "mimo",
-		DefaultModel:   "mimo-v2.5-pro",
-		ModelOptions:   []string{"mimo-v2.5-pro", "mimo-v2.5"},
-		IconKey:        "mimo",
-		ModelsEndpoint: "https://api.xiaomimimo.com/v1/models",
-		ModelsNeedsKey: true,
-		AnthropicBase:  "https://api.xiaomimimo.com/anthropic",
+		DefaultModel:    "mimo-v2.5-pro",
+		ModelOptions:    []string{"mimo-v2.5-pro", "mimo-v2.5"},
+		IconKey:         "mimo",
+		ModelsEndpoint:  "https://api.xiaomimimo.com/v1/models",
+		ModelsNeedsKey:  true,
+		AnthropicBase:   "https://api.xiaomimimo.com/anthropic",
 	},
 	// 自部署 vLLM-Omni 推理服务：没有固定地址，api_base 只是默认提示，由用户在设置里改。
 	{
@@ -376,7 +375,7 @@ var byPlan = func() map[PlanKind][]*VendorPreset {
 var byVendorPlan = func() map[string]*VendorPreset {
 	out := map[string]*VendorPreset{}
 	for _, p := range presets {
-		out[p.VendorKey + "|" + string(p.Plan)] = p
+		out[p.VendorKey+"|"+string(p.Plan)] = p
 	}
 	return out
 }()
@@ -468,19 +467,19 @@ func ToFrontendPayload() map[string]any {
 		cards := []map[string]any{}
 		for _, p := range byPlan[plan] {
 			card := map[string]any{
-				"vendor_key":    p.VendorKey,
-				"display_name":  p.DisplayName,
-				"plan":          string(p.Plan),
+				"vendor_key":   p.VendorKey,
+				"display_name": p.DisplayName,
+				"plan":         string(p.Plan),
 				// OpenAI 格式（默认）：client_provider + api_base + endpoint_profile
-				"client_provider":       p.ClientProvider,
-				"api_base":              p.APIBase,
-				"endpoint_profile":      p.EndpointProfile,
-				"default_model":         p.DefaultModel,
-				"model_options":         p.ModelOptions,
-				"icon_key":              p.IconKey,
-				"models_endpoint":       p.ModelsEndpoint,
-				"models_needs_key":      p.ModelsNeedsKey,
-				"generation_only":       p.GenerationOnly,
+				"client_provider":        p.ClientProvider,
+				"api_base":               p.APIBase,
+				"endpoint_profile":       p.EndpointProfile,
+				"default_model":          p.DefaultModel,
+				"model_options":          p.ModelOptions,
+				"icon_key":               p.IconKey,
+				"models_endpoint":        p.ModelsEndpoint,
+				"models_needs_key":       p.ModelsNeedsKey,
+				"generation_only":        p.GenerationOnly,
 				"reasoning_capabilities": reasoningCapabilities(p),
 				// Provider-scoped pattern 规则：给 models_endpoint 拉取到的、
 				// 不在 model_options 精确表里的新模型用，避免前端退到跨厂商

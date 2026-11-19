@@ -1,6 +1,7 @@
 package common
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -32,41 +33,39 @@ func (s *ExternalCliWriteSuite) TestFromSwitches组装与未触碰保留() {
 			},
 		}}},
 	}
-	detect := func(cliAgent, requestedPath string, useBuiltin bool) map[string]any {
-		return map[string]any{"status": "ok", "path": requestedPath}
-	}
+	// 真实探测（D-d9 回收后无注入缝）：临时文件充当可执行 CLI
+	realCLI := filepath.Join(s.T().TempDir(), "claude")
+	s.Require().NoError(os.WriteFile(realCLI, []byte("#!/bin/sh\necho \"claude 1.2.3\"\n"), 0o755))
 	// 只触碰 claude：codex 未触碰 → 原样保留
 	entries, err := ExternalCliAgentsFromSwitches(raw,
 		map[string]any{"external_cli_agent_claude_enabled": true, "external_cli_agent_claude_use_builtin": false,
-			"external_cli_agent_claude_cli_path": "/new/claude"},
-		[]string{"claude", "codex"}, map[string]string{}, detect)
+			"external_cli_agent_claude_cli_path": realCLI},
+		[]string{"claude", "codex"}, map[string]string{})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 2)
-	s.Equal("/new/claude", entries[0]["cli_path"])
+	s.Equal(realCLI, entries[0]["cli_path"])
 	s.Equal("/persisted/codex", entries[1]["cli_path"]) // untouched verbatim
 }
 
 func (s *ExternalCliWriteSuite) TestFromSwitches禁用与探测失败() {
 	raw := map[string]any{}
-	detect := func(cliAgent, requestedPath string, useBuiltin bool) map[string]any {
-		return map[string]any{"status": "unavailable", "message": "not found"}
-	}
 	// disabled → 不产条目
 	entries, err := ExternalCliAgentsFromSwitches(raw,
 		map[string]any{"external_cli_agent_claude_enabled": false, "external_cli_agent_claude_use_builtin": false},
-		[]string{"claude"}, nil, detect)
+		[]string{"claude"}, nil)
 	s.Require().NoError(err)
 	s.Empty(entries)
-	// 探测失败 → ValueError 语义
+	// 探测失败（路径不存在）→ ValueError 语义
 	_, err = ExternalCliAgentsFromSwitches(raw,
-		map[string]any{"external_cli_agent_claude_enabled": true, "external_cli_agent_claude_use_builtin": false},
-		[]string{"claude"}, nil, detect)
+		map[string]any{"external_cli_agent_claude_enabled": true, "external_cli_agent_claude_use_builtin": false,
+			"external_cli_agent_claude_cli_path": "/nonexistent/claude-bin"},
+		[]string{"claude"}, nil)
 	s.Require().Error(err)
 	s.Contains(err.Error(), "cli_path is not available")
 	// 上传 CLI 即内建：use_builtin 且有上传路径 → 直接取上传路径
 	entries, err = ExternalCliAgentsFromSwitches(raw,
 		map[string]any{"external_cli_agent_myagent_enabled": true, "external_cli_agent_myagent_use_builtin": true},
-		[]string{"claude", "myagent"}, map[string]string{"myagent": "/uploaded/foo"}, detect)
+		[]string{"claude", "myagent"}, map[string]string{"myagent": "/uploaded/foo"})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 1)
 	s.Equal("/uploaded/foo", entries[0]["cli_path"])

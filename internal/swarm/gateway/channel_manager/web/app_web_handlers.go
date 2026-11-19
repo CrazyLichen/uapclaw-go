@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -28,6 +27,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -752,6 +752,45 @@ func normalizeTruthy(val string) string {
 	return "false"
 }
 
+// applyExternalCliConfigKeys 面板保存的外部 CLI 键拦截（config.set/save_all 共用）。
+// 无触碰键零开销返回；有触碰键时组装条目、写 yaml、跑内建模型探测（catalog 在
+// externalcli 包，经 refresh 适配器注入；写链在 swarm/common）。
+// Python: config_set_handlers.py is_external_cli_agent_config_key 分支。
+func applyExternalCliConfigKeys(params map[string]any) error {
+	touched := false
+	for key := range params {
+		if swarmcommon.IsExternalCliAgentConfigKey(key) {
+			touched = true
+			break
+		}
+	}
+	if !touched {
+		return nil
+	}
+	cfg, err := config.New("")
+	if err != nil {
+		return err
+	}
+	raw, err := cfg.Raw()
+	if err != nil {
+		return err
+	}
+	return swarmcommon.ApplyExternalCliConfigKeys(raw, params, refreshExternalCliBuiltinModels)
+}
+
+// refreshExternalCliBuiltinModels 探测适配器：catalog 探测编排（externalcli 包）
+// + 播种目录回写（swarm/common 写链），对齐 Python 同模块直调。
+func refreshExternalCliBuiltinModels(entries []any, enabledNow []string) []string {
+	return externalcli.RefreshExternalCliBuiltinModels(context.Background(), entries, enabledNow,
+		func(catalogs map[string][]map[string]any) {
+			if err := swarmcommon.UpdateExternalCliBuiltinModelsInConfig(nil, catalogs); err != nil {
+				logger.Warn(logger.ComponentGateway).
+					Err(err).
+					Msg("[config.set] external CLI builtin catalog seed write failed")
+			}
+		})
+}
+
 // configSet 处理 config.set 请求。
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // Python: _config_set (app_web_handlers.py L870-895)。
@@ -763,6 +802,13 @@ func configSet(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSave
 			return
 		}
 		p := resolveCrypto(cryptoProv)
+
+		// 步骤0: external_cli_agent_* 键拦截（组装/写 yaml/refresh 探测）。
+		// Python: config_set 循环 is_external_cli_agent_config_key 分支（:1629-1666）。
+		if err := applyExternalCliConfigKeys(params); err != nil {
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
+		}
 
 		// 步骤1-5: applyConfigPayload 统一处理
 		envUpdates, yamlUpdated, err := ApplyConfigPayload(ctx, params, p)
@@ -848,6 +894,13 @@ func configSaveAll(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfig
 		}
 		if team, ok := params["team"]; ok {
 			configParams["team"] = team
+		}
+
+		// external_cli_agent_* 键拦截（config.save_all 嵌套形状合并后统一判触碰，
+		// 对齐 Python keys_view 顶层优先语义；path_histories-only 键不触发探测门）
+		if err := applyExternalCliConfigKeys(configParams); err != nil {
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
 
 		// 应用 config 子载荷
@@ -3760,15 +3813,6 @@ func externalCLIAgentKindsFull() []string {
 	return swarmcommon.ExternalCliAgentKinds()
 }
 
-// externalCLIReferenceVersions 各内置 CLI 的参考版本（"期望版本"）。
-// Python: external_cli_reference_version (config_set_handlers.py:330-342) 读安装包元数据
-// （claude_agent_sdk._cli_version / openai-codex dist）；Go 侧无这些 Python 依赖，改用常量表，
-// 取上游 uv.lock 的锁定版本。**上游升版时需同步这里**，否则会把正常版本误报为"偏旧"。
-var externalCLIReferenceVersions = map[string]string{
-	"claude": "0.2.115",
-	"codex":  "0.144.4",
-}
-
 // externalCLIPruneMaxPaths prune 单次最多处理的路径数（对齐 _EXTERNAL_CLI_PRUNE_PATH_HISTORIES_MAX_PATHS）。
 const externalCLIPruneMaxPaths = 50
 
@@ -3796,7 +3840,7 @@ func externalCLIDetect(wc *WebChannel) methodHandler {
 				useBuiltin = true
 			}
 		}
-		wc.sendResponse(ws, reqID, true, detectExternalCLIAgent(cliAgent, cliPath, useBuiltin), "", "")
+		wc.sendResponse(ws, reqID, true, swarmcommon.DetectExternalCLIAgent(cliAgent, cliPath, useBuiltin), "", "")
 	}
 }
 
@@ -3886,7 +3930,7 @@ func externalCLIPrunePathHistories(wc *WebChannel) methodHandler {
 func externalCLIInstallStatus(wc *WebChannel) methodHandler {
 	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		cliAgent := strings.ToLower(strings.TrimSpace(strOrEmpty(params["cli_agent"])))
-		if !isKnownExternalCLIAgent(cliAgent) {
+		if !swarmcommon.IsKnownExternalCLIAgent(cliAgent) {
 			wc.sendResponse(ws, reqID, false, nil, "unsupported external cli agent", WsErrBadRequest)
 			return
 		}
@@ -3905,148 +3949,6 @@ func defaultExternalCLIInstallStatus() map[string]any {
 		"progress":   0,
 		"error":      "",
 	}
-}
-
-// isKnownExternalCLIAgent 判断是否为已知外部 CLI 种类（内置 + 注册表自定义）。
-func isKnownExternalCLIAgent(agent string) bool {
-	for _, kind := range externalCLIAgentKindsFull() {
-		if kind == agent {
-			return true
-		}
-	}
-	return false
-}
-
-// detectExternalCLIAgent 探测外部 CLI 的路径/版本，返回上游同形状的 DTO。
-// Python: detect_external_cli_agent / _detect_cli_at
-// (config_set_handlers.py:464-563)。本仓差异：
-//   - reference_version 取 Python 侧包元数据（claude_agent_sdk / openai-codex），本仓无此依赖，恒回空串；
-//   - 不做 use_builtin 的托管 CLI 解析（managed runtime 未移植，偏差 D-15.16-d7 桌面版专属），退回 PATH 搜索。
-func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[string]any {
-	if !isKnownExternalCLIAgent(cliAgent) {
-		return map[string]any{
-			"cli_agent":         cliAgent,
-			"status":            "unavailable",
-			"path":              "",
-			"version":           "",
-			"reference_version": "",
-			"message":           "unsupported cli_agent: " + cliAgent,
-		}
-	}
-	_ = useBuiltin
-	referenceVersion := externalCLIReferenceVersions[cliAgent]
-
-	resolved, reason, message := resolveExternalCLIPath(cliAgent, cliPath)
-	if resolved == "" {
-		status := "missing"
-		if reason == "directory" || reason == "windows_script" {
-			status = "unsupported"
-		}
-		return map[string]any{
-			"cli_agent":         cliAgent,
-			"status":            status,
-			"path":              "",
-			"version":           "",
-			"reference_version": referenceVersion,
-			"reason":            reason,
-			"message":           message,
-		}
-	}
-
-	versionOutput, versionErr := runExternalCLIVersionCommand(resolved)
-	version := ""
-	if match := externalCLIVersionRe.FindStringSubmatch(versionOutput); match != nil {
-		version = match[1]
-	}
-	if strings.TrimSpace(versionOutput) == "" {
-		return map[string]any{
-			"cli_agent":         cliAgent,
-			"status":            "unavailable",
-			"path":              resolved,
-			"version":           "",
-			"reference_version": referenceVersion,
-			"message":           firstNonEmpty(versionErr, "version command failed"),
-		}
-	}
-	status := "ok"
-	message = ""
-	if version == "" {
-		status = "warning"
-		message = "version output could not be parsed"
-	} else if detected, okDetected := parseVersionTuple(version); okDetected {
-		// 只有"探测版本 < 参考版本"才降级为 warning（对齐上游 has_comparable_versions 分支）
-		if reference, okReference := parseVersionTuple(referenceVersion); okReference && compareVersionTuple(detected, reference) < 0 {
-			status = "warning"
-			message = fmt.Sprintf("version %s may be incompatible with expected version %s", version, referenceVersion)
-		}
-	}
-	return map[string]any{
-		"cli_agent":         cliAgent,
-		"status":            status,
-		"path":              resolved,
-		"version":           version,
-		"reference_version": referenceVersion,
-		"message":           message,
-	}
-}
-
-// externalCLIVersionRe 从 --version 输出里提取语义版本号。
-// Python: re.search(r"(\d+\.\d+\.\d+)", version_output) (config_set_handlers.py:537)。
-var externalCLIVersionRe = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
-
-// resolveExternalCLIPath 解析外部 CLI 可执行文件路径。
-// 显式路径：必须是存在的文件且不是目录（Python resolve_external_cli_path 的
-// directory / windows_script 两个 reason 在此覆盖）；空路径回退 PATH 搜索。
-func resolveExternalCLIPath(cliAgent, cliPath string) (resolved, reason, message string) {
-	if p := strings.TrimSpace(cliPath); p != "" {
-		expanded := pathutil.ExpandHome(p)
-		info, err := os.Stat(expanded)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return "", "not_found", "not found: " + p
-			}
-			return "", "unreadable", err.Error()
-		}
-		if info.IsDir() {
-			return "", "directory", "path is a directory: " + p
-		}
-		if runtime.GOOS == "windows" && isWindowsScriptPath(expanded) {
-			return "", "windows_script", "windows_script"
-		}
-		return expanded, "", ""
-	}
-	found, err := exec.LookPath(cliAgent)
-	if err != nil {
-		return "", "not_found", err.Error()
-	}
-	if runtime.GOOS == "windows" && isWindowsScriptPath(found) {
-		return "", "windows_script", "windows_script"
-	}
-	return found, "", ""
-}
-
-// isWindowsScriptPath 判断是否是不受支持的 Windows 脚本（.bat/.cmd/.ps1）。
-func isWindowsScriptPath(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".bat", ".cmd", ".ps1":
-		return true
-	}
-	return false
-}
-
-// runExternalCLIVersionCommand 执行 `<cli> --version` 并返回合并输出。
-// 失败时返回的错误信息会作为 message 透传给前端（对齐上游 version_error）。
-func runExternalCLIVersionCommand(resolved string) (string, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, resolved, "--version")
-	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if err != nil && text == "" {
-		return "", err.Error()
-	}
-	return text, ""
 }
 
 // pruneExternalCLIPathHistories 从 config.yaml 的路径历史里删除已确认缺失的项。
@@ -4325,35 +4227,3 @@ func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string)
 	}
 }
 
-// parseVersionTuple 把 "x.y.z" 解析成三段整数元组；缺段按 0 补，非数字段视为不可解析。
-// Python: parse_version_tuple (config_set_handlers.py 内部助手)：解析失败返回 None，
-// 上游据此跳过"版本偏旧"比较。
-func parseVersionTuple(version string) ([3]int, bool) {
-	var out [3]int
-	text := strings.TrimSpace(version)
-	if text == "" {
-		return out, false
-	}
-	parts := strings.Split(text, ".")
-	for i := 0; i < len(parts) && i < 3; i++ {
-		n, err := strconv.Atoi(strings.TrimSpace(parts[i]))
-		if err != nil {
-			return out, false
-		}
-		out[i] = n
-	}
-	return out, true
-}
-
-// compareVersionTuple 比较两个三段版本元组：a<b 返回 -1，相等 0，a>b 返回 1。
-func compareVersionTuple(a, b [3]int) int {
-	for i := 0; i < 3; i++ {
-		switch {
-		case a[i] < b[i]:
-			return -1
-		case a[i] > b[i]:
-			return 1
-		}
-	}
-	return 0
-}

@@ -45,7 +45,7 @@ func testCatalogConfig() map[string]any {
 					"model_config_obj":    map[string]any{"reasoning_level": true},
 				},
 				map[string]any{
-					"model_id": "mdl_b",
+					"model_id":            "mdl_b",
 					"model_client_config": map[string]any{"model_name": "gpt-b", "client_provider": "openai"},
 				},
 			},
@@ -138,7 +138,7 @@ func TestModelCatalog_ListPublicModels_双源(t *testing.T) {
 	cfg := testCatalogConfig()
 	models := cfg["models"].(map[string]any)
 	models["agentos"] = []any{map[string]any{
-		"model_id": "mdl_os",
+		"model_id":            "mdl_os",
 		"model_client_config": map[string]any{"model_name": "os-model"},
 	}}
 	c := newTestCatalog(t, cfg)
@@ -221,9 +221,9 @@ func TestModelCatalog_FindReferences_组引用与配置树(t *testing.T) {
 	setSessionsRoot(t) // 会话目录指到临时目录，隔离真实环境
 	cfg := testCatalogConfig()
 	cfg["agents"] = map[string]any{
-		"id": "agent_root",
+		"id":              "agent_root",
 		"model_selection": map[string]any{"type": "model", "id": "mdl_b"},
-		"sub": []any{map[string]any{"model_selection": map[string]any{"type": "model", "id": "mdl_b"}}},
+		"sub":             []any{map[string]any{"model_selection": map[string]any{"type": "model", "id": "mdl_b"}}},
 	}
 	cfg["team"] = map[string]any{"name": "team_x", "model_selection": map[string]any{"type": "model", "id": "mdl_a"}}
 	c := newTestCatalog(t, cfg)

@@ -8,7 +8,7 @@ import (
 )
 
 // TestGetTeamArtifactWorkspace_SharedChatDir 同 session 全员共享一个 chat-<n>
-//（对齐 team_artifacts.py:71-107）。
+// （对齐 team_artifacts.py:71-107）。
 func TestGetTeamArtifactWorkspace_SharedChatDir(t *testing.T) {
 	root := t.TempDir()
 	ws1, err := GetTeamArtifactWorkspace(root, "sess-1", "")
@@ -44,7 +44,7 @@ func TestGetTeamArtifactsDir(t *testing.T) {
 }
 
 // TestResolveMemberWorkDir_Slug 隔离目录形状 + 二次调用复用
-//（对齐 team_artifacts.py:110-129）。
+// （对齐 team_artifacts.py:110-129）。
 func TestResolveMemberWorkDir_Slug(t *testing.T) {
 	root := t.TempDir()
 	dir, err := ResolveMemberWorkDir(root, "Alice Dev")

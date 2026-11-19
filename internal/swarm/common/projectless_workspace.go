@@ -19,11 +19,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"regexp"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -65,7 +65,7 @@ var windowsReservedNames = map[string]bool{
 	"AUX": true, "CLOCK$": true,
 	"COM1": true, "COM2": true, "COM3": true, "COM4": true, "COM5": true,
 	"COM6": true, "COM7": true, "COM8": true, "COM9": true,
-	"CON": true,
+	"CON":  true,
 	"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true, "LPT5": true,
 	"LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
 	"NUL": true, "PRN": true,
@@ -425,7 +425,7 @@ func writeTaskMetadata(root, sessionID, taskName string) error {
 }
 
 // atomicWrite 唯一临时文件 + os.replace 原子落盘；finally 清理临时文件
-//（Python: temporary.unlink(missing_ok=True)）。
+// （Python: temporary.unlink(missing_ok=True)）。
 // ensureTrailingNewline 对齐 Python json.dumps(...) + "\n"（仅 metadata 用）。
 func atomicWrite(path string, payload []byte, ensureTrailingNewline bool) error {
 	if ensureTrailingNewline {

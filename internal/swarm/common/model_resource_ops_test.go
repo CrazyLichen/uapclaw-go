@@ -200,7 +200,7 @@ func TestUpsertModelGroupResource_Routing超时白名单(t *testing.T) {
 	modelID := asString(savedModel["model_id"])
 	saved, err := UpsertModelGroupResource(cfg, map[string]any{
 		"model_group_id": "mgp_rt", "enabled": true,
-		"routes": []any{map[string]any{"model_id": modelID, "enabled": true}},
+		"routes":  []any{map[string]any{"model_id": modelID, "enabled": true}},
 		"routing": map[string]any{"timeout_seconds": 30, "strategy": "legacy-x", "stream_idle_timeout": 60},
 	})
 	if err != nil {

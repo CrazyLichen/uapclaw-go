@@ -144,15 +144,15 @@ func TestValidateModelsConfig_错误文案(t *testing.T) {
 	}
 	bad := map[string]any{
 		"defaults": []any{
-			map[string]any{},                                        // model_id required
-			map[string]any{"model_id": "mdl_a"},                     // ok
-			map[string]any{"model_id": "mdl_a"},                     // duplicate
+			map[string]any{},                    // model_id required
+			map[string]any{"model_id": "mdl_a"}, // ok
+			map[string]any{"model_id": "mdl_a"}, // duplicate
 			map[string]any{"model_id": "mdl_c", "model_client_config": "not-map"}, // must be object
 		},
 		"agentos": []any{map[string]any{"model_id": "mdl_a", "is_default": true}}, // cannot be default（+duplicate）
 		"groups": []any{
 			map[string]any{"model_group_id": "mgp_a", "is_default": true, "enabled": false, "routes": []any{}}, // disabled default + no routes
-			map[string]any{"model_group_id": "mgp_a"}, // duplicate
+			map[string]any{"model_group_id": "mgp_a"},                                                          // duplicate
 		},
 	}
 	errs := ValidateModelsConfig(bad)

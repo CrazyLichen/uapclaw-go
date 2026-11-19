@@ -28,6 +28,7 @@
 //	├── model_routing_registry.go     # ModelSelectionResolver 五级回退与 Resolve
 //	├── model_resource_ops.go         # 模型资源 upsert/delete（config.py:2791-2825）
 //	├── external_cli_read.go         # 面板 external_cli_agent_* 四键读展平（15.16d）
+//	├── external_cli_detect.go       # detect_external_cli_agent 移位（D-d9 回收，Python 家 config_set_handlers.py:949）
 //	├── custom_agent.go              # 自定义 agent 注册表半区（agents.json/激活校验语义，15.16d）
 //	├── projectless_workspace.go      # 无项目任务工作空间分配与注册（15.16c）
 //	├── team_artifacts.go             # 团队产物目录与成员工作目录（15.16c）
