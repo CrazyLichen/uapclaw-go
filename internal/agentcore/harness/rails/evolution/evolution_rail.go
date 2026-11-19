@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -35,6 +36,15 @@ type EvolutionRail struct {
 	ext EvolutionExtension
 	// trajectoryStore 轨迹存储
 	trajectoryStore trajectory.TrajectoryStore
+	// scopeMu 窗口/订阅锁（Python: _window_lock + _subscription_lock 合一）
+	scopeMu sync.Mutex
+	// scopeWindows scope 键 → 窗口状态（Python: _scope_windows）
+	scopeWindows map[string]*scopeWindowState
+	// activeCaptures 活跃采集集（Python: _active_captures）
+	activeCaptures map[*invokeCapture]struct{}
+	// currentCapture 当前 invoke 采集（Python: _invoke_capture ContextVar 的
+	// 显式化，D-25.2b-4）
+	currentCapture *invokeCapture
 	// builder 轨迹构造器（跨 invoke 复用）
 	builder *trajectory.TrajectoryBuilder
 	// maxTrajectorySteps 最大轨迹步骤数
@@ -339,6 +349,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 		return buildErr
 	}
 	r.builder = builder
+	r.beginScopeCapture(sessionID, memberID, r.teamID)
 
 	logger.Debug(logComponent).
 		Str("session_id", sessionID).
@@ -431,6 +442,11 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 		}
 	}
 
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
+	}
+
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterModelCall(ctx, cbc); err != nil {
 		return err
@@ -465,11 +481,11 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 	// 12-04 span 模型迁移：工具步骤构造为规范 GenAI 工具 span。
 	if inputs.ToolName != "" {
 		attrs := map[string]any{
-			"gen_ai.operation.name":       "execute_tool",
-			"gen_ai.tool.name":            inputs.ToolName,
-			"gen_ai.tool.call.arguments":  argsToJSONAttr(inputs.ToolArgs),
-			"gen_ai.tool.call.result":     argsToJSONAttr(inputs.ToolResult),
-			"gen_ai.tool.call.id":         "",
+			"gen_ai.operation.name":      "execute_tool",
+			"gen_ai.tool.name":           inputs.ToolName,
+			"gen_ai.tool.call.arguments": argsToJSONAttr(inputs.ToolArgs),
+			"gen_ai.tool.call.result":    argsToJSONAttr(inputs.ToolResult),
+			"gen_ai.tool.call.id":        "",
 		}
 		if err := r.builder.RecordSpan(map[string]any{
 			"name":       fmt.Sprintf("execute_tool %s", inputs.ToolName),
@@ -477,6 +493,11 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 		}); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("tool span record failed")
 		}
+	}
+
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
 	}
 
 	// Python: 触发扩展点
@@ -520,16 +541,21 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 // Final 回调——子类不应覆写，通过 ext.OnAfterInvoke 扩展。
 // Python: EvolutionRail.after_invoke(ctx)
 func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-		if r.builder == nil {
+	if r.builder == nil {
 		return nil
 	}
+	// 12-04：最终窗口合并；收口释放订阅但窗口保留（上游同语义）。
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window final merge failed")
+	}
+	defer r.endScopeCapture(r.currentCapture)
 
 	// Python: trajectory = self._build_trajectory()
 	traj := r.buildTrajectory()
 	if traj == nil {
 		return nil
 	}
-		if err := r.saveTrajectory(ctx, traj); err != nil {
+	if err := r.saveTrajectory(ctx, traj); err != nil {
 		return err
 	}
 	// 【12-04】sink 发布段已删除（上游无对应物）。
