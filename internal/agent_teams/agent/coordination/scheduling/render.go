@@ -32,7 +32,7 @@ const (
 	templateTaskResume     = "scheduler_task_resume"
 	templateTaskRevised    = "scheduler_task_revised"
 	templateSubtaskReview  = "scheduler_subtask_review"
-	templateReviewRequest  = "scheduler_review_request"      // 25.2b
+	templateReviewRequest  = "scheduler_review_request"           // 25.2b
 	templateReviewPrevFB   = "scheduler_review_previous_feedback" // 25.2b
 	templateReviewSubNote  = "scheduler_review_submission_note"   // 25.2b
 	templateReviewUpstream = "scheduler_review_upstream"          // 25.2b

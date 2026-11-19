@@ -7,9 +7,9 @@ import (
 
 	ateamcoordtypes "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	ateamprompts "github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	ateamprompts "github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
@@ -71,8 +71,8 @@ func (f *fakeTaskManager) UnseenRevisions(ctx context.Context) ([]database.Unsee
 
 // fakeBackend 探针桩。
 type fakeBackend struct {
-	retirable []database.RetirableMemberRow
-	shutdown  map[string]bool
+	retirable     []database.RetirableMemberRow
+	shutdown      map[string]bool
 	shutdownCalls []string
 }
 
@@ -111,12 +111,12 @@ func (s *fakeSender) GetMessages(_ context.Context, toMemberName string, _ bool,
 
 // setupScheduler 组装 in-memory 全链（真实 TaskManager + 全桩边界）。
 type fixture struct {
-	sched  *TeamScheduler
-	host   *fakeHost
+	sched   *TeamScheduler
+	host    *fakeHost
 	backend *fakeBackend
-	sender *fakeSender
-	tm     *tools.TeamTaskManager
-	db     *database.InMemoryTeamDatabase
+	sender  *fakeSender
+	tm      *tools.TeamTaskManager
+	db      *database.InMemoryTeamDatabase
 }
 
 func setupScheduler(t *testing.T) *fixture {
