@@ -1,4 +1,4 @@
-package externalcli
+package common
 
 import (
 	"encoding/json"
@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sync"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // customAgentRegistryLock 保护 agents.json 读写的进程内互斥。

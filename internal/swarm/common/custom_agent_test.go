@@ -1,4 +1,4 @@
-package externalcli
+package common
 
 import (
 	"os"

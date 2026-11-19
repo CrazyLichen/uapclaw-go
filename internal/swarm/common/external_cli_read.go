@@ -3,8 +3,6 @@ package common
 import (
 	"encoding/json"
 	"strings"
-
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 )
 
 // 本文件移植外部 CLI 设置的「面板读展平」面。
@@ -38,14 +36,14 @@ func ExternalCliAgentKey(cliAgent, suffix string) string {
 // Python: external_cli_agent_kinds (external_cli_read.py:24-28)
 func ExternalCliAgentKinds() []string {
 	kinds := []string{"claude", "codex"}
-	kinds = append(kinds, externalcli.CustomAgentNames()...)
+	kinds = append(kinds, CustomAgentNames()...)
 	return kinds
 }
 
 // CustomAgentsConfigValue 把当前已注册自定义 agent 描述成配置面板字符串。
 // Python: custom_agents_config_value (external_cli_read.py:31-46)
 func CustomAgentsConfigValue() string {
-	agents := externalcli.ListCustomAgents()
+	agents := ListCustomAgents()
 	entries := make([]map[string]any, 0, len(agents))
 	for _, agent := range agents {
 		entries = append(entries, map[string]any{
