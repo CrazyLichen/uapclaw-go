@@ -484,7 +484,10 @@ func TestStringOrDefault_nil值(t *testing.T) {
 // ──────────────────────────── BuildTeamTrajectorySummary 测试 ────────────────────────────
 
 func TestBuildTeamTrajectorySummary_空轨迹(t *testing.T) {
-	traj := &trajectory.Trajectory{Steps: []*trajectory.TrajectoryStep{}}
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, nil)
+	if trajErr != nil {
+		t.Fatal(trajErr)
+	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "### Tool Calls (0)") {
 		t.Errorf("summary should contain '### Tool Calls (0)', got %q", result)
@@ -495,17 +498,11 @@ func TestBuildTeamTrajectorySummary_空轨迹(t *testing.T) {
 }
 
 func TestBuildTeamTrajectorySummary_含工具步骤(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindTool,
-				Detail: &trajectory.ToolCallDetail{
-					ToolName:   "spawn_member",
-					CallArgs:   map[string]any{"name": "worker"},
-					CallResult: map[string]any{"status": "ok"},
-				},
-			},
-		},
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, []trajectory.TestStep{
+		{Kind: "tool", ToolName: "spawn_member", CallArgs: map[string]any{"name": "worker"}, CallResult: map[string]any{"status": "ok"}},
+	})
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "[Tool:spawn_member]") {
@@ -514,15 +511,11 @@ func TestBuildTeamTrajectorySummary_含工具步骤(t *testing.T) {
 }
 
 func TestBuildTeamTrajectorySummary_含LLM步骤(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Response: map[string]any{"content": "LLM response text"},
-				},
-			},
-		},
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, []trajectory.TestStep{
+		{Kind: "llm", Response: map[string]any{"content": "LLM response text"}},
+	})
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "[LLM]") {
@@ -531,11 +524,10 @@ func TestBuildTeamTrajectorySummary_含LLM步骤(t *testing.T) {
 }
 
 func TestBuildTeamTrajectorySummary_步骤无Detail(t *testing.T) {
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{Kind: trajectory.StepKindTool, Detail: nil},
-			{Kind: trajectory.StepKindLLM, Detail: nil},
-		},
+	// span 模型：无 Detail 步骤的旧语义不可表达；空轨迹等价（计数 0）。
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, nil)
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "### Tool Calls (0)") {
@@ -545,18 +537,19 @@ func TestBuildTeamTrajectorySummary_步骤无Detail(t *testing.T) {
 
 func TestBuildTeamTrajectorySummary_工具区截断(t *testing.T) {
 	longResult := map[string]any{"data": strings.Repeat("x", 30000)}
-	steps := make([]*trajectory.TrajectoryStep, 100)
+	steps := make([]trajectory.TestStep, 100)
 	for i := range steps {
-		steps[i] = &trajectory.TrajectoryStep{
-			Kind: trajectory.StepKindTool,
-			Detail: &trajectory.ToolCallDetail{
-				ToolName:   fmt.Sprintf("tool_%d", i),
-				CallArgs:   map[string]any{"arg": "val"},
-				CallResult: longResult,
-			},
+		steps[i] = trajectory.TestStep{
+			Kind:       "tool",
+			ToolName:   fmt.Sprintf("tool_%d", i),
+			CallArgs:   map[string]any{"arg": "val"},
+			CallResult: longResult,
 		}
 	}
-	traj := &trajectory.Trajectory{Steps: steps}
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, steps)
+	if trajErr != nil {
+		t.Fatal(trajErr)
+	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "tool section truncated") {
 		t.Error("long tool section should be truncated")
@@ -565,16 +558,17 @@ func TestBuildTeamTrajectorySummary_工具区截断(t *testing.T) {
 
 func TestBuildTeamTrajectorySummary_LLM区截断(t *testing.T) {
 	longResponse := map[string]any{"content": strings.Repeat("y", 500)}
-	steps := make([]*trajectory.TrajectoryStep, 100)
+	steps := make([]trajectory.TestStep, 100)
 	for i := range steps {
-		steps[i] = &trajectory.TrajectoryStep{
-			Kind: trajectory.StepKindLLM,
-			Detail: &trajectory.LLMCallDetail{
-				Response: longResponse,
-			},
+		steps[i] = trajectory.TestStep{
+			Kind:     "llm",
+			Response: longResponse,
 		}
 	}
-	traj := &trajectory.Trajectory{Steps: steps}
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, steps)
+	if trajErr != nil {
+		t.Fatal(trajErr)
+	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "LLM section truncated") {
 		t.Error("long LLM section should be truncated")
@@ -952,25 +946,12 @@ func TestParseTeamModelJSON_实际LLM输出(t *testing.T) {
 
 func TestBuildTeamTrajectorySummary_关键工具更长截断(t *testing.T) {
 	longValue := strings.Repeat("x", 600)
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindTool,
-				Detail: &trajectory.ToolCallDetail{
-					ToolName:   "spawn_member",
-					CallArgs:   map[string]any{"data": longValue},
-					CallResult: map[string]any{"data": longValue},
-				},
-			},
-			{
-				Kind: trajectory.StepKindTool,
-				Detail: &trajectory.ToolCallDetail{
-					ToolName:   "other_tool",
-					CallArgs:   map[string]any{"data": longValue},
-					CallResult: map[string]any{"data": longValue},
-				},
-			},
-		},
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, []trajectory.TestStep{
+		{Kind: "tool", ToolName: "spawn_member", CallArgs: map[string]any{"data": longValue}, CallResult: map[string]any{"data": longValue}},
+		{Kind: "tool", ToolName: "other_tool", CallArgs: map[string]any{"data": longValue}, CallResult: map[string]any{"data": longValue}},
+	})
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	result := BuildTeamTrajectorySummary(traj)
 	if !strings.Contains(result, "spawn_member") {
@@ -1147,14 +1128,11 @@ func TestParseTeamModelJSON_轨迹问题LLM输出(t *testing.T) {
 func TestDetectTrajectorySignals_无问题(t *testing.T) {
 	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
 	d := NewTeamSignalDetector(nil, "test-model", "cn", &policy, nil)
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{
-			{Kind: trajectory.StepKindTool, Detail: &trajectory.ToolCallDetail{
-				ToolName:   "some_tool",
-				CallArgs:   map[string]any{"x": 1},
-				CallResult: map[string]any{"ok": true},
-			}},
-		},
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, []trajectory.TestStep{
+		{Kind: "tool", ToolName: "some_tool", CallArgs: map[string]any{"x": 1}, CallResult: map[string]any{"ok": true}},
+	})
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	// LLM 为 nil，调用会失败
 	signals, err := d.DetectTrajectorySignals(context.Background(), traj, "test_skill", "skill content")
@@ -1166,8 +1144,9 @@ func TestDetectTrajectorySignals_无问题(t *testing.T) {
 func TestDetectTrajectoryIssues_LLM为nil(t *testing.T) {
 	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
 	d := NewTeamSignalDetector(nil, "test-model", "cn", &policy, nil)
-	traj := &trajectory.Trajectory{
-		Steps: []*trajectory.TrajectoryStep{},
+	traj, trajErr := trajectory.NewTestTrajectory("", nil, nil)
+	if trajErr != nil {
+		t.Fatal(trajErr)
 	}
 	issues, err := d.DetectTrajectoryIssues(context.Background(), traj, "skill content")
 	_ = issues

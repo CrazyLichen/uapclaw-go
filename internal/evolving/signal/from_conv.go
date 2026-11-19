@@ -596,8 +596,11 @@ func (d *ConversationSignalDetector) resolveActiveSkill(msgIdx int, history []sk
 // Python: ConversationSignalDetector._detect_skill_from_tool_calls(tool_calls)
 func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[string]any) string {
 	for _, tc := range toolCalls {
-		name := strings.ToLower(getField[string](tc, "name", ""))
-		arguments := getField[string](tc, "arguments", "")
+		// 12-04：name/arguments 兼容 OpenAI 嵌套 function 形态（对齐 upstream
+		// tool_call_name(tc)/tool_call_arguments(tc) —— trajectory/messages.py 投影
+		// 输出 normalize 后即嵌套形态）。
+		name := strings.ToLower(toolCallNameOf(tc))
+		arguments := toolCallArgumentsOf(tc)
 
 		var skillName string
 
@@ -744,4 +747,35 @@ func (d *ConversationSignalDetector) deduplicate(signals []*EvolutionSignal) []*
 		deduped = append(deduped, sig)
 	}
 	return deduped
+}
+
+// toolCallNameOf 兼容扁平/OpenAI 嵌套形态读取工具名。
+// Python: trajectory/messages.py tool_call_name。
+func toolCallNameOf(tc map[string]any) string {
+	if v, ok := tc["name"].(string); ok && v != "" {
+		return v
+	}
+	if fn, ok := tc["function"].(map[string]any); ok {
+		if v, ok := fn["name"].(string); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// toolCallArgumentsOf 兼容扁平/OpenAI 嵌套形态读取工具参数。
+// Python: trajectory/messages.py tool_call_arguments。
+func toolCallArgumentsOf(tc map[string]any) string {
+	if v, ok := tc["arguments"].(string); ok && v != "" {
+		return v
+	}
+	if fn, ok := tc["function"].(map[string]any); ok {
+		if v, ok := fn["arguments"].(string); ok {
+			return v
+		}
+	}
+	if v := tc["arguments"]; v != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return ""
 }

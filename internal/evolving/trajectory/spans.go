@@ -953,6 +953,22 @@ func flattenStructuredMessage(message map[string]any) map[string]any {
 	return flat
 }
 
+// toAnyList 把 []map[string]any / []any 统一为 []any（Go 内存映射形态宽容）。
+func toAnyList(value any) []any {
+	switch v := value.(type) {
+	case []any:
+		return v
+	case []map[string]any:
+		result := make([]any, 0, len(v))
+		for _, item := range v {
+			result = append(result, item)
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
 // structureMessage 把扁平 role/content 消息渲染为结构化 GenAI 消息。
 // 文本、tool calls 与 tool 响应成为 OpenTelemetry GenAI JSON schema 定义的
 // 精确 part 形态。
@@ -978,7 +994,7 @@ func structureMessage(message map[string]any) map[string]any {
 		// 空内容也记录：携带空 content 字段的消息不同于没携带的。
 		parts = append(parts, map[string]any{"type": "text", "content": copyJSON(content)})
 	}
-	toolCalls, _ := message["tool_calls"].([]any)
+	toolCalls := toAnyList(message["tool_calls"])
 	for _, item := range toolCalls {
 		call, isMap := item.(map[string]any)
 		if !isMap {
