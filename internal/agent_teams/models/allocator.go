@@ -799,3 +799,15 @@ func marshalForSignature(v any) string {
 	}
 	return string(data)
 }
+
+// CliModelCatalog 外部 CLI 投影目录协议（Python: CliModelCatalog Protocol，
+// allocator.py:201-217）。ModelAllocator 实现可额外实现本接口以暴露物理
+// 部署目录（IntelliRouterAllocator 已实现）。
+type CliModelCatalog interface {
+	// ListCliModels 列出供外部 CLI 投影的真实部署候选。
+	// Python: list_cli_models (allocator.py:204)
+	ListCliModels(providerFilter func(string) bool) []CliModelAllocation
+	// ResolveCliModels 按真实部署名解析。
+	// Python: resolve_cli_models (allocator.py:211)
+	ResolveCliModels(modelName string, providerFilter func(string) bool) []CliModelAllocation
+}

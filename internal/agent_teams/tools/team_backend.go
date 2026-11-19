@@ -69,6 +69,10 @@ type TeamBackend struct {
 	predefinedMembers []atschema.TeamMemberSpec
 	// modelConfigAllocator 模型配置分配器
 	modelConfigAllocator func(modelName string) *models.Allocation
+	// currentModelName/currentModelProvider 团队当前模型（可空）。
+	// Python: team.py:287-288
+	currentModelName     string
+	currentModelProvider string
 	// modelAllocator 当前模型分配器（可经 UpdateModelAllocator 热替换）。
 	// Python: TeamBackend._model_allocator (team.py:284)
 	modelAllocator models.ModelAllocator
@@ -1882,4 +1886,79 @@ type ExternalCLISpawnInput struct {
 	Lifetime *database.MemberLifetime
 	// AgentTemplate 专家模板引用（member_config 存于其中，重启/冷恢复按同配置重建）
 	AgentTemplate *database.MemberAgentTemplate
+}
+
+// ──────────────────────────── 模型池 CLI 投影与内置模型（15.16e-T5b 前置） ────────────────────────────
+
+// WithCurrentModel 注入团队当前模型名与 provider。
+// Python: __init__ 的 current_model_name/current_model_provider（team.py:287-288）。
+func WithCurrentModel(name, provider string) TeamBackendOption {
+	return func(tb *TeamBackend) {
+		tb.currentModelName = strings.TrimSpace(name)
+		tb.currentModelProvider = strings.TrimSpace(provider)
+	}
+}
+
+// CurrentModelName 当前模型名（可空）。
+// Python: team.current_model_name (team.py:287)
+func (tb *TeamBackend) CurrentModelName() string { return tb.currentModelName }
+
+// CurrentModelProvider 当前模型 provider（可空）。
+// Python: team.current_model_provider (team.py:288)
+func (tb *TeamBackend) CurrentModelProvider() string { return tb.currentModelProvider }
+
+// ListCliModels 列出供外部 CLI 投影的真实部署候选（仅 CliModelCatalog 分配器）。
+// Python: list_cli_models (team.py:472-477)
+func (tb *TeamBackend) ListCliModels(providerFilter func(string) bool) []models.CliModelAllocation {
+	if catalog, ok := tb.modelAllocator.(models.CliModelCatalog); ok {
+		return catalog.ListCliModels(providerFilter)
+	}
+	return nil
+}
+
+// ResolveCliModels 按真实部署名解析（仅 CliModelCatalog 分配器）。
+// Python: resolve_cli_models (team.py:484-490)
+func (tb *TeamBackend) ResolveCliModels(modelName string, providerFilter func(string) bool) []models.CliModelAllocation {
+	if catalog, ok := tb.modelAllocator.(models.CliModelCatalog); ok {
+		return catalog.ResolveCliModels(modelName, providerFilter)
+	}
+	return nil
+}
+
+// ResolveBuiltinModel 校验内置模型选择：kind 目录查找 + effort 校验。
+// Python: resolve_builtin_model (team.py:3088-3112)
+func (tb *TeamBackend) ResolveBuiltinModel(cliAgent, model, effort string) (*database.MemberBuiltinModel, string) {
+	cfg := tb.ExternalCLIConfig(cliAgent)
+	if cfg == nil || len(cfg.BuiltinModels) == 0 {
+		return nil, fmt.Sprintf("cli_agent '%s' declares no builtin_models", cliAgent)
+	}
+	declared := cfg.FindBuiltinModel(model)
+	if declared == nil {
+		names := make([]string, 0, len(cfg.BuiltinModels))
+		for i := range cfg.BuiltinModels {
+			names = append(names, cfg.BuiltinModels[i].Name)
+		}
+		return nil, fmt.Sprintf("builtin model '%s' is not declared for cli_agent '%s' (declared: %s)", model, cliAgent, strings.Join(names, ", "))
+	}
+	if effort != "" {
+		allowed := strings.Join(declared.Efforts, ", ")
+		if allowed == "" {
+			allowed = "none"
+		}
+		supported := false
+		for _, e := range declared.Efforts {
+			if e == effort {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return nil, fmt.Sprintf("effort '%s' is not supported by builtin model '%s' (supported: %s)", effort, model, allowed)
+		}
+	}
+	effective := effort
+	if effective == "" {
+		effective = declared.DefaultEffort
+	}
+	return &database.MemberBuiltinModel{Model: model, Effort: &effective}, ""
 }

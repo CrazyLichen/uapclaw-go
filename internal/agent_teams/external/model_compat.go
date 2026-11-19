@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 外部 CLI agent 共享的模型兼容原语：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/model_compat.py（110 行全文）。
@@ -7,7 +7,6 @@ package externalcli
 // 使 provider/协议/模型配置映射只存在一份。
 
 import (
-	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"sort"
 	"strings"
 
@@ -19,9 +18,10 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// jiuwenExternalProvider Codex 的 OpenAI 兼容非官方端点使用的 provider 名。
+// JiuwenExternalProvider Codex 的 OpenAI 兼容非官方端点使用的 provider 名。
 // Python: _JIUWEN_EXTERNAL_PROVIDER (model_compat.py:16)
-const jiuwenExternalProvider = "jiuwen"
+// JiuwenExternalProvider Codex 的 OpenAI 兼容非官方端点使用的 provider 名。
+const JiuwenExternalProvider = "jiuwen"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -42,11 +42,11 @@ func ProviderFilterForCLI(cliAgent string) func(string) bool {
 	if cliAgent == "codex" {
 		return func(p string) bool { return !IsAnthropicProvider(p) }
 	}
-	backend := external.BackendFor(cliAgent)
-	if backend == nil || backend.Kind != external.BackendKindProvider {
+	backend := BackendFor(cliAgent)
+	if backend == nil || backend.Kind != BackendKindProvider {
 		return nil
 	}
-	if external.ProviderTakesEndpointModels(cliAgent) {
+	if ProviderTakesEndpointModels(cliAgent) {
 		return nil
 	}
 	return func(_ string) bool { return false }
@@ -99,7 +99,7 @@ func ExternalCLIProviderName(clientConfig *llmschema.ModelClientConfig, cliAgent
 	apiBase := strings.TrimSpace(clientConfig.APIBase)
 	provider := strings.TrimSpace(clientConfig.ClientProvider)
 	if cliAgent == "codex" && strings.EqualFold(provider, "openai") && apiBase != "" {
-		return jiuwenExternalProvider
+		return JiuwenExternalProvider
 	}
 	return provider
 }
@@ -123,10 +123,10 @@ func TeamModelConfigToExternal(memberModel *hschema.TeamModelConfig, cliAgent st
 		model = requestConfig.ModelName
 	}
 	return &schema.ExternalCliModelConfig{
-		Provider: emptyToNil(provider),
-		Model:    emptyToNil(model),
-		APIBase:  emptyToNil(clientConfig.APIBase),
-		APIKey:   emptyToNil(clientConfig.APIKey),
+		Provider: EmptyToNil(provider),
+		Model:    EmptyToNil(model),
+		APIBase:  EmptyToNil(clientConfig.APIBase),
+		APIKey:   EmptyToNil(clientConfig.APIKey),
 	}
 }
 
@@ -135,7 +135,8 @@ func TeamModelConfigToExternal(memberModel *hschema.TeamModelConfig, cliAgent st
 // emptyToNil 承载 Python `x or None` 语义：Go 字段为 string（无 None 形态），
 // 空串即"未设置"，经 json omitempty 序列化时与 Python None 等价——本函数
 // 归一空串为未设置形状，非空串原样透传。
-func emptyToNil(s string) string {
+// EmptyToNil 空串转 nil（导出包装，model_plan 跨包消费）。
+func EmptyToNil(s string) string {
 	if s == "" {
 		return ""
 	}

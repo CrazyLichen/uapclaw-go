@@ -37,7 +37,7 @@ func WireExternalCliSpawn() {
 		BuildMemberSystemPrompt:     buildMemberSystemPrompt,
 		BuildCliRuntime:             buildExternalCliRuntime,
 		BackendFor:                  backendViewFor,
-		TeamModelToExternal:         externalcli.TeamModelConfigToExternal,
+		TeamModelToExternal:         externalbackends.TeamModelConfigToExternal,
 		ProviderTakesEndpointModels: externalbackends.ProviderTakesEndpointModels,
 		TakesAuthFallback:           externalbackends.TakesAuthFallback,
 		NormalizeSkills:             normalizeSkillsShim,

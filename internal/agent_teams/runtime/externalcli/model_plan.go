@@ -2,6 +2,7 @@ package externalcli
 
 import (
 	"fmt"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
@@ -108,7 +109,7 @@ func resolvePoolModel(
 	if teamBackend != nil {
 		pool = teamBackend.GetModelPool()
 	}
-	compatible := CompatiblePoolModelNames(cliAgent, pool)
+	compatible := external.CompatiblePoolModelNames(cliAgent, pool)
 	group := []models.ModelPoolEntry{}
 	for _, e := range pool {
 		if e.ModelName == modelHint {
@@ -119,7 +120,7 @@ func resolvePoolModel(
 		return nil, &PlanError{Message: poolMissMessage(cliAgent, modelHint, compatible, entry,
 			"is not offered by the team model pool")}
 	}
-	providerFilter := ProviderFilterForCLI(cliAgent)
+	providerFilter := external.ProviderFilterForCLI(cliAgent)
 	hit := group[0] // 与 resolve_member_model 相同的"按名分组取首项"规则（:108）
 	if providerFilter != nil && !providerFilter(hit.APIProvider) {
 		return nil, &PlanError{Message: poolMissMessage(cliAgent, modelHint, compatible, entry,
@@ -132,13 +133,13 @@ func resolvePoolModel(
 	// 官方端点（:113-116）
 	provider := strings.TrimSpace(hit.APIProvider)
 	if apiBase != "" {
-		provider = jiuwenExternalProvider
+		provider = external.JiuwenExternalProvider
 	}
 	config := &schema.ExternalCliModelConfig{
-		Provider: emptyToNil(provider),
-		Model:    emptyToNil(modelHint),
-		APIBase:  emptyToNil(apiBase),
-		APIKey:   emptyToNil(apiKey),
+		Provider: external.EmptyToNil(provider),
+		Model:    external.EmptyToNil(modelHint),
+		APIBase:  external.EmptyToNil(apiBase),
+		APIKey:   external.EmptyToNil(apiKey),
 	}
 	return &ExternalModelPlan{Primary: config, Display: modelHint}, nil
 }
