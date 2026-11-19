@@ -24,6 +24,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -572,4 +574,21 @@ func init() {
 // schemaAdapterNamesHook 注册 schema 包的 adapter 名单钩子。
 func schemaAdapterNamesHook() {
 	schema.AdapterNamesFunc = AvailableAdapters
+}
+
+func init() {
+	// D-15.16-e14：adapter 面注入 external 包的 backends 缝
+	// （Python 同包直调 available_adapters/build_adapter；Go 为消
+	// tools → external → externalcli → tools 环，adapter 构造经缝回填）。
+	external.SetAdaptersProvider(AvailableAdapters)
+	external.SetAdaptersBuildProvider(func(name string) (*external.AdapterBuildResult, error) {
+		adapter, err := BuildAdapter(name, nil)
+		if err != nil {
+			return nil, err
+		}
+		return &external.AdapterBuildResult{
+			Name:    adapter.Name,
+			Command: adapter.Command,
+		}, nil
+	})
 }

@@ -9,6 +9,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	externalbackends "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 
 	agent "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
@@ -37,8 +38,8 @@ func WireExternalCliSpawn() {
 		BuildCliRuntime:             buildExternalCliRuntime,
 		BackendFor:                  backendViewFor,
 		TeamModelToExternal:         externalcli.TeamModelConfigToExternal,
-		ProviderTakesEndpointModels: externalcli.ProviderTakesEndpointModels,
-		TakesAuthFallback:           externalcli.TakesAuthFallback,
+		ProviderTakesEndpointModels: externalbackends.ProviderTakesEndpointModels,
+		TakesAuthFallback:           externalbackends.TakesAuthFallback,
 		NormalizeSkills:             normalizeSkillsShim,
 		InstallSkills:               installSkillsShim,
 		BindOrchestration:           bindExternalMemberOrchestration,
@@ -184,7 +185,7 @@ func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeConte
 
 // backendViewFor 后端能力视图（Python: backend_for(ctx.cli_agent)）。
 func backendViewFor(cliAgent string) *spawn.ExternalCliBackendView {
-	b := externalcli.BackendFor(cliAgent)
+	b := externalbackends.BackendFor(cliAgent)
 	if b == nil {
 		return nil
 	}

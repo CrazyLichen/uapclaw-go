@@ -20,6 +20,7 @@ package externalcli
 import (
 	"context"
 	"fmt"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"io"
 	"os"
 	"os/exec"
@@ -202,8 +203,8 @@ func BuildCliRuntime(ctx context.Context, rtc *schema.TeamRuntimeContext, opts O
 				rtc.CLIAgent)))
 	}
 	// 步骤 4：后端查找与 provider 路分发（:405-441）
-	backend := BackendFor(rtc.CLIAgent)
-	if backend != nil && backend.Kind == BackendKindProvider {
+	backend := external.BackendFor(rtc.CLIAgent)
+	if backend != nil && backend.Kind == external.BackendKindProvider {
 		// provider 不收的 7 项 SDK/adapter 专属配置，逐项收集、一次性报出
 		unsupported := map[string]bool{
 			"command_override":           opts.CommandOverride != nil,

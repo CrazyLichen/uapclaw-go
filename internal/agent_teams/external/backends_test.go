@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 import (
 	"slices"
@@ -7,6 +7,15 @@ import (
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 )
+
+// init 测试注入：adapter 集经缝提供（D-15.16-e14）——原测试与 adapters
+// 同包，迁移后以 fake adapter 名集保持断言面不变。
+func init() {
+	SetAdaptersProvider(func() []string { return []string{"openclaw", "hermes", "gemini", "generic"} })
+	SetAdaptersBuildProvider(func(name string) (*AdapterBuildResult, error) {
+		return &AdapterBuildResult{Name: name}, nil
+	})
+}
 
 // TestBackendFor_sdk与adapter与provider 对齐 backend_for 查找顺序（backends.py:92-112）。
 func TestBackendFor_sdk与adapter与provider(t *testing.T) {

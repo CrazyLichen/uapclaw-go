@@ -18,8 +18,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
+	externalbackends "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -118,6 +120,17 @@ type TeamBackend struct {
 	enableMemberMessaging bool
 	// maxSubtaskDepth 成员拆子任务的深度上限（F_128），0=不启用
 	maxSubtaskDepth int
+
+	// ── 外部 CLI 成员注册链（15.16e-T5）──
+	// externalCliMu 保护以下两映射（Python 单线程事件循环直读直写；
+	// Go 按 asyncio→Go 惯例加锁）。
+	externalCliMu sync.RWMutex
+	// externalCliConfigs 声明的 CLI kind → 静态配置（能力天花板）。
+	// Python: _external_cli_configs (team.py:404-406)
+	externalCliConfigs map[string]*atschema.ExternalCliAgentSpec
+	// externalCliSpecs 成员名 → CLI kind（spawn 记账；startup 路由凭据）。
+	// Python: _external_cli_specs（team.py spawn_external_cli_agent 内）
+	externalCliSpecs map[string]string
 }
 
 // TeamBackendOption TeamBackend 构造可选参数。
@@ -1702,4 +1715,171 @@ func (tb *TeamBackend) spawnAndPublish(
 	logger.Info(logComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 		Msg("spawnAndPublish: member started")
 	return nil
+}
+
+// ──────────────────────────── 外部 CLI 成员注册链（15.16e-T5） ────────────────────────────
+
+// WithExternalCLIAgents 注入本团队声明的 external CLI 静态配置
+// （能力天花板：spawn 只认这里的 kind）。Python: __init__ 的
+// external_cli_agents 形参（team.py:127 区段）→ _external_cli_configs（:404-406）。
+func WithExternalCLIAgents(specs []*atschema.ExternalCliAgentSpec) TeamBackendOption {
+	return func(tb *TeamBackend) {
+		if tb.externalCliConfigs == nil {
+			tb.externalCliConfigs = map[string]*atschema.ExternalCliAgentSpec{}
+		}
+		for i := range specs {
+			if specs[i] != nil {
+				tb.externalCliConfigs[specs[i].CLIAgent] = specs[i]
+			}
+		}
+	}
+}
+
+// ExternalCLIConfig 返回某 CLI kind 的声明配置；未声明得 nil。
+// Python: external_cli_config (team.py:3076-3078)
+func (tb *TeamBackend) ExternalCLIConfig(cliAgent string) *atschema.ExternalCliAgentSpec {
+	tb.externalCliMu.RLock()
+	defer tb.externalCliMu.RUnlock()
+	return tb.externalCliConfigs[cliAgent]
+}
+
+// DeclaredCLIKinds 已声明的 CLI kind 闭集。Python: declared_cli_kinds (:3080-3082)
+func (tb *TeamBackend) DeclaredCLIKinds() map[string]bool {
+	tb.externalCliMu.RLock()
+	defer tb.externalCliMu.RUnlock()
+	kinds := make(map[string]bool, len(tb.externalCliConfigs))
+	for kind := range tb.externalCliConfigs {
+		kinds[kind] = true
+	}
+	return kinds
+}
+
+// BuiltinModelsEnabled 任一声明 kind 自带内置模型目录。
+// Python: builtin_models_enabled (team.py:3084-3086)
+func (tb *TeamBackend) BuiltinModelsEnabled() bool {
+	tb.externalCliMu.RLock()
+	defer tb.externalCliMu.RUnlock()
+	for _, cfg := range tb.externalCliConfigs {
+		if len(cfg.BuiltinModels) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// SpawnExternalCLI 注册一个外部 CLI 成员行（UNSTARTED）：
+// 声明 kind 校验 → SDK 可用性 → 记账 → SpawnMember（EXTERNAL_CLI 角色）→
+// 失败回滚记账。SDK 只在成员进程 spawn 时才 import，注册期先失败避免把
+// 不可用 kind 留到首条消息的惰性启动才暴露为晦涩的发送失败。
+// Python: spawn_external_cli_agent (team.py:3193-3280)
+//
+// 偏差 D-15.16-e13：missing_sdk_requirement（Python packaging 层 import 探测，
+// team.py:3276）在 Go 无对应物——CLI SDK 可用性由 15.16d 探测面/运行时拉起
+// 失败承担，恒返回 nil 并保留 Python 源行号锚点，随 15.7/15.8 探测分支回收。
+func (tb *TeamBackend) SpawnExternalCLI(ctx context.Context, in ExternalCLISpawnInput) atschema.MemberOpResult {
+	// 能力天花板：CLI kind 必须在 TeamAgentSpec.external_cli_agents 预声明
+	// （全部启动知识静态在声明里；spawn 调用只报 kind 名）。
+	// Python: team.py:3260-3267
+	if _, declared := tb.DeclaredCLIKinds()[in.CLIAgent]; !declared {
+		declaredKinds := make([]string, 0)
+		for kind := range tb.DeclaredCLIKinds() {
+			declaredKinds = append(declaredKinds, kind)
+		}
+		sort.Strings(declaredKinds)
+		shown := strings.Join(declaredKinds, ", ")
+		if shown == "" {
+			shown = "<none>"
+		}
+		return atschema.NewMemberOpResultFail(
+			fmt.Sprintf("cli_agent '%s' is not declared in TeamAgentSpec.external_cli_agents (declared: %s); add a static config entry for it first", in.CLIAgent, shown))
+	}
+	// Python: is_known_backend (team.py:3268)
+	if !externalbackends.IsKnownBackend(in.CLIAgent) {
+		return atschema.NewMemberOpResultFail(
+			fmt.Sprintf("Unknown cli_agent '%s'; known: %s", in.CLIAgent, strings.Join(externalbackends.AvailableBackends(), ", ")))
+	}
+	// Python: missing_sdk_requirement (team.py:3270-3278)——D-15.16-e13 恒 nil。
+	if missing := missingSDKRequirement(in.CLIAgent); missing != "" {
+		return atschema.NewMemberOpResultFail(missing)
+	}
+
+	card := agentschema.AgentCard{
+		BaseCard: cschema.BaseCard{
+			ID:          tb.teamName + "_" + in.MemberName,
+			Name:        in.DisplayName,
+			Description: in.Desc,
+		},
+	}
+	// 先记账再 spawn_member：后续 startup → build_context_from_db 的路由按
+	// 这份映射把成员派往 CLI 路径。Python: team.py:3281-3283
+	tb.externalCliMu.Lock()
+	tb.externalCliSpecs[in.MemberName] = in.CLIAgent
+	tb.externalCliMu.Unlock()
+
+	opts := []SpawnMemberOption{
+		WithStatus("UNSTARTED"),
+		WithExecutionStatus("IDLE"),
+		WithMode(tb.teammateMode),
+		WithCLIAgent(in.CLIAgent),
+	}
+	if in.Allocation != nil {
+		opts = append(opts, WithAllocation(in.Allocation))
+	}
+	if in.FallbackAllocation != nil {
+		opts = append(opts, WithFallbackAllocation(in.FallbackAllocation))
+	}
+	if in.BuiltinModel != nil {
+		opts = append(opts, WithBuiltinModel(in.BuiltinModel))
+	}
+	if in.Lifetime != nil {
+		opts = append(opts, WithLifetime(in.Lifetime))
+	}
+	if in.AgentTemplate != nil {
+		opts = append(opts, WithAgentTemplate(in.AgentTemplate))
+	}
+	result := tb.SpawnMember(ctx, in.MemberName, in.DisplayName, &card,
+		string(atschema.TeamRoleExternalCLI), in.Desc, in.Prompt, in.ModelName, opts...)
+	if !result.OK {
+		tb.externalCliMu.Lock()
+		delete(tb.externalCliSpecs, in.MemberName)
+		tb.externalCliMu.Unlock()
+		logger.Warn(logComponent).
+			Str("member_name", in.MemberName).
+			Str("team_name", tb.teamName).
+			Msg("Failed to register external-cli agent")
+	}
+	return result
+}
+
+// missingSDKRequirement SDK 缺失探测缝（D-15.16-e13）。
+// Python: missing_sdk_requirement (external/cli_agent/backends.py)
+func missingSDKRequirement(cliAgent string) string {
+	return ""
+}
+
+// ExternalCLISpawnInput SpawnExternalCLI 的具名入参（对齐 Python keyword-only 形参）。
+// Python: spawn_external_cli_agent (team.py:3194-3219)
+type ExternalCLISpawnInput struct {
+	// MemberName 成员名
+	MemberName string
+	// DisplayName 显示名
+	DisplayName string
+	// CLIAgent 外部 CLI kind
+	CLIAgent string
+	// Desc 成员公开描述
+	Desc string
+	// Prompt 成员私有 prompt
+	Prompt string
+	// ModelName 模型名（池成员路由 tag）
+	ModelName string
+	// Allocation 池模型分配
+	Allocation *models.Allocation
+	// FallbackAllocation 认证兜底分配（native CLI 报认证失败时启用）
+	FallbackAllocation *models.Allocation
+	// BuiltinModel CLI 自带登录态模型（与 Allocation 互斥）
+	BuiltinModel *database.MemberBuiltinModel
+	// Lifetime task-scoped 成员退役策略（scheduled create_task 内联，F_118；nil=常驻）
+	Lifetime *database.MemberLifetime
+	// AgentTemplate 专家模板引用（member_config 存于其中，重启/冷恢复按同配置重建）
+	AgentTemplate *database.MemberAgentTemplate
 }

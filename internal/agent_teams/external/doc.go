@@ -1,13 +1,16 @@
-// Package external 提供外部成员（第三方 CLI 驱动）的入站上下文渲染。
-// 这些辅助函数把原始团队模型（消息、任务）转成与进程内成员经协调处理器收到的
-// 完全相同的 <team-inbound> / <team-event> XML，复用共享的 inbound_render 结构与
-// i18n 提示文案，让外部 agent 读到一致的形状。无 IO、无 LLM 调用，完全确定性、可单测。
+// Package external 提供外部 CLI 成员的后端注册表与 AgentTemplate runtime 翻译。
+//
 // 文件目录：
 //
 //	external/
-//	├── doc.go            # 包文档
-//	└── format.go         # RenderMessage / RenderMessages（消息装配）
+//	├── doc.go               # 包文档
+//	├── backends.go         # 外部 CLI 后端注册表（cli_agent/backends.py 190 行 1:1；归属修正见文件头）
+//	└── manifest.go         # AgentTemplate runtime → ExternalCliAgentSpec（manifest.py 104 行 1:1）
 //
-// 待 25.4 回填：RenderTaskLine / RenderTaskBoard（依赖任务板状态机语义）
-// 对应 Python 代码：openjiuwen/agent_teams/external/format.py
+// 归属说明：backends.go 此前在 runtime/externalcli（聚合包）；Python 源文件在
+// agent_teams/external/cli_agent 层，tools 包消费 IsKnownBackend/AvailableBackends
+// 时不得依赖 runtime 层，按规则 9 抽回（15.16e-T5）；adapter 半区仍在
+// runtime/externalcli，经缝注入（D-15.16-e14）。
+//
+// 对应 Python 代码：openjiuwen/agent_teams/external/{cli_agent/backends.py,manifest.py}
 package external

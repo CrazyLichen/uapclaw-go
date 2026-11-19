@@ -7,6 +7,7 @@ package externalcli
 // 使 provider/协议/模型配置映射只存在一份。
 
 import (
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"sort"
 	"strings"
 
@@ -41,11 +42,11 @@ func ProviderFilterForCLI(cliAgent string) func(string) bool {
 	if cliAgent == "codex" {
 		return func(p string) bool { return !IsAnthropicProvider(p) }
 	}
-	backend := BackendFor(cliAgent)
-	if backend == nil || backend.Kind != BackendKindProvider {
+	backend := external.BackendFor(cliAgent)
+	if backend == nil || backend.Kind != external.BackendKindProvider {
 		return nil
 	}
-	if ProviderTakesEndpointModels(cliAgent) {
+	if external.ProviderTakesEndpointModels(cliAgent) {
 		return nil
 	}
 	return func(_ string) bool { return false }

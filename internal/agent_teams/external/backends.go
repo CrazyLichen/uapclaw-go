@@ -1,14 +1,39 @@
-package externalcli
+// Python 源：openjiuwen/agent_teams/external/cli_agent/backends.py（190 行全文一比一）
+// 归属修正（15.16e-T5）：此前落在 runtime/externalcli 包，但 Python 本文件在
+// agent_teams/external/cli_agent 层——tools 包（team_backend）需消费
+// IsKnownBackend/AvailableBackends 且不得依赖 runtime 层，按规则 9 抽回
+// external 包（tools → external 无环；externalcli 包改为引用本包）。
+package external
 
 // 外部 CLI 后端种类注册表：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/backends.py（190 行全文一比一）。
 
 import (
+	"fmt"
 	"slices"
 
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 )
+
+// adaptersProviderFn adapter 面注入缝（偏差 D-15.16-e14）：Python 的
+// backends.py 与 adapters.py 同在 external/cli_agent 包内直接互调；Go 的
+// adapters 半区落在 runtime/externalcli（与 spawn/runtime 聚合），为避免
+// tools → external → externalcli → tools 的环，adapter 可用集经本缝注入，
+// externalcli 包构造期（init）调用 SetAdaptersProvider 回填。
+// Python: available_adapters (adapters.py:509) 直调。
+var adaptersProviderFn func() []string
+
+// SetAdaptersProvider 注入 adapter 可用集（externalcli 包 init 调用）。
+// Python 无对应独立函数（同包直调）。
+func SetAdaptersProvider(fn func() []string) {
+	adaptersProviderFn = fn
+}
+
+// SetAdaptersBuildProvider 注入 adapter 构建（externalcli 包 init 调用）。
+func SetAdaptersBuildProvider(fn func(name string) (*AdapterBuildResult, error)) {
+	adaptersBuildFn = fn
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -88,6 +113,15 @@ var sdkBackends = map[string]*ExternalCliBackend{
 	},
 }
 
+// sdkBackendNames SDK 后端名集（Python (*_SDK_BACKENDS) 展开）。
+func sdkBackendNames() []string {
+	names := make([]string, 0, len(sdkBackends))
+	for name := range sdkBackends {
+		names = append(names, name)
+	}
+	return names
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BackendFor 返回 name 的后端元数据，未支持时 nil。
@@ -101,8 +135,8 @@ func BackendFor(name string) *ExternalCliBackend {
 		copied := *sdkBackend
 		return &copied
 	}
-	if slices.Contains(AvailableAdapters(), name) {
-		adapter, err := BuildAdapter(name, nil)
+	if adapterNames := adaptersAvailable(); slices.Contains(adapterNames, name) {
+		adapter, err := adaptersBuild(name)
 		if err != nil {
 			return nil
 		}
@@ -189,7 +223,7 @@ func TakesAuthFallback(name string) bool {
 // Python: available_backends (backends.py:153)
 func AvailableBackends() []string {
 	known := append([]string{}, "claude", "codex")
-	known = append(known, AvailableAdapters()...)
+	known = append(known, adaptersAvailable()...)
 	for _, name := range ThirdPartyProviders() {
 		if !slices.Contains(known, name) {
 			known = append(known, name)
@@ -219,3 +253,49 @@ func MissingSDKRequirement(name string) *SdkRequirement {
 	}
 	return nil
 }
+
+// ──────────────────────────── adapter 缝助手（D-15.16-e14） ────────────────────────────
+
+// adaptersAvailable adapter 可用名集（缝；externalcli 注入）。
+func adaptersAvailable() []string {
+	if adaptersProviderFn != nil {
+		return adaptersProviderFn()
+	}
+	return nil
+}
+
+// adaptersBuild adapter 构建（缝）。
+func adaptersBuild(name string) (*AdapterBuildResult, error) {
+	if adaptersBuildFn == nil {
+		return nil, fmt.Errorf("adapter provider not injected")
+	}
+	return adaptersBuildFn(name)
+}
+
+// AdapterBuildResult adapter 构建产物（缝承载类型；实际构造在 externalcli）。
+type AdapterBuildResult struct {
+	// Name adapter 名
+	Name string
+	// Command 启动 argv
+	Command []string
+	// BypassFlags 权限绕过 flag
+	BypassFlags []string
+	// StreamMode 流模式
+	StreamMode string
+	// injectsSystemPromptViaArg 是否经 argv 注入 system prompt
+	injectsSystemPromptViaArg bool
+}
+
+// InjectsSystemPromptViaArg 是否经 argv 注入 system prompt。
+// Python: CliAgentAdapter.injects_system_prompt_via_arg
+func (a *AdapterBuildResult) InjectsSystemPromptViaArg() bool {
+	return a.injectsSystemPromptViaArg
+}
+
+// SetInjectsSystemPromptViaArg 注入侧写值（跨包构造用）。
+func (a *AdapterBuildResult) SetInjectsSystemPromptViaArg(v bool) {
+	a.injectsSystemPromptViaArg = v
+}
+
+// adaptersBuildFn adapter 构建注入缝。
+var adaptersBuildFn func(name string) (*AdapterBuildResult, error)
