@@ -30,7 +30,7 @@ type AgentRoundController interface {
 	// DeliverInput 确保内容到达 DeepAgent，不论当前状态。
 	// runContext 请求局部调用上下文（heartbeat 原因/上下文装配模式），nil 等价
 	// Python 的省略（team_agent.py L565-571）。
-	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
+	DeliverInput(ctx context.Context, content string, useSteer bool, runContext *agentinterfaces.RunContext) error
 	// AutoStartMember 尽力拉起一个 UNSTARTED 成员运行时（F_62 调度器 handoff
 	// 搭车的幂等惰性拉起原语：UNSTARTED→STARTING CAS）。
 	// Python: TeamAgent.auto_start_member

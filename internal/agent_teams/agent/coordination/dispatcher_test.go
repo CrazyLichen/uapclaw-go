@@ -30,7 +30,7 @@ func (f *fakeDispatcherHost) HasInFlightRound() bool                        { re
 func (f *fakeDispatcherHost) HasPendingInterrupt() bool                     { return f.pendingInt }
 func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error           { return nil }
 func (f *fakeDispatcherHost) AnnounceTaskRevisions(_ context.Context) error { return nil }
-func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ string, _ bool, _ *agentinterfaces.RunContext) error {
 	return nil
 }
 func (f *fakeDispatcherHost) AutoStartMember(_ context.Context, _ string) bool { return true }

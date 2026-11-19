@@ -306,7 +306,7 @@ func (a *roundAdapter) IsAgentRunning() bool              { return false }
 func (a *roundAdapter) HasInFlightRound() bool            { return false }
 func (a *roundAdapter) HasPendingInterrupt() bool         { return false }
 func (a *roundAdapter) CancelAgent(context.Context) error { return nil }
-func (a *roundAdapter) DeliverInput(ctx context.Context, content any, useSteer bool, _ *agentinterfaces.RunContext) error {
+func (a *roundAdapter) DeliverInput(ctx context.Context, content string, useSteer bool, _ *agentinterfaces.RunContext) error {
 	return a.r.DeliverInput(ctx, content, useSteer, nil)
 }
 func (a *roundAdapter) ResumeInterrupt(context.Context, *interaction.InteractiveInput) error {

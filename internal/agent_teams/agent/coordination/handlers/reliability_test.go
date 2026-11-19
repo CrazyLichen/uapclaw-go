@@ -32,10 +32,8 @@ func (f *fakeRecordingHost) IsAgentRunning() bool              { return false }
 func (f *fakeRecordingHost) HasInFlightRound() bool            { return false }
 func (f *fakeRecordingHost) HasPendingInterrupt() bool         { return false }
 func (f *fakeRecordingHost) CancelAgent(context.Context) error { return nil }
-func (f *fakeRecordingHost) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
-	if s, ok := content.(string); ok {
-		f.delivered = append(f.delivered, s)
-	}
+func (f *fakeRecordingHost) DeliverInput(_ context.Context, content string, _ bool, runContext *agentinterfaces.RunContext) error {
+	f.delivered = append(f.delivered, content)
 	return nil
 }
 func (f *fakeRecordingHost) AutoStartMember(_ context.Context, _ string) bool { return true }

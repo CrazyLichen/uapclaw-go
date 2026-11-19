@@ -138,7 +138,7 @@ func (f *fakeKernelHost) HasInFlightRound() bool                        { return
 func (f *fakeKernelHost) HasPendingInterrupt() bool                     { return f.pendingInt }
 func (f *fakeKernelHost) CancelAgent(_ context.Context) error           { return nil }
 func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error { return nil }
-func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+func (f *fakeKernelHost) DeliverInput(_ context.Context, _ string, _ bool, _ *agentinterfaces.RunContext) error {
 	return nil
 }
 func (f *fakeKernelHost) AutoStartMember(_ context.Context, _ string) bool { return true }

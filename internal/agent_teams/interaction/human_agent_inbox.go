@@ -21,7 +21,7 @@ import (
 type DeliverInputer interface {
 	// DeliverInput 投递输入到 Agent。
 	// Python: TeamAgent.deliver_input(content, use_steer=True, run_context=None)
-	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
+	DeliverInput(ctx context.Context, content string, useSteer bool, runContext *agentinterfaces.RunContext) error
 }
 
 // AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
