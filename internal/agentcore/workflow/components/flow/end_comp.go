@@ -22,6 +22,7 @@ import (
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -428,6 +429,68 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		e.conf = conf
 		e.template = NewTemplateProcessor(conf.ResponseTemplate)
 	}
+	// StreamFn 绑定（Python stream，end_comp.py:91-142）
+	e.StreamFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetComponentID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component stream started")
+		if inputs == nil {
+			inputs = map[string]any{}
+		}
+		out := make(chan graphexe.StreamChunk[map[string]any])
+		frameCount := 0
+		go func() {
+			defer close(out)
+			defer func() {
+				logger.Debug(logComponent).
+					Str("component_id", sess.GetComponentID()).
+					Str("session_id", sess.GetSessionID()).
+					Bool("has_template", e.template != nil).
+					Bool("mix", e.mix).
+					Int("chunk_num", frameCount).
+					Msg("End component stream succeed")
+			}()
+			if e.template != nil {
+				// 模板路径：逐帧包 OutputSchema{EndNodeStream}（end_comp.py:106-114）
+				timeout := envTimeoutToFloat(sess.GetEnv(constants.EndCompTemplateRenderPositionTimeoutKey))
+				for chunk := range e.template.RenderStream(ctx, inputs, sess, timeout) {
+					if chunk.Err != nil {
+						logger.Error(logComponent).
+							Err(chunk.Err).
+							Str("component_id", sess.GetComponentID()).
+							Str("session_id", sess.GetSessionID()).
+							Int("chunk_num", frameCount).
+							Bool("has_template", e.template != nil).
+							Bool("mix", e.mix).
+							Msg("End component stream failed")
+						out <- graphexe.StreamChunk[map[string]any]{Err: chunk.Err}
+						return
+					}
+					frameCount++
+					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+						"frame": stream.OutputSchema{
+							Type:    constants.EndNodeStream,
+							Index:   chunk.Val.Index,
+							Payload: map[string]any{"response": chunk.Val.Data},
+						},
+					}}
+				}
+				return
+			}
+			// 无模板：dict 逐 key 吐 {"output": {k:v}}（end_comp.py:116-119）
+			for key, value := range inputs {
+				frameCount++
+				out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+					"output": map[string]any{key: value},
+				}}
+			}
+		}()
+		return out, nil
+	}
+
 	// InvokeFn 绑定（Python invoke，end_comp.py:59-89）
 	e.InvokeFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
 		logger.Debug(logComponent).

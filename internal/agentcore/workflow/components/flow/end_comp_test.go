@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -365,5 +367,57 @@ func TestEnd_Invoke_有模板_渲染(t *testing.T) {
 	out, err := e.OnInvoke(context.Background(), map[string]any{"n": "bob"}, inner, nil)
 	if err != nil || out["response"] != "Hi bob" {
 		t.Fatalf("模板渲染不符: out=%v err=%v", out, err)
+	}
+}
+
+// TestEnd_Stream_有模板_信封帧 验证 OutputSchema{EndNodeStream} 包装（end_comp.py:106-114）。
+func TestEnd_Stream_有模板_信封帧(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	inner := newFakeVertexSession(t, "n1", "End")
+	ch, err := e.OnStream(context.Background(), map[string]any{"n": "cat"}, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	var got []stream.OutputSchema
+	for chunk := range ch {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		got = append(got, chunk.Val["frame"].(stream.OutputSchema))
+	}
+	if len(got) != 2 || got[0].Type != constants.EndNodeStream {
+		t.Fatalf("信封帧不符: %+v", got)
+	}
+	if got[0].Payload.(map[string]any)["response"] != "Hi " {
+		t.Fatalf("首帧 payload 不符: %+v", got[0])
+	}
+	if got[1].Payload.(map[string]any)["response"] != "cat" {
+		t.Fatalf("次帧 payload 不符: %+v", got[1])
+	}
+}
+
+// TestEnd_Stream_无模板_逐key吐出 验证 dict 逐 key 输出（end_comp.py:116-119）。
+func TestEnd_Stream_无模板_逐key吐出(t *testing.T) {
+	e, _ := NewEnd(nil)
+	inner := newFakeVertexSession(t, "n1", "End")
+	ch, err := e.OnStream(context.Background(), map[string]any{"a": 1, "b": 2}, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	count := 0
+	seen := map[string]bool{}
+	for chunk := range ch {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		count++
+		if wrapper, ok := chunk.Val["output"].(map[string]any); ok {
+			for k := range wrapper {
+				seen[k] = true
+			}
+		}
+	}
+	if count != 2 || !seen["a"] || !seen["b"] {
+		t.Fatalf("逐 key 输出不符: count=%d seen=%v", count, seen)
 	}
 }
