@@ -49,11 +49,9 @@ func (s *ExternalCliReadSuite) TestFlatten四键投影() {
 	s.Equal("/usr/bin/codex", flat["external_cli_agent_codex_cli_path"])
 	// 首现去重 + 空白滤除（:87-93）
 	s.Equal(`["/usr/bin/codex","/opt/codex"]`, flat["external_cli_agent_codex_path_histories"])
-	// 未配置的 kind 全 false（:94）
-	s.Equal("false", flat["external_cli_agent_myagent_enabled"])
-	s.Equal("false", flat["external_cli_agent_myagent_use_builtin"])
-	s.Equal("", flat["external_cli_agent_myagent_cli_path"])
-	s.Equal("[]", flat["external_cli_agent_myagent_path_histories"])
+	// kinds 只投影传入集合；未列入 kinds 的 kind 不产生键（Python :81 遍历 kinds）
+	_, ok := flat["external_cli_agent_myagent_enabled"]
+	s.False(ok)
 }
 
 func (s *ExternalCliReadSuite) TestFlatten上传CLI即内建() {
