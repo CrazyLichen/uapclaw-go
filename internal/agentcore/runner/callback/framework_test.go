@@ -1989,3 +1989,41 @@ func TestOnChain_基本功能(t *testing.T) {
 	fw.OnChain("test:chain", nil, nil)
 	// 不 panic 即通过
 }
+
+// ──────────────────────────── Workflow TransformIO 测试 ────────────────────────────
+
+// TestCallbackFramework_TransformWorkflowIO_透传 验证未注册转换函数时输入输出原样透传。
+// Python: transform_io 无回调注册时 noop（component.py transform_io 语义）。
+func TestCallbackFramework_TransformWorkflowIO_透传(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	input := map[string]any{"key": "value"}
+	result := fw.TransformWorkflowIOInput(ctx, ComponentBatchInput, input)
+	assert.Equal(t, input, result)
+
+	result = fw.TransformWorkflowIOOutput(ctx, ComponentBatchOutput, input)
+	assert.Equal(t, input, result)
+}
+
+// TestCallbackFramework_TransformWorkflowIO_注册后变换 验证注册转换函数后输入被改写。
+func TestCallbackFramework_TransformWorkflowIO_注册后变换(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	fw.RegisterWorkflowTransformIO(
+		ComponentBatchInput, ComponentBatchOutput,
+		func(ctx context.Context, event WorkflowEventType, input any) any {
+			return "transformed_" + input.(string)
+		},
+		func(ctx context.Context, event WorkflowEventType, output any) any {
+			return output.(string) + "!"
+		},
+	)
+
+	result := fw.TransformWorkflowIOInput(ctx, ComponentBatchInput, "hello")
+	assert.Equal(t, "transformed_hello", result)
+
+	result = fw.TransformWorkflowIOOutput(ctx, ComponentBatchOutput, "ab")
+	assert.Equal(t, "ab!", result)
+}

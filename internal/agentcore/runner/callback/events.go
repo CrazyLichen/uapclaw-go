@@ -239,6 +239,14 @@ type TransformAgentIOInputFunc func(ctx context.Context, event GlobalAgentEventT
 // Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
 type TransformAgentIOOutputFunc func(ctx context.Context, event GlobalAgentEventType, output any) any
 
+// TransformWorkflowIOInputFunc Workflow 层输入变换回调函数类型。
+// Python: transform_io 的 input_fn（COMPONENT_BATCH_INPUT / COMPONENT_STREAM_INPUT）
+type TransformWorkflowIOInputFunc func(ctx context.Context, event WorkflowEventType, input any) any
+
+// TransformWorkflowIOOutputFunc Workflow 层输出变换回调函数类型。
+// Python: transform_io 的 output_fn（COMPONENT_BATCH_OUTPUT / COMPONENT_STREAM_OUTPUT）
+type TransformWorkflowIOOutputFunc func(ctx context.Context, event WorkflowEventType, output any) any
+
 // TransformToolIOInputFunc Tool 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
 // Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
@@ -451,6 +459,9 @@ const (
 	ComponentBatchOutput WorkflowEventType = "_framework:component_batch_output"
 	// ComponentStreamInput 组件流式输入
 	ComponentStreamInput WorkflowEventType = "_framework:component_stream_input"
+	// ComponentStreamOutput 组件流式输出
+	// Python: events.py:145 COMPONENT_STREAM_OUTPUT
+	ComponentStreamOutput WorkflowEventType = "_framework:component_stream_output"
 )
 
 const (
