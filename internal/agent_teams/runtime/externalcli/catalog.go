@@ -7,10 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
@@ -45,7 +46,7 @@ func ReconcileBuiltinModels(
 	corrected := []map[string]any{}
 	warnings := []string{}
 	for _, item := range declared {
-		name := stringValue(item["name"])
+		name := config.String(item["name"])
 		efforts, reported := reported[name]
 		if !reported {
 			warnings = append(warnings,
@@ -53,7 +54,7 @@ func ReconcileBuiltinModels(
 			continue
 		}
 		entry := cloneStringMap(item)
-		declaredEfforts := stringListOf(item["efforts"])
+		declaredEfforts := config.StringListOrEmpty(item["efforts"])
 		if !equalStrings(efforts, declaredEfforts) {
 			warnings = append(warnings, fmt.Sprintf("%s: '%s' efforts %s -> %s",
 				cliAgent, name, emptyOrSlice(declaredEfforts), emptyOrSlice(efforts)))
@@ -63,7 +64,7 @@ func ReconcileBuiltinModels(
 				delete(entry, "efforts")
 			}
 		}
-		defaultEffort := stringValue(item["default_effort"])
+		defaultEffort := config.String(item["default_effort"])
 		if defaultEffort != "" && !containsStr(efforts, defaultEffort) {
 			warnings = append(warnings, fmt.Sprintf(
 				"%s: '%s' default_effort '%s' is not supported; dropped", cliAgent, name, defaultEffort))
@@ -74,7 +75,7 @@ func ReconcileBuiltinModels(
 
 	declaredNames := map[string]bool{}
 	for _, item := range declared {
-		declaredNames[stringValue(item["name"])] = true
+		declaredNames[config.String(item["name"])] = true
 	}
 	added := []string{}
 	for name := range reported {
@@ -100,7 +101,7 @@ func ApplyReportedModels(entries []any) {
 		if !ok {
 			continue
 		}
-		cliAgent := stringValue(entry["cli_agent"])
+		cliAgent := config.String(entry["cli_agent"])
 		declared, ok := entry["builtin_models"].([]any)
 		if !ok || len(declared) == 0 {
 			continue
@@ -109,7 +110,7 @@ func ApplyReportedModels(entries []any) {
 		if !probed {
 			continue
 		}
-		corrected, drift := ReconcileBuiltinModels(cliAgent, dictListOf(declared), reported)
+		corrected, drift := ReconcileBuiltinModels(cliAgent, config.DictList(declared), reported)
 		for _, line := range drift {
 			logger.Info(catalogLogComponent).Str("detail", line).
 				Msg("[external-cli] builtin models drift")
@@ -150,7 +151,7 @@ func LoadReportedModels() map[string]map[string][]string {
 		}
 		entry := map[string][]string{}
 		for name, efforts := range modelsDict {
-			entry[name] = stringListOf(efforts)
+			entry[name] = config.StringListOrEmpty(efforts)
 		}
 		reports[cliAgent] = entry
 	}
@@ -186,13 +187,13 @@ func RefreshExternalCliBuiltinModels(
 		if !ok {
 			continue
 		}
-		cliAgent := stringValue(entry["cli_agent"])
+		cliAgent := config.String(entry["cli_agent"])
 		builtinModels, ok := entry["builtin_models"].([]any)
 		if cliAgent == "" || !ok || len(builtinModels) == 0 {
 			continue
 		}
-		declaredByAgent[cliAgent] = dictListOf(builtinModels)
-		paths[cliAgent] = stringValue(entry["cli_path"])
+		declaredByAgent[cliAgent] = config.DictList(builtinModels)
+		paths[cliAgent] = config.String(entry["cli_path"])
 	}
 	if len(paths) == 0 {
 		return []string{}
@@ -295,10 +296,10 @@ func discoverableCustomAgents(entries []any) map[string]string {
 	targets := map[string]string{}
 	for _, raw := range entries {
 		entry, ok := raw.(map[string]any)
-		if !ok || !isEmptyAny(entry["builtin_models"]) {
+		if !ok || !config.IsEmptyList(entry["builtin_models"]) {
 			continue
 		}
-		cliAgent := stringValue(entry["cli_agent"])
+		cliAgent := config.String(entry["cli_agent"])
 		if _, known := customNames[cliAgent]; !known {
 			continue
 		}
@@ -311,7 +312,7 @@ func discoverableCustomAgents(entries []any) map[string]string {
 			continue
 		}
 		if discoverable {
-			targets[cliAgent] = stringValue(entry["cli_path"])
+			targets[cliAgent] = config.String(entry["cli_path"])
 		}
 	}
 	return targets
@@ -324,12 +325,12 @@ func reenabledAgents(entries []any, enabledNow []string) map[string]string {
 	targets := map[string]string{}
 	for _, raw := range entries {
 		entry, ok := raw.(map[string]any)
-		if !ok || !isEmptyAny(entry["builtin_models"]) {
+		if !ok || !config.IsEmptyList(entry["builtin_models"]) {
 			continue
 		}
-		cliAgent := stringValue(entry["cli_agent"])
+		cliAgent := config.String(entry["cli_agent"])
 		if _, on := enabled[cliAgent]; on {
-			targets[cliAgent] = stringValue(entry["cli_path"])
+			targets[cliAgent] = config.String(entry["cli_path"])
 		}
 	}
 	return targets
@@ -418,30 +419,8 @@ func providerSupportsModelDiscovery(cliAgent string) (bool, error) {
 }
 
 // ──────────────────────────── 通用小工具 ────────────────────────────
-
-func stringValue(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func stringListOf(v any) []string {
-	list, _ := v.([]any)
-	out := make([]string, 0, len(list))
-	for _, item := range list {
-		out = append(out, stringValue(item))
-	}
-	return out
-}
-
-func dictListOf(list []any) []map[string]any {
-	out := []map[string]any{}
-	for _, item := range list {
-		if dict, ok := item.(map[string]any); ok {
-			out = append(out, dict)
-		}
-	}
-	return out
-}
+// stringValue/stringListOf/dictListOf/isEmptyAny 已收归 config.String/
+// StringListOrEmpty/DictList/IsEmptyList（internal/common/config/mapvalue.go）。
 
 func anyListOf(dicts []map[string]any) []any {
 	out := make([]any, 0, len(dicts))
@@ -457,11 +436,6 @@ func cloneStringMap(src map[string]any) map[string]any {
 		dst[k] = v
 	}
 	return dst
-}
-
-func isEmptyAny(v any) bool {
-	list, ok := v.([]any)
-	return !ok || len(list) == 0
 }
 
 func strSet(list []string) map[string]bool {

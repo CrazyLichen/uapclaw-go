@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 )
 
 // CatalogSuite external_cli_catalog 对拍与探测编排测试。
@@ -83,11 +83,13 @@ type fakeDiscoveryHarness struct {
 	reported map[string][]string
 }
 
-func (h *fakeDiscoveryHarness) Card() harnessprotocol.HarnessCard { return harnessprotocol.HarnessCard{} }
+func (h *fakeDiscoveryHarness) Card() harnessprotocol.HarnessCard {
+	return harnessprotocol.HarnessCard{}
+}
 func (h *fakeDiscoveryHarness) State() harnessprotocol.HarnessState {
 	return harnessprotocol.HarnessStateIdle
 }
-func (h *fakeDiscoveryHarness) ProviderSessionID() *string      { return nil }
+func (h *fakeDiscoveryHarness) ProviderSessionID() *string { return nil }
 func (h *fakeDiscoveryHarness) EventBufferConfig() harnessprotocol.EventBufferConfig {
 	return harnessprotocol.EventBufferConfig{}
 }
@@ -166,12 +168,12 @@ func (s *CatalogSuite) TestRefresh探测失败保旧报告() {
 		[]string{"probe-ok", "probe-fail"}, func(c map[string][]map[string]any) { catalogs = c })
 
 	reports := LoadReportedModels()
-	s.Equal(map[string][]string{"m1": {"low"}}, reports["probe-ok"])       // 成功者更新
-	s.Equal(map[string][]string{"old": {"low"}}, reports["kept"])          // 失败者保旧报告
-	s.Nil(reports["probe-fail"])                                           // 失败者不进报告
-	s.Empty(warnings)                                                      // probe-ok 是播种 kind，无目录对拍
+	s.Equal(map[string][]string{"m1": {"low"}}, reports["probe-ok"]) // 成功者更新
+	s.Equal(map[string][]string{"old": {"low"}}, reports["kept"])    // 失败者保旧报告
+	s.Nil(reports["probe-fail"])                                     // 失败者不进报告
+	s.Empty(warnings)                                                // probe-ok 是播种 kind，无目录对拍
 	s.Require().NotNil(catalogs)
-	s.Equal("m1", catalogs["probe-ok"][0]["name"])                         // 播种目录回写回调收到
+	s.Equal("m1", catalogs["probe-ok"][0]["name"]) // 播种目录回写回调收到
 }
 
 func (s *CatalogSuite) TestApplyReportedModelsInPlace() {

@@ -4,6 +4,7 @@
 package gateway
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -145,7 +146,7 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 		return false
 	}
 	rpcID := data["id"]
-	method := strings.TrimSpace(strVal(data["method"]))
+	method := strings.TrimSpace(config.String(data["method"]))
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(logComponent).
@@ -372,7 +373,7 @@ func (b *AcpGatewayBridge) OutboundIntercept(ctx context.Context, ws *websocket.
 	if msg.Type != schema.MessageTypeEvent || msg.Payload == nil {
 		return false
 	}
-	if strVal(msg.Payload["event_type"]) != "acp.output_request" {
+	if config.String(msg.Payload["event_type"]) != "acp.output_request" {
 		return false
 	}
 	rawJsonrpc, ok := msg.Payload["jsonrpc"].(map[string]any)
@@ -530,9 +531,9 @@ func (b *AcpGatewayBridge) SendMessage(ctx context.Context, msg *schema.Message,
 		jsonrpcID := pctx.JSONRPCID
 		pctxSessionID := pctx.SessionID
 		b.mu.Unlock()
-		errText := strVal(payload["error"])
+		errText := config.String(payload["error"])
 		if errText == "" {
-			errText = strVal(payload["content"])
+			errText = config.String(payload["content"])
 		}
 		if errText == "" {
 			errText = "Agent error"

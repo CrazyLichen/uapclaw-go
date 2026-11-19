@@ -5,6 +5,7 @@
 package server
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,9 +71,9 @@ func selectionFromParams(params map[string]any, key string) (*modelcommon.ModelS
 		return nil, fmt.Errorf("model_selection is required")
 	}
 	selection := &modelcommon.ModelSelection{
-		Type:    asServerString(raw["type"]),
-		ID:      asServerString(raw["id"]),
-		RouteID: asServerString(raw["route_id"]),
+		Type:    config.String(raw["type"]),
+		ID:      config.String(raw["id"]),
+		RouteID: config.String(raw["route_id"]),
 	}
 	if err := selection.Validate(); err != nil {
 		return nil, err
@@ -81,11 +82,6 @@ func selectionFromParams(params map[string]any, key string) (*modelcommon.ModelS
 }
 
 // asServerString any → string（nil → ""）。
-func asServerString(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // serverCatalog 基于 AgentServer 的配置实例构建目录。
@@ -107,7 +103,7 @@ func (s *AgentServer) HandleModelsGet(_ context.Context, request *schema.AgentRe
 	if catErr != nil {
 		return modelSelectionErrorResponse(request, catErr), nil
 	}
-	modelID := strings.TrimSpace(asServerString(params["model_id"]))
+	modelID := strings.TrimSpace(config.String(params["model_id"]))
 	detail, err := catalog.GetPublicModelDetail(modelID, false)
 	if err != nil {
 		return modelSelectionErrorResponse(request, err), nil
@@ -134,7 +130,7 @@ func (s *AgentServer) HandleModelsUpsert(ctx context.Context, request *schema.Ag
 	if catErr != nil {
 		return modelSelectionErrorResponse(request, catErr), nil
 	}
-	detail, err := catalog.GetPublicModelDetail(asServerString(saved["model_id"]), false)
+	detail, err := catalog.GetPublicModelDetail(config.String(saved["model_id"]), false)
 	if err != nil {
 		return modelSelectionErrorResponse(request, err), nil
 	}
@@ -176,7 +172,7 @@ func (s *AgentServer) handleResourceDelete(ctx context.Context, request *schema.
 	if resourceType == "model_group" {
 		key = "model_group_id"
 	}
-	resourceID := strings.TrimSpace(asServerString(params[key]))
+	resourceID := strings.TrimSpace(config.String(params[key]))
 	catalog, catErr := s.serverCatalog()
 	if catErr != nil {
 		return modelSelectionErrorResponse(request, catErr), nil
@@ -287,10 +283,10 @@ func (s *AgentServer) HandleVendorsList(_ context.Context, request *schema.Agent
 // 完整解析 ⤵️ 23.6。
 func (s *AgentServer) HandleVendorsFetchModels(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	params := requestParamsMap(request)
-	vendorKey := strings.TrimSpace(asServerString(params["vendor_key"]))
-	planRaw := strings.TrimSpace(asServerString(params["plan"]))
-	apiKey := strings.TrimSpace(asServerString(params["api_key"]))
-	modality := strings.TrimSpace(asServerString(params["modality"]))
+	vendorKey := strings.TrimSpace(config.String(params["vendor_key"]))
+	planRaw := strings.TrimSpace(config.String(params["plan"]))
+	apiKey := strings.TrimSpace(config.String(params["api_key"]))
+	modality := strings.TrimSpace(config.String(params["modality"]))
 	preset := modelcommon.GetPreset(vendorKey, modelcommon.PlanKind(planRaw))
 	if preset == nil {
 		// Python: :2650-2658 unknown vendor/plan → BAD_REQUEST
@@ -312,7 +308,7 @@ func (s *AgentServer) HandleVendorsFetchModels(_ context.Context, request *schem
 				schema.WithPayload(map[string]any{"error": "unsupported model modality", "code": "BAD_REQUEST"}),
 			), nil
 		}
-		apiBase := asServerString(params["api_base"])
+		apiBase := config.String(params["api_base"])
 		if apiBase == "" {
 			apiBase = preset.APIBase
 		}
@@ -431,10 +427,10 @@ func fetchRemoteModelIDs(endpoint string, headers map[string]string, modelDomain
 		seen := map[string]bool{}
 		for _, item := range entries {
 			entry, ok := item.(map[string]any)
-			if !ok || asServerString(entry["domain"]) != modelDomain {
+			if !ok || config.String(entry["domain"]) != modelDomain {
 				continue
 			}
-			modelID := asServerString(entry["id"])
+			modelID := config.String(entry["id"])
 			modelID = strings.TrimSpace(modelID)
 			if modelID == "" || seen[modelID] {
 				continue
@@ -456,7 +452,7 @@ func fetchRemoteModelIDs(endpoint string, headers map[string]string, modelDomain
 		if !ok {
 			continue
 		}
-		modelID := strings.TrimSpace(asServerString(entry["id"]))
+		modelID := strings.TrimSpace(config.String(entry["id"]))
 		if modelID == "" || seen[modelID] {
 			continue
 		}
@@ -476,7 +472,7 @@ func fetchRemoteModelIDs(endpoint string, headers map[string]string, modelDomain
 func (s *AgentServer) HandleSessionSelectionSet(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	params := requestParamsMap(request)
 	// Python: :104 target = str(params.get("session_id") or session_id or "")
-	target := strings.TrimSpace(asServerString(params["session_id"]))
+	target := strings.TrimSpace(config.String(params["session_id"]))
 	if target == "" && request.SessionID != nil {
 		target = strings.TrimSpace(*request.SessionID)
 	}
@@ -487,7 +483,7 @@ func (s *AgentServer) HandleSessionSelectionSet(_ context.Context, request *sche
 	// Python: :107-111 model_group 拒绝定时任务会话（"Scheduled task sessions only support a single model"）
 	if selection.Type == "model_group" {
 		meta := swarmsession.GetSessionMetadata(target)
-		if asServerString(meta["cron_id"]) != "" {
+		if config.String(meta["cron_id"]) != "" {
 			return modelSelectionErrorResponse(request, fmt.Errorf("Scheduled task sessions only support a single model")), nil
 		}
 	}

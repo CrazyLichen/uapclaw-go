@@ -117,7 +117,7 @@ func TestJoinTextParts_边界(t *testing.T) {
 
 // TestMessageToA2AParts_标量与无名工具 content 为标量、工具无名分支
 func TestMessageToA2AParts_标量与无名工具(t *testing.T) {
-	// content 为数字 → strVal 走默认分支
+	// content 为数字 → config.String 走默认分支
 	parts := MessageToA2AParts(&schema.Message{Payload: map[string]any{"content": float64(42)}}, false)
 	if len(parts) != 1 || parts[0].Text() != "42" {
 		t.Errorf("标量 content parts = %v", parts)

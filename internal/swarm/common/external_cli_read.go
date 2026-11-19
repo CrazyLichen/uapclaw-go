@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"strings"
 )
 
@@ -66,7 +67,7 @@ func CustomAgentsConfigValue() string {
 //     cli_path 字段；内置 kind 恒空，语义对齐 Python _uploaded_cli_path :49-56）。
 //
 // 返回 map 键为 external_cli_agent_<kind>_<suffix>，值为字符串
-//（enabled/use_builtin 布尔的字符串形态，path_histories 为 JSON 串）。
+// （enabled/use_builtin 布尔的字符串形态，path_histories 为 JSON 串）。
 func FlattenExternalCliAgentsForConfigPanel(
 	raw map[string]any,
 	kinds []string,
@@ -84,8 +85,8 @@ func FlattenExternalCliAgentsForConfigPanel(
 			case string: // 旧形态：纯字符串条目（:70-72）
 				cliAgent = strings.TrimSpace(entry)
 			case map[string]any: // dict 条目（:73-75）
-				cliAgent = strings.TrimSpace(stringValue(entry["cli_agent"]))
-				cliPath = strings.TrimSpace(stringValue(orValue(entry["cli_path"], entry["codex_bin"])))
+				cliAgent = strings.TrimSpace(config.String(entry["cli_agent"]))
+				cliPath = strings.TrimSpace(config.String(orValue(entry["cli_path"], entry["codex_bin"])))
 			}
 			if cliAgent != "" {
 				configured[cliAgent] = map[string]string{"cli_path": cliPath}
@@ -171,12 +172,6 @@ func pathHistoriesJSON(paths []string) string {
 	return string(data)
 }
 
-// stringValue any → string（nil 安全）。
-func stringValue(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // orValue Python `a or b` 语义：a 为空串取 b（:75 cli_path or codex_bin）。
 func orValue(a, b any) any {
 	if s, ok := a.(string); ok && s != "" {
@@ -192,4 +187,3 @@ func boolStr(b bool) string {
 	}
 	return "false"
 }
-

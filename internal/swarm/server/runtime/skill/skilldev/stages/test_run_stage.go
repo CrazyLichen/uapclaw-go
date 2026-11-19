@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -94,7 +95,7 @@ func (h *TestRunStageHandler) runAllEvals(sctx *skilldev.SkillDevContext, evalCa
 		evalMetadata := map[string]any{
 			"eval_id":    evalID,
 			"eval_name":  evalName,
-			"prompt":     getStrFromAny(caseMap["prompt"]),
+			"prompt":     config.String(caseMap["prompt"]),
 			"assertions": getSliceFromAny(caseMap["assertions"]),
 		}
 		metaData, _ := json.MarshalIndent(evalMetadata, "", "  ")
@@ -131,11 +132,6 @@ func toIntFromAny(v any) int {
 }
 
 // getStrFromAny 从 any 获取字符串值。
-func getStrFromAny(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // getSliceFromAny 从 any 获取 []any。
 func getSliceFromAny(v any) []any {
 	s, _ := v.([]any)
