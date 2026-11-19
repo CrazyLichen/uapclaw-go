@@ -54,7 +54,7 @@
 | `ExtractLeafNodes` / `FormatPath` | `common/utils/dict.go:77,252` | ✅ |
 | `stream.OutputSchema`（8.7 D2）/ `constants.EndNodeStream`（8.11） | session/stream、session/constants | ✅ |
 | Vertex 四策略分派表（INVOKE/STREAM/COLLECT/TRANSFORM） | `graph/vertex.go`（8.11） | ✅ 消费侧已通，本节只供组件 |
-| CallbackFramework 最小子集（On/Off/Trigger/TriggerContext） | llm/callback + 各域 | ✅ 本节扩展装饰器能力（§5.3） |
+| CallbackFramework 最小子集（On/Off/Trigger/TriggerContext） | `internal/agentcore/runner/callback/` | ✅ 本节扩展（§5.3）：**核对结论（2026-11-19 二轮）**——①4 个组件事件常量中 3 个已存在（`ComponentBatchInput/ComponentBatchOutput/ComponentStreamInput`，events.go:457-463），仅缺 `ComponentStreamOutput`；②`TransformLLMIOInput/Output` + `RegisterAgentTransformIO` 先例已在（framework.go:649-668、670+），TransformWorkflowIO 族按同款迁移；③方法体内 Trigger 序列先例已在（memory/ltm 的 emit_before 模式）；④env 两键 + BuiltinDefaults 默认值 5 均已存在（constants.go:41-43、136-137），D-17-6 关闭 |
 
 ## 5. 设计
 
@@ -126,11 +126,12 @@ Python 机制（component.py:22-73 + decorator.py）：`__init_subclass__` 钩�
 - `emit_after(event)(fn)`：调用后 Trigger 事件
 - `transform_io(input_event, output_event)(fn)`：触发事件并把**最后一个回调的返回值**替换为实际入参/出参（无回调注册时为 noop 哨兵）
 
-Go 落地（选项 2 一比一）：
+Go 落地（选项 2 一比一；**核对修订（2026-11-19 二轮）**：大部分地基已存在，实际增量极小）：
 
-1. `runner/callback` 包（Go 现有 callback 域）新增装饰器函数族：`EmitBefore(event string, fn Fn) Fn` / `EmitAfter` / `TransformIO(inputEvent, outputEvent string, fn Fn) Fn`——包装函数形态对齐 Trigger 语义；transform 无回调时返回 noop 哨兵（不替换）
-2. `events.go` 补 4 个组件事件常量：`WorkflowComponentBatchInput`("workflow_component_batch_input") 等四者，对齐 events.py:141-145
-3. `__init_subclass__` 的 Go 等价：Go 无类继承钩子。**偏差 D-17-5**：改为在 `ComponentExecutable` 四钩子入口处显式调用装饰器包装（构造期一次性包装为包级注册表 + `init()`，或直接方法体内 Trigger 序列），具体取「方法体内 Trigger 等价序」实现（与 2.14 Model 门面「前后触发回调」先例一致），装饰器能力本身仍独立落地供外部使用。回收条件：CallbackFramework 未来引入方法级包装机制时迁移。
+1. **事件常量**：仅补 `ComponentStreamOutput WorkflowEventType = "_framework:component_stream_output"`（其余 3 个已存在）
+2. **transform_io 等价**：按 `TransformLLMIOInput/Output`（framework.go:649-668）+ `RegisterAgentTransformIO`（670+）先例，新增 `TransformWorkflowIOInput/Output` 方法 + `RegisterWorkflowTransformIO(inputEvent, outputEvent WorkflowEventType, inputFn, outputFn TransformWorkflowIOFunc)`——无注册回调时原样返回（noop）
+3. **emit_before/emit_after 等价**：按 memory/ltm 先例，在 `ComponentExecutable` 四钩子方法体内 Trigger 序列（前 Trigger → TransformIOInput → 原逻辑 → TransformIOOutput → 后 Trigger）
+4. `__init_subclass__` 的 Go 等价：Go 无类继承钩子。**偏差 D-17-5**：改为在 `ComponentExecutable` 四钩子方法体内显式执行上述 Trigger 序列（与 2.14 Model 门面「前后触发回调」先例一致），语义等价（回调仍触发、transform 改写生效）。回收条件：CallbackFramework 未来引入方法级包装机制时迁移。
 
 ### 5.4 base.go 补齐（Python base.py 后三符号）
 
@@ -145,7 +146,7 @@ Go 落地（选项 2 一比一）：
 | D-17-3 | Python 叶子值 `AsyncGenerator/Generator` isinstance 双态 → Go 统一 `<-chan any`（或既有 StreamChunk 流形态） | 8.2 已定 `<-chan StreamChunk[O]` 为流形态 | 长期保留 |
 | D-17-4 | `string.Template.safe_substitute` → Go 手写等价（缺键保留 `$name` 原样） | Go 标准库无 Template | 长期保留 |
 | D-17-5 | `__init_subclass__` 自动装饰 → ComponentExecutable 四钩子方法体内 Trigger 等价序 | Go 无类继承钩子；语义等价（回调仍触发、transform_io 改写生效需回调注册方配合） | CallbackFramework 引入方法级包装时迁移 |
-| D-17-6 | Python `session.get_env` 键名核对：Python `END_COMP_TEMPLATE_BATCH_READER_TIMEOUT_KEY` vs Go 既有 `EndCompTemplateBranchRenderTimeoutKey`——实施时逐键核对，缺则补 | 键名可能非字面对应 | — |
+| D-17-6 | ~~Python `session.get_env` 键名核对~~ **已关闭（2026-11-19 核对）**：Python `END_COMP_TEMPLATE_BATCH_READER_TIMEOUT_KEY` 的键值就是 `"_end_comp_template_branch_render_timeout"`（Python 键名与值本就不一致），Go `EndCompTemplateBranchRenderTimeoutKey` 逐字对应；两键 + BuiltinDefaults 默认值 5 全部已存在（constants.go:41-43、136-137） | — | — |
 
 ## 7. 测试与覆盖率
 
