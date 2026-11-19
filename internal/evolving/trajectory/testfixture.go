@@ -78,7 +78,12 @@ func testSpanOf(step TestStep, index int) map[string]any {
 		// Response 为 nil 时不合成 completion（对齐真实投影：无响应即无输出消息）。
 		var completions []map[string]any
 		if step.Response != nil {
-			completions = []map[string]any{{"role": "assistant", "content": fmt.Sprint(step.Response)}}
+			// map 形态取 content 列的字符串值（贴近真实响应字典投影语义）。
+			content := fmt.Sprint(step.Response)
+			if inner, isStr := step.Response["content"].(string); isStr {
+				content = inner
+			}
+			completions = []map[string]any{{"role": "assistant", "content": content}}
 		}
 		for key, value := range WriteLLMExchange(step.Messages, completions) {
 			attrs[key] = value
