@@ -1616,7 +1616,7 @@ func TestSpawnMember_Lifetime与Isolation(t *testing.T) {
 
 // TestRegisterTeammate_边界 team 为 nil 时返回失败；prompt 为 nil 时不 panic。
 func TestRegisterTeammate_边界(t *testing.T) {
-	if res := RegisterTeammate(nil, "dev-1", "Dev", "d", nil, nil); res.OK {
+	if res := RegisterTeammate(context.Background(), nil, RegisterTeammateInput{MemberName: "dev-1", DisplayName: "Dev", Desc: "d"}); res.OK {
 		t.Fatal("team 为 nil 应失败")
 	}
 
@@ -1624,7 +1624,7 @@ func TestRegisterTeammate_边界(t *testing.T) {
 	ctx := context.Background()
 	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
 	prompt := "干活"
-	res := RegisterTeammate(tb, "dev-1", "Dev", "d", &prompt, nil)
+	res := RegisterTeammate(ctx, tb, RegisterTeammateInput{MemberName: "dev-1", DisplayName: "Dev", Desc: "d", Prompt: prompt})
 	require.True(t, res.OK)
 	m, err := tb.GetMember(ctx, "dev-1")
 	require.NoError(t, err)

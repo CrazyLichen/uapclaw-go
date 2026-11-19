@@ -62,16 +62,14 @@ func TestCleanTeamToolMapResult(t *testing.T) {
 
 // TestSpawnMemberToolMapResult 测试 SpawnMemberTool.MapResult
 func TestSpawnMemberToolMapResult(t *testing.T) {
-	tool := &SpawnMemberTool{}
+	tool := &spawnTeammateTool{}
 
 	// 有 role_type
 	result := tool.MapResult(map[string]any{
-		"success": true,
-		"data": map[string]any{
-			"member_name":  "member-1",
-			"display_name": "Member1",
-			"role_type":    "leader",
-		},
+		"success":      true,
+		"member_name":  "member-1",
+		"display_name": "Member1",
+		"role_type":    "leader",
 	})
 	assert.Contains(t, result, "leader")
 

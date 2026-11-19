@@ -455,40 +455,6 @@ func WithAgentTemplate(t *database.MemberAgentTemplate) SpawnMemberOption {
 	return func(c *spawnMemberConfig) { c.agentTemplate = t }
 }
 
-// RegisterTeammate 注册一条普通 LLM 成员行（UNSTARTED）。
-//
-// 唯一知道"成员的 card 与 mode 怎么派生"的地方。spawn_teammate、
-// create_task 的内联 member、spawn_expert（带 agentTemplate）都走它，
-// 三处不会在 card id / mode / options 上漂移。
-//
-// Python: register_teammate (tools/tool_member.py:626-667)
-func RegisterTeammate(
-	team *TeamBackend,
-	memberName, displayName, desc string,
-	prompt *string,
-	allocation *models.Allocation,
-	opts ...SpawnMemberOption,
-) atschema.MemberOpResult {
-	if team == nil {
-		return atschema.NewMemberOpResultFail("team backend is nil")
-	}
-	card := agentschema.NewAgentCard(
-		agentschema.WithAgentID(fmt.Sprintf("%s_%s", team.teamName, memberName)),
-		agentschema.WithAgentName(displayName),
-		agentschema.WithAgentDescription(desc),
-	)
-	promptText := ""
-	if prompt != nil {
-		promptText = *prompt
-	}
-	allOpts := append([]SpawnMemberOption{
-		WithMode(string(team.teammateMode)),
-		WithAllocation(allocation),
-	}, opts...)
-	return team.SpawnMember(context.Background(), memberName, displayName, card,
-		string(atschema.TeamRoleTeammate), desc, promptText, "", allOpts...)
-}
-
 // NewTeamBackend 创建团队后端门面。
 // Python: TeamBackend.__init__(team_name, member_name, is_leader, db, messager, ...)
 func NewTeamBackend(

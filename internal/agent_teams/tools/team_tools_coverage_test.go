@@ -93,8 +93,8 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
 		}, nil, nil)
-		if !hasTool(tools, "build_team") || !hasTool(tools, "spawn_member") {
-			t.Fatalf("leader 应包含 build_team/spawn_member，实际 %v", namesOf(tools))
+		if !hasTool(tools, "build_team") || !hasTool(tools, "spawn_teammate") {
+			t.Fatalf("leader 应包含 build_team/spawn_teammate，实际 %v", namesOf(tools))
 		}
 		if hasTool(tools, "approve_plan") || hasTool(tools, "submit_plan") {
 			t.Fatalf("非 plan_mode 不应包含审批/提交工具，实际 %v", namesOf(tools))
@@ -131,9 +131,9 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, map[string]struct{}{"spawn_member": {}})
-		if hasTool(tools, "spawn_member") {
-			t.Fatalf("排除的 spawn_member 不应出现，实际 %v", namesOf(tools))
+		}, nil, map[string]struct{}{"spawn_teammate": {}})
+		if hasTool(tools, "spawn_teammate") {
+			t.Fatalf("排除的 spawn_teammate 不应出现，实际 %v", namesOf(tools))
 		}
 	})
 
@@ -171,8 +171,8 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
 		}, nil, nil)
-		if hasTool(tools, "spawn_member") {
-			t.Fatalf("human_agent 不应包含 spawn_member，实际 %v", namesOf(tools))
+		if hasTool(tools, "spawn_teammate") {
+			t.Fatalf("human_agent 不应包含 spawn_teammate，实际 %v", namesOf(tools))
 		}
 	})
 }
@@ -281,24 +281,18 @@ func TestTeamTools_参数校验失败分支(t *testing.T) {
 	}, nil, nil)
 
 	t.Run("spawn_member 成员名非法", func(t *testing.T) {
-		res := invokeByName(t, tools, "spawn_member", map[string]any{"member_name": "Dev_1"})
+		res := invokeByName(t, tools, "spawn_teammate", map[string]any{"member_name": "Dev_1"})
 		if res["success"] != false || !strings.Contains(errText(res), "Invalid member_name") {
 			t.Fatalf("应报成员名非法，实际 %v", res)
 		}
 	})
 
-	t.Run("spawn_member role_type 非法", func(t *testing.T) {
-		res := invokeByName(t, tools, "spawn_member", map[string]any{
-			"member_name": "dev-1", "role_type": "robot",
-		})
-		if res["success"] != false || !strings.Contains(errText(res), "Invalid role_type") {
-			t.Fatalf("应报 role_type 非法，实际 %v", res)
-		}
-	})
+	// 旧 spawn_member 的 role_type 参数在新结构中消失：spawn_teammate /
+	// spawn_human_agent 工具拆分后各自固定角色（tool_member.py:669/:1041）。
 
-	t.Run("spawn_member human_agent 在 HITT 关闭时被拒", func(t *testing.T) {
-		res := invokeByName(t, tools, "spawn_member", map[string]any{
-			"member_name": "dev-1", "role_type": "human_agent",
+	t.Run("spawn_human_agent 在 HITT 关闭时被拒", func(t *testing.T) {
+		res := invokeByName(t, tools, "spawn_human_agent", map[string]any{
+			"member_name": "dev-1", "display_name": "Dev", "desc": "d",
 		})
 		if res["success"] != false || !strings.Contains(errText(res), "HITT") {
 			t.Fatalf("应报 HITT 未开启，实际 %v", res)

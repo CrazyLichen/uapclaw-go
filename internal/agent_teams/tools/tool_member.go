@@ -1,0 +1,950 @@
+// Python 源：openjiuwen/agent_teams/tools/tool_member.py（scoped 段 1:1）
+//
+// 本批落（tool_expert 依赖链 + spawn_teammate 新形态）：
+//   - 校验/描述助手（:27-160 区段、:456-530）
+//   - ExternalCliModels / ExternalCliModelRules（:222-455）
+//   - register_teammate / register_external_cli_member（:626-667/:486-540）
+//   - SpawnTeammateTool 新形态（:669-914，含 fork/cli_agent/external_cli 面）
+//
+// scoped 说明（D-15.16-e15）：tool_member.py 其余成员工具（CheckpointTool /
+// ListCheckpointsTool / SpawnHumanAgentTool / SpawnPassiveHumanTool /
+// SpawnBridgeAgentTool / ShutdownMemberTool / SetMemberModelTool /
+// ApprovePlanTool / ApproveToolCallTool / ListMembersTool，:917-1529）在 Go
+// 既有 team_tools.go 中已有同族实现（旧 team_tools.py 时代对齐物：role_type
+// 分支并入旧 SpawnMemberTool 的 human_agent 路径、shutdown/approve/list 系列
+// 已独立落地）——归属漂移按偏差登记，非本批重定位（等价实现已存在且被消费，
+// 规则 8 的"删除"对象是本批新增结构替代的部分，见 SpawnMemberTool 删除记录）。
+
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
+	"sort"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// toolMemberLogComponent 成员工具组件日志。
+const toolMemberLogComponent = logger.ComponentAgentServer
+
+// maxServedModels 已在 database/member_options.go（MAX_SERVED_MODELS）。
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ExternalCliModels 一个外部 CLI 成员的模型选择。
+// Python: ExternalCliModels (tool_member.py:222-229)
+type ExternalCliModels struct {
+	// Allocation 池模型分配（可空）
+	Allocation *models.Allocation
+	// FallbackAllocation 认证兜底分配（可空）
+	FallbackAllocation *models.Allocation
+	// BuiltinModel CLI 自带登录模型（可空）
+	BuiltinModel *database.MemberBuiltinModel
+}
+
+// ExternalCliModelRules 外部 CLI 成员的池模型 / 认证兜底 / 内置模型规则。
+// Python: ExternalCliModelRules (tool_member.py:231-455)
+type ExternalCliModelRules struct {
+	team                *TeamBackend
+	allocateModelConfig func(string) *models.Allocation
+}
+
+// NewExternalCliModelRules 构造规则求解器。
+// Python: __init__ (tool_member.py:234-240)
+func NewExternalCliModelRules(team *TeamBackend, allocateModelConfig func(string) *models.Allocation) *ExternalCliModelRules {
+	return &ExternalCliModelRules{team: team, allocateModelConfig: allocateModelConfig}
+}
+
+// Resolve 解析成员的模型选择；输入被拒时 (nil, reason)。
+// Python: resolve (tool_member.py:242-348)
+func (r *ExternalCliModelRules) Resolve(cliAgent, modelName, fallbackModelName, builtinModel, effort, toolName string) (*ExternalCliModels, string) {
+	// Python: raw_fallback_model_name 非 str 时拒绝（:262-264）
+	if fallbackModelName != "" && !isPlainString(fallbackModelName) {
+		return nil, toolName + " requires 'fallback_model_name' to be a model name when given"
+	}
+	// 缺省、null、空白都表示「无兜底模型」。Python: :266
+	fallbackName := strings.TrimSpace(fallbackModelName)
+	hasAuthFallback := external.TakesAuthFallback(cliAgent)
+	if fallbackName != "" && !hasAuthFallback {
+		return nil, fmt.Sprintf("cli_agent '%s' has no authentication fallback; omit 'fallback_model_name'", cliAgent)
+	}
+	var allocation, fallbackAllocation *models.Allocation
+	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	compatibleEntries := r.CompatiblePoolEntries(cliAgent)
+	compatibleModelNames := r.compatibleModelNames(cliAgent)
+	preferredCurrentModel := r.preferredCurrentModel(cliAgent, compatibleEntries)
+	builtin, builtinError := r.resolveBuiltinModel(builtinModel, effort, cliAgent, modelName)
+	if builtinError != "" {
+		return nil, builtinError
+	}
+	if modelName == "*" || fallbackName == "*" {
+		return nil, "model_name '*' is a Team logical entry and cannot be passed to an external CLI"
+	}
+	if modelName != "" {
+		if r.team.IsModelGroupPool() {
+			candidates := r.team.ResolveCliModels(modelName, providerFilter)
+			var logical *models.Allocation
+			if r.allocateModelConfig != nil {
+				logical = r.allocateModelConfig("")
+			}
+			if len(candidates) > 0 && logical != nil {
+				// Python: Allocation(logical.entry, logical.group_index,
+				// persistence_model_name=model_name)（:288-290）
+				pinned := *logical
+				pinned.PersistenceModelName = modelName
+				allocation = &pinned
+			}
+		} else if r.allocateModelConfig == nil {
+			return nil, r.modelNameFailure(cliAgent, modelName, compatibleModelNames, "cannot be resolved without a team model pool")
+		} else if providerFilter != nil {
+			allocation = r.allocateWithFilter(modelName, providerFilter)
+		} else if allocation == nil {
+			allocation = r.allocateModelConfig(modelName)
+		}
+		if allocation == nil {
+			return nil, r.modelNameFailure(cliAgent, modelName, compatibleModelNames, "is unavailable or incompatible")
+		}
+	}
+	if fallbackName == "" {
+		if len(compatibleModelNames) > 0 && hasAuthFallback {
+			return nil, ("fallback_model_name is required while compatible models are available for " +
+				fmt.Sprintf("cli_agent '%s': %s", cliAgent, strings.Join(compatibleModelNames, ", ")))
+		}
+	} else if preferredCurrentModel != "" && fallbackName != preferredCurrentModel {
+		return nil, (fmt.Sprintf("fallback_model_name must use current model '%s' because it is present "+
+			"in the team model pool and compatible with cli_agent '%s'", preferredCurrentModel, cliAgent))
+	} else if r.allocateModelConfig == nil {
+		return nil, toolName + " requires a team model pool when 'fallback_model_name' is specified"
+	} else {
+		if r.team.IsModelGroupPool() {
+			candidates := r.team.ResolveCliModels(fallbackName, providerFilter)
+			logical := r.allocateModelConfig("")
+			if len(candidates) > 0 && logical != nil {
+				pinned := *logical
+				pinned.PersistenceModelName = fallbackName
+				fallbackAllocation = &pinned
+			}
+		} else if providerFilter != nil {
+			fallbackAllocation = r.allocateWithFilter(fallbackName, providerFilter)
+		} else {
+			fallbackAllocation = r.allocateModelConfig(fallbackName)
+		}
+		if fallbackAllocation == nil {
+			compatibleHint := "none"
+			if len(compatibleModelNames) > 0 {
+				compatibleHint = strings.Join(compatibleModelNames, ", ")
+			}
+			return nil, (fmt.Sprintf("fallback_model_name '%s' is unavailable or incompatible with "+
+				"cli_agent '%s' (compatible models: %s); omit 'fallback_model_name' "+
+				"only when no compatible model is available", fallbackName, cliAgent, compatibleHint))
+		}
+	}
+	return &ExternalCliModels{Allocation: allocation, FallbackAllocation: fallbackAllocation, BuiltinModel: builtin}, ""
+}
+
+// CompatiblePoolEntries 一个 CLI kind 的协议兼容池条目。
+// Python: compatible_pool_entries (tool_member.py:350-357)
+func (r *ExternalCliModelRules) CompatiblePoolEntries(cliAgent string) []models.ModelPoolEntry {
+	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	entries := r.team.GetModelPool()
+	if providerFilter == nil {
+		return entries
+	}
+	out := make([]models.ModelPoolEntry, 0, len(entries))
+	for _, entry := range entries {
+		if providerFilter(entry.APIProvider) {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+// compatibleModelNames 一个 CLI kind 可见的 safe 模型名。
+// IntelliRouter/模型组池只含一个逻辑 "*" 条目，真实部署名在 allocator 目录里
+// ——把它投影出来，兜底校验不会把模型组误判为空池。
+// Python: _compatible_model_names (tool_member.py:359-376)
+func (r *ExternalCliModelRules) compatibleModelNames(cliAgent string) []string {
+	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	if r.team.IsModelGroupPool() {
+		seen := map[string]bool{}
+		names := []string{}
+		for _, item := range r.team.ListCliModels(providerFilter) {
+			if item.Model == "" || seen[item.Model] {
+				continue
+			}
+			seen[item.Model] = true
+			names = append(names, item.Model)
+		}
+		sort.Strings(names)
+		return names
+	}
+	seen := map[string]bool{}
+	names := []string{}
+	for _, entry := range r.CompatiblePoolEntries(cliAgent) {
+		if entry.ModelName == "" || seen[entry.ModelName] {
+			continue
+		}
+		seen[entry.ModelName] = true
+		names = append(names, entry.ModelName)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// preferredCurrentModel 池能兼容分配当前模型时返回当前模型名。
+// 模型组下当前模型是逻辑 "*" 条目，不是外部 CLI 能跑的具体模型；兜底必须是
+// 真实部署之一。
+// Python: _preferred_current_model (tool_member.py:378-395)
+func (r *ExternalCliModelRules) preferredCurrentModel(cliAgent string, entries []models.ModelPoolEntry) string {
+	if r.team.IsModelGroupPool() {
+		return ""
+	}
+	currentName := r.team.CurrentModelName()
+	currentProvider := r.team.CurrentModelProvider()
+	if currentName == "" || currentProvider == "" {
+		return ""
+	}
+	currentProtocol := external.ModelApiProtocol(currentProvider)
+	for _, entry := range entries {
+		if entry.ModelName != currentName {
+			continue
+		}
+		if external.ModelApiProtocol(entry.APIProvider) == currentProtocol {
+			return currentName
+		}
+	}
+	return ""
+}
+
+// modelNameFailure 解释被拒的 model_name 并指向内置目录。
+// Python: _model_name_failure (tool_member.py:397-425)
+func (r *ExternalCliModelRules) modelNameFailure(cliAgent, modelName string, compatible []string, cause string) string {
+	config := r.team.ExternalCLIConfig(cliAgent)
+	var builtinNames []string
+	if config != nil {
+		for i := range config.BuiltinModels {
+			builtinNames = append(builtinNames, config.BuiltinModels[i].Name)
+		}
+	}
+	for _, name := range builtinNames {
+		if name == modelName {
+			return fmt.Sprintf("model_name '%s' is a built-in model of cli_agent '%s', not a team model pool "+
+				"endpoint; pass it as 'builtin_model' instead (optionally with 'effort')", modelName, cliAgent)
+		}
+	}
+	message := fmt.Sprintf("model_name '%s' %s for cli_agent '%s'", modelName, cause, cliAgent)
+	if len(compatible) > 0 {
+		message += "; the team model pool offers: " + strings.Join(compatible, ", ")
+	} else {
+		message += "; the team model pool has no compatible model"
+	}
+	if len(builtinNames) > 0 {
+		message += ". Built-in models of this cli_agent, via 'builtin_model': " + strings.Join(builtinNames, ", ")
+	}
+	return message
+}
+
+// resolveBuiltinModel 校验可选的内置模型选择。MCP 客户端不按 schema 校验，
+// 门被绕过的参数在这里拒绝而不是静默忽略。
+// Python: _resolve_builtin_model (tool_member.py:427-453)
+func (r *ExternalCliModelRules) resolveBuiltinModel(builtinModel, effort, cliAgent, modelName string) (*database.MemberBuiltinModel, string) {
+	builtinName := OptionalText(builtinModel)
+	effortName := OptionalText(effort)
+	if builtinName == "" && effortName == "" {
+		return nil, ""
+	}
+	if !r.team.BuiltinModelsEnabled() {
+		return nil, "builtin_model / effort are unavailable: no CLI kind declares builtin_models"
+	}
+	if builtinName == "" {
+		return nil, "'effort' requires 'builtin_model'"
+	}
+	if modelName != "" {
+		return nil, ("'builtin_model' and 'model_name' are mutually exclusive: a built-in model runs on the CLI's " +
+			"own login, 'model_name' on a team model pool endpoint")
+	}
+	return r.team.ResolveBuiltinModel(cliAgent, builtinName, effortName)
+}
+
+// allocateWithFilter 带 provider 过滤的分配（Go allocator 接口无
+// provider_filter 形参——按 Python 语义先断言目录兼容性再分配；偏差
+// D-15.16-e16：Python allocate_model_config(model_name, provider_filter=...)
+// 的过滤在 Go 侧由调用方 allocator 自身兼容性承担，本包装在分配后校验
+// provider 并在失配时返回 nil）。
+func (r *ExternalCliModelRules) allocateWithFilter(modelName string, providerFilter func(string) bool) *models.Allocation {
+	alloc := r.allocateModelConfig(modelName)
+	if alloc == nil {
+		return nil
+	}
+	if providerFilter != nil && !providerFilter(alloc.Entry.APIProvider) {
+		return nil
+	}
+	return alloc
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ValidateMemberName 工具边界的 member_name 校验；非法返回错误文案，合法返回空。
+// Python: validate_member_name (tool_member.py:27-42)
+func ValidateMemberName(memberName string) string {
+	if memberName != "" && memberNamePattern.MatchString(memberName) {
+		return ""
+	}
+	return (fmt.Sprintf("Invalid member_name %q: must start with a "+
+		"lowercase ASCII letter (a-z), followed by lowercase letters, "+
+		"digits (0-9) or hyphen (-); no uppercase, underscore, "+
+		"whitespace, or non-ASCII characters (including CJK) — "+
+		"member_name is reused as a routing token and a filesystem "+
+		"path segment", memberName))
+}
+
+// ValidateDisplayName 工具边界的 display_name 校验。
+// Schema required 只约束宿主 LLM；MCP 客户端直接 invoke，这里是唯一强制点。
+// Python: validate_display_name (tool_member.py:44-62)
+func ValidateDisplayName(displayName string) string {
+	if displayName != "" && strings.TrimSpace(displayName) != "" {
+		return ""
+	}
+	return fmt.Sprintf("Invalid display_name %q: must be a non-empty, non-blank string", displayName)
+}
+
+// OptionalText 返回去空白非空字符串；缺失/空白得空串。
+// Python: _optional_text (tool_member.py:117-122)
+func OptionalText(value any) string {
+	if s, ok := value.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+// ModelNameDescription 描述注册成员工具的 model_name 参数。
+// 模型组内该字段收 route tag 而不是池模型，措辞切换并列出可选 tag。
+// Python: model_name_description (tool_member.py:125-136)
+func ModelNameDescription(team *TeamBackend, t locales.Translator) string {
+	if !team.IsModelGroupPool() {
+		return t("spawn_teammate", "model_name")
+	}
+	tags := team.ListRouteTags()
+	selectable := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		selectable = append(selectable, tag)
+	}
+	catalog, _ := json.Marshal(map[string]any{"selectable_models": selectable})
+	return fmt.Sprintf("%s\n\n<selectable_model_catalog>%s</selectable_model_catalog>",
+		t("spawn_teammate", "model_name_group"), catalog)
+}
+
+// CheckModelSelectable 拒绝当前模型组无法满足的显式 model_name。
+// 模型组内显式模型是硬性要求：让成员跑整组会静默无视用户。
+// Python: check_model_selectable (tool_member.py:138-160)
+func CheckModelSelectable(team *TeamBackend, modelName any, allocation *models.Allocation) string {
+	name := OptionalText(modelName)
+	if allocation != nil || name == "" || !team.IsModelGroupPool() {
+		return ""
+	}
+	tags := team.ListRouteTags()
+	selectable := strings.Join(tags, ", ")
+	if selectable == "" {
+		selectable = "<none>"
+	}
+	return fmt.Sprintf("model_name '%s' is not selectable in the current model group "+
+		"(selectable: %s). Do not pick a substitute yourself: ask the user "+
+		"which model to use, or omit model_name to let the model group choose.", name, selectable)
+}
+
+// BuiltinModelCatalogText 渲染各 CLI kind 声明的内置模型，供模型挑选。
+// Python: _builtin_model_catalog (tool_member.py:98-115)
+func BuiltinModelCatalogText(team *TeamBackend) string {
+	catalog := map[string][]map[string]any{}
+	kinds := team.DeclaredCLIKinds()
+	keys := make([]string, 0, len(kinds))
+	for kind := range kinds {
+		keys = append(keys, kind)
+	}
+	sort.Strings(keys)
+	for _, cliAgent := range keys {
+		config := team.ExternalCLIConfig(cliAgent)
+		if config == nil || len(config.BuiltinModels) == 0 {
+			continue
+		}
+		items := make([]map[string]any, 0, len(config.BuiltinModels))
+		for i := range config.BuiltinModels {
+			item := map[string]any{"name": config.BuiltinModels[i].Name}
+			if config.BuiltinModels[i].Description != "" {
+				item["description"] = config.BuiltinModels[i].Description
+			}
+			if len(config.BuiltinModels[i].Efforts) > 0 {
+				item["efforts"] = config.BuiltinModels[i].Efforts
+			}
+			if config.BuiltinModels[i].DefaultEffort != "" {
+				item["default_effort"] = config.BuiltinModels[i].DefaultEffort
+			}
+			items = append(items, item)
+		}
+		catalog[cliAgent] = items
+	}
+	data, _ := json.Marshal(catalog)
+	return fmt.Sprintf("<builtin_model_catalog>%s</builtin_model_catalog>", data)
+}
+
+// ExternalCliModelCatalogContext 渲染对模型安全的当前模型与池协议数据。
+// Python: external_cli_model_catalog_context (tool_member.py:182-219)
+func ExternalCliModelCatalogContext(team *TeamBackend) string {
+	rules := NewExternalCliModelRules(team, nil)
+	var currentModel any
+	if !team.IsModelGroupPool() && team.CurrentModelName() != "" && team.CurrentModelProvider() != "" {
+		currentModel = map[string]any{
+			"model_name": team.CurrentModelName(),
+			"protocol":   external.ModelApiProtocol(team.CurrentModelProvider()),
+		}
+	}
+	compatibleByCLI := map[string][]map[string]string{}
+	keys := make([]string, 0, len(team.DeclaredCLIKinds()))
+	for kind := range team.DeclaredCLIKinds() {
+		keys = append(keys, kind)
+	}
+	sort.Strings(keys)
+	for _, cliAgent := range keys {
+		if !external.TakesAuthFallback(cliAgent) {
+			continue
+		}
+		providerFilter := external.ProviderFilterForCLI(cliAgent)
+		options := map[string]bool{}
+		if team.IsModelGroupPool() {
+			for _, item := range team.ListCliModels(providerFilter) {
+				if item.Model != "" {
+					options[item.Model+"|"+external.ModelApiProtocol(item.Provider)] = true
+				}
+			}
+		} else {
+			for _, entry := range rules.CompatiblePoolEntries(cliAgent) {
+				if entry.ModelName != "" {
+					options[entry.ModelName+"|"+external.ModelApiProtocol(entry.APIProvider)] = true
+				}
+			}
+		}
+		list := []map[string]string{}
+		keys := make([]string, 0, len(options))
+		for key := range options {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			parts := strings.SplitN(key, "|", 2)
+			list = append(list, map[string]string{"model_name": parts[0], "protocol": parts[1]})
+		}
+		compatibleByCLI[cliAgent] = list
+	}
+	data, _ := json.Marshal(map[string]any{
+		"current_model":              currentModel,
+		"compatible_fallback_models": compatibleByCLI,
+	})
+	return fmt.Sprintf("<fallback_model_catalog>%s</fallback_model_catalog>", data)
+}
+
+// CheckExternalCliDeclared 拒绝团队未声明的 CLI kind（能力天花板）。
+// Python: check_external_cli_declared (tool_member.py:167-180)
+func CheckExternalCliDeclared(team *TeamBackend, cliAgent string) string {
+	if team.ExternalCLIConfig(cliAgent) != nil {
+		return ""
+	}
+	kinds := team.DeclaredCLIKinds()
+	shown := make([]string, 0, len(kinds))
+	for kind := range kinds {
+		shown = append(shown, kind)
+	}
+	sort.Strings(shown)
+	if len(shown) == 0 {
+		shown = append(shown, "<none>")
+	}
+	return fmt.Sprintf("cli_agent '%s' is not declared in TeamAgentSpec.external_cli_agents (declared: %s); "+
+		"add a static config entry for it first", cliAgent, strings.Join(shown, ", "))
+}
+
+// ExternalCliOptionProperties external_cli 对象的 schema properties
+// （spawn_teammate / spawn_expert / scheduled create_task 的内联 member）。
+// builtin_model/effort 仅在某个声明 kind 提供内置目录时出现。
+// Python: external_cli_option_properties (tool_member.py:456-484)
+func ExternalCliOptionProperties(team *TeamBackend, t locales.Translator, builtinModelDescription string) map[string]any {
+	properties := map[string]any{
+		"fallback_model_name": map[string]any{
+			"anyOf": []any{map[string]any{"type": "string", "minLength": 1}, map[string]any{"type": "null"}},
+			"description": fmt.Sprintf("%s\n\n%s",
+				t("spawn_teammate", "external_cli.fallback_model_name"),
+				ExternalCliModelCatalogContext(team)),
+		},
+	}
+	if team.BuiltinModelsEnabled() {
+		properties["builtin_model"] = map[string]any{
+			"type":        "string",
+			"description": fmt.Sprintf("%s\n\n%s", builtinModelDescription, BuiltinModelCatalogText(team)),
+		}
+		properties["effort"] = map[string]any{"type": "string", "description": t("spawn_teammate", "external_cli.effort")}
+	}
+	return properties
+}
+
+// RegisterTeammate 注册一条普通 LLM teammate 行（UNSTARTED）——唯一知道
+// teammate 卡与 mode 如何派生的地方。spawn_teammate、create_task 的内联
+// member（F_118）、spawn_expert（带 agent_template）共用，卡 id/mode/options
+// 永不漂移。
+// Python: register_teammate (tool_member.py:626-667)
+func RegisterTeammate(ctx context.Context, team *TeamBackend, in RegisterTeammateInput) atschema.MemberOpResult {
+	if team == nil {
+		return atschema.NewMemberOpResultFail("team backend is nil")
+	}
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(team.TeamName()+"_"+in.MemberName),
+		agentschema.WithAgentName(in.DisplayName),
+		agentschema.WithAgentDescription(in.Desc),
+	)
+	opts := []SpawnMemberOption{WithMode(team.TeammateMode())}
+	if in.Allocation != nil {
+		opts = append(opts, WithAllocation(in.Allocation))
+	}
+	if in.Isolation != "" {
+		opts = append(opts, WithIsolation(in.Isolation))
+	}
+	if in.PermissionsOverride != nil {
+		opts = append(opts, WithPermissionsOverride(in.PermissionsOverride))
+	}
+	if in.Lifetime != nil {
+		opts = append(opts, WithLifetime(in.Lifetime))
+	}
+	if in.AgentTemplate != nil {
+		opts = append(opts, WithAgentTemplate(in.AgentTemplate))
+	}
+	return team.SpawnMember(ctx, in.MemberName, in.DisplayName, card,
+		string(atschema.TeamRoleTeammate), in.Desc, in.Prompt, "", opts...)
+}
+
+// RegisterTeammateInput RegisterTeammate 的具名入参（Python keyword-only 形参）。
+type RegisterTeammateInput struct {
+	MemberName          string
+	DisplayName         string
+	Desc                string
+	Prompt              string
+	Allocation          *models.Allocation
+	Isolation           string
+	PermissionsOverride map[string]string
+	Lifetime            *database.MemberLifetime
+	AgentTemplate       *database.MemberAgentTemplate
+}
+
+// RegisterExternalCLIMember 注册一个外部 CLI 成员行（UNSTARTED）：
+// 声明 kind 校验、模型规则、注册。spawn_teammate 的 cli_agent 路径、
+// spawn_expert 的外部路径、scheduled create_task 的内联成员共用——相同输入
+// 恒到相同的行或相同的错误（仅 tool_name 不同）。
+// Python: register_external_cli_member (tool_member.py:486-540)
+func RegisterExternalCLIMember(ctx context.Context, team *TeamBackend, in RegisterExternalCLIMemberInput) atschema.MemberOpResult {
+	if err := CheckExternalCliDeclared(team, in.CLIAgent); err != "" {
+		return atschema.NewMemberOpResultFail(err)
+	}
+	rules := NewExternalCliModelRules(team, in.AllocateModelConfig)
+	resolved, reason := rules.Resolve(in.CLIAgent, in.ModelName, in.FallbackModelName, in.BuiltinModel, in.Effort, in.ToolName)
+	if resolved == nil {
+		return atschema.NewMemberOpResultFail(reason)
+	}
+	return team.SpawnExternalCLI(ctx, ExternalCLISpawnInput{
+		MemberName:         in.MemberName,
+		DisplayName:        in.DisplayName,
+		CLIAgent:           in.CLIAgent,
+		Desc:               in.Desc,
+		Prompt:             in.Prompt,
+		ModelName:          in.ModelName,
+		Allocation:         resolved.Allocation,
+		FallbackAllocation: resolved.FallbackAllocation,
+		BuiltinModel:       resolved.BuiltinModel,
+		Lifetime:           in.Lifetime,
+		AgentTemplate:      in.AgentTemplate,
+	})
+}
+
+// RegisterExternalCLIMemberInput RegisterExternalCLIMember 的具名入参。
+type RegisterExternalCLIMemberInput struct {
+	ToolName            string
+	AllocateModelConfig func(string) *models.Allocation
+	CLIAgent            string
+	MemberName          string
+	DisplayName         string
+	Desc                string
+	Prompt              string
+	ModelName           string
+	FallbackModelName   string
+	BuiltinModel        string
+	Effort              string
+	Lifetime            *database.MemberLifetime
+	AgentTemplate       *database.MemberAgentTemplate
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isPlainString 值是否为字符串形态（Python isinstance(x, str) 守卫；Go 入参
+// 已收敛为 string，恒真——保留以对齐 resolve 的分支注释位置）。
+func isPlainString(string) bool { return true }
+
+// spawnTeammateTool spawn_teammate 新形态。
+// Python: SpawnTeammateTool (tool_member.py:669-914)
+type spawnTeammateTool struct {
+	TeamTool
+	team                *TeamBackend
+	t                   locales.Translator
+	allocateModelConfig func(string) *models.Allocation
+	forkEnabled         bool
+	externalCLIEnabled  bool
+}
+
+// forkParams / forkSlots / localOnlyParams / externalCliSlots / builtinModelSlots
+// Python: _FORK_PARAMS/_FORK_SLOTS/_LOCAL_ONLY_PARAMS/_EXTERNAL_CLI_SLOTS/_BUILTIN_MODEL_SLOTS (:690-695)
+var (
+	forkParams        = []string{"fork", "fork_source", "fork_mode"}
+	forkSlots         = []string{"fork_usage", "fork_param_rows"}
+	externalCliSlots  = []string{"external_cli_usage"}
+	builtinModelSlots = []string{"builtin_model_param_rows", "builtin_model_usage"}
+)
+
+func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAllocator func(string) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
+	externalCLIEnabled := len(team.DeclaredCLIKinds()) > 0
+	builtinModelsEnabled := externalCLIEnabled && team.BuiltinModelsEnabled()
+	st := &spawnTeammateTool{
+		team:                team,
+		t:                   t,
+		allocateModelConfig: modelConfigAllocator,
+		forkEnabled:         forkEnabled,
+		externalCLIEnabled:  externalCLIEnabled,
+	}
+	// 卡片：omit_slots 三门控（fork/external_cli/builtin_model）。
+	// Python: __init__ :716-723
+	omit := map[string]bool{}
+	if !forkEnabled {
+		for _, name := range forkSlots {
+			omit[name] = true
+		}
+	}
+	if !externalCLIEnabled {
+		for _, name := range externalCliSlots {
+			omit[name] = true
+		}
+	}
+	if !builtinModelsEnabled {
+		for _, name := range builtinModelSlots {
+			omit[name] = true
+		}
+	}
+	var omitList []string
+	for name := range omit {
+		omitList = append(omitList, name)
+	}
+	sort.Strings(omitList)
+	description := t("spawn_teammate", omitList...)
+	// 卡片：id=team.spawn_teammate，描述经 omit_slots 门控（Python :574-580）。
+	card := tool.ToolCard{BaseCard: schema.BaseCard{ID: "team.spawn_teammate", Name: "spawn_teammate", Description: description}}
+	st.TeamTool = NewTeamTool(&card)
+
+	// model_name 描述 + external_cli 附加段。Python: :727-729
+	modelDescription := ModelNameDescription(team, t)
+	if externalCLIEnabled {
+		modelDescription += "\n\n" + t("spawn_teammate", "model_name_external_cli")
+	}
+	properties := map[string]any{
+		"member_name":  map[string]any{"type": "string", "description": t("spawn_teammate", "member_name")},
+		"display_name": map[string]any{"type": "string", "description": t("spawn_teammate", "display_name")},
+		"desc":         map[string]any{"type": "string", "description": t("spawn_teammate", "desc")},
+		"prompt":       map[string]any{"type": "string", "description": t("spawn_teammate", "prompt")},
+		"model_name":   map[string]any{"type": "string", "description": modelDescription},
+		"isolation": map[string]any{
+			"type": "string", "enum": []string{"worktree"},
+			"description": ("Optional isolation mode. Set 'worktree' only when the " +
+				"user explicitly requests worktree isolation, or when " +
+				"the teammate must modify repository files in an " +
+				"isolated checkout. Omit this field for read-only, " +
+				"game, discussion, research, or standby tasks."),
+		},
+		"permissions": map[string]any{"type": "object", "description": t("spawn_teammate", "permissions")},
+	}
+	if forkEnabled {
+		properties["fork"] = map[string]any{
+			"anyOf":       []any{map[string]any{"type": "boolean"}, map[string]any{"type": "string"}},
+			"description": t("spawn_teammate", "fork"),
+		}
+		properties["fork_source"] = map[string]any{"type": "string", "description": t("spawn_teammate", "fork_source")}
+		properties["fork_mode"] = map[string]any{
+			"type": "string", "enum": []string{"full", "before", "after", "keep_before_compact_after", "keep_after_compact_before"},
+			"description": t("spawn_teammate", "fork_mode"),
+		}
+	}
+	if externalCLIEnabled {
+		properties["cli_agent"] = map[string]any{"type": "string", "description": t("spawn_teammate", "cli_agent")}
+		properties["external_cli"] = map[string]any{
+			"type":        "object",
+			"description": t("spawn_teammate", "external_cli"),
+			"properties": ExternalCliOptionProperties(team, t,
+				t("spawn_teammate", "external_cli.builtin_model")),
+		}
+	}
+	card.InputParams = []*schema.Param{}
+	card.Properties = properties
+	return st
+}
+
+// Invoke 执行 spawn_teammate。
+// Python: invoke (tool_member.py:800-862)
+func (s *spawnTeammateTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName, _ := inputs["member_name"].(string)
+	if err := ValidateMemberName(memberName); err != "" {
+		return toolError(err)
+	}
+	displayName, _ := inputs["display_name"].(string)
+	if err := ValidateDisplayName(displayName); err != "" {
+		return toolError(err)
+	}
+	// Schema 省略约束宿主 LLM；这里拒绝 MCP 客户端直传的同款参数——在成员行
+	// 写入前检查，被拒调用不产生任何 spawn。Python: :809-821
+	if !s.forkEnabled {
+		passed := []string{}
+		for _, key := range forkParams {
+			if v, ok := inputs[key]; ok && v != nil {
+				passed = append(passed, key)
+			}
+		}
+		if len(passed) > 0 {
+			return toolError(fmt.Sprintf("Cannot use %s: context inheritance (fork) is "+
+				"disabled (enable_fork=False on TeamAgentSpec). Spawn the "+
+				"teammate without these arguments, or enable fork in the team spec.",
+				strings.Join(passed, ", ")))
+		}
+	}
+	if err := s.checkExternalCLIArgs(inputs); err != "" {
+		return toolError(err)
+	}
+	cliAgent := OptionalText(inputs["cli_agent"])
+	if cliAgent != "" {
+		return s.spawnExternalCLI(ctx, inputs, cliAgent)
+	}
+
+	desc, _ := inputs["desc"].(string)
+	prompt, _ := inputs["prompt"].(string)
+	var allocation *models.Allocation
+	if s.allocateModelConfig != nil {
+		allocation = s.allocateModelConfig(OptionalText(inputs["model_name"]))
+	}
+	if err := CheckModelSelectable(s.team, inputs["model_name"], allocation); err != "" {
+		return toolError(err)
+	}
+	isolation, _ := inputs["isolation"].(string)
+	permissionsOverride, _ := inputs["permissions"].(map[string]string)
+	result := RegisterTeammate(ctx, s.team, RegisterTeammateInput{
+		MemberName:          memberName,
+		DisplayName:         displayName,
+		Desc:                desc,
+		Prompt:              prompt,
+		Allocation:          allocation,
+		Isolation:           isolation,
+		PermissionsOverride: permissionsOverride,
+	})
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	// Python: fork 记账（:848-855）
+	// Python: team.mark_fork_on_spawn（:848-855）——fork 快照/继承链属
+	// 20.4 域（CheckpointTool 同源），Go TeamBackend 未落该方法。
+	// 偏差 D-15.16-e17：spawn 期 fork 记账 ⤴️fork 章节，步骤位置保留。
+	if forkValue, ok := inputs["fork"]; ok && forkValue != nil && forkValue != "false" && forkValue != false {
+		logger.Warn(toolMemberLogComponent).
+			Str("member_name", memberName).
+			Msg("fork-on-spawn accounting not ported (D-15.16-e17, pending fork chapter)")
+	}
+	data := map[string]any{
+		"member_name": memberName, "display_name": displayName, "role_type": "teammate",
+	}
+	if isolation != "" {
+		data["isolation"] = isolation
+	}
+	return toolSuccess(data)
+}
+
+// checkExternalCLIArgs 在任何写入前拒绝本次调用无法携带的 cli_agent/external_cli。
+// Python: _check_external_cli_args (tool_member.py:864-884)
+func (s *spawnTeammateTool) checkExternalCLIArgs(inputs map[string]any) string {
+	cliAgent := OptionalText(inputs["cli_agent"])
+	externalArgs, hasExternal := inputs["external_cli"]
+	if (cliAgent != "" || hasExternal) && !s.externalCLIEnabled {
+		return "cli_agent / external_cli are unavailable: this team declares no external CLI kinds"
+	}
+	if hasExternal && externalArgs != nil {
+		if _, ok := externalArgs.(map[string]any); !ok {
+			return "'external_cli' must be an object"
+		}
+	}
+	if extMap, ok := externalArgs.(map[string]any); ok && len(extMap) > 0 && cliAgent == "" {
+		return "'external_cli' applies only to an external CLI member: set 'cli_agent', or omit it"
+	}
+	if cliAgent != "" {
+		localOnly := []string{}
+		for _, key := range append([]string{"isolation", "permissions"}, forkParams...) {
+			if v, ok := inputs[key]; ok && v != nil {
+				localOnly = append(localOnly, key)
+			}
+		}
+		if len(localOnly) > 0 {
+			return fmt.Sprintf("%s cannot be set with cli_agent '%s': they apply only to a "+
+				"local teammate; omit them, or omit 'cli_agent'", strings.Join(localOnly, ", "), cliAgent)
+		}
+	}
+	return ""
+}
+
+// spawnExternalCLI 注册成第三方 CLI 成员（role_type='external_cli'）。
+// Python: _spawn_external_cli (tool_member.py:886-914)
+func (s *spawnTeammateTool) spawnExternalCLI(ctx context.Context, inputs map[string]any, cliAgent string) (map[string]any, error) {
+	externalArgs, _ := inputs["external_cli"].(map[string]any)
+	if externalArgs == nil {
+		externalArgs = map[string]any{}
+	}
+	memberName, _ := inputs["member_name"].(string)
+	displayName, _ := inputs["display_name"].(string)
+	if err := ValidateDisplayName(displayName); err != "" {
+		return toolError(err)
+	}
+	desc, _ := inputs["desc"].(string)
+	prompt, _ := inputs["prompt"].(string)
+	fallbackModelName, _ := externalArgs["fallback_model_name"].(string)
+	builtinModel, _ := externalArgs["builtin_model"].(string)
+	effort, _ := externalArgs["effort"].(string)
+	result := RegisterExternalCLIMember(ctx, s.team, RegisterExternalCLIMemberInput{
+		ToolName:            "spawn_teammate",
+		AllocateModelConfig: s.allocateModelConfig,
+		CLIAgent:            cliAgent,
+		MemberName:          memberName,
+		DisplayName:         displayName,
+		Desc:                desc,
+		Prompt:              prompt,
+		ModelName:           OptionalText(inputs["model_name"]),
+		FallbackModelName:   fallbackModelName,
+		BuiltinModel:        builtinModel,
+		Effort:              effort,
+	})
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{
+		"member_name": memberName, "display_name": displayName, "role_type": "external_cli", "cli_agent": cliAgent,
+	})
+}
+
+// RenderForLLM 模型面渲染。
+// Python: _SpawnToolBase.render_for_llm (tool_member.py:613-623)
+func (s *spawnTeammateTool) RenderForLLM(output map[string]any) string {
+	if success, ok := output["success"].(bool); !ok || !success {
+		if err, ok := output["error"].(string); ok && err != "" {
+			return err
+		}
+		return "Failed to spawn member"
+	}
+	role := "teammate"
+	if r, ok := output["role_type"].(string); ok && r != "" {
+		role = r
+	}
+	cliAgent, _ := output["cli_agent"].(string)
+	suffix := ""
+	if cliAgent != "" {
+		suffix = " cli_agent=" + cliAgent
+	}
+	memberName, _ := output["member_name"].(string)
+	displayName, _ := output["display_name"].(string)
+	return fmt.Sprintf("Member spawned: member_name=%s display_name=%s role=%s%s", memberName, displayName, role, suffix)
+}
+
+// MapResult spawn 结果的模型面映射。
+// Python: SpawnTeammateTool.map_result（经 _SpawnToolBase.render_for_llm 等价）。
+func (s *spawnTeammateTool) MapResult(output map[string]any) string {
+	return s.RenderForLLM(output)
+}
+
+// spawnHumanAgentTool spawn_human_agent 独立工具（role_type='human_agent'）。
+// schema 刻意省 model_name/prompt——human 成员跑框架模板，运行期无字段可拒；
+// HITT 检查是防御性兜底（工具在 HITT 关闭时不接线）。
+// Python: SpawnHumanAgentTool (tool_member.py:1041-1096)
+type spawnHumanAgentTool struct {
+	TeamTool
+	team *TeamBackend
+	t    locales.Translator
+}
+
+// newSpawnHumanAgentTool 构造 spawn_human_agent 工具。
+func newSpawnHumanAgentTool(team *TeamBackend, t locales.Translator) *spawnHumanAgentTool {
+	card := tool.ToolCard{BaseCard: schema.BaseCard{
+		ID:          "team.spawn_human_agent",
+		Name:        "spawn_human_agent",
+		Description: t("spawn_human_agent"),
+	}}
+	card.InputParams = []*schema.Param{}
+	card.Properties = map[string]any{
+		"member_name":  map[string]any{"type": "string", "description": t("spawn_human_agent", "member_name")},
+		"display_name": map[string]any{"type": "string", "description": t("spawn_human_agent", "display_name")},
+		"desc":         map[string]any{"type": "string", "description": t("spawn_human_agent", "desc")},
+	}
+	return &spawnHumanAgentTool{TeamTool: NewTeamTool(&card), team: team, t: t}
+}
+
+// Invoke 执行 spawn_human_agent。
+// Python: invoke (tool_member.py:1068-1096)
+func (s *spawnHumanAgentTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName, _ := inputs["member_name"].(string)
+	if err := ValidateMemberName(memberName); err != "" {
+		return toolError(err)
+	}
+	displayName, _ := inputs["display_name"].(string)
+	if err := ValidateDisplayName(displayName); err != "" {
+		return toolError(err)
+	}
+	if !s.team.HITTEnabled() {
+		return toolError("Cannot spawn human agent: HITT capability is disabled " +
+			"(enable_hitt=False on TeamAgentSpec or build_team). " +
+			"Enable HITT in the team spec or use spawn_teammate instead.")
+	}
+	desc, _ := inputs["desc"].(string)
+	result := s.team.SpawnHumanAgent(ctx, memberName, displayName, desc, "")
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{
+		"member_name": memberName, "display_name": displayName, "role_type": "human_agent",
+	})
+}
+
+// MapResult spawn 结果的模型面映射（对齐 render_for_llm）。
+func (s *spawnHumanAgentTool) MapResult(output map[string]any) string {
+	success, _ := output["success"].(bool)
+	if !success {
+		if errVal, ok := output["error"]; ok {
+			return fmt.Sprintf("%v", errVal)
+		}
+		return "Failed to spawn member"
+	}
+	d, _ := output["data"].(map[string]any)
+	return fmt.Sprintf("Member spawned: member_name=%v display_name=%v role=%v", d["member_name"], d["display_name"], d["role_type"])
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (s *spawnTeammateTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (s *spawnHumanAgentTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}

@@ -117,24 +117,6 @@ func (t *CleanTeamTool) MapResult(output map[string]any) string {
 	return fmt.Sprintf("Team cleaned: team_name=%v", d["team_name"])
 }
 
-// MapResult 将 SpawnMemberTool 执行结果转换为 LLM 可读文本。
-// 对齐 Python: SpawnMemberTool.map_result (tools/team_tools.py L414-419)
-func (t *SpawnMemberTool) MapResult(output map[string]any) string {
-	success, _ := output["success"].(bool)
-	if !success {
-		if errVal, ok := output["error"]; ok {
-			return fmt.Sprintf("%v", errVal)
-		}
-		return "Failed to spawn member"
-	}
-	d, _ := output["data"].(map[string]any)
-	role, _ := d["role_type"].(string)
-	if role == "" {
-		role = "teammate"
-	}
-	return fmt.Sprintf("Member spawned: member_name=%v display_name=%v role=%v", d["member_name"], d["display_name"], role)
-}
-
 // MapResult 将 ShutdownMemberTool 执行结果转换为 LLM 可读文本。
 // 对齐 Python: ShutdownMemberTool.map_result (tools/team_tools.py L458-461)
 func (t *ShutdownMemberTool) MapResult(output map[string]any) string {

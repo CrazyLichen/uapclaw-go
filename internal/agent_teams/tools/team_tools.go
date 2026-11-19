@@ -15,8 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -73,6 +71,9 @@ type TeamToolOptions struct {
 	// SwarmflowEnabled leader 是否持有 swarmflow 工具（偏差 D-3）
 	// Python: 由 swarmflow 工具是否注册推导，非显式参数
 	SwarmflowEnabled bool
+	// ForkEnabled 上下文继承开关（TeamAgentSpec.enable_fork）——门控
+	// spawn_teammate 的 fork 参数面与描述槽（tool_member.py:703-714）。
+	ForkEnabled bool
 }
 
 // CleanTeamTool 清理团队工具。
@@ -191,7 +192,7 @@ type SendMessageTool struct {
 // Python: tools/team_tools.py L94-155
 const (
 	// LeaderOnlyToolsStr 仅 Leader 可用的工具名（逗号分隔）
-	LeaderOnlyToolsStr = "build_team,clean_team,spawn_member,shutdown_member,approve_plan,approve_tool,create_task,update_task,list_members"
+	LeaderOnlyToolsStr = "build_team,clean_team,spawn_teammate,spawn_human_agent,shutdown_member,approve_plan,approve_tool,create_task,update_task,list_members"
 	// MemberOnlyToolsStr 仅 Teammate 可用的工具名（逗号分隔）
 	MemberOnlyToolsStr = "claim_task,submit_plan"
 	// SharedToolsStr Leader 和 Teammate 共用的工具名（逗号分隔）
@@ -259,7 +260,10 @@ func CreateTeamTools(
 	if teamBackend != nil {
 		allTools["build_team"] = newBuildTeamTool(teamBackend, t, opts)
 		allTools["clean_team"] = newCleanTeamTool(teamBackend, t)
-		allTools["spawn_member"] = newSpawnMemberTool(teamBackend, t, modelConfigAlloc)
+		// Python: spawn_teammate（tool_member.py SpawnTeammateTool）+ spawn_human_agent
+		// 两个独立工具（旧 SpawnMemberTool 的 role_type 分支拆分，规则 8 删旧）。
+		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, modelConfigAlloc, opts.ForkEnabled)
+		allTools["spawn_human_agent"] = newSpawnHumanAgentTool(teamBackend, t)
 		allTools["shutdown_member"] = newShutdownMemberTool(teamBackend, t)
 		allTools["approve_plan"] = newApprovePlanTool(teamBackend, t)
 		allTools["approve_tool"] = newApproveToolCallTool(teamBackend, t)
@@ -399,25 +403,6 @@ func newCleanTeamTool(team *TeamBackend, t locales.Translator) *CleanTeamTool {
 		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.clean_team", "clean_team", t("clean_team"),
 			nil, nil)),
 		team: team,
-	}
-}
-
-// newSpawnMemberTool 创建 SpawnMemberTool 实例。
-func newSpawnMemberTool(team *TeamBackend, t locales.Translator, alloc func(modelName string) *models.Allocation) *SpawnMemberTool {
-	roleTypeParam := schema.NewStringParam("role_type", t("spawn_member", "role_type"), false, "teammate")
-	roleTypeParam.Enum = []any{"teammate", "human_agent"}
-	return &SpawnMemberTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.spawn_member", "spawn_member", t("spawn_member"),
-			[]*schema.Param{
-				schema.NewStringParam("member_name", t("spawn_member", "member_name"), true),
-				schema.NewStringParam("display_name", t("spawn_member", "display_name"), true),
-				schema.NewStringParam("desc", t("spawn_member", "desc"), true),
-				roleTypeParam,
-				schema.NewStringParam("prompt", t("spawn_member", "prompt"), false),
-				schema.NewStringParam("model_name", t("spawn_member", "model_name"), false),
-			}, nil)),
-		team:             team,
-		modelConfigAlloc: alloc,
 	}
 }
 
@@ -647,81 +632,6 @@ func (t *CleanTeamTool) Invoke(ctx context.Context, _ map[string]any, _ ...tool.
 
 // Stream 实现 Tool 接口（不支持流式调用）。
 func (t *CleanTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
-	return nil, tool.ErrStreamNotSupported
-}
-
-// Invoke 执行 SpawnMemberTool，对齐 Python SpawnMemberTool.invoke。
-func (t *SpawnMemberTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	memberName, _ := inputs["member_name"].(string)
-	displayName, _ := inputs["display_name"].(string)
-	desc, _ := inputs["desc"].(string)
-	roleType := "teammate"
-	if v, ok := inputs["role_type"].(string); ok && v != "" {
-		roleType = strings.ToLower(v)
-	}
-
-	// 校验 member_name 格式（对齐 Python _MEMBER_NAME_PATTERN）
-	if memberName == "" || !memberNamePattern.MatchString(memberName) {
-		return toolError(fmt.Sprintf(
-			"Invalid member_name %q: must start with a lowercase ASCII letter (a-z), "+
-				"followed by lowercase letters, digits (0-9) or hyphen (-); no uppercase, "+
-				"underscore, whitespace, or non-ASCII characters", memberName))
-	}
-
-	if roleType != "teammate" && roleType != "human_agent" {
-		return toolError(fmt.Sprintf("Invalid role_type %q; expected 'teammate' or 'human_agent'", roleType))
-	}
-
-	// human_agent 路径
-	if roleType == "human_agent" {
-		if !t.team.HITTEnabled() {
-			return toolError("Cannot spawn human agent: HITT capability is disabled " +
-				"(enable_hitt=False on TeamAgentSpec or build_team). " +
-				"Either enable HITT in the team spec or use role_type='teammate'.")
-		}
-		if _, ok := inputs["model_name"]; ok {
-			return toolError("role_type='human_agent' does not accept 'model_name'; " +
-				"human members use the framework template — remove this field")
-		}
-		if _, ok := inputs["prompt"]; ok {
-			return toolError("role_type='human_agent' does not accept 'prompt'; " +
-				"human members use the framework template — remove this field")
-		}
-		result := t.team.SpawnHumanAgent(ctx, memberName, displayName, desc, "")
-		if !result.OK {
-			return toolError(result.Reason)
-		}
-		return toolSuccess(map[string]any{
-			"member_name": memberName, "display_name": displayName, "role_type": "human_agent",
-		})
-	}
-
-	// teammate 路径
-	mode := atschema.MemberMode(t.team.TeammateMode())
-	modelName, _ := inputs["model_name"].(string)
-	var allocation *models.Allocation
-	if t.modelConfigAlloc != nil {
-		allocation = t.modelConfigAlloc(modelName)
-	}
-	cardID := fmt.Sprintf("%s_%s", t.team.TeamName(), memberName)
-	agentCard := &agentschema.AgentCard{}
-	agentCard.ID = cardID
-	agentCard.Name = displayName
-	agentCard.Description = desc
-	prompt, _ := inputs["prompt"].(string) // 安全断言，prompt 为可选参数，对齐 Python inputs.get("prompt")
-	result := t.team.SpawnMember(ctx, memberName, displayName, agentCard, string(mode), desc,
-		prompt, modelName,
-		WithAllocation(allocation))
-	if !result.OK {
-		return toolError(result.Reason)
-	}
-	return toolSuccess(map[string]any{
-		"member_name": memberName, "display_name": displayName, "role_type": "teammate",
-	})
-}
-
-// Stream 实现 Tool 接口（不支持流式调用）。
-func (t *SpawnMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
@@ -1838,7 +1748,23 @@ func materializeInlineMembers(ctx context.Context, team *TeamBackend, tasks []ma
 		}
 		// allocation 传 nil：SpawnMember 内部会走 backend 的 modelConfigAllocator，
 		// 与上游 allocate(...) 回调同语义。
-		if result := RegisterTeammate(team, name, displayName, desc, prompt, nil, opts...); !result.OK {
+		promptText := ""
+		if prompt != nil {
+			promptText = *prompt
+		}
+		var lifetimePtr *database.MemberLifetime
+		if lifetime != "" {
+			lt := database.MemberLifetime(lifetime)
+			lifetimePtr = &lt
+		}
+		if result := RegisterTeammate(ctx, team, RegisterTeammateInput{
+			MemberName:  name,
+			DisplayName: displayName,
+			Desc:        desc,
+			Prompt:      promptText,
+			Isolation:   strings.TrimSpace(stringField(member, "isolation")),
+			Lifetime:    lifetimePtr,
+		}); !result.OK {
 			discardInlineMembers(ctx, team, created)
 			return nil, lifetimes
 		}
