@@ -329,9 +329,14 @@ func CreateTeamTools(
 		delete(allowed, "clean_team")
 	}
 
-	// 专家三件仅当 host 注入 catalog——三件一起，leader 永不缺角。
-	// Python: tool_factory.py:495-497
-	if opts.ExpertCatalog == nil {
+	// 专家三件：catalog 非 nil 时并入 allowed（Python create_team_tools 的
+	// allowed 含全部 all_tools 键，catalog None 才减 EXPERT_TOOLS；
+	// tool_factory.py:495-497）。
+	if opts.ExpertCatalog != nil {
+		for _, name := range expertTools {
+			allowed[name] = struct{}{}
+		}
+	} else {
 		for _, name := range expertTools {
 			delete(allowed, name)
 		}
