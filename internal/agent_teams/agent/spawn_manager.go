@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"sync"
 	"time"
 
@@ -378,6 +380,12 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 		role = atschema.TeamRoleTeammate
 	}
 
+	// 专家孵化成员的快照/外部配置读行（对齐 Python: spawn_manager.py:536-537
+	// agent_template_spec, template_external_cli = _template_fields(teammate)）。
+	// _template_fields (:46-54)：get_member_agent_template(record) → None 得
+	// 双 nil；external_cli 非空时按 ExternalCliAgentSpec 反序列化。
+	agentTemplateSpec, templateExternalCLI := templateFields(teammate)
+
 	// 构建成员 MessagerConfig（对齐 Python: build_member_messager_config）
 	var messagerConfig *atschema.MessagerTransportConfig
 	if m.configurator != nil {
@@ -385,14 +393,42 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 	}
 
 	return atschema.TeamRuntimeContext{
-		Role:           role,
-		MemberName:     teammate.MemberName,
-		Persona:        teammate.Desc,
-		TeamSpec:       runtimeCtx.TeamSpec,
-		DBConfig:       runtimeCtx.DBConfig,
-		MemberModel:    memberModel,
-		MessagerConfig: messagerConfig,
+		Role:                role,
+		MemberName:          teammate.MemberName,
+		Persona:             teammate.Desc,
+		TeamSpec:            runtimeCtx.TeamSpec,
+		DBConfig:            runtimeCtx.DBConfig,
+		MemberModel:         memberModel,
+		AgentTemplateSpec:   agentTemplateSpec,
+		TemplateExternalCLI: templateExternalCLI,
+		MessagerConfig:      messagerConfig,
 	}, nil
+}
+
+// templateFields 专家孵化成员的能力快照/外部 CLI 配置读行。
+// Python: _template_fields (spawn_manager.py:46-54)
+func templateFields(record *database.TeamMember) (*hschema.AgentTemplateSpec, *atschema.ExternalCliAgentSpec) {
+	template := database.GetMemberAgentTemplate(record)
+	if template == nil {
+		return nil, nil
+	}
+	var externalCLI *atschema.ExternalCliAgentSpec
+	if template.ExternalCLI != nil {
+		// Python: ExternalCliAgentSpec.model_validate(template.external_cli)——
+		// JSON 形态 map → 结构体。
+		data, err := json.Marshal(template.ExternalCLI)
+		if err == nil {
+			_ = json.Unmarshal(data, &externalCLI)
+		}
+	}
+	var snapshot *hschema.AgentTemplateSpec
+	if template.Snapshot != nil {
+		data, err := json.Marshal(template.Snapshot)
+		if err == nil {
+			_ = json.Unmarshal(data, &snapshot)
+		}
+	}
+	return snapshot, externalCLI
 }
 
 // PublishRestartEvent 发布重启事件。
@@ -513,7 +549,7 @@ func (m *SpawnManager) spawnInprocess(
 	factory := func(runtimeCtxParam atschema.TeamRuntimeContext) (spawn.SpawnableAgent, error) {
 		// Python: agent_spec = spec.agents.get(ctx.role.value) or spec.agents["leader"]
 		spec := m.configurator.Spec()
-		agentSpec := ResolveAgentSpec(*spec, runtimeCtxParam.Role, runtimeCtxParam.MemberName)
+		agentSpec := ResolveAgentSpec(*spec, runtimeCtxParam.Role, runtimeCtxParam.MemberName, runtimeCtxParam.AgentTemplateSpec)
 
 		// Python: card = agent_spec.card or AgentCard(...)
 		card := agentSpec.Card

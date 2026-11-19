@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"sort"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
@@ -124,6 +125,15 @@ type TeamRuntimeContext struct {
 	// TeamDesc 团队级描述（DB team_info.desc）
 	// Python: TeamRuntimeContext.team_desc (schema/team.py:668)
 	TeamDesc string `json:"team_desc,omitempty"`
+	// AgentTemplateSpec 专家孵化成员的能力快照（DB options.agent_template
+	// → BuildContextFromDB 恢复 → resolve_agent_spec 的 apply_template_snapshot
+	// 挂载）。native 成员非空；外部 CLI 成员为 nil（其启动配置在
+	// TemplateExternalCLI）。
+	// Python: TeamRuntimeContext.agent_template_spec (spawn_manager.py:568)
+	AgentTemplateSpec *hschema.AgentTemplateSpec `json:"agent_template_spec,omitempty"`
+	// TemplateExternalCLI 外部 CLI 专家成员的启动配置。
+	// Python: TeamRuntimeContext.template_external_cli (spawn_manager.py:568)
+	TemplateExternalCLI *ExternalCliAgentSpec `json:"template_external_cli,omitempty"`
 	// TeamPrompt 团队级提示词（DB team_info.prompt）
 	// Python: TeamRuntimeContext.team_prompt (schema/team.py:674)
 	TeamPrompt string `json:"team_prompt,omitempty"`

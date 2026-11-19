@@ -1,7 +1,6 @@
 package rails
 
 import (
-	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
 	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -266,7 +265,7 @@ func buildTeamToolRail(params map[string]any, ctx hschema.BuildContextInterface)
 	opts := []TeamToolRailOption{
 		WithTeamBackend(backend),
 		// Python: elements.py:135-136——catalog/binding 经 build context handle。
-		WithExpertCatalog(toExpertCatalog(GetExpertCatalog(ctx))),
+		WithExpertCatalog(GetExpertCatalog(ctx)),
 		WithExpertBinding(GetExpertBinding(ctx)),
 		WithRole(hschema.ParamString(params, "role", "leader")),
 		WithMemberName(hschema.ParamString(params, "member_name", "")),
@@ -452,13 +451,4 @@ func buildTeamObservabilityRail(params map[string]any, ctx hschema.BuildContextI
 		Str("rail_type", TeamObservability).
 		Msg("team observability rail provider is not implemented; skipping")
 	return nil, nil
-}
-
-// toExpertCatalog 把 handle 的 any 收敛为 ExpertCatalog 接口。
-// Python: get_expert_catalog 返回协议对象直传。
-func toExpertCatalog(catalog any) experts.ExpertCatalog {
-	if c, ok := catalog.(experts.ExpertCatalog); ok {
-		return c
-	}
-	return nil
 }

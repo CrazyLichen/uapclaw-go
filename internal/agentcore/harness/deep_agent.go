@@ -5096,33 +5096,107 @@ func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkIte
 	}
 }
 
-// syncExpertRoleAttachment 物化专家角色提示词附件。
-// ⤵️ #9.3 回填：等待 AgentTemplate 热加载能力落地后补完。
-// Python: _sync_expert_role_attachment (L3267)，由 run_one_round (L3787) 在
-// BEFORE_INVOKE 生命周期内、resume/submit 分支之前调用。
-// 今天的等价性：activeAgentTemplate 恒为 nil（Go 无 load_agent_template），
-// 而 expert_role 附件节也永远不会被创建，故直接返回与上游"会话里不存在
-// expert_role → 清理分支直接 return"完全等价。
-// ⚠️ 回填时必须**同时**补两条分支，只补①不补②会让模型在用户切走专家后
-// 仍以为自己是该专家：
-//  1. template 非 nil → add_section(expert_role, _expert_role_load_content(role, lang))
-//  2. template 为 nil 但会话里已存在 expert_role 节 →
-//     改写为 _expert_role_unload_content(role, lang)（降权提示）
-//
-// 上游对该方法整体 try/except 并只 warning，不阻塞主流程（尽力而为语义）。
-func (d *DeepAgent) syncExpertRoleAttachment(_ *agentinterfaces.InvokeInputs, _ *session.Session) {
-	d.interactionControlMu.Lock()
-	active := d.activeAgentTemplate
-	d.interactionControlMu.Unlock()
-	if active == nil {
+// expertRoleSectionName expert_role 附件节名。
+// Python: _EXPERT_ROLE_SECTION (deep_agent.py:197)
+const expertRoleSectionName = "expert_role"
+
+// expertRoleSource 附件写入方。Python: _EXPERT_ROLE_SOURCE (:198)
+const expertRoleSource = "deep_agent.agent_template"
+
+// expertRoleLoadContent 模型可见的加载提示。Python: _expert_role_load_content (:286-297)
+func expertRoleLoadContent(roleName, language string) string {
+	if language == "en" {
+		return (fmt.Sprintf("The user selected the %s expert. You are %s. ", roleName, roleName) +
+			"Previous expert roles are cancelled; do not use their persona or related capabilities.")
+	}
+	return fmt.Sprintf("用户选择了%s专家，你是%s。", roleName, roleName) +
+		"此前专家角色已取消，不再使用其角色设定和相关能力。"
+}
+
+// expertRoleUnloadContent 模型可见的卸载提示。Python: _expert_role_unload_content (:299-310)
+func expertRoleUnloadContent(roleName, language string) string {
+	if language == "en" {
+		return (fmt.Sprintf("The user cancelled the %s expert selection. Immediately stop using that "+
+			"expert's role, workflows, and exclusive capabilities, and fall back to your default ", roleName) +
+			"role and capabilities.")
+	}
+	return fmt.Sprintf("用户取消了%s专家选择，立即停止使用之前该专家的角色、工作流和独有能力，", roleName) +
+		"回退到你的默认角色和能力。"
+}
+
+// syncExpertRoleAttachment 物化当前 AgentTemplate 角色到本轮会话。
+// 两分支齐备（15.16e 收口，D-15.16-e17 的 expert_role 半区回收）：
+// ①template 非 nil → add_section(expert_role, load 提示)；
+// ②template nil 但会话已存在 expert_role 节 → 改写为 unload 提示（降权）。
+// 上游对方法整体 try/except 只 warning（尽力而为，不阻塞主流程）。
+// Python: _sync_expert_role_attachment (deep_agent.py:3267-3330)，由
+// run_one_round (:3787) 在 BEFORE_INVOKE 生命周期内、resume/submit 分支前调用。
+func (d *DeepAgent) syncExpertRoleAttachment(invokeInputs *agentinterfaces.InvokeInputs, session *session.Session) {
+	defer func() {
+		// Python: except Exception → warning 不阻塞。
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Msg("[DeepAgent] failed to sync expert_role attachment")
+		}
+	}()
+	// Python: session_id = session.get_session_id() or invoke_inputs.conversation_id
+	sessionID := ""
+	if session != nil {
+		sessionID = session.GetSessionID()
+	}
+	if sessionID == "" && invokeInputs != nil {
+		sessionID = invokeInputs.ConversationID
+	}
+	if sessionID == "" {
 		return
 	}
-	// 非 nil 在今天是不可达状态；一旦可达说明 9.3 已接线但本方法尚未补完，
-	// 必须显式告警而不是静默丢提示词。
-	logger.Warn(logComponent).
-		Str("load_id", active.LoadID).
-		Str("role_name", active.RoleName).
-		Msg("expert_role attachment sync not ported yet, waiting for AgentTemplate hot-load (⤵️ #9.3)")
+	if d.attachments == nil {
+		return
+	}
+	language := hprompts.ResolveLanguage("")
+	if d.deepConfig != nil {
+		language = hprompts.ResolveLanguage(d.deepConfig.Language)
+	}
+
+	if d.activeAgentTemplate != nil {
+		// 分支①：加载提示。
+		// Python: manager.add_section(..., kind=RUNTIME, source=..., metadata={"role_name": ...})
+		if _, err := d.attachments.AddSection(sessionID, expertRoleSectionName,
+			expertRoleLoadContent(d.activeAgentTemplate.RoleName, language),
+			hprompts.AttachmentRuntime, expertRoleSource,
+			hprompts.WithAttachmentMetadata(map[string]any{"role_name": d.activeAgentTemplate.RoleName})); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("[DeepAgent] failed to sync expert_role attachment")
+		}
+		return
+	}
+
+	// 分支②：卸载提示——会话里已存在 expert_role 节时改写为降权文案。
+	// Python: collect_for_session → next(item.section == _EXPERT_ROLE_SECTION)。
+	attachments, err := d.attachments.Collect(sessionID)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[DeepAgent] failed to sync expert_role attachment")
+		return
+	}
+	var current *hprompts.Attachment
+	for _, item := range attachments {
+		if item.Section == expertRoleSectionName {
+			current = item
+			break
+		}
+	}
+	if current == nil {
+		return
+	}
+	roleName, _ := current.Metadata["role_name"].(string)
+	if roleName == "" {
+		return
+	}
+	if _, err := d.attachments.AddSection(sessionID, expertRoleSectionName,
+		expertRoleUnloadContent(roleName, language),
+		hprompts.AttachmentRuntime, expertRoleSource,
+		hprompts.WithAttachmentMetadata(map[string]any{"role_name": roleName})); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[DeepAgent] failed to sync expert_role attachment")
+	}
 }
 
 // ──────────────────────────── 15.15 扩展热加载入口（deep_agent.py:2211-2450）────────────────────────────

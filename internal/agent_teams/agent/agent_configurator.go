@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"os"
 	"path/filepath"
 
@@ -114,19 +115,27 @@ func NewAgentConfigurator(card *agentschema.AgentCard) *AgentConfigurator {
 // Python: AgentConfigurator.resolve_agent_spec(spec, role, member_name)
 //
 // 优先级：memberName 精确匹配 → role 值匹配 → "teammate" → "leader"
-func ResolveAgentSpec(spec atschema.TeamAgentSpec, role atschema.TeamRole, memberName string) atschema.DeepAgentSpec {
+func ResolveAgentSpec(spec atschema.TeamAgentSpec, role atschema.TeamRole, memberName string, agentTemplateSpec ...*hschema.AgentTemplateSpec) atschema.DeepAgentSpec {
 	if memberName != "" {
 		if agentSpec, ok := spec.Agents[memberName]; ok {
 			return agentSpec
 		}
 	}
+	base := atschema.DeepAgentSpec{}
+	found := false
 	if agentSpec, ok := spec.Agents[string(role)]; ok {
-		return agentSpec
+		base, found = agentSpec, true
+	} else if agentSpec, ok := spec.Agents["teammate"]; ok {
+		base, found = agentSpec, true
+	} else {
+		base, found = spec.Agents["leader"], true
 	}
-	if agentSpec, ok := spec.Agents["teammate"]; ok {
-		return agentSpec
+	// 专家孵化成员的快照挂载（Python :1102-1105）：快照只作用于共享 base
+	// ——自身 agents[<member>] 条目（host 预装配）优先返回，不叠快照。
+	if !found || len(agentTemplateSpec) == 0 || agentTemplateSpec[0] == nil {
+		return base
 	}
-	return spec.Agents["leader"]
+	return experts.ApplyTemplateSnapshot(base, agentTemplateSpec[0])
 }
 
 // WithOnTeammateCreated 设置队友创建回调。
@@ -196,7 +205,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	c.onTeammateCreated = cfg.onTeammateCreated
 
 	// 1. 解析 AgentSpec
-	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
+	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName, ctx.AgentTemplateSpec)
 
 	// 2. 解析语言偏好
 	// ⤴️ 9.53 回填完成：解析语言
@@ -319,7 +328,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		return nil, nil
 	}
 	// 1. 解析 AgentSpec
-	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
+	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName, ctx.AgentTemplateSpec)
 
 	// 2. 解析语言
 	// ⤴️ 9.53 回填完成：从 blueprint 获取

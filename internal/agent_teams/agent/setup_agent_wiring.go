@@ -107,9 +107,9 @@ func buildTeamHandles(
 ) rails.TeamHandles {
 	// Python: agent_configurator.py:892-899——host 注入的专家 catalog 支撑
 	// leader 的专家工具；成员侧不走 catalog 门控，恒 nil。
-	var expertCatalog any
+	var expertCatalog experts.ExpertCatalog
 	var expertBinding *rails.ExpertBinding
-	if ctx.Role == "leader" {
+	if ctx.Role == atschema.TeamRoleLeader {
 		if catalog := experts.GetProcessExpertCatalog(); catalog != nil {
 			expertCatalog = catalog
 			expertBinding = deriveExpertBinding(teamSpec)

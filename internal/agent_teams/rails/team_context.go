@@ -112,8 +112,8 @@ type TeamHandles struct {
 	SwarmflowExternalCLIAgents any
 	// SwarmflowExpertSpecs swarmflow 专家表
 	SwarmflowExpertSpecs map[string]any
-	// ExpertCatalog 专家定位协议（experts.ExpertCatalog）
-	ExpertCatalog any
+	// ExpertCatalog 专家定位协议（host 注入；nil = 不注册专家三件）
+	ExpertCatalog experts.ExpertCatalog
 	// ExpertBinding 专家绑定信息（*ExpertBinding）
 	ExpertBinding *ExpertBinding
 	// TaskEventTracker 任务通知器
@@ -338,8 +338,13 @@ type ExpertBinding struct {
 
 // GetExpertCatalog 返回专家定位协议，缺失返回 nil。
 // Python: get_expert_catalog
-func GetExpertCatalog(ctx hschema.BuildContextInterface) any {
-	return getHandle(ctx, TeamHandleExpertCatalog)
+func GetExpertCatalog(ctx hschema.BuildContextInterface) experts.ExpertCatalog {
+	if h := getHandle(ctx, TeamHandleExpertCatalog); h != nil {
+		if catalog, ok := h.(experts.ExpertCatalog); ok {
+			return catalog
+		}
+	}
+	return nil
 }
 
 // GetExpertBinding 返回专家绑定信息，缺失返回 nil。

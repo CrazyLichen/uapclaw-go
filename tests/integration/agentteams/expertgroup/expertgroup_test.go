@@ -30,6 +30,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -268,4 +270,83 @@ func (s *ExpertGroupSuite) TestSpawnExpert_external_kind未声明拒绝() {
 	})
 	errText, _ := output["error"].(string)
 	s.Require().Contains(errText, "not declared in TeamAgentSpec.external_cli_agents")
+}
+
+// ──────────────────────────── enrich agent_group 全链（Step 8.1 核心断言） ────────────────────────────
+
+// TestEnrichAgentGroup_JSON往返_materialize enrich（带 agent_group）→ 预定义
+// 名册/reviewer 收窄/seed → TeamAgentSpec JSON 往返 → MaterializeBuildContext。
+// Python: enrich_team_spec_for_swarm(:531-534 agent_group 分支) + :563-570 尾日志
+// + materialize（15.16c 平台工厂）。
+func (s *ExpertGroupSuite) TestEnrichAgentGroup_JSON往返_materialize() {
+	// AgentGroup 包预载（enrich 懒加载路径的等价输入）
+	loaded, err := experts.LoadAgentGroupPackageBundle(s.groupPackageDir())
+	s.Require().NoError(err)
+
+	spec := newEnrichFixtureSpec()
+	p := swarm.EnrichSeedParams{
+		SessionID:         "s-mat",
+		Mode:              "team",
+		ChannelID:         "web",
+		AgentGroupName:    "story",
+		AgentGroupPackage: loaded,
+	}
+	s.Require().NoError(swarm.EnrichTeamSpecForSwarmSeed(spec, p))
+
+	// 预定义名册（hybrid）：editor 一员（leader 排除）
+	s.Require().Len(spec.PredefinedMembers, 1)
+	s.Require().Equal("editor", spec.PredefinedMembers[0].MemberName)
+	s.Require().Equal("hybrid", spec.TeamMode)
+	// reviewer 收窄（scheduled 评审基座）
+	s.Require().NotNil(spec.ReviewerAgent)
+	// seed 挂载
+	s.Require().NotNil(spec.BuildContext)
+	s.Require().NotEmpty(spec.BuildContextSeed)
+
+	// JSON 往返（跨进程承载形态）
+	data, err := json.Marshal(spec)
+	s.Require().NoError(err)
+	var received atschema.TeamAgentSpec
+	s.Require().NoError(json.Unmarshal(data, &received))
+	s.Require().Equal("story", received.AgentGroupName)
+	s.Require().Len(received.PredefinedMembers, 1)
+	// materialize：seed 经平台工厂重建 BuildContext
+	s.Require().NoError(received.MaterializeBuildContext())
+	s.Require().NotNil(received.BuildContext)
+}
+
+// groupPackageDir 复用 fixtureCatalog 的包目录（fixtureCatalog 内部建包，
+// 这里直接建一个供 enrich 预载）。
+func (s *ExpertGroupSuite) groupPackageDir() string {
+	dir := s.T().TempDir()
+	name := filepath.Base(dir)
+	write := func(rel, content string) {
+		p := filepath.Join(dir, rel)
+		s.Require().NoError(os.MkdirAll(filepath.Dir(p), 0o755))
+		s.Require().NoError(os.WriteFile(p, []byte(content), 0o644))
+	}
+	write("manifest.json",
+		`{"package_type":"agent_group","name":"`+name+`","instruction":"tell stories","agents":["leader","editor"]}`)
+	write("agents/leader/manifest.json",
+		`{"package_type":"agent_template","name":"Leader","description":"lead","persona":{"dir":"."}}`)
+	write("agents/leader/AGENT.md", "# rules")
+	write("agents/leader/persona.md", "lead persona")
+	write("agents/editor/manifest.json",
+		`{"package_type":"agent_template","name":"Editor","description":"edits","persona":{"dir":"."}}`)
+	write("agents/editor/persona.md", "editor persona")
+	return dir
+}
+
+// newEnrichFixtureSpec 最小 leader/teammate 基座 spec（assembly_test 同款形态）。
+func newEnrichFixtureSpec() *atschema.TeamAgentSpec {
+	base := func() hschema.DeepAgentSpec {
+		spec := hschema.NewDeepAgentSpec()
+		spec.Rails = []hschema.RailSpec{{Type: "user.base"}}
+		return spec
+	}
+	return &atschema.TeamAgentSpec{
+		TeamName: "t-mat",
+		Leader:   atschema.LeaderSpec{MemberName: "leader", Persona: "team prompt"},
+		Agents:   map[string]hschema.DeepAgentSpec{"leader": base(), "teammate": base()},
+	}
 }

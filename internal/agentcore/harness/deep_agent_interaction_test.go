@@ -159,24 +159,21 @@ func TestInteractionPhase机_终止不可逆(t *testing.T) {
 	assert.Equal(t, hschema.InteractionPhaseTerminated, d.Phase())
 }
 
-// TestSyncExpertRoleAttachment_空实现占位 验证 ⤵️ #9.3 未移植分支的两条路径
-// Python: _sync_expert_role_attachment (L3267)
-func TestSyncExpertRoleAttachment_空实现占位(t *testing.T) {
+// TestSyncExpertRoleAttachment_无会话直接返回 无 Session/会话 id 时直接返回
+// （Python :3275-3282 的空 session_id 早退）。
+func TestSyncExpertRoleAttachment_无会话直接返回(t *testing.T) {
 	d := newTestDeepAgent()
 	d.ensureInteractionState()
 
-	// activeAgentTemplate 为 nil：与上游"会话无 expert_role 节"的清理分支等价
+	// activeAgentTemplate 为 nil 且无会话：不 panic、不写附件
 	d.syncExpertRoleAttachment(nil, nil)
 
-	// 非 nil：今天不可达，只告警不 panic（等待 9.3 回填）
 	d.SetActiveAgentTemplate("load-1", "专家A")
-	d.syncExpertRoleAttachment(nil, nil)
+	d.syncExpertRoleAttachment(nil, nil) // sessionID 空 → 早退
 	require.NotNil(t, d.activeAgentTemplate)
 	assert.Equal(t, "load-1", d.activeAgentTemplate.LoadID)
-	assert.Equal(t, "专家A", d.activeAgentTemplate.RoleName)
 
 	d.ClearActiveAgentTemplate()
-	assert.Nil(t, d.activeAgentTemplate)
 }
 
 // TestRoundBoundaryFrame_流契约 验证边界帧实现 stream.Schema 的三个方法
@@ -906,4 +903,67 @@ func TestSendInput_补排失败向上抛(t *testing.T) {
 		Inputs:    map[string]any{"query": "hi"},
 	})
 	require.ErrorIs(t, err, assert.AnError)
+}
+
+// ──────────────────────────── expert_role 附件两分支（15.16e 收口） ────────────────────────────
+
+// TestSyncExpertRoleAttachment_加载分支 activeAgentTemplate 非 nil → 写入
+// load 提示附件（runtime kind + source + role_name metadata）。
+// Python: _sync_expert_role_attachment 分支① (:3286-3298)
+func TestSyncExpertRoleAttachment_加载分支(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+	sess := session.NewSession(session.WithSessionID("sess-load"))
+
+	d.SetActiveAgentTemplate("load-1", "专家A")
+	d.syncExpertRoleAttachment(nil, sess)
+
+	// 附件存在且内容为 load 文案
+	found := d.attachments.Find("sess-load", expertRoleSectionName, expertRoleSource)
+	require.NotNil(t, found)
+	require.Contains(t, found.Content, "用户选择了专家A专家")
+	require.Equal(t, "专家A", found.Metadata["role_name"])
+
+	// 英文语言形态
+	d.ClearActiveAgentTemplate()
+	d2 := newTestDeepAgent()
+	d2.ensureInteractionState()
+	d2.attachments = d.attachments
+	d2.SetActiveAgentTemplate("load-2", "expert-a")
+	// 英文经 deepConfig.language 控制——这里验证 en 文案函数本身
+	require.Contains(t, expertRoleLoadContent("expert-a", "en"), "The user selected the expert-a expert")
+	require.Contains(t, expertRoleUnloadContent("expert-a", "en"), "The user cancelled the expert-a expert")
+}
+
+// TestSyncExpertRoleAttachment_卸载分支 activeAgentTemplate 为 nil 但会话已
+// 存在 expert_role 节 → 改写为 unload 降权文案。
+// Python: 分支② (:3300-3321)
+func TestSyncExpertRoleAttachment_卸载分支(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+	sess := session.NewSession(session.WithSessionID("sess-unload"))
+
+	// 预置一个 load 状态附件
+	d.SetActiveAgentTemplate("load-1", "专家A")
+	d.syncExpertRoleAttachment(nil, sess)
+	require.NotNil(t, d.attachments.Find("sess-unload", expertRoleSectionName, expertRoleSource))
+
+	// 清掉激活态 → sync 改写为 unload
+	d.ClearActiveAgentTemplate()
+	d.syncExpertRoleAttachment(nil, sess)
+	updated := d.attachments.Find("sess-unload", expertRoleSectionName, expertRoleSource)
+	require.NotNil(t, updated)
+	require.Contains(t, updated.Content, "用户取消了专家A专家选择")
+	require.Equal(t, "专家A", updated.Metadata["role_name"])
+}
+
+// TestSyncExpertRoleAttachment_无既有节静默返回 nil 模板且会话无 expert_role
+// 节 → 清理分支直接 return（Python :3305-3307）。
+func TestSyncExpertRoleAttachment_无既有节静默返回(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+	sess := session.NewSession(session.WithSessionID("sess-empty"))
+
+	d.syncExpertRoleAttachment(nil, sess) // 无激活态、无既有节 → 无动作
+	assert.Nil(t, d.attachments.Find("sess-empty", expertRoleSectionName, expertRoleSource))
 }
