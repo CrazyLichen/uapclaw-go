@@ -164,7 +164,6 @@ func TestParseToolCallArguments(t *testing.T) {
 	}
 }
 
-
 func TestTruncateString(t *testing.T) {
 	if truncateString("hello", 3) != "hel" {
 		t.Errorf("expected 'hel', got '%s'", truncateString("hello", 3))

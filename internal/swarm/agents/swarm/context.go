@@ -20,8 +20,8 @@
 package swarm
 
 import (
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"path/filepath"
 	"strings"
@@ -231,22 +231,22 @@ func NewSwarmBuildContext(p SwarmBuildContextParams) *SwarmBuildContext {
 // Python: to_seed (context.py:196-228)
 func (c *SwarmBuildContext) ToSeed() map[string]any {
 	seed := map[string]any{
-		"session_id":                  c.SessionID,
-		"request_id":                  c.RequestID,
-		"user_id":                     c.UserID,
-		"channel_id":                  c.ChannelID,
-		"channel":                     c.Channel,
-		"request_metadata":            c.RequestMetadata,
-		"mode":                        c.Mode,
-		"project_dir":                 c.ProjectDir,
-		"trusted_dirs":                nil,
-		"disable_teammate_worktree":   c.DisableTeammateWorktree,
-		"team_id":                     c.TeamID,
-		"team_ws_root":                c.TeamWsRoot,
-		"task_workspace_root":         c.TaskWorkspaceRoot,
-		"team_outputs_dir":            c.TeamOutputsDir,
-		"team_skill_visibility_path":  c.TeamSkillVisibilityPath,
-		"global_skills_dir":           c.GlobalSkillsDir,
+		"session_id":                 c.SessionID,
+		"request_id":                 c.RequestID,
+		"user_id":                    c.UserID,
+		"channel_id":                 c.ChannelID,
+		"channel":                    c.Channel,
+		"request_metadata":           c.RequestMetadata,
+		"mode":                       c.Mode,
+		"project_dir":                c.ProjectDir,
+		"trusted_dirs":               nil,
+		"disable_teammate_worktree":  c.DisableTeammateWorktree,
+		"team_id":                    c.TeamID,
+		"team_ws_root":               c.TeamWsRoot,
+		"task_workspace_root":        c.TaskWorkspaceRoot,
+		"team_outputs_dir":           c.TeamOutputsDir,
+		"team_skill_visibility_path": c.TeamSkillVisibilityPath,
+		"global_skills_dir":          c.GlobalSkillsDir,
 	}
 	// Python: list(self.trusted_dirs) if self.trusted_dirs else None
 	if len(c.TrustedDirs) > 0 {

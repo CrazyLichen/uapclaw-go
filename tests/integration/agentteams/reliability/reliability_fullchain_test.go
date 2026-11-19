@@ -180,7 +180,8 @@ type fullChainHost struct {
 	delivered []string
 }
 
-func (h *fullChainHost) IsAgentReady() bool { return true }
+func (h *fullChainHost) AutoStartMember(_ context.Context, _ string) bool { return true }
+func (h *fullChainHost) IsAgentReady() bool                               { return true }
 func (h *fullChainHost) IsAgentRunning() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -195,12 +196,10 @@ func (h *fullChainHost) ResumeInterrupt(context.Context, *interaction.Interactiv
 func (h *fullChainHost) AnnounceTaskRevisions(context.Context) error            { return nil }
 func (h *fullChainHost) ShutdownSelf(context.Context) error                     { return nil }
 func (h *fullChainHost) ConcludeCompletedRound(context.Context, int, int) error { return nil }
-func (h *fullChainHost) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
+func (h *fullChainHost) DeliverInput(_ context.Context, content string, _ bool, runContext *agentinterfaces.RunContext) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if s, ok := content.(string); ok {
-		h.delivered = append(h.delivered, s)
-	}
+	h.delivered = append(h.delivered, content)
 	return nil
 }
 
@@ -216,6 +215,9 @@ type fullChainBlueprint struct{}
 
 func (f *fullChainBlueprint) Role() schema.TeamRole        { return schema.TeamRoleLeader }
 func (f *fullChainBlueprint) DispatcherMemberName() string { return "leader" }
+func (f *fullChainBlueprint) DispatcherSpec() *schema.TeamAgentSpec {
+	return nil
+}
 func (f *fullChainBlueprint) DispatcherReliability() *core.ReliabilityConfig {
 	return fullChainReliabilityCfg()
 }

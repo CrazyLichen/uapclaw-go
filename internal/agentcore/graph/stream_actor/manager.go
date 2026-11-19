@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -40,11 +40,11 @@ type ActorManager struct {
 	// streamsTransform 变换器集合
 	streamsTransform *StreamTransform
 	// activeProducerIDs 本轮已活跃的 producer 能力
-	activeProducerIDs map[string]map[components.ComponentAbility]bool
+	activeProducerIDs map[string]map[ability.ComponentAbility]bool
 	// consumerDict 反向图：consumer → [producers]
 	consumerDict map[string][]string
 	// producerAbilities producer 能力集（∩ {STREAM, TRANSFORM}）
-	producerAbilities map[string]map[components.ComponentAbility]bool
+	producerAbilities map[string]map[ability.ComponentAbility]bool
 	// streamSourceGroups consumer 源组
 	streamSourceGroups map[string][][]string
 	// workflowSession 会话依赖面
@@ -85,9 +85,9 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 		streamEdges:        spec.StreamEdges,
 		streams:            map[string]*StreamActor{},
 		streamsTransform:   &StreamTransform{},
-		activeProducerIDs:  map[string]map[components.ComponentAbility]bool{},
+		activeProducerIDs:  map[string]map[ability.ComponentAbility]bool{},
 		consumerDict:       buildReverseGraph(spec.StreamEdges),
-		producerAbilities:  map[string]map[components.ComponentAbility]bool{},
+		producerAbilities:  map[string]map[ability.ComponentAbility]bool{},
 		streamSourceGroups: map[string][][]string{},
 		workflowSession:    session,
 		subGraph:           subGraph,
@@ -103,10 +103,10 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 	// Python:37-56 逐消费者建 actor
 	for consumerID, producerIDs := range m.consumerDict {
 		consumerSpec := spec.CompConfigs[consumerID]
-		var consumerAbilities []components.ComponentAbility
+		var consumerAbilities []ability.ComponentAbility
 		if consumerSpec != nil {
 			for _, ab := range consumerSpec.Abilities {
-				if ab == components.ComponentAbilityCollect || ab == components.ComponentAbilityTransform {
+				if ab == ability.ComponentAbilityCollect || ab == ability.ComponentAbilityTransform {
 					consumerAbilities = append(consumerAbilities, ab)
 				}
 			}
@@ -115,12 +115,12 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 		for _, producerID := range producerIDs {
 			abilities := m.producerAbilities[producerID]
 			if abilities == nil {
-				abilities = map[components.ComponentAbility]bool{}
+				abilities = map[ability.ComponentAbility]bool{}
 			}
 			producerSpec := spec.CompConfigs[producerID]
 			if producerSpec != nil {
 				for _, ab := range producerSpec.Abilities {
-					if ab == components.ComponentAbilityStream || ab == components.ComponentAbilityTransform {
+					if ab == ability.ComponentAbilityStream || ab == ability.ComponentAbilityTransform {
 						abilities[ab] = true
 						sources[producerID+"-"+ab.Name()] = true
 					}
@@ -168,11 +168,11 @@ func (m *ActorManager) SubWorkflowStream() (*stream.AsyncStreamQueue, error) {
 }
 
 // ActiveProduceAbility 登记活跃能力（Python:66-69）
-func (m *ActorManager) ActiveProduceAbility(producerID string, ability components.ComponentAbility) {
+func (m *ActorManager) ActiveProduceAbility(producerID string, ab ability.ComponentAbility) {
 	if m.activeProducerIDs[producerID] == nil {
-		m.activeProducerIDs[producerID] = map[components.ComponentAbility]bool{}
+		m.activeProducerIDs[producerID] = map[ability.ComponentAbility]bool{}
 	}
-	m.activeProducerIDs[producerID][ability] = true
+	m.activeProducerIDs[producerID][ab] = true
 }
 
 // MarkProducerDone 写回 finished_stream_nodes（Python:71-76，幂等 append）
@@ -234,13 +234,13 @@ func (m *ActorManager) StreamActor(consumerID string) *StreamActor {
 }
 
 // ActiveAbilities 取 producer 已活跃能力（观测/测试辅助）
-func (m *ActorManager) ActiveAbilities(producerID string) map[components.ComponentAbility]bool {
+func (m *ActorManager) ActiveAbilities(producerID string) map[ability.ComponentAbility]bool {
 	return m.activeProducerIDs[producerID]
 }
 
 // Produce 路由帧到 stream_edges 指定的消费者（Python:106-120 步骤一比一）。
 func (m *ActorManager) Produce(ctx context.Context, producerID string, messageContent any,
-	ability components.ComponentAbility, firstFrame bool) error {
+	ability ability.ComponentAbility, firstFrame bool) error {
 	m.ActiveProduceAbility(producerID, ability)
 	consumerIDs := m.streamEdges[producerID]
 	if len(consumerIDs) > 0 {
@@ -265,13 +265,13 @@ func (m *ActorManager) Produce(ctx context.Context, producerID string, messageCo
 }
 
 // EndMessage 发 END 哨兵（Python:122-124）
-func (m *ActorManager) EndMessage(ctx context.Context, producerID string, ability components.ComponentAbility) error {
+func (m *ActorManager) EndMessage(ctx context.Context, producerID string, ability ability.ComponentAbility) error {
 	return m.Produce(ctx, producerID, fmt.Sprintf("END_%s", producerID), ability, false)
 }
 
 // Consume 注册 gen 树并启动 processor.run（Python:126-142 步骤一比一 + 偏差 D1 启动点）。
 // 尾部补发：finished_stream_nodes 中已完成且无活跃能力的 producer → EndMessage 补发。
-func (m *ActorManager) Consume(ctx context.Context, consumerID string, ability components.ComponentAbility,
+func (m *ActorManager) Consume(ctx context.Context, consumerID string, ability ability.ComponentAbility,
 	schema map[string]any, streamCallback func(map[string]any)) (map[string]any, error) {
 	actor := m.getActor(consumerID)
 	if actor == nil {
@@ -370,11 +370,11 @@ func sourceKeyMatchesProducer(sourceKey, producerID string) bool {
 }
 
 // splitSourceKey 源键反解 (producerID, ability)；能力名未知时报错（Python:157-163 ValueError）
-func splitSourceKey(sourceKey string) (string, components.ComponentAbility, error) {
+func splitSourceKey(sourceKey string) (string, ability.ComponentAbility, error) {
 	for i := len(sourceKey) - 1; i >= 0; i-- {
 		if sourceKey[i] == '-' {
 			producerID, abilityName := sourceKey[:i], sourceKey[i+1:]
-			for _, ab := range components.AbilityValues() {
+			for _, ab := range ability.AbilityValues() {
 				if ab.Name() == abilityName {
 					return producerID, ab, nil
 				}

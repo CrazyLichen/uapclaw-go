@@ -40,10 +40,10 @@ func init() {
 			}
 			return &agentface.Agent{Deep: agent, Release: release}, nil
 		},
-		InvokeAgent:          invokeFn,
-		ExtractText:          ExtractAgentText,
-		PackageWriteAllowed:  func(path string, declaredPaths []string) bool { return PackageWriteAllowed(path, declaredPaths, false) },
-		HostReadRoots:        SupportedHostReadRoots,
+		InvokeAgent:         invokeFn,
+		ExtractText:         ExtractAgentText,
+		PackageWriteAllowed: func(path string, declaredPaths []string) bool { return PackageWriteAllowed(path, declaredPaths, false) },
+		HostReadRoots:       SupportedHostReadRoots,
 		CreateVerificationRepairAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (*agentface.Agent, error) {
 			agent, err := CreateVerificationRepairAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
@@ -100,9 +100,6 @@ type StructuredOutputExhaustedError = memberoptimizer.StructuredOutputExhaustedE
 
 // StructuredInvokeParams 结构化调用参数。Go 类型别名指回父包定义（spec §4 D-c1-1）。
 type StructuredInvokeParams = memberoptimizer.StructuredInvokeParams
-
-
-
 
 // fencedMappingRE 代码围栏内映射提取。Python: output.py:16-18 _FENCED_MAPPING_RE。
 var fencedMappingRE = regexp.MustCompile("(?is)```(?:json|yaml|yml)?\\s*(\\{[\\s\\S]*?\\})\\s*```")

@@ -45,7 +45,7 @@ type MultimodalImageRail struct {
 	// Python: _window_mutators 的替换式安装；Go 侧由 rail 持有（D-23.8-3）。
 	// imageMu 保护其并发读写（BeforeModelCall 写、窗口组装点读）。
 	imageMutator prompt.MultimodalImageWindowMutator
-	imageMu       sync.RWMutex
+	imageMu      sync.RWMutex
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

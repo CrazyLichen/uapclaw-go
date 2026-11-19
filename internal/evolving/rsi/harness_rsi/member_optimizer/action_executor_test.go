@@ -105,8 +105,8 @@ func TestSanitizeRuntimeSemanticText_标识符剥离(t *testing.T) {
 func TestRuntimeContractProjection_公共边界(t *testing.T) {
 	action := MemberOptimizationAction{Constraints: map[string]any{
 		"optimization_contracts": []any{map[string]any{
-			"public_trigger": []any{map[string]any{"task": "fix the parser"}},
-			"required_behavior": "handle nested inputs",
+			"public_trigger":     []any{map[string]any{"task": "fix the parser"}},
+			"required_behavior":  "handle nested inputs",
 			"forbidden_behavior": []any{"skip validation"},
 			"decision_contract": map[string]any{
 				"wrong_decision": "a", "causal_distinction": "b",
@@ -453,7 +453,7 @@ func TestMergeSubwave_合并与登记簿同步(t *testing.T) {
 	}
 	merge := MergeSubwave(subwaveMergeRequest{
 		role: "solver", waveIndex: 1, subwaveIndex: 0,
-		results: []*MemberActionExecutionResult{result},
+		results:        []*MemberActionExecutionResult{result},
 		integrationDir: integration, runDir: runDir,
 	})
 	require.Equal(t, "merged", merge.Status)

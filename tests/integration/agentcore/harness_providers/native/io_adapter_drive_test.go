@@ -3,8 +3,6 @@
 package native
 
 import (
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-
 	"context"
 	"fmt"
 	"testing"
@@ -173,7 +171,7 @@ func (s *TestNativeAdapterDriveSuite) adapterDrive(
 
 	input, err := hp.NewHarnessInput("go", hp.JsonObject{})
 	s.Require().NoError(err)
-	_, err = adapter.Send(ctx, input, false, nil)
+	_, err = adapter.Send(ctx, input, false)
 	s.Require().NoError(err, "adapter send 失败")
 
 	asked := []sessionstream.OutputSchema{}
@@ -192,7 +190,7 @@ func (s *TestNativeAdapterDriveSuite) adapterDrive(
 		case interaction.InteractionType:
 			asked = append(asked, schema)
 			s.Require().LessOrEqual(len(asked), 2, "the agent keeps asking")
-			_, sendErr := adapter.Send(ctx, answer(schema), false, nil)
+			_, sendErr := adapter.Send(ctx, answer(schema), false)
 			s.Require().NoError(sendErr, "应答应命中挂起交互")
 		case harness_providers.TurnLifecycleChunkType:
 			// Python: TURN_LIFECYCLE 且 kind != "started" → return

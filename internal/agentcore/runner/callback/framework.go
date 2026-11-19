@@ -53,6 +53,8 @@ type CallbackFramework struct {
 	agentTransformIO map[GlobalAgentEventType]*agentTransformIOEntry
 	// toolTransformIO Tool 层 IO 变换回调注册表，键为 inputEvent 或 outputEvent
 	toolTransformIO map[ToolCallEventType]*toolTransformIOEntry
+	// workflowTransformIO Workflow 层 IO 变换回调注册表，键为 inputEvent 或 outputEvent
+	workflowTransformIO map[WorkflowEventType]*workflowTransformIOEntry
 	// workflowCallbacks 工作流回调函数注册表
 	workflowCallbacks map[WorkflowEventType][]*CallbackInfo[WorkflowCallbackFunc]
 	// agentTeamCallbacks AgentTeam 回调函数注册表
@@ -106,6 +108,13 @@ type toolTransformIOEntry struct {
 	outputFn TransformToolIOOutputFunc
 }
 
+type workflowTransformIOEntry struct {
+	// inputFn 输入变换函数
+	inputFn TransformWorkflowIOInputFunc
+	// outputFn 输出变换函数
+	outputFn TransformWorkflowIOOutputFunc
+}
+
 // HookFunc 钩子函数类型。
 type HookFunc func(ctx context.Context, event string, data any)
 
@@ -157,6 +166,7 @@ func NewCallbackFramework() *CallbackFramework {
 		llmTransformIO:       make(map[LLMCallEventType]*llmTransformIOEntry),
 		agentTransformIO:     make(map[GlobalAgentEventType]*agentTransformIOEntry),
 		toolTransformIO:      make(map[ToolCallEventType]*toolTransformIOEntry),
+		workflowTransformIO:  make(map[WorkflowEventType]*workflowTransformIOEntry),
 		workflowCallbacks:    make(map[WorkflowEventType][]*CallbackInfo[WorkflowCallbackFunc]),
 		agentTeamCallbacks:   make(map[AgentTeamEventType][]*CallbackInfo[AgentTeamCallbackFunc]),
 		retrievalCallbacks:   make(map[RetrievalEventType][]*CallbackInfo[RetrievalCallbackFunc]),
@@ -738,6 +748,46 @@ func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event Too
 func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any {
 	fw.mu.RLock()
 	entry, ok := fw.toolTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.outputFn == nil {
+		return output
+	}
+	return entry.outputFn(ctx, event, output)
+}
+
+// RegisterWorkflowTransformIO 注册 Workflow 组件调用前后的输入输出转换函数。
+// Python: transform_io(input_event=..., output_event=...)（component.py:32-35）
+func (fw *CallbackFramework) RegisterWorkflowTransformIO(
+	inputEvent WorkflowEventType,
+	outputEvent WorkflowEventType,
+	inputFn TransformWorkflowIOInputFunc,
+	outputFn TransformWorkflowIOOutputFunc,
+) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	entry := &workflowTransformIOEntry{
+		inputFn:  inputFn,
+		outputFn: outputFn,
+	}
+	fw.workflowTransformIO[inputEvent] = entry
+	fw.workflowTransformIO[outputEvent] = entry
+}
+
+// TransformWorkflowIOInput 用已注册的转换函数加工组件调用的输入（无注册原样返回）。
+func (fw *CallbackFramework) TransformWorkflowIOInput(ctx context.Context, event WorkflowEventType, input any) any {
+	fw.mu.RLock()
+	entry, ok := fw.workflowTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.inputFn == nil {
+		return input
+	}
+	return entry.inputFn(ctx, event, input)
+}
+
+// TransformWorkflowIOOutput 用已注册的转换函数加工组件调用的输出（无注册原样返回）。
+func (fw *CallbackFramework) TransformWorkflowIOOutput(ctx context.Context, event WorkflowEventType, output any) any {
+	fw.mu.RLock()
+	entry, ok := fw.workflowTransformIO[event]
 	fw.mu.RUnlock()
 	if !ok || entry.outputFn == nil {
 		return output

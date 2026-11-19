@@ -10,7 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
@@ -47,7 +47,7 @@ type StreamPayload struct {
 	// Message 帧内容（单键 dict：{producer_id: content}）
 	Message map[string]any
 	// SourceAbility 产出方的组件能力
-	SourceAbility components.ComponentAbility
+	SourceAbility ability.ComponentAbility
 }
 
 // StreamProcessor 单能力分发器：主队列收帧，按 schema 叶子路径分发到注册的路径队列。
@@ -55,7 +55,7 @@ type StreamPayload struct {
 type StreamProcessor struct {
 	nodeID string
 	// ability 所属能力（日志用，Go 侧承载 Python run(ability) 的入参）
-	ability components.ComponentAbility
+	ability ability.ComponentAbility
 	// queue 主队列（D2 无界，send 永不阻塞）
 	queue *payloadQueue
 	// mu 保护 processorQueues（防 consume 之后再次 generator 注册与 run 并发，D1 伴生防御）
@@ -76,7 +76,7 @@ type StreamProcessor struct {
 // Python: base.py StreamActor。每流式消费者节点一个，ActorManager 持有。
 type StreamActor struct {
 	// processors ability → processor（构造期按 consumer abilities ∩ {COLLECT, TRANSFORM} 建满）
-	processors map[components.ComponentAbility]*StreamProcessor
+	processors map[ability.ComponentAbility]*StreamProcessor
 	// mu 保护 task/taskErr/running 状态
 	mu sync.Mutex
 	// taskCtx 消费者执行体任务 ctx（首帧创建，shutdown 取消）
@@ -177,9 +177,9 @@ func NewStreamProcessor(nodeID string, sourceGroups [][]string, timeout time.Dur
 
 // NewStreamActor 构造（对齐 Python __init__：每 ability 建一个 processor；
 // abilities 为空时不建 processor，processor 可由测试/ActorManager 显式注入）。
-func NewStreamActor(nodeID string, vertex StreamConsumer, abilities []components.ComponentAbility,
+func NewStreamActor(nodeID string, vertex StreamConsumer, abilities []ability.ComponentAbility,
 	sourceGroups [][]string, timeout time.Duration) *StreamActor {
-	ps := map[components.ComponentAbility]*StreamProcessor{}
+	ps := map[ability.ComponentAbility]*StreamProcessor{}
 	for _, ab := range abilities {
 		p := NewStreamProcessor(nodeID, sourceGroups, timeout)
 		p.ability = ab
@@ -191,7 +191,7 @@ func NewStreamActor(nodeID string, vertex StreamConsumer, abilities []components
 // Send 接收帧：未 handle 丢弃 → 任务未启动时首帧拉起（等 event）→ 广播全部 processor。
 // Python: base.py send(64-104) 一比一；偏差 D1：此处不启动 processor.run（挪至 consume 注册后）。
 func (a *StreamActor) Send(ctx context.Context, message map[string]any,
-	sourceAbility components.ComponentAbility, firstFrame bool, producerID string) error {
+	sourceAbility ability.ComponentAbility, firstFrame bool, producerID string) error {
 	// Python send 第一分支：未 handle 丢弃（base.py:69-74）
 	if !a.vertex.ShouldHandleMessage() {
 		logger.Warn(logComponent).
@@ -281,7 +281,7 @@ func (a *StreamActor) Send(ctx context.Context, message map[string]any,
 }
 
 // Generator 按 ability 取 processor 注册 gen 树（Python generator(105-108)）
-func (a *StreamActor) Generator(ability components.ComponentAbility, schema map[string]any,
+func (a *StreamActor) Generator(ability ability.ComponentAbility, schema map[string]any,
 	streamCallback func(map[string]any)) map[string]any {
 	p := a.processors[ability]
 	if p == nil {
@@ -372,7 +372,7 @@ func (p *StreamProcessor) MainQueueLen() int {
 }
 
 // Processor 取 ability 对应 processor（观测/测试辅助）
-func (a *StreamActor) Processor(ability components.ComponentAbility) *StreamProcessor {
+func (a *StreamActor) Processor(ability ability.ComponentAbility) *StreamProcessor {
 	return a.processors[ability]
 }
 
@@ -380,7 +380,7 @@ func (a *StreamActor) Processor(ability components.ComponentAbility) *StreamProc
 // Python: base.py run(ability) 170-195 步骤一比一：
 // 取帧 → end 帧关流判定（记录 handle_map、按 source_path_map 关路径、全组满足关全队列）
 // → 非帧关非活跃组源 + 按 r_path 摘值投路径队列 → 全组满足退出。
-func (p *StreamProcessor) Run(ctx context.Context, ability components.ComponentAbility) {
+func (p *StreamProcessor) Run(ctx context.Context, ability ability.ComponentAbility) {
 	handleMap := map[string]bool{}
 	sourcePathMap := map[string]map[string]bool{}
 	for {

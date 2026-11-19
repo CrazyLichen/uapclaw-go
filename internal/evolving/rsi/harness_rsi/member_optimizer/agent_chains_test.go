@@ -1,11 +1,11 @@
 package memberoptimizer
 
 import (
-	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
-	"strings"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -183,7 +183,6 @@ func TestExecutorAgentExecuteAction_桥未注册拒绝(t *testing.T) {
 	require.Equal(t, "failed", result["status"])
 	require.Contains(t, result["error"], "agents bridge not registered")
 }
-
 
 func TestExportWrappers_转发链(t *testing.T) {
 	// BindImmutableHypotheses / AnnotateActionBundles 导出包装（c1 planner 集成用）

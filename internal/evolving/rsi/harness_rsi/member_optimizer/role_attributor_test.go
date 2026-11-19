@@ -1,11 +1,11 @@
 package memberoptimizer
 
 import (
-	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"os"
 	"path/filepath"
 	"strings"

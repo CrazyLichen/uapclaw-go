@@ -71,7 +71,7 @@ func (s *MidRoundAnnounceSuite) TestI07_首轮不再等门控() {
 	// 启动即 IDLE（不是 RUNNING），第一条 Send 应立刻开轮
 	s.Equal(harnessprotocol.HarnessStateIdle, h.State())
 
-	s.NoError(h.Send(s.Ctx, "开始工作", false))
+	s.NoError(h.Send(s.Ctx, "开始工作", false, nil))
 
 	// 关键断言：轮次必须真的开起来（旧门控会在这里永久阻塞）。
 	// 不断言"最终回到 IDLE"——那取决于 MockLLM 响应队列是否够用，

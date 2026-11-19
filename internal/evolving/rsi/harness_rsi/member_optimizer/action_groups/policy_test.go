@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func TestActionPolicyPrompt_模板逐字(t *testing.T) {
@@ -93,13 +92,17 @@ func TestValidateActionPolicy_错误矩阵(t *testing.T) {
 	require.Contains(t, check.Errors, "install_ref must be empty")
 	// skill/search 必填 candidate_query
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "skill"; m["operation"] = "search"; m["target_path"] = "skills/"
+		m["action_group"] = "skill"
+		m["operation"] = "search"
+		m["target_path"] = "skills/"
 		m["declared_write_paths"] = []any{"skills/", "skills/skills.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "skill/search requires a non-empty candidate_query")
 	// skill/search 声明联锁
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "skill"; m["operation"] = "search"; m["candidate_query"] = "find skill"
+		m["action_group"] = "skill"
+		m["operation"] = "search"
+		m["candidate_query"] = "find skill"
 		m["target_path"] = "skills/"
 		m["declared_write_paths"] = []any{"skills/"}
 	}), nil)
@@ -111,26 +114,32 @@ func TestValidateActionPolicy_错误矩阵(t *testing.T) {
 	require.Contains(t, check.Errors, "config actions may only target and declare runtime.yaml")
 	// prompt 保护
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "prompt"; m["operation"] = "remove"; m["target_path"] = "identity.md"
+		m["action_group"] = "prompt"
+		m["operation"] = "remove"
+		m["target_path"] = "identity.md"
 		m["declared_write_paths"] = []any{"identity.md"}
 	}), nil)
 	require.Contains(t, check.Errors, "prompt/remove cannot delete identity.md or soul.md")
 	// prompt/add 只许扩展段
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "prompt"; m["operation"] = "add"; m["target_path"] = "identity.md"
+		m["action_group"] = "prompt"
+		m["operation"] = "add"
+		m["target_path"] = "identity.md"
 		m["declared_write_paths"] = []any{"identity.md"}
 	}), nil)
 	require.Contains(t, check.Errors, "prompt/add may only create extension prompt sections")
 	// prompt 段文件缺 section_name
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "prompt"; m["operation"] = "add"
+		m["action_group"] = "prompt"
+		m["operation"] = "add"
 		m["target_path"] = "prompt_sections/files/x.md"
 		m["declared_write_paths"] = []any{"prompt_sections/files/x.md", "prompt_sections/sections.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "prompt section actions require constraints.section_name")
 	// prompt 段文件缺 sections.yaml 联锁
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "prompt"; m["operation"] = "add"
+		m["action_group"] = "prompt"
+		m["operation"] = "add"
 		m["target_path"] = "prompt_sections/files/x.md"
 		m["declared_write_paths"] = []any{"prompt_sections/files/x.md"}
 		m["constraints"] = map[string]any{"section_name": "x"}
@@ -138,32 +147,42 @@ func TestValidateActionPolicy_错误矩阵(t *testing.T) {
 	require.Contains(t, check.Errors, "prompt section file changes must also declare prompt_sections/sections.yaml so the file can be mounted")
 	// skill/add 路径形态
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "skill"; m["operation"] = "add"; m["target_path"] = "skills/My Skill/SKILL.md"
+		m["action_group"] = "skill"
+		m["operation"] = "add"
+		m["target_path"] = "skills/My Skill/SKILL.md"
 		m["declared_write_paths"] = []any{"skills/My Skill/SKILL.md", "skills/skills.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "skill/add target_path must be skills/<snake_name>/SKILL.md")
 	// tool/add 缺 class_name
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "tool"; m["operation"] = "add"; m["target_path"] = "tools/calc.py"
+		m["action_group"] = "tool"
+		m["operation"] = "add"
+		m["target_path"] = "tools/calc.py"
 		m["declared_write_paths"] = []any{"tools/calc.py", "tools/tools.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "tool/add requires constraints.class_name")
 	// tool/remove 保护 manifest
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "tool"; m["operation"] = "remove"; m["target_path"] = "tools/tools.yaml"
+		m["action_group"] = "tool"
+		m["operation"] = "remove"
+		m["target_path"] = "tools/tools.yaml"
 		m["declared_write_paths"] = []any{"tools/tools.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "tool/remove must target a package-local tool, not tools/tools.yaml")
 	// rail/add 缺 rails.yaml 联锁
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "rail"; m["operation"] = "add"; m["target_path"] = "rails/guard.py"
+		m["action_group"] = "rail"
+		m["operation"] = "add"
+		m["target_path"] = "rails/guard.py"
 		m["declared_write_paths"] = []any{"rails/guard.py"}
 		m["constraints"] = map[string]any{"class_name": "Guard"}
 	}), nil)
 	require.Contains(t, check.Errors, "rail/add must declare rails/rails.yaml")
 	// rail/remove 保护 manifest
 	check = ValidateActionPolicy(mk(func(m map[string]any) {
-		m["action_group"] = "rail"; m["operation"] = "remove"; m["target_path"] = "rails/rails.yaml"
+		m["action_group"] = "rail"
+		m["operation"] = "remove"
+		m["target_path"] = "rails/rails.yaml"
 		m["declared_write_paths"] = []any{"rails/rails.yaml"}
 	}), nil)
 	require.Contains(t, check.Errors, "rail/remove must target a package-local rail, not rails/rails.yaml")

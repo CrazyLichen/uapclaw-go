@@ -2,36 +2,26 @@ package components
 
 import "testing"
 
-// TestComponentAbility_NameDesc 四成员的 Name/Desc 与 Python 元组全量对齐
-// Python: components/base.py INVOKE=("invoke","batch in, batch out") 等
-func TestComponentAbility_NameDesc(t *testing.T) {
-	cases := []struct {
-		ability ComponentAbility
-		name    string
-		desc    string
-	}{
-		{ComponentAbilityInvoke, "invoke", "batch in, batch out"},
-		{ComponentAbilityStream, "stream", "batch in, stream out"},
-		{ComponentAbilityCollect, "collect", "stream in, batch out"},
-		{ComponentAbilityTransform, "transform", "stream in, stream out"},
-	}
-	for _, c := range cases {
-		if got := c.ability.Name(); got != c.name {
-			t.Errorf("Name() = %q, want %q", got, c.name)
-		}
-		if got := c.ability.Desc(); got != c.desc {
-			t.Errorf("Desc() = %q, want %q", got, c.desc)
-		}
+// TestWorkflowComponentMetadata_字段 验证元数据结构字段可读写。
+func TestWorkflowComponentMetadata_字段(t *testing.T) {
+	m := WorkflowComponentMetadata{NodeID: "n1", NodeType: "End", NodeName: "结束"}
+	if m.NodeID != "n1" || m.NodeType != "End" || m.NodeName != "结束" {
+		t.Fatalf("字段读写不符: %+v", m)
 	}
 }
 
-// TestComponentAbility_未知值 未知成员返回空串（Go 无 Enum ValueError 对应物，空串承载）
-func TestComponentAbility_未知值(t *testing.T) {
-	var unknown ComponentAbility = 999
-	if got := unknown.Name(); got != "" {
-		t.Errorf("未知值 Name() = %q, want 空", got)
+// TestComponentConfig_默认 验证配置零值 Metadata 为 nil。
+func TestComponentConfig_默认(t *testing.T) {
+	c := ComponentConfig{}
+	if c.Metadata != nil {
+		t.Fatalf("零值 Metadata 应为 nil: %+v", c)
 	}
-	if got := unknown.Desc(); got != "" {
-		t.Errorf("未知值 Desc() = %q, want 空", got)
+}
+
+// TestComponentState_默认 验证状态结构零值可用。
+func TestComponentState_默认(t *testing.T) {
+	s := ComponentState{CompID: "c1"}
+	if s.CompID != "c1" || s.Status != nil {
+		t.Fatalf("状态字段不符: %+v", s)
 	}
 }

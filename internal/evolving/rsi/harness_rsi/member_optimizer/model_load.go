@@ -96,4 +96,3 @@ func LoadMemberOptimizerModel(modelConfigRef string) (*BudgetedRsiModel, error) 
 	}
 	return model, nil
 }
-

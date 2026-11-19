@@ -14,9 +14,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/action_groups"
-	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -110,14 +110,14 @@ type harnessRefsWriteRequest struct {
 // MemberOptimizer member harness 优化管线编排门面。
 // Python: optimizer.py:116-157 MemberOptimizer。
 type MemberOptimizer struct {
-	config                  *MemberOptimizerConfig
-	actionGroupConfigPaths  []string
-	roleAttributor          *RoleAttributor
-	mechanismAttributor     *MechanismAttributor
-	memberSelector          selectorLike
-	actionPlanner           *MemberActionPlanner
-	actionExecutor          *MemberActionExecutor
-	verifier                *HarnessChangeVerifier
+	config                 *MemberOptimizerConfig
+	actionGroupConfigPaths []string
+	roleAttributor         *RoleAttributor
+	mechanismAttributor    *MechanismAttributor
+	memberSelector         selectorLike
+	actionPlanner          *MemberActionPlanner
+	actionExecutor         *MemberActionExecutor
+	verifier               *HarnessChangeVerifier
 }
 
 // selectorLike 选择器接口（注入替身用）。
@@ -332,8 +332,8 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 			EvalRef: &evalRef, TeamIssues: teamIssues, CandidateRoles: candidateRoles,
 			ModelConfigRef: m.config.ModelConfigRef, AttributionRetryLimit: m.config.AttributionRetryLimit,
 			MaxCasesPerIssue: m.config.MaxCasesPerIssue, MaxTraceChars: m.config.MaxTraceExcerptChars,
-			MaxResultChars: m.config.MaxResultExcerptChars,
-			AgentWorkspace: filepath.Join(runDir, "stage_workspaces", "role_attribution"),
+			MaxResultChars:  m.config.MaxResultExcerptChars,
+			AgentWorkspace:  filepath.Join(runDir, "stage_workspaces", "role_attribution"),
 			AgentSkillsDirs: m.config.AgentSkillsDirs,
 		})
 		if err != nil {
@@ -347,8 +347,8 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 			RoleAttributionReport: roleAttrReport, EvalRef: &evalRef, CandidateRoles: candidateRoles,
 			ModelConfigRef: m.config.ModelConfigRef, AttributionRetryLimit: m.config.AttributionRetryLimit,
 			MaxCasesPerIssue: m.config.MaxCasesPerIssue, MaxTraceChars: m.config.MaxTraceExcerptChars,
-			MaxResultChars: m.config.MaxResultExcerptChars,
-			AgentWorkspace: filepath.Join(runDir, "stage_workspaces", "mechanism_attribution"),
+			MaxResultChars:  m.config.MaxResultExcerptChars,
+			AgentWorkspace:  filepath.Join(runDir, "stage_workspaces", "mechanism_attribution"),
 			AgentSkillsDirs: m.config.AgentSkillsDirs,
 		})
 		if err != nil {
@@ -363,9 +363,9 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 	if len(teamIssues) == 0 {
 		return m.writeNoopArtifact(evalRefPath, analysisResultPath, harnessRefsPath, outputDir, noopParams{
 			status: "no_issues", runDir: runDir,
-			roleAttrPath: filepath.Join(runDir, "role_attribution.yaml"),
+			roleAttrPath:      filepath.Join(runDir, "role_attribution.yaml"),
 			mechanismAttrPath: filepath.Join(runDir, "mechanism_attribution.yaml"),
-			deferPublish: params.DeferPublish,
+			deferPublish:      params.DeferPublish,
 		})
 	}
 
@@ -386,10 +386,10 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 	if len(selectionReport.Targets) == 0 {
 		return m.writeNoopArtifact(evalRefPath, analysisResultPath, harnessRefsPath, outputDir, noopParams{
 			status: "no_targets", runDir: runDir,
-			roleAttrPath: filepath.Join(runDir, "role_attribution.yaml"),
+			roleAttrPath:      filepath.Join(runDir, "role_attribution.yaml"),
 			mechanismAttrPath: filepath.Join(runDir, "mechanism_attribution.yaml"),
-			selectionPath: selectionPath,
-			deferPublish: params.DeferPublish,
+			selectionPath:     selectionPath,
+			deferPublish:      params.DeferPublish,
 		})
 	}
 
@@ -402,8 +402,8 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 		}
 	}
 	plan, planErr := m.actionPlanner.Plan(ctx, PlanParams{
-		Targets: selectionReport.Targets,
-		RoleAttributionReport: roleAttrReport,
+		Targets:                    selectionReport.Targets,
+		RoleAttributionReport:      roleAttrReport,
 		MechanismAttributionReport: mechanismAttrReport,
 		ActionDefinitions:          actionDefinitions,
 		ModelConfigRef:             m.config.ModelConfigRef,
@@ -419,12 +419,12 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 	})
 	if planErr != nil {
 		details := map[string]any{
-			"selection_path":         selectionPath,
-			"role_attribution_path":  filepath.Join(runDir, "role_attribution.yaml"),
+			"selection_path":             selectionPath,
+			"role_attribution_path":      filepath.Join(runDir, "role_attribution.yaml"),
 			"mechanism_attribution_path": filepath.Join(runDir, "mechanism_attribution.yaml"),
-			"planning_workspace":     planningWorkspace,
-			"selected_roles":         targetRoles(selectionReport),
-			"selected_issue_ids":     targetIssueIDs(selectionReport),
+			"planning_workspace":         planningWorkspace,
+			"selected_roles":             targetRoles(selectionReport),
+			"selected_issue_ids":         targetIssueIDs(selectionReport),
 		}
 		_ = writeStageError(filepath.Join(runDir, "action_planning_error.json"), "action_planning", planErr, details)
 		if isActionPlanRejection(planErr) {
@@ -432,7 +432,7 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 			roleResults := map[string]RoleResult{}
 			for _, target := range selectionReport.Targets {
 				roleResults[target.Role] = RoleResult{
-					Status: "skipped",
+					Status:               "skipped",
 					BeforeHarnessRefPath: target.HarnessRefPath,
 					AfterHarnessRefPath:  target.HarnessRefPath,
 					VerificationStatus:   "not_run",
@@ -441,10 +441,10 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 			}
 			return m.writeNoopArtifact(evalRefPath, analysisResultPath, harnessRefsPath, outputDir, noopParams{
 				status: "planning_rejected", reason: planErr.Error(), runDir: runDir,
-				roleAttrPath: filepath.Join(runDir, "role_attribution.yaml"),
+				roleAttrPath:      filepath.Join(runDir, "role_attribution.yaml"),
 				mechanismAttrPath: filepath.Join(runDir, "mechanism_attribution.yaml"),
-				selectionPath: selectionPath,
-				roles: skippedRoles, skippedRoles: skippedRoles, roleResults: roleResults,
+				selectionPath:     selectionPath,
+				roles:             skippedRoles, skippedRoles: skippedRoles, roleResults: roleResults,
 				deferPublish: params.DeferPublish,
 			})
 		}
@@ -466,7 +466,7 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 		roleResults := map[string]RoleResult{}
 		for _, target := range selectionReport.Targets {
 			roleResults[target.Role] = RoleResult{
-				Status: "skipped",
+				Status:               "skipped",
 				BeforeHarnessRefPath: target.HarnessRefPath,
 				AfterHarnessRefPath:  target.HarnessRefPath,
 				VerificationStatus:   "not_run",
@@ -475,9 +475,9 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 		}
 		return m.writeNoopArtifact(evalRefPath, analysisResultPath, harnessRefsPath, outputDir, noopParams{
 			status: "no_actions", reason: "planner returned no executable actions", runDir: runDir,
-			roleAttrPath: filepath.Join(runDir, "role_attribution.yaml"),
+			roleAttrPath:      filepath.Join(runDir, "role_attribution.yaml"),
 			mechanismAttrPath: filepath.Join(runDir, "mechanism_attribution.yaml"),
-			selectionPath: selectionPath, planPath: planPath,
+			selectionPath:     selectionPath, planPath: planPath,
 			roles: skippedRoles, skippedRoles: skippedRoles, roleResults: roleResults,
 			deferPublish: params.DeferPublish,
 		})
@@ -524,13 +524,13 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 		runDir: runDir, pathLayout: pathLayout, outputRoot: outputRoot,
 		selectionReport: selectionReport, plan: plan, executionResults: executionResults,
 		verificationResult: verificationResult,
-		evalRefPath: evalRefPath, analysisResultPath: analysisResultPath, harnessRefsPath: harnessRefsPath,
-		roleAttrPath: filepath.Join(runDir, "role_attribution.yaml"),
+		evalRefPath:        evalRefPath, analysisResultPath: analysisResultPath, harnessRefsPath: harnessRefsPath,
+		roleAttrPath:      filepath.Join(runDir, "role_attribution.yaml"),
 		mechanismAttrPath: filepath.Join(runDir, "mechanism_attribution.yaml"),
-		selectionPath: selectionPath, planPath: planPath,
+		selectionPath:     selectionPath, planPath: planPath,
 		executionResultPath: executionResultPath, verificationPath: verificationPath,
-		fixResultPath: filepath.Join(runDir, "fix_result.json"),
-		deferPublish:  params.DeferPublish,
+		fixResultPath:              filepath.Join(runDir, "fix_result.json"),
+		deferPublish:               params.DeferPublish,
 		candidateManifestPath:      candidateManifestPath,
 		optimizationHypothesesPath: params.OptimizationHypothesesPath,
 	})
@@ -540,20 +540,20 @@ func (m *MemberOptimizer) Optimize(ctx context.Context, evalRefPath, analysisRes
 
 // noopParams noop 工件参数（Python _write_noop_artifact 关键字收拢）。
 type noopParams struct {
-	status             string
-	reason             string
-	runDir             string
-	roleAttrPath       string
-	mechanismAttrPath  string
-	selectionPath      string
-	planPath           string
+	status              string
+	reason              string
+	runDir              string
+	roleAttrPath        string
+	mechanismAttrPath   string
+	selectionPath       string
+	planPath            string
 	executionResultPath string
-	verificationPath   string
-	fixResultPath      string
-	roles              []string
-	skippedRoles       []string
-	roleResults        map[string]RoleResult
-	deferPublish       bool
+	verificationPath    string
+	fixResultPath       string
+	roles               []string
+	skippedRoles        []string
+	roleResults         map[string]RoleResult
+	deferPublish        bool
 }
 
 // writeNoopArtifact 无法优化时写 noop 工件。
@@ -731,8 +731,6 @@ func writeStageError(path, stage string, err error, details map[string]any) erro
 func errorTypeName(err error) string {
 	return fmt.Sprintf("%T", err)
 }
-
-
 
 // WriteDataclassYaml dataclass 值 YAML 落盘。
 // Python: optimizer.py:1041-1048 _write_dataclass_yaml。

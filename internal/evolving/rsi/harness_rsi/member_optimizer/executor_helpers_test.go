@@ -2,8 +2,8 @@ package memberoptimizer
 
 import (
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -147,8 +147,8 @@ func TestSkillRootFromTarget(t *testing.T) {
 func TestManifestPathMatches_别名规则(t *testing.T) {
 	require.True(t, manifestPathMatches("skills/foo", "skills/foo", false))
 	require.True(t, manifestPathMatches("foo.md", "prompt_sections/files/foo.md", false)) // prompt files 别名
-	require.False(t, manifestPathMatches("skills", "skills/foo", true))                  // exact_only
-	require.True(t, manifestPathMatches("skills", "skills/foo", false))                  // 目录包含
+	require.False(t, manifestPathMatches("skills", "skills/foo", true))                   // exact_only
+	require.True(t, manifestPathMatches("skills", "skills/foo", false))                   // 目录包含
 }
 
 func TestRemovePath_空父目录回收(t *testing.T) {

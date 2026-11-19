@@ -352,7 +352,7 @@ func TestValidateActionResultsByRole_缺失与跳过(t *testing.T) {
 	execPath := filepath.Join(dir, "exec.json")
 	os.WriteFile(execPath, []byte(`{"results": [{"action_id": "a1", "status": "succeeded", "merge_status": "merged"}]}`), 0o644)
 	plan := &MemberOptimizationPlan{
-		PlanID: "p",
+		PlanID:  "p",
 		Targets: []MemberOptimizationTarget{{Role: "solver", AttributedIssueIDs: []string{"i1"}}},
 		Actions: []MemberOptimizationAction{{
 			ActionID: "a1", Role: "solver", ActionGroup: "config", Operation: "modify",
@@ -418,7 +418,7 @@ func TestValidateActionResultsByRole_回退成功(t *testing.T) {
 		{"action_id": "fallback", "status": "succeeded", "merge_status": "merged"}
 	]}`), 0o644)
 	plan := &MemberOptimizationPlan{
-		PlanID: "p",
+		PlanID:  "p",
 		Targets: []MemberOptimizationTarget{{Role: "solver", AttributedIssueIDs: []string{"i1"}}},
 		Actions: []MemberOptimizationAction{
 			{ActionID: "primary", Role: "solver", ActionGroup: "config", Operation: "modify",

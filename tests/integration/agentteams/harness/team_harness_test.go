@@ -66,7 +66,7 @@ func (s *TeamHarnessSuite) TestState未启动为Idle() {
 // TestSend未启动报错 验证 Send before start 返回错误（对齐上游 raise）。
 func (s *TeamHarnessSuite) TestSend未启动报错() {
 	h := s.newTeamHarness()
-	s.Error(h.Send(s.Ctx, "早", false))
+	s.Error(h.Send(s.Ctx, "早", false, nil))
 }
 
 // TestOutputs未启动为nil 验证 Outputs before start 返回 nil。

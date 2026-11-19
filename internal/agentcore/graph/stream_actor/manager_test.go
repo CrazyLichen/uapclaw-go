@@ -8,7 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -45,8 +45,8 @@ func testSpec() *workflow.WorkflowSpec {
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"C"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"A": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"C": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+		"A": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"C": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityCollect}},
 	}
 	spec.StreamSourceGroups = map[string][][]string{"C": {{"A-stream"}}}
 	return spec
@@ -57,9 +57,9 @@ func TestNewActorManager_反向图与源键(t *testing.T) {
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"C"}, "B": {"C"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"A": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"B": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"C": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+		"A": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"B": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"C": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityCollect}},
 	}
 	graph := NewStreamGraph()
 	mgr := buildTestManager(t, spec, graph, nil)
@@ -70,14 +70,14 @@ func TestNewActorManager_反向图与源键(t *testing.T) {
 	if actor == nil || len(actor.processors) != 1 {
 		t.Fatal("C 应有一个 COLLECT processor")
 	}
-	p := actor.processors[components.ComponentAbilityCollect]
+	p := actor.processors[ability.ComponentAbilityCollect]
 	if len(p.sourceGroups) != 2 {
 		t.Fatalf("默认应单拆为 2 组, got %d", len(p.sourceGroups))
 	}
 	if !p.sourceGroups[0]["A-stream"] && !p.sourceGroups[0]["B-stream"] {
 		t.Fatal("源键应为 producerId-ABILITY 且排序")
 	}
-	if !mgr.producerAbilities["A"][components.ComponentAbilityStream] {
+	if !mgr.producerAbilities["A"][ability.ComponentAbilityStream] {
 		t.Fatal("producerAbilities 应收集 A-stream")
 	}
 }
@@ -88,9 +88,9 @@ func TestConsume_补发EndMessage(t *testing.T) {
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"C"}, "B": {"C"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"A": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"B": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"C": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+		"A": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"B": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"C": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityCollect}},
 	}
 	graph := NewStreamGraph()
 	wait := make(chan struct{})
@@ -102,7 +102,7 @@ func TestConsume_补发EndMessage(t *testing.T) {
 	schema := map[string]any{"a": "${A.answer}", "b": "${B.out}"}
 	var am *ActorManager
 	v := &fakeConsumer{handle: true, done: true, callWaitCh: wait, eventFn: func(e chan struct{}) {
-		out, consumeErr = am.Consume(context.Background(), "C", components.ComponentAbilityCollect, schema, nil)
+		out, consumeErr = am.Consume(context.Background(), "C", ability.ComponentAbilityCollect, schema, nil)
 		close(e)
 	}}
 	graph.AddStreamConsumer(v, "C") // 必须先注册：NewActorManager 构造期读取 vertex
@@ -111,19 +111,19 @@ func TestConsume_补发EndMessage(t *testing.T) {
 	// B 首帧拉起消费者（B 活跃；A 已完成但本轮无活跃记录）
 	if err := am.Produce(context.Background(), "B",
 		map[string]any{"out": "x"},
-		components.ComponentAbilityStream, true); err != nil {
+		ability.ComponentAbilityStream, true); err != nil {
 		t.Fatal(err)
 	}
-	p := am.streams["C"].processors[components.ComponentAbilityCollect]
+	p := am.streams["C"].processors[ability.ComponentAbilityCollect]
 	if consumeErr != nil || out == nil {
 		t.Fatalf("应返回 gen 树, err=%v", consumeErr)
 	}
 	// 补发后 A 应登记活跃能力（Python consume:141 active_produce_ability）
-	if !am.activeProducerIDs["A"][components.ComponentAbilityStream] {
+	if !am.activeProducerIDs["A"][ability.ComponentAbilityStream] {
 		t.Fatal("补发 end_message 后应登记 A 活跃能力")
 	}
 	// B END 后全组满足 → closeAllQueues → A 路径也收到 EndFrame（不挂死）
-	if err := am.EndMessage(context.Background(), "B", components.ComponentAbilityStream); err != nil {
+	if err := am.EndMessage(context.Background(), "B", ability.ComponentAbilityStream); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -149,7 +149,7 @@ func TestProduce_路由(t *testing.T) {
 	am := buildTestManager(t, spec, graph, nil)
 	err := am.Produce(context.Background(), "A",
 		map[string]any{"A": map[string]any{"answer": "x"}},
-		components.ComponentAbilityStream, true)
+		ability.ComponentAbilityStream, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestProduce_路由(t *testing.T) {
 	// 帧广播后 run 已消费主队列（此时无注册订阅者，值按 Python 语义被丢弃、主队列清空）。
 	// 真实 Vertex 在 Consume 注册完成后才 close event，故订阅路径不丢帧。
 	time.Sleep(30 * time.Millisecond) // 等 run 循环拉取
-	p := am.streams["C"].processors[components.ComponentAbilityCollect]
+	p := am.streams["C"].processors[ability.ComponentAbilityCollect]
 	if p.queue.len() != 0 {
 		t.Fatalf("run 已启动应消费主队列, got %d", p.queue.len())
 	}
@@ -171,7 +171,7 @@ func TestProduce_无消费者丢弃(t *testing.T) {
 	spec := testSpec()
 	am := buildTestManager(t, spec, NewStreamGraph(), nil)
 	if err := am.Produce(context.Background(), "Z", map[string]any{"Z": "x"},
-		components.ComponentAbilityStream, false); err != nil {
+		ability.ComponentAbilityStream, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -192,16 +192,16 @@ func TestShouldSanitizeStreamSource_三分支(t *testing.T) {
 	spec2 := workflow.NewWorkflowSpec()
 	spec2.StreamEdges = map[string][]string{"A": {"C"}, "B": {"C"}}
 	spec2.CompConfigs = map[string]*workflow.NodeSpec{
-		"A": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"B": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"C": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+		"A": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"B": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"C": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityCollect}},
 	}
 	spec2.StreamSourceGroups = map[string][][]string{"C": {{"A-stream", "B-stream"}}}
 	am2 := buildTestManager(t, spec2, NewStreamGraph(), nil)
 	if am2.ShouldSanitizeStreamSource("C", "A") {
 		t.Fatal("多源组无活跃替代源不应 sanitize")
 	}
-	am2.ActiveProduceAbility("B", components.ComponentAbilityStream)
+	am2.ActiveProduceAbility("B", ability.ComponentAbilityStream)
 	if !am2.ShouldSanitizeStreamSource("C", "A") {
 		t.Fatal("组内有活跃替代源应 sanitize")
 	}
@@ -245,7 +245,7 @@ func TestNewActorManager_EnvTimeout(t *testing.T) {
 		"_stream_input_generator_timeout": 0.05,
 	}}
 	am := buildTestManager(t, spec, graph, sess)
-	p := am.streams["C"].processors[components.ComponentAbilityCollect]
+	p := am.streams["C"].processors[ability.ComponentAbilityCollect]
 	// 未声明源路径应限时 50ms
 	sr := p.createGenerator("x", "unknown.foo", nil)
 	if sr.timeout != 50*time.Millisecond {

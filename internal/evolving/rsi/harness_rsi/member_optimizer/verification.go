@@ -428,10 +428,10 @@ func (v *HarnessChangeVerifier) Repair(verificationResult *MemberVerificationRes
 	}
 	if verificationResult.Status == "passed" {
 		fixResult := &MemberFixResult{
-			Status: "not_needed",
-			VerificationPath: filepath.Join(filepath.Dir(worktreesDir), "verification.json"),
+			Status:                  "not_needed",
+			VerificationPath:        filepath.Join(filepath.Dir(worktreesDir), "verification.json"),
 			FinalVerificationStatus: "passed",
-			Metadata: map[string]any{"note": "Verification already passed, no repair needed"},
+			Metadata:                map[string]any{"note": "Verification already passed, no repair needed"},
 		}
 		if err := writeFixResult(output, fixResult); err != nil {
 			return nil, err
@@ -693,10 +693,10 @@ func (v *HarnessChangeVerifier) Repair(verificationResult *MemberVerificationRes
 		FinalVerificationStatus: finalStatus,
 		Metadata: map[string]any{
 			"repair_attempts": len(repairs), "role_attempts": roleAttempts,
-			"role_stop_reasons": roleStopReasons,
+			"role_stop_reasons":       roleStopReasons,
 			"remaining_failed_checks": remainingFailedChecks,
-			"any_role_repaired": anyRolePassed,
-			"worktrees_dir": worktreesDir,
+			"any_role_repaired":       anyRolePassed,
+			"worktrees_dir":           worktreesDir,
 		},
 	}
 	if err := writeFixResult(output, fixResult); err != nil {
@@ -1132,7 +1132,7 @@ func validateActionResultsByRole(plan *MemberOptimizationPlan, execPath string) 
 		resultAction := map[string]any{
 			"action_id": action.ActionID, "role": action.Role,
 			"action_group": action.ActionGroup, "operation": action.Operation,
-			"target_path": action.TargetPath,
+			"target_path":          action.TargetPath,
 			"declared_write_paths": toAnySlice(action.DeclaredWritePaths),
 			"candidate_query":      action.CandidateQuery,
 			"install_ref":          action.InstallRef,

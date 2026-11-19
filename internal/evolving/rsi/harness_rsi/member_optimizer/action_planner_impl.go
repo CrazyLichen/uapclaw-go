@@ -22,9 +22,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/action_groups"
 	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
-	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -689,13 +689,13 @@ func bindImmutableHypotheses(planData map[string]any, hypotheses []map[string]an
 		var contracts []any
 		for _, item := range selected {
 			contract := map[string]any{
-				"hypothesis_id":    pyStrOrEmpty(item["hypothesis_id"]),
-				"content_sha256":   pyStrOrEmpty(item["content_sha256"]),
-				"source_issue_id":  pyStrOrEmpty(item["source_issue_id"]),
-				"required_behavior": pyStrOrEmpty(item["required_behavior"]),
+				"hypothesis_id":      pyStrOrEmpty(item["hypothesis_id"]),
+				"content_sha256":     pyStrOrEmpty(item["content_sha256"]),
+				"source_issue_id":    pyStrOrEmpty(item["source_issue_id"]),
+				"required_behavior":  pyStrOrEmpty(item["required_behavior"]),
 				"forbidden_behavior": pyOrNone(item["forbidden_behavior"]),
-				"public_trigger":   pyOrNone(item["public_trigger"]),
-				"decisive_probe":   pyOrNone(item["decisive_probe"]),
+				"public_trigger":     pyOrNone(item["public_trigger"]),
+				"decisive_probe":     pyOrNone(item["decisive_probe"]),
 			}
 			// Python: if isinstance(item.get("decision_contract"), dict) and ...: contract["decision_contract"] = ...
 			if dc, ok := item["decision_contract"].(map[string]any); ok && len(dc) > 0 {
@@ -1050,12 +1050,12 @@ func filterActionablePlanningInputs(targets []MemberOptimizationTarget, roleAttr
 		}
 	}
 	actionableMechanismReport := &MechanismAttributionReport{
-		MechanismAttributionID:   mechanismReport.MechanismAttributionID,
+		MechanismAttributionID:    mechanismReport.MechanismAttributionID,
 		SourceRoleAttributionPath: mechanismReport.SourceRoleAttributionPath,
-		RoleMechanisms:           actionableMechanisms,
-		SkippedRoles:             mechanismReport.SkippedRoles,
-		Warnings:                 mechanismReport.Warnings,
-		Metadata:                 mechanismReport.Metadata,
+		RoleMechanisms:            actionableMechanisms,
+		SkippedRoles:              mechanismReport.SkippedRoles,
+		Warnings:                  mechanismReport.Warnings,
+		Metadata:                  mechanismReport.Metadata,
 	}
 	// Python: sorted(inactionable_issue_ids)
 	inactionable := setToSortedStrings(inactionableIssueIDs)
@@ -1178,12 +1178,12 @@ func adaptPromptSurfaceWithinInstructionLever(targets []MemberOptimizationTarget
 		roleMechanisms[role] = adapted
 	}
 	return adaptedTargets, &MechanismAttributionReport{
-		MechanismAttributionID:   mechanismReport.MechanismAttributionID,
+		MechanismAttributionID:    mechanismReport.MechanismAttributionID,
 		SourceRoleAttributionPath: mechanismReport.SourceRoleAttributionPath,
-		RoleMechanisms:           roleMechanisms,
-		SkippedRoles:             mechanismReport.SkippedRoles,
-		Warnings:                 mechanismReport.Warnings,
-		Metadata:                 mechanismReport.Metadata,
+		RoleMechanisms:            roleMechanisms,
+		SkippedRoles:              mechanismReport.SkippedRoles,
+		Warnings:                  mechanismReport.Warnings,
+		Metadata:                  mechanismReport.Metadata,
 	}
 }
 
@@ -1253,9 +1253,9 @@ func buildSiblingGenerationContext(optimizationExperience map[string]any) string
 		generationIndex = siblingGeneration["candidate_index"]
 	}
 	generationPosition := map[string]any{
-		"candidate_id":    candidateID,
+		"candidate_id":     candidateID,
 		"generation_index": pyOrNone(generationIndex),
-		"candidate_count": pyOrNone(siblingGeneration["candidate_count"]),
+		"candidate_count":  pyOrNone(siblingGeneration["candidate_count"]),
 	}
 	positionJSON, _ := json.MarshalIndent(generationPosition, "", "  ")
 	proposalsJSON, _ := json.MarshalIndent(compactProposals, "", "  ")
@@ -1543,14 +1543,14 @@ func (a *MemberActionPlannerAgent) CreatePlan(ctx context.Context, params Planne
 	retryLimit := params.RetryLimit
 	// Python: return await invoke_member_optimizer_agent_structured(...)
 	return agentsBridge.InvokeStructured(ctx, StructuredInvokeParams{
-		Agent:       agent,
-		AgentName:   "MemberActionPlannerAgent",
-		UserMessage: userMessage,
-		SessionID:   plannerSessionID(params.OptimizationExperience),
-		RetryLimit:  retryLimit,
-		ParseResponse:     agentsBridge.ParseYamlOrJSONObject,
-		ValidateResponse:  ValidatePlanStructure,
-		FeedbackTracker:   params.FeedbackTracker,
+		Agent:            agent,
+		AgentName:        "MemberActionPlannerAgent",
+		UserMessage:      userMessage,
+		SessionID:        plannerSessionID(params.OptimizationExperience),
+		RetryLimit:       retryLimit,
+		ParseResponse:    agentsBridge.ParseYamlOrJSONObject,
+		ValidateResponse: ValidatePlanStructure,
+		FeedbackTracker:  params.FeedbackTracker,
 		BuildRetryMessage: func(_ map[string]any, errText string) string {
 			// Python: lambda _previous, error: self._build_retry_message(user_message, error)
 			return MemberActionPlannerAgentBuildRetryMessage(userMessage, errText)
@@ -1621,7 +1621,7 @@ type PlannerCreateParams struct {
 	// RetryLimit 重试上限（tracker 非空时为 max_attempts-1）
 	RetryLimit int
 	// EvidenceRailHolder 证据护栏持有者（收尾消息构造；agents 侧 adapter 填充）
-	}
+}
 
 // PlannerEvidenceHolder 证据护栏收尾消息构造接口（agentface.EvidenceFinalizer 别名保留消费点语义）。
 
@@ -1802,11 +1802,11 @@ func (p *MemberActionPlanner) Plan(ctx context.Context, params PlanParams) (*Mem
 			}
 			// Python: deferred_capability_requests.append({...五字段...})
 			deferredCapabilityRequests = append(deferredCapabilityRequests, map[string]any{
-				"role":          target.Role,
-				"issue_ids":     toAnySlice(target.AttributedIssueIDs),
+				"role":              target.Role,
+				"issue_ids":         toAnySlice(target.AttributedIssueIDs),
 				"required_surfaces": toAnySlice(setToSortedStrings(targetSurfaces)),
-				"status":        "unsupported_capability_request",
-				"reason":        "surface_not_available_in_restricted_action_contract; cross_lever_compensation_is_forbidden",
+				"status":            "unsupported_capability_request",
+				"reason":            "surface_not_available_in_restricted_action_contract; cross_lever_compensation_is_forbidden",
 			})
 		}
 		actionableTargets = retainedTargets
@@ -1819,14 +1819,14 @@ func (p *MemberActionPlanner) Plan(ctx context.Context, params PlanParams) (*Mem
 			Actions:     []MemberOptimizationAction{},
 			ActionWaves: [][]string{},
 			Metadata: map[string]any{
-				"planner":                          "member_action_planner_agent",
-				"validated":                        true,
-				"action_count":                     0,
-				"wave_count":                       0,
-				"filtered_inactionable_issue_ids":  toAnySlice(filteredIssueIDs),
-				"allowed_action_groups":            toAnySlice(setToSortedStrings(restrictedGroups)),
-				"allowed_prompt_surfaces":          toAnySlice(setToSortedStrings(restrictedPromptSurfaces)),
-				"capability_requests":              deferredCapabilityRequests,
+				"planner":                         "member_action_planner_agent",
+				"validated":                       true,
+				"action_count":                    0,
+				"wave_count":                      0,
+				"filtered_inactionable_issue_ids": toAnySlice(filteredIssueIDs),
+				"allowed_action_groups":           toAnySlice(setToSortedStrings(restrictedGroups)),
+				"allowed_prompt_surfaces":         toAnySlice(setToSortedStrings(restrictedPromptSurfaces)),
+				"capability_requests":             deferredCapabilityRequests,
 			},
 		}, nil
 	}
@@ -1967,26 +1967,26 @@ func (p *MemberActionPlanner) Plan(ctx context.Context, params PlanParams) (*Mem
 	var actions []MemberOptimizationAction
 	for _, actionData := range planActionsList(planData) {
 		actions = append(actions, MemberOptimizationAction{
-			ActionID:            pyStrOrEmpty(ActionMapField(actionData, "action_id")),
-			Role:                pyStrOrEmpty(ActionMapField(actionData, "role")),
-			MemberName:          pyStrOrEmpty(ActionMapField(actionData, "member_name")),
-			ActionGroup:         pyStrOrEmpty(ActionMapField(actionData, "action_group")),
-			Operation:           pyStrOrEmpty(ActionMapField(actionData, "operation")),
-			ActionType:          pyStrOrEmpty(ActionMapField(actionData, "action_type")),
-			TargetPath:          pyStrOrEmpty(ActionMapField(actionData, "target_path")),
-			Description:         pyStrOrEmpty(ActionMapField(actionData, "description")),
-			Rationale:           pyStrOrEmpty(ActionMapField(actionData, "rationale")),
-			AttributedIssueIDs:  strSliceFromAny(ActionMapField(actionData, "attributed_issue_ids")),
-			DependsOn:           strSliceFromAny(ActionMapField(actionData, "depends_on")),
-			RunIf:               pyStrOrEmpty(ActionMapField(actionData, "run_if")),
-			AllowedSkills:       strSliceFromAny(ActionMapField(actionData, "allowed_skills")),
-			AllowedTools:        actiongroups.SanitizeAllowedTools(strSliceFromAny(ActionMapField(actionData, "allowed_tools"))),
-			CandidateQuery:      pyStrOrEmpty(ActionMapField(actionData, "candidate_query")),
-			InstallRef:          pyStrOrEmpty(ActionMapField(actionData, "install_ref")),
-			ExpectedEffect:      pyStrOrEmpty(ActionMapField(actionData, "expected_effect")),
-			RiskNotes:           strSliceFromAny(ActionMapField(actionData, "risk_notes")),
-			DeclaredWritePaths:  strSliceFromAny(ActionMapField(actionData, "declared_write_paths")),
-			Constraints:         mapOrEmpty(ActionMapField(actionData, "constraints")),
+			ActionID:           pyStrOrEmpty(ActionMapField(actionData, "action_id")),
+			Role:               pyStrOrEmpty(ActionMapField(actionData, "role")),
+			MemberName:         pyStrOrEmpty(ActionMapField(actionData, "member_name")),
+			ActionGroup:        pyStrOrEmpty(ActionMapField(actionData, "action_group")),
+			Operation:          pyStrOrEmpty(ActionMapField(actionData, "operation")),
+			ActionType:         pyStrOrEmpty(ActionMapField(actionData, "action_type")),
+			TargetPath:         pyStrOrEmpty(ActionMapField(actionData, "target_path")),
+			Description:        pyStrOrEmpty(ActionMapField(actionData, "description")),
+			Rationale:          pyStrOrEmpty(ActionMapField(actionData, "rationale")),
+			AttributedIssueIDs: strSliceFromAny(ActionMapField(actionData, "attributed_issue_ids")),
+			DependsOn:          strSliceFromAny(ActionMapField(actionData, "depends_on")),
+			RunIf:              pyStrOrEmpty(ActionMapField(actionData, "run_if")),
+			AllowedSkills:      strSliceFromAny(ActionMapField(actionData, "allowed_skills")),
+			AllowedTools:       actiongroups.SanitizeAllowedTools(strSliceFromAny(ActionMapField(actionData, "allowed_tools"))),
+			CandidateQuery:     pyStrOrEmpty(ActionMapField(actionData, "candidate_query")),
+			InstallRef:         pyStrOrEmpty(ActionMapField(actionData, "install_ref")),
+			ExpectedEffect:     pyStrOrEmpty(ActionMapField(actionData, "expected_effect")),
+			RiskNotes:          strSliceFromAny(ActionMapField(actionData, "risk_notes")),
+			DeclaredWritePaths: strSliceFromAny(ActionMapField(actionData, "declared_write_paths")),
+			Constraints:        mapOrEmpty(ActionMapField(actionData, "constraints")),
 		})
 	}
 	// Python: action_waves = build_action_waves(actions)
@@ -2019,19 +2019,19 @@ func (p *MemberActionPlanner) Plan(ctx context.Context, params PlanParams) (*Mem
 		Actions:     actions,
 		ActionWaves: actionWaves,
 		Metadata: map[string]any{
-			"planner":                               "member_action_planner_agent",
-			"validated":                             true,
-			"action_count":                          len(actions),
-			"wave_count":                            len(actionWaves),
-			"filtered_inactionable_issue_ids":       toAnySlice(filteredIssueIDs),
-			"allowed_action_groups":                 toAnySlice(allowedGroupsSorted),
-			"allowed_prompt_surfaces":               toAnySlice(allowedSurfacesSorted),
-			"max_actions_per_plan":                  params.MaxActionsPerPlan,
+			"planner":                                 "member_action_planner_agent",
+			"validated":                               true,
+			"action_count":                            len(actions),
+			"wave_count":                              len(actionWaves),
+			"filtered_inactionable_issue_ids":         toAnySlice(filteredIssueIDs),
+			"allowed_action_groups":                   toAnySlice(allowedGroupsSorted),
+			"allowed_prompt_surfaces":                 toAnySlice(allowedSurfacesSorted),
+			"max_actions_per_plan":                    params.MaxActionsPerPlan,
 			"skill_search_disabled_for_single_action": searchDisabledForSingleAction,
-			"capability_requests":                   deferredCapabilityRequests,
-			"optimization_hypothesis_ids":           hypothesisIDs,
-			"action_bundles":                        actionBundles,
-			"semantic_authority":                    semanticAuthority,
+			"capability_requests":                     deferredCapabilityRequests,
+			"optimization_hypothesis_ids":             hypothesisIDs,
+			"action_bundles":                          actionBundles,
+			"semantic_authority":                      semanticAuthority,
 		},
 	}, nil
 }
@@ -2058,8 +2058,6 @@ func NewMemberActionPlannerAgent(modelConfigRef string, stageRetryLimit int, wor
 	}
 	return agent
 }
-
-
 
 // buildPlannerUserMessage 构造规划用户消息。
 // Python: action_planner.py:902-1042 _build_user_message。
@@ -2155,18 +2153,18 @@ func buildPlannerUserMessage(params PlannerCreateParams) string {
 				summary = pyStrOrEmpty(obs["summary"])
 			}
 			compact = append(compact, map[string]any{
-				"hypothesis_id":     pyStrOrEmpty(item["hypothesis_id"]),
-				"content_sha256":    pyStrOrEmpty(item["content_sha256"]),
-				"source_issue_id":   pyStrOrEmpty(item["source_issue_id"]),
-				"target_case_ids":   pyOrNone(item["target_case_ids"]),
-				"summary":           summary,
-				"required_behavior": pyStrOrEmpty(item["required_behavior"]),
+				"hypothesis_id":      pyStrOrEmpty(item["hypothesis_id"]),
+				"content_sha256":     pyStrOrEmpty(item["content_sha256"]),
+				"source_issue_id":    pyStrOrEmpty(item["source_issue_id"]),
+				"target_case_ids":    pyOrNone(item["target_case_ids"]),
+				"summary":            summary,
+				"required_behavior":  pyStrOrEmpty(item["required_behavior"]),
 				"forbidden_behavior": pyOrNone(item["forbidden_behavior"]),
-				"public_trigger":    pyOrNone(item["public_trigger"]),
-				"decisive_probe":    pyOrNone(item["decisive_probe"]),
-				"decision_contract": pyOrNone(item["decision_contract"]),
-				"evidence_refs":     pyOrNone(item["evidence_refs"]),
-				"lever_policy":      pyOrNone(item["lever_policy"]),
+				"public_trigger":     pyOrNone(item["public_trigger"]),
+				"decisive_probe":     pyOrNone(item["decisive_probe"]),
+				"decision_contract":  pyOrNone(item["decision_contract"]),
+				"evidence_refs":      pyOrNone(item["evidence_refs"]),
+				"lever_policy":       pyOrNone(item["lever_policy"]),
 			})
 		}
 		compactJSON, _ := json.MarshalIndent(compact, "", "  ")

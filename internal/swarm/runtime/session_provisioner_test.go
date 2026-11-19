@@ -1462,7 +1462,9 @@ func (f *failingActivityParticipant) SessionInactive(context.Context, session.Se
 }
 
 // containsStr 测试辅助包含判定。
-func containsStr(s, sub string) bool { return len(s) >= len(sub) && (s == sub || len(sub) == 0 || indexStr(s, sub) >= 0) }
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || indexStr(s, sub) >= 0)
+}
 
 func indexStr(s, sub string) int {
 	for i := 0; i+len(sub) <= len(s); i++ {

@@ -56,7 +56,7 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 	if userInput != nil {
 		rawPayload = userInput.Raw
 	}
-	result, err := mgr.Interact(ctx, rawPayload, teamName, sessionID)
+	result, err := mgr.Interact(ctx, rawPayload, teamName, sessionID, nil)
 	if err != nil {
 		// S-07: 对齐 Python except Exception as exc: logger.error(...); return False
 		logger.Error(logComponent).Err(err).

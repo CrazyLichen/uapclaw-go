@@ -1,8 +1,8 @@
 package memberoptimizer
 
 import (
-	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,8 +11,6 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 )
-
-
 
 func TestMemberActionPlanner_Plan_编排全链(t *testing.T) {
 	planData := mkPlan(func(p map[string]any) {
