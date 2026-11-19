@@ -11,13 +11,22 @@
 package flow
 
 import (
-	"sync"
-
+	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"reflect"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
+
+	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// logComponent 组件级日志组件常量（规则 3.2：agentcore/* 用 ComponentAgentCore）
+const logComponent = logger.ComponentAgentCore
 
 // renderTemplateVarRe {{var}} 段匹配（end_comp.py:486 re.split 捕获组
 // r'(\{\{[^{}]+\}\})'；RE2 兼容此模式，8.12 RE2 先例）
@@ -192,4 +201,177 @@ func (p *TemplateProcessor) isFinished() bool {
 func (p *TemplateProcessor) notifyAll() {
 	close(p.notify)
 	p.notify = make(chan struct{})
+}
+
+// ──────────────────────────── TemplateProcessor 流式方法 ────────────────────────────
+
+// RenderStream 模板流式渲染入口：主循环产出帧；结束后耗尽输入中残留流并按
+// 数据源计数归零。Python: render_stream（end_comp.py:356-366）。
+func (p *TemplateProcessor) RenderStream(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, timeout float64) <-chan graphexe.StreamChunk[templateFrame] {
+	out := make(chan graphexe.StreamChunk[templateFrame])
+	go func() {
+		defer close(out)
+		defer func() {
+			// finally：耗尽输入中所有迭代器（end_comp.py:361-362）
+			consumeAllIterators(inputs)
+			p.mu.Lock()
+			p.count++
+			done := p.count == p.dataSourceCount
+			if done {
+				p.reset()
+			}
+			p.mu.Unlock()
+		}()
+		p.renderStreamLoop(ctx, inputs, sess, timeout, out)
+	}()
+	return out
+}
+
+// renderStreamLoop 主推进循环。
+// Python: _render_stream（end_comp.py:368-441）。
+// 三态 None 处理：mix 等待（count<data_source_count）/ 单源跳过（!has_any_value，
+// debug 日志）/ 有值等待；静态段直出；channel 叶子逐帧转发。
+func (p *TemplateProcessor) renderStreamLoop(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, timeout float64, out chan<- graphexe.StreamChunk[templateFrame]) {
+	hasAnyValue := p.needRender(inputs)
+	shouldWait := false
+	for {
+		if shouldWait {
+			// Python: async with self._condition + anyio.fail_after(wait_timeout)
+			p.mu.Lock()
+			waitCh := p.notify
+			p.mu.Unlock()
+			var waitDur time.Duration
+			if timeout > 0 {
+				waitDur = time.Duration(timeout * float64(time.Second))
+			} else {
+				waitDur = 0 // 零/负超时 ≙ anyio.fail_after(None)：无超时等待
+			}
+			var timer *time.Timer
+			var timeoutCh <-chan time.Time
+			if waitDur > 0 {
+				timer = time.NewTimer(waitDur)
+				timeoutCh = timer.C
+			}
+			select {
+			case <-waitCh:
+				if timer != nil {
+					timer.Stop()
+				}
+			case <-timeoutCh:
+				// TimeoutError → warning + advance（end_comp.py:380-388）
+				logger.Warn(logComponent).
+					Float64("timeout", timeout).
+					Str("component_id", compIDOf(sess)).
+					Msg("Template render stream timeout")
+				p.mu.Lock()
+				p.advancePosition()
+				p.mu.Unlock()
+			case <-ctx.Done():
+				// asyncio.CancelledError → warning + break（end_comp.py:389-397）
+				logger.Warn(logComponent).
+					Str("component_id", compIDOf(sess)).
+					Msg("Template render stream cancelled")
+				return
+			}
+			shouldWait = false
+		}
+		p.mu.Lock()
+		if p.isFinished() {
+			p.mu.Unlock()
+			return
+		}
+		segment := p.getSegment(p.currentPosition)
+		if !p.shouldRender() {
+			// 静态文本段直出（end_comp.py:404-409）
+			f := templateFrame{Data: segment, Index: p.chunkIndex}
+			p.chunkIndex++
+			p.advancePosition()
+			p.mu.Unlock()
+			out <- graphexe.StreamChunk[templateFrame]{Val: f}
+			continue
+		}
+		value := utils.GetValueByNestedPath(segment, inputs)
+		p.mu.Unlock()
+		if value == nil {
+			p.mu.Lock()
+			if p.count < p.dataSourceCount {
+				shouldWait = true // mix 模式等待另一数据源（end_comp.py:415-417）
+				p.mu.Unlock()
+				continue
+			}
+			if !hasAnyValue {
+				// 单源跳过 None 值位置（end_comp.py:419-428）
+				logger.Debug(logComponent).
+					Str("segment", segment).
+					Str("component_id", compIDOf(sess)).
+					Msg("Template segment skip none value position")
+				p.advancePosition()
+				p.mu.Unlock()
+				continue
+			}
+			shouldWait = true // 有值场景等待（end_comp.py:429-430）
+			p.mu.Unlock()
+			continue
+		}
+		if ch, ok := value.(<-chan any); ok {
+			// 流叶子逐帧转发（end_comp.py:432-435）
+			for frame := range ch {
+				p.mu.Lock()
+				f := templateFrame{Data: frame, Index: p.chunkIndex}
+				p.chunkIndex++
+				p.mu.Unlock()
+				out <- graphexe.StreamChunk[templateFrame]{Val: f}
+			}
+		} else {
+			p.mu.Lock()
+			f := templateFrame{Data: value, Index: p.chunkIndex}
+			p.chunkIndex++
+			p.mu.Unlock()
+			out <- graphexe.StreamChunk[templateFrame]{Val: f}
+		}
+		p.mu.Lock()
+		p.advancePosition()
+		p.notifyAll()
+		p.mu.Unlock()
+	}
+}
+
+// consumeAllIterators 递归收集并耗尽 inputs 中所有 channel 叶子。
+// Python: TemplateProcessor._consume_all_iterators（end_comp.py:310-354）；
+// 偏差 D-17-3：AsyncGenerator/Generator → Go channel（含反射兜底任意 chan 种类）；
+// Python 逐迭代器耗尽异常仅 debug 日志，Go channel 无错误元素故省略。
+func consumeAllIterators(data any) {
+	switch v := data.(type) {
+	case map[string]any:
+		for _, val := range v {
+			consumeAllIterators(val)
+		}
+	case []any:
+		for _, val := range v {
+			consumeAllIterators(val)
+		}
+	case <-chan any:
+		for range v {
+		}
+	case chan any:
+		for range v {
+		}
+	default:
+		rv := reflect.ValueOf(data)
+		if rv.Kind() == reflect.Chan {
+			for {
+				if _, ok := rv.Recv(); !ok {
+					break
+				}
+			}
+		}
+	}
+}
+
+// compIDOf 组件 ID 安全取值（sess 为 nil 时返回空串）。
+func compIDOf(sess *session.NodeSessionFacade) string {
+	if sess == nil {
+		return ""
+	}
+	return sess.GetComponentID()
 }

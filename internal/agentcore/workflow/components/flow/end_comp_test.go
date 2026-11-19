@@ -1,6 +1,10 @@
 package flow
 
-import "testing"
+import (
+	"context"
+	"testing"
+	"time"
+)
 
 // TestTemplateUtils_RenderTemplate_基本替换 验证 {{var}} 批量替换语义。
 func TestTemplateUtils_RenderTemplate_基本替换(t *testing.T) {
@@ -141,5 +145,125 @@ func TestTemplateProcessor_AdvancePosition(t *testing.T) {
 	p := NewTemplateProcessor("ab")
 	if got := p.advancePosition(); got != 1 || p.currentPosition != 1 {
 		t.Fatalf("推进不符: %d %d", got, p.currentPosition)
+	}
+}
+
+// TestTemplateProcessor_RenderStream_静态段直出变量段取值 验证主循环基础路径
+// （end_comp.py:368-441）。
+func TestTemplateProcessor_RenderStream_静态段直出变量段取值(t *testing.T) {
+	p := NewTemplateProcessor("Hello {{name}}!")
+	var frames []templateFrame
+	for chunk := range p.RenderStream(context.Background(), map[string]any{"name": "alice"}, nil, 0.2) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		frames = append(frames, chunk.Val)
+	}
+	if len(frames) != 3 {
+		t.Fatalf("期望 3 帧, got %d: %v", len(frames), frames)
+	}
+	if frames[0].Data != "Hello " || frames[1].Data != "alice" || frames[1].Index != 1 || frames[2].Data != "!" {
+		t.Fatalf("帧内容不符: %+v", frames)
+	}
+}
+
+// TestTemplateProcessor_RenderStream_变量缺失跳过 验证单源 None 值跳过
+// （end_comp.py:419-428 debug 日志路径）。
+func TestTemplateProcessor_RenderStream_变量缺失跳过(t *testing.T) {
+	p := NewTemplateProcessor("A {{x}} B")
+	var datas []any
+	for chunk := range p.RenderStream(context.Background(), map[string]any{}, nil, 0.2) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		datas = append(datas, chunk.Val.Data)
+	}
+	if len(datas) != 2 || datas[0] != "A " || datas[1] != " B" {
+		t.Fatalf("期望静态段直出+变量段跳过: %v", datas)
+	}
+}
+
+// TestTemplateProcessor_RenderStream_变量流叶子 验证 channel 叶子逐帧转发
+// （end_comp.py:432-435，偏差 D-17-3）。
+func TestTemplateProcessor_RenderStream_变量流叶子(t *testing.T) {
+	p := NewTemplateProcessor("{{name}}")
+	ch := make(chan any, 2)
+	ch <- "f1"
+	ch <- "f2"
+	close(ch)
+	var datas []any
+	for chunk := range p.RenderStream(context.Background(), map[string]any{"name": (<-chan any)(ch)}, nil, 0.2) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		datas = append(datas, chunk.Val.Data)
+	}
+	if len(datas) != 2 || datas[0] != "f1" || datas[1] != "f2" {
+		t.Fatalf("流叶子转发不符: %v", datas)
+	}
+}
+
+// TestTemplateProcessor_RenderStream_超时等待后跳过 验证变量缺失且 has_any_value
+// 为真时的等待-超时-跳过路径（end_comp.py:429-430 + 380-388）。
+func TestTemplateProcessor_RenderStream_超时等待后跳过(t *testing.T) {
+	p := NewTemplateProcessor("A {{x}} B{{y}}")
+	var datas []any
+	start := time.Now()
+	for chunk := range p.RenderStream(context.Background(), map[string]any{"y": "Y"}, nil, 0.05) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		datas = append(datas, chunk.Val.Data)
+	}
+	if len(datas) != 3 || datas[0] != "A " || datas[1] != " B" || datas[2] != "Y" {
+		t.Fatalf("期望 A 段超时跳过 + B 段 + Y: %v", datas)
+	}
+	if time.Since(start) < 50*time.Millisecond {
+		t.Fatal("应至少经历一次超时等待")
+	}
+}
+
+// TestTemplateProcessor_RenderStream_计数归零 验证 finally 段 count 达标后 reset
+// （end_comp.py:364-366）。
+func TestTemplateProcessor_RenderStream_计数归零(t *testing.T) {
+	p := NewTemplateProcessor("{{x}}")
+	p.SetDataSourceCount(2)
+	// 第一拍：count 0→1，不 reset
+	for range p.RenderStream(context.Background(), map[string]any{}, nil, 0.05) {
+	}
+	p.mu.Lock()
+	c1 := p.count
+	p.mu.Unlock()
+	if c1 != 1 {
+		t.Fatalf("第一拍后 count 应为 1, got %d", c1)
+	}
+	// 第二拍：count 达 2 → reset
+	for range p.RenderStream(context.Background(), map[string]any{}, nil, 0.05) {
+	}
+	p.mu.Lock()
+	c2 := p.count
+	pos2 := p.currentPosition
+	p.mu.Unlock()
+	if c2 != 0 || pos2 != 0 {
+		t.Fatalf("第二拍后应 reset: count=%d pos=%d", c2, pos2)
+	}
+	_ = pos2
+}
+
+// TestConsumeAllIterators_递归耗尽 验证嵌套 dict/list 中 channel 全部耗尽
+// （end_comp.py:310-354，偏差 D-17-3）。
+func TestConsumeAllIterators_递归耗尽(t *testing.T) {
+	ch1 := make(chan any, 1)
+	ch1 <- 1
+	close(ch1)
+	empty := make(chan any)
+	close(empty)
+	inputs := map[string]any{
+		"a": []any{ch1, map[string]any{"b": empty}},
+		"c": (<-chan any)(empty),
+	}
+	consumeAllIterators(inputs)
+	// 耗尽后再次读立即关闭——range 无阻塞即通过
+	for range ch1 {
 	}
 }
