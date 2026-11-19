@@ -13,7 +13,7 @@ import (
 // mkPlan 构造合法最小方案。
 func mkPlan(mut func(map[string]any)) map[string]any {
 	plan := map[string]any{
-		"actions": []any{},
+		"actions":      []any{},
 		"action_waves": []any{},
 	}
 	mut(plan)
@@ -35,7 +35,7 @@ func mkAction(mut func(map[string]any)) map[string]any {
 func plannerTarget() []MemberOptimizationTarget {
 	return []MemberOptimizationTarget{{
 		Role: "solver", HarnessRefPath: "/nonexistent-harness-for-tests",
-		AttributedIssueIDs: []string{"i1"},
+		AttributedIssueIDs:   []string{"i1"},
 		OptimizationSurfaces: []string{"config"},
 	}}
 }
@@ -127,7 +127,7 @@ func TestValidatePlan_全链校验(t *testing.T) {
 func TestValidatePlan_Issue归因(t *testing.T) {
 	targets := []MemberOptimizationTarget{{
 		Role: "solver", HarnessRefPath: "/nonexistent-harness-for-tests",
-		AttributedIssueIDs: []string{"i1", "i2"},
+		AttributedIssueIDs:   []string{"i1", "i2"},
 		OptimizationSurfaces: []string{"config"},
 	}}
 	roles := map[string]bool{"solver": true}
@@ -179,8 +179,8 @@ func TestValidatePlan_SkillSearch回退(t *testing.T) {
 func TestValidatePlan_Prompt面契约(t *testing.T) {
 	targets := []MemberOptimizationTarget{{
 		Role: "solver", HarnessRefPath: "/nonexistent-harness-for-tests",
-		AttributedIssueIDs: []string{"i1"},
-		MechanismTypes:     []string{"workflow"},
+		AttributedIssueIDs:   []string{"i1"},
+		MechanismTypes:       []string{"workflow"},
 		OptimizationSurfaces: []string{"identity"},
 	}}
 	roles := map[string]bool{"solver": true}

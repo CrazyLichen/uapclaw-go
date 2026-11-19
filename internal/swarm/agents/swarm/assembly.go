@@ -3,9 +3,9 @@ package swarm
 import (
 	"strings"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/common"
@@ -46,7 +46,7 @@ type EnrichSeedParams struct {
 //
 // 偏差 D-15.16-c3：Python enrich_team_spec_for_swarm（assembly.py:391-570）
 // 单函数跨 rails/mcp/experts 多章内容——本节只承担 context 构造子链
-//（:456-541）；rails 目录注册 ⤵️15.7/15.8、_ensure_external_team_transport
+// （:456-541）；rails 目录注册 ⤵️15.7/15.8、_ensure_external_team_transport
 // ⤵️15.16d/swarmflow、成员 spec 重写/mcp/agent_group ⤵️15.16e 及成员配置
 // 源装配章节，届时并入同一 Go 函数并删除本拆分壳。
 //
@@ -54,7 +54,7 @@ type EnrichSeedParams struct {
 // 无该输入时的字面值（0/None）记录，随对应章节落地改为真实输入驱动。
 //
 // 偏差 D-15.16-c8 收尾：接线点为 TeamManager.GetSwarmEnrichedTeamSpec
-//（对齐 Python 活跃路径 get_swarm_enriched_team_spec，team_manager.py:1958；
+// （对齐 Python 活跃路径 get_swarm_enriched_team_spec，team_manager.py:1958；
 // 旧 GetEnrichedTeamSpec/GetEnrichedTeamSpec 路径已随 c8 收尾批删除）。
 func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams) error {
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）

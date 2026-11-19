@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-		)
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -140,7 +140,6 @@ func parseToolCallArguments(tc *llmschema.ToolCall) map[string]any {
 	}
 	return result
 }
-
 
 // truncateString 截断字符串到指定最大 rune 长度，CJK 安全。
 // 对齐 Python: str(result)[:60000] — Python 按字符截断，Go 按 rune 截断以避免破坏多字节字符。

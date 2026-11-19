@@ -166,7 +166,7 @@ func NewTeamManager() *TeamManager {
 // 仅允许在进程初始化阶段调用（adapter 包 init），运行期不再变更，
 // 因此默认值写入后对所有实例只读，无并发写读竞态。
 // 偏差（c8 收尾）：原第二形参 codeMemberConfigurer 随 customizer 链删除
-//（上游 configure_code_team_member_agent 死链，见 IMPLEMENTATION_PLAN 15.16c 行）。
+// （上游 configure_code_team_member_agent 死链，见 IMPLEMENTATION_PLAN 15.16c 行）。
 func RegisterTeamCallbackDefaults(
 	broadcast func(channelID, sessionID string, event map[string]any),
 ) {

@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -25,6 +23,8 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 )
 
 // TestLoadTeamSpec_分布式normalize 缺依赖时回退 local（Go 恒无缺依赖，仅验证 normalize 路径）。
@@ -171,6 +171,7 @@ func TestApplySessionScopedTeamName_会话作用域(t *testing.T) {
 		t.Fatalf("scoped name should be idempotent, got %q", spec.TeamName)
 	}
 }
+
 // ──────────────────────────── 11.10：RegisterMemberRuntimeTools cron 注册 ────────────────────────────
 
 // TestRegisterMemberRuntimeTools_cron工具注册 测试 cron 工具经 CronRuntimeBridge 注册到
@@ -367,7 +368,6 @@ func TestRegisterMemberRuntimeTools_SendFile重复注册前缀移除(t *testing.
 		t.Errorf("二轮 send_file 卡应前缀移除后仍 1 张, got %d", sfCount2)
 	}
 }
-
 
 // ──────────────────────────── 团队测试通用 DeepAgent/AbilityManager fake ────────────────────────────
 // （原 Task13 customizer 测试桩，customizer 链删除后由 skill rail 测试族继续使用）

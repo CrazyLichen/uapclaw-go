@@ -4,9 +4,9 @@
 package actiongroups
 
 import (
-	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"encoding/json"
 	"fmt"
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"os"
 	"path/filepath"
 	"strings"

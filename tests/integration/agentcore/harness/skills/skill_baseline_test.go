@@ -144,7 +144,7 @@ func (s *SkillBaselineSuite) TestBaselineLifecycle() {
 	skillTool := skilltools.NewSkillTool(
 		rail.SysOperation(),
 		func(view sessioninterfaces.SessionFacade) []*skillpkg.Skill { return rail.GetSkillsForSession(view) },
-		"cn", agent.id, true,
+		"cn", agent.id, func() bool { return true },
 	)
 	res, err := skillTool.Invoke(ctx, map[string]any{"skill_name": "alpha"}, tool.WithToolSession(sess))
 	require.NoError(s.T(), err)
@@ -257,7 +257,7 @@ func newSkillTool(rail *skillrails.SkillUseRail) *skilltools.SkillTool {
 	return skilltools.NewSkillTool(
 		rail.SysOperation(),
 		func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return rail.GetSkillsForSession(sess) },
-		"cn", "it-agent", true,
+		"cn", "it-agent", func() bool { return true },
 	)
 }
 

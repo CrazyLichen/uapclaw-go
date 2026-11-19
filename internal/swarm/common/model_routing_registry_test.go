@@ -13,7 +13,7 @@ func newResolverConfig() map[string]any {
 					"model_config_obj":    map[string]any{"reasoning_level": "high"},
 				},
 				map[string]any{
-					"model_id": "mdl_b",
+					"model_id":            "mdl_b",
 					"model_client_config": map[string]any{"model_name": "gpt-b", "client_provider": "openai"},
 				},
 			},

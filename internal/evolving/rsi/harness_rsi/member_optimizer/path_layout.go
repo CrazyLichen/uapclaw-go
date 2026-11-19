@@ -41,7 +41,7 @@ type MemberOptimizerPathLayout struct {
 func NewMemberOptimizerPathLayout(outputRoot string) *MemberOptimizerPathLayout {
 	resolved, _ := filepath.Abs(expandUserTilde(outputRoot))
 	return &MemberOptimizerPathLayout{
-		OutputRoot: resolved,
+		OutputRoot:  resolved,
 		RuntimeRoot: inferRuntimeRoot(resolved),
 	}
 }

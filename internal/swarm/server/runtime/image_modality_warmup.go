@@ -38,6 +38,16 @@ const (
 // Python 测试以 patch.object(image_modality_warmup, "probe_image_support") 等价）。
 var probeImageSupportFunc = modalityprobe.ProbeImageSupport
 
+// SetProbeImageSupportFuncForTest 跨包测试注入点：替换 probeImageSupportFunc
+// 并返回还原函数。23.7 重写 warmup 时该导出缝被删，23.9 的
+// tests/integration/agentcore/harness/image_modality_itest_test.go 仍依赖——
+// 恢复（私有 var 的 Test-only 赋值缝，等价 py patch.object）。
+func SetProbeImageSupportFuncForTest(fn func(context.Context, *llm.Model) *bool) (restore func()) {
+	prev := probeImageSupportFunc
+	probeImageSupportFunc = fn
+	return func() { probeImageSupportFunc = prev }
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WarmImageModalityCache 对配置的每个模型各探测一次并缓存结论。
@@ -59,6 +69,14 @@ func WarmImageModalityCache(configBase map[string]any, reason string) {
 func RefreshImageModalityCache(configBase map[string]any, reason string) {
 	modalityprobe.ResetImageSupportCache()
 	WarmImageModalityCache(configBase, reason)
+}
+
+// WarmImageModalityCacheStatus 预热并返回整体可用性（全部结论 true 才可用）。
+// 23.7 重写时该导出面被折叠进无返回值的 WarmImageModalityCache，集成测试
+// image_modality_itest_test.go 依赖返回值断言——恢复（py warm_image_modality_cache
+// 自带 bool 返回值，warmup.go 注释"返回整体可用性"）。
+func WarmImageModalityCacheStatus(configBase map[string]any, reason string) bool {
+	return warmImageModalityCache(context.Background(), configBase, reason)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

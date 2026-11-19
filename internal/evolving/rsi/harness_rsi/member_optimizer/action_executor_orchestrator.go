@@ -134,13 +134,13 @@ a steering message alone does not require another model iteration.
 
 If you cannot produce a valid change, return:
 
-` + "```json\n" + `{
+`+"```json\n"+`{
   "action_id": "%s",
   "status": "failed",
   "changed_files": [],
   "errors": ["<specific reason>"]
 }
-` + "```",
+`+"```",
 		action.ActionID, action.Role, action.ActionGroup, action.Operation, action.ActionType,
 		action.TargetPath, declaredDisplay, allowedSkills, semanticContext, fileContext,
 		hostRoots, resourceGuidance, writeConstraint, outputContract, action.ActionID)
@@ -591,16 +591,16 @@ afterExec:
 		return nil, err
 	}
 	return &MemberActionExecutionResult{
-		ActionID:          action.ActionID,
-		Role:              action.Role,
-		MemberName:        action.MemberName,
-		Status:            status,
-		WorktreePath:      worktreeDir,
-		ArtifactPath:      artifactPath,
-		ChangedFiles:      changedFiles,
+		ActionID:           action.ActionID,
+		Role:               action.Role,
+		MemberName:         action.MemberName,
+		Status:             status,
+		WorktreePath:       worktreeDir,
+		ArtifactPath:       artifactPath,
+		ChangedFiles:       changedFiles,
 		DeclaredWritePaths: declaredPaths,
-		MergeStatus:       "pending",
-		Error:             pyStrOrEmpty(execResult["error"]),
+		MergeStatus:        "pending",
+		Error:              pyStrOrEmpty(execResult["error"]),
 	}, nil
 }
 
@@ -615,31 +615,31 @@ func (e *MemberActionExecutor) WriteFailedActionResult(action *MemberOptimizatio
 	os.MkdirAll(artifactDir, 0o755)
 	artifactPath := filepath.Join(artifactDir, "execution.json")
 	payload := map[string]any{
-		"action_id":             action.ActionID,
-		"role":                  action.Role,
-		"action":                structToMap(*action),
-		"status":                "failed",
-		"worktree_path":         "",
-		"changed_files":         []any{},
-		"actual_changed_files":  []any{},
-		"declared_write_paths":  toAnySlice(declaredPaths),
+		"action_id":              action.ActionID,
+		"role":                   action.Role,
+		"action":                 structToMap(*action),
+		"status":                 "failed",
+		"worktree_path":          "",
+		"changed_files":          []any{},
+		"actual_changed_files":   []any{},
+		"declared_write_paths":   toAnySlice(declaredPaths),
 		"allowed_executor_tools": toAnySlice(sortedExecutorTools()),
-		"response_text":         "",
-		"error":                 errText,
+		"response_text":          "",
+		"error":                  errText,
 	}
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
 	os.WriteFile(artifactPath, payloadJSON, 0o644)
 	return &MemberActionExecutionResult{
-		ActionID:          action.ActionID,
-		Role:              action.Role,
-		MemberName:        action.MemberName,
-		Status:            "failed",
-		WorktreePath:      "",
-		ArtifactPath:      artifactPath,
-		ChangedFiles:      []string{},
+		ActionID:           action.ActionID,
+		Role:               action.Role,
+		MemberName:         action.MemberName,
+		Status:             "failed",
+		WorktreePath:       "",
+		ArtifactPath:       artifactPath,
+		ChangedFiles:       []string{},
 		DeclaredWritePaths: declaredPaths,
-		MergeStatus:       "",
-		Error:             errText,
+		MergeStatus:        "",
+		Error:              errText,
 	}
 }
 
@@ -719,14 +719,20 @@ func MergeSubwave(request subwaveMergeRequest) *MemberActionMergeResult {
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
 	os.WriteFile(mergeArtifact, payloadJSON, 0o644)
 	return &MemberActionMergeResult{
-		Role:           request.role,
-		WaveIndex:      request.waveIndex,
-		SubwaveIndex:   request.subwaveIndex,
-		ActionIDs:      func() []string { var out []string; for _, r := range request.results { out = append(out, r.ActionID) }; return out }(),
-		Status:         mergeStatus,
-		MergedFiles:    sortedUniqueStrings(mergedFiles),
-		Conflicts:      conflicts,
-		ArtifactPath:   mergeArtifact,
+		Role:         request.role,
+		WaveIndex:    request.waveIndex,
+		SubwaveIndex: request.subwaveIndex,
+		ActionIDs: func() []string {
+			var out []string
+			for _, r := range request.results {
+				out = append(out, r.ActionID)
+			}
+			return out
+		}(),
+		Status:       mergeStatus,
+		MergedFiles:  sortedUniqueStrings(mergedFiles),
+		Conflicts:    conflicts,
+		ArtifactPath: mergeArtifact,
 	}
 }
 

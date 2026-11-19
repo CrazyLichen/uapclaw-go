@@ -74,6 +74,7 @@ type fakeLeaderBlueprint struct {
 
 func (f *fakeLeaderBlueprint) Role() schema.TeamRole                          { return schema.TeamRoleLeader }
 func (f *fakeLeaderBlueprint) DispatcherMemberName() string                   { return "leader" }
+func (f *fakeLeaderBlueprint) DispatcherSpec() *schema.TeamAgentSpec          { return nil }
 func (f *fakeLeaderBlueprint) DispatcherReliability() *core.ReliabilityConfig { return f.cfg }
 
 // capturedSubscriber messager 订阅侧的捕获器（模拟 leader kernel 的 _deliver）。
@@ -301,11 +302,12 @@ func roundStub(r *fakeLeaderRound) coordtypes.DispatcherHost {
 // roundAdapter 转发 DeliverInput（其余恒零值）。
 type roundAdapter struct{ r *fakeLeaderRound }
 
-func (a *roundAdapter) IsAgentReady() bool                { return true }
-func (a *roundAdapter) IsAgentRunning() bool              { return false }
-func (a *roundAdapter) HasInFlightRound() bool            { return false }
-func (a *roundAdapter) HasPendingInterrupt() bool         { return false }
-func (a *roundAdapter) CancelAgent(context.Context) error { return nil }
+func (a *roundAdapter) AutoStartMember(_ context.Context, _ string) bool { return true }
+func (a *roundAdapter) IsAgentReady() bool                               { return true }
+func (a *roundAdapter) IsAgentRunning() bool                             { return false }
+func (a *roundAdapter) HasInFlightRound() bool                           { return false }
+func (a *roundAdapter) HasPendingInterrupt() bool                        { return false }
+func (a *roundAdapter) CancelAgent(context.Context) error                { return nil }
 func (a *roundAdapter) DeliverInput(ctx context.Context, content string, useSteer bool, _ *agentinterfaces.RunContext) error {
 	return a.r.DeliverInput(ctx, content, useSteer, nil)
 }

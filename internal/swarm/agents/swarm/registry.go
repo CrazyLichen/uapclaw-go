@@ -3,10 +3,10 @@ package swarm
 import (
 	"sync"
 
-	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -26,7 +26,7 @@ var (
 // registry.py:180-198 中的工厂注册段）。安全地可多次调用，只有首次执行
 // 注册；覆盖注册语义（后者覆盖前者）由 core 侧注册函数保证。
 // 偏差 D-15.16-c3：Python register_swarm_providers 的 rails 目录注册段
-//（register_from_catalog / ensure_harness_elements_registered）⤵️15.7/15.8，
+// （register_from_catalog / ensure_harness_elements_registered）⤵️15.7/15.8，
 // 本节不含。
 func RegisterSwarmBuildContextFactory() {
 	registeredMu.Lock()

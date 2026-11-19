@@ -41,10 +41,10 @@ type actionExecutionContext struct {
 // subwaveMergeRequest 子波合并请求。
 // Python: action_executor.py:79-86 _SubwaveMergeRequest。
 type subwaveMergeRequest struct {
-	role        string
-	waveIndex   int
-	subwaveIndex int
-	results     []*MemberActionExecutionResult
+	role           string
+	waveIndex      int
+	subwaveIndex   int
+	results        []*MemberActionExecutionResult
 	integrationDir string
 	runDir         string
 }
@@ -286,7 +286,7 @@ func SanitizeRuntimeSemanticText(value any) string {
 		{"FAIL_TO_PASS", "required checks"},
 		{"PASS_TO_PASS", "regression checks"},
 	} {
-		text = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(pair[0])).ReplaceAllString(text, pair[1])
+		text = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(pair[0])).ReplaceAllString(text, pair[1])
 	}
 	// Python: \b(hyp|issue)_[A-Za-z0-9_]+\b → ""
 	text = regexp.MustCompile(`(?i)\b(?:hyp|issue)_[A-Za-z0-9_]+\b`).ReplaceAllString(text, "")
@@ -349,8 +349,8 @@ func RuntimeContractProjection(action MemberOptimizationAction) []map[string]any
 		}
 		decisionContract := runtimeDecisionContractProjection(rawMap["decision_contract"])
 		projectedContract := map[string]any{
-			"public_tasks":      toAnySlice(tasks),
-			"required_behavior": requiredBehavior,
+			"public_tasks":       toAnySlice(tasks),
+			"required_behavior":  requiredBehavior,
 			"forbidden_behavior": toAnySlice(forbiddenBehavior),
 		}
 		// Python: has_decision_contract = any(value not in (None, "", []))

@@ -67,7 +67,7 @@ func (s *NativeHarnessSuite) TestStart后Send一轮回到Idle() {
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("第一轮完成"))
 
-	s.Require().NoError(h.Send(s.Ctx, "开始任务", false))
+	s.Require().NoError(h.Send(s.Ctx, "开始任务", false, nil))
 
 	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond, "Send 后应进入 RUNNING")
@@ -86,12 +86,12 @@ func (s *NativeHarnessSuite) Test连发两轮() {
 		mockllm.CreateTextResponse("第二轮"),
 	)
 
-	s.Require().NoError(h.Send(s.Ctx, "任务一", false))
+	s.Require().NoError(h.Send(s.Ctx, "任务一", false, nil))
 	// 等第一轮结束回到 idle
 	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
-	s.Require().NoError(h.Send(s.Ctx, "任务二", false))
+	s.Require().NoError(h.Send(s.Ctx, "任务二", false, nil))
 	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
@@ -106,7 +106,7 @@ func (s *NativeHarnessSuite) TestAbort立即中断() {
 
 	// 让模型调用卡住：不设响应，模型调用会等待？改用工具调用让一轮持续。
 	// 简单验证：Send 后 abort，状态不应 panic，最终能 Stop。
-	s.Require().NoError(h.Send(s.Ctx, "长任务", false))
+	s.Require().NoError(h.Send(s.Ctx, "长任务", false, nil))
 	s.Require().NoError(h.Abort(s.Ctx, true))
 }
 
@@ -120,7 +120,7 @@ func (s *NativeHarnessSuite) Test输出迭代器读到数据() {
 	out := h.Outputs()
 	s.Require().NotNil(out)
 
-	s.Require().NoError(h.Send(s.Ctx, "生成内容", false))
+	s.Require().NoError(h.Send(s.Ctx, "生成内容", false, nil))
 
 	// 读取至少一个 chunk（含 END 哨兵前的内容）
 	readAny := false
@@ -149,7 +149,7 @@ func (s *NativeHarnessSuite) Test订阅轮次事件() {
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("一轮"))
 
-	s.Require().NoError(h.Send(s.Ctx, "开始", false))
+	s.Require().NoError(h.Send(s.Ctx, "开始", false, nil))
 
 	kinds := map[string]bool{}
 	for i := 0; i < 2; i++ {

@@ -14,7 +14,6 @@ import (
 	verifieddownloadassets "github.com/uapclaw/uapclaw-go/internal/swarm/common/verified_download_assets"
 )
 
-
 // ──────────────────── 外部包测试基建 ────────────────────
 
 // boolPtr 可选 bool 测试助手。

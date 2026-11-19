@@ -76,7 +76,7 @@ func (s *PauseResumeSuite) TestI01_模型相位暂停后恢复不重复用户消
 		Chunks:      []*llmschema.AssistantMessageChunk{llmschema.NewAssistantMessageChunk("完成")},
 	})
 
-	s.Require().NoError(h.Send(s.Ctx, "原始任务", false))
+	s.Require().NoError(h.Send(s.Ctx, "原始任务", false, nil))
 	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond)
 	s.Require().NoError(h.Pause(s.Ctx))
@@ -102,7 +102,7 @@ func (s *PauseResumeSuite) TestI03_立即中止回滚并投递marker() {
 		StallBefore: 5 * time.Second,
 		Chunks:      []*llmschema.AssistantMessageChunk{llmschema.NewAssistantMessageChunk("不该出现")},
 	})
-	s.Require().NoError(h.Send(s.Ctx, "长任务", false))
+	s.Require().NoError(h.Send(s.Ctx, "长任务", false, nil))
 	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond)
 	// 等到内层上下文已创建：否则 abort 可能落在 initContext 之前，

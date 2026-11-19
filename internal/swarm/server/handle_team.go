@@ -15,11 +15,11 @@ import (
 //
 // Python: handle_team_mq_publish (jiuwenswarm/server/handlers/team.py:659-684)：
 //
-//	1. session_id 缺失 → ok=False, "session_id is required"
-//	2. params.payload 缺失 → ok=False, "payload is required"
-//	3. payload 非 dict 或 type != "team.external_event" → ok=False, "invalid_external_event"
-//	4. get_team_manager(channel_id).interact(session_id, payload)
-//	5. 成功 → {"published": true}；失败 → {"error": reason}
+//  1. session_id 缺失 → ok=False, "session_id is required"
+//  2. params.payload 缺失 → ok=False, "payload is required"
+//  3. payload 非 dict 或 type != "team.external_event" → ok=False, "invalid_external_event"
+//  4. get_team_manager(channel_id).interact(session_id, payload)
+//  5. 成功 → {"published": true}；失败 → {"error": reason}
 //
 // ⤴️25.6 回填登记：25.6 原文含「team.mq.publish 混合事件」，本 handler 为
 // 15.16b 端到端出站链的承载件，随本批提前落地（最小实现）。

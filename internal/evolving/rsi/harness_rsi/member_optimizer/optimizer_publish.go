@@ -123,8 +123,8 @@ func (m *MemberOptimizer) publish(request publishRequest) *MemberOptimizationArt
 		outputRoot: outputRoot, harnessRefsPath: request.harnessRefsPath,
 		publishedRoles: publishedRoles, failedRoles: failedRoles,
 		skippedRoles: skippedRoles, roleResults: roleResults,
-		pathLayout: pathLayout,
-		refsPath:   ternaryStr(deferPublish, filepath.Join(runDir, "candidate_harness_refs.yaml"), ""),
+		pathLayout:        pathLayout,
+		refsPath:          ternaryStr(deferPublish, filepath.Join(runDir, "candidate_harness_refs.yaml"), ""),
 		publishedRefPaths: publishedRefPaths,
 		cumulativePublish: deferPublish,
 	})
@@ -176,13 +176,13 @@ func (m *MemberOptimizer) publish(request publishRequest) *MemberOptimizationArt
 		FixResultPath:            request.fixResultPath,
 		RoleResults:              roleResults,
 		Metadata: map[string]any{
-			"eval_ref_path":            request.evalRefPath,
-			"analysis_result_path":     request.analysisResultPath,
-			"source_harness_refs_path": request.harnessRefsPath,
-			"runtime_root":             pathLayout.RuntimeRoot,
-			"runtime_run_dir":          pathLayout.RunRuntimeDir(filepath.Base(runDir)),
-			"runtime_worktrees_dir":    pathLayout.WorktreesDir(filepath.Base(runDir)),
-			"candidate_manifest_path":  request.candidateManifestPath,
+			"eval_ref_path":                request.evalRefPath,
+			"analysis_result_path":         request.analysisResultPath,
+			"source_harness_refs_path":     request.harnessRefsPath,
+			"runtime_root":                 pathLayout.RuntimeRoot,
+			"runtime_run_dir":              pathLayout.RunRuntimeDir(filepath.Base(runDir)),
+			"runtime_worktrees_dir":        pathLayout.WorktreesDir(filepath.Base(runDir)),
+			"candidate_manifest_path":      request.candidateManifestPath,
 			"optimization_hypotheses_path": request.optimizationHypothesesPath,
 			"execution_errors_by_role":     executionErrorsByRole,
 		},
@@ -384,18 +384,18 @@ func writeCurrentHarnessRefs(request harnessRefsWriteRequest) string {
 		promotionStatus = "pending_gate"
 	}
 	payload := map[string]any{
-		"version":                   1,
-		"source_harness_refs_path":  request.harnessRefsPath,
-		"harness_refs":              harnessRefs,
-		"published_roles":           effectivePublishedRoles,
-		"candidate_ready_roles":     effectivePublishedRoles,
-		"staged_roles":              effectivePublishedRoles,
-		"verified_roles":            effectivePublishedRoles,
-		"promoted_roles":            []string{},
-		"promotion_status":          promotionStatus,
-		"failed_roles":              ternaryAnySlice(request.cumulativePublish, nil, toAnySlice(request.failedRoles)),
-		"skipped_roles":             ternaryAnySlice(request.cumulativePublish, nil, toAnySlice(request.skippedRoles)),
-		"role_results":              effectiveRoleResults,
+		"version":                  1,
+		"source_harness_refs_path": request.harnessRefsPath,
+		"harness_refs":             harnessRefs,
+		"published_roles":          effectivePublishedRoles,
+		"candidate_ready_roles":    effectivePublishedRoles,
+		"staged_roles":             effectivePublishedRoles,
+		"verified_roles":           effectivePublishedRoles,
+		"promoted_roles":           []string{},
+		"promotion_status":         promotionStatus,
+		"failed_roles":             ternaryAnySlice(request.cumulativePublish, nil, toAnySlice(request.failedRoles)),
+		"skipped_roles":            ternaryAnySlice(request.cumulativePublish, nil, toAnySlice(request.skippedRoles)),
+		"role_results":             effectiveRoleResults,
 	}
 	if len(roleIdentities) > 0 {
 		payload["roles"] = roleIdentities
@@ -508,7 +508,7 @@ func compileSingleHarnessPlanningInputs(
 		assigned = append(assigned, RoleIssueAttribution{
 			IssueID: issue.IssueID, Role: role.Role, MemberName: role.MemberName,
 			HarnessRefPath: role.HarnessRefPath, Confidence: 1.0,
-			Evidence: evidenceAny,
+			Evidence:  evidenceAny,
 			TraceRefs: traceRefs,
 			Rationale: fmt.Sprintf("Analyzer-authored immutable hypothesis %s; downstream stages "+
 				"must preserve required_behavior verbatim.", hypothesisID),
@@ -537,7 +537,7 @@ func compileSingleHarnessPlanningInputs(
 			IssueID: issue.IssueID, Role: role.Role,
 			MechanismType: mechanismType, FailureSignature: failureSignature,
 			Confidence: 1.0, OptimizationSurface: optimizationSurface,
-			Evidence: evidenceAny,
+			Evidence:     evidenceAny,
 			EvidenceRefs: traceRefs,
 			Rationale: fmt.Sprintf("Analyzer suggests lever=%s; choose the smallest "+
 				"supported intervention preserving the failure facts and behavior objective.", recommendedLever),
@@ -552,7 +552,7 @@ func compileSingleHarnessPlanningInputs(
 		CandidateRoles:           append([]MemberRoleCandidate{}, candidateRoles...),
 		AssignedRoleIssues:       assigned,
 		Metadata: map[string]any{
-			"mode": "single_harness_direct",
+			"mode":                             "single_harness_direct",
 			"semantic_rewrite_stages_bypassed": []any{"role_attributor", "mechanism_attributor"},
 		},
 	}
@@ -564,7 +564,7 @@ func compileSingleHarnessPlanningInputs(
 		MechanismAttributionID: "single_harness_surface_unresolved",
 		RoleMechanisms:         roleMechanisms,
 		Metadata: map[string]any{
-			"mode":              "single_harness_direct",
+			"mode":               "single_harness_direct",
 			"semantic_authority": "optimization_hypotheses",
 		},
 	}
@@ -602,12 +602,12 @@ func compileSingleHarnessPlanningInputs(
 		}
 		targets = append(targets, MemberOptimizationTarget{
 			Role: role.Role, MemberName: role.MemberName,
-			HarnessRefPath: role.HarnessRefPath,
-			AttributedIssueIDs: executableIssueIDs,
-			Confidence:         1.0,
-			Reason:             "Directly bound to analyzer-authored immutable hypotheses.",
-			EvidenceRefs:       evidenceRefList,
-			MechanismTypes:     mechanismTypes,
+			HarnessRefPath:       role.HarnessRefPath,
+			AttributedIssueIDs:   executableIssueIDs,
+			Confidence:           1.0,
+			Reason:               "Directly bound to analyzer-authored immutable hypotheses.",
+			EvidenceRefs:         evidenceRefList,
+			MechanismTypes:       mechanismTypes,
 			OptimizationSurfaces: uniqueSurfaces,
 			Metadata: map[string]any{
 				"optimization_hypothesis_ids": hypothesisIDs,
@@ -618,7 +618,7 @@ func compileSingleHarnessPlanningInputs(
 		SelectionID: "single_harness_direct_selection",
 		Targets:     targets,
 		Metadata: map[string]any{
-			"mode":             "single_harness_direct",
+			"mode":              "single_harness_direct",
 			"selector_bypassed": true,
 			"deferred_levers":   deferredLevers,
 		},

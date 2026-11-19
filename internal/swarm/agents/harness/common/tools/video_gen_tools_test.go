@@ -624,7 +624,8 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 	// 成功分支：真实 SendFileToolkit（D-23.8-5 已回收）——push 宿主在位 →
 	// chat.file 投递成功 → 不推送兜底
 	SetSendFilePushFunc(func(context.Context, map[string]any) error { return nil })
-	SetSendFileHistoryFunc(func(string, string, string, string, string, float64, string, map[string]any, map[string]any, string) {})
+	SetSendFileHistoryFunc(func(string, string, string, string, string, float64, string, map[string]any, map[string]any, string) {
+	})
 	t.Cleanup(func() { SetSendFilePushFunc(nil); SetSendFileHistoryFunc(nil) })
 	SetVideoGenRuntimePush(func(map[string]any) bool { return true })
 	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })

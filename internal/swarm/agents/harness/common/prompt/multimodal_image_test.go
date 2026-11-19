@@ -15,7 +15,7 @@ import (
 // TestIsImageContentBlock 对齐 Python is_image_content_block:35-42。
 func TestIsImageContentBlock(t *testing.T) {
 	cases := []struct {
-		part  llmschema.ContentPart
+		part   llmschema.ContentPart
 		expect bool
 	}{
 		{llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "data:image/png;base64,x"}}, true},
@@ -62,12 +62,12 @@ func TestExtractMultimodalImageFiles_mediaItems与uploadedImages(t *testing.T) {
 func TestExtractMultimodalImageFiles_过滤与去重(t *testing.T) {
 	params := map[string]any{
 		"media_items": []any{
-			"not-a-map",                                                             // 非 dict → 丢
-			map[string]any{"type": "video", "path": "/tmp/v.mp4"},                   // type 非 image → 丢
-			map[string]any{"path": ""},                                              // 无 path → 丢
-			map[string]any{"path": "/tmp/t.txt"},                                    // mime 不在白名单 → 丢
-			map[string]any{"path": "/tmp/d.webp"},                                   // mime 缺失按扩展名补 webp
-			map[string]any{"path": "/tmp/a.png", "mime_type": "image/png"},          // 第一份
+			"not-a-map", // 非 dict → 丢
+			map[string]any{"type": "video", "path": "/tmp/v.mp4"},                                  // type 非 image → 丢
+			map[string]any{"path": ""},                                                             // 无 path → 丢
+			map[string]any{"path": "/tmp/t.txt"},                                                   // mime 不在白名单 → 丢
+			map[string]any{"path": "/tmp/d.webp"},                                                  // mime 缺失按扩展名补 webp
+			map[string]any{"path": "/tmp/a.png", "mime_type": "image/png"},                         // 第一份
 			map[string]any{"path": "/tmp/a.png", "mime_type": "image/png", "size_bytes": int64(3)}, // 重复 path → 丢
 		},
 	}
@@ -297,7 +297,11 @@ func TestStripImageContentBlocks_混合内容(t *testing.T) {
 func TestStripImageContentFromModelContext(t *testing.T) {
 	msgs := []llmschema.BaseMessage{
 		llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "text only"),
-		func() llmschema.BaseMessage { m := llmschema.NewDefaultMessage(llmschema.RoleTypeAssistant, ""); m.SetContent(llmschema.NewMultiModalContent(llmschema.ContentPart{Type: "text", Text: "with"}, llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "x"}})); return m }(),
+		func() llmschema.BaseMessage {
+			m := llmschema.NewDefaultMessage(llmschema.RoleTypeAssistant, "")
+			m.SetContent(llmschema.NewMultiModalContent(llmschema.ContentPart{Type: "text", Text: "with"}, llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "x"}}))
+			return m
+		}(),
 	}
 	total := StripImageContentFromModelContext(msgs)
 	if total != 1 {
