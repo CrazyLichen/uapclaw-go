@@ -76,15 +76,15 @@ func TestModelApiProtocol(t *testing.T) {
 // codex + client_provider=openai + api_base → jiuwen；其他原样。
 func TestExternalCLIProviderName_codexOpenAI改写(t *testing.T) {
 	cc := &llmschema.ModelClientConfig{ClientProvider: "openai", APIBase: "http://gw"}
-	if got := ExternalCLIProviderName(cc, "codex"); got != "jiuwen" {
+	if got := external.ExternalCLIProviderName(cc, "codex"); got != "jiuwen" {
 		t.Fatalf("got %q", got)
 	}
 	cc2 := &llmschema.ModelClientConfig{ClientProvider: "openai", APIBase: ""}
-	if got := ExternalCLIProviderName(cc2, "codex"); got != "openai" {
+	if got := external.ExternalCLIProviderName(cc2, "codex"); got != "openai" {
 		t.Fatalf("无 api_base 透传: %q", got)
 	}
 	cc3 := &llmschema.ModelClientConfig{ClientProvider: "openai", APIBase: "http://gw"}
-	if got := ExternalCLIProviderName(cc3, "claude"); got != "openai" {
+	if got := external.ExternalCLIProviderName(cc3, "claude"); got != "openai" {
 		t.Fatalf("非 codex 透传: %q", got)
 	}
 }
