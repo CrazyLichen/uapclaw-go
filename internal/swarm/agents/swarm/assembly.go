@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -178,7 +178,7 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 		TeamOutputsDir:          teamOutputsDir,
 		TeamSkillVisibilityPath: teamVisibilityPath,
 		GlobalSkillsDir:         globalSkillsDir,
-		TrajectorySpanProcessor: obs.GetTrajectorySpanProcessor(),
+		TrajectorySpanProcessor: demand.GetTrajectorySpanProcessor(),
 		HeartbeatJobService:     GetHeartbeatJobService(),
 	})
 

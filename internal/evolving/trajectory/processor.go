@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sync"
 
-	trace "go.opentelemetry.io/otel/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
@@ -251,7 +250,7 @@ func (p *TrajectorySpanProcessor) WithSuppress() Suppress {
 
 // OnStart 空操作。
 // Python: processor.py on_start。
-func (p *TrajectorySpanProcessor) OnStart(_ context.Context, _ trace.SpanContext, _ *trace.Span) {}
+func (p *TrajectorySpanProcessor) OnStart(_ context.Context, _ sdktrace.ReadWriteSpan) {}
 
 // OnEnd 捕获一个结束的 span，绝不影响调用线程。
 // OTel 在 span.end() 中同步调用 processor；畸形 span 或路由侧失败不得
@@ -316,11 +315,17 @@ func (p *TrajectorySpanProcessor) OnEnd(span sdktrace.ReadOnlySpan) {
 
 // ForceFlush 无操作（采集是同步的）。
 // Python: processor.py force_flush。
-func (p *TrajectorySpanProcessor) ForceFlush(_ uint64) bool { return true }
+func (p *TrajectorySpanProcessor) ForceFlush(_ context.Context) error { return nil }
 
 // Shutdown 清空全部订阅。
 // Python: processor.py shutdown。
-func (p *TrajectorySpanProcessor) Shutdown() {
+func (p *TrajectorySpanProcessor) Shutdown(_ context.Context) error {
+	p.shutdownLocked()
+	return nil
+}
+
+// shutdownLocked 槽位清理本体（分离以满足 SpanProcessor 接口签名）。
+func (p *TrajectorySpanProcessor) shutdownLocked() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, state := range p.subs {

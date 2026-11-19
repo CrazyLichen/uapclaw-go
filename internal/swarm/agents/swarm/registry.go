@@ -3,7 +3,7 @@ package swarm
 import (
 	"sync"
 
-	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -52,7 +52,7 @@ func buildSwarmContextFromSeed(seed map[string]any) (hschema.BuildContextInterfa
 	if err != nil {
 		return nil, err
 	}
-	return SwarmBuildContextFromSeed(seed, cfg, obs.GetTrajectorySpanProcessor()), nil
+	return SwarmBuildContextFromSeed(seed, cfg, demand.GetTrajectorySpanProcessor()), nil
 }
 
 // swarmLoadConfig 加载默认 config.yaml。

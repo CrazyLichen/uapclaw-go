@@ -179,7 +179,7 @@ func TestShutdown(t *testing.T) {
 	ro, _ := newTestSpan("llm.call", nil)
 	handle, _ := p.Subscribe([]string{"llm"}, ro.SpanContext().TraceID().String())
 	p.OnEnd(ro)
-	p.Shutdown()
+	p.Shutdown(context.Background())
 	if traj, _ := p.Drain(handle); traj != nil {
 		t.Fatal("shutdown must clear all subscriptions")
 	}
