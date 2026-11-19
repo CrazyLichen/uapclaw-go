@@ -85,7 +85,9 @@ func TestTeamBindingStore_持久化往返(t *testing.T) {
 	require.NotNil(t, binding)
 	assert.Equal(t, "tpl-1", binding.TemplateID)
 	assert.Equal(t, []string{"s1"}, binding.SessionIDs)
-	assert.Equal(t, float64(1), binding.TemplateSnapshot["k"])
+	// Python to_dict 刻意不序列化 template_snapshot（team_binding_store.py:77-89
+	// payload 无该键）——往返必丢，D-15.16-e19 登记为上游语义，快照仅运行期内存。
+	assert.Nil(t, binding.TemplateSnapshot)
 	// legacy 迁移：目标文件不存在时搬移旧目录
 	legacyDir := t.TempDir()
 	legacyPath := filepath.Join(legacyDir, "teams", "bindings.json")
