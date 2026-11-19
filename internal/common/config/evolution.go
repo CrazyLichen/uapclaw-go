@@ -28,3 +28,10 @@ func EvolutionConfig(cfg map[string]any) map[string]any {
 func SkillEvolutionEnabled(cfg map[string]any) bool {
 	return EvolutionConfig(cfg)["skill_evolution"] == true
 }
+
+// EvolutionAutoSaveEnabled 返回规范化的 react.evolution.auto_save 开关
+// （纯配置读取，不落盘不读 env）。
+// Python: get_evolution_auto_save_enabled (config.py:524-526)
+func EvolutionAutoSaveEnabled(cfg map[string]any) bool {
+	return EvolutionConfig(cfg)["auto_save"] == true
+}

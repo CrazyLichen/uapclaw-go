@@ -108,6 +108,13 @@ const (
 	TeamSkillUse = "core.team.skill_use"
 	// TeamObservability 团队可观测性轨（Go 实现未落地，见占位工厂）
 	TeamObservability = "core.team.observability"
+
+	// ExploreAgent 探索子代理（openjiuwen 提供）。Python: subagent_elements.py:40
+	ExploreAgent = "core.explore_agent"
+	// PlanAgent 计划子代理（openjiuwen 提供）。Python: subagent_elements.py:41
+	PlanAgent = "core.plan_agent"
+	// BrowserAgent 浏览器子代理（openjiuwen 提供）。Python: subagent_elements.py:42
+	BrowserAgent = "core.browser_agent"
 	// teamWorkspaceMountPath 团队工作空间在成员工作区里的挂载路径
 	// Python: agent_configurator.py:943 的 "/.team/workspace"
 	teamWorkspaceMountPath = "/.team/workspace"

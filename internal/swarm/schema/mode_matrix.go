@@ -324,6 +324,17 @@ func IsCodeProfileMode(mode string) bool {
 	}
 }
 
+// IsTeamPlanMode 判断是否 normal/code 两种 Team Plan 之一。
+// Python: gateway/common/mode_matrix.py:303-309 is_team_plan_mode
+func IsTeamPlanMode(mode string) bool {
+	switch CanonicalizeModeText(mode) {
+	case "team.plan.normal", "team.plan.code", "team.work.plan", "team.code.plan":
+		return true
+	default:
+		return false
+	}
+}
+
 // IsAgentMode 判断是否 agent 工作族（含历史 agent.plan/agent.fast/plan/fast 与新 agent.work.*）。
 // Python: gateway/common/mode_matrix.py is_agent_mode
 func IsAgentMode(mode string) bool {
