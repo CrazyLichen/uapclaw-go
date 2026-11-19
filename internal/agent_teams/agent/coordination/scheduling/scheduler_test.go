@@ -29,10 +29,8 @@ type fakeDelivery struct {
 	useSteer bool
 }
 
-func (h *fakeHost) DeliverInput(_ context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error {
-	if s, ok := content.(string); ok {
-		h.delivered = append(h.delivered, fakeDelivery{content: s, useSteer: useSteer})
-	}
+func (h *fakeHost) DeliverInput(_ context.Context, content string, useSteer bool, runContext *agentinterfaces.RunContext) error {
+	h.delivered = append(h.delivered, fakeDelivery{content: content, useSteer: useSteer})
 	return nil
 }
 

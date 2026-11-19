@@ -15,7 +15,8 @@
 //	├── feedback.go             # 输出修复预算与停滞追踪
 //	├── progress.go             # 优化编排器进度事件
 //	├── runtime_policy.go       # runtime.yaml 白名单校验（宿主上限封顶）
-//	├── runtime_reliability.go  # 单 Agent 可靠性轨（占位工厂 ⤴️ 25.1g 回填）
+//	├── runtime_reliability.go  # 单 Agent 可靠性轨装配（25.1g 真身已回填）
+//	├── runtime_cancellation.go # 协作式取消桩 RaiseIfCancelled（⤴️ 17.7 回填删除）
 //	├── artifact_io.go          # 文件系统 YAML/JSON 产物小助手
 //	├── config/                 # AutoCoordinatingHarnessConfig 全链配置
 //	├── data_loader/            # 评估数据集载入与批次规划

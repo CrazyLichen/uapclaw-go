@@ -50,7 +50,7 @@ const (
 type SchedulerHost interface {
 	// DeliverInput 把内容注入 leader 自己的输入流。
 	// Python: deliver_input(content, *, use_steer=True)
-	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
+	DeliverInput(ctx context.Context, content string, useSteer bool, runContext *agentinterfaces.RunContext) error
 	// AutoStartMember 尽力拉起一个 UNSTARTED 成员运行时。
 	// Python: auto_start_member(member_name)
 	AutoStartMember(ctx context.Context, memberName string) bool

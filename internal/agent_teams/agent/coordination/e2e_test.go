@@ -25,7 +25,7 @@ type fakeTrackableHost struct {
 	cancelCalled    bool
 }
 
-func (f *fakeTrackableHost) DeliverInput(_ context.Context, content any, _ bool, _ *agentinterfaces.RunContext) error {
+func (f *fakeTrackableHost) DeliverInput(_ context.Context, content string, _ bool, _ *agentinterfaces.RunContext) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deliveredInputs = append(f.deliveredInputs, content)

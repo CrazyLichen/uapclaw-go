@@ -18,7 +18,7 @@ type fakeDeliverInputer struct {
 	err       error
 }
 
-func (f *fakeDeliverInputer) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+func (f *fakeDeliverInputer) DeliverInput(_ context.Context, _ string, _ bool, _ *agentinterfaces.RunContext) error {
 	f.delivered = true
 	return f.err
 }

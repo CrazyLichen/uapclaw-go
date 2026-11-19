@@ -1099,12 +1099,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 17.4c3 | ✅ | 验证与发布 | verification 1,754（静态检查器群+可修复/不可修复名单+repair 修复闭环+修复快照锁定；gopapy v2 Python AST 技能安全扫描）/ package_registry / plugin_manifest / path_layout / execution_contract / optimizer 门面 1,366（optimize 全流程+noop/复用/stage_error+发布 PublishCoordinator） | 同上 ← 同名（~5,000 行） |
 | 17.4d | ☐ | 单 harness 迭代循环 | iterative.py（4,554 行）主循环 + continuous.py（逐目标改进+一次独立全量评估）+ promotion_policy.py（非回归门/EPSILON/包指纹/完整分数）+ candidate_feedback / runtime·source_evidence / events_translate；epoch 树与引擎事件对齐 `rsi/events.py`（17.1 已落地契约） | `internal/evolving/rsi/harness_rsi/single_harness/` ← 同名（~7,300 行） |
 | 17.4e | ☐ | 流水线指挥 auto_harness + improver_evolution | auto_harness 分阶段流水线（stages: assess/plan/implement/verify/commit/publish_pr、pipelines: extended_evolve、infra: ci_gate_runner 1,090 / git_operations / parsers / skill_source_manager / runtime_extension_merger、agents/registry/skills 等）+ improver_evolution（policy / feedback_analysis 804 / meta_validation） | `internal/evolving/rsi/harness_rsi/{auto_harness,improver_evolution}/` ← 同名（~12,900 行） |
-| 17.4f | ☐ | stub 回填段 | ① evaluator 桩（评分接口最小实现）⤴️ 17.6 回填真实 LLM judge/verdict；② 取消协作桩（`_raise_if_cancelled` 等价入口）⤴️ 17.7 回填协作式终止；③ 预算/usage 接线 ⤴️ 17.6/17.9 回填请求预算与服务面；所有桩在对应章节完成后删除（规则 8） | `internal/evolving/rsi/harness_rsi/`（桩）⤴️ `openjiuwen/rsi/`（evaluator 系列）· 17.7 |
+| 17.4f | ✅ | stub 回填段 | ✅ 两桩落地：① TeamEvaluator 打分桩（`evaluator/team_evaluator.go`，真签名+哨兵 `ErrEvaluatorNotImplemented`）⤴️ 17.6 回填真身后删桩；② 取消协作桩 `RaiseIfCancelled`（`harness_rsi/runtime_cancellation.go`）⤴️ 17.7 回填后删桩、17.4d 接线调用点；③ 预算/usage 接线判定已由 17.1 兑现（usage.go 全面对齐，请求预算属 17.6），无桩（见 spec `2026-11-19-rsi-17.4f-stub-backfill-design`） | `internal/evolving/rsi/harness_rsi/`（桩）⤴️ `openjiuwen/rsi/`（evaluator 系列）· 17.7 |
 | 17.5 | ☐ | paper pipeline | paper 上传/评分/评审证据链、报告渲染（tex/pdf）、宽松校验 | 同上 ← `openjiuwen/rsi/`（paper 系列） |
-| 17.6 | ☐ | 评估 agent | LLM judge（评分规则/自然语言 rubric）、JSON verdict 恢复、嵌套证据、并发与请求预算 | 同上 ← `openjiuwen/rsi/`（evaluator 系列） |
-| 17.7 | ☐ | 任务生命周期 | 取消/终结持久化、资源清理隔离、Windows 路径预算、协作式终止 | 同上 |
+| 17.6 | ☐ | 评估 agent | LLM judge（评分规则/自然语言 rubric）、JSON verdict 恢复、嵌套证据、并发与请求预算；⤴️ 回填 17.4f：TeamEvaluator 真身落地后删除 `evaluator/team_evaluator.go` 桩与 `ErrEvaluatorNotImplemented`（规则 8，锚点全仓 0 命中）；⤴️ 17.4f 桩附带回填：① Evaluate 的 cases 由 nil 桩占位换为 `_load_dataset_cases` 载入产物（team_evaluator.go L46-48）；② 三处 any 槽收窄为 17.6 真契约（cases/onCaseStage/baselineContexts，当前 map[string]any 占位） | 同上 ← `openjiuwen/rsi/`（evaluator 系列） |
+| 17.7 | ☐ | 任务生命周期 | 取消/终结持久化、资源清理隔离、Windows 路径预算、协作式终止；⤴️ 回填 17.4f：协作式终止落地后删除 `harness_rsi/runtime_cancellation.go` 桩（`RaiseIfCancelled` 锚点全仓 0 命中） | 同上 |
 | 17.8 | ☐ | 技能与插件 | native skill rails 准备、plugin 注册与加载、技能查询入口 | 同上 |
-| 17.9 | ☐ | AgentServer 服务域 | RSI 服务端入口、调度、网关注册、实验特性开关、前端契约（节点进度/失败原因） | `internal/swarm/server/runtime/rsi/` ← `jiuwenswarm/server/...rsi*` |
+| 17.9 | ☐ | AgentServer 服务域 | RSI 服务端入口、调度、网关注册、实验特性开关、前端契约（节点进度/失败原因）；⤴️ 17.4f ③ 预算/usage 已判定由 17.1 兑现，本节无桩 | `internal/swarm/server/runtime/rsi/` ← `jiuwenswarm/server/...rsi*` |
 | 17.10 | ☐ | 测试 | 引擎事件序、晋级门拒绝路径、judge 解析容错、取消后不残留 | `tests/integration/evolving/rsi/` |
 
 **验证点**：给定基线 harness 与任务集，可产出候选 artifact、评分、晋级或拒绝，全过程事件可回放。

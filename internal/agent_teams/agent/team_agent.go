@@ -990,7 +990,7 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // Python: TeamAgent.deliver_input(content, use_steer=True)（team_agent.py:550-570）
 // 运行时的单 supervisor 串行化所有输入：idle 开轮，running 转向或排队。
 // 因为没有状态转换窗口的竞态，这里不需要手写分支，也不需要 pending 队列。
-func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error {
+func (a *TeamAgent) DeliverInput(ctx context.Context, content string, useSteer bool, runContext *agentinterfaces.RunContext) error {
 	if mr := a.MemberRuntime(); mr != nil {
 		// 外部成员：MemberRuntime.Send(content, immediate)，无 ctx 形参
 		// （Python send(content, immediate) 为协程调用；Go 外部 runtime 自持 ctx）

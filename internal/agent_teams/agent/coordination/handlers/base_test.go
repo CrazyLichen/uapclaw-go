@@ -41,7 +41,7 @@ func (f *fakeHost) IsAgentRunning() bool                { return false }
 func (f *fakeHost) HasInFlightRound() bool              { return false }
 func (f *fakeHost) HasPendingInterrupt() bool           { return false }
 func (f *fakeHost) CancelAgent(_ context.Context) error { f.cancelCalled = true; return nil }
-func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+func (f *fakeHost) DeliverInput(_ context.Context, _ string, _ bool, _ *agentinterfaces.RunContext) error {
 	f.deliverCalled = true
 	return nil
 }

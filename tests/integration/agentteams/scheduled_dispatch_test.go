@@ -53,10 +53,8 @@ type schedFakeHost struct {
 	started   []string
 }
 
-func (h *schedFakeHost) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
-	if s, ok := content.(string); ok {
-		h.delivered = append(h.delivered, s)
-	}
+func (h *schedFakeHost) DeliverInput(_ context.Context, content string, _ bool, _ *agentinterfaces.RunContext) error {
+	h.delivered = append(h.delivered, content)
 	return nil
 }
 
