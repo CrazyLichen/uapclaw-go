@@ -252,10 +252,9 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 		leaderMemberName: leaderMemberName,
 	}
 	// 25.2b F_62：从团队行读 dispatch mode（Python 构造参数传入；
-	// Go 团队行已持久化该值，读库等价）。
-	if team, teamErr := db.Team().GetTeam(context.Background(), teamName); teamErr == nil && team != nil {
-		tm.dispatchMode = team.DispatchMode
-	}
+	// Go 团队行已持久化该值，读库等价）。读不到（测试替身的 nil DAO、
+	// 读库报错）即 autonomous 缺省。
+	tm.dispatchMode = readDispatchMode(db, teamName)
 	return tm
 }
 
@@ -1890,6 +1889,29 @@ func (tm *TeamTaskManager) GetReviewTasks(ctx context.Context, reviewerName stri
 		}
 	}
 	return result, nil
+}
+
+// readDispatchMode 从团队行读 dispatch mode；任何失败（测试替身 nil DAO、
+// 读库报错）静默回落空串 = autonomous。
+func readDispatchMode(db database.TeamDatabase, teamName string) string {
+	defer func() {
+		if r := recover(); r != nil {
+			// 测试替身的嵌入 nil 接口调用会 panic——按缺省处理。
+			_ = r
+		}
+	}()
+	if db == nil {
+		return ""
+	}
+	teamDao := db.Team()
+	if teamDao == nil {
+		return ""
+	}
+	team, err := teamDao.GetTeam(context.Background(), teamName)
+	if err != nil || team == nil {
+		return ""
+	}
+	return team.DispatchMode
 }
 
 // sortedKeysOf 键排序助手（voted 列表确定性输出）。
