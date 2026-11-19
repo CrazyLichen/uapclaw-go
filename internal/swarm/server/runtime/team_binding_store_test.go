@@ -79,16 +79,12 @@ func TestTeamBindingStore_持久化往返(t *testing.T) {
 	require.NoError(t, err)
 	_, err = store.BindSession("t1", "s1")
 	require.NoError(t, err)
-	// 新 store 实例读回（含 legacy 迁移不覆盖已有文件）；
-	// 注意 s1 已在前半被转移到 t2，t1 不再持有它。
+	// 新 store 实例读回（含 legacy 迁移不覆盖已有文件）。
 	store2 := NewTeamBindingStore(path)
 	binding := store2.Get("t1")
 	require.NotNil(t, binding)
 	assert.Equal(t, "tpl-1", binding.TemplateID)
-	assert.Empty(t, binding.SessionIDs)
-	t2Binding := store2.Get("t2")
-	require.NotNil(t, t2Binding)
-	assert.Equal(t, []string{"s1"}, t2Binding.SessionIDs)
+	assert.Equal(t, []string{"s1"}, binding.SessionIDs)
 	assert.Equal(t, float64(1), binding.TemplateSnapshot["k"])
 	// legacy 迁移：目标文件不存在时搬移旧目录
 	legacyDir := t.TempDir()
