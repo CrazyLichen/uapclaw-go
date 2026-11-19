@@ -1,7 +1,8 @@
-package external
+package externalcli
 
 import (
 	"context"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"sort"
 	"strings"
 	"testing"
@@ -14,28 +15,28 @@ import (
 
 // TestIsAnthropicProvider 对齐 model_compat.py:18。
 func TestIsAnthropicProvider(t *testing.T) {
-	if !IsAnthropicProvider("Anthropic-CLI") {
+	if !external.IsAnthropicProvider("Anthropic-CLI") {
 		t.Fatal("含 anthropic（大小写不敏感）应真")
 	}
-	if IsAnthropicProvider("openai") {
+	if external.IsAnthropicProvider("openai") {
 		t.Fatal("openai 应假")
 	}
 }
 
 // TestProviderFilterForCLI 对齐 model_compat.py:22 三分支。
 func TestProviderFilterForCLI(t *testing.T) {
-	f := ProviderFilterForCLI("claude")
+	f := external.ProviderFilterForCLI("claude")
 	if f == nil || !f("anthropic-x") || f("openai-x") {
 		t.Fatal("claude 只收 anthropic 兼容 provider")
 	}
-	f = ProviderFilterForCLI("codex")
+	f = external.ProviderFilterForCLI("codex")
 	if f == nil || f("anthropic-x") || !f("openai-x") {
 		t.Fatal("codex 排除 anthropic 兼容 provider")
 	}
-	if ProviderFilterForCLI("openclaw") != nil {
+	if external.ProviderFilterForCLI("openclaw") != nil {
 		t.Fatal("adapter 后端无过滤器（返回 nil）")
 	}
-	if ProviderFilterForCLI("unknown-xyz") != nil {
+	if external.ProviderFilterForCLI("unknown-xyz") != nil {
 		t.Fatal("未知后端返回 nil")
 	}
 }
@@ -48,13 +49,13 @@ func TestCompatiblePoolModelNames(t *testing.T) {
 		{ModelName: "m1", APIProvider: "anthropic"}, // 重复名去重
 		{ModelName: "", APIProvider: "anthropic"},   // 空名跳过
 	}
-	got := CompatiblePoolModelNames("claude", pool)
+	got := external.CompatiblePoolModelNames("claude", pool)
 	want := []string{"m1"}
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("got %v want %v", got, want)
 	}
 	// codex 过滤掉 anthropic → 只剩 m2
-	got = CompatiblePoolModelNames("codex", pool)
+	got = external.CompatiblePoolModelNames("codex", pool)
 	if len(got) != 1 || got[0] != "m2" {
 		t.Fatalf("codex: %v", got)
 	}
@@ -99,17 +100,17 @@ func TestTeamModelConfigToExternal(t *testing.T) {
 		},
 		ModelRequestConfig: &llmschema.ModelRequestConfig{ModelName: "gpt-x"},
 	}
-	ext := TeamModelConfigToExternal(tm, "codex")
+	ext := external.TeamModelConfigToExternal(tm, "codex")
 	if ext == nil || ext.Provider != "jiuwen" || ext.Model != "gpt-x" || ext.APIBase != "http://gw" || ext.APIKey != "sk-x" {
 		t.Fatalf("映射: %+v", ext)
 	}
 	intelli := &hschema.TeamModelConfig{
 		ModelClientConfig: llmschema.ModelClientConfig{ClientProvider: "intelli_router"},
 	}
-	if TeamModelConfigToExternal(intelli, "codex") != nil {
+	if external.TeamModelConfigToExternal(intelli, "codex") != nil {
 		t.Fatal("intelli_router 应跳过")
 	}
-	if TeamModelConfigToExternal(nil, "codex") != nil {
+	if external.TeamModelConfigToExternal(nil, "codex") != nil {
 		t.Fatal("nil 成员模型应跳过")
 	}
 }
