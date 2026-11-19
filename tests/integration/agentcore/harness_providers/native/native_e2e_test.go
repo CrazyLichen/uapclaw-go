@@ -5,9 +5,9 @@ package native
 import (
 	"context"
 	"fmt"
-	"os"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -611,14 +611,15 @@ func (h *recordingUserInputHandler) Handle(_ context.Context,
 }
 
 func (h *recordingUserInputHandler) Cancel(_ context.Context, _ string,
-	_ ...hp.CancelOption) error { return nil }
+	_ ...hp.CancelOption) error {
+	return nil
+}
 
 func (h *recordingUserInputHandler) all() []hp.UserInputRequest {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return append([]hp.UserInputRequest{}, h.requests...)
 }
-
 
 // ──────────────────────────── SSE 帧助手 ────────────────────────────
 

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hpbase "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )

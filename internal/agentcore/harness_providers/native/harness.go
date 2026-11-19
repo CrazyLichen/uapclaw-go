@@ -13,21 +13,21 @@ import (
 	"sync/atomic"
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	harness_providers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harness_providers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sessionstream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -269,9 +269,9 @@ func AgentFactoryCard() hp.HarnessCard {
 			hp.HarnessCapabilityForceAbort: true,
 		},
 		OptionalHostCapabilities: map[hp.HostCapability]bool{
-			hp.HostCapabilityUserInput:        true,
-			hp.HostCapabilityToolApproval:     true,
-			hp.HostCapabilityDynamicToolCall:  true,
+			hp.HostCapabilityUserInput:       true,
+			hp.HostCapabilityToolApproval:    true,
+			hp.HostCapabilityDynamicToolCall: true,
 		},
 	})
 	return card
@@ -300,7 +300,9 @@ func (h *DeepAgentHarness) ProviderSessionID() *string { return h.base.ProviderS
 
 // EventBufferConfig 观测的有界背压策略。
 // Python: base.py event_buffer_config
-func (h *DeepAgentHarness) EventBufferConfig() hp.EventBufferConfig { return h.base.EventBufferConfig() }
+func (h *DeepAgentHarness) EventBufferConfig() hp.EventBufferConfig {
+	return h.base.EventBufferConfig()
+}
 
 // Start 校验宿主兼容性并开启一次周期。
 // Python: base.py SerializedTurnHarness.start
@@ -773,7 +775,7 @@ func (h *DeepAgentHarness) OpenSession(ctx context.Context, harnessContext hp.Ha
 		typeName := exceptionTypeName(err)
 		return nil, &harness_providers.ProviderStartupError{
 			Msg: "DeepAgent harness startup failed: " + typeName,
-			Err:     hp.TurnError{
+			Err: hp.TurnError{
 				Message:  orDefault(err.Error(), typeName),
 				Code:     strPtr(typeName),
 				Category: strPtr("sdk_error"),
@@ -1278,7 +1280,7 @@ func (h *DeepAgentHarness) requestApproval(
 			answer, ansErr := interruptpkg.InterruptAnswerFor(kind, interruptpkg.InterruptAnswerOptions{
 				Approved: boolPtr(false),
 				Feedback: "The host edited the tool arguments while approving; editing arguments is not " +
-				"supported, so the call was not run.",
+					"supported, so the call was not run.",
 			})
 			if ansErr != nil {
 				return nil

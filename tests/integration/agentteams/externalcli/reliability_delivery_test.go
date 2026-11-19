@@ -3,12 +3,13 @@
 // 外部成员可靠性投递端到端集成（15.16b0）。
 //
 // 验证团队真的能收到（spec 集成验收硬要求）：
-//   ① 启动失败 → leader 信箱真实出现 external_runtime_failed JSON 消息
-//     （from=成员、to=leader，可反序列化、phase/category 正确）；
-//   ② 成员状态经 update_status_cb 真实落库翻 ERROR（FSM 校验通过）；
-//   ③ 同一尝试重复 finalize 后信箱仍只有一条（exactly-once）；
-//   ④ PublishRetrying 经真实 InProcessMessager 总线在团队 topic 上被订阅方收到，
-//     且成员状态与信箱不受影响（非持久进度信号）。
+//
+//	① 启动失败 → leader 信箱真实出现 external_runtime_failed JSON 消息
+//	  （from=成员、to=leader，可反序列化、phase/category 正确）；
+//	② 成员状态经 update_status_cb 真实落库翻 ERROR（FSM 校验通过）；
+//	③ 同一尝试重复 finalize 后信箱仍只有一条（exactly-once）；
+//	④ PublishRetrying 经真实 InProcessMessager 总线在团队 topic 上被订阅方收到，
+//	  且成员状态与信箱不受影响（非持久进度信号）。
 //
 // 跨子系统：externalcli（runtime/ reliability 投递半区）→ tools（TeamBackend/
 // TeamMessageManager 直发消息写库）→ database（内存库持久化 + FSM 状态机）→

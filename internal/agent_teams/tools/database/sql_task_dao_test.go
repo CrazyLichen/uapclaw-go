@@ -398,10 +398,10 @@ func TestSQLTaskDao_GetUnseenEdits(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	mk("t-1", fsm.TaskStatusInProgress, 2, 1)      // 未读 → 返回
-	mk("t-2", fsm.TaskStatusInProgress, 1, 1)      // 已读 → 不返回
-	mk("t-3", fsm.TaskStatusCompleted, 2, 0)    // 终态 → 不返回
-	mk("t-4", fsm.TaskStatusCancelled, 3, 0)    // 终态 → 不返回
+	mk("t-1", fsm.TaskStatusInProgress, 2, 1) // 未读 → 返回
+	mk("t-2", fsm.TaskStatusInProgress, 1, 1) // 已读 → 不返回
+	mk("t-3", fsm.TaskStatusCompleted, 2, 0)  // 终态 → 不返回
+	mk("t-4", fsm.TaskStatusCancelled, 3, 0)  // 终态 → 不返回
 	mk("t-5", fsm.TaskStatusInProgress, 5, 0) // 未读非终态 → 返回
 
 	rows, err := dao.GetUnseenEdits(ctx, "team1", "alice")

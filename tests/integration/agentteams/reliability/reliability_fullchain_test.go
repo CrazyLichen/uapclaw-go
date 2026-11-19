@@ -195,7 +195,7 @@ func (h *fullChainHost) ResumeInterrupt(context.Context, *interaction.Interactiv
 func (h *fullChainHost) AnnounceTaskRevisions(context.Context) error            { return nil }
 func (h *fullChainHost) ShutdownSelf(context.Context) error                     { return nil }
 func (h *fullChainHost) ConcludeCompletedRound(context.Context, int, int) error { return nil }
-func (h *fullChainHost) DeliverInput(_ context.Context, content any, _ bool) error {
+func (h *fullChainHost) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if s, ok := content.(string); ok {

@@ -151,13 +151,13 @@ func (f *fakeVertexExecutable) OnCollect(ctx context.Context, inputs <-chan map[
 
 // fakeInnerSession 最小 InnerSession 桩（Init 依赖面）
 type fakeInnerSession struct {
-	cfg config.SessionConfig
-	st  state.SessionState
-	tr  *tracer.Tracer
-	id  string
-	swm *stream.StreamWriterManager
-	am  *stream_actor.ActorManager
-	cp  interfaces.Checkpointer
+	cfg  config.SessionConfig
+	st   state.SessionState
+	tr   *tracer.Tracer
+	id   string
+	swm  *stream.StreamWriterManager
+	am   *stream_actor.ActorManager
+	cp   interfaces.Checkpointer
 	wfID string
 }
 

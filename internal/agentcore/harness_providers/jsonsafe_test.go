@@ -112,11 +112,12 @@ func TestToJsonSafe_指针解引用(t *testing.T) {
 	assert.Nil(t, ToJsonSafe((*int)(nil)))
 }
 
-
 // TestToJsonSafe_结构体走jsonMarshal 验证 struct 统一走 json.Marshal
 // （尊重自定义 MarshalJSON 与 json tag），替代原 fmt.Sprint 兜底。
 func TestToJsonSafe_结构体走jsonMarshal(t *testing.T) {
-	type sdkObject struct{ Name string `json:"name"` }
+	type sdkObject struct {
+		Name string `json:"name"`
+	}
 	got := ToJsonSafe(sdkObject{Name: "x"})
 	m, ok := got.(map[string]any)
 	require.True(t, ok, "struct 必须走 json.Marshal 得到对象，实际 %T", got)

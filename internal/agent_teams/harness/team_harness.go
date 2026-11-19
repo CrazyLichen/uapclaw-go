@@ -498,11 +498,13 @@ func (h *TeamHarness) Outputs() *OutputIterator {
 
 // Send 投递输入；immediate 转向当前轮。
 // Python: TeamHarness.send(content, immediate=...)（team_harness.py:351-368）
-func (h *TeamHarness) Send(ctx context.Context, content any, immediate bool) error {
+func (h *TeamHarness) Send(ctx context.Context, content any, immediate bool, runContext *agentinterfaces.RunContext) error {
 	if h.native == nil {
 		return fmt.Errorf("team harness: send() before start()")
 	}
-	return h.native.Send(ctx, content, immediate)
+	// Python: run_context is None → 不传（team_harness.py L364-369）——Go 侧
+	// nil 形参等价省略语义，单签名无可选魔法值。
+	return h.native.Send(ctx, content, immediate, runContext)
 }
 
 // Abort 中断当前轮（优雅或立即）。
@@ -729,7 +731,7 @@ func (h *TeamHarness) AnnounceTaskRevisions(ctx context.Context) error {
 		return nil
 	}
 	_, err := h.taskEventTracker.Announce(sess, func(text string) error {
-		return h.Send(ctx, text, true)
+		return h.Send(ctx, text, true, nil)
 	})
 	return err
 }

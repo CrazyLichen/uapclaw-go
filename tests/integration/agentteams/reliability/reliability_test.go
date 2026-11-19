@@ -9,6 +9,8 @@
 package agentteams_test
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"sync"
 	"testing"
@@ -47,7 +49,7 @@ func (f *fakeLeaderRound) IsAgentRunning() bool              { return false }
 func (f *fakeLeaderRound) HasInFlightRound() bool            { return false }
 func (f *fakeLeaderRound) HasPendingInterrupt() bool         { return false }
 func (f *fakeLeaderRound) CancelAgent(context.Context) error { return nil }
-func (f *fakeLeaderRound) DeliverInput(_ context.Context, content any, _ bool) error {
+func (f *fakeLeaderRound) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.delivered = append(f.delivered, content.(string))
@@ -304,8 +306,8 @@ func (a *roundAdapter) IsAgentRunning() bool              { return false }
 func (a *roundAdapter) HasInFlightRound() bool            { return false }
 func (a *roundAdapter) HasPendingInterrupt() bool         { return false }
 func (a *roundAdapter) CancelAgent(context.Context) error { return nil }
-func (a *roundAdapter) DeliverInput(ctx context.Context, content any, useSteer bool) error {
-	return a.r.DeliverInput(ctx, content, useSteer)
+func (a *roundAdapter) DeliverInput(ctx context.Context, content any, useSteer bool, _ *agentinterfaces.RunContext) error {
+	return a.r.DeliverInput(ctx, content, useSteer, nil)
 }
 func (a *roundAdapter) ResumeInterrupt(context.Context, *interaction.InteractiveInput) error {
 	return nil

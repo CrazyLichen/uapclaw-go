@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	interrupt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	interrupt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 

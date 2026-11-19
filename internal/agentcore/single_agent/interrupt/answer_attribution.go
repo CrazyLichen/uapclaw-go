@@ -425,7 +425,7 @@ func requestAsInterruptRequest(request saschema.InterruptRequester) *saschema.In
 // FindOwnAnswer 返回本次恢复中该 owner 在指定调用上的答案（无则 nil）。
 // rail 只读自己 owner 那份：答案按 interrupt_owner 路由（与 kind 无关）。
 // Python: core/single_agent/interrupt/ownership.py:53-55
-// InterruptOwnerMixin.find_own_answer(extra, tool_call_id) —— 
+// InterruptOwnerMixin.find_own_answer(extra, tool_call_id) ——
 // extra[RESUME_INTERRUPT_ANSWERS_KEY][tool_call_id][self.interrupt_owner]
 func FindOwnAnswer(
 	cbc *agentinterfaces.AgentCallbackContext,

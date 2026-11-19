@@ -164,7 +164,8 @@ func (g *PregelGraph) AddConditionalEdges(sourceNodeID string, router Router) Gr
 
 // RegisterBranchTargets 登记分支节点的目标全集，编译期 CNF 屏障解析用。
 // Python: graph.py:134-143（branch_node_id 与 targets 非空且 len>1 才登记）
-func (g *PregelGraph) RegisterBranchTargets(branchNodeID string, targets []string) *PregelGraph {	if branchNodeID != "" && len(targets) > 1 {
+func (g *PregelGraph) RegisterBranchTargets(branchNodeID string, targets []string) *PregelGraph {
+	if branchNodeID != "" && len(targets) > 1 {
 		set := make(map[string]struct{}, len(targets))
 		for _, t := range targets {
 			set[t] = struct{}{}

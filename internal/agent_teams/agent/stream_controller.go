@@ -145,6 +145,12 @@ func WithRequestCompletionPoll(cb func(ctx context.Context) error) StreamControl
 	return func(sc *StreamController) { sc.requestCompletionPollCb = cb }
 }
 
+// WithReconcileMemberStartup 设置轮结束边的成员启动对账回调（25.1a 回填）。
+// Python: member_startup_reconciler=self._reconcile_member_startup（team_agent.py L213）
+func WithReconcileMemberStartup(cb func(ctx context.Context) error) StreamControllerOption {
+	return func(sc *StreamController) { sc.reconcileMemberStartupCb = cb }
+}
+
 // WithTaskBoardProbe 设置团队任务板静止探针（仅 Leader）。
 // Python: task_board_probe=self.is_task_board_settled（team_agent.py L214）
 func WithTaskBoardProbe(cb func(ctx context.Context) (bool, error)) StreamControllerOption {
@@ -274,6 +280,9 @@ func (sc *StreamController) CancelAgent(ctx context.Context) error {
 // CloseStream 关闭流（向 streamQueue 写入 nil sentinel）。
 // Python: StreamController.close_stream()
 func (sc *StreamController) CloseStream() {
+	// Python: close_stream 先 cancel_team_idle（stream_controller.py L513-516）——
+	// 流要结束了，没有人再读标记；覆盖不经 stop 的拆机路径（外部 stop_team）。
+	sc.CancelTeamIdle()
 	q := sc.streamQueueSnapshot()
 	if q != nil {
 		// 非阻塞写入 nil sentinel
@@ -413,6 +422,38 @@ func (sc *StreamController) EmitTeamIdle(members map[string]string) {
 				"event_type":   "team.idle",
 				"member_count": len(members),
 				"members":      members,
+			},
+		},
+	}
+	if bp != nil {
+		name := bp.MemberName()
+		role := bp.Role()
+		marker.SourceMember = name
+		marker.Role = &role
+	}
+	select {
+	case q <- marker:
+	default:
+	}
+}
+
+// EmitTeamRecovered 入队 recovered-team 标记块；流保持打开。
+// 在 CoordinationKernel.start 的尾部发出（仅 leader 流）：会话状态已绑定
+// （恢复路径从 checkpoint 还原）、总线已订阅、harness 已启动、挂起的轮已续跑
+// ——消费者交互前需要的一切都就绪。队列已不在时 no-op。
+// Python: emit_team_recovered（stream_controller.py L674-690）
+func (sc *StreamController) EmitTeamRecovered() {
+	q := sc.streamQueueSnapshot()
+	if q == nil {
+		return
+	}
+	bp := sc.getBlueprint()
+	marker := &atschema.TeamOutputSchema{
+		OutputSchema: streambase.OutputSchema{
+			Type:  "message",
+			Index: 0,
+			Payload: map[string]any{
+				"event_type": "team.recovered",
 			},
 		},
 	}
@@ -817,7 +858,7 @@ func (sc *StreamController) handleRetry(ctx context.Context, chunk streambase.Sc
 			Int("attempt", attempt).Int("max_attempts", maxRetryAttempts).
 			Str("error_text", text).Msg("DeepAgent round transient error")
 		sc.emitRetryOutput(ctx, code, text)
-		_ = h.Send(ctx, retryQuery, false)
+		_ = h.Send(ctx, retryQuery, false, nil)
 		return true
 	}
 	logger.Error(logComponent).Int("error_code", code).

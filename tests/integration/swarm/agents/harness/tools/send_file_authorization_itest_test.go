@@ -52,7 +52,8 @@ func (s *SendFileAuthSuite) TestSendFileAuthSuite_授权全链() {
 		return nil
 	})
 	tools.SetSendFileHistoryFunc(func(string, string, string, string, string,
-		float64, string, map[string]any, map[string]any, string) {})
+		float64, string, map[string]any, map[string]any, string) {
+	})
 	s.T().Cleanup(func() { tools.SetSendFilePushFunc(nil); tools.SetSendFileHistoryFunc(nil) })
 
 	// 交付源文件

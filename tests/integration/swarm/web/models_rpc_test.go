@@ -214,4 +214,3 @@ func (s *ModelsRPCSuite) TestModelsGet_空目录未知模型() {
 	payload = s.sendModels("models.references", map[string]any{"type": "model", "id": "mdl_any"})
 	s.Equal("MODEL_RUNTIME_UNAVAILABLE", payload["code"])
 }
-

@@ -97,7 +97,7 @@ func (s *TeamMemberSuite) TestMemberStop_资源释放() {
 
 	// Stop 后 Send 应报错（supervisor 已终止）
 	s.Require().NoError(ta.Harness().Stop(s.Ctx))
-	s.Error(ta.Harness().Send(s.Ctx, "stop 之后", false), "Stop 后 Send 应报错")
+	s.Error(ta.Harness().Send(s.Ctx, "stop 之后", false, nil), "Stop 后 Send 应报错")
 }
 
 // TestMemberConcurrentDeliver_无丢失 两协程同时投递，两条都被消费。
@@ -127,7 +127,7 @@ func (s *TeamMemberSuite) TestMemberConcurrentDeliver_无丢失() {
 	errs := make(chan error, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			errs <- ta.Harness().Send(s.Ctx, "并发输入", false)
+			errs <- ta.Harness().Send(s.Ctx, "并发输入", false, nil)
 		}()
 	}
 	for i := 0; i < 2; i++ {

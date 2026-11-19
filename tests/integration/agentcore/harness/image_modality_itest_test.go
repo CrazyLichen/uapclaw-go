@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
@@ -123,4 +123,3 @@ func (s *ImageModalitySuite) TestReloadResetsCacheAndDeclaredSkips() {
 	s.Require().True(ok)
 	s.Require().False(v)
 }
-

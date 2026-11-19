@@ -28,7 +28,7 @@ import (
 
 // VertexStreamSuite 8.11 Vertex 双链批入/流入集成测试。
 // 真实跨子系统链路：graph.Vertex（批入编排/双链握手）→ graph/stream_actor
-//（ActorManager 队列与首帧拉起）→ session/state（WorkflowCommitState IO 暂存）
+// （ActorManager 队列与首帧拉起）→ session/state（WorkflowCommitState IO 暂存）
 // → runner/callback（NODE_EXECUTED 事件）。
 type VertexStreamSuite struct {
 	isuite.RunnerSuite

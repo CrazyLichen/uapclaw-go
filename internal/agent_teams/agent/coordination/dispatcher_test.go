@@ -1,6 +1,8 @@
 package coordination
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"testing"
 
@@ -22,14 +24,16 @@ type fakeDispatcherHost struct {
 	pendingInt   bool
 }
 
-func (f *fakeDispatcherHost) IsAgentReady() bool                                  { return f.agentReady }
-func (f *fakeDispatcherHost) IsAgentRunning() bool                                { return f.agentRunning }
-func (f *fakeDispatcherHost) HasInFlightRound() bool                              { return f.inFlight }
-func (f *fakeDispatcherHost) HasPendingInterrupt() bool                           { return f.pendingInt }
-func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                 { return nil }
-func (f *fakeDispatcherHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
-func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
-func (f *fakeDispatcherHost) AutoStartMember(_ context.Context, _ string) bool    { return true }
+func (f *fakeDispatcherHost) IsAgentReady() bool                            { return f.agentReady }
+func (f *fakeDispatcherHost) IsAgentRunning() bool                          { return f.agentRunning }
+func (f *fakeDispatcherHost) HasInFlightRound() bool                        { return f.inFlight }
+func (f *fakeDispatcherHost) HasPendingInterrupt() bool                     { return f.pendingInt }
+func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error           { return nil }
+func (f *fakeDispatcherHost) AnnounceTaskRevisions(_ context.Context) error { return nil }
+func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+	return nil
+}
+func (f *fakeDispatcherHost) AutoStartMember(_ context.Context, _ string) bool { return true }
 func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
 }

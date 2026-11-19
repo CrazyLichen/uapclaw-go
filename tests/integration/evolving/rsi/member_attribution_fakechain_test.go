@@ -9,9 +9,9 @@
 package rsi
 
 import (
-	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"context"
 	"encoding/json"
+	agentface "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,10 +71,14 @@ func (s *MemberAttributionFakeChainSuite) wireFakeBridge() {
 				Msg: params.AgentName + " failed after attempts (attempt_limit_reached)",
 			}
 		},
-		ParseJSONObject:                 parseJSONForIntegration,
-		ParseYamlOrJSONObject:           parseJSONForIntegration,
-		CreateRoleAttributionAgent:      func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) { return &agentface.Agent{}, nil },
-		CreateMechanismAttributionAgent: func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) { return &agentface.Agent{}, nil },
+		ParseJSONObject:       parseJSONForIntegration,
+		ParseYamlOrJSONObject: parseJSONForIntegration,
+		CreateRoleAttributionAgent: func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) {
+			return &agentface.Agent{}, nil
+		},
+		CreateMechanismAttributionAgent: func(context.Context, memberoptimizer.AttributionAgentParams) (*agentface.Agent, error) {
+			return &agentface.Agent{}, nil
+		},
 	})
 	s.T().Cleanup(func() { memberoptimizer.RestoreAgentsBridge(saved) })
 }

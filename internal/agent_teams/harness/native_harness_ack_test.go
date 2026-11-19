@@ -25,7 +25,7 @@ func TestNativeHarness_并发Send全部拿到应答(t *testing.T) {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			errs <- h.Send(ctx, "并发", false)
+			errs <- h.Send(ctx, "并发", false, nil)
 		}()
 	}
 	for i := 0; i < n; i++ {
@@ -49,6 +49,6 @@ func TestNativeHarness_Stop后Send返回错误(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := h.Send(ctx, "stop 之后", false)
+	err := h.Send(ctx, "stop 之后", false, nil)
 	assert.Error(t, err)
 }

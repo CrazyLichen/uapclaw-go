@@ -258,7 +258,7 @@ func (h *NativeHarness) SetAsyncToolOutputDirResolver(fn func() string) {
 // injectAsyncCompletion 把完成文本作为非立即输入回灌。
 // Python: NativeHarness._inject_async_completion (native_harness.py:723-725)
 func (h *NativeHarness) injectAsyncCompletion(ctx context.Context, text string) error {
-	return h.Send(ctx, text, false)
+	return h.Send(ctx, text, false, nil)
 }
 
 // ScheduleAutoInvokeOnSpawnDone 把 SESSION_SPAWN 完成后的自动调用改道到 supervisor。
@@ -285,7 +285,7 @@ func (h *NativeHarness) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, query
 			logger.Warn(logComponent).Msg("[NativeHarness] auto-invoke before start; skipping")
 			return
 		}
-		if err := h.Send(context.WithoutCancel(ctx), query, false); err != nil {
+		if err := h.Send(context.WithoutCancel(ctx), query, false, nil); err != nil {
 			logger.Debug(logComponent).Err(err).Msg("[NativeHarness] auto-invoke send rejected")
 		}
 	}()
@@ -449,9 +449,9 @@ func (h *NativeHarness) Stop(ctx context.Context) error {
 // Send 投递输入。
 // Python: NativeHarness.send (native_harness.py:562)
 // 返回消息序号（本阶段暂不暴露，接口只要求 error）。
-func (h *NativeHarness) Send(ctx context.Context, content any, immediate bool) error {
+func (h *NativeHarness) Send(ctx context.Context, content any, immediate bool, runContext *agentinterfaces.RunContext) error {
 	reply := make(chan error, 1)
-	msg := InboxMessage{Content: content, Immediate: immediate}
+	msg := InboxMessage{Content: content, Immediate: immediate, RunContext: runContext}
 	if err := h.enqueue(ctx, &cmdSend{msg: msg, reply: reply}); err != nil {
 		return err
 	}
@@ -759,7 +759,8 @@ func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 	phase := h.st.Phase()
 	switch phase {
 	case harnessprotocol.HarnessStateIdle:
-		active := h.startRound(ctx, msg.Content, startModeDefault, nil)
+		// Python: _start_round(msg.content, run_context=msg.run_context)（native_harness.py L892）
+		active := h.startRound(ctx, msg.Content, startModeDefault, msg.RunContext)
 		h.transition(ctx, harnessprotocol.HarnessStateRunning)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 	case harnessprotocol.HarnessStateRunning:
@@ -771,7 +772,8 @@ func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 		// InteractiveInput 自带单轮语义，不能被 steer 进续跑轮。
 		if _, isInteractive := msg.Content.(*interaction.InteractiveInput); isInteractive {
 			h.st.ClearPausedQuery()
-			active := h.startRound(ctx, msg.Content, startModeDefault, nil)
+			// Python: _start_round(msg.content, run_context=msg.run_context)（L902-905）
+			active := h.startRound(ctx, msg.Content, startModeDefault, msg.RunContext)
 			h.transition(ctx, harnessprotocol.HarnessStateRunning)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 			return nil
@@ -779,7 +781,8 @@ func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 		// 就地续跑 + 把新内容 steer 进去（不是拼接后重启，重启会丢掉已完成的迭代）。
 		query, _ := h.st.PausedQuery()
 		h.st.ClearPausedQuery()
-		active := h.startRound(ctx, query, startModeResumeContinuation, nil)
+		// Python: _start_round(query, _StartMode.RESUME_CONTINUATION, run_context=...)（L916-918）
+		active := h.startRound(ctx, query, startModeResumeContinuation, msg.RunContext)
 		h.transition(ctx, harnessprotocol.HarnessStateRunning)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 		if err := h.steerActive(ctx, msg.Content); err != nil {
@@ -800,7 +803,11 @@ func (h *NativeHarness) enqueueInbox(m InboxMessage) {
 }
 
 // steerActive 把转向输入交给当前轮的内核 steering 队列。
-// Python: NativeHarness._push_steer
+// Python: NativeHarness._push_steer（native_harness.py L1580-1592）
+// 已知偏差：py push_steer 带 run_context 进 interaction queues；Go 侧
+// InteractionQueues.PushSteer(msg) 无 context 槽且无消费方，登记 ⤴️interaction
+// 章节（与 inbox/startRound 已透传的 run_context 不同源，不阻塞本批）。
+// NOTE
 func (h *NativeHarness) steerActive(_ context.Context, content any) error {
 	text, ok := content.(string)
 	if !ok {

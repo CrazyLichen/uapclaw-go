@@ -20,8 +20,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cmschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

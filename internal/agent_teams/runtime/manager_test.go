@@ -43,7 +43,7 @@ func TestNewTeamRuntimeManager(t *testing.T) {
 
 func TestTeamRuntimeManager_Interact_团队不存在(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	result, err := m.Interact(context.Background(), "hello", "ghost", "sess-1")
+	result, err := m.Interact(context.Background(), "hello", "ghost", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestTeamRuntimeManager_Interact_字符串输入(t *testing.T) {
 	}
 	m.Pool().Add(entry)
 
-	result, err := m.Interact(context.Background(), "hello leader", "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), "hello leader", "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestTeamRuntimeManager_Interact_GodView载荷(t *testing.T) {
 	m.Pool().Add(entry)
 
 	payload := interaction.NewGodViewMessage("hello")
-	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestTeamRuntimeManager_Interact_Operator载荷(t *testing.T) {
 
 	target := "alice"
 	payload := interaction.NewOperatorMessage("hello", &target)
-	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestTeamRuntimeManager_Interact_Operator广播载荷(t *testing.T) {
 	m.Pool().Add(entry)
 
 	payload := interaction.NewOperatorMessage("hello all", nil)
-	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), payload, "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestTeamRuntimeManager_Interact_门控关闭(t *testing.T) {
 	// 关闭门控
 	_ = entry.InteractGate.CloseAndDrain(context.Background())
 
-	result, err := m.Interact(context.Background(), "hello", "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), "hello", "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestTeamRuntimeManager_Interact_InteractiveInput(t *testing.T) {
 	m.Pool().Add(entry)
 
 	input, _ := sessioninteraction.NewInteractiveInput("resume data")
-	result, err := m.Interact(context.Background(), input, "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), input, "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestTeamRuntimeManager_Interact_session不匹配(t *testing.T) {
 	}
 	m.Pool().Add(entry)
 
-	result, err := m.Interact(context.Background(), "hello", "team-1", "wrong-session")
+	result, err := m.Interact(context.Background(), "hello", "team-1", "wrong-session", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestTeamRuntimeManager_Interact_不支持的载荷类型(t *testing.T) {
 	}
 	m.Pool().Add(entry)
 
-	result, err := m.Interact(context.Background(), 12345, "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), 12345, "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestTeamRuntimeManager_Interact_井号字符串解析(t *testing.T) {
 	m.Pool().Add(entry)
 
 	// 输入 "# hello" → 解析为 GodViewMessage
-	result, err := m.Interact(context.Background(), "# hello", "team-1", "sess-1")
+	result, err := m.Interact(context.Background(), "# hello", "team-1", "sess-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

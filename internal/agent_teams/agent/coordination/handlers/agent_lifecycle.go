@@ -69,7 +69,7 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 		contentStr, _ = c.(string)
 	}
 	// 对齐 Python: self._round.deliver_input(content)（Python 默认 use_steer=True）
-	if err := h.round.DeliverInput(ctx, contentStr, true); err != nil {
+	if err := h.round.DeliverInput(ctx, contentStr, true, nil); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", string(event.Inner.EventType)).
