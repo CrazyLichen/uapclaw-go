@@ -411,6 +411,9 @@ type End struct {
 	template *TemplateProcessor
 	// batchTemplate 批渲染处理器（_render 懒建立）
 	batchTemplate *TemplateBatchProcessor
+	// btMu batchTemplate 懒建立/清空的并发保护（Python asyncio 单线程事件循环
+	// 天然串行，Go 多 goroutine 并发调用 render 需显式锁；偏差 D-17-2 补充）
+	btMu sync.Mutex
 	// mix 混合模式（模板+裸流并存）
 	mix bool
 }
@@ -633,30 +636,35 @@ func NewEnd(conf *EndConfig) (*End, error) {
 // render 批渲染：懒建 batchTemplate → 渲染 → notifyAll → 清空。
 // Python: _render（end_comp.py:214-245）；mix 分支见 renderMix。
 func (e *End) render(ctx context.Context, inputs map[string]any, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
+	e.btMu.Lock()
 	if e.batchTemplate == nil {
 		e.batchTemplate = &TemplateBatchProcessor{template: e.template, inputs: inputs, notify: make(chan struct{})}
 		if e.mix {
-			return e.renderMix(ctx, timeout, sess)
+			bt := e.batchTemplate
+			btCh := bt.notify
+			e.btMu.Unlock()
+			return e.renderMix(ctx, bt, btCh, timeout, sess)
 		}
 	}
-	answer, err := e.batchTemplate.Render(ctx, inputs, sess)
+	bt := e.batchTemplate
+	e.btMu.Unlock()
+	// 非首拍：合并自身 inputs 渲染（Python end_comp.py:239-241 inputs | inputs）
+	answer, err := bt.Render(ctx, inputs, sess)
 	if err != nil {
 		return nil, err
 	}
-	e.batchTemplate.mu.Lock()
-	e.batchTemplate.notifyAll()
-	e.batchTemplate.mu.Unlock()
+	bt.mu.Lock()
+	bt.notifyAll()
+	bt.mu.Unlock()
+	e.btMu.Lock()
 	e.batchTemplate = nil
+	e.btMu.Unlock()
 	return map[string]any{"response": answer}, nil
 }
 
 // renderMix mix 模式首拍条件等待：渲染完成被唤醒或超时降级。
 // Python: _render mix 分支（end_comp.py:219-238）。
-func (e *End) renderMix(ctx context.Context, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
-	bt := e.batchTemplate
-	bt.mu.Lock()
-	btCh := bt.notify
-	bt.mu.Unlock()
+func (e *End) renderMix(ctx context.Context, bt *TemplateBatchProcessor, btCh chan struct{}, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
 	var timeoutCh <-chan time.Time
 	var timer *time.Timer
 	if timeout > 0 {
@@ -677,7 +685,9 @@ func (e *End) renderMix(ctx context.Context, timeout float64, sess *session.Node
 		if !bt.IsRendered() {
 			// 未渲染过 → 同步渲染兜底（end_comp.py:232-236）
 			answer, aerr := bt.Render(ctx, nil, sess)
+			e.btMu.Lock()
 			e.batchTemplate = nil
+			e.btMu.Unlock()
 			if aerr != nil {
 				return nil, aerr
 			}
@@ -687,7 +697,9 @@ func (e *End) renderMix(ctx context.Context, timeout float64, sess *session.Node
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	e.btMu.Lock()
 	e.batchTemplate = nil
+	e.btMu.Unlock()
 	return nil, nil // mix 首拍（渲染完成后）：返回 None（end_comp.py:237-238）
 }
 
