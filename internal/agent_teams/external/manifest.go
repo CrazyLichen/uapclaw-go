@@ -61,9 +61,10 @@ func ExternalCliAgentSpecFromTemplate(template *hschema.AgentTemplateSpec) (*ats
 		return nil, fmt.Errorf("runtime.provider_name must be 'codex' or 'claudecode'")
 	}
 	// Python: resolve_provider(provider).card.implementation_version——已安装
-	// provider 卡片的实现版本。经 harness_providers 注册表查询（dsh 已注册
-	// 即得正确校验；claudecode/codex SDK provider 15.7/15.8 注册后自动生效，
-	// 未链接时降级空串保持"声明版本必须为空"语义）。
+	// provider 卡片的实现版本。provider 闭集仅 codex/claudecode（上方
+	// providerToCLI；dsh 是 harness provider 执行域，非成员后端，不进此翻译器），
+	// 两者的 SDK provider 15.7/15.8 注册后校验自动生效，未链接时降级空串
+	// 保持「声明版本必须为空」语义（与原恒空串行为等价）。
 	expectedVersion := BuiltinProviderImplementationVersion(provider)
 	if runtime.ProviderVersion != "" && runtime.ProviderVersion != expectedVersion {
 		return nil, fmt.Errorf("runtime requires %s %q; installed version is %q", provider, runtime.ProviderVersion, expectedVersion)
@@ -165,10 +166,10 @@ func templateHasAny(template *hschema.AgentTemplateSpec, name string) bool {
 // BuiltinProviderImplementationVersion 内置 provider 的实现版本查询——经
 // harness_providers 注册表（ResolveProvider）取卡片实现版本。
 // Python: resolve_provider(provider).card.implementation_version
-//   - dsh 等已注册 provider：真实版本参与校验（15.9 注册表面）
-//   - claudecode/codex：SDK provider 15.7/15.8 注册前 ResolveProvider 报
-//     "not yet linked"，降级空串保持「声明版本必须为空」语义（原 D-15.16-d1
-//     恒空串缝的理由已随 dsh 注册表面落地而失效，本实现替代之）。
+//   - provider 闭集仅 codex/claudecode（providerToCLI；dsh 是 harness provider
+//     执行域，非成员后端，不进此翻译器）——两者 SDK provider 15.7/15.8 注册
+//     前未链接，降级空串保持「声明版本必须为空」语义（与原恒空串行为等价，
+//     注册后自动生效）。
 func BuiltinProviderImplementationVersion(provider string) string {
 	resolved, err := harnessproviders.ResolveProvider(provider)
 	if err != nil {
