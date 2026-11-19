@@ -485,6 +485,16 @@ func (o *ModelUsageObserver) Observe(ctx context.Context) (context.Context, cont
 	}
 }
 
+// State 返回绑定后的共享 state（17.4d Run 收尾落盘用；未绑定返回 nil）。
+func (o *ModelUsageObserver) State() map[string]any {
+	return o.state
+}
+
+// ObserverFromContext 取上下文中的观察者（17.4d 编排器绑定用量用）。
+func ObserverFromContext(ctx context.Context) *ModelUsageObserver {
+	return observerFromContext(ctx)
+}
+
 // FinishPending 把中断/未上报的请求计为 incomplete（不编造成功或 token）。
 // Python: finish_pending()——遍历 pending 逐笔记账后清空。
 func (o *ModelUsageObserver) FinishPending() error {

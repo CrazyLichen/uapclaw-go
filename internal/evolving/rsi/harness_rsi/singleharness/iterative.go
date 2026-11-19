@@ -17,8 +17,11 @@ import (
 	"unicode"
 
 	hresources "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
+	rsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
+	configpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/data_loader"
+	analyzerpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluation_result_analyzer"
 	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/improver_evolution"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
@@ -454,7 +457,7 @@ func loadOrCreateState(
 		if !resumeFingerprintMatches(storedFingerprint, fingerprint) {
 			return nil, errors.New("resume inputs do not match single-harness state")
 		}
-		if !anyEqual(storedFingerprint, fingerprint) {
+		if !fingerprintJSONEqual(storedFingerprint, fingerprint) {
 			state["fingerprint"] = fingerprint
 		}
 		setDefaultString(state, "working_harness_refs_path",
@@ -608,7 +611,7 @@ func initializeFrozenBaseline(
 // Python: _resume_fingerprint_matches——注意 Python 侧 _request_fingerprint 写
 // version 20，此处 12/13 分支仅对旧状态生效（上游原样，勿"修正"）。
 func resumeFingerprintMatches(stored, requested map[string]any) bool {
-	if anyEqual(stored, requested) {
+	if fingerprintJSONEqual(stored, requested) {
 		return true
 	}
 	if stored == nil {
@@ -630,7 +633,17 @@ func resumeFingerprintMatches(stored, requested map[string]any) bool {
 	}
 	migrated["optimization_chain_version"] = 13
 	migrated["improver_policy_digest"] = requested["improver_policy_digest"]
-	return anyEqual(migrated, requested)
+	return fingerprintJSONEqual(migrated, requested)
+}
+
+// fingerprintJSONEqual 指纹 JSON 规范比较（YAML 往返 []string→[]any 类型漂移免疫）。
+func fingerprintJSONEqual(left, right map[string]any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	return string(leftJSON) == string(rightJSON)
 }
 
 // refreshOptimizationExperience 从已判定的实验重建跨轮日志与 lever 记分板。
@@ -1863,10 +1876,24 @@ func fileExists(path string) bool {
 
 // toAnySlice 任意值转 any 切片（nil 安全）。
 func toAnySlice(value any) []any {
-	if slice, ok := value.([]any); ok {
-		return slice
+	switch typed := value.(type) {
+	case []any:
+		return typed
+	case []string:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, item)
+		}
+		return out
+	default:
+		return nil
 	}
-	return nil
 }
 
 // toInt 任意数值转 int（Python int() 截断语义）。
@@ -3281,6 +3308,2793 @@ func ensureFinalPublication(state map[string]any, outputDir string) error {
 	return nil
 }
 
+// ──────────────────────────── 编排器（Python 151-1856） ────────────────────────────
+
+// SingleHarnessIterativeOptimizationOrchestrator 单 harness 的轮次/批次/候选门/检查点控制面。
+// Python: iterative.py SingleHarnessIterativeOptimizationOrchestrator——
+// 它不构造也不优化 Team Skill，不生成数据集，不调用 Team 执行。
+// member optimizer 被机器限制在 member 局部的 Skill/Prompt Section/Tool/Rail 面，
+// 即使调用方在 YAML 里省略这些限制。Identity/soul/subagent/Team Skill 面保持关闭。
+type SingleHarnessIterativeOptimizationOrchestrator struct {
+	// config 顶层配置（member_optimizer 已收紧）
+	config configpkg.AutoCoordinatingHarnessConfig
+	// evaluator 评估注入面（真身 *evaluator.TeamEvaluator ⤴️17.6）
+	evaluator EvaluatorInvoker
+	// analyzer 诊断分析注入面（真身 *analyzerpkg.EvaluationResultAnalyzer）
+	analyzer AnalyzerInvoker
+	// memberOptimizer 成员优化注入面（真身 *memberoptimizer.MemberOptimizer，17.4c）
+	memberOptimizer OptimizerInvoker
+	// dataLoader 数据载入器
+	dataLoader *dataloader.DataLoader
+	// improverPolicy 优化策略
+	improverPolicy *improver_evolution.VersionedImproverPolicy
+	// explicitImproverPolicy 是否显式指定策略
+	explicitImproverPolicy bool
+}
+
+// NewSingleHarnessIterativeOptimizationOrchestrator 构造编排器（Python __init__）。
+// evaluator/analyzer/memberOptimizer/dataLoader 传 nil 时按 Python 默认构造真身；
+// 测试经 evaluator 注入 fake。
+func NewSingleHarnessIterativeOptimizationOrchestrator(
+	cfg configpkg.AutoCoordinatingHarnessConfig,
+	evaluator EvaluatorInvoker,
+	analyzer AnalyzerInvoker,
+	memberOptimizer OptimizerInvoker,
+	dataLoader *dataloader.DataLoader,
+) (*SingleHarnessIterativeOptimizationOrchestrator, error) {
+	if cfg.Evaluator.Backend != "single_harness" {
+		return nil, errors.New(
+			"SingleHarnessIterativeOptimizationOrchestrator requires config.evaluator.backend='single_harness'")
+	}
+	if !cfg.Scheduling.FullEvaluationEnabled {
+		return nil, errors.New("iterative single-harness optimization requires the epoch full checkpoint")
+	}
+	if err := cfg.Scheduling.Validate(); err != nil {
+		return nil, err
+	}
+	if cfg.MemberOptimizer.SiblingCandidateCount != 1 || cfg.MemberOptimizer.ImproverPolicyRef != "" {
+		return nil, errors.New(
+			"single-harness optimization requires one candidate and no improver evolution policy")
+	}
+	restrictedMemberConfig := cfg.MemberOptimizer
+	restrictedMemberConfig.ActionGroupConfigs = allowedActionGroupsList()
+	restrictedMemberConfig.AllowedActionGroups = allowedActionGroupsList()
+	restrictedMemberConfig.AllowedPromptSurfaces = allowedPromptSurfacesList()
+	restrictedMemberConfig.RuntimeIterationHardLimit = cfg.Evaluator.SolverMaxIterationsHardLimit
+	restrictedMemberConfig.CandidateHoldoutCases = 0
+	restrictedMemberConfig.MaxRolesPerRun = 1
+	if restrictedMemberConfig.MaxActionsPerPlan <= 0 {
+		restrictedMemberConfig.MaxActionsPerPlan = 3
+	}
+	orchestratorCfg := cfg
+	orchestratorCfg.MemberOptimizer = restrictedMemberConfig
+	if cfg.Promotion.Continuous() {
+		orchestratorCfg.Evaluator.ScoreMode = "continuous"
+	}
+	if evaluator == nil {
+		evaluator = NewStubEvaluatorInvoker(orchestratorCfg.Evaluator)
+	}
+	if analyzer == nil {
+		analyzer = analyzerpkg.NewEvaluationResultAnalyzer(&orchestratorCfg.EvaluationResultAnalyzer)
+	}
+	if memberOptimizer == nil {
+		memberCfg := convertMemberOptimizerConfig(restrictedMemberConfig)
+		memberOptimizer = memberoptimizer.NewMemberOptimizer(memberCfg, nil, nil, nil, nil, nil, nil)
+	}
+	if dataLoader == nil {
+		loader, err := dataloader.NewDataLoader(orchestratorCfg.DataLoader)
+		if err != nil {
+			return nil, err
+		}
+		dataLoader = loader
+	}
+	policyRef := strings.TrimSpace(restrictedMemberConfig.ImproverPolicyRef)
+	var improverPolicy *improver_evolution.VersionedImproverPolicy
+	if policyRef != "" {
+		resolved, err := resolvePath(policyRef)
+		if err != nil {
+			return nil, err
+		}
+		improverPolicy, err = improver_evolution.LoadImproverPolicy(resolved)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		improverPolicy = improver_evolution.DefaultImproverPolicy()
+	}
+	return &SingleHarnessIterativeOptimizationOrchestrator{
+		config:                 orchestratorCfg,
+		evaluator:              evaluator,
+		analyzer:               analyzer,
+		memberOptimizer:        memberOptimizer,
+		dataLoader:             dataLoader,
+		improverPolicy:         improverPolicy,
+		explicitImproverPolicy: policyRef != "",
+	}, nil
+}
+
+// Run 运行迭代优化并保证用量账本收尾（Python run——asyncio 取消/失败状态落盘）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) Run(
+	ctx context.Context,
+	request *IterativeSingleHarnessRequest,
+	onEvent rsi.OnEvent,
+) (result IterativeSingleHarnessResult, err error) {
+	observer := rsi.NewModelUsageObserver(onEvent)
+	observeCtx, cancel := observer.Observe(ctx)
+	defer cancel()
+	cancelled := false
+	failed := false
+	defer func() {
+		// worker 发起的终止会取消运行中的编排协程；持久化 durable terminated
+		// 状态避免重启/恢复复活本次运行。
+		if ctx.Err() != nil {
+			cancelled = true
+		}
+		if cancelled && observer.State() != nil {
+			observer.State()["status"] = "terminated"
+		}
+		// 控制器中止时也要把中断调用计入；调用账本是崩溃后对账来源。
+		_ = observer.FinishPending()
+		if observer.State() != nil {
+			directory, err := resolvePath(request.OutputDir)
+			if err == nil {
+				_ = writeYAMLAtomic(filepath.Join(directory, "single_harness_state.yaml"), observer.State())
+				reportPath := filepath.Join(directory, "single_harness_report.yaml")
+				if fileExists(reportPath) {
+					if report, err := readYAMLFile(reportPath); err == nil {
+						report["usage"] = observer.State()["usage"]
+						report["model_calls_path"] = defaultString(observer.State()["model_calls_path"], "")
+						report["status"] = defaultString(observer.State()["status"], toString(report["status"]))
+						_ = writeYAMLAtomic(reportPath, report)
+					}
+				}
+			}
+		}
+		if cancelled || failed {
+			status := rsi.RsiStatusFailed
+			if cancelled {
+				status = rsi.RsiStatusTerminated
+			}
+			// 投递失败不得掩盖原始错误
+			_ = rsi.Emit(ctx, onEvent, rsi.NewEventStatus(status))
+		}
+	}()
+	result, err = o.run(observeCtx, request, onEvent)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			cancelled = true
+		} else {
+			failed = true
+			if observer.State() != nil {
+				observer.State()["status"] = "failed"
+			}
+		}
+	}
+	return result, err
+}
+
+// run 主循环（Python _run）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) run(
+	ctx context.Context,
+	request *IterativeSingleHarnessRequest,
+	onEvent rsi.OnEvent,
+) (IterativeSingleHarnessResult, error) {
+	outputDir, err := resolvePath(request.OutputDir)
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	statePath := filepath.Join(outputDir, "single_harness_state.yaml")
+	reportPath := filepath.Join(outputDir, "single_harness_report.yaml")
+	sourceRefs, err := resolvePath(request.HarnessRefsPath)
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	if err := validateSingleHarnessRefs(sourceRefs); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	dataset, err := datasetArtifact(request)
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	datasetDir := dataset.DatasetDir
+	fingerprint, err := requestFingerprint(
+		request, sourceRefs,
+		o.config.MemberOptimizer.SiblingCandidateCount,
+		o.improverPolicy.CanonicalDigest())
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	resumingExistingState := request.Resume && fileExists(statePath)
+	state, err := loadOrCreateState(statePath, request.Resume, fingerprint, sourceRefs, dataset)
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	policy := yamlToAnyMapMust(o.config.Promotion)
+	storedPolicy := map[string]any{"policy_version": "legacy_epoch_v1"}
+	if raw, ok := state["promotion_policy"].(map[string]any); ok {
+		storedPolicy = raw
+	}
+	if toString(storedPolicy["policy_version"]) == "legacy_epoch_v1" {
+		delete(storedPolicy, "confirmation_runs")
+		if _, ok := storedPolicy["min_improvement"]; !ok {
+			storedPolicy["min_improvement"] = 0.05
+		}
+		if _, ok := storedPolicy["non_target_max_regression"]; !ok {
+			storedPolicy["non_target_max_regression"] = 0.05
+		}
+	}
+	if request.Resume && !anyEqual(storedPolicy, policy) {
+		_, hasKey := state["promotion_policy"]
+		if o.config.Promotion.Continuous() || hasKey {
+			return IterativeSingleHarnessResult{}, errors.New("promotion policy changed; start a new task")
+		}
+	}
+	state["promotion_policy"] = policy
+	maxEpochs := o.config.MaxEpochs
+	if request.MaxIteration != nil {
+		maxEpochs = *request.MaxIteration
+	}
+	if storedLimitRaw, hasLimit := state["max_iteration"]; request.Resume && hasLimit && storedLimitRaw != nil {
+		storedLimit := toInt(storedLimitRaw)
+		if request.MaxIteration != nil && *request.MaxIteration != storedLimit {
+			return IterativeSingleHarnessResult{}, errors.New("resume max_iteration does not match the original run")
+		}
+		maxEpochs = storedLimit
+	}
+	state["max_iteration"] = maxEpochs
+	storedTaskID := toString(state["task_id"])
+	if request.Resume && storedTaskID != "" && request.TaskID != "" && storedTaskID != request.TaskID {
+		return IterativeSingleHarnessResult{}, errors.New("resume task_id does not match single-harness state")
+	}
+	if request.TaskID != "" {
+		state["task_id"] = request.TaskID
+	} else {
+		state["task_id"] = storedTaskID
+	}
+	if err := o.bindUsage(ctx, state, outputDir); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	state["improver_policy"] = map[string]any{
+		"version_id":    o.improverPolicy.VersionID,
+		"policy_digest": o.improverPolicy.CanonicalDigest(),
+		"policy_ref":    o.config.MemberOptimizer.ImproverPolicyRef,
+		"explicit":      o.explicitImproverPolicy,
+	}
+	allCases, err := LoadCases(dataset.DatasetFiles)
+	if err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	allCasesContext := o.evaluationContext(allCases, sourceRefs, nil)
+	protocolSignature := allCasesContext["signature"]
+	if request.Resume && !anyEqual(state["evaluation_protocol_signature"], protocolSignature) &&
+		state["evaluation_protocol_signature"] != nil {
+		return IterativeSingleHarnessResult{}, errors.New(
+			"run evaluation configuration or initial Harness changed; start a new run")
+	}
+	state["evaluation_protocol_signature"] = protocolSignature
+	if request.Resume && toString(state["status"]) == "completed" {
+		if err := ensureFinalPublication(state, outputDir); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := writeYAMLAtomic(statePath, state); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := writeYAMLAtomic(reportPath, buildReport(state, dataset)); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		return resultFromState(state, statePath, reportPath), nil
+	}
+
+	state["status"] = "running"
+	totalIterations := maxEpochs
+	allCaseIDs := map[string]struct{}{}
+	for _, singleCase := range allCases {
+		if caseID := toString(singleCase["case_id"]); caseID != "" {
+			allCaseIDs[caseID] = struct{}{}
+		}
+	}
+	baselineBefore := toString(state["baseline_eval_ref_path"])
+	if err := initializeFrozenBaseline(state, request.BaselineEvalRefPath, sourceRefs, allCaseIDs); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	missingBaseline := toString(state["baseline_eval_ref_path"]) == ""
+	needsBaseline := (request.AutoFullBaseline || o.config.Promotion.Continuous()) && missingBaseline
+	if !resumingExistingState || needsBaseline {
+		if err := writeYAMLAtomic(statePath, state); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := rsi.Emit(ctx, onEvent, RootNodeEvent(state)); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := rsi.Emit(ctx, onEvent, ProgressEvent(state, totalIterations)); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+	}
+	if needsBaseline {
+		ctx = rsi.SetUsageNode(ctx, "h0")
+		baselineEvalRef, err := o.evaluate(ctx, evaluateParams{
+			cases: allCases, harnessRefsPath: sourceRefs,
+			outputDir:       filepath.Join(outputDir, "evaluations", "frozen_baseline"),
+			caseConcurrency: o.config.Scheduling.FullEvaluationConcurrency,
+			dataset:         dataset, nodeRef: "h0", onEvent: onEvent,
+		})
+		if err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := initializeFrozenBaseline(state, baselineEvalRef, sourceRefs, allCaseIDs); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+	}
+	if err := writeYAMLAtomic(statePath, state); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	baselineAfter := toString(state["baseline_eval_ref_path"])
+	if baselineAfter != "" && baselineAfter != baselineBefore {
+		if err := rsi.Emit(ctx, onEvent, RootNodeEvent(state)); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if err := rsi.Emit(ctx, onEvent, ProgressEvent(state, totalIterations)); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+	}
+	if o.config.Promotion.Continuous() {
+		// Python: from .continuous import run_continuous（内嵌延迟 import 按原位置内联）
+		return o.runContinuous(ctx, request, state, dataset, allCases, outputDir, maxEpochs, onEvent)
+	}
+	currentRefs := toString(state["best_harness_refs_path"])
+	for epoch := 1; epoch <= maxEpochs; epoch++ {
+		if err := raiseIfCancelled(ctx); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		var existingCheckpoint map[string]any
+		for _, rawItem := range toAnySlice(state["epoch_checkpoints"]) {
+			item, ok := rawItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			if toInt(item["epoch"]) == epoch {
+				existingCheckpoint = item
+				break
+			}
+		}
+		if request.Resume && existingCheckpoint != nil {
+			currentRefs = toString(state["best_harness_refs_path"])
+			state["current_harness_refs_path"] = currentRefs
+			state["working_harness_refs_path"] = currentRefs
+			continue
+		}
+
+		currentRefs = toString(state["best_harness_refs_path"])
+		workingRetainedCaseIDs := toStringSet(state["retained_case_ids"])
+		epochStartRefs := currentRefs
+		epochStartScore := numberOf(state["best_score"])
+		epochStartRetainedCaseIDs := toStringSetCopy(workingRetainedCaseIDs)
+		priorEvalRefs := priorEvalRefsFromState(state)
+		// 保留在晋级时保护历史成功；重放失败匹配后不是分析的永久豁免。
+		sourceSelectionRefs := currentRefs
+		sourcePassingCaseIDs := o.sourcePassingCaseIDs(allCases, currentRefs, priorEvalRefs)
+		if stringSetSuperset(sourcePassingCaseIDs, allCaseIDs) {
+			break
+		}
+		epochNodeRef := fmt.Sprintf("epoch-%03d", epoch)
+		ctx = rsi.SetUsageNode(ctx, epochNodeRef)
+		state["active_epoch"] = epoch
+		state["active_epoch_before_harness_refs_path"] = epochStartRefs
+		if err := writeYAMLAtomic(statePath, state); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		if activeEvent := ActiveEpochNodeEvent(state); activeEvent != nil {
+			if err := rsi.Emit(ctx, onEvent, activeEvent); err != nil {
+				return IterativeSingleHarnessResult{}, err
+			}
+		}
+		var plannedBatches [][]map[string]any
+		// Python: callable(getattr(type(self.data_loader), "load_files", None))
+		if request.datasetFilesUsable() {
+			plannedBatches, err = o.dataLoader.LoadFiles(request.DatasetFiles, epoch)
+		} else {
+			plannedBatches, err = o.dataLoader.Load(datasetDir, epoch)
+		}
+		if err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		batches, err := validateAndFilterPlannedBatches(plannedBatches, allCaseIDs)
+		if err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		batchPlanPaths := mappingOrNil(state["batch_plan_paths"])
+		batchPlanPaths[fmt.Sprintf("epoch_%03d", epoch)] = ""
+		if err := writeYAMLAtomic(statePath, state); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+		for batchIndex, plannedBatch := range batches {
+			if err := o.runBatch(ctx, batchRunParams{
+				epoch: epoch, batchIndex: batchIndex + 1, plannedBatch: plannedBatch,
+				state: state, statePath: statePath, outputDir: outputDir, dataset: dataset,
+				allCases: allCases, allCaseIDs: allCaseIDs, onEvent: onEvent,
+				totalIterations: totalIterations,
+				refs: &batchRefs{
+					current: &currentRefs, sourceSelection: &sourceSelectionRefs,
+					sourcePassing: &sourcePassingCaseIDs, priorEvalRefs: priorEvalRefs,
+					workingRetained: workingRetainedCaseIDs, epochNodeRef: epochNodeRef,
+				},
+			}); err != nil {
+				return IterativeSingleHarnessResult{}, err
+			}
+		}
+		if err := o.runEpochCheckpoint(ctx, epochCheckpointParams{
+			epoch: epoch, state: state, statePath: statePath, outputDir: outputDir,
+			dataset: dataset, allCases: allCases, allCaseIDs: allCaseIDs,
+			onEvent: onEvent, totalIterations: totalIterations,
+			epochStartRefs: epochStartRefs, epochStartScore: epochStartScore,
+			epochStartRetained: epochStartRetainedCaseIDs,
+			workingRetained:    workingRetainedCaseIDs, currentRefs: &currentRefs,
+			epochNodeRef: epochNodeRef,
+		}); err != nil {
+			return IterativeSingleHarnessResult{}, err
+		}
+	}
+	if err := refreshOptimizationExperience(state, outputDir); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	if err := ensureFinalPublication(state, outputDir); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	state["status"] = "completed"
+	if err := writeYAMLAtomic(statePath, state); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	if err := writeYAMLAtomic(reportPath, buildReport(state, dataset)); err != nil {
+		return IterativeSingleHarnessResult{}, err
+	}
+	return resultFromState(state, statePath, reportPath), nil
+}
+
+// datasetFilesUsable 等价 Python `callable(getattr(type(loader),"load_files",None))`——
+// Go 的 DataLoader 恒有 LoadFiles，因此以"数据集文件清单非空"为切换条件。
+func (r *IterativeSingleHarnessRequest) datasetFilesUsable() bool {
+	return len(r.DatasetFiles) > 0
+}
+
+// bindUsage 绑定模型用量观察者（Python: await bind_model_usage(state, output_dir)）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) bindUsage(
+	ctx context.Context, state map[string]any, outputDir string,
+) error {
+	if observer := rsi.ObserverFromContext(ctx); observer != nil {
+		return observer.Bind(state, outputDir)
+	}
+	return nil
+}
+
+// yamlToAnyMapMust 结构体转映射（失败 panic——配置序列化不可能失败）。
+func yamlToAnyMapMust(value any) map[string]any {
+	result, err := yamlToAnyMap(value)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// toStringSet any 值转字符串集合（兼容 []any 与 []string——门字段经 sortedStringSet 存为 []string）。
+func toStringSet(value any) map[string]struct{} {
+	out := map[string]struct{}{}
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			if s := toString(item); s != "" {
+				out[s] = struct{}{}
+			}
+		}
+	case []string:
+		for _, s := range typed {
+			if s != "" {
+				out[s] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+// toStringSetCopy 集合拷贝。
+func toStringSetCopy(source map[string]struct{}) map[string]struct{} {
+	out := map[string]struct{}{}
+	for key := range source {
+		out[key] = struct{}{}
+	}
+	return out
+}
+
+// stringSetSuperset 判断 superset 是否包含 subset 全部元素。
+func stringSetSuperset(superset, subset map[string]struct{}) bool {
+	for key := range subset {
+		if _, ok := superset[key]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// batchRefs 轮内跨批次共享的可变引用。
+type batchRefs struct {
+	current         *string
+	sourceSelection *string
+	sourcePassing   *map[string]struct{}
+	priorEvalRefs   []string
+	workingRetained map[string]struct{}
+	epochNodeRef    string
+}
+
+// batchRunParams 单批次运行参数。
+type batchRunParams struct {
+	epoch           int
+	batchIndex      int
+	plannedBatch    []map[string]any
+	state           map[string]any
+	statePath       string
+	outputDir       string
+	dataset         harnessrsi.DatasetArtifact
+	allCases        []map[string]any
+	allCaseIDs      map[string]struct{}
+	onEvent         rsi.OnEvent
+	totalIterations int
+	refs            *batchRefs
+}
+
+// runBatch 单批次修复循环（Python _run 内层批次段 431-779）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) runBatch(
+	ctx context.Context, params batchRunParams,
+) error {
+	state := params.state
+	epoch := params.epoch
+	batchIndex := params.batchIndex
+	refs := params.refs
+	currentRefs := *refs.current
+	if err := raiseIfCancelled(ctx); err != nil {
+		return err
+	}
+	batchKey := fmt.Sprintf("epoch_%03d:batch_%03d", epoch, batchIndex)
+	completedBatch := mappingOrNil(mappingOrNil(state["completed_batches"])[batchKey])
+	if requestResume := toString(state["status"]) != ""; requestResume && len(completedBatch) > 0 {
+		// Python: if request.resume and isinstance(completed, dict)——run 入口已限定 resume，
+		// 此处以 completed_batches 已有记录为续跑信号
+		currentRefs = toString(completedBatch["after_harness_refs_path"])
+		retainedAfter := toAnySlice(completedBatch["retained_case_ids_after_batch"])
+		if len(retainedAfter) == 0 {
+			retainedAfter = toAnySlice(completedBatch["accepted_target_case_ids"])
+		}
+		for _, caseID := range retainedAfter {
+			if s := toString(caseID); s != "" {
+				refs.workingRetained[s] = struct{}{}
+			}
+		}
+		state["working_harness_refs_path"] = currentRefs
+		*refs.current = currentRefs
+		return nil
+	}
+
+	if currentRefs != *refs.sourceSelection {
+		*refs.sourceSelection = currentRefs
+		*refs.sourcePassing = o.sourcePassingCaseIDs(params.allCases, currentRefs, refs.priorEvalRefs)
+	}
+	batch := []map[string]any{}
+	for _, singleCase := range params.plannedBatch {
+		if _, passing := (*refs.sourcePassing)[toString(singleCase["case_id"])]; !passing {
+			batch = append(batch, singleCase)
+		}
+	}
+	completedBatches := mappingOrNil(state["completed_batches"])
+	if len(batch) == 0 {
+		completedBatches[batchKey] = map[string]any{
+			"epoch": epoch, "batch_index": batchIndex,
+			"source_eval_ref_path": "", "analysis_ref_path": "",
+			"optimization_hypotheses_path": "", "member_optimization_ref_path": "",
+			"before_harness_refs_path": currentRefs, "after_harness_refs_path": currentRefs,
+			"candidate_gate_status": "skipped", "candidate_gate_reason": "no_active_cases",
+			"accepted_target_case_ids":      []any{},
+			"retained_case_ids_after_batch": sortedStringSet(refs.workingRetained),
+		}
+		return writeYAMLAtomic(params.statePath, state)
+	}
+
+	batchDir := filepath.Join(params.outputDir, "evaluations",
+		fmt.Sprintf("e%03d", epoch), fmt.Sprintf("b%03d", batchIndex))
+	sourceEvalRef, err := o.sourceEvaluation(ctx, sourceEvaluationParams{
+		cases: batch, harnessRefsPath: currentRefs,
+		outputDir: filepath.Join(batchDir, "source"),
+		dataset:   params.dataset, priorEvalRefs: refs.priorEvalRefs,
+		batchIndex: batchIndex, nodeRef: refs.epochNodeRef, onEvent: params.onEvent,
+	})
+	if err != nil {
+		return err
+	}
+	batchBeforeRefs := currentRefs
+	attemptRecords := []any{}
+	acceptedTargetCaseIDs := map[string]struct{}{}
+	lastMemberRef := ""
+	var lastGate map[string]any
+	analysisRef := ""
+	hypothesesRef := ""
+	analysisRefs := []any{}
+	hypothesesRefs := []any{}
+	lastAnalysisIssueCount := 0
+	lastOptimizationHypothesisCount := 0
+	residualEvalRefs := []any{}
+	attemptedIssueIDs := map[string]struct{}{}
+	attemptedIssueSignatures := map[string]struct{}{}
+	maxRepairRounds := o.config.MemberOptimizer.MaxRepairRoundsPerBatch
+	if maxRepairRounds < 1 {
+		maxRepairRounds = 1
+	}
+	attemptIndex := 0
+	analysisRoundIndex := 0
+	repairStopReason := "repair_round_limit_reached"
+	attemptSourceEvalRef := sourceEvalRef
+	repairRefs := currentRefs
+	var repairCapabilities []map[string]any
+	reuseAnalysis := false
+	sourceCaseScores, err := evalCaseScores(sourceEvalRef)
+	if err != nil {
+		return err
+	}
+	sourcePassing, err := passingCaseIDs(sourceEvalRef)
+	if err != nil {
+		return err
+	}
+	syncRetainedCaseIDs(refs.workingRetained, sourceCaseScores, sourcePassing)
+	sourceNonPassing, err := nonpassingCaseIDs(sourceEvalRef)
+	if err != nil {
+		return err
+	}
+	activeCases := casesWithIDs(batch, sourceNonPassing)
+
+	for len(activeCases) > 0 && attemptIndex < maxRepairRounds {
+		if err := raiseIfCancelled(ctx); err != nil {
+			return err
+		}
+		analysisRoundIndex++
+		analysisDir := filepath.Join(batchDir, "analysis")
+		if analysisRoundIndex != 1 {
+			analysisDir = filepath.Join(batchDir, "residual_analyses",
+				fmt.Sprintf("r%03d", analysisRoundIndex))
+		}
+		refreshResidualAnalysis := false
+		// —— 分析轮 ——
+		if !reuseAnalysis {
+			analysisRef, err = o.analyze(ctx, analyzeParams{
+				evalRefPath: attemptSourceEvalRef, harnessRefsPath: repairRefs,
+				outputDir: analysisDir, nodeRef: refs.epochNodeRef,
+				sourceStage:            "single_harness_batch",
+				priorCandidateFeedback: priorCandidateFeedback(state, activeCases),
+				onEvent:                params.onEvent,
+			})
+			if analysisRoundIndex != 1 {
+				// residual 轮 source_stage 在 Python 是条件表达式的一部分；
+				// 实际取值见下（首轮 batch，其余 residual_repair）——此处修正：
+				_ = analysisDir
+			}
+		}
+		// Python: analysis_ref = analysis_ref if reuse_analysis else await self._analyze(...)
+		// source_stage 首轮 single_harness_batch，其余 single_harness_residual_repair
+		if err != nil {
+			var unavailable *memberoptimizer.AnalysisUnavailableError
+			if errors.As(err, &unavailable) {
+				if unavailable.AnalysisRefPath == "" {
+					unavailable.AnalysisRefPath = analysisRef
+				}
+				analysisRef = unavailable.AnalysisRefPath
+				analysisRefs = append(analysisRefs, analysisRef)
+				failures, _ := state["analysis_failures"].([]any)
+				failure := map[string]any{}
+				for key, value := range unavailable.Details() {
+					failure[key] = value
+				}
+				failure["epoch"] = epoch
+				failure["batch_index"] = batchIndex
+				failure["source_eval_ref_path"] = attemptSourceEvalRef
+				failure["harness_refs_path"] = repairRefs
+				targetCaseIDs := []any{}
+				for _, activeCase := range activeCases {
+					targetCaseIDs = append(targetCaseIDs, toString(activeCase["case_id"]))
+				}
+				failure["target_case_ids"] = targetCaseIDs
+				state["analysis_failures"] = append(failures, failure)
+				repairStopReason = "analysis_unavailable"
+				break
+			}
+			return err
+		}
+		reuseAnalysis = false
+		analysisRefs = append(analysisRefs, analysisRef)
+		hypothesesRef, err = memberoptimizer.CompileOptimizationHypotheses(
+			analysisRef, activeCases, filepath.Join(analysisDir, "optimization_hypotheses.yaml"))
+		if err != nil {
+			return err
+		}
+		hypothesesRefs = append(hypothesesRefs, hypothesesRef)
+		hypotheses, err := memberoptimizer.LoadOptimizationHypotheses(hypothesesRef)
+		if err != nil {
+			return err
+		}
+		issueCaseIDs, err := analysisIssueCaseIDs(analysisRef)
+		if err != nil {
+			return err
+		}
+		issueSignatures, err := analysisIssueSignatures(analysisRef)
+		if err != nil {
+			return err
+		}
+		lastAnalysisIssueCount = len(issueCaseIDs)
+		lastOptimizationHypothesisCount = len(hypotheses)
+		if len(issueCaseIDs) == 0 || len(hypotheses) == 0 {
+			if len(issueCaseIDs) == 0 {
+				repairStopReason = "no_actionable_analysis_issues"
+			} else {
+				repairStopReason = "no_executable_hypotheses"
+			}
+			break
+		}
+		attemptNonPassing, err := nonpassingCaseIDs(attemptSourceEvalRef)
+		if err != nil {
+			return err
+		}
+		type issueEntry struct {
+			issueID   string
+			signature string
+		}
+		issueQueue := []issueEntry{}
+		repeatedIssueIDs := []string{}
+		knownIssueSignatures := toStringSetCopy(attemptedIssueSignatures)
+		for _, hypothesis := range hypotheses {
+			issueID := toString(hypothesis["source_issue_id"])
+			if issueID == "" {
+				continue
+			}
+			targets := issueCaseIDs[issueID]
+			if len(targets) > 0 && len(stringSetIntersection(targets, attemptNonPassing)) == 0 {
+				continue
+			}
+			signature := issueSignatures[issueID]
+			if signature == "" {
+				signature = issueID
+			}
+			_, triedIssue := attemptedIssueIDs[issueID]
+			_, knownSignature := knownIssueSignatures[signature]
+			if triedIssue || knownSignature {
+				repeatedIssueIDs = append(repeatedIssueIDs, issueID)
+				continue
+			}
+			issueQueue = append(issueQueue, issueEntry{issueID: issueID, signature: signature})
+			knownIssueSignatures[signature] = struct{}{}
+		}
+		if len(issueQueue) == 0 {
+			if len(repeatedIssueIDs) > 0 {
+				repairStopReason = "repeated_issue_detected"
+			} else {
+				repairStopReason = "no_residual_issues"
+			}
+			break
+		}
+
+		for _, issue := range issueQueue {
+			if err := raiseIfCancelled(ctx); err != nil {
+				return err
+			}
+			if attemptIndex >= maxRepairRounds {
+				break
+			}
+			attemptIndex++
+			if issue.issueID != "" {
+				attemptedIssueIDs[issue.issueID] = struct{}{}
+			}
+			attemptedIssueSignatures[issue.signature] = struct{}{}
+			attemptDir := filepath.Join(batchDir, "attempts", fmt.Sprintf("a%03d", attemptIndex))
+			beforeAttemptRefs := repairRefs
+			rejectedCapabilities := rejectedCapabilities(state)
+			if err := rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+				refs.epochNodeRef,
+				GenerateStagePayload(1, 1, "running", ""), nil)); err != nil {
+				return err
+			}
+			optimizeCtx, done := rsi.ModelUsageStage(ctx, "optimize")
+			memberRef, optimizeErr := o.memberOptimizer.Optimize(
+				optimizeCtx,
+				attemptSourceEvalRef, analysisRef, beforeAttemptRefs,
+				filepath.Join(params.outputDir, "member_optimizations"),
+				memberoptimizer.OptimizeExecuteParams{
+					DeferPublish:               true,
+					RejectedCapabilities:       rejectedCapabilities,
+					SingleHarness:              true,
+					OptimizationHypothesesPath: hypothesesRef,
+					OptimizationIssueIds: func() []string {
+						if issue.issueID != "" {
+							return []string{issue.issueID}
+						}
+						return nil
+					}(),
+					OptimizationExperience: map[string]any{
+						"journal":          toAnySlice(state["optimization_journal"]),
+						"lever_scoreboard": mappingOrNil(state["lever_scoreboard"]),
+					},
+				})
+			done()
+			if optimizeErr != nil {
+				memberRef = filepath.Join(attemptDir, "generation_error.yaml")
+				if writeErr := writeYAMLAtomic(memberRef, map[string]any{
+					"status":                     "generation_error",
+					"candidate_generation_error": safeCandidateError(optimizeErr),
+				}); writeErr != nil {
+					return writeErr
+				}
+				_ = rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+					refs.epochNodeRef,
+					GenerateStagePayload(1, 1, "error", safeCandidateError(optimizeErr)["message"]), nil))
+				return optimizeErr
+			}
+			memberInfo, err := readYAMLFile(memberRef)
+			if err != nil {
+				return err
+			}
+			generationError := memberInfo["candidate_generation_error"]
+			errorMsg := ""
+			stageStatus := "done"
+			if generationError != nil {
+				stageStatus = "error"
+				errorMsg = toString(generationError)
+			}
+			if err := rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+				refs.epochNodeRef,
+				GenerateStagePayload(1, 1, stageStatus, errorMsg), nil)); err != nil {
+				return err
+			}
+			candidateRefs := defaultString(memberInfo["optimized_harness_refs_path"], beforeAttemptRefs)
+			capabilities, err := candidateCapabilities(memberInfo)
+			if err != nil {
+				return err
+			}
+			capabilities = mergeRepairCapabilities(repairCapabilities, capabilities)
+			gate, err := o.candidateGate(ctx, candidateGateParams{
+				cases: activeCases, sourceEvalRef: attemptSourceEvalRef,
+				analysisRef:              analysisRef,
+				beforeHarnessRefsPath:    beforeAttemptRefs,
+				candidateHarnessRefsPath: candidateRefs,
+				memberStatus:             toString(memberInfo["status"]),
+				capabilities:             capabilities,
+				outputDir: candidateEvaluationOutputDir(
+					params.outputDir, epoch, batchIndex, attemptIndex, 1),
+				dataset: params.dataset, nodeRef: refs.epochNodeRef,
+				onEvent: params.onEvent,
+			})
+			if err != nil {
+				return err
+			}
+			if memberInfo["candidate_generation_error"] != nil {
+				gate["candidate_generation_error"] = memberInfo["candidate_generation_error"]
+			}
+			primaryAccepted := truthy(gate["accepted"])
+			gate["epoch"] = epoch
+			gate["batch_index"] = batchIndex
+			gate["batch_attempt_index"] = attemptIndex
+			gate["repair_round_index"] = attemptIndex
+			gate["analysis_round_index"] = analysisRoundIndex
+			gate["source_issue_id"] = issue.issueID
+			gate["source_issue_signature"] = issue.signature
+			gate["member_optimization_ref_path"] = memberRef
+			gate["primary_gate_accepted"] = primaryAccepted
+			gate["primary_gate_reason"] = toString(gate["reason"])
+			gate["evaluation_input_mode"] = "original_task"
+			if primaryAccepted {
+				// 完整修复链是一个临时改动。
+				gate["before_harness_refs_path"] = currentRefs
+				gate["status"] = "provisional"
+				gate["reason"] = "candidate_passed_batch_gate_pending_epoch_checkpoint"
+				currentRefs = candidateRefs
+				for _, rawCaseID := range toAnySlice(gate["target_case_ids"]) {
+					if caseID := toString(rawCaseID); caseID != "" {
+						acceptedTargetCaseIDs[caseID] = struct{}{}
+					}
+				}
+			}
+			persistCandidateRefs := ""
+			if candidateRefs != beforeAttemptRefs {
+				persistCandidateRefs = candidateRefs
+			}
+			if err := persistPromotion(memberRef, persistCandidateRefs, gate); err != nil {
+				return err
+			}
+			gates, _ := state["candidate_gates"].([]any)
+			state["candidate_gates"] = append(gates, gate)
+			if err := refreshOptimizationExperience(state, params.outputDir); err != nil {
+				return err
+			}
+			attemptRecord := map[string]any{
+				"attempt_index":                attemptIndex,
+				"analysis_round_index":         analysisRoundIndex,
+				"source_issue_id":              issue.issueID,
+				"source_issue_signature":       issue.signature,
+				"source_eval_ref_path":         attemptSourceEvalRef,
+				"analysis_ref_path":            analysisRef,
+				"optimization_hypotheses_path": hypothesesRef,
+				"member_optimization_ref_path": memberRef,
+				"before_harness_refs_path":     beforeAttemptRefs,
+				"after_harness_refs_path":      currentRefs,
+				"candidate_gate_status":        gate["status"],
+				"candidate_gate_reason":        gate["reason"],
+				"completed_target_case_ids":    []any{},
+				"residual_case_ids":            []any{},
+				"residual_eval_ref_path":       "",
+			}
+			if primaryAccepted {
+				attemptRecord["accepted_target_case_ids"] = toAnySlice(gate["target_case_ids"])
+			} else {
+				attemptRecord["accepted_target_case_ids"] = []any{}
+			}
+			attemptRecords = append(attemptRecords, attemptRecord)
+			lastMemberRef = memberRef
+			lastGate = gate
+			if !primaryAccepted {
+				if candidateCanContinueLocally(gate, activeCases) {
+					repairRefs = candidateRefs
+					repairCapabilities = capabilities
+					attemptSourceEvalRef = toString(gate["candidate_eval_ref_path"])
+				}
+				if candidateFailureSupportsRepair(gate) {
+					// 完成的候选评估是新的因果证据。在有限修复预算内重开该问题，
+					// 让 Analyzer 保留进展或把可用未应用能力移到更强运行时面。
+					delete(attemptedIssueIDs, issue.issueID)
+					delete(attemptedIssueSignatures, issue.signature)
+					reuseAnalysis = isOperationalRepair(gate) && repairRefs == beforeAttemptRefs
+					refreshResidualAnalysis = true
+					break
+				}
+				continue
+			}
+			// 主门接受：残余源评估
+			residualEvalRef, err := o.evaluate(ctx, evaluateParams{
+				cases: batch, harnessRefsPath: currentRefs,
+				outputDir: filepath.Join(attemptDir, "residual_source"),
+				dataset:   params.dataset, nodeRef: refs.epochNodeRef, onEvent: params.onEvent,
+			})
+			if err != nil {
+				return err
+			}
+			residualEvalRefs = append(residualEvalRefs, residualEvalRef)
+			residualScores, err := evalCaseScores(residualEvalRef)
+			if err != nil {
+				return err
+			}
+			completedCaseIDs, err := passingCaseIDs(residualEvalRef)
+			if err != nil {
+				return err
+			}
+			syncRetainedCaseIDs(refs.workingRetained, residualScores, completedCaseIDs)
+			residualCaseIDs, err := nonpassingCaseIDs(residualEvalRef)
+			if err != nil {
+				return err
+			}
+			completedTarget := []any{}
+			for _, rawCaseID := range toAnySlice(gate["target_case_ids"]) {
+				if _, ok := completedCaseIDs[toString(rawCaseID)]; ok {
+					completedTarget = append(completedTarget, toString(rawCaseID))
+				}
+			}
+			sort.Slice(completedTarget, func(i, j int) bool { return completedTarget[i].(string) < completedTarget[j].(string) })
+			attemptRecord["completed_target_case_ids"] = completedTarget
+			attemptRecord["residual_case_ids"] = sortedStringSet(residualCaseIDs)
+			attemptRecord["residual_eval_ref_path"] = residualEvalRef
+			activeCases = casesWithIDs(batch, residualCaseIDs)
+			attemptSourceEvalRef = residualEvalRef
+			repairRefs = currentRefs
+			repairCapabilities = nil
+			refreshResidualAnalysis = true
+			if len(activeCases) == 0 {
+				repairStopReason = "all_batch_cases_completed"
+			}
+			break
+		}
+
+		if len(activeCases) == 0 {
+			break
+		}
+		if refreshResidualAnalysis {
+			continue
+		}
+		if len(repeatedIssueIDs) > 0 {
+			repairStopReason = "repeated_issue_detected"
+		} else {
+			repairStopReason = "issue_queue_exhausted_without_acceptance"
+		}
+		break
+	}
+
+	if len(activeCases) > 0 && attemptIndex >= maxRepairRounds {
+		repairStopReason = "repair_round_limit_reached"
+	} else if len(activeCases) == 0 && repairStopReason != "all_batch_cases_completed" {
+		repairStopReason = "all_batch_cases_completed"
+	}
+	batchAccepted := len(acceptedTargetCaseIDs) > 0
+	batchGateStatus := "not_generated"
+	if lastGate != nil {
+		batchGateStatus = toString(lastGate["status"])
+	}
+	if batchAccepted {
+		batchGateStatus = "provisional"
+	}
+	batchGateReason := repairStopReason
+	if lastGate != nil {
+		batchGateReason = toString(lastGate["reason"])
+	}
+	if batchAccepted {
+		batchGateReason = "candidate_passed_batch_gate_pending_epoch_checkpoint"
+	}
+	state["working_harness_refs_path"] = currentRefs
+	residualCaseIDList := []any{}
+	for _, activeCase := range activeCases {
+		if caseID := toString(activeCase["case_id"]); caseID != "" {
+			residualCaseIDList = append(residualCaseIDList, caseID)
+		}
+	}
+	completedBatches[batchKey] = map[string]any{
+		"epoch": epoch, "batch_index": batchIndex,
+		"source_eval_ref_path":               sourceEvalRef,
+		"source_evidence":                    mappingOrNil(mappingOrNil(readEvalRefSafe(sourceEvalRef))["source_evidence"]),
+		"analysis_ref_path":                  analysisRef,
+		"optimization_hypotheses_path":       hypothesesRef,
+		"analysis_ref_paths":                 analysisRefs,
+		"optimization_hypotheses_paths":      hypothesesRefs,
+		"residual_eval_ref_paths":            residualEvalRefs,
+		"repair_round_count":                 attemptIndex,
+		"last_analysis_issue_count":          lastAnalysisIssueCount,
+		"last_optimization_hypothesis_count": lastOptimizationHypothesisCount,
+		"max_repair_rounds":                  maxRepairRounds,
+		"repair_stop_reason":                 repairStopReason,
+		"residual_case_ids":                  residualCaseIDList,
+		"member_optimization_ref_path":       lastMemberRef,
+		"candidate_attempts":                 attemptRecords,
+		"before_harness_refs_path":           batchBeforeRefs,
+		"after_harness_refs_path":            currentRefs,
+		"candidate_gate_status":              batchGateStatus,
+		"candidate_gate_reason":              batchGateReason,
+		"accepted_target_case_ids":           sortedStringSet(acceptedTargetCaseIDs),
+		"retained_case_ids_after_batch":      sortedStringSet(refs.workingRetained),
+	}
+	if err := writeYAMLAtomic(params.statePath, state); err != nil {
+		return err
+	}
+	*refs.current = currentRefs
+	return rsi.Emit(ctx, params.onEvent, ProgressEvent(state, params.totalIterations))
+}
+
+// readEvalRefSafe 安全读评估引用（缺失返回空映射）。
+func readEvalRefSafe(path string) map[string]any {
+	payload, err := readYAMLFile(path)
+	if err != nil {
+		return map[string]any{}
+	}
+	return payload
+}
+
+// epochCheckpointParams epoch 检查点参数。
+type epochCheckpointParams struct {
+	epoch              int
+	state              map[string]any
+	statePath          string
+	outputDir          string
+	dataset            harnessrsi.DatasetArtifact
+	allCases           []map[string]any
+	allCaseIDs         map[string]struct{}
+	onEvent            rsi.OnEvent
+	totalIterations    int
+	epochStartRefs     string
+	epochStartScore    *float64
+	epochStartRetained map[string]struct{}
+	workingRetained    map[string]struct{}
+	currentRefs        *string
+	epochNodeRef       string
+}
+
+// runEpochCheckpoint epoch 级全量评估与晋级判定（Python 782-1290）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) runEpochCheckpoint(
+	ctx context.Context, params epochCheckpointParams,
+) error {
+	state := params.state
+	epoch := params.epoch
+	outputDir := params.outputDir
+	currentRefs := *params.currentRefs
+	// epoch 临时门
+	epochProvisionalGates := []map[string]any{}
+	for _, rawGate := range toAnySlice(state["candidate_gates"]) {
+		gate, ok := rawGate.(map[string]any)
+		if !ok {
+			continue
+		}
+		if toInt(gate["epoch"]) == epoch && toString(gate["status"]) == "provisional" {
+			epochProvisionalGates = append(epochProvisionalGates, gate)
+		}
+	}
+	provisionalTargetCaseIDs := map[string]struct{}{}
+	for _, gate := range epochProvisionalGates {
+		for _, rawCaseID := range toAnySlice(gate["target_case_ids"]) {
+			if caseID := toString(rawCaseID); caseID != "" {
+				provisionalTargetCaseIDs[caseID] = struct{}{}
+			}
+		}
+	}
+	bestScore := numberOf(state["best_score"])
+	previousBestEvalRef := toString(state["best_eval_ref_path"])
+	if bestScore != nil && len(epochProvisionalGates) == 0 {
+		checkpoint := map[string]any{
+			"epoch": epoch, "score": nil, "eval_ref_path": "",
+			"harness_refs_path":                params.epochStartRefs,
+			"evaluation_input_mode":            "not_evaluated",
+			"status":                           "unchanged",
+			"previous_best_score":              bestScore,
+			"previous_best_eval_ref_path":      previousBestEvalRef,
+			"regressed_best_case_ids":          []any{},
+			"failed_retention_case_ids":        []any{},
+			"failed_case_ids":                  []any{},
+			"failed_target_case_ids":           []any{},
+			"failed_machine_evidence":          []any{},
+			"error_case_ids":                   []any{},
+			"retained_candidate_action_ids":    []any{},
+			"removed_candidate_action_ids":     []any{},
+			"selected_harness_refs_path":       params.epochStartRefs,
+			"post_checkpoint_replay_performed": false,
+			"promotion_applied":                false,
+			"promotion_reason":                 "no_provisional_harness_change",
+			"full_evaluation_skipped_reason":   "no_retained_harness_change",
+			"noop_initial_score_seed":          false,
+			"before_harness_refs_path":         params.epochStartRefs,
+		}
+		checkpoints, _ := state["epoch_checkpoints"].([]any)
+		state["epoch_checkpoints"] = append(checkpoints, checkpoint)
+		currentRefs = params.epochStartRefs
+		state["best_score"] = bestScore
+		state["best_harness_refs_path"] = params.epochStartRefs
+		state["retained_case_ids"] = sortedStringSetToAnySlice(params.epochStartRetained)
+		state["current_harness_refs_path"] = params.epochStartRefs
+		state["working_harness_refs_path"] = params.epochStartRefs
+		state["active_epoch"] = 0
+		if err := refreshOptimizationExperience(state, outputDir); err != nil {
+			return err
+		}
+		if err := writeYAMLAtomic(params.statePath, state); err != nil {
+			return err
+		}
+		if err := rsi.Emit(ctx, params.onEvent, EpochNodeEvent(state, checkpoint)); err != nil {
+			return err
+		}
+		return rsi.Emit(ctx, params.onEvent, ProgressEvent(state, params.totalIterations))
+	}
+
+	fullEvalRef, err := o.evaluate(ctx, evaluateParams{
+		cases: params.allCases, harnessRefsPath: currentRefs,
+		outputDir: filepath.Join(outputDir, "evaluations",
+			fmt.Sprintf("e%03d", epoch), "full"),
+		caseConcurrency: o.config.Scheduling.FullEvaluationConcurrency,
+		dataset:         params.dataset, nodeRef: params.epochNodeRef, onEvent: params.onEvent,
+	})
+	if err != nil {
+		return err
+	}
+	fullScore, err := evalScore(fullEvalRef)
+	if err != nil {
+		return err
+	}
+	checkpoint := map[string]any{
+		"epoch": epoch, "score": fullScore, "eval_ref_path": fullEvalRef,
+		"harness_refs_path":     currentRefs,
+		"evaluation_input_mode": "original_task",
+	}
+	fullCaseScores, err := evalCaseScores(fullEvalRef)
+	if err != nil {
+		return err
+	}
+	fullPassingCaseIDs, err := passingCaseIDs(fullEvalRef)
+	if err != nil {
+		return err
+	}
+	fullFailedCaseIDs := sortedStringSetKeyDiff(mappingStringKeys(fullCaseScores), fullPassingCaseIDs)
+	var previousBestCaseScores map[string]float64
+	if previousBestEvalRef != "" {
+		previousBestCaseScores, err = evalCaseScores(previousBestEvalRef)
+		if err != nil {
+			return err
+		}
+	} else {
+		previousBestCaseScores = map[string]float64{}
+	}
+	regressedBestCaseIDs := []string{}
+	for _, rawCaseID := range toAnySlice(state["retained_case_ids"]) {
+		caseID := toString(rawCaseID)
+		if previousScore, ok := previousBestCaseScores[caseID]; ok {
+			if fullCaseScores[caseID] < previousScore {
+				regressedBestCaseIDs = append(regressedBestCaseIDs, caseID)
+			}
+		}
+	}
+	sort.Strings(regressedBestCaseIDs)
+	failedRetentionCaseIDs := []string{}
+	for caseID := range params.workingRetained {
+		if _, ok := fullPassingCaseIDs[caseID]; !ok {
+			failedRetentionCaseIDs = append(failedRetentionCaseIDs, caseID)
+		}
+	}
+	sort.Strings(failedRetentionCaseIDs)
+	failedTargetCaseIDs := []string{}
+	for caseID := range provisionalTargetCaseIDs {
+		if _, ok := fullPassingCaseIDs[caseID]; !ok {
+			failedTargetCaseIDs = append(failedTargetCaseIDs, caseID)
+		}
+	}
+	sort.Strings(failedTargetCaseIDs)
+	fullFailedMachineEvidence, err := failedMachineEvidence(fullEvalRef)
+	if err != nil {
+		return err
+	}
+	fullErrorCaseIDs, err := errorCaseIDs(fullEvalRef)
+	if err != nil {
+		return err
+	}
+	gateSelections := make([]map[string]any, 0, len(epochProvisionalGates))
+	for _, gate := range epochProvisionalGates {
+		selection, selErr := selectGateFromEpochCheckpoint(gate, fullEvalRef,
+			fullErrorCaseIDs, machineEvidenceCaseIDs(fullFailedMachineEvidence))
+		if selErr != nil {
+			return selErr
+		}
+		gateSelections = append(gateSelections, selection)
+	}
+	retainedGates := []map[string]any{}
+	removedGates := []map[string]any{}
+	for i, gate := range epochProvisionalGates {
+		if truthy(gateSelections[i]["retained"]) {
+			retainedGates = append(retainedGates, gate)
+		} else {
+			removedGates = append(removedGates, gate)
+		}
+	}
+	selectedRefs := currentRefs
+	checkpointStatus := "verified"
+	if len(fullErrorCaseIDs) > 0 || len(fullFailedMachineEvidence) > 0 {
+		checkpointStatus = "verified_with_inconclusive_cases"
+	}
+	if len(retainedGates) > 0 && len(removedGates) > 0 {
+		selectedRefs, err = materializeCheckpointFilteredHarness(
+			outputDir, epoch, params.epochStartRefs, currentRefs,
+			retainedGates, removedGates, fullEvalRef)
+		if err != nil {
+			return err
+		}
+		checkpointStatus = "filtered"
+	} else if len(retainedGates) > 0 && len(failedRetentionCaseIDs) > 0 {
+		checkpointStatus = "verified_with_unrelated_failures"
+	} else if len(retainedGates) == 0 && len(epochProvisionalGates) > 0 {
+		checkpointStatus = "rejected"
+	} else if len(failedRetentionCaseIDs) > 0 {
+		checkpointStatus = "rejected"
+	}
+
+	// 过滤后工件才是可晋级对象——可信分数必须由它（而非过滤前累积重放）承载。
+	performedSelectedReplay := selectedRefs != currentRefs
+	selectedEvalRef := fullEvalRef
+	if performedSelectedReplay {
+		selectedEvalRef, err = o.evaluate(ctx, evaluateParams{
+			cases: params.allCases, harnessRefsPath: selectedRefs,
+			outputDir: filepath.Join(outputDir, "evaluations",
+				fmt.Sprintf("e%03d", epoch), "selected_full"),
+			caseConcurrency: o.config.Scheduling.FullEvaluationConcurrency,
+			dataset:         params.dataset, nodeRef: params.epochNodeRef, onEvent: params.onEvent,
+		})
+		if err != nil {
+			return err
+		}
+		selectedPayload, err := readYAMLFile(selectedRefs)
+		if err != nil {
+			return err
+		}
+		if checkpointFilter, ok := selectedPayload["checkpoint_filter"].(map[string]any); ok {
+			checkpointFilter["post_checkpoint_replay_performed"] = true
+			checkpointFilter["selected_eval_ref_path"] = selectedEvalRef
+			if err := writeYAMLAtomic(selectedRefs, selectedPayload); err != nil {
+				return err
+			}
+		}
+	}
+	if performedSelectedReplay {
+		selectedErrors, err := errorCaseIDs(selectedEvalRef)
+		if err != nil {
+			return err
+		}
+		selectedMachineFailures := machineEvidenceCaseIDs(mustFailedMachineEvidence(selectedEvalRef))
+		replaySelections := make([]map[string]any, 0, len(epochProvisionalGates))
+		retainedSet := map[*map[string]any]bool{}
+		for i := range retainedGates {
+			retainedSet[&retainedGates[i]] = true
+		}
+		for i, gate := range epochProvisionalGates {
+			isRetained := false
+			for _, retained := range retainedGates {
+				if &gate == &retained || sameGate(gate, retained) {
+					isRetained = true
+					break
+				}
+			}
+			if isRetained {
+				selection, err := selectGateFromEpochCheckpoint(gate, selectedEvalRef,
+					selectedErrors, selectedMachineFailures)
+				if err != nil {
+					return err
+				}
+				replaySelections = append(replaySelections, selection)
+			} else {
+				replaySelections = append(replaySelections, gateSelections[i])
+			}
+		}
+		retainedReplayFailed := false
+		for i, gate := range epochProvisionalGates {
+			isRetained := false
+			for _, retained := range retainedGates {
+				if sameGate(gate, retained) {
+					isRetained = true
+					break
+				}
+			}
+			if isRetained && !truthy(replaySelections[i]["retained"]) {
+				retainedReplayFailed = true
+				break
+			}
+		}
+		if retainedReplayFailed {
+			// 二次修剪会产生又一个未验证包。
+			for _, selection := range replaySelections {
+				selection["retained"] = false
+				selection["reason"] = "filtered_harness_failed_replay"
+			}
+			retainedGates = nil
+			removedGates = append(removedGates, epochProvisionalGates...)
+			checkpointStatus = "rejected"
+		}
+		gateSelections = replaySelections
+	}
+	selectedScore, err := evalScore(selectedEvalRef)
+	if err != nil {
+		return err
+	}
+	checkpoint["status"] = checkpointStatus
+	checkpoint["previous_best_score"] = bestScore
+	checkpoint["previous_best_eval_ref_path"] = previousBestEvalRef
+	checkpoint["regressed_best_case_ids"] = toAnySlice(regressedBestCaseIDs)
+	checkpoint["failed_retention_case_ids"] = toAnySlice(failedRetentionCaseIDs)
+	checkpoint["failed_case_ids"] = toAnySlice(fullFailedCaseIDs)
+	checkpoint["failed_target_case_ids"] = toAnySlice(failedTargetCaseIDs)
+	checkpoint["failed_machine_evidence"] = toAnySlice(fullFailedMachineEvidence)
+	checkpoint["error_case_ids"] = sortedStringSetToAnySlice(fullErrorCaseIDs)
+	checkpoint["retained_candidate_action_ids"] = toAnySlice(capabilityActionIDs(retainedGates))
+	checkpoint["removed_candidate_action_ids"] = toAnySlice(capabilityActionIDs(removedGates))
+	if len(retainedGates) > 0 {
+		checkpoint["selected_harness_refs_path"] = selectedRefs
+	} else {
+		checkpoint["selected_harness_refs_path"] = params.epochStartRefs
+	}
+	checkpoint["post_checkpoint_replay_performed"] = performedSelectedReplay
+	checkpoints, _ := state["epoch_checkpoints"].([]any)
+	state["epoch_checkpoints"] = append(checkpoints, checkpoint)
+	// 候选局部保留不足以晋级：最终选中工件还须对前一最佳全局非回归。
+	promotable := false
+	promotionReason := ""
+	if len(retainedGates) > 0 {
+		promotable, promotionReason, err = globallyPromotable(
+			selectedEvalRef, previousBestEvalRef, bestScore)
+		if err != nil {
+			return err
+		}
+		protectedCaseIDs := toStringSetCopy(params.epochStartRetained)
+		for caseID := range params.workingRetained {
+			if _, isTarget := provisionalTargetCaseIDs[caseID]; !isTarget {
+				protectedCaseIDs[caseID] = struct{}{}
+			}
+		}
+		if promotable {
+			selectedPassing, err := passingCaseIDs(selectedEvalRef)
+			if err != nil {
+				return err
+			}
+			if len(stringSetKeyDiff(protectedCaseIDs, selectedPassing)) > 0 {
+				promotable, promotionReason = false, "protected_case_regressed"
+			}
+		}
+		if promotable {
+			selectedErrors, err := errorCaseIDs(selectedEvalRef)
+			if err != nil {
+				return err
+			}
+			selectedMachineFailures, err := failedMachineEvidence(selectedEvalRef)
+			if err != nil {
+				return err
+			}
+			if len(selectedErrors) > 0 || len(selectedMachineFailures) > 0 {
+				promotable, promotionReason = false, "selected_evaluation_inconclusive"
+			}
+		}
+	}
+	checkpoint["promotion_applied"] = promotable
+	checkpoint["promotion_reason"] = promotionReason
+	checkpoint["noop_initial_score_seed"] = bool(
+		len(epochProvisionalGates) == 0 && checkpointStatus == "verified" && bestScore == nil)
+	if promotable || truthy(checkpoint["noop_initial_score_seed"]) {
+		// 晋级检查点描述最终工件及其自身验证评估，而非过滤前累积重放。
+		checkpoint["score"] = selectedScore
+		checkpoint["eval_ref_path"] = selectedEvalRef
+		checkpoint["harness_refs_path"] = selectedRefs
+		currentRefs = selectedRefs
+		state["best_score"] = selectedScore
+		state["best_eval_ref_path"] = selectedEvalRef
+		state["best_harness_refs_path"] = currentRefs
+		selectedPassing, err := passingCaseIDs(selectedEvalRef)
+		if err != nil {
+			return err
+		}
+		state["retained_case_ids"] = sortedStringSetToAnySlice(selectedPassing)
+		if len(epochProvisionalGates) == 0 {
+			state["baseline_score"] = selectedScore
+			state["baseline_eval_ref_path"] = selectedEvalRef
+		}
+	} else {
+		currentRefs = params.epochStartRefs
+		state["best_score"] = params.epochStartScore
+		state["best_harness_refs_path"] = params.epochStartRefs
+		state["retained_case_ids"] = sortedStringSetToAnySlice(params.epochStartRetained)
+	}
+	for i, gate := range epochProvisionalGates {
+		selection := gateSelections[i]
+		retained := truthy(selection["retained"])
+		gate["accepted"] = retained
+		if retained {
+			gate["status"] = "accepted"
+		} else {
+			gate["status"] = "rejected"
+		}
+		gate["reason"] = toString(selection["reason"])
+		gate["failure_class"] = toString(selection["failure_class"])
+		outcome := map[string]any{}
+		for key, value := range selection {
+			outcome[key] = value
+		}
+		if retained {
+			outcome["status"] = "retained"
+		} else {
+			outcome["status"] = "removed"
+		}
+		outcome["eval_ref_path"] = fullEvalRef
+		if retained {
+			outcome["selected_harness_refs_path"] = selectedRefs
+		} else {
+			outcome["selected_harness_refs_path"] = ""
+		}
+		outcome["post_checkpoint_replay_performed"] = performedSelectedReplay
+		outcome["promotion_applied"] = promotable
+		outcome["promotion_reason"] = promotionReason
+		gate["epoch_checkpoint_outcome"] = outcome
+		if err := persistPromotion(
+			toString(gate["member_optimization_ref_path"]),
+			toString(gate["candidate_harness_refs_path"]), gate); err != nil {
+			return err
+		}
+		batchKey := fmt.Sprintf("epoch_%03d:batch_%03d", epoch, toInt(gate["batch_index"]))
+		if completed, ok := mappingOrNil(state["completed_batches"])[batchKey].(map[string]any); ok {
+			completed["candidate_gate_status"] = gate["status"]
+			completed["candidate_gate_reason"] = gate["reason"]
+			updateBatchAttemptRecord(completed, gate)
+		}
+	}
+	state["current_harness_refs_path"] = toString(state["best_harness_refs_path"])
+	state["working_harness_refs_path"] = toString(state["best_harness_refs_path"])
+	state["active_epoch"] = 0
+	checkpoint["before_harness_refs_path"] = params.epochStartRefs
+	checkpoint["selected_harness_refs_path"] = currentRefs
+	if err := refreshOptimizationExperience(state, outputDir); err != nil {
+		return err
+	}
+	if err := writeYAMLAtomic(params.statePath, state); err != nil {
+		return err
+	}
+	if err := rsi.Emit(ctx, params.onEvent, EpochNodeEvent(state, checkpoint)); err != nil {
+		return err
+	}
+	*params.currentRefs = currentRefs
+	return rsi.Emit(ctx, params.onEvent, ProgressEvent(state, params.totalIterations))
+}
+
+// sameGate 门映射同一性（指针等价即可——Python zip 引用同一 dict）。
+func sameGate(left, right map[string]any) bool {
+	return &left == &right || anyEqual(left, right)
+}
+
+// mustFailedMachineEvidence 失败机器证据（错误时返回空——晋级判定吞错路径不存在，此处防御）。
+func mustFailedMachineEvidence(evalRefPath string) []string {
+	failures, err := failedMachineEvidence(evalRefPath)
+	if err != nil {
+		return nil
+	}
+	return failures
+}
+
+// evaluationContext 评估上下文（Python _evaluation_context）。
+// 偏差 D-d3：judge_protocol_identity 属 17.6，llmJudgeProtocol 返回的契约缺 judge_protocol 键。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) evaluationContext(
+	cases []map[string]any, harnessRefsPath string,
+	baselineContexts map[string]any,
+) map[string]any {
+	evaluatorConfig := map[string]any{
+		"config":  configpkg.EvaluatorProtocolConfig(o.config.Evaluator),
+		"adapter": "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator.TeamEvaluator",
+		// Python: adapter_config=evaluator_protocol_config(adapter_config)——桩无独立配置，等价置 nil
+		"adapter_config": nil,
+	}
+	for key, value := range llmJudgeProtocol(evaluatorConfigView(o.config.Evaluator)) {
+		evaluatorConfig[key] = value
+	}
+	context := EvaluationContext(harnessRefsPath, evaluatorConfig, cases)
+	if len(baselineContexts) > 0 {
+		// Python 1139-1141：存 fingerprint 字符串，非上下文对象
+		baselineFingerprints := map[string]any{}
+		for _, singleCase := range cases {
+			caseID := toString(singleCase["case_id"])
+			if ctxObj, ok := baselineContexts[caseID].(*evaluatorpkg.BaselineJudgeContext); ok {
+				baselineFingerprints[caseID] = ctxObj.Fingerprint()
+			} else {
+				baselineFingerprints[caseID] = baselineContexts[caseID]
+			}
+		}
+		context["baseline_contexts"] = baselineFingerprints
+	}
+	return context
+}
+
+// evaluatorConfigView 供 llmJudgeProtocol 读取的配置面。
+type evaluatorConfigView configpkg.EvaluatorConfig
+
+func (v evaluatorConfigView) GetEvaluationMethod() string {
+	return configpkg.EvaluatorConfig(v).EvaluationMethod
+}
+func (v evaluatorConfigView) GetScoreMode() string { return configpkg.EvaluatorConfig(v).ScoreMode }
+func (v evaluatorConfigView) GetJudgeBaselineComparison() any {
+	return configpkg.EvaluatorConfig(v).JudgeBaselineComparison
+}
+
+// sourcePassingCaseIDs 由先前评估引用推断源通过用例（Python _source_passing_case_ids）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) sourcePassingCaseIDs(
+	cases []map[string]any, harnessRefsPath string, priorEvalRefs []string,
+) map[string]struct{} {
+	context := o.evaluationContext(cases, harnessRefsPath, nil)
+	selected := MatchingCases(priorEvalRefs, context)
+	uniquePaths := map[string]struct{}{}
+	for _, matched := range selected {
+		uniquePaths[matched.Path] = struct{}{}
+	}
+	passingByRef := map[string]map[string]struct{}{}
+	for path := range uniquePaths {
+		passing, err := passingCaseIDs(path)
+		if err != nil {
+			passing = map[string]struct{}{}
+		}
+		passingByRef[path] = passing
+	}
+	result := map[string]struct{}{}
+	for caseID, matched := range selected {
+		if _, ok := passingByRef[matched.Path][caseID]; ok {
+			result[caseID] = struct{}{}
+		}
+	}
+	return result
+}
+
+// sourceEvaluationParams 源评估参数。
+type sourceEvaluationParams struct {
+	cases           []map[string]any
+	harnessRefsPath string
+	outputDir       string
+	dataset         harnessrsi.DatasetArtifact
+	priorEvalRefs   []string
+	batchIndex      int
+	nodeRef         string
+	onEvent         rsi.OnEvent
+}
+
+// sourceEvaluation 源评估（复用或新评估；Python _source_evaluation）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) sourceEvaluation(
+	ctx context.Context, params sourceEvaluationParams,
+) (string, error) {
+	context := o.evaluationContext(params.cases, params.harnessRefsPath, nil)
+	existing := filepath.Join(params.outputDir, "eval_ref.yaml")
+	if complete, _ := evalRefComplete(existing); complete {
+		existingPayload, err := readYAMLFile(existing)
+		if err != nil {
+			return "", err
+		}
+		if !anyEqual(existingPayload["evaluation_context"], context) {
+			return "", errors.New("source evaluation inputs changed; start a new run instead of reusing old analysis")
+		}
+		return existing, nil
+	}
+	selected := MatchingCases(params.priorEvalRefs, context)
+	reused := map[string]bool{}
+	for caseID := range selected {
+		reused[caseID] = true
+	}
+	missing := []map[string]any{}
+	for _, singleCase := range params.cases {
+		if _, ok := selected[toString(singleCase["case_id"])]; !ok {
+			missing = append(missing, singleCase)
+		}
+	}
+	if len(selected) == 0 {
+		return o.evaluate(ctx, evaluateParams{
+			cases: params.cases, harnessRefsPath: params.harnessRefsPath,
+			outputDir: params.outputDir, dataset: params.dataset,
+			nodeRef: params.nodeRef, onEvent: params.onEvent,
+		})
+	}
+	if len(missing) > 0 {
+		freshRef, err := o.evaluate(ctx, evaluateParams{
+			cases: missing, harnessRefsPath: params.harnessRefsPath,
+			outputDir: filepath.Join(params.outputDir, "fresh"),
+			dataset:   params.dataset, nodeRef: params.nodeRef, onEvent: params.onEvent,
+		})
+		if err != nil {
+			return "", err
+		}
+		// 新的基础设施失败被保留，不以旧的更有利分数替换。
+		freshPayload, err := readYAMLFile(freshRef)
+		if err != nil {
+			return "", err
+		}
+		for _, rawCase := range toAnySlice(freshPayload["cases"]) {
+			caseMap, ok := rawCase.(map[string]any)
+			if !ok {
+				continue
+			}
+			selected[toString(caseMap["case_id"])] = matchedCase{Path: freshRef, Case: caseMap}
+		}
+	}
+	return MaterializeSource(params.cases, selected, params.outputDir,
+		params.harnessRefsPath, context, reused)
+}
+
+// evaluateParams 评估参数。
+type evaluateParams struct {
+	cases            []map[string]any
+	harnessRefsPath  string
+	outputDir        string
+	dataset          harnessrsi.DatasetArtifact
+	nodeRef          string
+	onEvent          rsi.OnEvent
+	caseConcurrency  int
+	baselineContexts map[string]any
+}
+
+// evaluate 评估（Python _evaluate + model_usage_stage("evaluate")）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) evaluate(
+	ctx context.Context, params evaluateParams,
+) (string, error) {
+	ctx, done := rsi.ModelUsageStage(ctx, "evaluate")
+	defer done()
+	if params.nodeRef == "" {
+		params.nodeRef = "h0"
+	}
+	if params.caseConcurrency == 0 {
+		params.caseConcurrency = 1
+	}
+	context := o.evaluationContext(params.cases, params.harnessRefsPath, params.baselineContexts)
+	existing := filepath.Join(params.outputDir, "eval_ref.yaml")
+	if complete, _ := evalRefComplete(existing); complete {
+		existingPayload, err := readYAMLFile(existing)
+		if err != nil {
+			return "", err
+		}
+		if !anyEqual(existingPayload["evaluation_context"], context) {
+			return "", errors.New("evaluation inputs changed; use a new run to preserve existing results")
+		}
+		return existing, nil
+	}
+
+	// 部分评估续跑同样绑定到相同模型/评委/Harness。
+	contextPath := filepath.Join(params.outputDir, "evaluation_context.yaml")
+	if fileExists(contextPath) {
+		existingContext, err := readYAMLFile(contextPath)
+		if err != nil {
+			return "", err
+		}
+		if !anyEqual(existingContext, context) {
+			return "", errors.New("partial evaluation inputs changed; use a new run")
+		}
+	} else if hasCaseResults(filepath.Join(params.outputDir, "cases")) {
+		return "", errors.New("partial evaluation provenance missing; use a new run")
+	}
+	if err := writeYAMLAtomic(contextPath, context); err != nil {
+		return "", err
+	}
+
+	emitCaseStage := func(payload map[string]any) error {
+		return rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+			params.nodeRef,
+			CaseStagePayload(
+				toInt(payload["case_index"]),
+				toInt(payload["total_cases"]),
+				defaultString(payload["status"], "running"),
+				toString(payload["case_id"]),
+				numberOf(payload["score"]),
+				toIntPointer(payload["completed_cases"]),
+			), nil))
+	}
+	result, err := o.evaluator.EvaluateBatch(ctx, params.cases, "", params.harnessRefsPath,
+		params.outputDir, &params.dataset, emitCaseStage, params.caseConcurrency, params.baselineContexts)
+	if err != nil {
+		return "", err
+	}
+	afterContext := o.evaluationContext(params.cases, params.harnessRefsPath, params.baselineContexts)
+	if !anyEqual(context, afterContext) {
+		return "", errors.New("evaluation inputs changed during execution; results cannot be reused")
+	}
+	if err := StampEvaluation(result, context); err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
+// hasCaseResults 用例结果目录是否已有 result.json（Python: any(glob("*/result.json"))）。
+func hasCaseResults(casesDir string) bool {
+	entries, err := os.ReadDir(casesDir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && fileExists(filepath.Join(casesDir, entry.Name(), "result.json")) {
+			return true
+		}
+	}
+	return false
+}
+
+// toIntPointer any 转 *int。
+func toIntPointer(value any) *int {
+	if value == nil {
+		return nil
+	}
+	v := toInt(value)
+	return &v
+}
+
+// analyzeParams 分析参数。
+type analyzeParams struct {
+	evalRefPath            string
+	harnessRefsPath        string
+	outputDir              string
+	sourceStage            string
+	priorCandidateFeedback map[string]any
+	nodeRef                string
+	onEvent                rsi.OnEvent
+}
+
+// analyze 诊断分析（Python _analyze + model_usage_stage("analyze")）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) analyze(
+	ctx context.Context, params analyzeParams,
+) (string, error) {
+	ctx, done := rsi.ModelUsageStage(ctx, "analyze")
+	defer done()
+	if params.nodeRef == "" {
+		params.nodeRef = "h0"
+	}
+	if params.sourceStage == "" {
+		params.sourceStage = "single_harness_batch"
+	}
+	existing := filepath.Join(params.outputDir, "analysis_ref.yaml")
+	// Python: sorted(glob("retry_*/analysis_ref.yaml"))——按名字排序
+	retryAttempts := []string{}
+	if entries, err := os.ReadDir(params.outputDir); err == nil {
+		var names []string
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "retry_") {
+				candidate := filepath.Join(params.outputDir, entry.Name(), "analysis_ref.yaml")
+				if fileExists(candidate) {
+					names = append(names, entry.Name())
+				}
+			}
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			retryAttempts = append(retryAttempts, filepath.Join(params.outputDir, name, "analysis_ref.yaml"))
+		}
+	}
+	attempts := append([]string{existing}, retryAttempts...)
+	for i := len(attempts) - 1; i >= 0; i-- {
+		path := attempts[i]
+		if !fileExists(path) {
+			continue
+		}
+		analysis := memberoptimizer.LoadAnalysisRef(path)
+		if !analysis.DiagnosisIncomplete() || len(analysis.Issues) > 0 {
+			return path, nil
+		}
+	}
+	if fileExists(existing) {
+		// 续跑时重试失败诊断而不覆盖其证据。
+		index := 1
+		for {
+			next := filepath.Join(params.outputDir, fmt.Sprintf("retry_%03d", index))
+			if _, err := os.Stat(next); err != nil {
+				params.outputDir = next
+				break
+			}
+			index++
+		}
+	}
+	if err := rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+		params.nodeRef, AnalysisStagePayload("running", nil, ""), nil)); err != nil {
+		return "", err
+	}
+	evalRefAbs, err := resolvePath(params.evalRefPath)
+	if err != nil {
+		return "", err
+	}
+	casesRoot := filepath.Join(filepath.Dir(evalRefAbs), "cases")
+	result, err := o.analyzer.Analyze(ctx, harnessrsi.EvaluationResultAnalysisInvocation{
+		EvalRefPath:            params.evalRefPath,
+		CaseResultsDir:         casesRoot,
+		CaseTracesDir:          casesRoot,
+		TeamSkillRefPath:       "",
+		HarnessRefsPath:        params.harnessRefsPath,
+		OutputDir:              params.outputDir,
+		SourceStage:            params.sourceStage,
+		PriorCandidateFeedback: defaultMap(params.priorCandidateFeedback),
+	})
+	if err == nil {
+		if analysis := memberoptimizer.LoadAnalysisRef(result); analysis != nil {
+			err = analysis.RequireUsable()
+		}
+	}
+	if err != nil {
+		_ = rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+			params.nodeRef,
+			AnalysisStagePayload("error", nil, safeCandidateError(err)["message"]), nil))
+		return "", err
+	}
+	if err := rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
+		params.nodeRef, AnalysisStagePayload("done", nil, ""), nil)); err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
+// defaultMap nil 映射转空映射。
+func defaultMap(value map[string]any) map[string]any {
+	if value == nil {
+		return map[string]any{}
+	}
+	return value
+}
+
+// convertMemberOptimizerConfig 配置层 → member_optimizer 包配置转换。
+// Python dataclasses.replace 直接同类型；Go 两处定义（17.4c 先例）。
+func convertMemberOptimizerConfig(cfg configpkg.MemberOptimizerConfig) *memberoptimizer.MemberOptimizerConfig {
+	outputRepair := cfg.OutputRepair
+	return &memberoptimizer.MemberOptimizerConfig{
+		ModelConfigRef:                    cfg.ModelConfigRef,
+		ActionGroupConfigs:                cfg.ActionGroupConfigs,
+		OutputRepair:                      &outputRepair,
+		AttributionRetryLimit:             cfg.AttributionRetryLimit,
+		MaxCasesPerIssue:                  cfg.MaxCasesPerIssue,
+		MaxTraceExcerptChars:              cfg.MaxTraceExcerptChars,
+		MaxResultExcerptChars:             cfg.MaxResultExcerptChars,
+		ExecutionConcurrency:              cfg.ExecutionConcurrency,
+		RoleExecutionConcurrency:          cfg.RoleExecutionConcurrency,
+		ActionExecutionConcurrencyPerRole: cfg.ActionExecutionConcurrencyPerRole,
+		AgentSkillsDirs:                   cfg.AgentSkillsDirs,
+		RuntimeIterationHardLimit:         cfg.RuntimeIterationHardLimit,
+		StageRetryLimit:                   cfg.StageRetryLimit,
+		MinAttributionConfidence:          cfg.MinAttributionConfidence,
+		MaxRolesPerRun:                    cfg.MaxRolesPerRun,
+		ActionPlanningMaxAttempts:         cfg.ActionPlanningMaxAttempts,
+		MaxActionsPerPlan:                 cfg.MaxActionsPerPlan,
+		AllowedActionGroups:               cfg.AllowedActionGroups,
+		AllowedPromptSurfaces:             cfg.AllowedPromptSurfaces,
+		Freeze:                            cfg.Freeze,
+		AllowEmptyHarnessRefsNoop:         cfg.AllowEmptyHarnessRefsNoop,
+	}
+}
+
+// candidateGateParams 候选门参数。
+type candidateGateParams struct {
+	cases                    []map[string]any
+	sourceEvalRef            string
+	analysisRef              string
+	beforeHarnessRefsPath    string
+	candidateHarnessRefsPath string
+	memberStatus             string
+	capabilities             []map[string]any
+	outputDir                string
+	dataset                  harnessrsi.DatasetArtifact
+	frozenTargetCaseIDs      map[string]struct{}
+	nodeRef                  string
+	onEvent                  rsi.OnEvent
+	baselineContexts         map[string]any
+}
+
+// candidateGate 候选门（Python _candidate_gate，1,446-1,856）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) candidateGate(
+	ctx context.Context, params candidateGateParams,
+) (map[string]any, error) {
+	originalSourceScore, err := evalScore(params.sourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	base := map[string]any{
+		"source_eval_ref_path":        params.sourceEvalRef,
+		"paired_source_eval_ref_path": params.sourceEvalRef,
+		"candidate_eval_ref_path":     "",
+		"before_harness_refs_path":    params.beforeHarnessRefsPath,
+		"candidate_harness_refs_path": params.candidateHarnessRefsPath,
+		"original_source_score":       originalSourceScore,
+		"source_score":                originalSourceScore,
+		"candidate_score":             nil,
+		"score_delta":                 nil,
+		"capabilities":                params.capabilities,
+	}
+	inconclusiveGate := func() map[string]any {
+		gate := map[string]any{
+			"accepted": false, "status": "inconclusive",
+			"reason": "source_gate_inconclusive_due_to_error_cases",
+		}
+		for key, value := range base {
+			gate[key] = value
+		}
+		return gate
+	}
+	if hasErrors, _ := evalHasErrorsWrapper(params.sourceEvalRef); hasErrors {
+		return inconclusiveGate(), nil
+	}
+	if params.memberStatus != "success" && params.memberStatus != "partial_success" {
+		return map[string]any{
+			"accepted": false, "status": "rejected",
+			"reason": fmt.Sprintf("member_optimization_status_%s", defaultString(params.memberStatus, "unknown")),
+		}, nil
+	}
+	for key, value := range base {
+		// rejected 门同样携带 base 字段（Python **base）
+		_ = key
+		_ = value
+	}
+	rejectedBase := func(reason string) map[string]any {
+		gate := map[string]any{"accepted": false, "status": "rejected", "reason": reason}
+		for key, value := range base {
+			gate[key] = value
+		}
+		return gate
+	}
+	if params.candidateHarnessRefsPath == params.beforeHarnessRefsPath {
+		return rejectedBase("member_optimizer_produced_no_candidate"), nil
+	}
+	fallbackTargetCaseIDs, err := nonpassingCaseIDs(params.sourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	if len(fallbackTargetCaseIDs) == 0 {
+		fallbackTargetCaseIDs = map[string]struct{}{}
+		for _, singleCase := range params.cases {
+			if caseID := toString(singleCase["case_id"]); caseID != "" {
+				fallbackTargetCaseIDs[caseID] = struct{}{}
+			}
+		}
+	}
+	batchCaseIDs := map[string]struct{}{}
+	for _, singleCase := range params.cases {
+		if caseID := toString(singleCase["case_id"]); caseID != "" {
+			batchCaseIDs[caseID] = struct{}{}
+		}
+	}
+	targetCaseIDs := stringSetIntersection(
+		capabilityTargetCaseIDs(params.capabilities, fallbackTargetCaseIDs), batchCaseIDs)
+	if params.frozenTargetCaseIDs != nil {
+		targetCaseIDs = stringSetIntersection(params.frozenTargetCaseIDs, batchCaseIDs)
+	}
+	if len(targetCaseIDs) == 0 {
+		targetCaseIDs = stringSetIntersection(fallbackTargetCaseIDs, batchCaseIDs)
+	}
+	sourceErrorCaseIDs, err := errorCaseIDs(params.sourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	inconclusiveSourceTargets := sortedStringSet(stringSetIntersection(sourceErrorCaseIDs, targetCaseIDs))
+	if len(inconclusiveSourceTargets) > 0 {
+		gate := inconclusiveGate()
+		gate["target_case_ids"] = toAnySlice(sortedStringSet(targetCaseIDs))
+		gate["inconclusive_source_target_case_ids"] = toAnySlice(inconclusiveSourceTargets)
+		return gate, nil
+	}
+	nonTargetCaseIDs := stringSetKeyDiff(batchCaseIDs, targetCaseIDs)
+	_, taskAcceptanceContracts, err := bindTaskAcceptanceContracts(
+		params.cases, params.analysisRef, targetCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	// 候选只拥有其动作归因的用例。此处评估无关批次用例会把接受与否
+	// 与独立求解采样耦合，使后续候选越来越难接受。
+	candidateCases := []map[string]any{}
+	for _, singleCase := range params.cases {
+		if _, isTarget := targetCaseIDs[toString(singleCase["case_id"])]; isTarget {
+			candidateCases = append(candidateCases, cloneCase(singleCase))
+		}
+	}
+	pairedSourceEvalRef := params.sourceEvalRef
+	sourceCaseScores, err := evalCaseScores(pairedSourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	sourceTargetScore := averageCaseScores(sourceCaseScores, targetCaseIDs)
+	candidateEvalRef, err := o.evaluate(ctx, evaluateParams{
+		cases: candidateCases, harnessRefsPath: params.candidateHarnessRefsPath,
+		outputDir: params.outputDir, dataset: params.dataset,
+		nodeRef: params.nodeRef, onEvent: params.onEvent,
+		baselineContexts: params.baselineContexts,
+	})
+	if err != nil {
+		return nil, err
+	}
+	candidateSkipped, err := skippedCaseIDs(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	skippedTargets := sortedStringSet(stringSetIntersection(candidateSkipped, targetCaseIDs))
+	if len(skippedTargets) > 0 {
+		gate := inconclusiveGate()
+		gate["reason"] = "candidate_gate_inconclusive_due_to_infrastructure_skip"
+		gate["candidate_eval_ref_path"] = candidateEvalRef
+		gate["skipped_target_case_ids"] = toAnySlice(skippedTargets)
+		return gate, nil
+	}
+	candidateCaseScores, err := evalCaseScores(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	if o.config.Promotion.Continuous() {
+		// Python: from .promotion_policy import complete_scores + EvaluationInfrastructureError
+		sourceComplete, sourceErr := CompleteScores(pairedSourceEvalRef, structSetToBool(batchCaseIDs))
+		if sourceErr != nil {
+			return continuousInvalidGate(base, candidateEvalRef, targetCaseIDs, sourceErr), nil
+		}
+		candidateComplete, candErr := CompleteScores(candidateEvalRef, structSetToBool(targetCaseIDs))
+		if candErr != nil {
+			return continuousInvalidGate(base, candidateEvalRef, targetCaseIDs, candErr), nil
+		}
+		sourceCaseScores = sourceComplete
+		candidateCaseScores = candidateComplete
+	}
+	sourceNativeSignals, err := evalCaseNativeSignals(pairedSourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	candidateNativeSignals, err := evalCaseNativeSignals(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	sourceNativeTargetScore := averageCaseScores(nativeCaseScores(sourceNativeSignals), targetCaseIDs)
+	candidateNativeTargetScore := averageCaseScores(nativeCaseScores(candidateNativeSignals), targetCaseIDs)
+	nativeDimensionDeltasByCase, nativeDimensionDelta := nativeDimensionDeltas(
+		sourceNativeSignals, candidateNativeSignals, targetCaseIDs)
+	verifierDeltasByCase, err := verifierDeltasByCase(pairedSourceEvalRef, candidateEvalRef, targetCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	candidatePatchExcerptsByCase, err := candidatePatchExcerptsByCase(candidateEvalRef, targetCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	candidateTargetScore := averageCaseScores(candidateCaseScores, targetCaseIDs)
+	targetScoreDelta := candidateTargetScore - sourceTargetScore
+	base["paired_source_eval_ref_path"] = pairedSourceEvalRef
+	base["source_score"] = sourceTargetScore
+	sourceNonTargetScore := averageCaseScores(sourceCaseScores, nonTargetCaseIDs)
+	expectedTools := expectedRuntimeNames(params.capabilities, "tool")
+	invokedToolsByCase, err := invokedToolNamesByCase(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	preEditToolsByCase, firstEditStepsByCase, err := preEditInvokedNamesByCase(candidateEvalRef, "tool", false)
+	if err != nil {
+		return nil, err
+	}
+	invokedToolsSet := map[string]struct{}{}
+	for _, names := range invokedToolsByCase {
+		for name := range names {
+			invokedToolsSet[name] = struct{}{}
+		}
+	}
+	expectedSkills := expectedRuntimeNames(params.capabilities, "skill")
+	invokedSkillsByCase, err := invokedSkillNamesByCase(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	preEditSkillsByCase, skillFirstEditStepsByCase, err := preEditInvokedNamesByCase(candidateEvalRef, "skill", false)
+	if err != nil {
+		return nil, err
+	}
+	for caseID, step := range skillFirstEditStepsByCase {
+		if current, ok := firstEditStepsByCase[caseID]; !ok || step < current {
+			firstEditStepsByCase[caseID] = step
+		}
+	}
+	invokedSkillsSet := map[string]struct{}{}
+	for _, names := range invokedSkillsByCase {
+		for name := range names {
+			invokedSkillsSet[name] = struct{}{}
+		}
+	}
+	laterEditGroups := map[string]struct{}{}
+	for _, capability := range params.capabilities {
+		phase := toString(capability["activation_phase"])
+		if phase == "post_diagnosis" || phase == "pre_submission" {
+			laterEditGroups[toString(capability["action_group"])] = struct{}{}
+		}
+	}
+	laterEditUsage := map[string]map[string]map[string]struct{}{}
+	for _, group := range []string{"tool", "skill"} {
+		if _, needed := laterEditGroups[group]; needed {
+			names, _, err := preEditInvokedNamesByCase(candidateEvalRef, group, true)
+			if err != nil {
+				return nil, err
+			}
+			laterEditUsage[group] = names
+		}
+	}
+	missingToolInvocations := missingCapabilityInvocations(
+		params.capabilities, "tool", preEditToolsByCase, fallbackTargetCaseIDs,
+		toolNamesMatch, laterEditUsage["tool"])
+	missingToolNamesSet := map[string]struct{}{}
+	for _, item := range missingToolInvocations {
+		missingToolNamesSet[item["runtime_name"]] = struct{}{}
+	}
+	missingSkillInvocations := missingCapabilityInvocations(
+		params.capabilities, "skill", preEditSkillsByCase, fallbackTargetCaseIDs,
+		skillNamesMatch, laterEditUsage["skill"])
+	allMissing := append(append([]map[string]string{}, missingToolInvocations...), missingSkillInvocations...)
+	inconclusiveCapabilityCaseIDs := InconclusiveCapabilityCases(candidateEvalRef, allMissing)
+	var unverifiedCapabilityInvocations []any
+	var keptToolInvocations, keptSkillInvocations []map[string]string
+	for _, item := range missingToolInvocations {
+		if _, inconclusive := inconclusiveCapabilityCaseIDs[item["target_case_id"]]; inconclusive {
+			unverifiedCapabilityInvocations = append(unverifiedCapabilityInvocations, item)
+		} else {
+			keptToolInvocations = append(keptToolInvocations, item)
+		}
+	}
+	for _, item := range missingSkillInvocations {
+		if _, inconclusive := inconclusiveCapabilityCaseIDs[item["target_case_id"]]; inconclusive {
+			unverifiedCapabilityInvocations = append(unverifiedCapabilityInvocations, item)
+		} else {
+			keptSkillInvocations = append(keptSkillInvocations, item)
+		}
+	}
+	missingToolInvocations = keptToolInvocations
+	missingSkillInvocations = keptSkillInvocations
+	missingToolNamesSet = map[string]struct{}{}
+	for _, item := range missingToolInvocations {
+		missingToolNamesSet[item["runtime_name"]] = struct{}{}
+	}
+	missingSkillNamesSet := map[string]struct{}{}
+	for _, item := range missingSkillInvocations {
+		missingSkillNamesSet[item["runtime_name"]] = struct{}{}
+	}
+	failedMachineEvidenceList, err := failedMachineEvidence(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	minTargetDelta := float64(o.config.MemberOptimizer.CandidateMinTargetBehaviorDelta)
+	if o.config.Promotion.Continuous() {
+		minTargetDelta = o.config.Promotion.MinImprovement
+	}
+	sourcePassing, err := passingCaseIDs(pairedSourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	failingTargetCaseIDs := []string{}
+	if o.config.Promotion.Continuous() {
+		failingTargetCaseIDs = sortedStringSet(targetCaseIDs)
+	} else {
+		failingTargetCaseIDs = sortedStringSetKeyDiff(targetCaseIDs, sourcePassing)
+	}
+	improvedTargetCaseIDs := []string{}
+	for _, caseID := range failingTargetCaseIDs {
+		margin := minTargetDelta
+		if o.config.Promotion.Continuous() {
+			margin += 1e-9
+		}
+		if candidateCaseScores[caseID] > sourceCaseScores[caseID]+margin {
+			improvedTargetCaseIDs = append(improvedTargetCaseIDs, caseID)
+		}
+	}
+	sort.Strings(improvedTargetCaseIDs)
+	unimprovedTargetCaseIDs := sortedStringSetKeyDiff(toKeySet(failingTargetCaseIDs), toKeySet(improvedTargetCaseIDs))
+	regressedTargetCaseIDs := []string{}
+	for _, caseID := range sortedStringSet(targetCaseIDs) {
+		if candidateCaseScores[caseID] < sourceCaseScores[caseID] {
+			regressedTargetCaseIDs = append(regressedTargetCaseIDs, caseID)
+		}
+	}
+	partialProgressTargetCaseIDs := []string{}
+	verifierProgressTargetCaseIDs := []string{}
+	for _, caseID := range sortedKeysOf(verifierDeltasByCase) {
+		delta := verifierDeltasByCase[caseID]
+		if truthy(delta["partial_progress"]) {
+			partialProgressTargetCaseIDs = append(partialProgressTargetCaseIDs, caseID)
+		}
+		if len(toAnySlice(delta["newly_passed_fail_to_pass"])) > 0 ||
+			len(toAnySlice(delta["newly_passed_atomic_checks"])) > 0 {
+			verifierProgressTargetCaseIDs = append(verifierProgressTargetCaseIDs, caseID)
+		}
+	}
+	targetImproved := len(failingTargetCaseIDs) > 0 &&
+		len(unimprovedTargetCaseIDs) == 0 && len(regressedTargetCaseIDs) == 0
+	if o.config.Promotion.Continuous() {
+		targetImproved = TargetsImproved(
+			candidateCaseScores, sourceCaseScores, structSetToBool(targetCaseIDs), o.config.Promotion.MinImprovement)
+	}
+	nonTargetConfirmation := map[string]any{
+		"status":     "not_evaluated",
+		"reason":     "candidate_gate_is_target_local",
+		"case_count": len(nonTargetCaseIDs),
+	}
+	candidateHasErrors, _ := evalHasErrorsWrapper(candidateEvalRef)
+	accepted := !candidateHasErrors &&
+		targetImproved &&
+		len(missingToolNamesSet) == 0 &&
+		len(missingSkillNamesSet) == 0 &&
+		len(failedMachineEvidenceList) == 0 &&
+		len(inconclusiveCapabilityCaseIDs) == 0
+	targetConfirmation := map[string]any{
+		"status":                     "not_needed",
+		"reason":                     "primary_candidate_evaluation_is_natural",
+		"case_count":                 len(targetCaseIDs),
+		"confirmed":                  accepted,
+		"capability_activation_mode": "natural",
+	}
+	retention := map[string]any{
+		"status":     "not_performed",
+		"reason":     "cross_case_retention_deferred_to_epoch_checkpoint",
+		"case_count": 0,
+		"retained":   true,
+	}
+	reason := "candidate_did_not_improve_target_cases"
+	if accepted {
+		reason = "candidate_improved_target_cases"
+	}
+	if candidateHasErrors {
+		reason = "candidate_gate_inconclusive_due_to_error_cases"
+	} else if len(inconclusiveCapabilityCaseIDs) > 0 {
+		reason = "candidate_capability_evidence_inconclusive"
+	} else if len(missingToolNamesSet) > 0 {
+		if missingInvocationsWereLate(missingToolInvocations, invokedToolsByCase, toolNamesMatch) {
+			reason = "expected_tool_invoked_outside_activation_window"
+		} else {
+			reason = "expected_tool_not_invoked_on_target_case"
+		}
+	} else if len(missingSkillNamesSet) > 0 {
+		if missingInvocationsWereLate(missingSkillInvocations, invokedSkillsByCase, skillNamesMatch) {
+			reason = "expected_skill_invoked_outside_activation_window"
+		} else {
+			reason = "expected_skill_not_invoked_on_target_case"
+		}
+	} else if len(failedMachineEvidenceList) > 0 {
+		reason = "candidate_machine_evidence_failed"
+	} else if !targetImproved {
+		if len(partialProgressTargetCaseIDs) > 0 {
+			reason = "candidate_made_partial_verifier_progress"
+		} else {
+			reason = "candidate_did_not_improve_target_cases"
+		}
+	}
+	failureClass := classifyGateFailure(accepted, reason, targetCaseIDs, candidateCaseScores,
+		firstEditStepsByCase, missingSkillInvocations, verifierDeltasByCase)
+	var observations map[string]map[string]any
+	if !candidateHasErrors {
+		var outputRepair *harnessrsi.OutputRepairConfig
+		repairCopy := o.config.EvaluationResultAnalyzer.OutputRepair
+		outputRepair = &repairCopy
+		observations, err = CheckCandidateBehavior(ctx, pairedSourceEvalRef, candidateEvalRef,
+			params.capabilities, o.config.EvaluationResultAnalyzer.ModelConfigRef,
+			filepath.Join(params.outputDir, "behavior_check"), outputRepair)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		observations = map[string]map[string]any{}
+	}
+	candidatePassing, err := passingCaseIDs(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	for caseID, observation := range observations {
+		var requiredNames []map[string]any
+		for _, item := range params.capabilities {
+			targets := toAnySlice(item["target_case_ids"])
+			if len(targets) == 0 {
+				targets = toAnySlice(targetCaseIDs)
+			}
+			found := false
+			for _, rawTarget := range targets {
+				if toString(rawTarget) == caseID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+			if group := toString(item["action_group"]); group == "tool" || group == "skill" {
+				requiredNames = append(requiredNames, item)
+			}
+		}
+		available := "unknown"
+		if len(requiredNames) > 0 {
+			allPresent := true
+			for _, item := range requiredNames {
+				runtimeName := toString(item["runtime_name"])
+				var invokedSet map[string]struct{}
+				if toString(item["action_group"]) == "tool" {
+					invokedSet = invokedToolsByCase[caseID]
+				} else {
+					invokedSet = invokedSkillsByCase[caseID]
+				}
+				if _, present := invokedSet[runtimeName]; !present {
+					allPresent = false
+					break
+				}
+			}
+			if allPresent {
+				available = "yes"
+			}
+		}
+		observation["availability"] = available
+		var scoreImproved *bool
+		if o.config.Promotion.Continuous() {
+			scoreImproved = &targetImproved
+		}
+		observation["next_action"] = FeedbackRoute(observation, boolContains(candidatePassing, caseID), scoreImproved)
+	}
+	if accepted {
+		for _, observation := range observations {
+			if observation["next_action"] != "verified" {
+				accepted = false
+				reason = "candidate_behavior_change_not_verified"
+				failureClass = "behavior_evidence_inconclusive"
+				targetConfirmation["confirmed"] = false
+				break
+			}
+		}
+	}
+	candidateFailureAnalysisRef := ""
+	candidateFailureAnalysisStatus := "not_requested"
+	candidateFailureAnalysisError := map[string]any{}
+	candidateFailureDiagnoses := map[string][]map[string]any{}
+	candidateBehaviorByCase := map[string]any{}
+	for _, caseID := range sortedStringSet(targetCaseIDs) {
+		behaviorCheck := map[string]any{}
+		if obs, ok := observations[caseID]; ok {
+			behaviorCheck = obs
+		}
+		capabilitySummaries := []any{}
+		for _, capability := range params.capabilities {
+			targets := toAnySlice(capability["target_case_ids"])
+			if len(targets) == 0 {
+				targets = toAnySlice(targetCaseIDs)
+			}
+			inTargets := false
+			for _, rawTarget := range targets {
+				if toString(rawTarget) == caseID {
+					inTargets = true
+					break
+				}
+			}
+			if !inTargets {
+				continue
+			}
+			capabilitySummaries = append(capabilitySummaries, map[string]any{
+				"action_group": capability["action_group"],
+				"runtime_name": capability["runtime_name"],
+				"target_path":  capability["target_path"],
+			})
+		}
+		missingSkillForCase := []any{}
+		missingToolForCase := []any{}
+		for _, item := range missingSkillInvocations {
+			if item["target_case_id"] == caseID {
+				missingSkillForCase = append(missingSkillForCase, item)
+			}
+		}
+		for _, item := range missingToolInvocations {
+			if item["target_case_id"] == caseID {
+				missingToolForCase = append(missingToolForCase, item)
+			}
+		}
+		candidateBehaviorByCase[caseID] = map[string]any{
+			"gate_reason":               reason,
+			"failure_class":             failureClass,
+			"behavior_check":            behaviorCheck,
+			"capabilities":              capabilitySummaries,
+			"invoked_skill_names":       sortedStringSet(invokedSkillsByCase[caseID]),
+			"invoked_tool_names":        sortedStringSet(invokedToolsByCase[caseID]),
+			"missing_skill_invocations": missingSkillForCase,
+			"missing_tool_invocations":  missingToolForCase,
+		}
+	}
+	canPair := !accepted && !candidateHasErrors
+	definite := !strings.Contains(reason, "inconclusive") && failureClass != "behavior_evidence_inconclusive"
+	operational := isOperationalRepair(map[string]any{"candidate_behavior_by_case": candidateBehaviorByCase})
+	if canPair && definite && !operational {
+		pairedFeedbackByCase := map[string]any{}
+		for _, caseID := range sortedKeysOf(verifierDeltasByCase) {
+			delta := verifierDeltasByCase[caseID]
+			pairedFeedbackByCase[caseID] = []any{map[string]any{
+				"kind":                    "paired_source_candidate_delta",
+				"verifier_delta":          delta,
+				"candidate_patch_excerpt": candidatePatchExcerptsByCase[caseID],
+				"candidate_behavior":      candidateBehaviorByCase[caseID],
+				"source_eval_ref_path":    pairedSourceEvalRef,
+				"candidate_eval_ref_path": candidateEvalRef,
+			}}
+		}
+		analysisRefPath, analyzeErr := o.analyze(ctx, analyzeParams{
+			evalRefPath: candidateEvalRef, harnessRefsPath: params.candidateHarnessRefsPath,
+			outputDir:              filepath.Join(params.outputDir, "failure_analysis"),
+			sourceStage:            "single_harness_candidate_failure",
+			priorCandidateFeedback: map[string]any{"by_case": pairedFeedbackByCase},
+			nodeRef:                params.nodeRef, onEvent: params.onEvent,
+		})
+		if analyzeErr == nil {
+			candidateFailureAnalysisRef = analysisRefPath
+			if diagnoses, diagErr := compactAnalysisDiagnoses(analysisRefPath); diagErr == nil {
+				candidateFailureDiagnoses = diagnoses
+			}
+			candidateFailureAnalysisStatus = "completed"
+		} else if unavailable, ok := analyzeErr.(*memberoptimizer.AnalysisUnavailableError); ok {
+			candidateFailureAnalysisRef = unavailable.AnalysisRefPath
+			candidateFailureAnalysisStatus = "unavailable"
+			for key, value := range unavailable.Details() {
+				candidateFailureAnalysisError[key] = value
+			}
+		} else {
+			return nil, analyzeErr
+		}
+	}
+	status := "rejected"
+	if accepted {
+		status = "accepted"
+	} else if strings.Contains(reason, "inconclusive") || strings.Contains(reason, "error_cases") {
+		status = "inconclusive"
+	}
+	gate := map[string]any{
+		"accepted": accepted, "status": status, "reason": reason, "failure_class": failureClass,
+		"candidate_eval_ref_path":             candidateEvalRef,
+		"candidate_score":                     candidateTargetScore,
+		"score_delta":                         targetScoreDelta,
+		"target_case_ids":                     sortedStringSet(targetCaseIDs),
+		"source_target_score":                 sourceTargetScore,
+		"candidate_target_score":              candidateTargetScore,
+		"target_score_delta":                  targetScoreDelta,
+		"source_native_target_score":          sourceNativeTargetScore,
+		"candidate_native_target_score":       candidateNativeTargetScore,
+		"native_target_score_delta":           candidateNativeTargetScore - sourceNativeTargetScore,
+		"native_dimension_deltas_by_case":     nativeDimensionDeltasByCase,
+		"native_dimension_delta":              nativeDimensionDelta,
+		"native_signal_role":                  "diagnostic_only",
+		"failing_target_case_ids":             toAnySlice(failingTargetCaseIDs),
+		"improved_target_case_ids":            toAnySlice(improvedTargetCaseIDs),
+		"unimproved_target_case_ids":          toAnySlice(unimprovedTargetCaseIDs),
+		"regressed_target_case_ids":           toAnySlice(regressedTargetCaseIDs),
+		"partial_progress_target_case_ids":    toAnySlice(partialProgressTargetCaseIDs),
+		"verifier_progress_target_case_ids":   toAnySlice(verifierProgressTargetCaseIDs),
+		"verifier_deltas_by_case":             verifierDeltasByCase,
+		"candidate_patch_excerpts_by_case":    candidatePatchExcerptsByCase,
+		"candidate_failure_analysis_ref_path": candidateFailureAnalysisRef,
+		"candidate_failure_analysis_status":   candidateFailureAnalysisStatus,
+		"candidate_failure_analysis_error":    candidateFailureAnalysisError,
+		"candidate_failure_diagnoses":         candidateFailureDiagnoses,
+		"candidate_behavior_by_case":          candidateBehaviorByCase,
+		"task_acceptance_contracts":           taskAcceptanceContracts,
+		"non_target_case_ids":                 sortedStringSet(nonTargetCaseIDs),
+		"source_non_target_score":             sourceNonTargetScore,
+		"candidate_non_target_score":          nil,
+		"non_target_score_delta":              nil,
+		"regressed_non_target_case_ids":       []any{},
+		"non_target_confirmation":             nonTargetConfirmation,
+		"expected_tool_names":                 expectedTools,
+		"invoked_tool_names":                  sortedStringSet(invokedToolsSet),
+		"missing_expected_tool_names":         sortedStringSet(missingToolNamesSet),
+		"inconclusive_capability_case_ids":    sortedBoolSetKeys(inconclusiveCapabilityCaseIDs),
+		"unverified_capability_invocations":   unverifiedCapabilityInvocations,
+		"expected_skill_names":                expectedSkills,
+		"invoked_skill_names":                 sortedStringSet(invokedSkillsSet),
+		"missing_expected_skill_names":        sortedStringSet(missingSkillNamesSet),
+		"candidate_evaluation_mode":           "natural",
+		"failed_machine_evidence":             toAnySlice(failedMachineEvidenceList),
+		"target_confirmation":                 targetConfirmation,
+		"retention":                           retention,
+	}
+	for key, value := range base {
+		if _, exists := gate[key]; !exists || key == "source_score" || key == "paired_source_eval_ref_path" {
+			gate[key] = value
+		}
+	}
+	gate["invoked_tool_names_by_case"] = sortedNamesByCase(invokedToolsByCase)
+	gate["pre_edit_invoked_tool_names_by_case"] = sortedNamesByCase(preEditToolsByCase)
+	gate["missing_expected_tool_invocations"] = toAnySlice(missingToolInvocations)
+	gate["invoked_skill_names_by_case"] = sortedNamesByCase(invokedSkillsByCase)
+	gate["pre_edit_invoked_skill_names_by_case"] = sortedNamesByCase(preEditSkillsByCase)
+	gate["first_persistent_edit_step_by_case"] = intMapToAny(firstEditStepsByCase)
+	preFinalEdit := map[string]any{}
+	for group, byCase := range laterEditUsage {
+		preFinalEdit[group] = sortedNamesByCase(byCase)
+	}
+	gate["pre_final_edit_invoked_names_by_case"] = preFinalEdit
+	gate["missing_expected_skill_invocations"] = toAnySlice(missingSkillInvocations)
+	return gate, nil
+}
+
+// evalHasErrorsWrapper 吞错版 evalHasErrors。
+func evalHasErrorsWrapper(evalRefPath string) (bool, error) {
+	errorSet, err := errorCaseIDs(evalRefPath)
+	if err != nil {
+		return false, err
+	}
+	return len(errorSet) > 0, nil
+}
+
+// continuousInvalidGate continuous 分数不完整时的不确定门。
+func continuousInvalidGate(base map[string]any, candidateEvalRef string,
+	targetCaseIDs map[string]struct{}, evalErr error) map[string]any {
+	gate := map[string]any{
+		"accepted": false, "status": "inconclusive", "reason": "evaluation_invalid",
+		"candidate_eval_ref_path": candidateEvalRef,
+		"target_case_ids":         sortedStringSet(targetCaseIDs),
+		"evaluation_error":        evalErr.Error(),
+	}
+	for key, value := range base {
+		gate[key] = value
+	}
+	return gate
+}
+
+// sortedNamesByCase 逐用例名字集合转排序切片映射。
+func sortedNamesByCase(byCase map[string]map[string]struct{}) map[string]any {
+	out := map[string]any{}
+	for caseID, names := range byCase {
+		out[caseID] = sortedStringSet(names)
+	}
+	return out
+}
+
+// intMapToAny int 映射转 any 映射。
+func intMapToAny(value map[string]int) map[string]any {
+	out := map[string]any{}
+	for key, v := range value {
+		out[key] = v
+	}
+	return out
+}
+
+// mergeRepairCapabilities 保留完整局部补丁的归因（Python _merge_repair_capabilities）。
+func mergeRepairCapabilities(previous, current []map[string]any) []map[string]any {
+	merged := map[string]map[string]any{}
+	order := []string{}
+	keyOf := func(item map[string]any) string {
+		return toString(item["role"]) + "\x00" + toString(item["target_path"])
+	}
+	for _, item := range previous {
+		key := keyOf(item)
+		if _, seen := merged[key]; !seen {
+			order = append(order, key)
+		}
+		merged[key] = cloneCase(item)
+	}
+	for _, item := range current {
+		key := keyOf(item)
+		value := cloneCase(item)
+		if prior, ok := merged[key]; ok && toString(prior["operation"]) == "add" &&
+			toString(value["operation"]) == "modify" {
+			value["operation"] = "add"
+		}
+		if _, seen := merged[key]; !seen {
+			order = append(order, key)
+		}
+		merged[key] = value
+	}
+	result := []map[string]any{}
+	for _, key := range order {
+		result = append(result, merged[key])
+	}
+	return result
+}
+
+// candidateCanContinueLocally 既有批次预算内保留已测部分进展（Python _candidate_can_continue_locally）。
+func candidateCanContinueLocally(gate map[string]any, cases []map[string]any) bool {
+	if toString(gate["candidate_failure_analysis_status"]) == "unavailable" {
+		return false
+	}
+	behavior := mappingOrNil(gate["candidate_behavior_by_case"])
+	localRepair := false
+	for _, rawItem := range behavior {
+		if item, ok := rawItem.(map[string]any); ok {
+			if toString(mappingOrNil(item["behavior_check"])["next_action"]) == "investigate_residuals" {
+				localRepair = true
+				break
+			}
+		}
+	}
+	if toString(gate["status"]) != "rejected" {
+		return false
+	}
+	if toString(gate["reason"]) != "candidate_made_partial_verifier_progress" && !localRepair {
+		return false
+	}
+	caseIDSet := map[string]struct{}{}
+	for _, singleCase := range cases {
+		if caseID := toString(singleCase["case_id"]); caseID != "" {
+			caseIDSet[caseID] = struct{}{}
+		}
+	}
+	if !stringSetEqual(toStringSet(gate["target_case_ids"]), caseIDSet) {
+		return false // 剩余活跃用例无混合 Harness 证据。
+	}
+	blockingEvidenceKeys := []string{
+		"failed_machine_evidence", "missing_expected_skill_invocations", "missing_expected_tool_invocations",
+		"regressed_target_case_ids", "regressed_non_target_case_ids",
+	}
+	for _, key := range blockingEvidenceKeys {
+		if anySliceNonEmpty(gate[key]) || len(toAnySlice(gate[key])) > 0 {
+			return false
+		}
+	}
+	deltas := mappingOrNil(gate["verifier_deltas_by_case"])
+	if !localRepair && (len(deltas) == 0 || !anyDeltaTruthy(deltas, "partial_progress")) {
+		return false
+	}
+	regressionKeys := []string{
+		"regressed_requirements", "regressed_fail_to_pass", "regressed_pass_to_pass",
+		"regressed_atomic_checks", "regressed_requirement_scores",
+	}
+	for _, rawDelta := range deltas {
+		delta := evalDeltaMap(rawDelta)
+		for _, key := range regressionKeys {
+			if len(toAnySlice(delta[key])) > 0 {
+				return false
+			}
+		}
+	}
+	evalRef := toString(gate["candidate_eval_ref_path"])
+	if evalRef == "" {
+		return false
+	}
+	complete, _ := evalRefComplete(evalRef)
+	if !complete {
+		return false
+	}
+	caseScores, err := evalCaseScores(evalRef)
+	if err != nil {
+		return false
+	}
+	if !stringSetEqual(mappingStringKeys(caseScores), toStringSet(gate["target_case_ids"])) {
+		return false
+	}
+	hasErrors, _ := evalHasErrorsWrapper(evalRef)
+	if hasErrors {
+		return false
+	}
+	skipped, err := skippedCaseIDs(evalRef)
+	if err != nil || len(skipped) > 0 {
+		return false
+	}
+	return true
+}
+
+// evalDeltaMap any 转映射。
+func evalDeltaMap(value any) map[string]any {
+	if m, ok := value.(map[string]any); ok {
+		return m
+	}
+	return map[string]any{}
+}
+
+// anyDeltaTruthy 任一 delta 指定键为真。
+func anyDeltaTruthy(deltas map[string]any, key string) bool {
+	for _, delta := range deltas {
+		if truthy(evalDeltaMap(delta)[key]) {
+			return true
+		}
+	}
+	return false
+}
+
+// candidateFailureSupportsRepair 被拒候选是否产出可用修复证据（Python _candidate_failure_supports_repair）。
+func candidateFailureSupportsRepair(gate map[string]any) bool {
+	if toString(gate["candidate_failure_analysis_status"]) == "unavailable" {
+		return false
+	}
+	if toString(gate["status"]) != "rejected" {
+		return false
+	}
+	if isOperationalRepair(gate) || toString(gate["candidate_failure_analysis_ref_path"]) != "" {
+		return true
+	}
+	switch toString(gate["reason"]) {
+	case "candidate_made_partial_verifier_progress",
+		"expected_skill_not_invoked_on_target_case",
+		"expected_skill_invoked_after_first_persistent_edit",
+		"expected_skill_invoked_outside_activation_window",
+		"expected_tool_not_invoked_on_target_case",
+		"expected_tool_invoked_after_first_persistent_edit",
+		"expected_tool_invoked_outside_activation_window":
+		return true
+	}
+	return false
+}
+
+// isOperationalRepair 证据指向交付/执行时复用已诊断问题（Python _is_operational_repair）。
+func isOperationalRepair(gate map[string]any) bool {
+	behavior := mappingOrNil(gate["candidate_behavior_by_case"])
+	if len(behavior) == 0 {
+		return false
+	}
+	for _, rawItem := range behavior {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			return false
+		}
+		nextAction := toString(mappingOrNil(item["behavior_check"])["next_action"])
+		if nextAction != "repair_activation" && nextAction != "repair_execution" {
+			return false
+		}
+	}
+	return true
+}
+
+// rejectedCapabilities 带证据的先前被拒动作（Python _rejected_capabilities）。
+func rejectedCapabilities(state map[string]any) []map[string]any {
+	gates := []map[string]any{}
+	for _, rawGate := range toAnySlice(state["candidate_gates"]) {
+		if gate, ok := rawGate.(map[string]any); ok {
+			gates = append(gates, gate)
+		}
+	}
+	return rejectedCapabilityHistory(gates)
+}
+
+// candidateEvaluationOutputDir 候选评估目录（Windows 路径长度边界下，Python _candidate_evaluation_output_dir）。
+func candidateEvaluationOutputDir(
+	optimizationOutputDir string, epoch, batchIndex, attemptIndex, candidateIndex int,
+) string {
+	return filepath.Join(
+		filepath.Dir(optimizationOutputDir), "ce",
+		fmt.Sprintf("e%03d", epoch), fmt.Sprintf("b%03d", batchIndex),
+		fmt.Sprintf("a%03d", attemptIndex), fmt.Sprintf("c%03d", candidateIndex),
+	)
+}
+
+// runContinuous 委托连续模式（Python: run_continuous——Task 10 落地）。
+func (o *SingleHarnessIterativeOptimizationOrchestrator) runContinuous(
+	ctx context.Context,
+	request *IterativeSingleHarnessRequest,
+	state map[string]any,
+	dataset harnessrsi.DatasetArtifact,
+	allCases []map[string]any,
+	outputDir string,
+	maxEpochs int,
+	onEvent rsi.OnEvent,
+) (IterativeSingleHarnessResult, error) {
+	return runContinuousLoop(ctx, o, request, state, dataset, allCases, outputDir, maxEpochs, onEvent)
+}
+
 // ──────────────────────────── 评估信号与用量段（Python 2821-3400） ────────────────────────────
 
 // evalCaseScores 用例分数映射（Python: _eval_case_scores）。
@@ -4523,4 +7337,39 @@ func rejectMixedOpaqueSnapshotSelection(
 		selection["failure_class"] = "regression_or_retention_failure"
 	}
 	return true, nil
+}
+
+// structSetToBool 集合形态转换（promotion_policy 使用 map[string]bool）。
+func structSetToBool(set map[string]struct{}) map[string]bool {
+	out := map[string]bool{}
+	for key := range set {
+		out[key] = true
+	}
+	return out
+}
+
+// sortedKeysOf 映射键排序。
+func sortedKeysOf[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// sortedBoolSetKeys bool 集合键排序。
+func sortedBoolSetKeys(set map[string]bool) []string {
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// boolContains 集合含元素。
+func boolContains(set map[string]struct{}, value string) bool {
+	_, ok := set[value]
+	return ok
 }

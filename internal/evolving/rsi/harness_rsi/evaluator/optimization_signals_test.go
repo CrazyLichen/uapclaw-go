@@ -1,6 +1,14 @@
 package evaluator
 
-import "testing"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestOptimizationSignalsContract_归一化(t *testing.T) {
 	contract := OptimizationSignalsContract(
@@ -214,4 +222,248 @@ func infFloat() float64 {
 		inf *= 2
 	}
 	return inf
+}
+
+func TestBaselineContexts_各类错误(t *testing.T) {
+	dir := t.TempDir()
+	// 造基线：嵌套 cases 布局 + 合法评分
+	resultPath := filepath.Join(dir, "cases", "c1", "result.json")
+	os.MkdirAll(filepath.Dir(resultPath), 0o755)
+	os.WriteFile(resultPath, []byte(`{"case_id":"c1","score":0.5,"status":"passed","execution_status":"passed"}`), 0o644)
+	tracePath := filepath.Join(dir, "cases", "c1", "trace.json")
+	os.WriteFile(tracePath, []byte(`{"steps":[]}`), 0o644)
+	evalRef := filepath.Join(dir, "eval_ref.yaml")
+	os.WriteFile(evalRef, []byte("cases:\n  - case_id: c1\n    score: 0.5\n    status: passed\n    result_path: "+resultPath+"\n    trace_path: "+tracePath+"\n"), 0o644)
+	cases := []map[string]any{{"case_id": "c1", "input": "task", "reference": map[string]any{}}}
+	contexts, err := BaselineContexts(evalRef, cases)
+	if err != nil {
+		t.Fatalf("BaselineContexts: %v", err)
+	}
+	ctx := contexts["c1"]
+	if ctx == nil || ctx.TaskIdentity == "" || ctx.EvidenceDigest == "" {
+		t.Fatalf("上下文字段: %+v", ctx)
+	}
+	if ctx.Fingerprint() == "" {
+		t.Fatalf("指纹应非空")
+	}
+	// validate 通过
+	if _, err := ctx.Validate(cases[0]); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	// 用例身份变化 → validate 拒绝
+	_, err = ctx.Validate(map[string]any{"case_id": "c1", "input": "changed"})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("身份变化应拒绝: %v", err)
+	}
+	// 缺失用例
+	_, err = BaselineContexts(evalRef, []map[string]any{{"case_id": "c9"}})
+	if err == nil || !strings.Contains(err.Error(), "does not cover case") {
+		t.Fatalf("缺失用例应拒绝: %v", err)
+	}
+	// 重复用例身份
+	dupRef := filepath.Join(dir, "dup.yaml")
+	os.WriteFile(dupRef, []byte("cases:\n  - case_id: c1\n    result_path: "+resultPath+"\n  - case_id: c1\n    result_path: "+resultPath+"\n"), 0o644)
+	_, err = BaselineContexts(dupRef, cases)
+	if err == nil || !strings.Contains(err.Error(), "duplicate case identities") {
+		t.Fatalf("重复身份应拒绝: %v", err)
+	}
+	// 非法评分（>1）——评分取自 result 文件
+	badResult := filepath.Join(dir, "cases", "c1", "bad_result.json")
+	os.WriteFile(badResult, []byte(`{"case_id":"c1","score":2.0,"status":"passed","execution_status":"passed"}`), 0o644)
+	badRef := filepath.Join(dir, "bad.yaml")
+	os.WriteFile(badRef, []byte("cases:\n  - case_id: c1\n    score: 2.0\n    status: passed\n    result_path: "+badResult+"\n"), 0o644)
+	_, err = BaselineContexts(badRef, cases)
+	if err == nil || !strings.Contains(err.Error(), "valid correctness grade") {
+		t.Fatalf("越界评分应拒绝: %v", err)
+	}
+}
+
+func TestCaseIdentity_稳定与内容敏感(t *testing.T) {
+	caseA := map[string]any{"case_id": "c1", "input": "task a", "reference": map[string]any{}}
+	id1, err := CaseIdentity(caseA)
+	if err != nil {
+		t.Fatalf("CaseIdentity: %v", err)
+	}
+	id2, _ := CaseIdentity(caseA)
+	if id1 != id2 || len(id1) != 64 {
+		t.Fatalf("身份应稳定 64 位: %s", id1)
+	}
+	caseB := map[string]any{"case_id": "c1", "input": "task b", "reference": map[string]any{}}
+	id3, _ := CaseIdentity(caseB)
+	if id1 == id3 {
+		t.Fatalf("内容变化身份应变")
+	}
+}
+
+func TestBaselineValidate_错误分支矩阵(t *testing.T) {
+	dir := t.TempDir()
+	// result 属于别的 case
+	mismatchResult := filepath.Join(dir, "cases", "c1", "mismatch.json")
+	os.MkdirAll(filepath.Dir(mismatchResult), 0o755)
+	os.WriteFile(mismatchResult, []byte(`{"case_id":"other","score":0.5,"status":"passed"}`), 0o644)
+	ctx := &BaselineJudgeContext{CaseID: "c1", ResultPath: mismatchResult, TaskIdentity: "x", EvidenceDigest: "x"}
+	// evidence digest 不符先触发
+	_, err := ctx.Validate(map[string]any{"case_id": "c1"})
+	if err == nil {
+		t.Fatalf("evidence 不符应拒绝")
+	}
+	// 修正 evidence：构造目录后取真实 digest
+	normalResult := filepath.Join(dir, "cases", "c2", "result.json")
+	os.MkdirAll(filepath.Dir(normalResult), 0o755)
+	os.WriteFile(normalResult, []byte(`{"case_id":"c2","score":0.5,"status":"passed","execution_status":"passed"}`), 0o644)
+	digest, err := evidenceDigest(filepath.Dir(normalResult))
+	if err != nil {
+		t.Fatalf("evidenceDigest: %v", err)
+	}
+	identity2, _ := CaseIdentity(map[string]any{"case_id": "c2", "input": "task", "reference": map[string]any{}})
+	ctx2 := &BaselineJudgeContext{CaseID: "c1", ResultPath: normalResult, TaskIdentity: identity2, EvidenceDigest: digest}
+	// 用例身份与任务身份一致但 result 属于别的 case → belongs to a different case
+	_, err = ctx2.Validate(map[string]any{"case_id": "c1", "input": "task", "reference": map[string]any{}})
+	// 先触发身份比对：validate 的 case_identity(c1)==TaskIdentity(c2) 不等 → does not match
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("任务身份不匹配应拒绝: %v", err)
+	}
+	// 用 c2 身份校验 → result 属于 c2 匹配 → 通过
+	ctx2b := &BaselineJudgeContext{CaseID: "c2", ResultPath: normalResult, TaskIdentity: identity2, EvidenceDigest: digest}
+	if _, err := ctx2b.Validate(map[string]any{"case_id": "c2", "input": "task", "reference": map[string]any{}}); err != nil {
+		t.Fatalf("一致应通过: %v", err)
+	}
+	// execution_status error → 拒绝
+	errResult := filepath.Join(dir, "cases", "c3", "result.json")
+	os.MkdirAll(filepath.Dir(errResult), 0o755)
+	os.WriteFile(errResult, []byte(`{"case_id":"c3","score":0.5,"status":"passed","execution_status":"error"}`), 0o644)
+	digest3, _ := evidenceDigest(filepath.Dir(errResult))
+	ctx3 := &BaselineJudgeContext{CaseID: "c3", ResultPath: errResult, EvidenceDigest: digest3}
+	identity3, _ := CaseIdentity(map[string]any{"case_id": "c3", "input": "task", "reference": map[string]any{}})
+	ctx3.TaskIdentity = identity3
+	_, err = ctx3.Validate(map[string]any{"case_id": "c3", "input": "task", "reference": map[string]any{}})
+	if err == nil || !strings.Contains(err.Error(), "valid correctness grade") {
+		t.Fatalf("execution error 应拒绝: %v", err)
+	}
+	// harvest artifact 缺失 → 拒绝
+	missingArtifact := filepath.Join(dir, "cases", "c4", "result.json")
+	os.MkdirAll(filepath.Dir(missingArtifact), 0o755)
+	os.WriteFile(missingArtifact, []byte(`{"case_id":"c4","score":0.5,"status":"passed","execution_status":"passed","artifacts":{"harvested":["gone.txt"]}}`), 0o644)
+	digest4, _ := evidenceDigest(filepath.Dir(missingArtifact))
+	ctx4 := &BaselineJudgeContext{CaseID: "c4", ResultPath: missingArtifact, EvidenceDigest: digest4}
+	identity4, _ := CaseIdentity(map[string]any{"case_id": "c4", "input": "task", "reference": map[string]any{}})
+	ctx4.TaskIdentity = identity4
+	_, err = ctx4.Validate(map[string]any{"case_id": "c4", "input": "task", "reference": map[string]any{}})
+	if err == nil || !strings.Contains(err.Error(), "deliverable is missing") {
+		t.Fatalf("缺失交付物应拒绝: %v", err)
+	}
+	// 助手分支
+	if evalToString(42) == "" {
+		t.Fatalf("evalToString 数字")
+	}
+	if !evalAnyEqual(map[string]any{"a": 1}, map[string]any{"a": 1}) {
+		t.Fatalf("evalAnyEqual")
+	}
+	if expandUserB("~/x") == "~/x" {
+		t.Fatalf("应展开 ~")
+	}
+}
+
+func TestAppendOrderedSteps_kind形态与排序(t *testing.T) {
+	// kind+detail 单步直出
+	step := map[string]any{"kind": "tool", "detail": map[string]any{"tool_name": "bash"}}
+	steps := orderedSteps(step)
+	if len(steps) != 1 {
+		t.Fatalf("kind+detail 应直出: %d", len(steps))
+	}
+	// 嵌套 map 递归（键排序遍历）
+	nested := map[string]any{
+		"zz": map[string]any{"steps": []any{step}},
+	}
+	steps = orderedSteps(nested)
+	if len(steps) != 1 {
+		t.Fatalf("嵌套递归: %d", len(steps))
+	}
+	// messages 中非 dict 忽略
+	msgs := map[string]any{"messages": []any{"skip", map[string]any{}}}
+	if got := orderedSteps(msgs); len(got) != 0 {
+		t.Fatalf("空 tool_calls 应无步: %d", len(got))
+	}
+	sortStrings([]string{"b", "a"})
+}
+
+func TestValidate_judgeManifest分支(t *testing.T) {
+	dir := t.TempDir()
+	caseDir := filepath.Join(dir, "cases", "c5")
+	os.MkdirAll(filepath.Join(caseDir, "judge", "j1"), 0o755)
+	os.MkdirAll(filepath.Join(caseDir, "artifacts"), 0o755)
+	// artifacts 文件 + harvest 记录
+	os.WriteFile(filepath.Join(caseDir, "artifacts", "out.txt"), []byte("data"), 0o644)
+	// judge manifest 与实际文件一致
+	manifest := map[string]any{"files": map[string]any{"out.txt": sha256OfFile(filepath.Join(caseDir, "artifacts", "out.txt"))}}
+	manifestJSON, _ := json.Marshal(manifest)
+	os.WriteFile(filepath.Join(caseDir, "judge", "j1", "artifact_manifest.json"), manifestJSON, 0o644)
+	result := map[string]any{
+		"case_id": "c5", "score": 0.5, "status": "passed", "execution_status": "passed",
+		"artifacts": map[string]any{"harvested": []any{"out.txt"}},
+		"evaluation": map[string]any{
+			"method":  "llm_as_judge",
+			"metadata": map[string]any{"score_mode": "continuous", "judge_dir": "judge/j1"},
+		},
+	}
+	resultJSON, _ := json.Marshal(result)
+	resultPath := filepath.Join(caseDir, "result.json")
+	os.WriteFile(resultPath, resultJSON, 0o644)
+	// trace 文件入 digest
+	os.WriteFile(filepath.Join(caseDir, "judge", "normalized_trace.json"), []byte(`{}`), 0o644)
+	digest, err := evidenceDigest(caseDir)
+	if err != nil {
+		t.Fatalf("evidenceDigest: %v", err)
+	}
+	identity, _ := CaseIdentity(map[string]any{"case_id": "c5", "input": "task", "reference": map[string]any{}})
+	ctx := &BaselineJudgeContext{CaseID: "c5", ResultPath: resultPath, TaskIdentity: identity, EvidenceDigest: digest}
+	if _, err := ctx.Validate(map[string]any{"case_id": "c5", "input": "task", "reference": map[string]any{}}); err != nil {
+		t.Fatalf("judge manifest 一致应通过: %v", err)
+	}
+	// manifest 与实际不符：先改文件再重算 evidence digest（绕过 digest 前置检查）
+	os.WriteFile(filepath.Join(caseDir, "artifacts", "out.txt"), []byte("changed"), 0o644)
+	digestChanged, _ := evidenceDigest(caseDir)
+	ctxChanged := &BaselineJudgeContext{CaseID: "c5", ResultPath: resultPath,
+		TaskIdentity: identity, EvidenceDigest: digestChanged}
+	_, err = ctxChanged.Validate(map[string]any{"case_id": "c5", "input": "task", "reference": map[string]any{}})
+	if err == nil || !strings.Contains(err.Error(), "differ from the evidence") {
+		t.Fatalf("manifest 不符应拒绝: %v", err)
+	}
+	// manifest 缺失：删除后重算 digest（evidence digest 不含 manifest——与实现一致则走 manifest 分支）
+	os.Remove(filepath.Join(caseDir, "judge", "j1", "artifact_manifest.json"))
+	digestNoManifest, _ := evidenceDigest(caseDir)
+	ctxNoManifest := &BaselineJudgeContext{CaseID: "c5", ResultPath: resultPath,
+		TaskIdentity: identity, EvidenceDigest: digestNoManifest}
+	_, err = ctxNoManifest.Validate(map[string]any{"case_id": "c5", "input": "task", "reference": map[string]any{}})
+	if err == nil || !strings.Contains(err.Error(), "missing its original judged-artifact manifest") {
+		t.Fatalf("manifest 缺失应拒绝: %v", err)
+	}
+	// TrajectoryGlobJSONL
+	os.WriteFile(filepath.Join(dir, "a.jsonl"), []byte("{}\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "sub"), 0o755)
+	got := TrajectoryGlobJSONL(dir)
+	if len(got) != 1 {
+		t.Fatalf("glob: %v", got)
+	}
+	if got := TrajectoryGlobJSONL(filepath.Join(dir, "missing")); got != nil {
+		t.Fatalf("缺失目录应 nil: %v", got)
+	}
+	if !trajectoryFileExists(filepath.Join(dir, "a.jsonl")) || trajectoryFileExists(filepath.Join(dir, "missing")) {
+		t.Fatalf("trajectoryFileExists")
+	}
+	// boolPtrToAny / GetCallTimeout
+	if boolPtrToAny(nil) != nil || boolPtrToAny(boolPtr(true)) != true {
+		t.Fatalf("boolPtrToAny")
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+func sha256OfFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

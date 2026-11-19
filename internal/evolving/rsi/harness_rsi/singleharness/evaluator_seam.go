@@ -7,7 +7,9 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
+	analyzerpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluation_result_analyzer"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
+	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -43,3 +45,24 @@ func NewStubEvaluatorInvoker(cfg harnessconfig.EvaluatorConfig) EvaluatorInvoker
 // 编排器分支应使用 errors.Is(err, evaluator.ErrEvaluatorNotImplemented)，
 // 此变量仅为可读性别名，⤴️17.6 删桩时一并删除。
 var ErrEvaluatorStubReexported = evaluator.ErrEvaluatorNotImplemented
+
+// AnalyzerInvoker 编排器依赖的诊断分析面（Python 构造器 analyzer: Any 注入点）。
+// 真身 *analyzerpkg.EvaluationResultAnalyzer（17.4b）；测试注入 fake。
+type AnalyzerInvoker interface {
+	// Analyze 执行诊断分析并返回 analysis_ref.yaml 路径。
+	Analyze(ctx context.Context, invocation harnessrsi.EvaluationResultAnalysisInvocation) (string, error)
+}
+
+// OptimizerInvoker 编排器依赖的成员优化面（Python 构造器 member_optimizer: Any 注入点）。
+// 真身 *memberoptimizer.MemberOptimizer（17.4c）；测试注入 fake。
+type OptimizerInvoker interface {
+	// Optimize 执行成员优化并返回 member_optimization_ref.yaml 路径。
+	Optimize(ctx context.Context, evalRefPath, analysisResultPath, harnessRefsPath, outputDir string,
+		params memberoptimizer.OptimizeExecuteParams) (string, error)
+}
+
+// 编译期兜底：真身满足注入面。
+var (
+	_ AnalyzerInvoker  = (*analyzerpkg.EvaluationResultAnalyzer)(nil)
+	_ OptimizerInvoker = (*memberoptimizer.MemberOptimizer)(nil)
+)
