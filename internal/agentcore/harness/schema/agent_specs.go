@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -363,6 +364,15 @@ type DeepAgentSpec struct {
 	AutoCreateWorkspace bool `json:"auto_create_workspace"`
 	// CompletionTimeout 完成超时时间（秒）
 	CompletionTimeout float64 `json:"completion_timeout"`
+	// Cwd 成员工作目录。
+	// Python: DeepAgentSpec.cwd (deep_agent_spec.py:456)
+	Cwd string `json:"cwd,omitempty"`
+	// ProjectRoot 项目身份锚点，缺省取 cwd。
+	// Python: DeepAgentSpec.project_root (deep_agent_spec.py:458-459)
+	ProjectRoot string `json:"project_root,omitempty"`
+	// KvCacheAffinityConfig KV 缓存亲和策略（assembly 期由 config_specs 烘焙）。
+	// Python: DeepAgentSpec.kv_cache_affinity_config (deep_agent_spec.py:494)
+	KvCacheAffinityConfig *kv_cache.KVCacheAffinityConfig `json:"kv_cache_affinity_config,omitempty"`
 	// ProgressiveTool 渐进式工具规格
 	ProgressiveTool *ProgressiveToolSpec `json:"progressive_tool,omitempty"`
 	// ApprovalRequiredTools 需审批的工具列表

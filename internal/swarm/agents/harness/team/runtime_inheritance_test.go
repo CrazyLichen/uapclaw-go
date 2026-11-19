@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
 	"os"
 	"reflect"
 	"testing"
@@ -115,14 +116,14 @@ func TestGetSkillCreateEnabled(t *testing.T) {
 
 // TestGetContextEngineEnabled_默认true。
 func TestGetContextEngineEnabled_默认true(t *testing.T) {
-	if !GetContextEngineEnabled(nil) {
+	if !runtimeinheritance.GetContextEngineEnabled(nil) {
 		t.Fatalf("nil config default true")
 	}
-	if !GetContextEngineEnabled(map[string]any{}) {
+	if !runtimeinheritance.GetContextEngineEnabled(map[string]any{}) {
 		t.Fatalf("empty config default true")
 	}
 	cfg := map[string]any{"react": map[string]any{"context_engine_config": map[string]any{"enabled": false}}}
-	if GetContextEngineEnabled(cfg) {
+	if runtimeinheritance.GetContextEngineEnabled(cfg) {
 		t.Fatalf("explicit false should disable")
 	}
 }
@@ -148,7 +149,7 @@ func TestResolveModelConfig_defaults列表isDefault优先(t *testing.T) {
 			map[string]any{"is_default": true, "model_client_config": map[string]any{"model_name": "second", "api_key": "k"}},
 		},
 	}}
-	mcc, mco, name := ResolveModelConfig(cfg)
+	mcc, mco, name := runtimeinheritance.ResolveModelConfig(cfg)
 	if name != "second" {
 		t.Fatalf("is_default entry should win, got %q", name)
 	}
@@ -166,7 +167,7 @@ func TestResolveModelConfig_无isDefault取第一个(t *testing.T) {
 			map[string]any{"model_client_config": map[string]any{"model_name": "second"}},
 		},
 	}}
-	_, _, name := ResolveModelConfig(cfg)
+	_, _, name := runtimeinheritance.ResolveModelConfig(cfg)
 	if name != "first" {
 		t.Fatalf("first entry fallback = %q, want first", name)
 	}
@@ -180,7 +181,7 @@ func TestResolveModelConfig_旧格式default与react回退(t *testing.T) {
 		}},
 		"react": map[string]any{"model_name": "from-react"},
 	}
-	_, _, name := ResolveModelConfig(cfg)
+	_, _, name := runtimeinheritance.ResolveModelConfig(cfg)
 	if name != "from-default" {
 		t.Fatalf("models.default should win over react, got %q", name)
 	}
@@ -192,7 +193,7 @@ func TestResolveModelConfig_旧格式default与react回退(t *testing.T) {
 			"model_config_obj":    map[string]any{"temperature": 0.5},
 		},
 	}
-	mcc, mco, name2 := ResolveModelConfig(cfg2)
+	mcc, mco, name2 := runtimeinheritance.ResolveModelConfig(cfg2)
 	if name2 != "from-react" {
 		t.Fatalf("react fallback = %q", name2)
 	}
@@ -203,7 +204,7 @@ func TestResolveModelConfig_旧格式default与react回退(t *testing.T) {
 
 // TestResolveModelConfig_最终回退gpt4。
 func TestResolveModelConfig_最终回退gpt4(t *testing.T) {
-	_, _, name := ResolveModelConfig(map[string]any{})
+	_, _, name := runtimeinheritance.ResolveModelConfig(map[string]any{})
 	if name != "gpt-4" {
 		t.Fatalf("final fallback = %q, want gpt-4", name)
 	}
@@ -478,7 +479,7 @@ func TestBuildSkillEvolutionRail_合法配置(t *testing.T) {
 func TestBuildMemberRails_默认路径(t *testing.T) {
 	// 无 team_ws_root/skills_dir/config：仅 8 个基础 rail + ContextProcessorRail（默认 enabled）
 	rails := BuildMemberRails(nil, nil, nil)
-	// 8 基础 + 1 ContextProcessor（GetContextEngineEnabled(nil)=true）
+	// 8 基础 + 1 ContextProcessor（runtimeinheritance.GetContextEngineEnabled(nil)=true）
 	if len(rails) != 9 {
 		names := railTypeNames(rails)
 		t.Fatalf("rails count = %d, want 9, got %v", len(rails), names)

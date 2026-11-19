@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -142,26 +143,6 @@ func GetSkillCreateEnabled(config map[string]any) bool {
 	return getEvolutionConfigField(config, "skill_create")
 }
 
-// GetContextEngineEnabled 检查上下文压缩是否启用。
-// 对齐 Python: get_context_engine_enabled (L525-537)
-//
-// 读取 react.context_engine_config.enabled，默认 true。
-func GetContextEngineEnabled(config map[string]any) bool {
-	if config == nil {
-		return true
-	}
-	react, _ := config["react"].(map[string]any)
-	if react != nil {
-		ctxCfg, _ := react["context_engine_config"].(map[string]any)
-		if ctxCfg != nil {
-			if b, ok := ctxCfg["enabled"].(bool); ok {
-				return b
-			}
-		}
-	}
-	return true
-}
-
 // GetDefaultModelName 从配置获取默认 model_name。
 // 对齐 Python: get_default_model_name (team_runtime_inheritance.py L335-360)
 //
@@ -192,82 +173,6 @@ func GetDefaultModelName(cfgMap map[string]any) string {
 	return "gpt-4"
 }
 
-// ResolveModelConfig 从配置字典解析 model 相关参数。
-// 对齐 Python: resolve_model_config (L395-448)
-//
-// 优先 models.defaults 列表 is_default=true 条目 → 第一个条目 →
-// models.default 单对象 → react 段回退。返回浅拷贝（对齐 Python .copy()）。
-func ResolveModelConfig(config map[string]any) (mcc map[string]any, mco map[string]any, modelName string) {
-	if config == nil {
-		return map[string]any{}, map[string]any{}, "gpt-4"
-	}
-	models, _ := config["models"].(map[string]any)
-	if models == nil {
-		models = map[string]any{}
-	}
-
-	// 优先从 models.defaults 列表取 is_default=true 的条目
-	if defaults, ok := models["defaults"].([]any); ok && len(defaults) > 0 {
-		for _, item := range defaults {
-			entry, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			if b, ok := entry["is_default"].(bool); ok && b {
-				mcc = copyMapShallow(entry["model_client_config"])
-				mco = copyMapShallow(entry["model_config_obj"])
-				if name := mapStrField(mcc, "model_name"); name != "" {
-					return mcc, mco, name
-				}
-			}
-		}
-		// 无 is_default=true 时取第一个
-		if first, ok := defaults[0].(map[string]any); ok {
-			mcc = copyMapShallow(first["model_client_config"])
-			mco = copyMapShallow(first["model_config_obj"])
-			if name := mapStrField(mcc, "model_name"); name != "" {
-				return mcc, mco, name
-			}
-		}
-	}
-
-	// 回退到旧格式：models.default + react 段
-	defaultModelConfig, _ := models["default"].(map[string]any)
-	if defaultModelConfig == nil {
-		defaultModelConfig = map[string]any{}
-	}
-	reactConfig, _ := config["react"].(map[string]any)
-	if reactConfig == nil {
-		reactConfig = map[string]any{}
-	}
-
-	modelClientConfig, _ := defaultModelConfig["model_client_config"].(map[string]any)
-	if modelClientConfig == nil {
-		modelClientConfig, _ = reactConfig["model_client_config"].(map[string]any)
-	}
-	if modelClientConfig == nil {
-		modelClientConfig = map[string]any{}
-	}
-
-	modelName = mapStrField(modelClientConfig, "model_name")
-	if modelName == "" {
-		modelName = mapStrField(reactConfig, "model_name")
-	}
-	if modelName == "" {
-		modelName = "gpt-4"
-	}
-
-	modelConfigObj, _ := defaultModelConfig["model_config_obj"].(map[string]any)
-	if modelConfigObj == nil {
-		modelConfigObj, _ = reactConfig["model_config_obj"].(map[string]any)
-	}
-	if modelConfigObj == nil {
-		modelConfigObj = map[string]any{}
-	}
-
-	return modelClientConfig, modelConfigObj, modelName
-}
-
 // BuildEvolutionLLM 从配置构造 evolution 使用的 LLM Model 实例。
 // 对齐 Python: build_evolution_llm (L451-476)
 //
@@ -275,7 +180,7 @@ func ResolveModelConfig(config map[string]any) (mcc map[string]any, mco map[stri
 // 构造失败（provider/api_key/api_base 缺失或 Model 创建失败）返回 (nil, model_name)，
 // 调用方按 Python try/except 语义跳过该 rail。
 func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
-	mcc, mco, modelName := ResolveModelConfig(config)
+	mcc, mco, modelName := runtimeinheritance.ResolveModelConfig(config)
 	temperature := 0.95
 	// 双类型兼容：YAML 把 `temperature: 1` 解成 int
 	if t, ok := configutil.Float(mco, "temperature"); ok {
@@ -680,7 +585,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	}
 
 	// 14. ContextProcessorRail（leader + teammate 均可，需开关启用，默认 true）
-	if GetContextEngineEnabled(config) {
+	if runtimeinheritance.GetContextEngineEnabled(config) {
 		if rail := BuildContextProcessorRail(config); rail != nil {
 			railsList = append(railsList, rail)
 		}
