@@ -300,11 +300,31 @@ func renderReviewRequestForHarness(
 	previousVote *database.TeamTaskReviewVoteBase,
 	upstream []*database.TeamTaskBase,
 ) string {
-	template, loadErr := ateamprompts.LoadTemplate(templateReviewRequest, language)
-	if loadErr != nil {
-		return ""
+	return assembleReviewRequestBody(task, language, reviewer, previousVote, upstream, frameworkTemplateLoader(language))
+}
+
+// frameworkTemplateLoader 框架只读加载器（A 类 per-team 加载器为 nil 时的缺省）。
+func frameworkTemplateLoader(language string) func(string) string {
+	return func(name string) string {
+		tpl, err := ateamprompts.LoadTemplate(name, language)
+		if err != nil || tpl == nil {
+			return ""
+		}
+		return tpl.Content()
 	}
-	body := template.Content()
+}
+
+// assembleReviewRequestBody 评审请求正文组装（加载面参数化：框架只读或
+// per-team A 类加载器）。
+// Python: render_review_request_for_harness 主体（render.py L258-308）。
+func assembleReviewRequestBody(
+	task *database.TeamTaskBase,
+	language, reviewer string,
+	previousVote *database.TeamTaskReviewVoteBase,
+	upstream []*database.TeamTaskBase,
+	load func(string) string,
+) string {
+	body := load(templateReviewRequest)
 	body = strings.ReplaceAll(body, "{{task.task_id}}", task.TaskID)
 	body = strings.ReplaceAll(body, "{{task.title}}", task.Title)
 	body = strings.ReplaceAll(body, "{{task.content}}", task.Content)
@@ -335,35 +355,28 @@ func renderReviewRequestForHarness(
 	body = strings.ReplaceAll(body, "{{task.reviewer_instruction}}", instruction)
 	previous := ""
 	if previousVote != nil {
-		prevTpl, prevErr := ateamprompts.LoadTemplate(templateReviewPrevFB, language)
-		if prevErr == nil {
-			previous = strings.TrimSpace(prevTpl.Content())
-			none, _ := schema.T("scheduler.none")
-			feedback := none
-			if previousVote.Feedback != nil {
-				feedback = *previousVote.Feedback
-			}
-			previous = strings.ReplaceAll(previous, "{{vote.review_round}}", fmt.Sprintf("%d", previousVote.ReviewRound))
-			previous = strings.ReplaceAll(previous, "{{vote.decision}}", previousVote.Decision)
-			previous = strings.ReplaceAll(previous, "{{vote.feedback}}", feedback)
+		previous = strings.TrimSpace(load(templateReviewPrevFB))
+		none, _ := schema.T("scheduler.none")
+		feedback := none
+		if previousVote.Feedback != nil {
+			feedback = *previousVote.Feedback
 		}
+		previous = strings.ReplaceAll(previous, "{{vote.review_round}}", fmt.Sprintf("%d", previousVote.ReviewRound))
+		previous = strings.ReplaceAll(previous, "{{vote.decision}}", previousVote.Decision)
+		previous = strings.ReplaceAll(previous, "{{vote.feedback}}", feedback)
 	}
 	body = strings.ReplaceAll(body, "{{task.previous_feedback}}", previous)
 	submissionNote := ""
 	submissionBody := SubmissionBody(task, language)
 	if submissionBody != "" {
-		if noteTpl, noteErr := ateamprompts.LoadTemplate(templateReviewSubNote, language); noteErr == nil {
-			submissionNote = strings.TrimSpace(noteTpl.Content())
-			submissionNote = strings.ReplaceAll(submissionNote, "{{task.submission_body}}", submissionBody)
-		}
+		submissionNote = strings.TrimSpace(load(templateReviewSubNote))
+		submissionNote = strings.ReplaceAll(submissionNote, "{{task.submission_body}}", submissionBody)
 	}
 	body = strings.ReplaceAll(body, "{{task.submission_note}}", submissionNote)
 	upstreamSection := ""
 	if len(upstream) > 0 {
-		if upTpl, upErr := ateamprompts.LoadTemplate(templateReviewUpstream, language); upErr == nil {
-			upstreamSection = strings.TrimSpace(upTpl.Content())
-			upstreamSection = strings.ReplaceAll(upstreamSection, "{{task.upstream_brief}}", ateamprompts.UpstreamBrief(upstream, language))
-		}
+		upstreamSection = strings.TrimSpace(load(templateReviewUpstream))
+		upstreamSection = strings.ReplaceAll(upstreamSection, "{{task.upstream_brief}}", ateamprompts.UpstreamBrief(upstream, language))
 	}
 	body = strings.ReplaceAll(body, "{{task.upstream_section}}", upstreamSection)
 	// 上方省略的可选段会留下空分隔行——折叠连续 3 个以上换行。

@@ -56,6 +56,10 @@ type StorageSpec struct {
 type TeamAgentSpec struct {
 	// Agents 角色名到 DeepAgentSpec 的映射
 	Agents map[string]DeepAgentSpec `json:"agents"`
+	// ReviewerAgent 临时 reviewer 的基础规格（可选；nil 时调度器以 teammate
+	// 规格经 BuildReviewerAgentSpec 收窄派生）。
+	// Python: blueprint.py L208 reviewer_agent: DeepAgentSpec | None。
+	ReviewerAgent *DeepAgentSpec `json:"reviewer_agent,omitempty"`
 	// TeamName 团队名
 	TeamName string `json:"team_name"`
 	// Lifecycle 生命周期模式

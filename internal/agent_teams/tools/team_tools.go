@@ -2024,3 +2024,19 @@ func stringField(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }
+
+// ──────────────────────────── 评审半区单实例导出（25.2b） ────────────────────────────
+
+// NewVerifyTaskToolInstance 构造 verify_task 工具单实例（临时 reviewer harness
+// 装配用）。descKey 按 dispatch mode 选择 verify_task/verify_task_scheduled。
+// Python: VerifyTaskTool(task_manager, t, desc_key=...)（tool_task.py L2238）。
+func NewVerifyTaskToolInstance(taskManager *TeamTaskManager, language string, descKey string) tool.Tool {
+	return newVerifyTaskTool(taskManager, locales.MakeTranslator(atschema.Language(language)), descKey)
+}
+
+// NewViewTaskToolInstance 构造 view_task 工具单实例（临时 reviewer harness
+// 装配用）。descKey 按 dispatch mode 选择 view_task/view_task_reviewer。
+// Python: ViewTaskToolV2(task_manager, t, desc_key=...)（tool_task.py L1374）。
+func NewViewTaskToolInstance(taskManager *TeamTaskManager, language string, descKey string) tool.Tool {
+	return newViewTaskTool(taskManager, locales.MakeTranslator(atschema.Language(language)))
+}
