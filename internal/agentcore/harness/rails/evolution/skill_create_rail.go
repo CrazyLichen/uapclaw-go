@@ -184,7 +184,7 @@ func (r *SkillCreateRail) maybePropose(cbc *agentinterfaces.AgentCallbackContext
 		return
 	}
 
-	total, unique := countToolCalls(builder.GetSteps())
+	total, unique := countToolCalls(builder)
 	if total < r.toolCallThreshold || unique < r.toolDiversityThreshold {
 		logger.Debug(logComponent).
 			Int("total_calls", total).
@@ -218,19 +218,15 @@ func (r *SkillCreateRail) maybePropose(cbc *agentinterfaces.AgentCallbackContext
 }
 
 // countToolCalls 统计工具调用总数与去重后的种类数。
-// 对齐 Python: _should_propose_new_skill()
-func countToolCalls(steps []*trajectory.TrajectoryStep) (total int, unique int) {
+// 对齐 Python: _should_propose_new_skill()（span 读面：iter_spans 过滤 tool）。
+func countToolCalls(builder *trajectory.TrajectoryBuilder) (total int, unique int) {
 	seen := make(map[string]bool)
-	for _, step := range steps {
-		if step == nil || step.Kind != trajectory.StepKindTool {
-			continue
-		}
-		detail, ok := step.Detail.(*trajectory.ToolCallDetail)
-		if !ok || detail == nil || detail.ToolName == "" {
+	for _, tool := range toolSpansOf(builder) {
+		if tool.Name == "" {
 			continue
 		}
 		total++
-		seen[detail.ToolName] = true
+		seen[tool.Name] = true
 	}
 	return total, len(seen)
 }

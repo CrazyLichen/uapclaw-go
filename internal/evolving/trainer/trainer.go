@@ -263,7 +263,14 @@ func (t *Trainer) Forward(
 	trajectories := make([]*trajectory.Trajectory, len(caseList))
 	if t.extractor != nil {
 		for i, c := range caseList {
-			trajectories[i] = t.extractor.Extract(sessions[i], c.CaseID)
+			extracted, extractErr := t.extractor.Extract(sessions[i], c.CaseID)
+			if extractErr != nil {
+				// Python: extract 异常向上抛；Go 侧记录后以该失败终止本轮评估。
+				logger.Warn(logComponent).Str("case_id", c.CaseID).Err(extractErr).
+					Msg("[Trainer] trajectory extraction failed")
+				return 0, nil, nil, nil, extractErr
+			}
+			trajectories[i] = extracted
 		}
 	}
 	_ = predicts

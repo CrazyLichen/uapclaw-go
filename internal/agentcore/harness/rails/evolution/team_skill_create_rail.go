@@ -2,7 +2,6 @@ package evolution
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -297,19 +296,12 @@ func (r *TeamSkillCreateRail) detectUsedTeamSkill() string {
 	// 收集 skill_tool 调用参数和所有文本
 	var skillToolPayloads []string
 	var texts []string
-	for _, step := range builder.GetSteps() {
-		if step.Kind != trajectory.StepKindTool || step.Detail == nil {
-			continue
+	for _, tool := range toolSpansOf(builder) {
+		if tool.Name == "skill_tool" {
+			skillToolPayloads = append(skillToolPayloads, argsJSONString(tool.Args))
 		}
-		toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail)
-		if !ok {
-			continue
-		}
-		if toolDetail.ToolName == "skill_tool" {
-			skillToolPayloads = append(skillToolPayloads, fmt.Sprint(toolDetail.CallArgs))
-		}
-		texts = append(texts, fmt.Sprint(toolDetail.CallArgs))
-		texts = append(texts, fmt.Sprint(toolDetail.CallResult))
+		texts = append(texts, argsJSONString(tool.Args))
+		texts = append(texts, argsJSONAnyString(tool.Output))
 	}
 
 	skillNames := make([]string, 0, len(knownSkills))
@@ -344,13 +336,9 @@ func (r *TeamSkillCreateRail) countSpawnMemberCalls() int {
 	}
 
 	count := 0
-	for _, step := range builder.GetSteps() {
-		if step.Kind == trajectory.StepKindTool && step.Detail != nil {
-			if toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail); ok {
-				if strings.Contains(toolDetail.ToolName, "spawn_member") {
-					count++
-				}
-			}
+	for _, tool := range toolSpansOf(builder) {
+		if strings.Contains(tool.Name, "spawn_member") {
+			count++
 		}
 	}
 	return count

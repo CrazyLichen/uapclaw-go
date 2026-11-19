@@ -289,11 +289,13 @@ func (p *TrajectorySpanProcessor) OnEnd(span sdktrace.ReadOnlySpan) {
 		if _, wanted := state.categories[category]; !wanted {
 			continue
 		}
-		if state.traceID == "" {
-			continue // Python 的 contextvar 活跃订阅语义由 rail 显式 drain 保证
-		} else if state.traceID != traceID {
+		if state.traceID != "" && state.traceID != traceID {
+			// 绑定 trace 的订阅（team scope）按 trace 匹配。
 			continue
 		}
+		// 未绑定 trace 的订阅（agent scope）= 活跃订阅：Python 的
+		// _ACTIVE_SUBSCRIPTIONS contextvar 语义（订阅期间一律接收），
+		// Go 以 state.active 表达（偏差 D-25.2b-4）。
 		if _, duplicated := state.pendingIDs[*identity]; duplicated {
 			continue
 		}

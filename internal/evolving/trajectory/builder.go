@@ -206,3 +206,7 @@ func (b *TrajectoryBuilder) Build() (*Trajectory, error) {
 	}
 	return FromOTLP(payload)
 }
+
+// SessionID 返回组装器会话标识。
+// Python: offline/builder.py TrajectoryBuilder.session_id 属性。
+func (b *TrajectoryBuilder) SessionID() string { return b.sessionID }

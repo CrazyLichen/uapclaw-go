@@ -76,7 +76,7 @@ type TeamSkillEvolutionRail struct {
 	// teamID 团队标识
 	teamID string
 	// trajectorySource 团队轨迹聚合源
-	trajectorySource trajectory.TrajectorySource
+	trajectorySource TeamTrajectorySource
 	// trajectoriesDir 轨迹调试目录
 	trajectoriesDir string
 
@@ -337,18 +337,21 @@ func WithTeamSkillTeamID(v string) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) { r.teamID = v }
 }
 
+// TeamTrajectorySource 团队轨迹源窄接口（25.2b：订阅窗口/聚合回落承载）。
+// 12-04 注记：trajectory.TrajectorySource 接口随 registry 删除；本接口为
+// rails 侧协作面（Go 等价 Python rail.get_trajectory 的窗口读取）。
+type TeamTrajectorySource interface {
+	// GetTrajectory 返回指定团队/会话的聚合轨迹。
+	GetTrajectory(teamID, sessionID string, filterCollaborative bool) *trajectory.Trajectory
+}
+
 // WithTeamSkillTrajectorySource 设置团队轨迹聚合源。
-func WithTeamSkillTrajectorySource(src trajectory.TrajectorySource) TeamSkillEvolutionRailOption {
+func WithTeamSkillTrajectorySource(src TeamTrajectorySource) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) { r.trajectorySource = src }
 }
 
-// WithTeamSkillTrajectorySink 设置轨迹写入端点。
-func WithTeamSkillTrajectorySink(sink trajectory.TrajectorySink, teamID string, memberRole ...string) TeamSkillEvolutionRailOption {
-	return func(r *TeamSkillEvolutionRail) {
-		r.teamID = teamID
-		_ = r.SetTrajectorySink(sink, teamID, memberRole...)
-	}
-}
+// 【12-04 迁移注记】WithTeamSkillTrajectorySink 已删除（上游无 set_trajectory_sink，
+// registry 链规则 8 删除；跨成员可见性改由 TrajectorySpanProcessor 订阅窗口承载）。
 
 // WithTeamSkillMemberRole 设置成员角色。
 // 基类已初始化后，直接修改基类 defaultMemberRole 字段。
@@ -506,7 +509,7 @@ func (r *TeamSkillEvolutionRail) OnAfterTaskIteration(_ context.Context, _ *agen
 // OnAfterEvolutionTriggered 在 after_invoke 演化触发完成后消费外部完成标记。
 // Python: TeamSkillEvolutionRail._on_after_evolution_triggered(trajectory, ctx)
 func (r *TeamSkillEvolutionRail) OnAfterEvolutionTriggered(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) error {
-	if r.hostCompletionPendingSessionID != nil && traj != nil && *r.hostCompletionPendingSessionID == traj.SessionID {
+	if r.hostCompletionPendingSessionID != nil && traj != nil && *r.hostCompletionPendingSessionID == sessionIDString(traj) {
 		r.hostCompletionPendingSessionID = nil
 	}
 	return nil
@@ -556,7 +559,7 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 		Messages:         messages,
 		SkillName:        &skillName,
 		PresentedEntries: presentedEntries,
-		SessionID:        traj.SessionID,
+		SessionID:        sessionIDString(traj),
 	}
 }
 
@@ -744,26 +747,27 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 	// Python: trajectory = self._build_trajectory()
 	traj := r.buildTrajectory()
 	if traj == nil {
-		traj = &trajectory.Trajectory{
-			ExecutionID: "user_triggered",
-			SessionID:   "user_triggered",
-			Source:      "user_triggered",
-			Steps:       []*trajectory.TrajectoryStep{},
+		// 12-04：空轨迹兜底改经离线组装器（span 模型，Python 无对应字面量）。
+		empty, buildErr := emptySpanTrajectoryForRails("user_triggered", "user_triggered")
+		if buildErr != nil {
+			return nil, buildErr
 		}
+		traj = empty
 	}
 
 	// Python: trajectory = self._aggregate_team_trajectory(trajectory)
 	traj = r.aggregateTeamTrajectory(traj)
 
 	// Python: messages = self._collect_messages_from_trajectory(trajectory) if trajectory.steps else []
+	// span 模型：以工作 span 存在性等价「steps 非空」判定。
 	messages := []map[string]any{}
-	if len(traj.Steps) > 0 {
+	if len(trajectory.IterSpans(traj)) > 0 {
 		messages = collectMessagesFromTrajectory(traj)
 	}
 
 	// Python: signals = await self._detect_active_request_signals(...) if trajectory.steps else []
 	signals := []*signal.EvolutionSignal{}
-	if len(traj.Steps) > 0 {
+	if len(trajectory.IterSpans(traj)) > 0 {
 		detected, err := r.detectActiveRequestSignals(ctx, skillName, traj)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request signal detection failed")
@@ -1018,7 +1022,7 @@ func (r *TeamSkillEvolutionRail) EvolutionConfig() map[string]any {
 
 // SetTrajectorySource 绑定团队轨迹聚合源。
 // Python: TeamSkillEvolutionRail.set_trajectory_source(source)
-func (r *TeamSkillEvolutionRail) SetTrajectorySource(src trajectory.TrajectorySource) {
+func (r *TeamSkillEvolutionRail) SetTrajectorySource(src TeamTrajectorySource) {
 	r.trajectorySource = src
 }
 
@@ -1140,25 +1144,20 @@ func (r *TeamSkillEvolutionRail) aggregateTeamTrajectory(traj *trajectory.Trajec
 		teamID = "unknown"
 	}
 
-	sessionID := ""
-	if traj != nil {
-		sessionID = traj.SessionID
-	}
+	sessionID := sessionIDString(traj)
 
 	// Python: team_traj = source.get_trajectory(team_id=team_id, session_id=..., filter_collaborative=True)
 	teamTraj := r.trajectorySource.GetTrajectory(teamID, sessionID, true)
-	if teamTraj == nil || len(teamTraj.Steps) == 0 {
+	if teamTraj == nil || len(trajectory.IterSpans(teamTraj)) == 0 {
 		return traj
 	}
 
 	// Python: emit_progress("detecting_signals", "aggregated ...")
 	memberCount := 0
-	if teamTraj.Meta != nil {
-		if mc, ok := teamTraj.Meta["member_count"].(int); ok {
-			memberCount = mc
-		}
+	if mc, ok := teamTraj.Metadata()["member_count"].(int); ok {
+		memberCount = mc
 	}
-	r.emitProgress("detecting_signals", fmt.Sprintf("聚合 %d 个成员，%d 个协作步骤", memberCount, len(teamTraj.Steps)))
+	r.emitProgress("detecting_signals", fmt.Sprintf("聚合 %d 个成员，%d 个协作步骤", memberCount, len(trajectory.IterSpans(teamTraj))))
 	return teamTraj
 }
 
@@ -1372,7 +1371,12 @@ func (r *TeamSkillEvolutionRail) buildTrajectory() *trajectory.Trajectory {
 	if r.Builder() == nil {
 		return nil
 	}
-	return r.Builder().Build()
+	traj, err := r.Builder().Build()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] trajectory build failed")
+		return nil
+	}
+	return traj
 }
 
 // isSkillDisabled 检查技能是否被禁用。
@@ -1607,67 +1611,65 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 		return
 	}
 
-	// 文件名带时间戳和执行 ID 前 8 位，方便区分不同批次、不同执行。
+	// 文件名带时间戳和轨迹 ID 前 8 位，方便区分不同批次、不同执行。
 	ts := time.Now().Format("20060102_150405")
-	execID := traj.ExecutionID
+	execID := traj.TrajectoryID()
 	if len(execID) > 8 {
 		execID = execID[:8]
 	}
 	path := filepath.Join(debugDir, fmt.Sprintf("trajectory_%s_%s.json", ts, execID))
 
-	// 落盘用的精简结构：只留排查需要的字段，避免把整份明细都写出去。
+	// 落盘用的精简结构：只留排查需要的字段（span 读面）。
 	type stepEntry struct {
 		Kind            string         `json:"kind"`
 		ToolName        string         `json:"tool_name,omitempty"`
 		CallArgs        string         `json:"call_args,omitempty"`
 		CallResult      string         `json:"call_result,omitempty"`
 		ResponsePreview string         `json:"response_preview,omitempty"`
-		Meta            map[string]any `json:"meta,omitempty"`
 	}
 
-	// 逐个步骤转换：工具调用留下名字和参数/结果的前 500 字，模型调用留下响应的前 300 字。
-	stepsData := make([]stepEntry, 0, len(traj.Steps))
-	for _, step := range traj.Steps {
-		entry := stepEntry{Kind: string(step.Kind)}
-		if step.Detail != nil {
-			switch string(step.Kind) {
-			case "tool":
-				if td, ok := step.Detail.(*trajectory.ToolCallDetail); ok && td != nil {
-					entry.ToolName = td.ToolName
-					argsStr := fmt.Sprintf("%v", td.CallArgs)
-					if len(argsStr) > 500 {
-						argsStr = argsStr[:500]
-					}
-					entry.CallArgs = argsStr
-					resultStr := fmt.Sprintf("%v", td.CallResult)
-					if len(resultStr) > 500 {
-						resultStr = resultStr[:500]
-					}
-					entry.CallResult = resultStr
-				}
-			case "llm":
-				if ld, ok := step.Detail.(*trajectory.LLMCallDetail); ok && ld != nil {
-					respStr := fmt.Sprintf("%v", ld.Response)
-					if len(respStr) > 300 {
-						respStr = respStr[:300]
-					}
-					entry.ResponsePreview = respStr
-				}
-			}
+	// 逐 span 转换：工具 span 留名字和参数/结果的前 500 字，LLM span 留最后一条回复的前 300 字。
+	spans := trajectory.IterSpans(traj)
+	stepsData := make([]stepEntry, 0, len(spans))
+	for _, span := range spans {
+		category := trajectory.SpanCategory(span)
+		if category != "tool" && category != "llm" {
+			continue
 		}
-		if step.Meta != nil {
-			entry.Meta = step.Meta
+		entry := stepEntry{Kind: category}
+		if category == "tool" {
+			call := trajectory.ReadToolCall(span)
+			entry.ToolName = fmt.Sprintf("%v", call["name"])
+			argsStr := fmt.Sprintf("%v", call["input"])
+			if len(argsStr) > 500 {
+				argsStr = argsStr[:500]
+			}
+			entry.CallArgs = argsStr
+			resultStr := fmt.Sprintf("%v", call["output"])
+			if len(resultStr) > 500 {
+				resultStr = resultStr[:500]
+			}
+			entry.CallResult = resultStr
+		} else {
+			messages := trajectory.ReadLLMMessages(span, false)
+			if len(messages) > 0 {
+				respStr := fmt.Sprintf("%v", messages[len(messages)-1]["content"])
+				if len(respStr) > 300 {
+					respStr = respStr[:300]
+				}
+				entry.ResponsePreview = respStr
+			}
 		}
 		stepsData = append(stepsData, entry)
 	}
 
-	// 组装顶层对象：执行标识、会话来源、步骤总数以及刚整理好的步骤列表。
+	// 组装顶层对象：轨迹标识、会话来源、span 总数以及列表。
+	sessionID := sessionIDString(traj)
 	dump := map[string]any{
-		"execution_id": traj.ExecutionID,
-		"session_id":   traj.SessionID,
-		"source":       traj.Source,
-		"step_count":   len(traj.Steps),
-		"steps":        stepsData,
+		"trajectory_id": traj.TrajectoryID(),
+		"session_id":    sessionID,
+		"span_count":    len(spans),
+		"spans":         stepsData,
 	}
 
 	// 序列化成带缩进的 JSON，方便人直接打开阅读。
@@ -1745,24 +1747,24 @@ func isCompletedTeamTaskView(result any) bool {
 //
 //	遍历轨迹步骤，收集 skill_tool 参数和文本，调用 inferSkillFromTexts
 func inferTeamSkillFromTrajectory(traj *trajectory.Trajectory, knownSkills []string) string {
-	if traj == nil || len(traj.Steps) == 0 || len(knownSkills) == 0 {
+	if traj == nil || len(trajectory.IterSpans(traj)) == 0 || len(knownSkills) == 0 {
 		return ""
 	}
 
 	var skillToolPayloads []string
 	var texts []string
 
-	for _, step := range traj.Steps {
-		if step.Kind != trajectory.StepKindTool || step.Detail == nil {
+	for _, span := range trajectory.IterSpans(traj) {
+		if trajectory.SpanCategory(span) != "tool" {
 			continue
 		}
-		if td, ok := step.Detail.(*trajectory.ToolCallDetail); ok && td != nil {
-			if td.ToolName == "skill_tool" {
-				skillToolPayloads = append(skillToolPayloads, fmt.Sprintf("%v", td.CallArgs))
-			}
-			texts = append(texts, fmt.Sprintf("%v", td.CallArgs))
-			texts = append(texts, fmt.Sprintf("%v", td.CallResult))
+		call := trajectory.ReadToolCall(span)
+		toolName := fmt.Sprintf("%v", call["name"])
+		if toolName == "skill_tool" {
+			skillToolPayloads = append(skillToolPayloads, fmt.Sprintf("%v", call["input"]))
 		}
+		texts = append(texts, fmt.Sprintf("%v", call["input"]))
+		texts = append(texts, fmt.Sprintf("%v", call["output"]))
 	}
 
 	return inferSkillFromTexts(knownSkills, skillToolPayloads, texts)
