@@ -16,6 +16,10 @@
 //
 //	experts/
 //	├── doc.go              # 包文档
+//	├── agent_group.go           # AgentGroup 包加载器与卡片（agent_group.py 1:1，15.16e）
+//	├── catalog.go               # ExpertRef/PackageLocation/ExpertCatalog 协议（catalog.py 1:1，15.16e）
+//	├── bound_group.go           # 团队绑定 AgentGroup 读取（bound_group.py 1:1，15.16e）
+//	├── platform_catalog.go      # JiuwenExpertCatalog + 包路径布局（平台 catalog.py + extension_package_manager scoped，D-15.16-e12，15.16e）
 //	└── template_member.go # persona 拍平 + 能力快照 + compose 三步
 //
 // 对应 Python 代码：openjiuwen/agent_teams/experts/template_member.py

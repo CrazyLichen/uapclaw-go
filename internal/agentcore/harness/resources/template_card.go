@@ -369,3 +369,30 @@ func orString(a, b string) string {
 	}
 	return b
 }
+
+// ──────────────────────────── 导出包装（experts 域跨包消费，15.16e） ────────────────────────────
+
+// ReadManifestMapping 读 manifest 映射的导出包装。
+// Python: read_manifest_mapping (template_card.py)——harness.resources 公共 API，
+// experts/agent_group 跨包消费；包内既有私有 readManifestMapping 保持。
+func ReadManifestMapping(path string) (map[string]any, error) {
+	return readManifestMapping(path)
+}
+
+// ManifestText manifest 文本值导出包装。
+// Python: manifest_text
+func ManifestText(value any) string {
+	return manifestText(value)
+}
+
+// NormalizeLocalized 本地化值归一导出包装。
+// Python: normalize_localized
+func NormalizeLocalized(value any) LocalizedText {
+	return normalizeLocalized(value)
+}
+
+// LocalizedTextOf 按语言取本地化文本导出包装。
+// Python: localized_text
+func LocalizedTextOf(value LocalizedText, language string) string {
+	return localizedText(value, language)
+}

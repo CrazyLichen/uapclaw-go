@@ -167,6 +167,10 @@ type TeamAgentSpec struct {
 	//
 	// Python: bootstrap_mode (blueprint.py L395)
 	BootstrapMode string `json:"bootstrap_mode,omitempty"`
+	// AgentGroupName 本次 enrich 选定的 AgentGroup 名。
+	// Python: agent_group_name (blueprint.py:253)；_apply_agent_group 写入，
+	// core 的 spawn_expert 读它孵化同款成员。
+	AgentGroupName string `json:"agent_group_name,omitempty"`
 	// BoundGroupName 绑定的 AgentGroup 名（F_125）
 	//
 	// scheduled + 绑定专家团 + 专家工具接线时，leader 段会命名该组，指示
