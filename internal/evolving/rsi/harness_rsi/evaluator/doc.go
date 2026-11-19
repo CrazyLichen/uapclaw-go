@@ -5,13 +5,15 @@
 // RSISysOperationRail（诊断 agent 的只读系统操作轨，b2 的
 // agent_runtime.DiagnosisAgentRuntime 挂载）。包内其余符号（LLM judge
 // 适配、verdict 解析等）⤴️ 17.6 评估 agent 章节补齐，届时删除本说明中
-// 的切片标注。
+// 的切片标注。17.4f 增补：TeamEvaluator 打分桩（team_evaluator.go）已落地——
+// 真签名 + 哨兵错误 ErrEvaluatorNotImplemented，17.6 真身落地时按规则 8 删除。
 //
 // 文件目录：
 //
 //	evaluator/
 //	├── doc.go                # 包文档
-//	└── runtime_adapters.go  # RSISysOperationRail（17.4b1 切片 ⤴️ 17.6 补齐其余）
+//	├── runtime_adapters.go  # RSISysOperationRail（17.4b1 切片 ⤴️ 17.6 补齐其余）
+//	└── team_evaluator.go    # TeamEvaluator 打分桩（⤴️ 17.6 回填删除）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluator/
 package evaluator
