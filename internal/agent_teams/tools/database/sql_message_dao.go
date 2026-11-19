@@ -216,6 +216,58 @@ func (d *SQLMessageDao) HasUnreadMessages(ctx context.Context, teamName string, 
 	return false
 }
 
+// MembersWithUnread 返回 memberNames 中仍有未读输入的子集（直发行 + 广播水位）。
+// Python: members_with_unread（message_dao.py L483-497）
+func (d *SQLMessageDao) MembersWithUnread(ctx context.Context, teamName string, memberNames []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	if len(memberNames) == 0 {
+		return out, nil
+	}
+	table := d.msgTableName(ctx)
+	var direct []string
+	if err := d.db.WithContext(ctx).Table(table).
+		Where("team_name = ? AND to_member_name IN ? AND is_read = ?", teamName, memberNames, false).
+		Distinct().Pluck("to_member_name", &direct).Error; err != nil {
+		return nil, err
+	}
+	for _, name := range direct {
+		out[name] = true
+	}
+	// 广播：水位落后于他人最新广播的成员仍未读完。
+	// Python: _broadcast_unread_recipients —— read_at IS NULL 或
+	// read_at < 他人广播的最大 timestamp（排除成员自己的广播）。
+	readTable := d.readStatusTableName(ctx)
+	for _, name := range memberNames {
+		if out[name] {
+			continue
+		}
+		var latest int64
+		err := d.db.WithContext(ctx).Table(table).
+			Select("COALESCE(MAX(timestamp), 0)").
+			Where("team_name = ? AND broadcast = ? AND (to_member_name IS NULL OR to_member_name <> ?)",
+				teamName, true, name).
+			Scan(&latest).Error
+		if err != nil {
+			return nil, err
+		}
+		if latest == 0 {
+			continue
+		}
+		var readAt *int64
+		err = d.db.WithContext(ctx).Table(readTable).
+			Select("read_at").
+			Where("team_name = ? AND member_name = ?", teamName, name).
+			Scan(&readAt).Error
+		if err != nil {
+			return nil, err
+		}
+		if readAt == nil || *readAt < latest {
+			out[name] = true
+		}
+	}
+	return out, nil
+}
+
 // MarkMessageRead 标记已读。直发设 is_read=true；广播更新 read_status watermark。
 // Python: mark_message_read(message_id, member_name)
 func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberName string) bool {

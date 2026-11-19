@@ -40,6 +40,9 @@ const (
 	MemberStatusRestarting MemberStatus = fsm.MemberStatusRestarting
 	// MemberStatusShutdownRequested 成员已收到关闭请求
 	MemberStatusShutdownRequested MemberStatus = fsm.MemberStatusShutdownRequested
+	// MemberStatusDormant 退役休眠态（options.lifetime=="dormant"，F_118）。
+	// Python: MemberStatus.DORMANT（schema/status.py L55）
+	MemberStatusDormant MemberStatus = fsm.MemberStatusDormant
 	// MemberStatusShutdown 成员已关闭
 	MemberStatusShutdown MemberStatus = fsm.MemberStatusShutdown
 	// MemberStatusError 成员处于错误状态
@@ -77,18 +80,20 @@ const (
 )
 
 const (
-	// TaskStatusPending 任务等待被认领
+	// TaskStatusPending 任务等待被认领（autonomous）或已分配未开始（scheduled）
 	TaskStatusPending TaskStatus = fsm.TaskStatusPending
-	// TaskStatusClaimed 任务已被成员认领
-	TaskStatusClaimed TaskStatus = fsm.TaskStatusClaimed
-	// TaskStatusPlanApproved 任务计划已批准（仅 PLAN_MODE 成员）
-	TaskStatusPlanApproved TaskStatus = fsm.TaskStatusPlanApproved
-	// TaskStatusCompleted 任务已完成
-	TaskStatusCompleted TaskStatus = fsm.TaskStatusCompleted
-	// TaskStatusCancelled 任务已取消
-	TaskStatusCancelled TaskStatus = fsm.TaskStatusCancelled
 	// TaskStatusBlocked 任务因依赖被阻塞
 	TaskStatusBlocked TaskStatus = fsm.TaskStatusBlocked
+	// TaskStatusPlanning plan 闸门：成员准备计划等待 leader 审批（可选，PLAN_MODE）
+	TaskStatusPlanning TaskStatus = fsm.TaskStatusPlanning
+	// TaskStatusInProgress 执行中（统一旧模型 CLAIMED/STARTED/PLAN_APPROVED）
+	TaskStatusInProgress TaskStatus = fsm.TaskStatusInProgress
+	// TaskStatusInReview verify 闸门：成员已提交结果，reviewer 验收中（可选，有 reviewer 时）
+	TaskStatusInReview TaskStatus = fsm.TaskStatusInReview
+	// TaskStatusCompleted 任务已完成（终态）
+	TaskStatusCompleted TaskStatus = fsm.TaskStatusCompleted
+	// TaskStatusCancelled 任务已取消（终态）
+	TaskStatusCancelled TaskStatus = fsm.TaskStatusCancelled
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -172,12 +177,21 @@ var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 // TaskTransitions TaskStatus 状态转换表。
 // Python: TASK_TRANSITIONS
 var TaskTransitions = map[TaskStatus][]TaskStatus{
-	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
-	TaskStatusPlanApproved: {TaskStatusCompleted, TaskStatusPending, TaskStatusCancelled},
+	TaskStatusPending:      {TaskStatusPlanning, TaskStatusInProgress, TaskStatusBlocked, TaskStatusCancelled},
 	TaskStatusBlocked:      {TaskStatusPending, TaskStatusCancelled},
+	TaskStatusPlanning:     {TaskStatusPlanning, TaskStatusInProgress, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInProgress:   {TaskStatusInReview, TaskStatusCompleted, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInReview:     {TaskStatusCompleted, TaskStatusInProgress, TaskStatusPending, TaskStatusCancelled},
 	TaskStatusCompleted:    {},
 	TaskStatusCancelled:    {},
+}
+
+// TaskReassignableStatuses 任务 owner 可原位交换的状态集合。
+// Python: TASK_REASSIGNABLE_STATUSES (schema/status.py L399-405)
+var TaskReassignableStatuses = map[TaskStatus]bool{
+	TaskStatusPending:    true,
+	TaskStatusBlocked:    true,
+	TaskStatusInProgress: true,
 }
 
 // MemberDepartedStatuses 返回"leader 已释放该成员"的状态集合。
@@ -193,6 +207,30 @@ func MemberDepartedStatuses() map[MemberStatus]struct{} {
 		MemberStatusShutdownRequested: {},
 		MemberStatusShutdown:          {},
 	}
+}
+
+// IsMemberQuiescent 成员状态是否属于「未在动」集合。
+// Python: MEMBER_QUIESCENT_STATUSES 成员关系（schema/status.py L202-213）
+func IsMemberQuiescent(status MemberStatus) bool {
+	switch status {
+	case MemberStatusUnstarted, MemberStatusReady, MemberStatusPaused,
+		MemberStatusStopped, MemberStatusShutdown, MemberStatusDormant, MemberStatusError:
+		return true
+	}
+	return false
+}
+
+// ParseMemberStatus 解析状态值字符串为 MemberStatus；未知返回 ok=false。
+// Python: parse_member_status（member_activity.py L55-71）
+func ParseMemberStatus(value string) (MemberStatus, bool) {
+	switch MemberStatus(value) {
+	case MemberStatusUnstarted, MemberStatusStarting, MemberStatusReady,
+		MemberStatusBusy, MemberStatusPaused, MemberStatusStopped,
+		MemberStatusRestarting, MemberStatusShutdownRequested,
+		MemberStatusShutdown, MemberStatusDormant, MemberStatusError:
+		return MemberStatus(value), true
+	}
+	return "", false
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

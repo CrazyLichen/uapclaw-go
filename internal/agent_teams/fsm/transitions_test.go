@@ -81,8 +81,13 @@ func TestIsValidTaskTransition_合法转换(t *testing.T) {
 		current string
 		target  string
 	}{
-		{TaskStatusPending, TaskStatusClaimed},
-		{TaskStatusClaimed, TaskStatusCompleted},
+		{TaskStatusPending, TaskStatusInProgress},
+		{TaskStatusInProgress, TaskStatusCompleted},
+		{TaskStatusInProgress, TaskStatusInReview},
+		{TaskStatusInReview, TaskStatusCompleted},
+		{TaskStatusInReview, TaskStatusInProgress},
+		{TaskStatusPlanning, TaskStatusInProgress},
+		{TaskStatusPlanning, TaskStatusPlanning},
 		{TaskStatusBlocked, TaskStatusPending},
 	}
 	for _, tt := range tests {
@@ -97,8 +102,11 @@ func TestIsValidTaskTransition_非法转换(t *testing.T) {
 	if IsValidTaskTransition(TaskStatusCompleted, TaskStatusPending) {
 		t.Error("completed → pending 应非法")
 	}
-	if IsValidTaskTransition(TaskStatusCancelled, TaskStatusClaimed) {
-		t.Error("cancelled → claimed 应非法")
+	if IsValidTaskTransition(TaskStatusCancelled, TaskStatusInProgress) {
+		t.Error("cancelled → in_progress 应非法")
+	}
+	if IsValidTaskTransition(TaskStatusCompleted, TaskStatusInReview) {
+		t.Error("completed → in_review 应非法")
 	}
 }
 
@@ -108,7 +116,7 @@ func TestMemberTransitions_完整性(t *testing.T) {
 		MemberStatusUnstarted, MemberStatusStarting, MemberStatusReady,
 		MemberStatusBusy, MemberStatusPaused, MemberStatusStopped,
 		MemberStatusRestarting, MemberStatusShutdownRequested,
-		MemberStatusShutdown, MemberStatusError,
+		MemberStatusShutdown, MemberStatusDormant, MemberStatusError,
 	}
 	for _, state := range expectedStates {
 		if _, ok := MemberTransitions[state]; !ok {
@@ -135,8 +143,8 @@ func TestExecutionTransitions_完整性(t *testing.T) {
 // TestTaskTransitions_完整性 每个状态都应在转换表中。
 func TestTaskTransitions_完整性(t *testing.T) {
 	expectedStates := []string{
-		TaskStatusPending, TaskStatusClaimed, TaskStatusPlanApproved,
-		TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked,
+		TaskStatusPending, TaskStatusPlanning, TaskStatusInProgress,
+		TaskStatusInReview, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked,
 	}
 	for _, state := range expectedStates {
 		if _, ok := TaskTransitions[state]; !ok {
@@ -147,7 +155,7 @@ func TestTaskTransitions_完整性(t *testing.T) {
 
 // TestMemberSettledStatuses_完整性 settled 状态集合应包含 4 个状态。
 func TestMemberSettledStatuses_完整性(t *testing.T) {
-	expected := []string{MemberStatusReady, MemberStatusPaused, MemberStatusStopped, MemberStatusShutdown}
+	expected := []string{MemberStatusReady, MemberStatusPaused, MemberStatusStopped, MemberStatusShutdown, MemberStatusDormant}
 	if len(MemberSettledStatuses) != len(expected) {
 		t.Errorf("MemberSettledStatuses 数量: got %d, want %d", len(MemberSettledStatuses), len(expected))
 	}

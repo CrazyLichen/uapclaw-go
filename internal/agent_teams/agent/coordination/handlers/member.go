@@ -200,7 +200,7 @@ func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(ctx context.Context, targ
 	if taskMgr == nil || msgMgr == nil {
 		return
 	}
-	claimed, err := taskMgr.GetTasksByAssignee(ctx, targetID, string(schema.TaskStatusClaimed))
+	claimed, err := taskMgr.GetTasksByAssignee(ctx, targetID, string(schema.TaskStatusInProgress))
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("target_id", targetID).

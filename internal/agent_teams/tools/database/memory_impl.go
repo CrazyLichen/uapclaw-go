@@ -289,6 +289,38 @@ func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, team
 	return true
 }
 
+// ListRetirableMembers 投影携带退役策略且空闲（READY）的成员（F_118）。
+// Python: list_retirable_members（member_dao.py L338-367）
+func (db *InMemoryTeamDatabase) ListRetirableMembers(_ context.Context, teamName string) ([]RetirableMemberRow, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	out := make([]RetirableMemberRow, 0)
+	for _, member := range db.members {
+		if member.TeamName != teamName || member.Status != fsm.MemberStatusReady {
+			continue
+		}
+		lifetime := LoadMemberOptions(member.Options).Lifetime
+		if lifetime != nil && *lifetime != "" {
+			out = append(out, RetirableMemberRow{MemberName: member.MemberName, Status: member.Status, Lifetime: string(*lifetime)})
+		}
+	}
+	return out, nil
+}
+
+// ListShutdownMembers 投影 SHUTDOWN 成员名集合。
+// Python: list_shutdown_members（member_dao.py L369-381）
+func (db *InMemoryTeamDatabase) ListShutdownMembers(_ context.Context, teamName string) (map[string]bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	out := make(map[string]bool)
+	for _, member := range db.members {
+		if member.TeamName == teamName && member.Status == fsm.MemberStatusShutdown {
+			out[member.MemberName] = true
+		}
+	}
+	return out, nil
+}
+
 // GetMember 获取成员信息。对齐 Python: MemberDao.get_member()
 func (db *InMemoryTeamDatabase) GetMember(_ context.Context, memberName, teamName string) (*TeamMember, error) {
 	db.mu.Lock()
@@ -652,9 +684,9 @@ func (db *InMemoryTeamDatabase) AppendChangeNote(_ context.Context, taskID strin
 	return true, nil
 }
 
-// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
-// Python: TaskDao.claim_task()
-func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee string) (bool, error) {
+// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+// Python: TaskDao.claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING)
+func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee, toStatus string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	task, exists := db.tasks[taskID]
@@ -666,17 +698,18 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 		logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 		return false, nil
 	}
-	if !IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
+	if !IsValidTaskTransition(task.Status, toStatus) {
 		return false, nil // Python: invalid transition → False
 	}
-	task.Status = fsm.TaskStatusClaimed
+	task.Status = toStatus
 	task.Assignee = StringPtr(assignee)
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
 
-// ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
-// Python: TaskDao.reset_task()
+// ResetTask 重置任务：活跃态→PENDING，清除 assignee。
+// Python: TaskDao.reset_task()（condition-named 状态机后 reset 的合法来源
+// 是 IN_PROGRESS / PLANNING / IN_REVIEW，转换表各自有 → PENDING）
 func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -684,8 +717,8 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 	if !exists {
 		return false, nil
 	}
-	// 只允许 CLAIMED 状态重置（对齐 Python + SQL 实现）
-	if task.Status != fsm.TaskStatusClaimed {
+	// 只允许活跃态重置（对齐 Python + SQL 实现）
+	if task.Status != fsm.TaskStatusInProgress && task.Status != fsm.TaskStatusPlanning && task.Status != fsm.TaskStatusInReview {
 		return false, nil
 	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
@@ -697,7 +730,7 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 	return true, nil
 }
 
-// ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。
+// ApprovePlanTask 计划审批：PLANNING→IN_PROGRESS FSM 校验。
 // Python: TaskDao.approve_plan_task()
 func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
@@ -706,15 +739,16 @@ func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string
 	if !exists {
 		return false, nil
 	}
-	if !IsValidTaskTransition(task.Status, fsm.TaskStatusPlanApproved) {
+	if !IsValidTaskTransition(task.Status, fsm.TaskStatusInProgress) {
 		return false, nil
 	}
-	task.Status = fsm.TaskStatusPlanApproved
+	task.Status = fsm.TaskStatusInProgress
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
 
-// UpdateTask 更新标题/内容。CLAIMED/PLAN_APPROVED 状态下禁止编辑。
+// UpdateTask 更新标题/内容。IN_REVIEW 冻结（评审按稳定正文验收），
+// PLANNING/IN_PROGRESS 可编辑（leader 修订活任务，assignee 经 F_129 得知）。
 // Python: TaskDao.update_task()
 func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, content string) (bool, error) {
 	db.mu.Lock()
@@ -723,8 +757,8 @@ func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, con
 	if !exists {
 		return false, nil
 	}
-	// Python: PENDING/BLOCKED 状态才允许编辑；CLAIMED/PLAN_APPROVED 禁止
-	if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
+	// Python: 仅 IN_REVIEW 冻结（PLANNING/IN_PROGRESS 可编辑，F_129）
+	if task.Status == fsm.TaskStatusInReview {
 		return false, nil
 	}
 	task.Title = title
@@ -745,6 +779,154 @@ func (db *InMemoryTeamDatabase) DeleteTask(_ context.Context, taskID string) err
 		}
 	}
 	return nil
+}
+
+// GetDependentTaskIDs 返回依赖 dependsOnTaskID 的全部下游任务 id（去重）。
+// Python: get_dependent_task_ids（task_dao.py L1630-1642）
+func (db *InMemoryTeamDatabase) GetDependentTaskIDs(_ context.Context, dependsOnTaskID string) ([]string, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	seen := map[string]bool{}
+	var ids []string
+	for _, dep := range db.deps {
+		if dep.DependsOnID == dependsOnTaskID && !seen[dep.TaskID] {
+			seen[dep.TaskID] = true
+			ids = append(ids, dep.TaskID)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
+// GetTasksByIDs 一条 IN 查询取多行（顺序未定义；缺失 id 跳过）。
+// Python: get_tasks_by_ids（task_dao.py L675-683）
+func (db *InMemoryTeamDatabase) GetTasksByIDs(_ context.Context, taskIDs []string) ([]*TeamTaskBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	rows := make([]*TeamTaskBase, 0, len(taskIDs))
+	for _, id := range taskIDs {
+		if task, ok := db.tasks[id]; ok {
+			row := *task
+			rows = append(rows, &row)
+		}
+	}
+	return rows, nil
+}
+
+// GetRevisionSnapshot 取正文快照（F_129/D9）。已知偏差：Go 无 session_file_store
+// 溢出机制，恒 (nil, nil)，diff section 按契约降级为空；回收条件 = 溢出存储落地。
+// Python: get_revision_snapshot（task_dao.py L1473-1494）
+func (db *InMemoryTeamDatabase) GetRevisionSnapshot(_ context.Context, _, _ string, _ int64) (*string, error) {
+	return nil, nil
+}
+
+// GetSubtasks 取直接子任务行（F_129）。
+// Python: get_subtasks（task_dao.py L781-794）
+func (db *InMemoryTeamDatabase) GetSubtasks(_ context.Context, teamName, parentTaskID string) ([]*TeamTaskBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	rows := make([]*TeamTaskBase, 0)
+	for _, task := range db.tasks {
+		if task.TeamName == teamName && task.ParentTaskID != nil && *task.ParentTaskID == parentTaskID {
+			row := *task
+			rows = append(rows, &row)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].TaskID < rows[j].TaskID })
+	return rows, nil
+}
+
+// GetOtherActiveTaskID 成员持有的另一条活跃任务（三活跃态），存在式探测。
+// Python: get_other_active_task_id（task_dao.py L822-852）
+func (db *InMemoryTeamDatabase) GetOtherActiveTaskID(_ context.Context, teamName, memberName, excludeTaskID string) (*string, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	active := map[string]bool{
+		fsm.TaskStatusPlanning: true, fsm.TaskStatusInProgress: true, fsm.TaskStatusInReview: true,
+	}
+	var found string
+	for _, task := range db.tasks {
+		if task.TeamName == teamName && task.TaskID != excludeTaskID && active[task.Status] &&
+			task.Assignee != nil && *task.Assignee == memberName {
+			found = task.TaskID
+			break
+		}
+	}
+	if found == "" {
+		return nil, nil
+	}
+	return &found, nil
+}
+
+// StartTaskCAS 原子地把已归属 PENDING 任务推进到 toStatus；resume_pending 被消费。
+// Python: start_task（task_dao.py L855-905）
+func (db *InMemoryTeamDatabase) StartTaskCAS(_ context.Context, taskID, memberName, toStatus string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists {
+		return false, nil
+	}
+	if task.Assignee == nil || *task.Assignee != memberName || task.Status != fsm.TaskStatusPending {
+		return false, nil
+	}
+	task.Status = toStatus
+	task.ResumePending = false
+	task.UpdatedAt = GetCurrentTime()
+	return true, nil
+}
+
+// ObserveRevision 记录 assignee 被展示了 revision（F_129）：单调且 owner 绑定。
+// Python: observe_revision（task_dao.py L1493-1511）
+func (db *InMemoryTeamDatabase) ObserveRevision(_ context.Context, taskID, memberName string, revision int64) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists || task.Assignee == nil || *task.Assignee != memberName || task.ObservedRevision >= revision {
+		return false, nil
+	}
+	task.ObservedRevision = revision
+	return true, nil
+}
+
+// GetUnseenRevisions 全队级未见过当前 revision 的已指派未终态任务窄投影。
+// Python: get_unseen_revisions（task_dao.py L723-752）
+func (db *InMemoryTeamDatabase) GetUnseenRevisions(_ context.Context, teamName string) ([]UnseenRevisionRow, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	terminal := map[string]bool{fsm.TaskStatusCompleted: true, fsm.TaskStatusCancelled: true}
+	var rows []UnseenRevisionRow
+	for _, task := range db.tasks {
+		if task.TeamName != teamName || task.Assignee == nil || terminal[task.Status] {
+			continue
+		}
+		if task.Revision > task.ObservedRevision {
+			rows = append(rows, UnseenRevisionRow{
+				TaskID: task.TaskID, Status: task.Status, Assignee: *task.Assignee,
+				ResumePending: task.ResumePending, Revision: task.Revision,
+			})
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].TaskID < rows[j].TaskID })
+	return rows, nil
+}
+
+// CountTasksTerminality (total, non_terminal) 聚合（B_09）。
+func (db *InMemoryTeamDatabase) CountTasksTerminality(_ context.Context, teamName string) (int64, int64, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	terminal := map[string]bool{fsm.TaskStatusCompleted: true, fsm.TaskStatusCancelled: true}
+	var total, nonTerminal int64
+	for _, task := range db.tasks {
+		if task.TeamName != teamName {
+			continue
+		}
+		total++
+		if !terminal[task.Status] {
+			nonTerminal++
+		}
+	}
+	return total, nonTerminal, nil
 }
 
 // GetTaskDependencies 查询任务依赖。对齐 Python: TaskDao.get_task_dependencies()
@@ -1079,6 +1261,59 @@ func (db *InMemoryTeamDatabase) GetTeamMessages(_ context.Context, teamName stri
 	return result, nil
 }
 
+// MembersWithUnread 返回 memberNames 中仍有未读输入的子集（直发行 + 广播水位）。
+// Python: members_with_unread（message_dao.py L483-497）——直发命中未读行；
+// 广播对每个候选成员检查水位是否落后于他人最新广播（与 HasUnreadMessages
+// 的两个读取器一致，收窄到指名成员）。
+func (db *InMemoryTeamDatabase) MembersWithUnread(_ context.Context, teamName string, memberNames []string) (map[string]bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	want := make(map[string]bool, len(memberNames))
+	for _, name := range memberNames {
+		want[name] = true
+	}
+	out := make(map[string]bool)
+	// 直发：to_member_name 命中且未读
+	for _, msg := range db.messages {
+		if msg.TeamName != teamName || msg.Broadcast || msg.ToMemberName == nil {
+			continue
+		}
+		if want[*msg.ToMemberName] && (msg.IsRead == nil || !*msg.IsRead) {
+			out[*msg.ToMemberName] = true
+		}
+	}
+	// 广播：水位落后于他人最新广播的成员仍未读完
+	var broadcasts []*TeamMessageBase
+	for _, msg := range db.messages {
+		if msg.TeamName == teamName && msg.Broadcast {
+			broadcasts = append(broadcasts, msg)
+		}
+	}
+	for _, member := range db.members {
+		if member.TeamName != teamName || !want[member.MemberName] {
+			continue
+		}
+		if out[member.MemberName] {
+			continue
+		}
+		rs := db.readStatus[memberKey(member.MemberName, teamName)]
+		watermark := int64(0)
+		if rs != nil && rs.ReadAt != nil {
+			watermark = *rs.ReadAt
+		}
+		for _, msg := range broadcasts {
+			if msg.FromMemberName == member.MemberName {
+				continue
+			}
+			if msg.Timestamp > watermark {
+				out[member.MemberName] = true
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
 // HasUnreadMessages 是否有未读消息。对齐 Python: MessageDao.has_unread_messages()
 func (db *InMemoryTeamDatabase) HasUnreadMessages(_ context.Context, teamName string, includeBroadcast bool) bool {
 	db.mu.Lock()
@@ -1246,7 +1481,8 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 		// 源任务（edge.TaskID）处于终态或已执行状态时拒绝添加依赖
 		srcStatus := downstream.Status
 		if srcStatus == fsm.TaskStatusCompleted || srcStatus == fsm.TaskStatusCancelled ||
-			srcStatus == fsm.TaskStatusClaimed || srcStatus == fsm.TaskStatusPlanApproved {
+			srcStatus == fsm.TaskStatusPlanning || srcStatus == fsm.TaskStatusInProgress ||
+			srcStatus == fsm.TaskStatusInReview {
 			mc.failReason = "cannot add dependency to " + edge.TaskID + " in terminal or executing status: " + srcStatus
 			mc.rollbackStagedTasks()
 			return

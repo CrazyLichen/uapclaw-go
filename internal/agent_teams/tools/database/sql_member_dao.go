@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -93,6 +94,43 @@ func (d *SQLMemberDao) GetMemberStatus(ctx context.Context, teamName, memberName
 		return "", false
 	}
 	return status, true
+}
+
+// ListRetirableMembers 投影携带退役策略且空闲（READY）的成员（F_118）。
+// Python: list_retirable_members（member_dao.py L338-367）
+func (d *SQLMemberDao) ListRetirableMembers(ctx context.Context, teamName string) ([]RetirableMemberRow, error) {
+	var rows []TeamMember
+	err := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND status = ?", teamName, fsm.MemberStatusReady).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RetirableMemberRow, 0, len(rows))
+	for _, row := range rows {
+		lifetime := LoadMemberOptions(row.Options).Lifetime
+		if lifetime != nil && *lifetime != "" {
+			out = append(out, RetirableMemberRow{MemberName: row.MemberName, Status: row.Status, Lifetime: string(*lifetime)})
+		}
+	}
+	return out, nil
+}
+
+// ListShutdownMembers 投影 SHUTDOWN 成员名集合。
+// Python: list_shutdown_members（member_dao.py L369-381）
+func (d *SQLMemberDao) ListShutdownMembers(ctx context.Context, teamName string) (map[string]bool, error) {
+	var names []string
+	err := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND status = ?", teamName, fsm.MemberStatusShutdown).
+		Pluck("member_name", &names).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(names))
+	for _, name := range names {
+		out[name] = true
+	}
+	return out, nil
 }
 
 // DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。

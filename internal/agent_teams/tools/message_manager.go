@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -85,6 +86,43 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 	})
 
 	return messageID, nil
+}
+
+// SendMessageWithMeta 带框架投递载荷的直发消息（F_63 两阶段渲染）：
+// 信箱行 content 为空、meta 携带 template key + refs/params，投递时按当前
+// 任务行现场渲染。供调度器 leader 身份 handoff（_send_as_leader）使用。
+// Python: message_manager.send_message(..., meta=...)（message_manager.py L60-95）
+func (tm *TeamMessageManager) SendMessageWithMeta(ctx context.Context, meta map[string]any, toMemberName string) (string, error) {
+	metaRaw, err := json.Marshal(meta)
+	if err != nil {
+		return "", fmt.Errorf("序列化 meta 失败: %w", err)
+	}
+	metaStr := string(metaRaw)
+	// Python: sender = self.member_name —— leader 身份由 manager 持有的成员名决定
+	messageID := uuid.New().String()
+	msg := &database.TeamMessageBase{
+		MessageID:      messageID,
+		TeamName:       tm.teamName,
+		FromMemberName: tm.memberName,
+		ToMemberName:   database.StringPtr(toMemberName),
+		Content:        "",
+		Meta:           &metaStr,
+		Broadcast:      false,
+		IsRead:         database.BoolPtr(false),
+	}
+	if !tm.db.Message().CreateMessage(ctx, msg) {
+		logger.Error(logComponent).Str("to_member", toMemberName).
+			Msg("SendMessageWithMeta: failed to create message")
+		return "", fmt.Errorf("创建消息失败: message_id 冲突 %s", msg.MessageID)
+	}
+	// 发布 MessageEvent 唤醒（行已落库为凭；成员启动是调用方的独立 best-effort 步骤）
+	tm.publishMessageEvent(ctx, events.MessageEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
+		MessageID:        msg.MessageID,
+		FromMemberName:   tm.memberName,
+		ToMemberName:     toMemberName,
+	})
+	return msg.MessageID, nil
 }
 
 // BroadcastMessage 广播消息。

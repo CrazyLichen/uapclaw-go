@@ -3,6 +3,7 @@ package coordination
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/scheduling"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -33,6 +34,11 @@ type CoordinationKernel struct {
 	subscribedTopics []string
 	// lifecycleState 生命周期状态："idle" | "running" | "paused" | "stopped"
 	lifecycleState string
+	// scheduler leader-only scheduled-dispatch 决策引擎（F_62）。setup 时以
+	// 休眠态构造；团队 effective dispatch mode 为 "scheduled"（build_team 选择 /
+	// recovery 恢复）时武装。
+	// Python: CoordinationKernel._scheduler（kernel.py L56）
+	scheduler *scheduling.TeamScheduler
 }
 
 // kernelOptions 内部选项结构体
@@ -123,6 +129,30 @@ func (k *CoordinationKernel) Setup(role schema.TeamRole, opts ...KernelOption) {
 	k.eventBus = eventBus
 	k.dispatcher = dispatcher
 
+	// F_62: 调度器只存在于有活可干的地方——scheduled-dispatch 团队的 leader。
+	// 团队物化（build_team / start 时已存在的团队行）之前保持休眠。
+	// Python: kernel.py L91-104
+	if role == schema.TeamRoleLeader && bp.DispatcherSpec() != nil && bp.DispatcherSpec().DispatchMode == "scheduled" {
+		spec := bp.DispatcherSpec()
+		var backend scheduling.SchedulerBackend
+		if tb := inf.TeamBackend(); tb != nil && tb.DB() != nil {
+			backend = scheduling.NewSchedulerBackend(tb, tb.DB())
+		}
+		var taskMgr scheduling.SchedulerTaskManager
+		if tm := inf.TaskManager(); tm != nil {
+			taskMgr = tm
+		}
+		var msgSender scheduling.LeaderMessageSender
+		if mm := inf.MessageManager(); mm != nil {
+			msgSender = mm
+		}
+		k.scheduler = scheduling.NewTeamScheduler(
+			k.host, taskMgr, backend, msgSender,
+			int64(spec.DefaultMaxReviewRounds), int64(spec.ReviewStallTimeout),
+			spec.TeamName, spec.Language,
+		)
+	}
+
 	logger.Info(logComponent).
 		Str("role", string(role)).
 		Msg("CoordinationKernel setup completed")
@@ -136,6 +166,40 @@ func (k *CoordinationKernel) EventBus() *EventBus {
 // Dispatcher 返回事件分发器实例（setup 前为 nil）。
 func (k *CoordinationKernel) Dispatcher() *EventDispatcher {
 	return k.dispatcher
+}
+
+// Scheduler 返回 leader 的 scheduled-dispatch 引擎（非 leader / 非 scheduled 为 nil）。
+// Python: CoordinationKernel.scheduler property（kernel.py L115-117）
+func (k *CoordinationKernel) Scheduler() *scheduling.TeamScheduler {
+	return k.scheduler
+}
+
+// buildWakeCallback 组合总线唤醒回调：协调先行，调度器随后。
+// 协调保持纯唤醒层；调度器严格在 handler 观察到同一事件之后做决策。
+// 非 leader 内核没有调度器，保持裸 dispatch 路径。
+// Python: _build_wake_callback（kernel.py L298-312）
+func (k *CoordinationKernel) buildWakeCallback() WakeCallback {
+	dispatcher := k.dispatcher
+	scheduler := k.scheduler
+	if scheduler == nil {
+		return dispatcher.Dispatch
+	}
+	return func(ctx context.Context, event types.CoordinationEvent) {
+		dispatcher.Dispatch(ctx, event)
+		scheduler.OnEvent(ctx, event)
+	}
+}
+
+// NotifyTeamBuilt build_team 物化团队后武装调度器。
+// 由宿主的 on_team_built 钩子（build_team 工具调用内）调用——scheduled 团队的
+// 调度器在任何 teammate spawn 或任务创建之前就活，与提示词承诺的「框架会启动
+// 承担者」一致。无调度器时 no-op（autonomous 团队、非 leader 内核）。
+// Python: notify_team_built（kernel.py L314-326）
+func (k *CoordinationKernel) NotifyTeamBuilt(ctx context.Context) {
+	if k.scheduler == nil {
+		return
+	}
+	k.scheduler.Activate(ctx)
 }
 
 // SubscribedTopics 返回已订阅的传输主题列表。
@@ -296,8 +360,18 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 		}
 	}
 
+	// 步骤 6.8: 重置 leader 的成员活动视图基线，再上报 READY——首个状态更新
+	// 是可能产生本轮 team-idle 边的输入，必须对照数据库实际持有的名册评估。
+	// 非 leader no-op。Python: await host.seed_member_registry()（kernel.py L268）
+	k.host.SeedMemberRegistry(ctx)
 	// 步骤 7: 更新状态
 	_ = k.host.UpdateStatus(ctx, schema.MemberStatusReady)
+	// 步骤 7.1: 在轮询定时器回来之前重置 idle 时钟基线——pause 时已 idle 的
+	// 成员在单调时钟跨越整个 pause 窗口期间保持打点，且没有挂起的轮可续、
+	// 不会重进 IDLE 重打点；不重置则本轮首个 POLL_TASK 会把整个 pause 读成
+	// idle 时间并发出虚假停滞提示。冷启动 no-op、轮中暂停的成员 no-op。
+	// Python: host.refresh_idle_baseline()（kernel.py L269-275）
+	k.host.RefreshIdleBaseline()
 
 	// 步骤 8: EventBus 启动
 	if k.dispatcher == nil {
@@ -305,9 +379,7 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 		return
 	}
 	if !k.eventBus.IsRunning() {
-		k.eventBus.Start(ctx, func(ctx context.Context, event types.CoordinationEvent) {
-			k.dispatcher.Dispatch(ctx, event)
-		})
+		k.eventBus.Start(ctx, k.buildWakeCallback())
 	}
 
 	// 步骤 9: Subscribe transport
@@ -319,6 +391,16 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 	// 步骤 10: TeamCompletion rearmed
 	if k.dispatcher != nil && k.dispatcher.TeamCompletion != nil {
 		k.dispatcher.TeamCompletion.Rearm()
+	}
+
+	// 步骤 10.5: F_62 —— 本轮启动面对已存在的团队时武装调度器（调度器只存在
+	// 于 scheduled-dispatch 的 leader 上）——激活即执行恢复清扫（启动 pending
+	// 指派、裁决开放评审）。团队行必须在场：team_row_present 检查。
+	// Python: kernel.py L279-284 `if self._scheduler is not None and team_row_present`
+	if k.scheduler != nil && backendAccessor != nil && backendAccessor.DB() != nil && backendAccessor.DB().Team() != nil {
+		if existing, _ := backendAccessor.DB().Team().GetTeam(ctx, backendAccessor.TeamName()); existing != nil {
+			k.scheduler.Activate(ctx)
+		}
 	}
 
 	k.lifecycleState = kernelStateRunning
@@ -341,6 +423,12 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	}
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("lifecycle", k.host.Lifecycle()).Msg("coordination pausing (persistent)")
+
+	// 步骤 0: 解除调度器武装（kernel pause）。
+	// Python: kernel.py L337-338 `if self._scheduler is not None: self._scheduler.deactivate()`
+	if k.scheduler != nil {
+		k.scheduler.Deactivate()
+	}
 
 	// 步骤 1: 暂停在飞轮次（就地停车，不拆毁）。
 	// Python: await self.pause_agent_round()（kernel.py L343）
@@ -429,6 +517,12 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 		memberName = "?"
 	}
 	logger.Info(logComponent).Str("member_name", memberName).Msg("coordination stopping")
+
+	// 步骤 0: 解除调度器武装（kernel stop）。
+	// Python: kernel.py L552-553 `if self._scheduler is not None: self._scheduler.deactivate()`
+	if k.scheduler != nil {
+		k.scheduler.Deactivate()
+	}
 
 	// 步骤 1: Drain agent task
 	k.host.DrainAgentTask(ctx)

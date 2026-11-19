@@ -40,6 +40,10 @@ const (
 	InnerEventTypePollMailbox InnerEventType = "coordination_poll_mailbox"
 	// InnerEventTypePollTask 任务轮询事件
 	InnerEventTypePollTask InnerEventType = "coordination_poll_task"
+	// InnerEventTypeSchedulerScan 调度器扫描 echo（F_62）：kernel 把 leader
+	// 自发布的任务变更转成该内部事件，保证 leader 本地改板也触发扫描。
+	// Python: event_bus.py L56 SCHEDULER_SCAN
+	InnerEventTypeSchedulerScan InnerEventType = "coordination_scheduler_scan"
 	// InnerEventTypeShutdown 关闭事件
 	InnerEventTypeShutdown InnerEventType = "shutdown"
 )

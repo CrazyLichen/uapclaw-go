@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -271,7 +272,13 @@ func TestEventDispatcher_共享StaleClaimThrottle(t *testing.T) {
 		t.Error("Member handler 的 staleClaimThrottle 不应为 nil")
 	}
 	d.Member.StaleClaimThrottle()["task-1"] = 123.0
-	val, ok := d.StaleTask.StaleClaimThrottle()["task-1"]
+	// F_62: dispatch_mode 分派后 StaleTask 可能是 scheduled 变体（无共享断言
+	// 语义变化——autonomous 默认路径仍是基类指针）。
+	staleBase, isBase := d.StaleTask.(*handlers.StaleTaskHandler)
+	if !isBase {
+		t.Skip("scheduled 变体不共享 Member 的节流映射")
+	}
+	val, ok := staleBase.StaleClaimThrottle()["task-1"]
 	if !ok || val != 123.0 {
 		t.Error("Member 和 StaleTask 应共享同一个 staleClaimThrottle 引用")
 	}

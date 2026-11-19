@@ -27,6 +27,10 @@ type AgentRoundController interface {
 	CancelAgent(ctx context.Context) error
 	// DeliverInput 确保内容到达 DeepAgent，不论当前状态
 	DeliverInput(ctx context.Context, content any, useSteer bool) error
+	// AutoStartMember 尽力拉起一个 UNSTARTED 成员运行时（F_62 调度器 handoff
+	// 搭车的幂等惰性拉起原语：UNSTARTED→STARTING CAS）。
+	// Python: TeamAgent.auto_start_member
+	AutoStartMember(ctx context.Context, memberName string) bool
 	// ResumeInterrupt 以结构化输入恢复 HITL 中断
 	// Python: resume_interrupt(user_input: Any) — 实际调用始终传 InteractiveInput
 	ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error
@@ -75,6 +79,10 @@ type DispatcherBlueprint interface {
 	// DispatcherReliability 返回团队可靠性配置（未配置为 nil）。
 	// Python: blueprint.spec.reliability（dispatcher.py:264 读 spec.reliability.enabled）
 	DispatcherReliability() *railsreliabilitycore.ReliabilityConfig
+	// DispatcherSpec 返回团队规格（25.2a 调度器装配读 DispatchMode/
+	// DefaultMaxReviewRounds/ReviewStallTimeout/TeamName/Language）。
+	// Python: kernel.setup() 直接读 blueprint.spec.*。
+	DispatcherSpec() *schema.TeamAgentSpec
 }
 
 // DispatcherInfra Dispatcher 构造所需的 infra 接口。

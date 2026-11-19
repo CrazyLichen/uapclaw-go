@@ -93,6 +93,18 @@ type MemberDao interface {
 	// 仅当当前状态 == fromStatus 时才更新为 toStatus，否则返回 false。
 	// 使用 string 参数避免 database→schema 循环依赖。
 	TryTransitionMemberStatus(ctx context.Context, memberName, teamName, fromStatus, toStatus string) bool
+	// ListRetirableMembers 投影携带退役策略且空闲（READY）的成员
+	// (member_name, status, lifetime)。供调度器 retirement scan（F_118）。
+	// 只取 READY：BUSY 成员在轮中，退役请求落到那里会让它正在说的话的回复
+	// 变成搁浅邮件（轮结束、流关闭、没人再唤醒它）。READY 状态事件在轮结束
+	// 瞬间重新触发扫描。status 过滤在 SQL；lifetime 在 options JSON 里，
+	// 策略过滤在收窄后的行集上做。
+	// Python: list_retirable_members（member_dao.py L338-367）
+	ListRetirableMembers(ctx context.Context, teamName string) ([]RetirableMemberRow, error)
+	// ListShutdownMembers 投影 SHUTDOWN 成员名集合。供调度器每次唤醒的
+	// 搁浅任务检查，只读名字——永不读序列化卡片或私有提示词。
+	// Python: list_shutdown_members（member_dao.py L369-381）
+	ListShutdownMembers(ctx context.Context, teamName string) (map[string]bool, error)
 	// ListHumanAgentNames 获取 human_agent 角色的成员名列表（HITT 名册重建）。
 	// Python: list_human_agent_names()
 	ListHumanAgentNames(ctx context.Context, teamName string) ([]string, error)
@@ -148,10 +160,10 @@ type TaskDao interface {
 	// Python: update_task 内 revision += 1 + change_notes 追加
 	// note 为编辑说明正文，by 为修改人（空串表示未知）。
 	AppendChangeNote(ctx context.Context, taskID string, revision int64, note, by string) (bool, error)
-	// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
-	// Python: claim_task() → bool
-	ClaimTask(ctx context.Context, taskID, assignee string) (bool, error)
-	// ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
+	// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+	// Python: claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING) → bool
+	ClaimTask(ctx context.Context, taskID, assignee, toStatus string) (bool, error)
+	// ResetTask 重置任务：活跃态→PENDING，清除 assignee。
 	// Python: reset_task() → bool
 	ResetTask(ctx context.Context, taskID string) (bool, error)
 	// ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。
@@ -169,6 +181,42 @@ type TaskDao interface {
 	// AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
 	// Python: add_task_with_bidirectional_dependencies(task_id, team_name, title, content, status, *, dependencies, dependent_task_ids)
 	AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult
+	// GetDependentTaskIDs 返回依赖 dependsOnTaskID 的全部下游任务 id（去重）。
+	// Python: get_dependent_task_ids（task_dao.py L1630-1642）
+	GetDependentTaskIDs(ctx context.Context, dependsOnTaskID string) ([]string, error)
+	// GetTasksByIDs 一条 IN 查询取多行（顺序未定义；缺失 id 跳过）。
+	// Python: get_tasks_by_ids（task_dao.py L675-683）
+	GetTasksByIDs(ctx context.Context, taskIDs []string) ([]*TeamTaskBase, error)
+	// GetRevisionSnapshot 取 (task_id, revision) 时刻的正文快照（F_129/D9）。
+	// ⚠️ 已知偏差：Go 侧无 session_file_store 溢出机制（Python 快照写
+	// KIND_TASK_REVISION FileAddress），当前恒返回 (nil, nil)——diff section
+	// 按契约优雅降级为空；回收条件 = Go 落任务正文溢出存储。
+	// Python: get_revision_snapshot（task_dao.py L1473-1494）
+	GetRevisionSnapshot(ctx context.Context, teamName, taskID string, revision int64) (*string, error)
+	// GetSubtasks 取直接子任务行（F_129），正文不读。
+	// Python: get_subtasks（task_dao.py L781-794）
+	GetSubtasks(ctx context.Context, teamName, parentTaskID string) ([]*TeamTaskBase, error)
+	// GetOtherActiveTaskID 成员持有的另一条活跃任务（三活跃态 PLANNING/
+	// IN_PROGRESS/IN_REVIEW），LIMIT 1 存在式探测（one-active-task 不变量）。
+	// Python: get_other_active_task_id（task_dao.py L822-852）
+	GetOtherActiveTaskID(ctx context.Context, teamName, memberName, excludeTaskID string) (*string, error)
+	// StartTaskCAS 原子地把**已归属** PENDING 任务推进到 toStatus：
+	// WHERE assignee=member AND status=pending 单语句 CAS——调度器代表记录的
+	// owner 启动任务，不（重）指派。resume_pending 由本次 start 消费（F_128）。
+	// Python: start_task（task_dao.py L855-905）
+	StartTaskCAS(ctx context.Context, taskID, memberName, toStatus string) (bool, error)
+	// ObserveRevision 记录 member（任务 assignee）被展示了 revision（F_129）。
+	// 单调（永不回退）且绑定 owner：投给不再持有任务的人不记账。
+	// Python: observe_revision（task_dao.py L1493-1511）
+	ObserveRevision(ctx context.Context, taskID, memberName string, revision int64) (bool, error)
+	// GetUnseenRevisions 全队级「已指派、未终态、assignee 未见过当前 revision」
+	// 的 (task_id, status, assignee, resume_pending, revision) 窄投影——调度器
+	// revision scan 每次板面唤醒都跑，不读正文。
+	// Python: get_unseen_revisions（task_dao.py L723-752）
+	GetUnseenRevisions(ctx context.Context, teamName string) ([]UnseenRevisionRow, error)
+	// CountTasksTerminality 一条聚合查询返回 (total, non_terminal)（B_09）。
+	// Python: count_tasks_terminality（task_manager.py L1556 消费）
+	CountTasksTerminality(ctx context.Context, teamName string) (int64, int64, error)
 	// GetTaskDependencies 查询任务依赖。
 	GetTaskDependencies(ctx context.Context, taskID string) ([]*TeamTaskDependencyBase, error)
 	// GetUnresolvedDependenciesCount 未解决依赖计数。
@@ -209,6 +257,12 @@ type MessageDao interface {
 	// HasUnreadMessages 是否有未读消息。
 	// 直发：检查 is_read=false；广播：检查 per-member watermark。
 	HasUnreadMessages(ctx context.Context, teamName string, includeBroadcast bool) bool
+	// MembersWithUnread 返回 memberNames 中仍有未读输入的子集：与
+	// has_unread_messages 相同的两个读取器（直发行，再广播水位），收窄到指名
+	// 成员。供调度器 retirement scan 与休眠 settle 门使用（F_118）：还没读
+	// 收到内容的成员不算完事，哪怕板子空了。
+	// Python: members_with_unread（message_dao.py L483-497）
+	MembersWithUnread(ctx context.Context, teamName string, memberNames []string) (map[string]bool, error)
 	// MarkMessageRead 标记已读。直发设 is_read=true；广播更新 read_status watermark。
 	MarkMessageRead(ctx context.Context, messageID, memberName string) bool
 }

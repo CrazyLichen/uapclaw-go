@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -1192,19 +1193,27 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 	return toolSuccess(map[string]any{"task_id": taskID, "status": "updated", "updated_fields": updated})
 }
 
-// isHumanAgentLocked 检查任务是否被 human-agent 持有（对齐 Python _is_human_agent_locked）。
+// isHumanAgentLocked 检查任务是否被 human-agent 持有（对齐 Python _is_human_agent_locked，
+// tool_task.py L1651：PLANNING/IN_PROGRESS/IN_REVIEW 三活跃态）。
 func isHumanAgentLocked(team *TeamBackend, task *database.TeamTaskBase) bool {
-	return task.Assignee != nil && team.IsHumanAgent(*task.Assignee) && task.Status == "claimed"
+	if task.Assignee == nil || !team.IsHumanAgent(*task.Assignee) {
+		return false
+	}
+	switch task.Status {
+	case fsm.TaskStatusPlanning, fsm.TaskStatusInProgress, fsm.TaskStatusInReview:
+		return true
+	}
+	return false
 }
 
-// cancelMemberIfClaimed 如果任务处于 claimed 状态则取消认领者（对齐 Python _cancel_member_if_claimed）。
+// cancelMemberIfClaimed 如果任务处于执行中状态则取消认领者（旧 claimed→in_progress 语义）。
 func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string) error {
 	task, err := team.TaskManager().Get(ctx, taskID)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed: Get failed")
 		return err
 	}
-	if task == nil || task.Status != "claimed" || task.Assignee == nil {
+	if task == nil || task.Status != fsm.TaskStatusInProgress || task.Assignee == nil {
 		return nil
 	}
 	if !team.IsHumanAgent(*task.Assignee) {
@@ -1215,9 +1224,9 @@ func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string
 	return nil
 }
 
-// cancelClaimedMembers 取消所有 claimed 状态的非 human-agent 成员（对齐 Python _cancel_claimed_members）。
+// cancelClaimedMembers 取消所有执行中状态的非 human-agent 成员（旧 claimed→in_progress 语义）。
 func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) error {
-	claimedTasks, err := t.agentTeam.TaskManager().ListTasks(ctx, "claimed")
+	claimedTasks, err := t.agentTeam.TaskManager().ListTasks(ctx, fsm.TaskStatusInProgress)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("cancelClaimedMembers: ListTasks failed")
 		return err
@@ -1301,7 +1310,7 @@ func (t *ClaimTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...
 		if !result.OK {
 			return toolError(result.Reason)
 		}
-		statusChange = map[string]any{"from": task.Status, "to": "claimed"}
+		statusChange = map[string]any{"from": task.Status, "to": fsm.TaskStatusInProgress}
 	case "completed":
 		result, err := t.taskManager.Complete(ctx, taskID)
 		if err != nil {

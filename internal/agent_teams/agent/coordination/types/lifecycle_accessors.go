@@ -161,6 +161,12 @@ type LifecycleAccessor interface {
 	MarkLiveTeammates(ctx context.Context, status string) error
 	// CloseStream 关闭流
 	CloseStream()
+	// SeedMemberRegistry 每轮启动前从团队数据库重建 leader 活动视图基线
+	//（非 leader no-op）。Python: TeamAgent.seed_member_registry（team_agent.py L1309）
+	SeedMemberRegistry(ctx context.Context)
+	// RefreshIdleBaseline 重置 idle 时钟基线，使 pause 窗口不被计为 idle。
+	// Python: TeamAgent.refresh_idle_baseline（team_agent.py L522）
+	RefreshIdleBaseline()
 	// SetMemberID 设置成员 ID 上下文，返回携带成员 ID 的新 context
 	// 对齐 Python: set_member_id(member_name) — Python 用 ContextVar，Go 用 context.WithValue
 	SetMemberID(ctx context.Context, name string) context.Context

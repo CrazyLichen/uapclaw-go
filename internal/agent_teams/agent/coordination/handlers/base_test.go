@@ -61,8 +61,8 @@ type fakeBP struct {
 	reliability *railsreliabilitycore.ReliabilityConfig
 }
 
-func (f *fakeBP) Role() schema.TeamRole        { return f.role }
-func (f *fakeBP) DispatcherMemberName() string { return f.memberName }
+func (f *fakeBP) Role() schema.TeamRole                 { return f.role }
+func (f *fakeBP) DispatcherMemberName() string          { return f.memberName }
 func (f *fakeBP) DispatcherSpec() *schema.TeamAgentSpec { return nil }
 func (f *fakeBP) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
 	return f.reliability

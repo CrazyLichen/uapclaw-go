@@ -62,6 +62,24 @@ type TaskClaimedEvent struct {
 	TaskID string
 }
 
+// TaskStartedEvent scheduled 派发启动事件（F_62）：调度器把已指派任务推进到
+// 执行——建队时的指派与执行开始是两个独立事件。
+// Python: TaskStartedEvent（schema/events.py，TeamEvent.TASK_STARTED L161）
+type TaskStartedEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+	// MemberName 被启动的成员
+	MemberName string
+}
+
+func (e TaskStartedEvent) EventTypeName() string { return TeamEventTaskStarted }
+
+// ToPayload 转换为事件载荷。
+func (e TaskStartedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "member_name": e.MemberName}
+}
+
 // TaskCompletedEvent 任务完成事件。
 // Python: TaskCompletedEvent
 type TaskCompletedEvent struct {
