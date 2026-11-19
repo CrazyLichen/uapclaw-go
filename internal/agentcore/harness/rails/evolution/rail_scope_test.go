@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // rail_scope_test.go 订阅窗口机械测试（对齐 evolution_rail.py 语义）。
@@ -119,7 +119,13 @@ func TestScopeWindow_裁剪上限(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.InvokeInputs{ConversationID: "sess-trim"})
 	require.NoError(t, rail.BeforeInvoke(context.Background(), cbc))
 	recordToolSpan(t, rail, "t1")
-	t.Logf("DBG after t1: builder=%d window=%d", len(rail.builder.Spans()), func() int { w, _ := rail.projectScopeWindow(rail.currentCapture); if w == nil { return -1 }; return len(trajectory.IterSpans(w)) }())
+	t.Logf("DBG after t1: builder=%d window=%d", len(rail.builder.Spans()), func() int {
+		w, _ := rail.projectScopeWindow(rail.currentCapture)
+		if w == nil {
+			return -1
+		}
+		return len(trajectory.IterSpans(w))
+	}())
 	recordToolSpan(t, rail, "t2")
 
 	recordToolSpan(t, rail, "t3")

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -34,6 +35,9 @@ var resourceAliases = map[string]string{
 // TrajectoryBuilder 为一次离线执行累积规范 OTLP span。
 // Python: offline/builder.py TrajectoryBuilder。
 type TrajectoryBuilder struct {
+	// mu 保护 spans/identities（Python 单线程 asyncio；Go 回调可并发，
+	// 并发移植模式：共享状态加锁）。
+	mu           sync.Mutex
 	sessionID    string
 	source       string
 	caseID       *string
@@ -93,6 +97,8 @@ func NewTrajectoryBuilder(sessionID, source string, caseID, memberID, teamID *st
 // Spans 返回组装器当前持有的脱离 span 列表。
 // Python: offline/builder.py TrajectoryBuilder.spans。
 func (b *TrajectoryBuilder) Spans() []map[string]any {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	result := make([]map[string]any, 0, len(b.spans))
 	for _, span := range b.spans {
 		result = append(result, copyJSON(span).(map[string]any))
@@ -103,6 +109,8 @@ func (b *TrajectoryBuilder) Spans() []map[string]any {
 // RecordSpan 记录一个脱离的规范 span，忽略重复身份。
 // Python: offline/builder.py TrajectoryBuilder.record_span。
 func (b *TrajectoryBuilder) RecordSpan(span map[string]any) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if span == nil {
 		return fmt.Errorf("span must be a mapping")
 	}
@@ -184,6 +192,8 @@ func (b *TrajectoryBuilder) resourceAttributes() map[string]any {
 // Build 构建不可变的规范 OTLP 轨迹快照。
 // Python: offline/builder.py TrajectoryBuilder.build。
 func (b *TrajectoryBuilder) Build() (*Trajectory, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	spanList := make([]any, 0, len(b.spans))
 	for _, span := range b.spans {
 		spanList = append(spanList, copyJSON(span))

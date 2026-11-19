@@ -34,7 +34,7 @@ type invokeCapture struct {
 
 // scopeWindowState 一个 scope 的窗口与其游标。
 // Python: _scope_windows[key] = Trajectory；cursor 为 Go 侧 builder 增量游标
-//（D-25.2b-11 附属状态，Python 无对应）。
+// （D-25.2b-11 附属状态，Python 无对应）。
 type scopeWindowState struct {
 	trajectory *trajectory.Trajectory
 	// consumed 已并入窗口的 spanId 集（增量游标；builder 列表会重排，
@@ -291,8 +291,6 @@ func (r *EvolutionRail) clearScopeWindows() {
 	defer r.scopeMu.Unlock()
 	r.scopeWindows = map[string]*scopeWindowState{}
 }
-
-
 
 // ScopeProcessorLike rail 需要的进程级 processor 面（订阅/退订）。
 type ScopeProcessorLike interface {
