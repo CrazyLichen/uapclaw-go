@@ -2,6 +2,8 @@ package common
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,8 +87,16 @@ func (s *ExternalCliReadSuite) TestFlatten缺段与字符串条目() {
 }
 
 func (s *ExternalCliReadSuite) TestCustomAgentsConfigValue() {
-	// 无注册表 → 空数组 JSON
-	s.Equal("[]", CustomAgentsConfigValue())
+	// 注册表为共享真实路径（WorkspaceDir），先落已知条目再断言其出现在串中
+	root := CustomAgentsRoot()
+	s.Require().NoError(os.MkdirAll(root, 0o755))
+	seed := `{"dsh":{"name":"dsh","version":"1","summary":"","cli_path":""}}`
+	s.Require().NoError(os.WriteFile(filepath.Join(root, "agents.json"), []byte(seed), 0o644))
+	var decoded []map[string]any
+	s.Require().NoError(json.Unmarshal([]byte(CustomAgentsConfigValue()), &decoded))
+	s.Require().Len(decoded, 1)
+	s.Equal("dsh", decoded[0]["name"])
+	s.Equal(false, decoded[0]["has_cli"])
 }
 
 func (s *ExternalCliReadSuite) TestPathHistoriesJSON形状() {
