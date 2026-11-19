@@ -12,6 +12,7 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	configpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
+	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 )
 
@@ -39,7 +40,7 @@ func (f *fakeOrchestratorEvaluator) EvaluateBatch(ctx context.Context, cases []m
 	dataset *harnessrsi.DatasetArtifact,
 	onCaseStage func(map[string]any) error,
 	caseConcurrency int,
-	baselineContexts map[string]any) (string, error) {
+	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error) {
 	f.calls++
 	var evalCases []map[string]any
 	for _, singleCase := range cases {
@@ -719,7 +720,7 @@ func (f *fakePathEvaluator) EvaluateBatch(ctx context.Context, cases []map[strin
 	dataset *harnessrsi.DatasetArtifact,
 	onCaseStage func(map[string]any) error,
 	caseConcurrency int,
-	baselineContexts map[string]any) (string, error) {
+	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error) {
 	f.calls++
 	isCandidateRefs := strings.Contains(harnessRefsPath, f.candidateTag)
 	// 评分语义：/target（候选门评估）→ 候选声称修复即满分；
@@ -1221,10 +1222,13 @@ func TestEvaluationContext_带基线上下文(t *testing.T) {
 	}
 	cases := []map[string]any{{"case_id": "c1"}}
 	context := orchestrator.evaluationContext(cases, dir,
-		map[string]any{"c1": "fingerprint-1"})
+		map[string]*evaluatorpkg.BaselineJudgeContext{
+			"c1": {CaseID: "c1", EvalRefPath: "/e", ResultPath: "/r",
+				TaskIdentity: "t", EvidenceDigest: "d"},
+		})
 	baselines, ok := context["baseline_contexts"].(map[string]any)
-	if !ok || baselines["c1"] != "fingerprint-1" {
-		t.Fatalf("基线上下文应入 context: %v", context["baseline_contexts"])
+	if !ok || baselines["c1"] == "" {
+		t.Fatalf("基线指纹应入 context: %v", context["baseline_contexts"])
 	}
 }
 

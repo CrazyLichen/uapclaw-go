@@ -6,6 +6,7 @@ import (
 	"context"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
+	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
 	analyzerpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluation_result_analyzer"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
@@ -27,7 +28,7 @@ type EvaluatorInvoker interface {
 		dataset *harnessrsi.DatasetArtifact,
 		onCaseStage func(map[string]any) error,
 		caseConcurrency int,
-		baselineContexts map[string]any) (string, error)
+		baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error)
 }
 
 // 编译期兜底：桩满足注入面（真身替换时同步满足）。

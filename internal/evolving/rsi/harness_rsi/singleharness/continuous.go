@@ -288,12 +288,9 @@ func runContinuousLoop(
 				return IterativeSingleHarnessResult{}, err
 			}
 			// contexts → any 形态（编排器缝隙参数）
-			var contextsAny map[string]any
+			var contextsTyped map[string]*evaluatorpkg.BaselineJudgeContext
 			if contexts != nil {
-				contextsAny = map[string]any{}
-				for caseID, context := range contexts {
-					contextsAny[caseID] = context
-				}
+				contextsTyped = contexts
 			}
 			repairRefs, repairSource := parentRefs, source
 			var repairCaps []map[string]any
@@ -640,7 +637,7 @@ func runContinuousLoop(
 							beforeHarnessRefsPath: parentRefs, candidateHarnessRefsPath: candidateRefs,
 							memberStatus: memberStatus, capabilities: capabilities,
 							outputDir: filepath.Join(attemptDir, "target"), dataset: dataset,
-							nodeRef: node, onEvent: onEvent, baselineContexts: contextsAny,
+							nodeRef: node, onEvent: onEvent, baselineContexts: contextsTyped,
 						})
 						if err != nil {
 							return IterativeSingleHarnessResult{}, err
@@ -693,7 +690,7 @@ func runContinuousLoop(
 						}
 						// YAML 往返将结构体字段名小写化——双方归一为 map 后比较
 						storedCtxNorm := yamlNormalize(targetPayload["evaluation_context"])
-						nowCtxNorm := yamlNormalize(owner.evaluationContext(targetCases, candidateRefs, contextsAny))
+						nowCtxNorm := yamlNormalize(owner.evaluationContext(targetCases, candidateRefs, contextsTyped))
 						if !anyEqual(storedCtxNorm, nowCtxNorm) {
 							return &evaluatorpkg.EvaluationInfrastructureError{
 								Msg: "Target evaluation does not match the frozen candidate and baseline"}
@@ -755,7 +752,7 @@ func runContinuousLoop(
 						fullRef, err := owner.evaluate(ctx, evaluateParams{
 							cases: allCases, harnessRefsPath: candidateRefs,
 							outputDir: filepath.Join(attemptDir, "full"), dataset: dataset,
-							nodeRef: node, onEvent: onEvent, baselineContexts: contextsAny,
+							nodeRef: node, onEvent: onEvent, baselineContexts: contextsTyped,
 							caseConcurrency: owner.config.Scheduling.FullEvaluationConcurrency,
 						})
 						if err != nil {

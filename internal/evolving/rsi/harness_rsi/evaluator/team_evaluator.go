@@ -57,14 +57,14 @@ func (te *TeamEvaluator) Evaluate(ctx context.Context, dataset harnessrsi.Datase
 // Python: team_evaluator.py:82 evaluate_batch。case_concurrency 守卫
 // （bool-as-int 与 <1 拒绝）按 Python 原始检查顺序先于桩错误（守卫顺序不得调换）；
 // Python 的 isinstance bool 检查在 Go 类型层不可能（bool ≠ int），属已知
-// 类型层偏差。baselineContexts 依赖 17.6 的 BaselineJudgeContext，桩期以
-// map[string]any 占位（⤴️ 17.6 收窄）。
+// 类型层偏差。baselineContexts 已随 17.4d 前置件收窄为 *BaselineJudgeContext
+// （原 ⤴️17.6 收窄回填已于 17.4d 兑现）。
 func (te *TeamEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]any,
 	teamSkillRefPath, harnessRefsPath, outputDir string,
 	dataset *harnessrsi.DatasetArtifact,
 	onCaseStage func(map[string]any) error,
 	caseConcurrency int,
-	baselineContexts map[string]any) (string, error) {
+	baselineContexts map[string]*BaselineJudgeContext) (string, error) {
 	if caseConcurrency < 1 {
 		return "", errors.New("case_concurrency must be a positive integer")
 	}

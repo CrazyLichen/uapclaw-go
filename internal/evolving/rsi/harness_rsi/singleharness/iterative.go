@@ -4826,7 +4826,7 @@ func mustFailedMachineEvidence(evalRefPath string) []string {
 // 偏差 D-d3：judge_protocol_identity 属 17.6，llmJudgeProtocol 返回的契约缺 judge_protocol 键。
 func (o *SingleHarnessIterativeOptimizationOrchestrator) evaluationContext(
 	cases []map[string]any, harnessRefsPath string,
-	baselineContexts map[string]any,
+	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext,
 ) map[string]any {
 	evaluatorConfig := map[string]any{
 		"config":  configpkg.EvaluatorProtocolConfig(o.config.Evaluator),
@@ -4843,10 +4843,8 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) evaluationContext(
 		baselineFingerprints := map[string]any{}
 		for _, singleCase := range cases {
 			caseID := toString(singleCase["case_id"])
-			if ctxObj, ok := baselineContexts[caseID].(*evaluatorpkg.BaselineJudgeContext); ok {
+			if ctxObj, ok := baselineContexts[caseID]; ok {
 				baselineFingerprints[caseID] = ctxObj.Fingerprint()
-			} else {
-				baselineFingerprints[caseID] = baselineContexts[caseID]
 			}
 		}
 		context["baseline_contexts"] = baselineFingerprints
@@ -4973,7 +4971,7 @@ type evaluateParams struct {
 	nodeRef          string
 	onEvent          rsi.OnEvent
 	caseConcurrency  int
-	baselineContexts map[string]any
+	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext
 }
 
 // evaluate 评估（Python _evaluate + model_usage_stage("evaluate")）。
@@ -5220,7 +5218,7 @@ type candidateGateParams struct {
 	frozenTargetCaseIDs      map[string]struct{}
 	nodeRef                  string
 	onEvent                  rsi.OnEvent
-	baselineContexts         map[string]any
+	baselineContexts         map[string]*evaluatorpkg.BaselineJudgeContext
 }
 
 // candidateGate 候选门（Python _candidate_gate，1,446-1,856）。
