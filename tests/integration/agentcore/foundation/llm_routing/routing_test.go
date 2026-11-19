@@ -16,14 +16,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	intelliroutererrors "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
 	intelliroutertypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
+	llmrouterpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/router"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	llmrouterpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/router"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

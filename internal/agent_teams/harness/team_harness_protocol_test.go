@@ -101,7 +101,7 @@ func TestTeamHarness_Stop无native不报错(t *testing.T) {
 // TestTeamHarness_Send无native报错 验证 Send 的 nil native 守卫。
 func TestTeamHarness_Send无native报错(t *testing.T) {
 	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
-	assert.Error(t, h.Send(context.Background(), "x", false))
+	assert.Error(t, h.Send(context.Background(), "x", false, nil))
 }
 
 // TestTeamHarness_Send转发native 验证 Send 转调 native.Send()。
@@ -111,7 +111,7 @@ func TestTeamHarness_Send转发native(t *testing.T) {
 	require.NoError(t, h.Start(context.Background(), teamSess))
 	defer func() { _ = h.Stop(context.Background()) }()
 
-	require.NoError(t, h.Send(context.Background(), "第一条", false))
+	require.NoError(t, h.Send(context.Background(), "第一条", false, nil))
 }
 
 // TestTeamHarness_Abort无活跃会话NoOp 验证 Abort 在无 native/无活跃会话时 no-op。

@@ -408,6 +408,13 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 	// 步骤 11: 续跑被生命周期暂停挂起的轮次（warm / cold）。
 	// Python: await self.resume_paused_round()（kernel.py L291）——内核完全就绪后最后执行。
 	k.resumePausedRound(ctx)
+	// Python: kernel.py L296-299 —— leader 才发 recovered 标记（consumer
+	// 交互前的一切都已完成，此时才发布）。
+	if k.host.Role() == schema.TeamRoleLeader {
+		if sc := k.host.StreamController(); sc != nil {
+			sc.EmitTeamRecovered()
+		}
+	}
 }
 
 // Pause 暂停协调子系统（幂等）。

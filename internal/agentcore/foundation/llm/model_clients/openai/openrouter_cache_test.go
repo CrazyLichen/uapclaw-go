@@ -12,7 +12,7 @@ func TestOpenrouterModelProvider(t *testing.T) {
 		{"anthropic/claude-4", "anthropic"},
 		{"~anthropic/claude-4", "anthropic"}, // 剥 "~"
 		{"Qwen/qwen-max", "qwen"},
-		{"gpt-4", ""},               // 无 "/" → None
+		{"gpt-4", ""}, // 无 "/" → None
 		{"", ""},
 		{"openai/gpt/a", "openai"}, // 只取第一段
 	}
@@ -402,7 +402,7 @@ func TestApplyOpenrouterProfile_矩阵(t *testing.T) {
 // 破坏 longestPrefixOverlapIndex 的 DeepEqual（多轮对话前缀匹配失效）。
 func TestDeepCopyValue_保数字类型(t *testing.T) {
 	in := []any{map[string]any{
-		"role": "assistant",
+		"role":       "assistant",
 		"tool_calls": []any{map[string]any{"id": "1", "index": 0, "weight": 1.5}},
 	}}
 	out := deepCopyValue(in).([]any)

@@ -15,12 +15,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 	intellirouter "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/health"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/observability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/provider"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/strategy"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	"time"
 )
 
@@ -1308,7 +1308,7 @@ func TestSingleDeployment401_ClassifiesUserAction(t *testing.T) {
 		t.Fatal("401 应进冷却（部署侧）")
 	}
 	// 分类：usable 空 → exhausted_user_action
-		modelErr := routing.ToModelError(err, &routerViewForTest{r: r}, "*", false)
+	modelErr := routing.ToModelError(err, &routerViewForTest{r: r}, "*", false)
 	if modelErr == nil {
 		t.Fatal("应产出 model error")
 	}

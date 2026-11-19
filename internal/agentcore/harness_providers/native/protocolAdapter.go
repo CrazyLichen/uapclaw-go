@@ -144,8 +144,8 @@ func NewNativeV2Adapter(spec atschema.DeepAgentSpec, buildCtx hschema.BuildConte
 		capacity = 1024
 	}
 	a := &NativeHarnessProtocolAdapter{
-		spec:             spec,
-		buildContext:     buildCtx,
+		spec:            spec,
+		buildContext:    buildCtx,
 		dispatched:      make(chan struct{}, 1),
 		pausedObserved:  make(chan struct{}, 1),
 		resumedObserved: make(chan struct{}, 1),
@@ -478,7 +478,7 @@ func (a *NativeHarnessProtocolAdapter) ExecuteTurn(ctx context.Context, turn *ha
 		if a.agent == nil {
 			return "", hp.TurnResult{}, &hp.HarnessProtocolError{Msg: "NativeHarness output stream is unavailable"}
 		}
-		if err := a.agent.Send(ctx, turn.Content.Content, false); err != nil {
+		if err := a.agent.Send(ctx, turn.Content.Content, false, nil); err != nil {
 			return "", hp.TurnResult{}, err
 		}
 	}
@@ -512,7 +512,7 @@ func (a *NativeHarnessProtocolAdapter) Steer(ctx context.Context, turn *harness_
 	if agent.State() != hp.HarnessStateRunning {
 		return &hp.HarnessStateError{Msg: "the native turn is not running"}
 	}
-	return agent.Send(ctx, harness_providers.HarnessInputText(content), true)
+	return agent.Send(ctx, harness_providers.HarnessInputText(content), true, nil)
 }
 
 // InterruptTurn 在 checkpointLock 内按 mode 分级 abort。
@@ -1350,12 +1350,12 @@ func turnMessagesFromAny(v any) ([]hp.TurnMessage, error) {
 // SavedInput / Queued 已含 jsontag，逐条转成 JsonObject 保持键名一致。
 func structToJsonObject(snap NativeCheckpoint) (hp.JsonObject, error) {
 	out := hp.JsonObject{
-		"session_id":    snap.SessionID,
-		"card_id":       snap.CardID,
-		"contexts":      snap.Contexts,
-		"deepagent":     snap.DeepAgent,
-		"queued":        savedInputsToJsonObjects(snap.Queued),
-		"output_state":  snap.OutputState,
+		"session_id":   snap.SessionID,
+		"card_id":      snap.CardID,
+		"contexts":     snap.Contexts,
+		"deepagent":    snap.DeepAgent,
+		"queued":       savedInputsToJsonObjects(snap.Queued),
+		"output_state": snap.OutputState,
 	}
 	if snap.Cwd != "" {
 		out["cwd"] = snap.Cwd

@@ -118,7 +118,8 @@ func (s *VideoGenSuite) TestVideoGenSuite_提交到盯单推送全链() {
 		return nil
 	})
 	tools.SetSendFileHistoryFunc(func(string, string, string, string, string,
-		float64, string, map[string]any, map[string]any, string) {})
+		float64, string, map[string]any, map[string]any, string) {
+	})
 	s.T().Cleanup(func() { tools.SetSendFilePushFunc(nil); tools.SetSendFileHistoryFunc(nil) })
 	// D-23.8-4 已回收：盯单路由经 ctx 绑定的 RootDecisionContext 直达（对齐 Python current_root_decision_context）
 

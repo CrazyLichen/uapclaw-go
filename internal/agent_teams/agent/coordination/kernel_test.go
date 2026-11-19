@@ -1,6 +1,8 @@
 package coordination
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"fmt"
 	"sync"
@@ -85,6 +87,7 @@ type fakeStreamControllerAccessor struct {
 	resetCalled bool
 }
 
+func (f *fakeStreamControllerAccessor) EmitTeamRecovered()      {}
 func (f *fakeStreamControllerAccessor) ResetStreamQueue()       { f.resetCalled = true }
 func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
 
@@ -129,16 +132,18 @@ type fakeKernelHost struct {
 	streamControllerAccessor types.StreamControllerAccessor
 }
 
-func (f *fakeKernelHost) IsAgentReady() bool                                  { return f.agentReady }
-func (f *fakeKernelHost) IsAgentRunning() bool                                { return f.agentRunning }
-func (f *fakeKernelHost) HasInFlightRound() bool                              { return f.inFlight }
-func (f *fakeKernelHost) HasPendingInterrupt() bool                           { return f.pendingInt }
-func (f *fakeKernelHost) CancelAgent(_ context.Context) error                 { return nil }
-func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
-func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
-func (f *fakeKernelHost) AutoStartMember(_ context.Context, _ string) bool    { return true }
-func (f *fakeKernelHost) SeedMemberRegistry(_ context.Context)                {}
-func (f *fakeKernelHost) RefreshIdleBaseline()                                {}
+func (f *fakeKernelHost) IsAgentReady() bool                            { return f.agentReady }
+func (f *fakeKernelHost) IsAgentRunning() bool                          { return f.agentRunning }
+func (f *fakeKernelHost) HasInFlightRound() bool                        { return f.inFlight }
+func (f *fakeKernelHost) HasPendingInterrupt() bool                     { return f.pendingInt }
+func (f *fakeKernelHost) CancelAgent(_ context.Context) error           { return nil }
+func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error { return nil }
+func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
+	return nil
+}
+func (f *fakeKernelHost) AutoStartMember(_ context.Context, _ string) bool { return true }
+func (f *fakeKernelHost) SeedMemberRegistry(_ context.Context)             {}
+func (f *fakeKernelHost) RefreshIdleBaseline()                             {}
 func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
 }

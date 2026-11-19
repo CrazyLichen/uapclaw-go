@@ -37,6 +37,10 @@
 package agent
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
+	"strings"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -201,6 +205,9 @@ func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 		// S-33: 对齐 Python team_agent.py L83-91，注入协调内核回调
 		WithWakeMailbox(a.coordination.WakeMailboxIfInterruptCleared),
 		WithRequestCompletionPoll(a.requestCompletionPoll),
+		// 25.1a 回填（Task 8）：轮结束边的成员启动对账。
+		// Python: member_startup_reconciler=self._reconcile_member_startup（team_agent.py L213）
+		WithReconcileMemberStartup(a.ReconcileMemberStartup),
 		// Python: task_board_probe=self.is_task_board_settled（team_agent.py L214）
 		WithTaskBoardProbe(a.isTaskBoardSettled),
 		// Python: team_agent.py:216-217——模型组名访问器与路由记账回调
@@ -561,6 +568,48 @@ func (a *TeamAgent) IsShutdownRequested(ctx context.Context) (bool, error) {
 	}
 	status := atschema.MemberStatus(dbMember.Status)
 	return status == atschema.MemberStatusShutdownRequested || status == atschema.MemberStatusShutdown, nil
+}
+
+// ReconcileMemberStartup 把板面有活但没人启动的窗口关掉（25.1a 回填 Task 8）。
+// 任务创建路径自带的 auto-start 的兜底，跑在 leader 的轮结束边（IDLE edge）上：
+// 本轮意图此时已完整落库，名册仍停在 UNSTARTED 而板面有开放任务就是缺口——
+// 代码关掉它，而不是指望模型自己注意到。注册与启动刻意分离
+// （spawn_teammate 只写 DB 行），这正是留给本钩子的窗口。
+//
+// 仅 leader：只有它持有名册。先探板面（一条聚合 COUNT）——没有开放任务的团队
+// 没有什么可启动的（leader 可以先于工作注册成员）。autostart_unstarted 在
+// UNSTARTED 集为空时是 no-op，所以静止的团队每轮几乎零开销。全程尽力而为：
+// 它跑在拆机邻接的边上，这里的失败不得阻断它后面的完成轮询。
+// Python: TeamAgent._reconcile_member_startup（team_agent.py L1371-1414）
+func (a *TeamAgent) ReconcileMemberStartup(ctx context.Context) error {
+	if a.Role() != atschema.TeamRoleLeader {
+		return nil
+	}
+	backend := a.TeamBackend()
+	if backend == nil {
+		return nil
+	}
+	_, nonTerminal, err := backend.DB().Task().CountTasksTerminality(ctx, backend.TeamName())
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("member_name", a.MemberName()).
+			Msg("round-idle member startup reconcile failed")
+		return nil
+	}
+	if nonTerminal == 0 {
+		return nil
+	}
+	started, err := backend.AutostartUnstarted(ctx, false)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("member_name", a.MemberName()).
+			Msg("round-idle member startup reconcile failed")
+		return nil
+	}
+	if len(started) > 0 {
+		logger.Info(logComponent).Str("member_name", a.MemberName()).
+			Str("started", strings.Join(started, ",")).
+			Msg("round-idle reconcile started members")
+	}
+	return nil
 }
 
 // UpdateStatus 更新成员状态到数据库。
@@ -941,7 +990,7 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // Python: TeamAgent.deliver_input(content, use_steer=True)（team_agent.py:550-570）
 // 运行时的单 supervisor 串行化所有输入：idle 开轮，running 转向或排队。
 // 因为没有状态转换窗口的竞态，这里不需要手写分支，也不需要 pending 队列。
-func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
+func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error {
 	if mr := a.MemberRuntime(); mr != nil {
 		// 外部成员：MemberRuntime.Send(content, immediate)，无 ctx 形参
 		// （Python send(content, immediate) 为协程调用；Go 外部 runtime 自持 ctx）
@@ -952,7 +1001,8 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 	if h == nil {
 		return nil
 	}
-	return h.Send(ctx, content, useSteer)
+	// Python: run_context is None → 省略（team_agent.py L565-571）；nil 形参等价。
+	return h.Send(ctx, content, useSteer, runContext)
 }
 
 // StartAgent 启动成员首轮。
@@ -966,7 +1016,7 @@ func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
 	if h == nil {
 		return nil
 	}
-	return h.Send(ctx, content, false)
+	return h.Send(ctx, content, false, nil)
 }
 
 // FollowUp 追加输入，等本轮结束后再跑。
@@ -980,7 +1030,7 @@ func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
 	if h == nil {
 		return nil
 	}
-	return h.Send(ctx, content, false)
+	return h.Send(ctx, content, false, nil)
 }
 
 // CancelAgent 取消 Agent。
@@ -1005,7 +1055,7 @@ func (a *TeamAgent) Steer(ctx context.Context, content string) error {
 	if h == nil {
 		return nil
 	}
-	return h.Send(ctx, content, true)
+	return h.Send(ctx, content, true, nil)
 }
 
 // ResumeInterrupt 用用户输入恢复挂起的中断。
@@ -1028,7 +1078,7 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput *interaction.
 	if !h.IsPendingInterruptResumeValid(userInput) {
 		return nil
 	}
-	return h.Send(ctx, userInput, false)
+	return h.Send(ctx, userInput, false, nil)
 }
 
 // ShutdownSelf 请求自身关闭。

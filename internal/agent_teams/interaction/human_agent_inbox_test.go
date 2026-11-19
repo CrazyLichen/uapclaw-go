@@ -1,6 +1,8 @@
 package interaction
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"testing"
 
@@ -16,7 +18,7 @@ type fakeDeliverInputer struct {
 	err       error
 }
 
-func (f *fakeDeliverInputer) DeliverInput(_ context.Context, _ any, _ bool) error {
+func (f *fakeDeliverInputer) DeliverInput(_ context.Context, _ any, _ bool, _ *agentinterfaces.RunContext) error {
 	f.delivered = true
 	return f.err
 }

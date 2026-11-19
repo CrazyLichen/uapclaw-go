@@ -177,13 +177,13 @@ var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 // TaskTransitions TaskStatus 状态转换表。
 // Python: TASK_TRANSITIONS
 var TaskTransitions = map[TaskStatus][]TaskStatus{
-	TaskStatusPending:      {TaskStatusPlanning, TaskStatusInProgress, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusBlocked:      {TaskStatusPending, TaskStatusCancelled},
-	TaskStatusPlanning:     {TaskStatusPlanning, TaskStatusInProgress, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusInProgress:   {TaskStatusInReview, TaskStatusCompleted, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusInReview:     {TaskStatusCompleted, TaskStatusInProgress, TaskStatusPending, TaskStatusCancelled},
-	TaskStatusCompleted:    {},
-	TaskStatusCancelled:    {},
+	TaskStatusPending:    {TaskStatusPlanning, TaskStatusInProgress, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusBlocked:    {TaskStatusPending, TaskStatusCancelled},
+	TaskStatusPlanning:   {TaskStatusPlanning, TaskStatusInProgress, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInProgress: {TaskStatusInReview, TaskStatusCompleted, TaskStatusPending, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusInReview:   {TaskStatusCompleted, TaskStatusInProgress, TaskStatusPending, TaskStatusCancelled},
+	TaskStatusCompleted:  {},
+	TaskStatusCancelled:  {},
 }
 
 // TaskReassignableStatuses 任务 owner 可原位交换的状态集合。

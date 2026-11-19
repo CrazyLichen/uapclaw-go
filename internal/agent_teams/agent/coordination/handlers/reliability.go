@@ -198,7 +198,7 @@ func (h *ReliabilityHandler) deliverRouteNotice(ctx context.Context, summary str
 		}
 		h.noticed[*key] = true
 	}
-	if err := h.round.DeliverInput(ctx, h.routeNoticeText(ctx, summary, mapOrNone(evidence)), true); err != nil {
+	if err := h.round.DeliverInput(ctx, h.routeNoticeText(ctx, summary, mapOrNone(evidence)), true, nil); err != nil {
 		logger.Error(logComponent).Err(err).Msg("deliver_route_notice: deliver_input failed")
 	}
 }
@@ -243,7 +243,7 @@ func (h *ReliabilityHandler) route(ctx context.Context, severity core.Severity, 
 	} else {
 		return
 	}
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).Err(err).Msg("route anomaly: deliver_input failed")
 	}
 }

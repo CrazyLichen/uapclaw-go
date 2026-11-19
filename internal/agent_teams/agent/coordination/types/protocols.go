@@ -1,6 +1,8 @@
 package types
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
@@ -25,8 +27,10 @@ type AgentRoundController interface {
 	HasPendingInterrupt() bool
 	// CancelAgent 取消运行中的 agent 任务
 	CancelAgent(ctx context.Context) error
-	// DeliverInput 确保内容到达 DeepAgent，不论当前状态
-	DeliverInput(ctx context.Context, content any, useSteer bool) error
+	// DeliverInput 确保内容到达 DeepAgent，不论当前状态。
+	// runContext 请求局部调用上下文（heartbeat 原因/上下文装配模式），nil 等价
+	// Python 的省略（team_agent.py L565-571）。
+	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
 	// AutoStartMember 尽力拉起一个 UNSTARTED 成员运行时（F_62 调度器 handoff
 	// 搭车的幂等惰性拉起原语：UNSTARTED→STARTING CAS）。
 	// Python: TeamAgent.auto_start_member

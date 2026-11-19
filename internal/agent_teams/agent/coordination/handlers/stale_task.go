@@ -179,7 +179,7 @@ func (h *StaleTaskHandler) nudgeStaleClaim(ctx context.Context, task *database.T
 func (h *StaleTaskHandler) selfNudgeStaleClaim(ctx context.Context, task *database.TeamTaskBase) {
 	content := formatStaleClaimNudge(task)
 	// 对齐 Python: deliver_input(content)（默认 use_steer=True）
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("task_id", task.TaskID).
 			Msg("selfNudgeStaleClaim: deliver_input failed")
@@ -273,7 +273,7 @@ func (h *StaleTaskHandler) checkStalePendingTasks(ctx context.Context) {
 	for _, task := range fresh {
 		content += fmt.Sprintf("\n- [%s] %s: %s", task.TaskID, task.Title, task.Content)
 	}
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).Err(err).Msg("checkStalePendingTasks: deliver_input failed")
 	}
 	logger.Info(logComponent).

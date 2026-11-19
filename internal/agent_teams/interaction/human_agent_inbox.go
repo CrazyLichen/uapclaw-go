@@ -1,6 +1,8 @@
 package interaction
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"fmt"
 	"sort"
@@ -18,8 +20,8 @@ import (
 // 不需要 import agent 包。*agent.TeamAgent 隐式满足此接口。
 type DeliverInputer interface {
 	// DeliverInput 投递输入到 Agent。
-	// Python: TeamAgent.deliver_input(content, use_steer=True)
-	DeliverInput(ctx context.Context, content any, useSteer bool) error
+	// Python: TeamAgent.deliver_input(content, use_steer=True, run_context=None)
+	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
 }
 
 // AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
@@ -221,7 +223,7 @@ func (h *HumanAgentInbox) driveAgent(ctx context.Context, body string, sender st
 
 	// Python 步骤 4-5
 	// ✅(#9.55): 通过 agentLookup 返回的 TeamAgent.DeliverInput 实现投递
-	if err := agent.DeliverInput(ctx, body, true); err != nil {
+	if err := agent.DeliverInput(ctx, body, true, nil); err != nil {
 		return NewDeliverResultFailure("deliver_input_failed:" + err.Error()), nil
 	}
 	return NewDeliverResultSuccess(nil), nil

@@ -1,6 +1,8 @@
 package scheduling
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"encoding/json"
 	"testing"
@@ -27,7 +29,7 @@ type fakeDelivery struct {
 	useSteer bool
 }
 
-func (h *fakeHost) DeliverInput(_ context.Context, content any, useSteer bool) error {
+func (h *fakeHost) DeliverInput(_ context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error {
 	if s, ok := content.(string); ok {
 		h.delivered = append(h.delivered, fakeDelivery{content: s, useSteer: useSteer})
 	}

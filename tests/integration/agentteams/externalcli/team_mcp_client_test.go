@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -65,15 +65,15 @@ func (s *TeamMcpClientSuite) newClient(ctx context.Context, memberName string) *
 	})
 	descriptor := &externalcli.TeamJoinDescriptor{
 		// 同团队全部成员共享同一会话 id（Python descriptor.session_id 同源）
-		SessionID:     "sess-it-team",
-		TeamName:      "team-it",
-		MemberName:    memberName,
-		Role:          "teammate",
-		Scope:         "member",
-		Language:      "cn",
-		DispatchMode:  "autonomous",
-		TeammateMode:  "build_mode",
-		DBConfig:      memDBConfig{},
+		SessionID:       "sess-it-team",
+		TeamName:        "team-it",
+		MemberName:      memberName,
+		Role:            "teammate",
+		Scope:           "member",
+		Language:        "cn",
+		DispatchMode:    "autonomous",
+		TeammateMode:    "build_mode",
+		DBConfig:        memDBConfig{},
 		TransportConfig: &atschema.MessagerTransportConfig{Backend: "inprocess"},
 	}
 	client := externalcli.NewExternalTeamClient(descriptor)

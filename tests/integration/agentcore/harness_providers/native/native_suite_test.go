@@ -13,14 +13,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	nativeprov "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/native"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

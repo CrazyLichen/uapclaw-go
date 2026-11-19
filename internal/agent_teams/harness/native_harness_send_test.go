@@ -20,7 +20,7 @@ func TestNativeHarness_Send在Idle时开轮(t *testing.T) {
 	require.NoError(t, h.Start(context.Background(), sess))
 	defer func() { _ = h.Stop(context.Background()) }()
 
-	require.NoError(t, h.Send(context.Background(), "第一条", false))
+	require.NoError(t, h.Send(context.Background(), "第一条", false, nil))
 
 	require.Eventually(t, func() bool {
 		return h.State() == harnessprotocol.HarnessStateRunning
@@ -67,5 +67,5 @@ func TestNativeHarness_Send在Terminated后报错(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	assert.Error(t, h.Send(ctx, "stop 之后", false))
+	assert.Error(t, h.Send(ctx, "stop 之后", false, nil))
 }

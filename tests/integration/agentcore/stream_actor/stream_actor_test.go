@@ -187,7 +187,7 @@ func (s *StreamActorIntegrationSuite) Test恢复场景_补发EndMessage_免超�
 // 讨论点 8/9：ctx 取消贯穿 + shutdown 级联（-race 由 CI/本地 -race 运行验证）
 func (s *StreamActorIntegrationSuite) TestCtx取消与Shutdown级联() {
 	ctx := context.Background()
-	
+
 	graph := stream_actor.NewStreamGraph()
 	graph.AddStreamConsumer(&liveConsumer{handle: true}, "C")
 	mgr, err := stream_actor.NewActorManager(ctx, twoProducerSpec(), graph, false, newSessionAdapter(&s.Suite))

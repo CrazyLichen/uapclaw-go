@@ -3,6 +3,8 @@
 package agentteams_test
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"encoding/json"
 	"testing"
@@ -51,7 +53,7 @@ type schedFakeHost struct {
 	started   []string
 }
 
-func (h *schedFakeHost) DeliverInput(_ context.Context, content any, _ bool) error {
+func (h *schedFakeHost) DeliverInput(_ context.Context, content any, _ bool, runContext *agentinterfaces.RunContext) error {
 	if s, ok := content.(string); ok {
 		h.delivered = append(h.delivered, s)
 	}
