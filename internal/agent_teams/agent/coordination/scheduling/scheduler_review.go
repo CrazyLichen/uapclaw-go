@@ -339,3 +339,11 @@ func derefStr(value *string) string {
 func currentTimeMs() int64 {
 	return database.GetCurrentTime()
 }
+
+// ──────────────────────────── 终态反馈聚合（25.2b） ────────────────────────────
+
+// SetReviewFeedbackFinalizer 注入终态聚合回调（挂载 rail 的 FinalizeReviewFeedback；
+// 装配点注入）。Python: _dispatch_team_review_feedback 的 rail 回调面。
+func (s *TeamScheduler) SetReviewFeedbackFinalizer(finalizer func(ctx context.Context) (bool, error)) {
+	s.reviewFeedbackFinalizer = finalizer
+}

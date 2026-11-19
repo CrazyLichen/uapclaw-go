@@ -75,6 +75,8 @@ type TeamSkillEvolutionRail struct {
 	evolutionTotalTimeoutSec float64
 	// teamID 团队标识
 	teamID string
+	// reviewFeedbackCoordinator 评审反馈协调器（25.2b F_62，接口注入）。
+	reviewFeedbackCoordinator ReviewFeedbackCoordinator
 	// trajectorySource 团队轨迹聚合源
 	trajectorySource TeamTrajectorySource
 	// trajectoriesDir 轨迹调试目录
@@ -1768,4 +1770,77 @@ func inferTeamSkillFromTrajectory(traj *trajectory.Trajectory, knownSkills []str
 	}
 
 	return inferSkillFromTexts(knownSkills, skillToolPayloads, texts)
+}
+
+// ──────────────────────────── 评审反馈挂点（25.2b F_62） ────────────────────────────
+
+// SetupReviewFeedbackEvolution 为标准团队 rail 附挂评审反馈演化。
+// 任务反馈被翻译为结构化观察并保留到团队结束；终态聚合复用本挂载 rail 的
+// 常规团队 Skill 优化器、持久化、pending 事件与审批路径。
+// Python: setup_review_feedback_evolution (team_skill_evolution_rail.py L244-273)。
+func (r *TeamSkillEvolutionRail) SetupReviewFeedbackEvolution(sessionID, teamID string, minConfidence float64, coordinator ReviewFeedbackCoordinator) {
+	r.reviewFeedbackCoordinator = coordinator
+}
+
+// ReviewFeedbackEvolutionEnabled 本挂载 rail 是否接受调度器评审反馈。
+// Python: review_feedback_evolution_enabled (team_skill_evolution_rail.py L274-276)。
+func (r *TeamSkillEvolutionRail) ReviewFeedbackEvolutionEnabled() bool {
+	return r.reviewFeedbackCoordinator != nil
+}
+
+// BindReviewFeedbackSkillCreateRail 绑定已挂载、用于重复模式的新建 Skill rail。
+// Python: bind_review_feedback_skill_create_rail (team_skill_evolution_rail.py L277-280)。
+func (r *TeamSkillEvolutionRail) BindReviewFeedbackSkillCreateRail(rail ReviewFeedbackCoordinator) {
+	// Go 侧 creation rail 面与协调器同经接口注入（见 ReviewFeedbackCoordinator）。
+	r.reviewFeedbackCoordinator = rail
+}
+
+// HandleReviewFeedback 把一条结算失败的评审经 Core 协调器路由。
+// Python: handle_review_feedback (team_skill_evolution_rail.py L282-285)。
+func (r *TeamSkillEvolutionRail) HandleReviewFeedback(ctx context.Context, payload map[string]any) error {
+	if r.reviewFeedbackCoordinator != nil {
+		return r.reviewFeedbackCoordinator.HandleReviewFeedback(ctx, payload)
+	}
+	return nil
+}
+
+// FinalizeReviewFeedback 为调度器反馈运行终态团队聚合。
+// Python: finalize_review_feedback (team_skill_evolution_rail.py L287-293)。
+func (r *TeamSkillEvolutionRail) FinalizeReviewFeedback(ctx context.Context, payload map[string]any) (bool, error) {
+	if r.reviewFeedbackCoordinator == nil {
+		return false, nil
+	}
+	return r.reviewFeedbackCoordinator.OnTeamCompleted(ctx, payload)
+}
+
+// ReviewLanguage rail 语言（协调器归因提示词消费）。
+func (r *TeamSkillEvolutionRail) ReviewLanguage() string { return r.language }
+
+// ReviewStore 演进存储（协调器证据面消费）。
+func (r *TeamSkillEvolutionRail) ReviewStore() *checkpointing.EvolutionStore { return r.evolutionStore }
+
+// ReviewGenerator 优化器（协调器 LLM/模型名消费）。
+func (r *TeamSkillEvolutionRail) ReviewGenerator() *skillopt.TeamSkillExperienceOptimizer {
+	return r.generator
+}
+
+// RailGetTrajectory 团队 scope 干净窗口（协调器轨迹证据消费）。
+// Python: rail.get_trajectory(session_id=..., team_id=...)。
+func (r *TeamSkillEvolutionRail) RailGetTrajectory(sessionID, teamID string) (*trajectory.Trajectory, error) {
+	return r.GetTrajectory(sessionID, "", teamID)
+}
+
+// RailDrainApprovalEvents 排干待审批事件（payload map 形态）。
+// Python: rail.drain_pending_approval_events(wait=False)。
+func (r *TeamSkillEvolutionRail) RailDrainApprovalEvents() []map[string]any {
+	events := r.DrainPendingApprovalEvents(false, nil)
+	out := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		if event != nil {
+			if payload, ok := event.Payload.(map[string]any); ok {
+				out = append(out, payload)
+			}
+		}
+	}
+	return out
 }
