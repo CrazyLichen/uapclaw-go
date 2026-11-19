@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // TestPayloadQueue_无界不阻塞 send 侧永不阻塞（D2，对齐 asyncio.Queue 无界语义）
@@ -146,9 +146,9 @@ func TestProcessorRun_广播不匹配ability(t *testing.T) {
 	p.processorQueues["A.answer"] = []*payloadQueue{newPayloadQueue()}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go p.Run(ctx, components.ComponentAbilityCollect)
+	go p.Run(ctx, ability.ComponentAbilityCollect)
 	time.Sleep(20 * time.Millisecond) // 等 run 启动（D1：run 先启动后投帧）
-	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "你"}}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "你"}}, SourceAbility: ability.ComponentAbilityStream})
 	v, ok := p.processorQueues["A.answer"][0].get(context.Background())
 	if !ok {
 		t.Fatal("应收到分发值")
@@ -168,7 +168,7 @@ func TestProcessorRun_注册前帧不丢失(t *testing.T) {
 	p.processorQueues["A.answer"] = []*payloadQueue{newPayloadQueue()}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go p.Run(ctx, components.ComponentAbilityCollect)
+	go p.Run(ctx, ability.ComponentAbilityCollect)
 	v, ok := p.processorQueues["A.answer"][0].get(context.Background())
 	if !ok || v != "你" {
 		t.Fatalf("注册前帧应补投, got %v ok=%v", v, ok)
@@ -187,13 +187,13 @@ func TestProcessorRun_多源组关流(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
-	go func() { p.Run(ctx, components.ComponentAbilityCollect); close(done) }()
+	go func() { p.Run(ctx, ability.ComponentAbilityCollect); close(done) }()
 	time.Sleep(20 * time.Millisecond)
 	// A 先发数据帧（source_path_map 记录路径后 END 才关这些路径——Python 同语义）
-	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: ability.ComponentAbilityStream})
 	_, _ = qa.get(context.Background()) // 消费数据帧
 	// A 组内到齐：只关 A 路径，B 路径不动
-	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: ability.ComponentAbilityStream})
 	// closeInactiveGroupSources：A 数据帧时 B（同组非活跃源）路径已被关流
 	if v, ok := qb.get(context.Background()); !ok {
 		t.Fatal("B 路径应收到 EndFrame(B)（close_inactive_group_sources）")
@@ -201,7 +201,7 @@ func TestProcessorRun_多源组关流(t *testing.T) {
 		t.Fatalf("B 路径应收到 EndFrame(B), got %v", v)
 	}
 	// Python `group & handled` 为组内 OR：{A,B} 组任一源到齐即满足 → A END 后关全队列退出
-	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: ability.ComponentAbilityStream})
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -227,19 +227,19 @@ func TestProcessorRun_单源组到齐即关全流(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
-	go func() { p.Run(ctx, components.ComponentAbilityCollect); close(done) }()
+	go func() { p.Run(ctx, ability.ComponentAbilityCollect); close(done) }()
 	time.Sleep(20 * time.Millisecond)
-	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: ability.ComponentAbilityStream})
 	_, _ = qa.get(context.Background())
-	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: ability.ComponentAbilityStream})
 	select {
 	case <-done:
 		t.Fatal("仅 A 组到齐 run 不应退出（B 组未到齐）")
 	case <-time.After(100 * time.Millisecond):
 	}
-	p.Receive(StreamPayload{Message: map[string]any{"B": map[string]any{"results": "y"}}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"B": map[string]any{"results": "y"}}, SourceAbility: ability.ComponentAbilityStream})
 	_, _ = qb.get(context.Background())
-	p.Receive(StreamPayload{Message: map[string]any{"B": "END_B"}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"B": "END_B"}, SourceAbility: ability.ComponentAbilityStream})
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -256,11 +256,11 @@ func TestProcessorRun_EndFrame传播(t *testing.T) {
 	p.processorQueues["A.answer"] = []*payloadQueue{q}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go p.Run(ctx, components.ComponentAbilityCollect)
+	go p.Run(ctx, ability.ComponentAbilityCollect)
 	time.Sleep(20 * time.Millisecond)
-	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "x"}}, SourceAbility: ability.ComponentAbilityStream})
 	_, _ = q.get(context.Background())
-	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: components.ComponentAbilityStream})
+	p.Receive(StreamPayload{Message: map[string]any{"A": "END_A"}, SourceAbility: ability.ComponentAbilityStream})
 	v, ok := q.get(context.Background())
 	if !ok {
 		t.Fatal("路径队列应收到 EndFrame")
@@ -333,7 +333,7 @@ func TestProcessorGenerator_每路径多chan广播(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go p.Run(ctx, components.ComponentAbilityCollect)
+	go p.Run(ctx, ability.ComponentAbilityCollect)
 	time.Sleep(20 * time.Millisecond)
 	p.Receive(StreamPayload{Message: map[string]any{"A": map[string]any{"answer": "v"}}})
 	for i, q := range queues {
@@ -394,13 +394,13 @@ func TestActorSend_首帧拉起(t *testing.T) {
 	// 未 handle 直接丢弃，不拉起任务
 	vNoHandle := &fakeConsumer{handle: false}
 	a2 := NewStreamActor("C2", vNoHandle, nil, [][]string{{"A-stream"}}, -1)
-	_ = a2.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, false, "A")
+	_ = a2.Send(ctx, map[string]any{"A": "x"}, ability.ComponentAbilityStream, false, "A")
 	if a2.taskCtx != nil {
 		t.Fatal("未 handle 不应拉起任务")
 	}
 	// 首帧拉起
 	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"answer": "你"}},
-		components.ComponentAbilityStream, true, "A"); err != nil {
+		ability.ComponentAbilityStream, true, "A"); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -415,7 +415,7 @@ func TestActorSend_任务已结束丢弃(t *testing.T) {
 	v := &fakeConsumer{handle: true, done: true}
 	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
-	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, false, "A"); err != nil {
+	if err := actor.Send(ctx, map[string]any{"A": "x"}, ability.ComponentAbilityStream, false, "A"); err != nil {
 		t.Fatal(err)
 	}
 	if actor.taskCtx != nil {
@@ -429,11 +429,11 @@ func TestActorSend_错误拦截(t *testing.T) {
 		eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v, nil, [][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
-	if err := actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A"); err != nil {
+	if err := actor.Send(ctx, map[string]any{"A": "x"}, ability.ComponentAbilityStream, true, "A"); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(30 * time.Millisecond) // 等 taskErr 被错误回调填充
-	if err := actor.Send(ctx, map[string]any{"A": "y"}, components.ComponentAbilityStream, true, "A"); err == nil {
+	if err := actor.Send(ctx, map[string]any{"A": "y"}, ability.ComponentAbilityStream, true, "A"); err == nil {
 		t.Fatal("task_error 有异常时后续首帧应被拦截")
 	}
 }
@@ -442,7 +442,7 @@ func TestActorSend_错误拦截(t *testing.T) {
 func TestActorSend_广播全部processor(t *testing.T) {
 	v := &fakeConsumer{handle: true, done: true, eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v,
-		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
+		[]ability.ComponentAbility{ability.ComponentAbilityCollect, ability.ComponentAbilityTransform},
 		[][]string{{"A-stream"}}, -1)
 	if len(actor.processors) != 2 {
 		t.Fatal("应建两个 processor")
@@ -450,11 +450,11 @@ func TestActorSend_广播全部processor(t *testing.T) {
 	// 注册订阅路径须先于 Send（run 于 event 放行后启动，广播帧直接路由到订阅者）
 	qa := newPayloadQueue()
 	qb := newPayloadQueue()
-	actor.processors[components.ComponentAbilityCollect].processorQueues["A.x"] = []*payloadQueue{qa}
-	actor.processors[components.ComponentAbilityTransform].processorQueues["A.x"] = []*payloadQueue{qb}
+	actor.processors[ability.ComponentAbilityCollect].processorQueues["A.x"] = []*payloadQueue{qa}
+	actor.processors[ability.ComponentAbilityTransform].processorQueues["A.x"] = []*payloadQueue{qb}
 	ctx := context.Background()
 	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"x": "hello"}},
-		components.ComponentAbilityStream, true, "A"); err != nil {
+		ability.ComponentAbilityStream, true, "A"); err != nil {
 		t.Fatal(err)
 	}
 	for ab, q := range map[string]*payloadQueue{"collect": qa, "transform": qb} {
@@ -469,15 +469,15 @@ func TestActorSend_广播全部processor(t *testing.T) {
 func TestActorSend_启动全部processor(t *testing.T) {
 	v := &fakeConsumer{handle: true, done: true, eventFn: func(e chan struct{}) { close(e) }}
 	actor := NewStreamActor("C", v,
-		[]components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform},
+		[]ability.ComponentAbility{ability.ComponentAbilityCollect, ability.ComponentAbilityTransform},
 		[][]string{{"A-stream"}}, -1)
 	qa := newPayloadQueue()
 	qb := newPayloadQueue()
-	actor.processors[components.ComponentAbilityCollect].processorQueues["A.answer"] = []*payloadQueue{qa}
-	actor.processors[components.ComponentAbilityTransform].processorQueues["A.answer"] = []*payloadQueue{qb}
+	actor.processors[ability.ComponentAbilityCollect].processorQueues["A.answer"] = []*payloadQueue{qa}
+	actor.processors[ability.ComponentAbilityTransform].processorQueues["A.answer"] = []*payloadQueue{qb}
 	ctx := context.Background()
 	if err := actor.Send(ctx, map[string]any{"A": map[string]any{"answer": "你"}},
-		components.ComponentAbilityStream, true, "A"); err != nil {
+		ability.ComponentAbilityStream, true, "A"); err != nil {
 		t.Fatal(err)
 	}
 	// 路由值按 Python 语义：origin 路径解析到叶值
@@ -498,11 +498,11 @@ func TestActorSend_启动全部processor(t *testing.T) {
 func TestActorShutdown_级联取消(t *testing.T) {
 	wait := make(chan struct{})
 	v := &fakeConsumer{handle: true, done: true, callWaitCh: wait, eventFn: func(e chan struct{}) { close(e) }}
-	actor := NewStreamActor("C", v, []components.ComponentAbility{components.ComponentAbilityCollect},
+	actor := NewStreamActor("C", v, []ability.ComponentAbility{ability.ComponentAbilityCollect},
 		[][]string{{"A-stream"}}, -1)
 	ctx := context.Background()
-	_ = actor.Send(ctx, map[string]any{"A": "x"}, components.ComponentAbilityStream, true, "A")
-	actor.startProcessor(ctx, actor.processors[components.ComponentAbilityCollect])
+	_ = actor.Send(ctx, map[string]any{"A": "x"}, ability.ComponentAbilityStream, true, "A")
+	actor.startProcessor(ctx, actor.processors[ability.ComponentAbilityCollect])
 	if err := actor.Shutdown(); err != nil {
 		t.Fatal(err)
 	}

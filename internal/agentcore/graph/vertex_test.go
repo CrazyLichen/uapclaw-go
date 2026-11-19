@@ -20,7 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // Task2 测试：结构体/构造/对账辅助/collectRefSourceIDs/Reset。
@@ -224,7 +224,7 @@ func TestInit_主干默认能力(t *testing.T) {
 		t.Fatalf("流超时应从 session env 读取（vertex.py:91）, got %v", v.streamCalledTimeout)
 	}
 	// nodeConfig 为 nil（⤵️ 8.15 回填管路）→ 能力面默认 [INVOKE]（vertex.py:93-95）
-	if len(v.componentAbility) != 1 || v.componentAbility[0] != components.ComponentAbilityInvoke {
+	if len(v.componentAbility) != 1 || v.componentAbility[0] != ability.ComponentAbilityInvoke {
 		t.Fatalf("默认能力应为 [INVOKE], got %v", v.componentAbility)
 	}
 	if v.hasStreamCall {
@@ -249,13 +249,13 @@ func TestInit_能力判定_流批混合(t *testing.T) {
 	v := NewVertex("n", &fakeVertexExecutable{})
 	parent := &fakeInnerSession{cfg: config.NewSessionConfig(context.Background()),
 		st: state.NewInMemoryWorkflowState()}
-	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
-		components.ComponentAbilityInvoke, components.ComponentAbilityTransform}})
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []ability.ComponentAbility{
+		ability.ComponentAbilityInvoke, ability.ComponentAbilityTransform}})
 	if !v.hasStreamCall || !v.hasCall {
 		t.Fatalf("混合能力应双真, stream=%v call=%v", v.hasStreamCall, v.hasCall)
 	}
-	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
-		components.ComponentAbilityCollect}})
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []ability.ComponentAbility{
+		ability.ComponentAbilityCollect}})
 	if !v.hasStreamCall || v.hasCall {
 		t.Fatal("纯流能力：hasStreamCall true / hasCall false")
 	}
@@ -488,9 +488,9 @@ func TestPostInvoke_None过滤与Merge(t *testing.T) {
 
 func TestStreamAbilities与ShouldHandleMessage(t *testing.T) {
 	v, parent := newTraceVertex(t, false)
-	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
-		components.ComponentAbilityInvoke, components.ComponentAbilityCollect,
-		components.ComponentAbilityTransform}})
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []ability.ComponentAbility{
+		ability.ComponentAbilityInvoke, ability.ComponentAbilityCollect,
+		ability.ComponentAbilityTransform}})
 	ab := v.streamAbilities()
 	if len(ab) != 2 {
 		t.Fatalf("应过滤出 COLLECT/TRANSFORM, got %v", ab)
@@ -508,7 +508,7 @@ func (f *fakeVertexActorSession) GetWorkflowStateValue(string) any            { 
 func (f *fakeVertexActorSession) UpdateAndCommitWorkflowState(map[string]any) {}
 
 // newVertexWithActor 构造带 ActorManager 的 Vertex（A --stream--> n1）
-func newVertexWithActor(t *testing.T, abilities ...components.ComponentAbility) (*Vertex, *stream_actor.ActorManager) {
+func newVertexWithActor(t *testing.T, abilities ...ability.ComponentAbility) (*Vertex, *stream_actor.ActorManager) {
 	t.Helper()
 	cfg := config.NewSessionConfig(context.Background())
 	parent := &fakeInnerSession{cfg: cfg, st: state.NewInMemoryWorkflowState(), id: "s1"}
@@ -520,7 +520,7 @@ func newVertexWithActor(t *testing.T, abilities ...components.ComponentAbility) 
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"n1"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"A":  {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"A":  {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
 		"n1": {Abilities: abilities},
 	}
 	am, err := stream_actor.NewActorManager(context.Background(), spec, stream_actor.NewStreamGraph(), false, &fakeVertexActorSession{})
@@ -532,9 +532,9 @@ func newVertexWithActor(t *testing.T, abilities ...components.ComponentAbility) 
 }
 
 func TestPreStream_消费注册(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	// 无 schema：Consume 返回空 map（Generator 空 schema 短路）
-	out, err := v.preStream(context.Background(), components.ComponentAbilityCollect)
+	out, err := v.preStream(context.Background(), ability.ComponentAbilityCollect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,10 +542,10 @@ func TestPreStream_消费注册(t *testing.T) {
 		t.Fatal("Consume 返回不应为 nil")
 	}
 	// 有 schema：$ref 叶子应注册为 StreamReader（Generator 一比一）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	v2.nodeConfig = &workflow.NodeSpec{StreamIOConfigs: &workflow.CompIOConfig{
 		InputsSchema: map[string]any{"x": "${A.answer}"}}}
-	out2, err := v2.preStream(context.Background(), components.ComponentAbilityCollect)
+	out2, err := v2.preStream(context.Background(), ability.ComponentAbilityCollect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,8 +574,8 @@ func newVertexAsProducer(t *testing.T) (*Vertex, *stream_actor.ActorManager) {
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"n1": {"n2"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"n1": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
-		"n2": {Abilities: []components.ComponentAbility{components.ComponentAbilityCollect}},
+		"n1": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
+		"n2": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityCollect}},
 	}
 	g := stream_actor.NewStreamGraph()
 	g.AddStreamConsumer(&fakeVertexConsumer{}, "n2")
@@ -595,7 +595,7 @@ func TestProcessChunk_三分支(t *testing.T) {
 	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	_ = swm.AddWriter(stream.StreamModeOutput, &fakeOutputWriter{ch: written})
 	v.nodeSession = &fakeVertexNodeSession{WorkflowVertexSession: v.nodeSession, swm: swm}
-	v.processChunk(context.Background(), "chunk-0", true, 0, false, components.ComponentAbilityStream)
+	v.processChunk(context.Background(), "chunk-0", true, 0, false, ability.ComponentAbilityStream)
 	select {
 	case w := <-written:
 		os, ok := w.(*stream.OutputSchema)
@@ -607,8 +607,8 @@ func TestProcessChunk_三分支(t *testing.T) {
 	}
 	// ② 普通节点：produce 转发（n1 --stream--> n2）
 	v2, am := newVertexAsProducer(t)
-	v2.processChunk(context.Background(), "x", false, 0, false, components.ComponentAbilityStream)
-	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 1 {
+	v2.processChunk(context.Background(), "x", false, 0, false, ability.ComponentAbilityStream)
+	if am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen() != 1 {
 		t.Fatal("普通节点应 produce 到下游 actor")
 	}
 }
@@ -638,17 +638,17 @@ func TestPostStream_收口分流(t *testing.T) {
 	ch := make(chan StreamChunk[map[string]any], 1)
 	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
 	close(ch)
-	v.postStream(context.Background(), ch, components.ComponentAbilityStream)
-	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 2 {
-		t.Fatalf("应产出数据帧+END 哨兵帧, got %d", am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen())
+	v.postStream(context.Background(), ch, ability.ComponentAbilityStream)
+	if am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen() != 2 {
+		t.Fatalf("应产出数据帧+END 哨兵帧, got %d", am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen())
 	}
 	// 逐 chunk 转发：默认 transformer 无 schema → 原样透传
 	v2, am2 := newVertexAsProducer(t)
 	ch2 := make(chan StreamChunk[map[string]any], 1)
 	ch2 <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
 	close(ch2)
-	v2.postStream(context.Background(), ch2, components.ComponentAbilityStream)
-	p := am2.StreamActor("n2").Processor(components.ComponentAbilityCollect)
+	v2.postStream(context.Background(), ch2, ability.ComponentAbilityStream)
+	p := am2.StreamActor("n2").Processor(ability.ComponentAbilityCollect)
 	if p.MainQueueLen() != 2 { // 数据帧 + END 帧
 		t.Fatalf("应产出数据帧+END 帧, got %d", p.MainQueueLen())
 	}
@@ -657,7 +657,7 @@ func TestPostStream_收口分流(t *testing.T) {
 // ──────────────────────────── Task5: runExecutable / retry / 错误恢复 ────────────────────────────
 
 func TestRunExecutable_Invoke策略主干(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	exe := &fakeVertexExecutable{
 		invokeFn: func(ctx context.Context, inputs map[string]any, sess session.BaseSession,
 			kw map[string]any) (map[string]any, error) {
@@ -668,7 +668,7 @@ func TestRunExecutable_Invoke策略主干(t *testing.T) {
 		},
 	}
 	v.executable = exe
-	ok, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	ok, err := v.runExecutable(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	if err != nil || !ok {
 		t.Fatalf("invoke 策略应成功, ok=%v err=%v", ok, err)
 	}
@@ -679,32 +679,32 @@ func TestRunExecutable_Invoke策略主干(t *testing.T) {
 
 func TestRunExecutable_异常分类(t *testing.T) {
 	// BaseError → 原样上抛（vertex.py:213-222）
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	be := exception.BuildError(exception.StatusWorkflowExecutionTimeout)
 	v.executable = &fakeVertexExecutable{
 		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
 			return nil, be
 		},
 	}
-	_, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	_, err := v.runExecutable(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	if !errors.Is(err, be) {
 		t.Fatalf("BaseError 应原样上抛, got %v", err)
 	}
 	// 通用错误 → 组件执行错误包装（vertex.py:223-233）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v2.executable = &fakeVertexExecutable{
 		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
 			return nil, errors.New("boom")
 		},
 	}
-	_, err2 := v2.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	_, err2 := v2.runExecutable(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	var be2 *exception.BaseError
 	if !errors.As(err2, &be2) || be2.Code() != exception.StatusWorkflowComponentExecutionError.Code() {
 		t.Fatalf("通用错误应包装为组件执行错误, got %v", err2)
 	}
 	// event 兜底置位（vertex.py:234-236）
 	ev := make(chan struct{})
-	_, _ = v2.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, ev)
+	_, _ = v2.runExecutable(context.Background(), ability.ComponentAbilityInvoke, false, nil, ev)
 	select {
 	case <-ev:
 	default:
@@ -713,7 +713,7 @@ func TestRunExecutable_异常分类(t *testing.T) {
 }
 
 func TestRunExecutable_Collect策略信封(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	var gotSchema map[string]any
 	v.executable = &fakeVertexExecutable{
 		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
@@ -723,7 +723,7 @@ func TestRunExecutable_Collect策略信封(t *testing.T) {
 			return map[string]any{"collected": true}, nil
 		},
 	}
-	ok, err := v.runExecutable(context.Background(), components.ComponentAbilityCollect, false, nil, nil)
+	ok, err := v.runExecutable(context.Background(), ability.ComponentAbilityCollect, false, nil, nil)
 	if err != nil || !ok {
 		t.Fatalf("collect 策略应成功, ok=%v err=%v", ok, err)
 	}
@@ -734,7 +734,7 @@ func TestRunExecutable_Collect策略信封(t *testing.T) {
 }
 
 func TestRunExecutableWithRetry_超时真取消(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v.nodeConfig = &workflow.NodeSpec{Timeout: 0.05, MaxRetries: 0}
 	started := make(chan struct{})
 	v.executable = &fakeVertexExecutable{
@@ -745,7 +745,7 @@ func TestRunExecutableWithRetry_超时真取消(t *testing.T) {
 			return nil, ctx.Err()
 		},
 	}
-	_, err := v.runExecutableWithRetry(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	_, err := v.runExecutableWithRetry(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	var be *exception.BaseError
 	if !errors.As(err, &be) || be.Code() != exception.StatusWorkflowExecutionTimeout.Code() {
 		t.Fatalf("超时应回落为执行超时错误, got %v", err)
@@ -754,7 +754,7 @@ func TestRunExecutableWithRetry_超时真取消(t *testing.T) {
 }
 
 func TestRunExecutableWithRetry_重试后成功(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v.nodeConfig = &workflow.NodeSpec{MaxRetries: 2}
 	calls := 0
 	v.executable = &fakeVertexExecutable{
@@ -766,14 +766,14 @@ func TestRunExecutableWithRetry_重试后成功(t *testing.T) {
 			return map[string]any{"ok": true}, nil
 		},
 	}
-	ok, err := v.runExecutableWithRetry(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	ok, err := v.runExecutableWithRetry(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	if err != nil || !ok || calls != 3 {
 		t.Fatalf("第 3 次应成功, ok=%v err=%v calls=%d", ok, err, calls)
 	}
 }
 
 func TestBuildTimeoutError_命中与回落(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	// 未命中 → 回落默认（vertex.py:326-330）
 	err := v.buildTimeoutError(context.Background(), errors.New("t"), 1.5)
 	var be *exception.BaseError
@@ -793,23 +793,23 @@ func TestBuildTimeoutError_命中与回落(t *testing.T) {
 
 func TestRunErrorRecovery_三出口(t *testing.T) {
 	// STREAM 不可恢复（vertex.py:335-337）
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	boom := errors.New("boom")
-	if _, err := v.runErrorRecovery(context.Background(), components.ComponentAbilityStream, boom); !errors.Is(err, boom) {
+	if _, err := v.runErrorRecovery(context.Background(), ability.ComponentAbilityStream, boom); !errors.Is(err, boom) {
 		t.Fatal("STREAM 能力应直接上抛")
 	}
 	// 无 handler → 上抛（vertex.py:362）
-	if _, err := v.runErrorRecovery(context.Background(), components.ComponentAbilityInvoke, boom); !errors.Is(err, boom) {
+	if _, err := v.runErrorRecovery(context.Background(), ability.ComponentAbilityInvoke, boom); !errors.Is(err, boom) {
 		t.Fatal("无命中应上抛原错误")
 	}
 	// handler 命中 → postInvoke 恢复并成功（vertex.py:356-358）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	recoveryFn := func(ctx context.Context, data map[string]any) any {
 		return map[string]any{"recovered": true}
 	}
 	callback.GetCallbackFramework().OnCustom("component_error_recovery", recoveryFn)
 	defer callback.GetCallbackFramework().OffCustom("component_error_recovery", recoveryFn)
-	ok, err := v2.runErrorRecovery(context.Background(), components.ComponentAbilityInvoke, boom)
+	ok, err := v2.runErrorRecovery(context.Background(), ability.ComponentAbilityInvoke, boom)
 	if err != nil || !ok {
 		t.Fatalf("恢复命中应返回成功, ok=%v err=%v", ok, err)
 	}
@@ -828,7 +828,7 @@ func TestCallInternal_未初始化报错(t *testing.T) {
 
 func TestCallInternal_无流数据报错(t *testing.T) {
 	// 有流能力、非 End、流侧从未启动 → no stream data in（vertex.py:701-704）
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	// COLLECT（流能力）执行成功但流侧从未被 StreamActor 触发 → no stream data in
 	err := v.callInternal(context.Background(), nil)
 	var be *exception.BaseError
@@ -839,8 +839,8 @@ func TestCallInternal_无流数据报错(t *testing.T) {
 
 func TestCallInternal_流等待握手(t *testing.T) {
 	// 流侧先启动（stream=1,call=0）→ callInternal 等待 streamDone
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
-	v.componentAbility = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
+	v.componentAbility = []ability.ComponentAbility{ability.ComponentAbilityInvoke}
 	v.streamCallCount.Store(1) // 模拟流侧已启动
 	go func() {
 		time.Sleep(20 * time.Millisecond)
@@ -850,7 +850,7 @@ func TestCallInternal_流等待握手(t *testing.T) {
 		t.Fatalf("流侧成功结果应放行, err=%v", err)
 	}
 	// 流侧失败 → 转抛（vertex.py:696-697）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v2.streamCallCount.Store(1)
 	boom := errors.New("stream failed")
 	go func() { v2.streamDone <- boom }()
@@ -858,7 +858,7 @@ func TestCallInternal_流等待握手(t *testing.T) {
 		t.Fatalf("流侧失败应转抛, got %v", err)
 	}
 	// 超时分支 D-1（vertex.py:698-700）
-	v3, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v3, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v3.streamCallCount.Store(1)
 	v3.streamCalledTimeout = 0.05
 	err3 := v3.callInternal(context.Background(), nil)
@@ -869,7 +869,7 @@ func TestCallInternal_流等待握手(t *testing.T) {
 }
 
 func TestCall_成功路径(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	// post_commit=true → AtomicInvoke 路径（需 state 实现 WorkflowState——已满足）
 	res, err := v.Call(context.Background(), map[string]any{"st": 1}, nil)
 	if err != nil {
@@ -888,7 +888,7 @@ func TestCall_成功路径(t *testing.T) {
 }
 
 func TestCall_异常路径触发NodeError(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	v.executable = &fakeVertexExecutable{
 		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
 			return nil, errors.New("boom")
@@ -916,7 +916,7 @@ func TestCall_异常路径触发NodeError(t *testing.T) {
 }
 
 func TestAtomicInvoke_转发call(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	// atomicInvoke → callInternal（vertex.py:418-419）：未初始化不成立时走正常链，
 	// 此处经 stream 侧未启动的正常批入返回 nil error
 	if err := func() error {
@@ -957,7 +957,7 @@ func TestStreamCall_未初始化分支(t *testing.T) {
 }
 
 func TestStreamCall_启动链与成功收割(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	collectStarted := make(chan struct{})
 	v.executable = &fakeVertexExecutable{
 		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
@@ -998,7 +998,7 @@ func TestStreamCall_启动链与成功收割(t *testing.T) {
 }
 
 func TestStreamCall_失败回调(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	boom := errors.New("collect failed")
 	v.executable = &fakeVertexExecutable{
 		collectFn: func(context.Context, <-chan map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
@@ -1030,7 +1030,7 @@ func TestStreamCall_失败回调(t *testing.T) {
 }
 
 func TestStreamCall_取消分类(t *testing.T) {
-	v, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	blockCtx, cancel := context.WithCancel(context.Background())
 	v.executable = &fakeVertexExecutable{
 		collectFn: func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession,
@@ -1084,12 +1084,12 @@ func TestVertex_双链并发_race(t *testing.T) {
 			return map[string]any{"invoked": true}, nil
 		},
 	})
-	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
-		components.ComponentAbilityInvoke, components.ComponentAbilityCollect}})
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []ability.ComponentAbility{
+		ability.ComponentAbilityInvoke, ability.ComponentAbilityCollect}})
 	spec := workflow.NewWorkflowSpec()
 	spec.StreamEdges = map[string][]string{"A": {"n1"}}
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"A":  {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"A":  {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
 		"n1": {Abilities: v.componentAbility},
 	}
 	g := stream_actor.NewStreamGraph()
@@ -1101,7 +1101,7 @@ func TestVertex_双链并发_race(t *testing.T) {
 	parent.am = am
 	// 流入侧：首帧 spawn StreamCall（批入侧 Call 之前启动——不变式）
 	if err := am.Produce(context.Background(), "A", map[string]any{"A": "first"},
-		components.ComponentAbilityStream, true); err != nil {
+		ability.ComponentAbilityStream, true); err != nil {
 		t.Fatal(err)
 	}
 	// 批入侧：Call 等待当轮 streamDone 握手
@@ -1216,7 +1216,7 @@ func TestIsStreamSourceStillPending_分支(t *testing.T) {
 		t.Fatal("无 actor manager 应 false")
 	}
 	// 有 manager：未匹配组 → should_sanitize true → pending false（取反）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityCollect)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityCollect)
 	if v2.isStreamSourceStillPending("Z") {
 		t.Fatal("无匹配组应 pending=false")
 	}
@@ -1228,8 +1228,8 @@ func TestIsStreamSourceStillPending_分支(t *testing.T) {
 
 func TestInit_节点规格派生与SetEndNode(t *testing.T) {
 	v, parent := newTraceVertex(t, false)
-	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []components.ComponentAbility{
-		components.ComponentAbilityTransform}})
+	driveNodeSpec(t, v, parent, &workflow.NodeSpec{Abilities: []ability.ComponentAbility{
+		ability.ComponentAbilityTransform}})
 	v.SetEndNode(true)
 	if !v.isEndNode {
 		t.Fatal("SetEndNode 应生效")
@@ -1313,9 +1313,9 @@ func TestPostStream_Transformer轨与StreamOutput(t *testing.T) {
 	ch := make(chan StreamChunk[map[string]any], 1)
 	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "raw"}}
 	close(ch)
-	v.postStream(context.Background(), ch, components.ComponentAbilityStream)
+	v.postStream(context.Background(), ch, ability.ComponentAbilityStream)
 	// transformer 轨产出的 message "x"（map）入下游 + END 帧
-	if am.StreamActor("n2").Processor(components.ComponentAbilityCollect).MainQueueLen() != 2 {
+	if am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen() != 2 {
 		t.Fatal("transformer 轨应产出数据帧+END 帧")
 	}
 }
@@ -1353,7 +1353,7 @@ func TestClearInteractive(t *testing.T) {
 
 func TestRunExecutable_Stream策略与子图封装(t *testing.T) {
 	// 子图封装：OnInvoke 收到 {inputs, config} 信封（vertex.py:136-137）
-	v, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	var gotInputs map[string]any
 	v.executable = &fakeVertexExecutable{
 		invokeFn: func(ctx context.Context, inputs map[string]any, sess session.BaseSession,
@@ -1362,7 +1362,7 @@ func TestRunExecutable_Stream策略与子图封装(t *testing.T) {
 			return map[string]any{}, nil
 		},
 	}
-	_, err := v.runExecutable(context.Background(), components.ComponentAbilityInvoke, true,
+	_, err := v.runExecutable(context.Background(), ability.ComponentAbilityInvoke, true,
 		map[string]any{"wf": "cfg"}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1374,21 +1374,21 @@ func TestRunExecutable_Stream策略与子图封装(t *testing.T) {
 		t.Fatalf("子图信封应含 config 键, got %v", gotInputs)
 	}
 	// stream 策略：OnStream 成功空流（vertex.py:148-158）
-	v2, _ := newVertexWithActor(t, components.ComponentAbilityStream)
+	v2, _ := newVertexWithActor(t, ability.ComponentAbilityStream)
 	v2.executable = &fakeVertexExecutable{} // 默认空流
-	ok, err := v2.runExecutable(context.Background(), components.ComponentAbilityStream, false, nil, nil)
+	ok, err := v2.runExecutable(context.Background(), ability.ComponentAbilityStream, false, nil, nil)
 	if err != nil || !ok {
 		t.Fatalf("stream 策略应成功, ok=%v err=%v", ok, err)
 	}
 	// 中断路径：OnInvoke 返回 GraphInterrupt → info 日志原样上抛（vertex.py:206-212）
-	v3, _ := newVertexWithActor(t, components.ComponentAbilityInvoke)
+	v3, _ := newVertexWithActor(t, ability.ComponentAbilityInvoke)
 	gi := &pregel.GraphInterrupt{}
 	v3.executable = &fakeVertexExecutable{
 		invokeFn: func(context.Context, map[string]any, session.BaseSession, map[string]any) (map[string]any, error) {
 			return nil, gi
 		},
 	}
-	_, err3 := v3.runExecutable(context.Background(), components.ComponentAbilityInvoke, false, nil, nil)
+	_, err3 := v3.runExecutable(context.Background(), ability.ComponentAbilityInvoke, false, nil, nil)
 	if !errors.Is(err3, gi) {
 		t.Fatal("中断应原样上抛")
 	}
@@ -1399,7 +1399,7 @@ func TestProcessChunk_End子图与Schema直通(t *testing.T) {
 	w, _ := newSubVertexWorld(t)
 	v := w.v
 	os := &stream.OutputSchema{Type: "x", Payload: "p"}
-	v.processChunk(context.Background(), os, true, 0, true, components.ComponentAbilityStream)
+	v.processChunk(context.Background(), os, true, 0, true, ability.ComponentAbilityStream)
 	q, err := w.am.SubWorkflowStream()
 	if err != nil {
 		t.Fatal(err)
@@ -1416,7 +1416,7 @@ func TestProcessChunk_End子图与Schema直通(t *testing.T) {
 	v2.nodeSession = &fakeVertexNodeSession{WorkflowVertexSession: v2.nodeSession, swm: swm}
 	v2.isEndNode = true
 	v2.processChunk(context.Background(), &stream.OutputSchema{Type: "raw", Payload: "d"},
-		true, 0, false, components.ComponentAbilityStream)
+		true, 0, false, ability.ComponentAbilityStream)
 	select {
 	case got := <-written:
 		if got.(*stream.OutputSchema).Type != "raw" {
@@ -1441,7 +1441,7 @@ func newSubVertexWorld(t *testing.T) (*subWorld, error) {
 	v.SetEndNode(true)
 	spec := workflow.NewWorkflowSpec()
 	spec.CompConfigs = map[string]*workflow.NodeSpec{
-		"B": {Abilities: []components.ComponentAbility{components.ComponentAbilityStream}},
+		"B": {Abilities: []ability.ComponentAbility{ability.ComponentAbilityStream}},
 	}
 	g := stream_actor.NewStreamGraph()
 	v.RegisterStreamConsumer(g)

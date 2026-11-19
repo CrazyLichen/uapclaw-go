@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // TestStart_Invoke_透传 验证 Start 原样返回 inputs（start_comp.py:14-15）。
@@ -37,4 +37,4 @@ func TestStart_其余钩子默认未实现(t *testing.T) {
 }
 
 // 编译期确认 ability 别名锚点（components 包桥接面可用性）
-var _ = components.ComponentAbilityInvoke
+var _ = ability.ComponentAbilityInvoke

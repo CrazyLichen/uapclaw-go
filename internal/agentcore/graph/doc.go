@@ -26,7 +26,8 @@
 //	├── doc.go                 # 包文档
 //	├── base.go               # Graph 声明式构图接口 + Router 类型别名（8.1，Python base.py）
 //	├── graph.go              # Branch/PregelGraph/CompiledGraph 构图与编译门面（8.1，Python graph.py）
-//	├── executable.go          # Executable 泛型接口 + StreamChunk + BaseExecutable 基座（8.2）
+//	├── executable.go          # Executable 契约锚点别名层（本体在 executable/ 叶包，D-17-8）
+//	├── executable/            # Executable 契约叶包（StreamChunk/BaseExecutable/Executable，8.2/D-17-8）
 //	├── executable_graph.go    # ExecutableGraph 契约 + InputsKey/ConfigKey 信封常量（8.2）
 //	├── atomic_node.go         # AtomicNode 原子提交包装（8.10）
 //	├── graph_state.go        # GraphState 节点输出聚合 schema

@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // ──────────────────────────── WorkflowSession 测试 ────────────────────────────
@@ -615,7 +615,7 @@ func TestNodeSession_NodeConfig(t *testing.T) {
 	ws := NewWorkflowSession(WithWorkflowID("wf1"))
 	wfc, _ := workflow.NewWorkflowConfig(&workflow.WorkflowCard{Version: "v1"})
 	nsSpec, _ := workflow.NewNodeSpec()
-	nsSpec.Abilities = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	nsSpec.Abilities = []ability.ComponentAbility{ability.ComponentAbilityInvoke}
 	wfc.Spec.CompConfigs["node1"] = nsSpec
 	ws.Config().AddWorkflowConfig("wf1", wfc)
 

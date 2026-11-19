@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -84,5 +86,47 @@ func TestWorkflowComponent_OnCollect_流式会话包装(t *testing.T) {
 	out, err := comp.OnCollect(context.Background(), in, inner, nil)
 	if err != nil || out["ok"] != true {
 		t.Fatalf("collect 转调失败: out=%v err=%v", out, err)
+	}
+}
+
+// TestWorkflowComponent_AbilityValues_别名锚点 验证别名委托（D-17-8 锚点保持）。
+func TestWorkflowComponent_AbilityValues_别名锚点(t *testing.T) {
+	vals := AbilityValues()
+	if len(vals) != 4 || vals[0] != ComponentAbilityInvoke {
+		t.Fatalf("AbilityValues 委托不符: %v", vals)
+	}
+	if ComponentAbilityInvoke.Name() != "invoke" || ComponentAbilityTransform.Desc() != "stream in, stream out" {
+		t.Fatal("别名方法透传不符")
+	}
+}
+
+// TestWorkflowComponent_OnStream_流输出转换触发 验证 transformStreamOutput
+// 逐帧转换路径（component.py output_event 逐项语义）。
+func TestWorkflowComponent_OnStream_流输出转换触发(t *testing.T) {
+	fw := callback.GetCallbackFramework()
+	fw.RegisterWorkflowTransformIO(callback.ComponentBatchInput, callback.ComponentStreamOutput,
+		nil,
+		func(ctx context.Context, event callback.WorkflowEventType, output any) any {
+			return map[string]any{"wrapped": true}
+		})
+	defer fw.RegisterWorkflowTransformIO(callback.ComponentBatchInput, callback.ComponentStreamOutput, nil, nil)
+
+	comp := &WorkflowComponent{StreamFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+		ch := make(chan graphexe.StreamChunk[map[string]any], 1)
+		ch <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"raw": 1}}
+		close(ch)
+		return ch, nil
+	}}
+	inner := newFakeVertexSession(t, "n1", "End")
+	ch, err := comp.OnStream(context.Background(), map[string]any{}, inner, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := <-ch
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if got.Val["wrapped"] != true {
+		t.Fatalf("流输出应经转换包装: %v", got.Val)
 	}
 }

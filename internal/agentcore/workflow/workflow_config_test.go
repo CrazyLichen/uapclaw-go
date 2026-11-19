@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // TestNewWorkflowSpec_默认值 对齐 Python pydantic default_factory=dict
@@ -41,8 +41,8 @@ func TestNodeSpec_默认值(t *testing.T) {
 // TestNodeSpec_Abilities字段 供 ActorManager 消费
 func TestNodeSpec_Abilities字段(t *testing.T) {
 	spec, _ := NewNodeSpec()
-	spec.Abilities = []components.ComponentAbility{components.ComponentAbilityCollect, components.ComponentAbilityTransform}
-	if len(spec.Abilities) != 2 || spec.Abilities[0] != components.ComponentAbilityCollect {
+	spec.Abilities = []ability.ComponentAbility{ability.ComponentAbilityCollect, ability.ComponentAbilityTransform}
+	if len(spec.Abilities) != 2 || spec.Abilities[0] != ability.ComponentAbilityCollect {
 		t.Fatal("Abilities 读写失败")
 	}
 }

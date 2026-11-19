@@ -545,9 +545,15 @@ func TestEnd_Render_Mix_第二拍等待首拍渲染完成(t *testing.T) {
 	var err1, err2 error
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); first, err1 = e.render(context.Background(), map[string]any{"n": "a"}, 5, compSess) }()
+	go func() {
+		defer wg.Done()
+		first, err1 = e.render(context.Background(), map[string]any{"n": "a"}, 5, compSess)
+	}()
 	time.Sleep(10 * time.Millisecond) // 保证首拍先建 batchTemplate
-	go func() { defer wg.Done(); second, err2 = e.render(context.Background(), map[string]any{"n": "b"}, 5, compSess) }()
+	go func() {
+		defer wg.Done()
+		second, err2 = e.render(context.Background(), map[string]any{"n": "b"}, 5, compSess)
+	}()
 	wg.Wait()
 	if err1 != nil || err2 != nil {
 		t.Fatalf("render 错误: %v %v", err1, err2)

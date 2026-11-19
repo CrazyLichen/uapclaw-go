@@ -146,7 +146,8 @@ Go 落地（选项 2 一比一；**核对修订（2026-11-19 二轮）**：大�
 | D-17-3 | Python 叶子值 `AsyncGenerator/Generator` isinstance 双态 → Go 统一 `<-chan any`（或既有 StreamChunk 流形态） | 8.2 已定 `<-chan StreamChunk[O]` 为流形态 | 长期保留 |
 | D-17-4 | `string.Template.safe_substitute` → Go 手写等价（缺键保留 `$name` 原样） | Go 标准库无 Template | 长期保留 |
 | D-17-5 | `__init_subclass__` 自动装饰 → ComponentExecutable 四钩子方法体内 Trigger 等价序 | Go 无类继承钩子；语义等价（回调仍触发、transform_io 改写生效需回调注册方配合） | CallbackFramework 引入方法级包装时迁移 |
-| D-17-6 | ~~Python `session.get_env` 键名核对~~ **已关闭（2026-11-19 核对）**：Python `END_COMP_TEMPLATE_BATCH_READER_TIMEOUT_KEY` 的键值就是 `"_end_comp_template_branch_render_timeout"`（Python 键名与值本就不一致），Go `EndCompTemplateBranchRenderTimeoutKey` 逐字对应；两键 + BuiltinDefaults 默认值 5 全部已存在（constants.go:41-43、136-137） | — | — |
+| D-17-8 | **实施中新增（2026-11-19）**：①ComponentAbility 枚举本体沉 `components/ability` 叶包（stream_actor/workflow_config 经 components 间接引用在 components 引入 session/graph 后成环）；②Executable 契约（StreamChunk/BaseExecutable/Executable/GeneralExecutor）沉 `graph/executable` 叶包（components 需实现契约但引 graph 根与 graph→components 成环）；两处均以**类型别名**（Go 1.24+ 泛型别名）在 components/base.go、graph/executable.go 保持原锚点不变；stream_actor/manager、workflow_config 及 5 个测试文件改直引叶包 | Go 包环硬约束（Python 无此问题）；PendingNode 迁 pregel（8.3b D6）/AgentsBridge（17.4c1）破环先例同款 | 锚点别名长期保留；若上游包结构重组可回收 |
+| D-17-6 || D-17-6 | ~~Python `session.get_env` 键名核对~~ **已关闭（2026-11-19 核对）**：Python `END_COMP_TEMPLATE_BATCH_READER_TIMEOUT_KEY` 的键值就是 `"_end_comp_template_branch_render_timeout"`（Python 键名与值本就不一致），Go `EndCompTemplateBranchRenderTimeoutKey` 逐字对应；两键 + BuiltinDefaults 默认值 5 全部已存在（constants.go:41-43、136-137） | — | — |
 
 ## 7. 测试与覆盖率
 
