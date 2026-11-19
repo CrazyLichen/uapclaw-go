@@ -272,6 +272,15 @@ func CreateTeamTools(
 		allTools["claim_task"] = newClaimTaskTool(taskMgr, t)
 		allTools["submit_plan"] = newSubmitPlanTool(taskMgr, t)
 		allTools["member_complete_task"] = newMemberCompleteTaskTool(taskMgr, t)
+		// 25.2b F_62：一个 schema 一个 invoke；判定策略（首个判定生效 vs 记票
+		// 由调度器结算）在 manager 内，变体只是 desc_key——文案必须与调用方
+		// 实际经历的策略一致。
+		// Python: _VERIFY_TASK_DESC_KEY (tool_factory.py L126-133)。
+		verifyDescKey := "verify_task"
+		if taskMgr.dispatchMode == "scheduled" {
+			verifyDescKey = "verify_task_scheduled"
+		}
+		allTools["verify_task"] = newVerifyTaskTool(taskMgr, t, verifyDescKey)
 	}
 	if msgMgr != nil {
 		allTools["send_message"] = newSendMessageTool(msgMgr, t, teamBackend)
@@ -519,13 +528,81 @@ func newUpdateTaskTool(agentTeam *TeamBackend, t locales.Translator) *UpdateTask
 // newViewTaskTool 创建 ViewTaskTool 实例。
 func newViewTaskTool(taskManager *TeamTaskManager, t locales.Translator) *ViewTaskTool {
 	actionParam := schema.NewStringParam("action", t("view_task", "action"), false, "list")
-	actionParam.Enum = []any{"get", "list", "claimable"}
+	actionParam.Enum = []any{"get", "note", "list", "claimable", "in_review"}
 	return &ViewTaskTool{
 		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.view_task", "view_task", t("view_task"),
 			[]*schema.Param{
 				actionParam,
 				schema.NewStringParam("task_id", t("view_task", "task_id"), false),
 				schema.NewStringParam("status", t("view_task", "status"), false),
+			}, nil)),
+		taskManager: taskManager,
+	}
+}
+
+// VerifyTaskTool 评审人判定工具（verify gate，reviewer only）。
+// 带验收人的任务由作者完成时进入 IN_REVIEW；名单上的验收人以此工具投出
+// pass/fail 判定。判定的效果由团队 dispatch-mode 策略决定（manager 内选择，
+// 按模式的 desc_key 描述）：autonomous 直接应用首个判定；scheduled 记票并
+// 由 leader 侧调度器计票结算（F_62）。manager 强制调用者是任务验收人且非作者。
+//
+// Python: VerifyTaskTool (tool_task.py L2238-2305)。
+type VerifyTaskTool struct {
+	TeamTool
+	// taskManager 任务管理器
+	taskManager *TeamTaskManager
+}
+
+// Invoke 执行评审判定。
+// Python: VerifyTaskTool.invoke (tool_task.py L2262-2287)。
+func (t *VerifyTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	taskID := strings.TrimSpace(fmt.Sprint(inputs["task_id"]))
+	if taskID == "" || taskID == "<nil>" {
+		return toolError("'task_id' is required")
+	}
+	decision := strings.TrimSpace(fmt.Sprint(inputs["decision"]))
+	if decision == "<nil>" {
+		decision = ""
+	}
+	feedback := strings.TrimSpace(fmt.Sprint(inputs["feedback"]))
+	if feedback == "<nil>" {
+		feedback = ""
+	}
+
+	result, err := t.taskManager.VerifyTask(ctx, taskID, decision, feedback)
+	if err != nil {
+		return toolError(err.Error())
+	}
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	data := map[string]any{"task_id": taskID, "decision": strings.ToLower(decision)}
+	if feedback != "" {
+		data["feedback"] = feedback
+	}
+	if result.Data != nil {
+		// scheduled dispatch（F_62）：调用只记票，判定未定——回传计票快照，
+		// reviewer 无需再跑一次 view_task 就知道当前轮进度。
+		data["tally"] = result.Data
+	}
+	return toolSuccess(data)
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (t *VerifyTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// newVerifyTaskTool 创建 VerifyTaskTool 实例。
+// desc_key 按模式选择：autonomous=verify_task；scheduled=verify_task_scheduled
+// （由装配点传入）。
+func newVerifyTaskTool(taskManager *TeamTaskManager, t locales.Translator, descKey string) *VerifyTaskTool {
+	return &VerifyTaskTool{
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.verify_task", "verify_task", t(descKey),
+			[]*schema.Param{
+				schema.NewStringParam("task_id", t("verify_task", "task_id"), true),
+				schema.NewStringParam("decision", t("verify_task", "decision"), true),
+				schema.NewStringParam("feedback", t("verify_task", "feedback"), false),
 			}, nil)),
 		taskManager: taskManager,
 	}
@@ -1045,6 +1122,50 @@ func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...t
 	// 对齐 Python: claimable 传 status=PENDING，list 传 inputs["status"]
 	var summaries []*TaskSummary
 	var err error
+	if action == "note" {
+		// F_119：一条任务的完整完成 summary + detail（digest/brief 中展示的
+		// summary 背后的不截断全文）。
+		// Python: ViewTaskToolV2 note action (tool_task.py L1417-1435)。
+		taskID, _ := inputs["task_id"].(string)
+		if taskID == "" {
+			return toolError("task_id required for note action")
+		}
+		task, err := t.taskManager.Get(ctx, taskID)
+		if err != nil || task == nil {
+			return toolError("Task not found")
+		}
+		return toolSuccess(map[string]any{
+			"view":     "note",
+			"task_id":  task.TaskID,
+			"title":    task.Title,
+			"status":   task.Status,
+			"assignee": derefString(task.Assignee),
+			"summary":  derefString(task.Summary),
+			"note":     derefString(task.Note),
+		})
+	}
+	if action == "in_review" {
+		// F_62：本成员必须验收的任务（是验收人且 status=IN_REVIEW）。
+		// Python: ViewTaskToolV2 in_review action (tool_task.py L1437-1440)。
+		tasks, listErr := t.taskManager.GetReviewTasks(ctx, t.taskManager.MemberName())
+		if listErr != nil {
+			return toolError(fmt.Sprintf("Failed to list review tasks: %s", listErr))
+		}
+		result := make([]map[string]any, 0, len(tasks))
+		for _, task := range tasks {
+			assignee := "<unassigned>"
+			if task.Assignee != nil && *task.Assignee != "" {
+				assignee = *task.Assignee
+			}
+			result = append(result, map[string]any{
+				"task_id":  task.TaskID,
+				"title":    task.Title,
+				"status":   task.Status,
+				"assignee": assignee,
+			})
+		}
+		return toolSuccess(map[string]any{"tasks": result})
+	}
 	if action == "claimable" {
 		summaries, err = t.taskManager.ListTasksWithDeps(ctx, "pending")
 	} else {

@@ -293,6 +293,7 @@ var (
 		"team_task_",
 		"team_message_",
 		"message_read_status_",
+		"team_review_vote_",
 	}
 	// TeamStaticTablesToClear 需要清空的静态表名。
 	// Python: TEAM_STATIC_TABLES_TO_CLEAR
@@ -375,6 +376,73 @@ func (t *TeamTaskBase) Reviewers() []string {
 		return nil
 	}
 	return ids
+}
+
+// TeamTaskReviewVoteBase 评审票事实（F_62）：追加式，改票 = INSERT 新行，
+// 计票取每 reviewer 的最新行（最高 id）。无 UPDATE 路径、无丢更新窗口，
+// 投票历史全程可审计。判定阈值数学在 leader 侧调度器，不在 DAO。
+//
+// Python: TeamTaskReviewVoteBase (models.py L272-293)
+type TeamTaskReviewVoteBase struct {
+	// ID 自增主键。
+	ID int64 `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
+	// TeamName 团队名（无索引，对齐上游 A1）。
+	TeamName string `json:"team_name" gorm:"column:team_name;not null"`
+	// TaskID 任务标识。
+	TaskID string `json:"task_id" gorm:"column:task_id;not null"`
+	// ReviewRound 票所属评审轮（round 列分代，超期轮的行永不读取）。
+	ReviewRound int64 `json:"review_round" gorm:"column:review_round;not null"`
+	// Reviewer 投票成员。
+	Reviewer string `json:"reviewer" gorm:"column:reviewer;not null"`
+	// Decision 票值：verifier/challenger 为 "pass"/"fail"；inspector 为 0~1 分数。
+	Decision string `json:"decision" gorm:"column:decision;not null"`
+	// Feedback 评审反馈（pass 侧可空）。
+	Feedback *string `json:"feedback,omitempty" gorm:"column:feedback"`
+	// CreatedAt 毫秒时间戳。
+	CreatedAt int64 `json:"created_at" gorm:"column:created_at;not null"`
+}
+
+// ReviewerDetails 解析 reviewer 列为结构化验收人列表（type/reviewer_id/instruction）。
+// 旧字符串格式自动升级为 verifier 条目（对齐上游 reviewers() 容错语义）。
+//
+// Python: TeamTaskBase.reviewer_details() (models.py L225-255)
+func (t *TeamTaskBase) ReviewerDetails() []map[string]string {
+	if t == nil || t.Reviewer == nil || *t.Reviewer == "" {
+		return nil
+	}
+	var parsed []any
+	if err := json.Unmarshal([]byte(*t.Reviewer), &parsed); err != nil {
+		return nil
+	}
+	result := make([]map[string]string, 0, len(parsed))
+	for _, entry := range parsed {
+		switch v := entry.(type) {
+		case map[string]any:
+			id, _ := v["reviewer_id"].(string)
+			if id == "" {
+				continue
+			}
+			typ, _ := v["type"].(string)
+			if typ == "" {
+				typ = "verifier"
+			}
+			instruction, _ := v["instruction"].(string)
+			result = append(result, map[string]string{
+				"type":        typ,
+				"reviewer_id": id,
+				"instruction": instruction,
+			})
+		case string:
+			if v != "" {
+				result = append(result, map[string]string{
+					"type":        "verifier",
+					"reviewer_id": v,
+					"instruction": "",
+				})
+			}
+		}
+	}
+	return result
 }
 
 // HasReviewers 该任务是否配了验收人（决定完成时是否走 IN_REVIEW）。

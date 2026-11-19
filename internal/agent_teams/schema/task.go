@@ -14,6 +14,9 @@ type TaskOpResult struct {
 	OK bool
 	// Reason 失败原因
 	Reason string
+	// Data 附带数据（scheduled 模式 verify_task 快照票计；Python data=tally，
+	// 25.2b F_62 新增，偏差 D-25.2b-12：Go 无 pydantic 泛型，用 map 承载）。
+	Data map[string]any
 }
 
 // TaskCreateResult 任务创建操作结果。
@@ -115,6 +118,12 @@ func (TaskOpResult) Success() TaskOpResult {
 // Python: TaskOpResult.fail(reason)
 func (TaskOpResult) Fail(reason string) TaskOpResult {
 	return TaskOpResult{OK: false, Reason: reason}
+}
+
+// SuccessWithData 创建一个成功且附带数据的 TaskOpResult。
+// Python: TaskOpResult.success(data=...)
+func (TaskOpResult) SuccessWithData(data map[string]any) TaskOpResult {
+	return TaskOpResult{OK: true, Data: data}
 }
 
 // OK 判断 TaskCreateResult 是否创建成功（Task 不为 nil）。

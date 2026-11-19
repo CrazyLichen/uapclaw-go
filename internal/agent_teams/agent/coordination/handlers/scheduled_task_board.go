@@ -56,15 +56,22 @@ func NewScheduledTaskBoardHandler(
 // 新内容的调度器 revision mail 到达承担者（F_129）；它旁边的「重读并继续」
 // steer 会重复投递，且会把挂起父任务的 owner 送回父任务。
 //
-// ⚠️ 已知偏差：TASK_REVIEW_VOTE / TASK_SUBMITTED_FOR_REVIEW /
-// TASK_REVISION_REQUESTED 三事件的 Go 常量随 25.2b（评审半区）落地后补进本表；
-// TASK_REVOKED 定向 steer 随 reassign（25.4）落。Python: EVENT_METHOD_MAP
-// （task_board.py L708-722）。
-// Python: ScheduledTaskBoardHandler.EVENT_METHOD_MAP（task_board.py L708-722）
+// Python: ScheduledTaskBoardHandler.EVENT_METHOD_MAP（task_board.py L708-722）。
+// ⚠️ 已知偏差：TASK_REVOKED 定向 steer 随 reassign（25.4）落。
 func (h *ScheduledTaskBoardHandler) GetCallbacks() map[string]ateamcoordtypes.EventCallbackFunc {
 	callbacks := map[string]ateamcoordtypes.EventCallbackFunc{
 		// 定向所有权 steer 继承基类（update_task 两模式行为相同）。
-		events.TeamEventTaskClaimed:      h.OnTaskClaimed,
+		events.TeamEventTaskClaimed: h.OnTaskClaimed,
+		// 评审投票只在 scheduled 派发下存在：票是纯板面可观测性——leader 侧
+		// 调度器统计它们（F_62，25.2b）。
+		events.TeamEventTaskReviewVote: h.OnTaskBoardEvent,
+		// verify-gate handoff 在该模式下是调度器的信件。
+		events.TeamEventTaskSubmittedForReview: h.OnTaskBoardEvent,
+		events.TeamEventTaskVerified:           h.OnTaskBoardEvent,
+		events.TeamEventTaskRevisionRequested:  h.OnTaskBoardEvent,
+		// 被编辑的任务以携带新内容的调度器 revision mail 到达承担者（F_129）；
+		// 它旁边的「重读并继续」steer 会重复投递，且会把挂起父任务的 owner
+		// 送回父任务。
 		events.TeamEventTaskUpdated:      h.OnTaskBoardEvent,
 		events.TeamEventTaskCompleted:    h.OnTaskBoardEvent,
 		events.TeamEventTaskCancelled:    h.OnTaskBoardEvent,

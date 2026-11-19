@@ -31,6 +31,8 @@ type InMemoryTeamDatabase struct {
 	messages map[string]*TeamMessageBase
 	// readStatus 已读水位数据，key=memberName+"\x00"+teamName
 	readStatus map[string]*MessageReadStatusBase
+	// reviewVotes 评审票事实（F_62，追加式）
+	reviewVotes []*TeamTaskReviewVoteBase
 	// initialized 是否已初始化
 	initialized bool
 	// mu 保护并发访问
@@ -874,6 +876,68 @@ func (db *InMemoryTeamDatabase) StartTaskCAS(_ context.Context, taskID, memberNa
 	task.ResumePending = false
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
+}
+
+// SubmitForReview 内存实现：IN_PROGRESS→IN_REVIEW + round 自增。
+func (db *InMemoryTeamDatabase) SubmitForReview(ctx context.Context, taskID, summary, note string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, task := range db.tasks {
+		if task.TaskID == taskID && task.Status == fsm.TaskStatusInProgress {
+			task.Status = fsm.TaskStatusInReview
+			task.ReviewRound++
+			if summary != "" {
+				task.Summary = &summary
+			}
+			if note != "" {
+				task.Note = &note
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ReviseTask 内存实现：IN_REVIEW→IN_PROGRESS。
+func (db *InMemoryTeamDatabase) ReviseTask(ctx context.Context, taskID string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, task := range db.tasks {
+		if task.TaskID == taskID && task.Status == fsm.TaskStatusInReview {
+			task.Status = fsm.TaskStatusInProgress
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// InsertReviewVote 内存实现：追加票行。
+func (db *InMemoryTeamDatabase) InsertReviewVote(ctx context.Context, teamName, taskID string, reviewRound int64, reviewer, decision string, feedback *string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.reviewVotes = append(db.reviewVotes, &TeamTaskReviewVoteBase{
+		TeamName:    teamName,
+		TaskID:      taskID,
+		ReviewRound: reviewRound,
+		Reviewer:    reviewer,
+		Decision:    decision,
+		Feedback:    feedback,
+		CreatedAt:   GetCurrentTime(),
+	})
+	return nil
+}
+
+// GetReviewVotes 内存实现：按轮过滤、id 升序。
+func (db *InMemoryTeamDatabase) GetReviewVotes(ctx context.Context, taskID string, reviewRound int64) ([]*TeamTaskReviewVoteBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var votes []*TeamTaskReviewVoteBase
+	for _, vote := range db.reviewVotes {
+		if vote.TaskID == taskID && vote.ReviewRound == reviewRound {
+			votes = append(votes, vote)
+		}
+	}
+	return votes, nil
 }
 
 // ObserveRevision 记录 assignee 被展示了 revision（F_129）：单调且 owner 绑定。
