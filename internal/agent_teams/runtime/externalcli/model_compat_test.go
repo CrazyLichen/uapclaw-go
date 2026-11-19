@@ -64,10 +64,10 @@ func TestCompatiblePoolModelNames(t *testing.T) {
 
 // TestModelApiProtocol 对齐 model_compat.py:60。
 func TestModelApiProtocol(t *testing.T) {
-	if ModelApiProtocol("anthropic") != "Anthropic" {
+	if external.ModelApiProtocol("anthropic") != "Anthropic" {
 		t.Fatal("anthropic → Anthropic")
 	}
-	if ModelApiProtocol("openai") != "OpenAI" {
+	if external.ModelApiProtocol("openai") != "OpenAI" {
 		t.Fatal("其他 → OpenAI")
 	}
 }
