@@ -481,8 +481,8 @@ func trajectoryFileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// trajectoryGlobJSONL 列目录下 *.jsonl（Python: trajectory_dir.glob("*.jsonl")）。
-func trajectoryGlobJSONL(dir string) []string {
+// TrajectoryGlobJSONL 列目录下 *.jsonl（Python: trajectory_dir.glob("*.jsonl")）。
+func TrajectoryGlobJSONL(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil

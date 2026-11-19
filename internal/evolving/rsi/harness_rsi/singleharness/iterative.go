@@ -17,6 +17,7 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/data_loader"
+	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/improver_evolution"
 	"gopkg.in/yaml.v3"
 )
@@ -2019,4 +2020,1386 @@ func yamlToAnyMap(value any) (map[string]any, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// readJSONFile 读 JSON 文件为映射（Python: _read_json——不存在/解析失败返回空映射）。
+func readJSONFile(path string) map[string]any {
+	target := expandUser(path)
+	if !fileExists(target) {
+		return map[string]any{}
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		return map[string]any{}
+	}
+	var parsed any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return map[string]any{}
+	}
+	if result, ok := parsed.(map[string]any); ok {
+		return result
+	}
+	return map[string]any{}
+}
+
+// mappingKeys 映射键集合。
+func mappingKeys(value map[string]any) map[string]struct{} {
+	keys := map[string]struct{}{}
+	for key := range value {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+// mappingStringKeys 浮点映射键集合。
+func mappingStringKeys(value map[string]float64) map[string]struct{} {
+	keys := map[string]struct{}{}
+	for key := range value {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+// stringSetIntersection 集合交集。
+func stringSetIntersection(left, right map[string]struct{}) map[string]struct{} {
+	out := map[string]struct{}{}
+	for value := range left {
+		if _, ok := right[value]; ok {
+			out[value] = struct{}{}
+		}
+	}
+	return out
+}
+
+// stringSetKeyDiffToSlice 与映射键集求差并排序（failed_targets − first_edit_steps 场景）。
+func stringSetKeyDiffToSlice(minuend map[string]struct{}, subtrahendKeys map[string]int) []string {
+	subtrahend := map[string]struct{}{}
+	for key := range subtrahendKeys {
+		subtrahend[key] = struct{}{}
+	}
+	return sortedStringSetKeyDiff(minuend, subtrahend)
+}
+
+// toKeySet 字符串切片转键集。
+func toKeySet(values []string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, value := range values {
+		out[value] = struct{}{}
+	}
+	return out
+}
+
+// collectTrajectoryDirUsage 收集成员轨迹目录用量（Python: _collect_trajectory_dir_usage）。
+func collectTrajectoryDirUsage(trace map[string]any, toolNames, skillNames map[string]struct{}) {
+	trajectoryDir := expandUser(toString(trace["trajectory_dir"]))
+	if info, err := os.Stat(trajectoryDir); err != nil || !info.IsDir() {
+		return
+	}
+	for _, memberTracePath := range evaluatorpkg.TrajectoryGlobJSONL(trajectoryDir) {
+		evaluatorpkg.CollectJSONLSuccessfulUsage(memberTracePath, toolNames, skillNames)
+	}
+}
+
+// failedMachineEvidence 失败的机器证据（Python: _failed_machine_evidence）。
+func failedMachineEvidence(evalRefPath string) ([]string, error) {
+	failures := []string{}
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		result := readJSONFile(toString(caseMap["result_path"]))
+		metadata := mappingOrNil(mappingOrNil(result["evaluation"])["metadata"])
+		evidence := mappingOrNil(metadata["artifact_runtime_evidence"])
+		for _, rawObservation := range toAnySlice(evidence["observations"]) {
+			observation, ok := rawObservation.(map[string]any)
+			if !ok {
+				continue
+			}
+			status := strings.ToLower(toString(observation["status"]))
+			if status == "failed" || status == "error" {
+				caseID := defaultString(caseMap["case_id"], "unknown")
+				failures = append(failures, fmt.Sprintf("%s:%s", caseID, toString(observation["type"])))
+			}
+		}
+	}
+	sort.Strings(failures)
+	deduped := failures[:0]
+	seen := map[string]struct{}{}
+	for _, failure := range failures {
+		if _, ok := seen[failure]; !ok {
+			seen[failure] = struct{}{}
+			deduped = append(deduped, failure)
+		}
+	}
+	return deduped, nil
+}
+
+// machineEvidenceCaseIDs 机器证据用例集（Python: _machine_evidence_case_ids）。
+func machineEvidenceCaseIDs(failures []string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, failure := range failures {
+		parts := strings.SplitN(failure, ":", 2)
+		if parts[0] != "" {
+			out[parts[0]] = struct{}{}
+		}
+	}
+	return out
+}
+
+// toolNamesMatch 工具名匹配（Python: _tool_names_match——小写/中划线转下划线/去 _tool 后缀）。
+func toolNamesMatch(planned, invoked string) bool {
+	canonical := func(value string) string {
+		value = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), "-", "_")
+		return strings.TrimSuffix(value, "_tool")
+	}
+	return canonical(planned) != "" && canonical(planned) == canonical(invoked)
+}
+
+// skillNamesMatch 技能名匹配（Python: _skill_names_match——不去 _tool 后缀）。
+func skillNamesMatch(planned, invoked string) bool {
+	canonical := func(value string) string {
+		return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), "-", "_")
+	}
+	return canonical(planned) != "" && canonical(planned) == canonical(invoked)
+}
+
+// ──────────────────────────── 评估信号与用量段（Python 2821-3400） ────────────────────────────
+
+// evalCaseScores 用例分数映射（Python: _eval_case_scores）。
+func evalCaseScores(evalRefPath string) (map[string]float64, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	scores := map[string]float64{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		score := numberOf(caseMap["score"])
+		if caseID != "" && score != nil {
+			scores[caseID] = *score
+		}
+	}
+	return scores, nil
+}
+
+// evalCaseNativeSignals 读评估器通用搜索信号，回退严格分（Python: _eval_case_native_signals）。
+func evalCaseNativeSignals(evalRefPath string) (map[string]map[string]any, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	signals := map[string]map[string]any{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		fallbackScore := numberOf(caseMap["score"])
+		if caseID == "" {
+			continue
+		}
+		result := readJSONFile(toString(caseMap["result_path"]))
+		evaluation := mappingOrNil(result["evaluation"])
+		metadata := mappingOrNil(evaluation["metadata"])
+		contract := evaluatorpkg.EvaluationOptimizationSignals(metadata)
+		continuous := mappingOrNil(contract["continuous_score"])
+		var nativeScore *float64
+		if toString(continuous["availability"]) == "available" {
+			nativeScore = numberOf(continuous["value"])
+		}
+		source := toString(continuous["source"])
+		dimensions := map[string]any{}
+		for name, rawDimension := range mappingOrNil(contract["dimensions"]) {
+			dimension, ok := rawDimension.(map[string]any)
+			if !ok || toString(dimension["availability"]) != "available" {
+				continue
+			}
+			if score := numberOf(dimension["value"]); score != nil {
+				dimensions[toString(name)] = *score
+			}
+		}
+		if nativeScore == nil {
+			nativeScore = fallbackScore
+			source = "eval_ref_score_fallback"
+		}
+		if nativeScore == nil {
+			continue
+		}
+		signals[caseID] = map[string]any{
+			"score":      *nativeScore,
+			"source":     source,
+			"dimensions": dimensions,
+		}
+	}
+	return signals, nil
+}
+
+// nativeCaseScores 原生分映射（Python: _native_case_scores）。
+func nativeCaseScores(signals map[string]map[string]any) map[string]float64 {
+	scores := map[string]float64{}
+	for caseID, signal := range signals {
+		if score := numberOf(signal["score"]); score != nil {
+			scores[caseID] = *score
+		}
+	}
+	return scores
+}
+
+// pairedScoreDelta 配对分差（Python: _paired_score_delta）。
+func pairedScoreDelta(sourceScores, candidateScores map[string]float64, caseID string) *float64 {
+	sourceRaw, hasSource := sourceScores[caseID]
+	candidateRaw, hasCandidate := candidateScores[caseID]
+	sourceScore := numberOf(numberToAny(sourceRaw, hasSource))
+	candidateScore := numberOf(numberToAny(candidateRaw, hasCandidate))
+	if sourceScore == nil || candidateScore == nil {
+		return nil
+	}
+	delta := *candidateScore - *sourceScore
+	return &delta
+}
+
+// numberToAny 有值转 any、缺失转 nil（配合 numberOf 的缺失语义）。
+func numberToAny(value float64, present bool) any {
+	if !present {
+		return nil
+	}
+	return value
+}
+
+// nativeDimensionDeltas 原生维度差（Python: _native_dimension_deltas）。
+func nativeDimensionDeltas(
+	sourceSignals, candidateSignals map[string]map[string]any,
+	targetCaseIDSet map[string]struct{},
+) (map[string]map[string]float64, *float64) {
+	byCase := map[string]map[string]float64{}
+	var allDeltas []float64
+	for _, caseID := range sortedStringSet(targetCaseIDSet) {
+		sourceDimensions := mappingOrNil(sourceSignals[caseID]["dimensions"])
+		candidateDimensions := mappingOrNil(candidateSignals[caseID]["dimensions"])
+		caseDeltas := map[string]float64{}
+		names := sortedStringSet(stringSetIntersection(mappingKeys(sourceDimensions), mappingKeys(candidateDimensions)))
+		for _, name := range names {
+			sourceScore := numberOf(sourceDimensions[name])
+			candidateScore := numberOf(candidateDimensions[name])
+			if sourceScore == nil || candidateScore == nil {
+				continue
+			}
+			delta := *candidateScore - *sourceScore
+			caseDeltas[name] = delta
+			allDeltas = append(allDeltas, delta)
+		}
+		if len(caseDeltas) > 0 {
+			byCase[caseID] = caseDeltas
+		}
+	}
+	var aggregate *float64
+	if len(allDeltas) > 0 {
+		total := 0.0
+		for _, delta := range allDeltas {
+			total += delta
+		}
+		mean := total / float64(len(allDeltas))
+		aggregate = &mean
+	}
+	return byCase, aggregate
+}
+
+// evalOfficialMetrics 官方指标（Python: _eval_official_metrics）。
+func evalOfficialMetrics(evalRefPath string) (map[string]any, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	if metrics, ok := payload["official_metrics"].(map[string]any); ok {
+		return metrics, nil
+	}
+	return map[string]any{}, nil
+}
+
+// epochFullSourceEvalRef 找覆盖全部冻结用例的 epoch 源评估（Python: _epoch_full_source_eval_ref）。
+func epochFullSourceEvalRef(
+	state map[string]any,
+	epoch int,
+	expectedCaseIDs map[string]struct{},
+) string {
+	completedBatches := mappingOrNil(state["completed_batches"])
+	prefix := fmt.Sprintf("epoch_%03d:", epoch)
+	keys := make([]string, 0, len(completedBatches))
+	for key := range completedBatches {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		record, ok := completedBatches[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		candidate := toString(record["source_eval_ref_path"])
+		if candidate == "" {
+			continue
+		}
+		caseScores, err := evalCaseScores(candidate)
+		if err != nil {
+			continue
+		}
+		if stringSetEqual(mappingStringKeys(caseScores), expectedCaseIDs) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// evalVerifierStatuses 读数据集中立的逐需求结果（Python: _eval_verifier_statuses）。
+func evalVerifierStatuses(evalRefPath string) (map[string]map[string]any, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	statuses := map[string]map[string]any{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if caseID == "" {
+			continue
+		}
+		result := readJSONFile(toString(caseMap["result_path"]))
+		evaluation := mappingOrNil(result["evaluation"])
+		metadata := mappingOrNil(evaluation["metadata"])
+		requirements := evaluatorpkg.EvaluationRequirementResults(metadata, caseID)
+		instanceReport := mappingOrNil(metadata["instance_report"])
+		report := mappingOrNil(instanceReport[caseID])
+		if len(report) == 0 && len(instanceReport) == 1 {
+			for _, only := range instanceReport {
+				report = mappingOrNil(only)
+				break
+			}
+		}
+		statuses[caseID] = map[string]any{
+			"patch_successfully_applied": report["patch_successfully_applied"],
+			"resolved":                   report["resolved"],
+			"empty_patch":                metadata["empty_patch"],
+			"requirement_results":        requirements,
+		}
+	}
+	return statuses, nil
+}
+
+// verifierDeltasByCase 配对官方测试操作逐用例对比（Python: _verifier_deltas_by_case）。
+func verifierDeltasByCase(
+	sourceEvalRef, candidateEvalRef string,
+	targetCaseIDSet map[string]struct{},
+) (map[string]map[string]any, error) {
+	source, err := evalVerifierStatuses(sourceEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	candidate, err := evalVerifierStatuses(candidateEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	deltas := map[string]map[string]any{}
+	for _, caseID := range sortedStringSet(targetCaseIDSet) {
+		sourceStatus := mappingOrNil(source[caseID])
+		candidateStatus := mappingOrNil(candidate[caseID])
+		sourceRequirements := requirementResultIndex(sourceStatus["requirement_results"])
+		candidateRequirements := requirementResultIndex(candidateStatus["requirement_results"])
+		sourcePassed := requirementKeysWithPassed(sourceRequirements, true)
+		candidatePassed := requirementKeysWithPassed(candidateRequirements, true)
+		candidateFailed := requirementKeysWithPassed(candidateRequirements, false)
+		newlyPassedKeys := keySetDiff(candidatePassed, sourcePassed)
+		regressedKeys := keySetIntersection(sourcePassed, candidateFailed)
+
+		sourceF2PSuccess := requirementIDsWithGroup(sourcePassed, evaluatorpkg.FailToPassGroup)
+		candidateF2PSuccess := requirementIDsWithGroup(candidatePassed, evaluatorpkg.FailToPassGroup)
+		candidateF2PFailure := requirementIDsWithGroup(candidateFailed, evaluatorpkg.FailToPassGroup)
+		newlyPassed := sortedStringSetKeyDiff(candidateF2PSuccess, sourceF2PSuccess)
+		regressedF2P := sortedStringSetKeyDiff(sourceF2PSuccess, candidateF2PSuccess)
+		sourceP2PSuccess := requirementIDsWithGroup(sourcePassed, evaluatorpkg.PassToPassGroup)
+		candidateP2PFailure := requirementIDsWithGroup(candidateFailed, evaluatorpkg.PassToPassGroup)
+		regressedP2P := sortedStringSet(stringSetIntersection(sourceP2PSuccess, candidateP2PFailure))
+		sourceAtomicSuccess := requirementIDsWithGroup(sourcePassed, evaluatorpkg.AtomicCheckGroup)
+		candidateAtomicSuccess := requirementIDsWithGroup(candidatePassed, evaluatorpkg.AtomicCheckGroup)
+		candidateAtomicFailure := requirementIDsWithGroup(candidateFailed, evaluatorpkg.AtomicCheckGroup)
+		newlyPassedAtomic := sortedStringSetKeyDiff(candidateAtomicSuccess, sourceAtomicSuccess)
+		regressedAtomic := sortedStringSetKeyDiff(sourceAtomicSuccess, candidateAtomicSuccess)
+		newlyPassedRequirements := requirementSnapshots(candidateRequirements, newlyPassedKeys)
+		remainingFailedRequirements := requirementSnapshots(candidateRequirements, candidateFailed)
+		regressedRequirements := requirementSnapshots(candidateRequirements, regressedKeys)
+		improvedScoreKeys := map[evaluatorpkg.RequirementKey]struct{}{}
+		regressedScoreKeys := map[evaluatorpkg.RequirementKey]struct{}{}
+		for key := range sourceRequirements {
+			if _, both := candidateRequirements[key]; !both {
+				continue
+			}
+			before := numberOf(sourceRequirements[key]["score"])
+			after := numberOf(candidateRequirements[key]["score"])
+			if before == nil || after == nil {
+				continue
+			}
+			if *after < *before {
+				regressedScoreKeys[key] = struct{}{}
+			} else if *after > *before && strings.TrimSpace(toString(candidateRequirements[key]["evidence"])) != "" {
+				improvedScoreKeys[key] = struct{}{}
+			}
+		}
+		improvedRequirementScores := requirementSnapshots(candidateRequirements, improvedScoreKeys)
+		regressedRequirementScores := requirementSnapshots(candidateRequirements, regressedScoreKeys)
+		partialProgress := (len(newlyPassedRequirements) > 0 || len(improvedRequirementScores) > 0) &&
+			len(remainingFailedRequirements) > 0 &&
+			len(regressedRequirements) == 0 &&
+			len(regressedRequirementScores) == 0
+		requirementValues := func(index map[evaluatorpkg.RequirementKey]map[string]any) []any {
+			out := []any{}
+			for _, key := range requirementKeyList(index) {
+				out = append(out, index[key])
+			}
+			return out
+		}
+		deltas[caseID] = map[string]any{
+			"source_requirement_results":           requirementValues(sourceRequirements),
+			"candidate_requirement_results":        requirementValues(candidateRequirements),
+			"newly_passed_requirements":            newlyPassedRequirements,
+			"remaining_failed_requirements":        remainingFailedRequirements,
+			"regressed_requirements":               regressedRequirements,
+			"improved_requirement_scores":          improvedRequirementScores,
+			"regressed_requirement_scores":         regressedRequirementScores,
+			"source_fail_to_pass_success":          sortedStringSet(sourceF2PSuccess),
+			"candidate_fail_to_pass_success":       sortedStringSet(candidateF2PSuccess),
+			"newly_passed_fail_to_pass":            newlyPassed,
+			"remaining_failed_fail_to_pass":        sortedStringSet(candidateF2PFailure),
+			"regressed_fail_to_pass":               regressedF2P,
+			"regressed_pass_to_pass":               regressedP2P,
+			"source_passed_atomic_checks":          sortedStringSet(sourceAtomicSuccess),
+			"candidate_passed_atomic_checks":       sortedStringSet(candidateAtomicSuccess),
+			"newly_passed_atomic_checks":           newlyPassedAtomic,
+			"remaining_failed_atomic_checks":       sortedStringSet(candidateAtomicFailure),
+			"regressed_atomic_checks":              regressedAtomic,
+			"partial_progress":                     partialProgress,
+			"source_patch_successfully_applied":    sourceStatus["patch_successfully_applied"],
+			"candidate_patch_successfully_applied": candidateStatus["patch_successfully_applied"],
+			"candidate_empty_patch":                candidateStatus["empty_patch"],
+		}
+	}
+	return deltas, nil
+}
+
+// keySetDiff 需求键差集。
+func keySetDiff(minuend, subtrahend map[evaluatorpkg.RequirementKey]struct{}) map[evaluatorpkg.RequirementKey]struct{} {
+	out := map[evaluatorpkg.RequirementKey]struct{}{}
+	for key := range minuend {
+		if _, ok := subtrahend[key]; !ok {
+			out[key] = struct{}{}
+		}
+	}
+	return out
+}
+
+// keySetIntersection 需求键交集。
+func keySetIntersection(left, right map[evaluatorpkg.RequirementKey]struct{}) map[evaluatorpkg.RequirementKey]struct{} {
+	out := map[evaluatorpkg.RequirementKey]struct{}{}
+	for key := range left {
+		if _, ok := right[key]; ok {
+			out[key] = struct{}{}
+		}
+	}
+	return out
+}
+
+// stringSetKeyDiff 字符串集合差集（保留集合形态，排序由调用方 sortedStringSet 完成）。
+func stringSetKeyDiff(minuend, subtrahend map[string]struct{}) map[string]struct{} {
+	out := map[string]struct{}{}
+	for value := range minuend {
+		if _, ok := subtrahend[value]; !ok {
+			out[value] = struct{}{}
+		}
+	}
+	return out
+}
+
+// requirementKeyList 索引键排序列表。
+func requirementKeyList(index map[evaluatorpkg.RequirementKey]map[string]any) []evaluatorpkg.RequirementKey {
+	keys := make([]evaluatorpkg.RequirementKey, 0, len(index))
+	for key := range index {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Group != keys[j].Group {
+			return keys[i].Group < keys[j].Group
+		}
+		return keys[i].RequirementID < keys[j].RequirementID
+	})
+	return keys
+}
+
+// requirementResultIndex 需求结果索引（Python: _requirement_result_index）。
+func requirementResultIndex(value any) map[evaluatorpkg.RequirementKey]map[string]any {
+	index := map[evaluatorpkg.RequirementKey]map[string]any{}
+	rawList, ok := value.([]any)
+	if !ok {
+		return index
+	}
+	for _, raw := range rawList {
+		rawMap, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		requirementID := strings.TrimSpace(toString(rawMap["requirement_id"]))
+		group := strings.TrimSpace(defaultString(rawMap["group"], "requirement"))
+		if group == "" {
+			group = "requirement"
+		}
+		if requirementID != "" {
+			cloned := map[string]any{}
+			for k, v := range rawMap {
+				cloned[k] = v
+			}
+			index[evaluatorpkg.RequirementKey{Group: group, RequirementID: requirementID}] = cloned
+		}
+	}
+	return index
+}
+
+// requirementIDsWithGroup 组内需求 ID（Python: _requirement_ids）。
+func requirementIDsWithGroup(
+	keys map[evaluatorpkg.RequirementKey]struct{}, group string,
+) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for key := range keys {
+		if key.Group == group {
+			ids[key.RequirementID] = struct{}{}
+		}
+	}
+	return ids
+}
+
+// requirementKeysWithPassed 按 passed 过滤键集。
+func requirementKeysWithPassed(
+	index map[evaluatorpkg.RequirementKey]map[string]any, passed bool,
+) map[evaluatorpkg.RequirementKey]struct{} {
+	keys := map[evaluatorpkg.RequirementKey]struct{}{}
+	for key, item := range index {
+		if item["passed"] == passed {
+			keys[key] = struct{}{}
+		}
+	}
+	return keys
+}
+
+// requirementSnapshots 键集快照（Python: _requirement_snapshots——排序键序）。
+func requirementSnapshots(
+	index map[evaluatorpkg.RequirementKey]map[string]any,
+	keys map[evaluatorpkg.RequirementKey]struct{},
+) []map[string]any {
+	sortedKeys := sortRequirementKeys(keys)
+	result := []map[string]any{}
+	for _, key := range sortedKeys {
+		if item, ok := index[key]; ok {
+			cloned := map[string]any{}
+			for k, v := range item {
+				cloned[k] = v
+			}
+			result = append(result, cloned)
+		}
+	}
+	return result
+}
+
+// sortRequirementKeys 需求键排序。
+func sortRequirementKeys(keys map[evaluatorpkg.RequirementKey]struct{}) []evaluatorpkg.RequirementKey {
+	out := make([]evaluatorpkg.RequirementKey, 0, len(keys))
+	for key := range keys {
+		out = append(out, key)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Group != out[j].Group {
+			return out[i].Group < out[j].Group
+		}
+		return out[i].RequirementID < out[j].RequirementID
+	})
+	return out
+}
+
+// candidatePatchExcerptsByCase 候选补丁摘要（Python: _candidate_patch_excerpts_by_case）。
+func candidatePatchExcerptsByCase(
+	evalRefPath string,
+	targetCaseIDSet map[string]struct{},
+) (map[string]string, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	excerpts := map[string]string{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if _, isTarget := targetCaseIDSet[caseID]; !isTarget {
+			continue
+		}
+		result := readJSONFile(toString(caseMap["result_path"]))
+		evaluation := mappingOrNil(result["evaluation"])
+		metadata := mappingOrNil(evaluation["metadata"])
+		patchPath := expandUser(toString(metadata["model_patch_path"]))
+		if !fileExists(patchPath) {
+			excerpts[caseID] = ""
+			continue
+		}
+		raw, err := os.ReadFile(patchPath)
+		patch := ""
+		if err == nil {
+			patch = string(raw)
+		}
+		excerpts[caseID] = boundedCandidateText(patch)
+	}
+	return excerpts, nil
+}
+
+// candidateInterventionExcerptsByCase 候选干预摘要（Python: _candidate_intervention_excerpts_by_case）。
+func candidateInterventionExcerptsByCase(
+	capabilities []map[string]any,
+	targetCaseIDSet map[string]struct{},
+) map[string]string {
+	excerpts := map[string][]string{}
+	for caseID := range targetCaseIDSet {
+		excerpts[caseID] = []string{}
+	}
+	for _, capability := range capabilities {
+		if capability == nil {
+			continue
+		}
+		intervention := strings.TrimSpace(toString(capability["intervention"]))
+		if intervention == "" {
+			continue
+		}
+		capabilityCaseIDs := map[string]struct{}{}
+		for _, rawCaseID := range toAnySlice(capability["target_case_ids"]) {
+			if caseID := toString(rawCaseID); caseID != "" {
+				capabilityCaseIDs[caseID] = struct{}{}
+			}
+		}
+		applicable := capabilityCaseIDs
+		if len(applicable) == 0 {
+			applicable = targetCaseIDSet
+		}
+		applicable = stringSetIntersection(applicable, targetCaseIDSet)
+		labelParts := []string{
+			toString(capability["action_group"]),
+			toString(capability["target_path"]),
+		}
+		nonEmpty := []string{}
+		for _, part := range labelParts {
+			if part != "" {
+				nonEmpty = append(nonEmpty, part)
+			}
+		}
+		label := strings.Join(nonEmpty, ":")
+		block := intervention
+		if label != "" {
+			block = fmt.Sprintf("[%s]\n%s", label, intervention)
+		}
+		for caseID := range applicable {
+			excerpts[caseID] = append(excerpts[caseID], block)
+		}
+	}
+	result := map[string]string{}
+	for caseID, blocks := range excerpts {
+		if len(blocks) > 0 {
+			result[caseID] = boundedCandidateText(strings.Join(blocks, "\n\n"))
+		}
+	}
+	return result
+}
+
+// boundedCandidateText 截断候选文本（Python: _bounded_candidate_text，limit 默认 6000）。
+func boundedCandidateText(value string, limits ...int) string {
+	limit := 6000
+	if len(limits) > 0 {
+		limit = limits[0]
+	}
+	if len(value) <= limit {
+		return value
+	}
+	half := limit / 2
+	return fmt.Sprintf("%s\n... candidate patch omitted ...\n%s", value[:half], value[len(value)-half:])
+}
+
+// averageCaseScores 平均分（Python: _average_case_scores）。
+func averageCaseScores(scores map[string]float64, caseIDSet map[string]struct{}) float64 {
+	values := []float64{}
+	for caseID := range caseIDSet {
+		if score, ok := scores[caseID]; ok {
+			values = append(values, score)
+		}
+	}
+	if len(values) == 0 {
+		return 0.0
+	}
+	total := 0.0
+	for _, value := range values {
+		total += value
+	}
+	return total / float64(len(values))
+}
+
+// capabilityTargetCaseIDs 能力目标用例（Python: _capability_target_case_ids）。
+func capabilityTargetCaseIDs(
+	capabilities []map[string]any,
+	fallbackTargetCaseIDs map[string]struct{},
+) map[string]struct{} {
+	targetCaseIDs := map[string]struct{}{}
+	for _, capability := range capabilities {
+		operation := toString(capability["operation"])
+		if operation != "add" && operation != "modify" {
+			continue
+		}
+		for _, rawCaseID := range toAnySlice(capability["target_case_ids"]) {
+			if caseID := toString(rawCaseID); caseID != "" {
+				targetCaseIDs[caseID] = struct{}{}
+			}
+		}
+	}
+	if len(targetCaseIDs) > 0 {
+		return targetCaseIDs
+	}
+	result := map[string]struct{}{}
+	for caseID := range fallbackTargetCaseIDs {
+		result[caseID] = struct{}{}
+	}
+	return result
+}
+
+// errorCaseIDs 错误用例集（Python: _error_case_ids）。
+func errorCaseIDs(evalRefPath string) (map[string]struct{}, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	errorSet := map[string]struct{}{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if caseID != "" && strings.ToLower(toString(caseMap["status"])) == "error" {
+			errorSet[caseID] = struct{}{}
+		}
+	}
+	return errorSet, nil
+}
+
+// evalHasErrors 是否存在错误用例（Python: _eval_has_errors）。
+func evalHasErrors(evalRefPath string) bool {
+	errorSet, err := errorCaseIDs(evalRefPath)
+	return err == nil && len(errorSet) > 0
+}
+
+// skippedCaseIDs 跳过用例集（Python: _skipped_case_ids）。
+func skippedCaseIDs(evalRefPath string) (map[string]struct{}, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	skipped := map[string]struct{}{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		metadata := mappingOrNil(caseMap["metadata"])
+		isSkipped := strings.ToLower(toString(caseMap["status"])) == "skipped" ||
+			metadata["infrastructure_skip"] == true
+		if caseID != "" && isSkipped {
+			skipped[caseID] = struct{}{}
+		}
+	}
+	return skipped, nil
+}
+
+// invokedToolNames 调用过的工具名全集（Python: _invoked_tool_names）。
+func invokedToolNames(evalRefPath string) (map[string]struct{}, error) {
+	invoked := map[string]struct{}{}
+	namesByCase, err := invokedToolNamesByCase(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, names := range namesByCase {
+		for name := range names {
+			invoked[name] = struct{}{}
+		}
+	}
+	return invoked, nil
+}
+
+// invokedToolNamesByCase 逐用例工具名（Python: _invoked_tool_names_by_case）。
+func invokedToolNamesByCase(evalRefPath string) (map[string]map[string]struct{}, error) {
+	namesByCase := map[string]map[string]struct{}{}
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if caseID == "" {
+			continue
+		}
+		names, ok := namesByCase[caseID]
+		if !ok {
+			names = map[string]struct{}{}
+			namesByCase[caseID] = names
+		}
+		if len(taskStartTriggeredSkillNames(caseMap)) > 0 {
+			names["skill_tool"] = struct{}{}
+		}
+		for _, trace := range caseUsageTraces(caseMap) {
+			evaluatorpkg.CollectSuccessfulToolNames(trace, names)
+			collectTrajectoryDirUsage(trace, names, nil)
+		}
+	}
+	return namesByCase, nil
+}
+
+// invokedSkillNames 调用过的技能名全集（Python: _invoked_skill_names）。
+func invokedSkillNames(evalRefPath string) (map[string]struct{}, error) {
+	invoked := map[string]struct{}{}
+	namesByCase, err := invokedSkillNamesByCase(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, names := range namesByCase {
+		for name := range names {
+			invoked[name] = struct{}{}
+		}
+	}
+	return invoked, nil
+}
+
+// invokedSkillNamesByCase 逐用例技能名（Python: _invoked_skill_names_by_case）。
+func invokedSkillNamesByCase(evalRefPath string) (map[string]map[string]struct{}, error) {
+	namesByCase := map[string]map[string]struct{}{}
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if caseID == "" {
+			continue
+		}
+		names, ok := namesByCase[caseID]
+		if !ok {
+			names = map[string]struct{}{}
+			namesByCase[caseID] = names
+		}
+		for name := range taskStartTriggeredSkillNames(caseMap) {
+			names[name] = struct{}{}
+		}
+		for _, trace := range caseUsageTraces(caseMap) {
+			evaluatorpkg.CollectSuccessfulSkillNames(trace, names)
+			collectTrajectoryDirUsage(trace, nil, names)
+		}
+	}
+	return namesByCase, nil
+}
+
+// preEditInvokedNamesByCase 首次持久编辑前完成的能力调用（Python: _pre_edit_invoked_names_by_case）。
+func preEditInvokedNamesByCase(
+	evalRefPath string,
+	actionGroup string,
+	allowLaterEdit bool,
+) (map[string]map[string]struct{}, map[string]int, error) {
+	namesByCase := map[string]map[string]struct{}{}
+	firstEditStepsByCase := map[string]int{}
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		if caseID == "" {
+			continue
+		}
+		names, ok := namesByCase[caseID]
+		if !ok {
+			names = map[string]struct{}{}
+			namesByCase[caseID] = names
+		}
+		triggeredSkills := taskStartTriggeredSkillNames(caseMap)
+		if actionGroup == "skill" && !allowLaterEdit {
+			for name := range triggeredSkills {
+				names[name] = struct{}{}
+			}
+		} else if len(triggeredSkills) > 0 && !allowLaterEdit {
+			names["skill_tool"] = struct{}{}
+		}
+		var toolNamesArg, skillNamesArg map[string]struct{}
+		if actionGroup == "tool" {
+			toolNamesArg = names
+		}
+		if actionGroup == "skill" {
+			skillNamesArg = names
+		}
+		editSteps := []int{}
+		for _, trace := range caseUsageTraces(caseMap) {
+			if step := evaluatorpkg.CollectPreEditSuccessfulUsage(trace, toolNamesArg, skillNamesArg, allowLaterEdit); step != nil {
+				editSteps = append(editSteps, *step)
+			}
+			trajectoryDir := expandUser(toString(trace["trajectory_dir"]))
+			if info, err := os.Stat(trajectoryDir); err == nil && info.IsDir() {
+				for _, memberTracePath := range evaluatorpkg.TrajectoryGlobJSONL(trajectoryDir) {
+					if step := evaluatorpkg.CollectJSONLPreEditSuccessfulUsage(
+						memberTracePath, toolNamesArg, skillNamesArg, allowLaterEdit); step != nil {
+						editSteps = append(editSteps, *step)
+					}
+				}
+			}
+		}
+		if len(editSteps) > 0 {
+			minStep := editSteps[0]
+			for _, step := range editSteps[1:] {
+				if step < minStep {
+					minStep = step
+				}
+			}
+			firstEditStepsByCase[caseID] = minStep
+			if allowLaterEdit && len(triggeredSkills) > 0 {
+				if actionGroup == "skill" {
+					for name := range triggeredSkills {
+						names[name] = struct{}{}
+					}
+				} else {
+					names["skill_tool"] = struct{}{}
+				}
+			}
+		}
+	}
+	return namesByCase, firstEditStepsByCase, nil
+}
+
+// caseUsageTraces 适配器轨迹 + 其引用的归一化轨迹（Python: _case_usage_traces）。
+func caseUsageTraces(caseMap map[string]any) []map[string]any {
+	trace := readJSONFile(toString(caseMap["trace_path"]))
+	traces := []map[string]any{trace}
+	behavior := mappingOrNil(trace["behavior_trace"])
+	normalizedPath := toString(behavior["normalized_trace_path"])
+	if normalizedPath != "" {
+		normalized := readJSONFile(normalizedPath)
+		if len(normalized) > 0 && !anyEqual(normalized, trace) {
+			traces = append(traces, normalized)
+		}
+	}
+	return traces
+}
+
+// taskStartTriggeredSkillNames 任务开始自然派发的 Skill（Python: _task_start_triggered_skill_names）。
+func taskStartTriggeredSkillNames(caseMap map[string]any) map[string]struct{} {
+	result := readJSONFile(toString(caseMap["result_path"]))
+	metadata := mappingOrNil(result["metadata"])
+	execution := mappingOrNil(metadata["execution"])
+	triggers, _ := execution["skill_triggers"].([]any)
+	names := map[string]struct{}{}
+	for _, rawTrigger := range triggers {
+		trigger, ok := rawTrigger.(map[string]any)
+		if !ok || trigger["delivered"] != true {
+			continue
+		}
+		name := strings.TrimSpace(toString(trigger["selected_skill_name"]))
+		if name != "" {
+			names[name] = struct{}{}
+		}
+	}
+	return names
+}
+
+// nonpassingCaseIDs 未通过用例集（Python: _nonpassing_case_ids）。
+func nonpassingCaseIDs(evalRefPath string) (map[string]struct{}, error) {
+	payload, err := readYAMLFile(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	caseIDs := map[string]struct{}{}
+	for _, rawCase := range toAnySlice(payload["cases"]) {
+		caseMap, ok := rawCase.(map[string]any)
+		if !ok {
+			continue
+		}
+		caseID := toString(caseMap["case_id"])
+		score := numberOf(caseMap["score"])
+		status := strings.ToLower(toString(caseMap["status"]))
+		metadata := mappingOrNil(caseMap["metadata"])
+		if status == "skipped" || metadata["infrastructure_skip"] == true {
+			continue
+		}
+		statusFailed := status == "failed" || status == "error"
+		explicitPassed := llmCasePassed(caseMap)
+		if toString(metadata["score_mode"]) == "continuous" {
+			explicitPassed = nil
+		} else if toString(metadata["evaluation_method"]) == "llm_as_judge" {
+			result := readJSONFile(toString(caseMap["result_path"]))
+			resultMetadata := mappingOrNil(mappingOrNil(result["evaluation"])["metadata"])
+			if toString(resultMetadata["score_mode"]) == "continuous" {
+				explicitPassed = nil
+			}
+		}
+		scoreFailed := false
+		if explicitPassed != nil {
+			scoreFailed = !*explicitPassed
+		} else {
+			scoreFailed = score != nil && *score < 1.0
+		}
+		if score == nil {
+			scoreFailed = evalCaseExplicitPassed(caseMap) != nil && *evalCaseExplicitPassed(caseMap) == false
+		}
+		if caseID != "" && (statusFailed || scoreFailed) {
+			caseIDs[caseID] = struct{}{}
+		}
+	}
+	return caseIDs, nil
+}
+
+// ──────────────────────────── 门失败分类与检查点选择段（Python 3401-3613） ────────────────────────────
+
+// promotionScoreEpsilon 晋级分容差（Python: _PROMOTION_SCORE_EPSILON）。
+const promotionScoreEpsilon = 1e-9
+
+// classifyGateFailure 分类候选失败原因（Python: _classify_gate_failure）。
+func classifyGateFailure(
+	accepted bool,
+	reason string,
+	targetCaseIDSet map[string]struct{},
+	candidateCaseScores map[string]float64,
+	firstEditStepsByCase map[string]int,
+	missingSkillInvocations []map[string]string,
+	verifierDeltas map[string]map[string]any,
+) string {
+	if accepted {
+		return ""
+	}
+	if strings.Contains(reason, "inconclusive") || strings.Contains(reason, "error_cases") {
+		return "infrastructure_or_evidence_failure"
+	}
+	if len(missingSkillInvocations) > 0 {
+		return "natural_skill_activation_failure"
+	}
+	for _, delta := range verifierDeltas {
+		if truthy(delta["newly_passed_fail_to_pass"]) {
+			return "partial_contract_progress"
+		}
+	}
+	failedTargets := map[string]struct{}{}
+	for caseID := range targetCaseIDSet {
+		if candidateCaseScores[caseID] < 1.0 {
+			failedTargets[caseID] = struct{}{}
+		}
+	}
+	if len(failedTargets) > 0 && len(stringSetKeyDiffToSlice(failedTargets, firstEditStepsByCase)) > 0 {
+		return "execution_convergence_failure"
+	}
+	if len(failedTargets) > 0 {
+		return "semantic_non_reproduction"
+	}
+	if strings.Contains(reason, "retention") {
+		return "regression_or_retention_failure"
+	}
+	if strings.Contains(reason, "not_invoked") || strings.Contains(reason, "invoked_outside_activation_window") {
+		return "capability_activation_failure"
+	}
+	return "score_non_improvement"
+}
+
+// classifyReplayOutcome 对比临时目标与 epoch 重放轨迹（Python: _classify_replay_outcome）。
+func classifyReplayOutcome(gate map[string]any, evalRefPath string) (map[string]any, error) {
+	targetCaseIDSet := map[string]struct{}{}
+	for _, rawCaseID := range toAnySlice(gate["target_case_ids"]) {
+		if caseID := toString(rawCaseID); caseID != "" {
+			targetCaseIDSet[caseID] = struct{}{}
+		}
+	}
+	passing, err := passingCaseIDs(evalRefPath)
+	if err != nil {
+		return nil, err
+	}
+	failedTargetCaseIDs := sortedStringSet(stringSetKeyDiff(targetCaseIDSet, passing))
+	_, firstEditSteps, err := preEditInvokedNamesByCase(evalRefPath, "skill", false)
+	if err != nil {
+		return nil, err
+	}
+	firstEditSet := map[string]struct{}{}
+	for caseID := range firstEditSteps {
+		firstEditSet[caseID] = struct{}{}
+	}
+	var failureClass string
+	switch {
+	case len(stringSetKeyDiff(toKeySet(failedTargetCaseIDs), firstEditSet)) > 0:
+		failureClass = "execution_convergence_failure"
+	case len(failedTargetCaseIDs) > 0:
+		failureClass = "semantic_non_reproduction"
+	default:
+		failureClass = "score_non_improvement"
+	}
+	firstEditAny := map[string]any{}
+	for caseID, step := range firstEditSteps {
+		firstEditAny[caseID] = step
+	}
+	return map[string]any{
+		"status":                             "failed",
+		"eval_ref_path":                      evalRefPath,
+		"failed_target_case_ids":             toAnySlice(failedTargetCaseIDs),
+		"first_persistent_edit_step_by_case": firstEditAny,
+		"failure_class":                      failureClass,
+	}, nil
+}
+
+// selectGateFromEpochCheckpoint 从 epoch 级重放中选一个临时改动（Python: _select_gate_from_epoch_checkpoint）。
+//
+// epoch 重放评估的是累积 Harness；选择是候选局部的：只有当它自己的目标仍通过、
+// 且其运行时能力确实被用到时才存活。无关用例结果只是审计证据，不能证明该候选
+// 造成了回归。epoch 是否整体可晋级由全局晋级门另行决定。
+func selectGateFromEpochCheckpoint(
+	gate map[string]any,
+	fullEvalRef string,
+	errorCaseIDSet map[string]struct{},
+	machineEvidenceSet map[string]struct{},
+) (map[string]any, error) {
+	targetCaseIDSet := map[string]struct{}{}
+	for _, rawCaseID := range toAnySlice(gate["target_case_ids"]) {
+		if caseID := toString(rawCaseID); caseID != "" {
+			targetCaseIDSet[caseID] = struct{}{}
+		}
+	}
+	inconclusiveUnion := map[string]struct{}{}
+	for caseID := range errorCaseIDSet {
+		inconclusiveUnion[caseID] = struct{}{}
+	}
+	for caseID := range machineEvidenceSet {
+		inconclusiveUnion[caseID] = struct{}{}
+	}
+	inconclusiveTargets := sortedStringSet(stringSetIntersection(targetCaseIDSet, inconclusiveUnion))
+	if len(inconclusiveTargets) > 0 {
+		return map[string]any{
+			"retained":                       false,
+			"reason":                         "candidate_target_inconclusive_at_epoch_checkpoint",
+			"failure_class":                  "infrastructure_or_evidence_failure",
+			"failed_target_case_ids":         []any{},
+			"inconclusive_target_case_ids":   toAnySlice(inconclusiveTargets),
+			"missing_runtime_invocations":    []any{},
+			"correlated_regression_case_ids": []any{},
+		}, nil
+	}
+	passing, err := passingCaseIDs(fullEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	failedTargetCaseIDs := sortedStringSet(stringSetKeyDiff(targetCaseIDSet, passing))
+	if len(failedTargetCaseIDs) > 0 {
+		replay, err := classifyReplayOutcome(gate, fullEvalRef)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"retained":                       false,
+			"reason":                         "candidate_failed_target_replay_checkpoint",
+			"failure_class":                  replay["failure_class"],
+			"failed_target_case_ids":         toAnySlice(failedTargetCaseIDs),
+			"missing_runtime_invocations":    []any{},
+			"correlated_regression_case_ids": []any{},
+		}, nil
+	}
+
+	invokedSkill, err := invokedSkillNamesByCase(fullEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	invokedTool, err := invokedToolNamesByCase(fullEvalRef)
+	if err != nil {
+		return nil, err
+	}
+	missingRuntimeInvocations := []map[string]string{}
+	for _, rawCapability := range toAnySlice(gate["capabilities"]) {
+		capability, ok := rawCapability.(map[string]any)
+		if !ok {
+			continue
+		}
+		actionGroup := toString(capability["action_group"])
+		runtimeName := toString(capability["runtime_name"])
+		capabilityTargets := map[string]struct{}{}
+		for _, rawCaseID := range toAnySlice(capability["target_case_ids"]) {
+			if caseID := toString(rawCaseID); caseID != "" {
+				capabilityTargets[caseID] = struct{}{}
+			}
+		}
+		if len(capabilityTargets) == 0 {
+			capabilityTargets = targetCaseIDSet
+		}
+		if actionGroup == "prompt" {
+			continue
+		}
+		if actionGroup != "skill" && actionGroup != "tool" {
+			continue
+		}
+		if runtimeName == "" {
+			continue
+		}
+		var namesMatch func(planned, invoked string) bool
+		var invokedByCase map[string]map[string]struct{}
+		if actionGroup == "skill" {
+			namesMatch = skillNamesMatch
+			invokedByCase = invokedSkill
+		} else {
+			namesMatch = toolNamesMatch
+			invokedByCase = invokedTool
+		}
+		for _, caseID := range sortedStringSet(capabilityTargets) {
+			matched := false
+			for invoked := range invokedByCase[caseID] {
+				if namesMatch(runtimeName, invoked) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				missingRuntimeInvocations = append(missingRuntimeInvocations, map[string]string{
+					"runtime_name":   runtimeName,
+					"target_case_id": caseID,
+				})
+			}
+		}
+	}
+	if len(missingRuntimeInvocations) > 0 {
+		incompleteBool := InconclusiveCapabilityCases(fullEvalRef, missingRuntimeInvocations)
+		incomplete := map[string]struct{}{}
+		for caseID := range incompleteBool {
+			incomplete[caseID] = struct{}{}
+		}
+		if len(incomplete) > 0 {
+			return map[string]any{
+				"retained":                       false,
+				"reason":                         "candidate_target_inconclusive_at_epoch_checkpoint",
+				"failure_class":                  "infrastructure_or_evidence_failure",
+				"failed_target_case_ids":         []any{},
+				"inconclusive_target_case_ids":   toAnySlice(sortedStringSet(incomplete)),
+				"missing_runtime_invocations":    []any{},
+				"correlated_regression_case_ids": []any{},
+			}, nil
+		}
+		missingAny := []any{}
+		for _, missing := range missingRuntimeInvocations {
+			missingAny = append(missingAny, missing)
+		}
+		return map[string]any{
+			"retained":                       false,
+			"reason":                         "candidate_capability_not_used_at_epoch_checkpoint",
+			"failure_class":                  "capability_activation_failure",
+			"failed_target_case_ids":         []any{},
+			"missing_runtime_invocations":    missingAny,
+			"correlated_regression_case_ids": []any{},
+		}, nil
+	}
+	return map[string]any{
+		"retained":                       true,
+		"reason":                         "candidate_effect_retained_after_epoch_checkpoint",
+		"failure_class":                  "",
+		"failed_target_case_ids":         []any{},
+		"missing_runtime_invocations":    []any{},
+		"correlated_regression_case_ids": []any{},
+	}, nil
+}
+
+// globallyPromotable epoch 最终工件能否成为新全局最佳（Python: _globally_promotable）。
+//
+// 候选局部保留只证明改动仍有益于自己的目标；晋级要求最终选中工件对前一最佳
+// 非回归：均分不降，且前一最佳通过的用例必须仍通过。epsilon 只吸收评委浮点噪声。
+func globallyPromotable(
+	selectedEvalRef, previousBestEvalRef string,
+	previousBestScore *float64,
+) (bool, string, error) {
+	selectedScore, err := evalScore(selectedEvalRef)
+	if err != nil {
+		return false, "", err
+	}
+	if previousBestScore != nil && selectedScore < *previousBestScore-promotionScoreEpsilon {
+		return false, "selected_score_regressed", nil
+	}
+	if previousBestEvalRef != "" {
+		previousPassing, err := passingCaseIDs(previousBestEvalRef)
+		if err != nil {
+			return false, "", err
+		}
+		selectedPassing, err := passingCaseIDs(selectedEvalRef)
+		if err != nil {
+			return false, "", err
+		}
+		if len(stringSetKeyDiff(previousPassing, selectedPassing)) > 0 {
+			return false, "protected_case_regressed", nil
+		}
+	}
+	return true, "selected_global_non_regression", nil
+}
+
+// rejectMixedOpaqueSnapshotSelection 拒绝部分存活的 opaque epoch（Python: _reject_mixed_opaque_snapshot_selection）。
+func rejectMixedOpaqueSnapshotSelection(
+	gates, selections []map[string]any,
+) (bool, error) {
+	if len(gates) != len(selections) {
+		return false, errors.New("opaque snapshot gates and selections must be paired")
+	}
+	opaque := false
+	for _, gate := range gates {
+		if toString(gate["composition_mode"]) == "opaque_snapshot" {
+			opaque = true
+			break
+		}
+	}
+	anyRetained := false
+	anyRejected := false
+	for _, selection := range selections {
+		if truthy(selection["retained"]) {
+			anyRetained = true
+		} else {
+			anyRejected = true
+		}
+	}
+	mixed := opaque && anyRetained && anyRejected
+	if !mixed {
+		return false, nil
+	}
+	// PolicyHarness 候选是累积文件系统快照。移除一个动作而保留更晚快照
+	// 会保留被拒字节。在 opaque 组合器/重放出现前整体拒绝该 epoch。
+	for _, selection := range selections {
+		selection["retained"] = false
+		selection["reason"] = "epoch_opaque_snapshot_partial_retention_unsupported"
+		selection["failure_class"] = "regression_or_retention_failure"
+	}
+	return true, nil
 }
