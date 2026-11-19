@@ -27,6 +27,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // logComponent 组件级日志组件常量（规则 3.2：agentcore/* 用 ComponentAgentCore）
@@ -491,6 +492,97 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		return out, nil
 	}
 
+	// TransformFn 绑定（Python transform，end_comp.py:144-179）
+	e.TransformFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetExecutableID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component transform started")
+		out := make(chan graphexe.StreamChunk[map[string]any])
+		frameCount := 0
+		go func() {
+			defer close(out)
+			defer func() {
+				logger.Debug(logComponent).
+					Str("component_id", sess.GetExecutableID()).
+					Str("session_id", sess.GetSessionID()).
+					Bool("has_template", e.template != nil).
+					Bool("mix", e.mix).
+					Int("chunk_num", frameCount).
+					Msg("End component transform succeed")
+			}()
+			if e.template != nil {
+				// 模板路径：流入合并后走渲染流（end_comp.py:154-162）
+				merged := flattenChannelInputs(inputs)
+				timeout := envTimeoutToFloat(sess.GetEnv(constants.EndCompTemplateRenderPositionTimeoutKey))
+				for chunk := range e.template.RenderStream(ctx, merged, sess, timeout) {
+					if chunk.Err != nil {
+						out <- graphexe.StreamChunk[map[string]any]{Err: chunk.Err}
+						return
+					}
+					frameCount++
+					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+						"frame": stream.OutputSchema{
+							Type:    constants.EndNodeStream,
+							Index:   chunk.Val.Index,
+							Payload: map[string]any{"response": chunk.Val.Data},
+						},
+					}}
+				}
+				return
+			}
+			// 无模板：逐帧叶子抽取 → {"output": {path: value}}（end_comp.py:163-171）
+			for frame := range inputs {
+				for _, leaf := range commonutils.ExtractLeafNodes(frame) {
+					frameCount++
+					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+						"output": map[string]any{commonutils.FormatPath(leaf.Path): leaf.Value},
+					}}
+				}
+			}
+		}()
+		return out, nil
+	}
+
+	// CollectFn 绑定（Python collect，end_comp.py:181-212）
+	e.CollectFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetExecutableID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component collect started")
+		var result map[string]any
+		if e.template != nil {
+			// 模板路径：流入合并 → 批渲染（end_comp.py:191-192）
+			merged := flattenChannelInputs(inputs)
+			timeout := envTimeoutToFloat(sess.GetEnv(constants.EndCompTemplateBranchRenderTimeoutKey))
+			r, rerr := e.render(ctx, merged, timeout, sess)
+			if rerr != nil {
+				return nil, rerr
+			}
+			result = r
+		} else {
+			// 无模板：逐帧叶子抽取 → chunks 聚合（end_comp.py:193-202）
+			var chunks []any
+			for frame := range inputs {
+				for _, leaf := range commonutils.ExtractLeafNodes(frame) {
+					chunks = append(chunks, map[string]any{commonutils.FormatPath(leaf.Path): leaf.Value})
+				}
+			}
+			result = map[string]any{"output": chunks}
+		}
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetExecutableID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component collect succeed")
+		return result, nil
+	}
+
 	// InvokeFn 绑定（Python invoke，end_comp.py:59-89）
 	e.InvokeFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
 		logger.Debug(logComponent).
@@ -679,4 +771,17 @@ func (b *TemplateBatchProcessor) Render(ctx context.Context, extra map[string]an
 		sb.WriteString(fmt.Sprintf("%v", chunk.Val.Data))
 	}
 	return sb.String(), nil
+}
+
+// flattenChannelInputs 将流入的多帧合并为单 dict（同名后帧覆盖前帧）。
+// Python 流入侧收的是 dict + AsyncGenerator 叶子（偏差 D-17-3），Go 统一为
+// 帧 channel 后的等价聚合；流叶子在 RenderStream/consumeAllIterators 内消化。
+func flattenChannelInputs(inputs <-chan map[string]any) map[string]any {
+	merged := map[string]any{}
+	for frame := range inputs {
+		for k, v := range frame {
+			merged[k] = v
+		}
+	}
+	return merged
 }

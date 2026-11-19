@@ -421,3 +421,86 @@ func TestEnd_Stream_无模板_逐key吐出(t *testing.T) {
 		t.Fatalf("逐 key 输出不符: count=%d seen=%v", count, seen)
 	}
 }
+
+// TestEnd_Transform_无模板_叶子帧 验证流入经叶子抽取逐帧吐出（end_comp.py:163-171）。
+func TestEnd_Transform_无模板_叶子帧(t *testing.T) {
+	e, _ := NewEnd(nil)
+	inner := newFakeVertexSession(t, "n1", "End")
+	in := make(chan map[string]any, 1)
+	in <- map[string]any{"llm1": map[string]any{"text": "hi"}}
+	close(in)
+	ch, err := e.OnTransform(context.Background(), in, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	var first map[string]any
+	for chunk := range ch {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		if first == nil {
+			first = chunk.Val
+		}
+	}
+	if first == nil {
+		t.Fatal("无输出帧")
+	}
+	wrapper, ok := first["output"].(map[string]any)
+	if !ok || wrapper["llm1.text"] != "hi" {
+		t.Fatalf("叶子抽取帧不符: %v", first)
+	}
+}
+
+// TestEnd_Collect_无模板_聚合 验证 {"output": chunks}（end_comp.py:193-202）。
+func TestEnd_Collect_无模板_聚合(t *testing.T) {
+	e, _ := NewEnd(nil)
+	inner := newFakeVertexSession(t, "n1", "End")
+	in := make(chan map[string]any, 1)
+	in <- map[string]any{"k": "v"}
+	close(in)
+	out, err := e.OnCollect(context.Background(), in, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, ok := out["output"]; !ok {
+		t.Fatalf("期望 output 聚合信封: %v", out)
+	}
+}
+
+// TestEnd_Collect_有模板_渲染 验证模板路径（end_comp.py:191-192）。
+func TestEnd_Collect_有模板_渲染(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	inner := newFakeVertexSession(t, "n1", "End")
+	in := make(chan map[string]any, 1)
+	in <- map[string]any{"n": "joe"}
+	close(in)
+	out, err := e.OnCollect(context.Background(), in, inner, nil)
+	if err != nil || out["response"] != "Hi joe" {
+		t.Fatalf("模板聚合不符: out=%v err=%v", out, err)
+	}
+}
+
+// TestEnd_Transform_有模板_信封帧 验证 transform 模板路径（end_comp.py:154-162）。
+func TestEnd_Transform_有模板_信封帧(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	inner := newFakeVertexSession(t, "n1", "End")
+	in := make(chan map[string]any, 1)
+	in <- map[string]any{"n": "zoe"}
+	close(in)
+	ch, err := e.OnTransform(context.Background(), in, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	n := 0
+	for chunk := range ch {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		if _, ok := chunk.Val["frame"].(stream.OutputSchema); ok {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("期望 2 个信封帧, got %d", n)
+	}
+}
