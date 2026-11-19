@@ -1,207 +1,208 @@
 package trajectory
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 )
+
+// builder.go 离线轨迹数据的规范化 OTLP 组装器。
+// 对齐 Python: agent_evolving/trajectory/offline/builder.py（全文，2026-12-04 快照）。
+// 接受已规范化的 span 字典；刻意不构造旧 TrajectoryStep/detail 对象；
+// 产出单个不可变 Trajectory。
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// resourceAliases meta 键 → 资源属性键别名。
+// Python: offline/builder.py _RESOURCE_ALIASES。
+var resourceAliases = map[string]string{
+	"session_id":    obs.GenAIConversationID,
+	"member_id":     obs.ATMemberName,
+	"team_id":       TeamID,
+	"source":        TrajectorySource,
+	"case_id":       CaseID,
+	"trajectory_id": TrajectoryID,
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TrajectoryBuilder 轨迹组装器，用于在线和离线路径的轨迹构建。
-// 职责：
-//   - 步骤累积（按插入顺序）
-//   - Cost 累积（input_tokens/output_tokens）
-//   - 最终 Trajectory 组装
-//
-// 不负责：
-//   - 格式转换（由调用方处理）
-//   - Span 解析（由 Extractor 处理）
-//   - 持久化（由 Store 处理）
-//
-// Python: openjiuwen/agent_evolving/trajectory/builder.py TrajectoryBuilder
+// TrajectoryBuilder 为一次离线执行累积规范 OTLP span。
+// Python: offline/builder.py TrajectoryBuilder。
 type TrajectoryBuilder struct {
-	// sessionID 会话标识（在线模式为 conversation_id，离线模式为 case_id）
-	sessionID string
-	// source 执行来源："online" 或 "offline"
-	source string
-	// caseID 离线模式下的用例标识（可选）
-	caseID string
-	// memberID 团队成员标识（可选）
-	memberID string
-	// maxSteps 最大保留步骤数（可选，nil 表示不限制）
-	maxSteps *int
-	// meta 扩展元数据
-	meta map[string]any
-	// steps 已累积的步骤
-	steps []*TrajectoryStep
-	// cost 聚合成本指标
-	cost map[string]int
-	// startTimeMs 首个步骤的开始时间（毫秒时间戳，可选）
-	startTimeMs *int
+	sessionID    string
+	source       string
+	caseID       *string
+	memberID     *string
+	teamID       *string
+	maxSpans     int // 0 表示无上限（对齐 Python None）；负值构造期拒绝
+	trajectoryID string
+	traceID      string
+	meta         map[string]any
+	spans        []map[string]any
+	identities   map[SpanIdentity]struct{}
 }
-
-// TrajectoryBuilderOption TrajectoryBuilder 构造选项函数。
-type TrajectoryBuilderOption func(*TrajectoryBuilder)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewTrajectoryBuilder 创建 TrajectoryBuilder 实例。
-// Python: TrajectoryBuilder(session_id, source, case_id, member_id, meta, max_steps)
-func NewTrajectoryBuilder(sessionID, source string, opts ...TrajectoryBuilderOption) *TrajectoryBuilder {
-	b := &TrajectoryBuilder{
-		sessionID: sessionID,
-		source:    source,
-		meta:      map[string]any{},
-		steps:     []*TrajectoryStep{},
-		cost:      map[string]int{"input_tokens": 0, "output_tokens": 0},
+// NewTrajectoryBuilder 创建离线轨迹组装器。
+// maxSpans 传 0 表示无上限（Python None）；负值非法。
+// Python: offline/builder.py TrajectoryBuilder.__init__。
+func NewTrajectoryBuilder(sessionID, source string, caseID, memberID, teamID *string, meta map[string]any, maxSpans int, trajectoryID, traceID *string) (*TrajectoryBuilder, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
 	}
-	for _, opt := range opts {
-		opt(b)
+	if maxSpans < 0 {
+		return nil, fmt.Errorf("max_spans must be >= 1")
 	}
-	return b
-}
-
-// WithCaseID 设置离线模式下的用例标识。
-func WithCaseID(caseID string) TrajectoryBuilderOption {
-	return func(b *TrajectoryBuilder) { b.caseID = caseID }
-}
-
-// WithMemberID 设置团队成员标识。
-// Python: if member_id: self.meta.setdefault("member_id", member_id)
-func WithMemberID(memberID string) TrajectoryBuilderOption {
-	return func(b *TrajectoryBuilder) {
-		b.memberID = memberID
-		if b.meta == nil {
-			b.meta = map[string]any{}
+	var id string
+	if trajectoryID != nil && *trajectoryID != "" {
+		id = *trajectoryID
+	} else {
+		id = uuid.NewString()
+	}
+	trace := id
+	if traceID != nil && *traceID != "" {
+		trace = *traceID
+	}
+	copiedMeta := map[string]any{}
+	for key, value := range meta {
+		if value == nil {
+			continue
 		}
-		if _, exists := b.meta["member_id"]; !exists && memberID != "" {
-			b.meta["member_id"] = memberID
-		}
+		copiedMeta[key] = copyJSON(value)
 	}
+	return &TrajectoryBuilder{
+		sessionID:    sessionID,
+		source:       source,
+		caseID:       caseID,
+		memberID:     memberID,
+		teamID:       teamID,
+		maxSpans:     maxSpans,
+		trajectoryID: id,
+		traceID:      trace,
+		meta:         copiedMeta,
+		identities:   map[SpanIdentity]struct{}{},
+	}, nil
 }
 
-// WithMeta 设置扩展元数据。
-// Python: self.meta: Dict[str, Any] = dict(meta or {})
-func WithMeta(meta map[string]any) TrajectoryBuilderOption {
-	return func(b *TrajectoryBuilder) {
-		if meta != nil {
-			b.meta = meta
-		}
+// Spans 返回组装器当前持有的脱离 span 列表。
+// Python: offline/builder.py TrajectoryBuilder.spans。
+func (b *TrajectoryBuilder) Spans() []map[string]any {
+	result := make([]map[string]any, 0, len(b.spans))
+	for _, span := range b.spans {
+		result = append(result, copyJSON(span).(map[string]any))
 	}
+	return result
 }
 
-// WithMaxSteps 设置最大保留步骤数。
-// Python: max_steps < 1 时抛出 ValueError。
-// Go 中不 panic，maxSteps < 1 时忽略该选项。
-func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
-	return func(b *TrajectoryBuilder) {
-		if maxSteps >= 1 {
-			b.maxSteps = &maxSteps
-		} else {
-			logger.Warn(logComponent).Int("max_steps", maxSteps).Msg("WithMaxSteps: maxSteps < 1 ignored, aligned with Python ValueError")
+// RecordSpan 记录一个脱离的规范 span，忽略重复身份。
+// Python: offline/builder.py TrajectoryBuilder.record_span。
+func (b *TrajectoryBuilder) RecordSpan(span map[string]any) error {
+	if span == nil {
+		return fmt.Errorf("span must be a mapping")
+	}
+	normalized, err := NormalizeSpan(span)
+	if err != nil {
+		return err
+	}
+	if _, hasTrace := normalized["traceId"]; !hasTrace {
+		normalized["traceId"] = b.traceID
+	}
+	spanID, _ := normalized["spanId"].(string)
+	if spanID == "" {
+		digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%s", b.traceID, len(b.spans), normalized["name"])))
+		normalized["spanId"] = hex.EncodeToString(digest[:])[:16]
+	}
+	identity := SpanIdentityOf(normalized)
+	if identity != nil {
+		if _, duplicated := b.identities[*identity]; duplicated {
+			return nil
 		}
+		b.identities[*identity] = struct{}{}
 	}
-}
-
-// RecordStep 记录一个步骤并累积成本。
-// Python: TrajectoryBuilder.record_step(step)
-func (b *TrajectoryBuilder) RecordStep(step *TrajectoryStep) {
-	// Python: self.steps.append(step)
-	b.steps = append(b.steps, step)
-
-	// Python: if self.max_steps is not None and len(self.steps) > self.max_steps:
-	//     self.steps = self.steps[-self.max_steps:]
-	if b.maxSteps != nil && len(b.steps) > *b.maxSteps {
-		b.steps = b.steps[len(b.steps)-*b.maxSteps:]
-	}
-
-	// Python: if step.kind == "llm" and step.detail:
-	//     if isinstance(step.detail, LLMCallDetail) and step.detail.usage:
-	//         self.cost["input_tokens"] += step.detail.usage.get("prompt_tokens", 0)
-	//         self.cost["output_tokens"] += step.detail.usage.get("completion_tokens", 0)
-	if step.Kind == StepKindLLM {
-		if detail, ok := step.Detail.(*LLMCallDetail); ok && detail != nil && detail.Usage != nil {
-			if pt, ok := detail.Usage["prompt_tokens"]; ok {
-				b.cost["input_tokens"] += toIntFromAny(pt)
+	b.spans = append(b.spans, normalized)
+	sort.SliceStable(b.spans, func(i, j int) bool {
+		return compareSpanSortKey(SpanSortKeyOf(b.spans[i]), SpanSortKeyOf(b.spans[j])) < 0
+	})
+	if b.maxSpans > 0 && len(b.spans) > b.maxSpans {
+		removed := b.spans[:len(b.spans)-b.maxSpans]
+		b.spans = b.spans[len(b.spans)-b.maxSpans:]
+		for _, removedSpan := range removed {
+			if removedIdentity := SpanIdentityOf(removedSpan); removedIdentity != nil {
+				delete(b.identities, *removedIdentity)
 			}
-			if ct, ok := detail.Usage["completion_tokens"]; ok {
-				b.cost["output_tokens"] += toIntFromAny(ct)
-			}
 		}
 	}
+	return nil
+}
 
-	// Python: if self._start_time_ms is None and step.start_time_ms:
-	if b.startTimeMs == nil && step.StartTimeMs != 0 {
-		ms := step.StartTimeMs
-		b.startTimeMs = &ms
+// AddSpan 供采集器风格调用方使用的 record_span 别名。
+// Python: offline/builder.py TrajectoryBuilder.add_span。
+func (b *TrajectoryBuilder) AddSpan(span map[string]any) error {
+	return b.RecordSpan(span)
+}
+
+// resourceAttributes 组装资源属性（trajectory_id/投影版本/来源/会话 + 可选）。
+// Python: offline/builder.py TrajectoryBuilder._resource_attributes。
+func (b *TrajectoryBuilder) resourceAttributes() map[string]any {
+	attrs := map[string]any{
+		TrajectoryID:                    b.trajectoryID,
+		TrajectoryProjectionVersionAttr: TrajectoryProjectionVersion,
+		TrajectorySource:                b.source,
+		obs.GenAIConversationID:         b.sessionID,
 	}
-}
-
-// SessionID 返回会话标识。
-func (b *TrajectoryBuilder) SessionID() string {
-	return b.sessionID
-}
-
-// GetSteps 返回已累积步骤的只读切片。
-func (b *TrajectoryBuilder) GetSteps() []*TrajectoryStep {
-	return b.steps
-}
-
-// Build 组装最终 Trajectory。
-// Python: TrajectoryBuilder.build()
-func (b *TrajectoryBuilder) Build() *Trajectory {
-	// Python: meta: dict[str, Any] = {}
-	//     if self.member_id: meta["member_id"] = self.member_id
-	meta := map[string]any{}
-	for k, v := range b.meta {
-		meta[k] = v
+	if b.caseID != nil {
+		attrs[CaseID] = *b.caseID
 	}
-	// Python: setdefault 语义，仅在 member_id 不存在时才设置
-	if b.memberID != "" {
-		if _, exists := meta["member_id"]; !exists {
-			meta["member_id"] = b.memberID
+	if b.memberID != nil {
+		attrs[obs.ATMemberName] = *b.memberID
+	}
+	if b.teamID != nil {
+		attrs[TeamID] = *b.teamID
+	}
+	for key, value := range b.meta {
+		if value == nil {
+			continue
 		}
-	}
-
-	// Python: cost=self.cost if self.cost["input_tokens"] > 0 else None
-	var cost CostInfo
-	if b.cost["input_tokens"] > 0 {
-		cost = map[string]int{
-			"input_tokens":  b.cost["input_tokens"],
-			"output_tokens": b.cost["output_tokens"],
+		target := key
+		if alias, exists := resourceAliases[key]; exists {
+			target = alias
 		}
+		if _, exists := attrs[target]; exists {
+			continue
+		}
+		attrs[target] = copyJSON(value)
 	}
-
-	return &Trajectory{
-		ExecutionID: generateUUID(),
-		SessionID:   b.sessionID,
-		Source:      b.source,
-		CaseID:      b.caseID,
-		Steps:       b.steps,
-		Cost:        cost,
-		Meta:        meta,
-	}
+	return attrs
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// generateUUID 生成唯一执行标识符。
-// Python: _generate_uuid() -> str(uuid.uuid4())
-func generateUUID() string {
-	return uuid.New().String()
-}
-
-// toIntFromAny 安全地将 any 转换为 int。
-func toIntFromAny(v any) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case int64:
-		return int(n)
-	case float64:
-		return int(n)
-	default:
-		return 0
+// Build 构建不可变的规范 OTLP 轨迹快照。
+// Python: offline/builder.py TrajectoryBuilder.build。
+func (b *TrajectoryBuilder) Build() (*Trajectory, error) {
+	spanList := make([]any, 0, len(b.spans))
+	for _, span := range b.spans {
+		spanList = append(spanList, copyJSON(span))
 	}
+	payload := map[string]any{
+		"resourceSpans": []any{
+			map[string]any{
+				"resource": map[string]any{"attributes": AttributesFromMap(b.resourceAttributes())},
+				"scopeSpans": []any{
+					map[string]any{
+						"scope": map[string]any{
+							"name":    TrajectoryScopeName,
+							"version": TrajectoryProjectionVersion,
+						},
+						"spans": spanList,
+					},
+				},
+			},
+		},
+	}
+	return FromOTLP(payload)
 }
