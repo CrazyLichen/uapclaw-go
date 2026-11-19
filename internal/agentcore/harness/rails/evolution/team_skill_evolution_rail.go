@@ -77,8 +77,6 @@ type TeamSkillEvolutionRail struct {
 	teamID string
 	// reviewFeedbackCoordinator 评审反馈协调器（25.2b F_62，接口注入）。
 	reviewFeedbackCoordinator ReviewFeedbackCoordinator
-	// trajectorySource 团队轨迹聚合源
-	trajectorySource TeamTrajectorySource
 	// trajectoriesDir 轨迹调试目录
 	trajectoriesDir string
 
@@ -337,19 +335,6 @@ func WithTeamSkillEvolutionTimeout(v float64) TeamSkillEvolutionRailOption {
 // WithTeamSkillTeamID 设置团队标识。
 func WithTeamSkillTeamID(v string) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) { r.teamID = v }
-}
-
-// TeamTrajectorySource 团队轨迹源窄接口（25.2b：订阅窗口/聚合回落承载）。
-// 12-04 注记：trajectory.TrajectorySource 接口随 registry 删除；本接口为
-// rails 侧协作面（Go 等价 Python rail.get_trajectory 的窗口读取）。
-type TeamTrajectorySource interface {
-	// GetTrajectory 返回指定团队/会话的聚合轨迹。
-	GetTrajectory(teamID, sessionID string, filterCollaborative bool) *trajectory.Trajectory
-}
-
-// WithTeamSkillTrajectorySource 设置团队轨迹聚合源。
-func WithTeamSkillTrajectorySource(src TeamTrajectorySource) TeamSkillEvolutionRailOption {
-	return func(r *TeamSkillEvolutionRail) { r.trajectorySource = src }
 }
 
 // 【12-04 迁移注记】WithTeamSkillTrajectorySink 已删除（上游无 set_trajectory_sink，
@@ -1022,12 +1007,6 @@ func (r *TeamSkillEvolutionRail) EvolutionConfig() map[string]any {
 	}
 }
 
-// SetTrajectorySource 绑定团队轨迹聚合源。
-// Python: TeamSkillEvolutionRail.set_trajectory_source(source)
-func (r *TeamSkillEvolutionRail) SetTrajectorySource(src TeamTrajectorySource) {
-	r.trajectorySource = src
-}
-
 // UpdateLLM 更新 LLM 客户端和模型名称引用。
 // Python: SkillEvolutionRail.update_llm(llm, model) — Team 中也有类似逻辑
 func (r *TeamSkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
@@ -1137,10 +1116,8 @@ func (r *TeamSkillEvolutionRail) teamSkillForExperienceDetailFile(ctx context.Co
 // aggregateTeamTrajectory 聚合团队轨迹。
 // 对齐 Python: TeamSkillEvolutionRail._aggregate_team_trajectory(trajectory)
 func (r *TeamSkillEvolutionRail) aggregateTeamTrajectory(traj *trajectory.Trajectory) *trajectory.Trajectory {
-	if r.trajectorySource == nil {
-		return traj
-	}
-
+	// 25.2b：聚合源 = rail 自身 team scope 干净窗口（Task 3 GetTrajectory；
+	// registry 死字段链按规则 8 删除）。
 	teamID := r.teamID
 	if teamID == "" {
 		teamID = "unknown"
@@ -1148,9 +1125,9 @@ func (r *TeamSkillEvolutionRail) aggregateTeamTrajectory(traj *trajectory.Trajec
 
 	sessionID := sessionIDString(traj)
 
-	// Python: team_traj = source.get_trajectory(team_id=team_id, session_id=..., filter_collaborative=True)
-	teamTraj := r.trajectorySource.GetTrajectory(teamID, sessionID, true)
-	if teamTraj == nil || len(trajectory.IterSpans(teamTraj)) == 0 {
+	// Python: team_traj = rail.get_trajectory(team_id=team_id, session_id=...)
+	teamTraj, err := r.RailGetTrajectory(sessionID, teamID)
+	if err != nil || teamTraj == nil || len(trajectory.IterSpans(teamTraj)) == 0 {
 		return traj
 	}
 

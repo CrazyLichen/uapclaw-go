@@ -1136,17 +1136,6 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_EvolutionReques
 	s.False(result3.HasChanges())
 }
 
-// ─── SetTrajectorySource 轨迹源设置 ───
-
-// TestTeamSkillEvolutionRail_SetTrajectorySource 测试设置团队轨迹聚合源。
-//
-// 对齐 Python: TeamSkillEvolutionRail.set_trajectory_source(source)
-func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SetTrajectorySource() {
-	rail := s.newTestRail()
-	// 设置 nil 不崩溃
-	rail.SetTrajectorySource(nil)
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTestRail 创建测试用 TeamSkillEvolutionRail。

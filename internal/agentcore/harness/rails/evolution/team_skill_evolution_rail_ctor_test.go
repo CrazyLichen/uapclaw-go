@@ -42,11 +42,6 @@ func TestNewTeamSkillEvolutionRail(t *testing.T) {
 
 // TestTeamSkillEvolutionRail_Setters 验证各 setter 的赋值效果。
 func TestTeamSkillEvolutionRail_Setters(t *testing.T) {
-	t.Run("SetTrajectorySource 后字段非 nil", func(t *testing.T) {
-		r := newTeamRail(t)
-		r.SetTrajectorySource(nil)
-		assert.Nil(t, r.trajectorySource)
-	})
 
 	t.Run("HasPendingApprovalSnapshot 对未知 ID 返回 false", func(t *testing.T) {
 		r := newTeamRail(t)

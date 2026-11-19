@@ -618,13 +618,6 @@ func TestTeamSkillEvolutionRail_RunEvolution_禁用AutoScan(t *testing.T) {
 
 // ─── 辅助 ───
 
-// TestWithTeamSkillTrajectorySource 验证 WithTeamSkillTrajectorySource 选项。
-func TestWithTeamSkillTrajectorySource(t *testing.T) {
-	r := &TeamSkillEvolutionRail{}
-	src := &fakeTrajectorySource{}
-	WithTeamSkillTrajectorySource(src)(r)
-	assert.Equal(t, src, r.trajectorySource)
-}
 
 // fakeTrajectorySource 用于测试的模拟轨迹聚合源
 type fakeTrajectorySource struct{}

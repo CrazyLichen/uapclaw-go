@@ -509,7 +509,6 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	teamWsSkillsDir := strPtrValue(teamWorkspace.SkillsDir)
 	teamID := strPtrValue(teamWorkspace.TeamID)
 	config := teamWorkspace.Config
-	teamTrajectoryRegistry := trajectorySourceUnused()
 
 	railsList := make([]agentinterfaces.AgentRail, 0, 13)
 
@@ -609,9 +608,8 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 				return nil, fmt.Errorf("evolution LLM 构建失败（config 无有效模型）")
 			}
 			evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
-			// 【12-04】registry 绑定段删除（死字段）；跨成员可见性由订阅窗口承载。
-			teamTrajectoryRegistry := teamTrajectoryRegistry // 保持变量名引用不歧义
-			_ = teamTrajectoryRegistry
+			// 【12-04】registry 绑定段删除（死字段，规则 8）；跨成员可见性由
+			// 订阅窗口承载。
 			var opts []evolution.TeamSkillEvolutionRailOption
 			if teamID != "" {
 				opts = append(opts,
@@ -826,8 +824,3 @@ func roleStr(role *string) string {
 	}
 	return *role
 }
-
-// trajectorySourceUnused registry 链删除后的占位（规则 8：跨成员可见性由
-// TrajectorySpanProcessor 订阅窗口承载，见 spec §5）。恒 nil 保持调用点编译
-// 语义（teamID != "" && registry != nil 恒 false）。
-func trajectorySourceUnused() *evolution.TeamTrajectorySource { return nil }
