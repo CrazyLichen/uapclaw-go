@@ -245,8 +245,8 @@ func (s *TestNativeInterruptKindsSuite) Test未声明动态工具调用的宿主
 	host := newRecordedHost(allowApproval)
 	result, err := s.turnWith(
 		host, map[hp.HostCapability]bool{
-			hp.HostCapabilityUserInput:     true,
-			hp.HostCapabilityToolApproval:  true,
+			hp.HostCapabilityUserInput:    true,
+			hp.HostCapabilityToolApproval: true,
 		},
 		func(params hconfig.CreateDeepAgentParams) hconfig.CreateDeepAgentParams {
 			params.ToolInstances = []tool.Tool{clientTool}

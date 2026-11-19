@@ -86,6 +86,10 @@ type InboxMessage struct {
 	Content any
 	// Immediate true 表示转向当前轮，false 表示等本轮结束后再跑
 	Immediate bool
+	// RunContext 请求局部调用上下文，必须与其它模型轮的消息保持隔离
+	//（heartbeat 原因 / 上下文装配模式等）。Python: InboxMessage.run_context
+	//（harness/state.py L72-79）
+	RunContext *agentinterfaces.RunContext
 }
 
 // HarnessInternalState 全部可变状态容器；supervisor 是唯一写者。

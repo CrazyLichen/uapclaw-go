@@ -7,6 +7,8 @@
 package scheduling
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"strconv"
 	"sync"
@@ -48,7 +50,7 @@ const (
 type SchedulerHost interface {
 	// DeliverInput 把内容注入 leader 自己的输入流。
 	// Python: deliver_input(content, *, use_steer=True)
-	DeliverInput(ctx context.Context, content any, useSteer bool) error
+	DeliverInput(ctx context.Context, content any, useSteer bool, runContext *agentinterfaces.RunContext) error
 	// AutoStartMember 尽力拉起一个 UNSTARTED 成员运行时。
 	// Python: auto_start_member(member_name)
 	AutoStartMember(ctx context.Context, memberName string) bool
@@ -408,7 +410,7 @@ func (s *TeamScheduler) skipRetiredOwner(ctx context.Context, task *database.Tea
 	logger.Warn(logComponent).
 		Str("task_id", task.TaskID).Str("status", task.Status).Str("owner", owner).
 		Msg("[scheduler] task is assigned to shut-down member; escalating to the leader")
-	_ = s.host.DeliverInput(ctx, RenderLeaderEscalationRetiredOwner(task, owner), false)
+	_ = s.host.DeliverInput(ctx, RenderLeaderEscalationRetiredOwner(task, owner), false, nil)
 	return true
 }
 
@@ -748,7 +750,7 @@ func (s *TeamScheduler) escalate(ctx context.Context, task *database.TeamTaskBas
 	logger.Info(logComponent).
 		Str("task_id", task.TaskID).Int64("round", task.ReviewRound).Str("message", content).
 		Msg("[scheduler] escalating task round to the leader")
-	_ = s.host.DeliverInput(ctx, content, false)
+	_ = s.host.DeliverInput(ctx, content, false, nil)
 }
 
 // digestTaskDone 每 task 一次的终态 digest 给 leader。
@@ -771,11 +773,11 @@ func (s *TeamScheduler) digestTaskDone(ctx context.Context, task *database.TeamT
 		return
 	}
 	if task.ParentTaskID == nil {
-		_ = s.host.DeliverInput(ctx, RenderLeaderTaskDone(task, verified), false)
+		_ = s.host.DeliverInput(ctx, RenderLeaderTaskDone(task, verified), false, nil)
 	}
 	if remaining == 0 && total > 0 && !s.allDoneAnnounced {
 		s.allDoneAnnounced = true
-		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(total), false)
+		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(total), false, nil)
 	}
 	if remaining == 0 && total > 0 {
 		s.dispatchTeamReviewFeedback(ctx)
@@ -828,7 +830,7 @@ func (s *TeamScheduler) announceAllDone(ctx context.Context, event *events.Event
 	}
 	if !s.allDoneAnnounced {
 		s.allDoneAnnounced = true
-		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(int64(payloadInt(event.Payload, "task_count"))), false)
+		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(int64(payloadInt(event.Payload, "task_count"))), false, nil)
 	}
 	s.dispatchTeamReviewFeedback(ctx)
 }

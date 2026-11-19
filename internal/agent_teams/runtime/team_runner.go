@@ -381,7 +381,7 @@ func InteractAgentTeam(
 		return interaction.NewDeliverResultFailure("missing_target"), nil
 	}
 	ctx = bindInteractTeamSession(ctx, sessionID)
-	return GetTeamRuntimeManager().Interact(ctx, payload, teamName, sessionID)
+	return GetTeamRuntimeManager().Interact(ctx, payload, teamName, sessionID, nil)
 }
 
 // GetAgentTeamMonitor 获取活跃团队的 TeamMonitor。

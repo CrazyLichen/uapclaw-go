@@ -135,19 +135,19 @@ func (s *ConfigRoundtripSuite) TestTeamAgentSpecValidate_嵌套校验与mcp默�
 //
 // 15.16c：D-15.13-k 过渡默认工厂已回收——平台工厂是唯一注册面，
 // per-member 键（language/member_name/role/member_card_id）不入 seed
-//（context.py:199-205），由 derive() 填充。
+// （context.py:199-205），由 derive() 填充。
 //
 // Python: materialize_build_context (blueprint.py:685-699)。
 func (s *ConfigRoundtripSuite) TestBuildContextSeed_往返与materialize() {
 	swarm.RegisterSwarmBuildContextFactory()
 	seed := map[string]any{
-		"session_id":        "sess-1",
-		"team_id":           "pay",
-		"mode":              "team",
-		"project_dir":       "/proj/dir",
-		"team_outputs_dir":  "/proj/outputs",
-		"team_ws_root":      "/ws/root",
-		"channel":           "web",
+		"session_id":       "sess-1",
+		"team_id":          "pay",
+		"mode":             "team",
+		"project_dir":      "/proj/dir",
+		"team_outputs_dir": "/proj/outputs",
+		"team_ws_root":     "/ws/root",
+		"channel":          "web",
 	}
 	spec := &schema.TeamAgentSpec{TeamName: "pay", BuildContextSeed: seed}
 

@@ -95,7 +95,7 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 	taskID, _ := em.Payload["task_id"].(string)
 	content := renderTaskAssignedToSelf(ctx, h.infra, taskID, role == schema.TeamRoleHumanAgent)
 	// 对齐 Python: deliver_input 默认 use_steer=True
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", em.EventType).
@@ -198,7 +198,7 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 			Msg("onTaskPlanDecision: i18n render failed")
 		content = key
 	}
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", em.EventType).
@@ -293,7 +293,7 @@ func (h *TaskBoardHandler) nudgeIdleAgent(ctx context.Context, memberName string
 					Msg("nudgeIdleAgent: i18n render failed")
 				return
 			}
-			if err := h.round.DeliverInput(ctx, prompt, true); err != nil {
+			if err := h.round.DeliverInput(ctx, prompt, true, nil); err != nil {
 				logger.Error(logComponent).Err(err).
 					Str("member_name", memberName).
 					Msg("nudgeIdleAgent: deliver_input failed")
@@ -326,7 +326,7 @@ func (h *TaskBoardHandler) nudgeIdleAgent(ctx context.Context, memberName string
 		lines = append(lines, fmt.Sprintf("- [%s] [%s] %s: %s%s", tk.TaskID, tk.Status, tk.Title, tk.Content, assignee))
 	}
 
-	if err := h.round.DeliverInput(ctx, strings.Join(lines, "\n"), true); err != nil {
+	if err := h.round.DeliverInput(ctx, strings.Join(lines, "\n"), true, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("member_name", memberName).
 			Msg("nudgeIdleAgent: deliver_input failed")

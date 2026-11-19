@@ -13,9 +13,9 @@ import (
 	kvcache "github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessionstream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -27,10 +27,10 @@ type captureSession struct {
 	frames []any
 }
 
-func (s *captureSession) GetSessionID() string                             { return "test-session" }
-func (s *captureSession) UpdateState(_ map[string]any)                     {}
-func (s *captureSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }
-func (s *captureSession) DumpState() map[string]any                        { return nil }
+func (s *captureSession) GetSessionID() string                   { return "test-session" }
+func (s *captureSession) UpdateState(_ map[string]any)           {}
+func (s *captureSession) GetState(_ state.StateKey) (any, error) { return nil, nil }
+func (s *captureSession) DumpState() map[string]any              { return nil }
 func (s *captureSession) WriteStream(_ context.Context, data any) error {
 	s.frames = append(s.frames, data)
 	return nil

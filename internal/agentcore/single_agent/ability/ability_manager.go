@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	jsonschemaV6 "github.com/santhosh-tekuri/jsonschema/v6"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -21,14 +22,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-		interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	jsonschemaV6 "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -771,7 +771,7 @@ func (am *AbilityManager) runToolCallSafely(
 	// @rail(after=AFTER_TOOL_CALL)：只有 after 钩子会看到结果）。
 	// Python: L1171-1178 answered_client_call → execute_call = _finish_client_tool_call
 	if am.isClientToolCard(toolCall.Name) && am.clientAnswer(cbc, toolCall) != nil {
-			return am.finishClientToolCallRailed(ctx, cbc, toolCall, sess, tag)
+		return am.finishClientToolCallRailed(ctx, cbc, toolCall, sess, tag)
 	}
 	return am.railedExecuteSingleToolCall(ctx, cbc, toolCall, sess, tag)
 }

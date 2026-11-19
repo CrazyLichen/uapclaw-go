@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+
 	"context"
 	"fmt"
 	"strings"
@@ -180,6 +182,7 @@ func (m *TeamRuntimeManager) Interact(
 	payload any,
 	teamName string,
 	sessionID string,
+	runContext *agentinterfaces.RunContext,
 ) (*interaction.DeliverResult, error) {
 	// Python 步骤 1-2
 	entry := m.resolveEntry(teamName, sessionID)
@@ -231,7 +234,7 @@ func (m *TeamRuntimeManager) Interact(
 	// Python 步骤 8b-8d: 逐个分发
 	var lastResult *interaction.DeliverResult
 	for _, p := range resolved {
-		lastResult, err = m.dispatchPayload(ctx, entry, p)
+		lastResult, err = m.dispatchPayload(ctx, entry, p, runContext)
 		if err != nil {
 			return nil, err
 		}
@@ -862,6 +865,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 	ctx context.Context,
 	entry *ActiveTeam,
 	payload interaction.InteractPayload,
+	runContext *agentinterfaces.RunContext,
 ) (*interaction.DeliverResult, error) {
 	switch p := payload.(type) {
 	case *interaction.GodViewMessage:
@@ -869,8 +873,9 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		if entry.Agent == nil {
 			return interaction.NewDeliverResultFailure("agent_unavailable"), nil
 		}
+		// Python: _deliver_to_leader 闭包带 invocation-scoped context（manager.py L786-790）
 		deliverInput := func(ctx context.Context, content string) error {
-			return entry.Agent.DeliverInput(ctx, content, true)
+			return entry.Agent.DeliverInput(ctx, content, true, runContext)
 		}
 		return interaction.DeliverToLeader(ctx, deliverInput, p.Body()), nil
 

@@ -3,12 +3,12 @@ package checkpointer
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 命名空间常量测试 ────────────────────────────
@@ -142,7 +142,7 @@ func (s *testSession) State() state.SessionState                        { return
 func (s *testSession) Config() config.SessionConfig                     { return nil }
 func (s *testSession) Tracer() *tracer.Tracer                           { return nil }
 func (s *testSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
-func (s *testSession) ActorManager() *stream_actor.ActorManager                                { return nil }
+func (s *testSession) ActorManager() *stream_actor.ActorManager         { return nil }
 func (s *testSession) Close() error                                     { return nil }
 func (s *testSession) Checkpointer() interfaces.Checkpointer            { return nil }
 

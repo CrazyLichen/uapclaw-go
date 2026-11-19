@@ -157,8 +157,8 @@ func (s *NativeV2Suite) TestNativeV2_ControlFrameFIFO() {
 	// 控制帧 payload 本身是 JSON-native map，可直接进快照，无需二次解码
 	snapData := hp.JsonObject{
 		"session_id": "host-fifo:agent-fifo", "card_id": "c",
-		"contexts":   map[string]any{}, "deepagent": map[string]any{},
-		"queued":     []any{}, "output_state": controlPayload,
+		"contexts": map[string]any{}, "deepagent": map[string]any{},
+		"queued": []any{}, "output_state": controlPayload,
 	}
 	cpRaw, err := json.Marshal(snapData)
 	s.Require().NoError(err)

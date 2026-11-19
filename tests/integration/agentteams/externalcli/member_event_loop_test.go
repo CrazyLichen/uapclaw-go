@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

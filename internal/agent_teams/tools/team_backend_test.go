@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
 	"github.com/stretchr/testify/assert"

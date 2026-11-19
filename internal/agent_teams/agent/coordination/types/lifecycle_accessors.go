@@ -98,6 +98,9 @@ type StreamControllerAccessor interface {
 	// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
 	// 对齐 Python: StreamController.pause_agent()（stream_controller.py:711-720）
 	PauseAgent(ctx context.Context) error
+	// EmitTeamRecovered 入队 recovered-team 标记块（leader 流，kernel.start 尾）。
+	// 对齐 Python: emit_team_recovered()（stream_controller.py:674-690）
+	EmitTeamRecovered()
 	// ResumeAgent 就地续跑暂停轮；query 非 nil 为冷恢复。
 	// 对齐 Python: StreamController.resume_agent(query=...)（stream_controller.py:722-730）
 	ResumeAgent(ctx context.Context, query *string) error

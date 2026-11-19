@@ -526,7 +526,7 @@ func TestTeamAgent_Steer(t *testing.T) {
 func TestTeamAgent_DeliverInput(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(context.Background(), card)
-	err := a.DeliverInput(context.Background(), "input", true)
+	err := a.DeliverInput(context.Background(), "input", true, nil)
 	assert.NoError(t, err)
 }
 
@@ -861,4 +861,31 @@ func TestTeamAgent_AnnounceTaskRevisions_转发到harness(t *testing.T) {
 	a.configurator.SetHarness(&harness.TeamHarness{})
 
 	assert.NoError(t, a.AnnounceTaskRevisions(context.Background()))
+}
+
+// TestReconcileMemberStartup_非leader与无backend为no-op 对齐 py
+// _reconcile_member_startup 的两个早退（team_agent.py L1383-1387）。
+func TestReconcileMemberStartup_非leader与无backend为no_op(t *testing.T) {
+	// 空 configurator：Role() 缺省 Leader（L398-403），TeamBackend() 返回 nil——
+	// 测的是 leader + 无 backend 的 no-op 分支与非 leader 分支两条。
+	a := &TeamAgent{state: NewTeamAgentState()}
+	// 非 leader（无 spec → Role() 默认非 leader）与无 backend 都不 panic、不拉起
+	if err := a.ReconcileMemberStartup(context.Background()); err != nil {
+		t.Errorf("no-op 路径不应返回错误: %v", err)
+	}
+}
+
+// TestWithReconcileMemberStartup_注入回调 对齐 stream_controller.py L213 注册链。
+func TestWithReconcileMemberStartup_注入回调(t *testing.T) {
+	called := false
+	sc := NewStreamController(
+		nil, NewTeamAgentState(), nil,
+		func(_ context.Context, _ atschema.MemberStatus) error { return nil },
+		func(_ context.Context, _ atschema.ExecutionStatus) error { return nil },
+		WithReconcileMemberStartup(func(_ context.Context) error { called = true; return nil }),
+	)
+	sc.onIdleSettled(context.Background())
+	if !called {
+		t.Error("onIdleSettled 应触发 reconcileMemberStartupCb")
+	}
 }

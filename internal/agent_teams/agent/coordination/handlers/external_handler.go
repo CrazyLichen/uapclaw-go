@@ -112,7 +112,7 @@ func (h *ExternalRuntimeHandler) onExternalRetry(ctx context.Context, event type
 		"attempt":        attempt,
 		"max_attempts":   maxAttempts,
 	})
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, content, true, nil); err != nil {
 		logger.Error(logComponent).Err(err).Msg("[external-runtime] deliver_input failed")
 	}
 }

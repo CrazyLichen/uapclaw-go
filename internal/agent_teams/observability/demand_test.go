@@ -16,7 +16,7 @@ func (f *fakeSpanProcessor) Shutdown(ctx context.Context) error                 
 func (f *fakeSpanProcessor) ForceFlush(ctx context.Context) error                     { return nil }
 
 // TestGetTrajectorySpanProcessor_PutGet 对齐 demand.py:52-73——对外仅 Get
-//（Python 无 setter），槽位幂等返回同实例。
+// （Python 无 setter），槽位幂等返回同实例。
 func TestGetTrajectorySpanProcessor_PutGet(t *testing.T) {
 	resetTrajectorySpanProcessorForTest()
 	if GetTrajectorySpanProcessor() != nil {

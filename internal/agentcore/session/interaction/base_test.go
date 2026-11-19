@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── fake 实现 ────────────────────────────
@@ -32,7 +32,7 @@ func (f *fakeInnerSession) ExecutableID() string                             { r
 func (f *fakeInnerSession) SessionID() string                                { return f.sessionID }
 func (f *fakeInnerSession) Config() config.SessionConfig                     { return f.config }
 func (f *fakeInnerSession) Tracer() *tracer.Tracer                           { return nil }
-func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager                                { return nil }
+func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager         { return nil }
 func (f *fakeInnerSession) Close() error                                     { return nil }
 
 // newFakeInnerSession 创建测试用 fake session
@@ -214,12 +214,12 @@ func (f *fakeSessionWithoutExecID) State() state.SessionState { return f.stateVa
 func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterManager {
 	return f.swMgrValue
 }
-func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { return f.cpValue }
-func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
-func (f *fakeSessionWithoutExecID) Config() config.SessionConfig          { return f.cfgValue }
-func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                { return nil }
-func (f *fakeSessionWithoutExecID) ActorManager() *stream_actor.ActorManager                     { return nil }
-func (f *fakeSessionWithoutExecID) Close() error                          { return nil }
+func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer    { return f.cpValue }
+func (f *fakeSessionWithoutExecID) SessionID() string                        { return f.sidValue }
+func (f *fakeSessionWithoutExecID) Config() config.SessionConfig             { return f.cfgValue }
+func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                   { return nil }
+func (f *fakeSessionWithoutExecID) ActorManager() *stream_actor.ActorManager { return nil }
+func (f *fakeSessionWithoutExecID) Close() error                             { return nil }
 
 // TestGetExecutableID_不满足接口 测试 session 不满足 ExecutableIDProvider 时返回空字符串
 func TestGetExecutableID_不满足接口(t *testing.T) {

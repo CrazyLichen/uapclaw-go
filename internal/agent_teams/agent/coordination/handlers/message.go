@@ -217,7 +217,7 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 				Str("message_id", msg.MessageID).
 				Msg("message delivered")
 
-			if err := h.round.DeliverInput(ctx, text, useSteer); err != nil {
+			if err := h.round.DeliverInput(ctx, text, useSteer, nil); err != nil {
 				logger.Error(logComponent).Err(err).
 					Str("message_id", msg.MessageID).
 					Msg("deliver_input failed")

@@ -335,7 +335,9 @@ func (t *ClientTool) Stream(ctx context.Context, inputs map[string]any, opts ...
 }
 
 // GetCallTimeout 沿用卡片级超时策略（Python 基类未覆盖）。
-func (t *ClientTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 { return defaultTimeout }
+func (t *ClientTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
 
 // SessionID 会话 id，无会话时为空串。
 // Python: client.py:152-155 ClientToolContext.session_id

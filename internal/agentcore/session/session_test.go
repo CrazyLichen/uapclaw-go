@@ -6,13 +6,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -51,7 +51,7 @@ func (m *mockStub) Tracer() *tracer.Tracer                           { return m.
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
 func (m *mockStub) Checkpointer() interfaces.Checkpointer            { return m.checkpointerVal }
-func (m *mockStub) ActorManager() *stream_actor.ActorManager                                { return m.actorManagerVal }
+func (m *mockStub) ActorManager() *stream_actor.ActorManager         { return m.actorManagerVal }
 func (m *mockStub) Close() error                                     { m.closeCalled = true; return m.closeErr }
 
 // testMockCheckpointer 用于 session_test 的模拟检查点器
