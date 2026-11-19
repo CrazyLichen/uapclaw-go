@@ -2,8 +2,11 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // TestTemplateUtils_RenderTemplate_基本替换 验证 {{var}} 批量替换语义。
@@ -265,5 +268,57 @@ func TestConsumeAllIterators_递归耗尽(t *testing.T) {
 	consumeAllIterators(inputs)
 	// 耗尽后再次读立即关闭——range 无阻塞即通过
 	for range ch1 {
+	}
+}
+
+// codeOf 提取错误码（测试辅助：对齐 StatusCode 100010 断言）。
+func codeOf(t *testing.T, err error) int {
+	t.Helper()
+	var be *exception.BaseError
+	if !errors.As(err, &be) {
+		t.Fatalf("非 BaseError: %v", err)
+	}
+	return be.Status().Code()
+}
+
+// TestNewEnd_带配置 验证模板处理器建立（end_comp.py:42-44）。
+func TestNewEnd_带配置(t *testing.T) {
+	e, err := NewEnd(NewEndConfig("Hi {{n}}"))
+	if err != nil || e.template == nil || e.conf == nil {
+		t.Fatalf("构造失败: err=%v template=%v", err, e.template)
+	}
+}
+
+// TestNewEnd_配置无效 验证 100010 错误（end_comp.py:45-46）。
+func TestNewEnd_配置无效(t *testing.T) {
+	_, err := NewEnd(NewEndConfig(""))
+	if err == nil || codeOf(t, err) != 100010 {
+		t.Fatalf("期望 COMPONENT_END_PARAM_INVALID(100010), got %v", err)
+	}
+}
+
+// TestNewEnd_无配置 验证 conf/template 双 nil（end_comp.py:47-50）。
+func TestNewEnd_无配置(t *testing.T) {
+	e, err := NewEnd(nil)
+	if err != nil || e.conf != nil || e.template != nil {
+		t.Fatalf("无配置构造不符: err=%v", err)
+	}
+}
+
+// TestEnd_SetMix 验证 mix 置位与模板数据源计数（end_comp.py:53-57）。
+func TestEnd_SetMix(t *testing.T) {
+	e, _ := NewEnd(NewEndConfig("Hi {{n}}"))
+	e.SetMix()
+	if !e.mix || e.template.dataSourceCount != 2 {
+		t.Fatalf("SetMix 不符: mix=%v count=%d", e.mix, e.template.dataSourceCount)
+	}
+}
+
+// TestEnd_SetMix_无模板 验证无模板时仅置位不触碰 template（end_comp.py:53-57 if 分支）。
+func TestEnd_SetMix_无模板(t *testing.T) {
+	e, _ := NewEnd(nil)
+	e.SetMix()
+	if !e.mix || e.template != nil {
+		t.Fatalf("SetMix 无模板不符: mix=%v", e.mix)
 	}
 }

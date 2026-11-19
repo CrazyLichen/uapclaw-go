@@ -22,6 +22,7 @@ import (
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -374,4 +375,68 @@ func compIDOf(sess *session.NodeSessionFacade) string {
 		return ""
 	}
 	return sess.GetComponentID()
+}
+
+// ──────────────────────────── EndConfig / End ────────────────────────────
+
+// EndConfig End 组件配置。
+// Python: end_comp.py:26-35 (EndConfig pydantic)；alias responseTemplate、
+// min_length=1（构造校验拒绝空模板，拍板 α 拒绝语义同 8.15）。
+type EndConfig struct {
+	// ResponseTemplate 最终输出格式化模板，渲染结果 {"response": "..."}
+	ResponseTemplate string `json:"responseTemplate"`
+}
+
+// NewEndConfig 构造校验（min_length=1：空模板拒绝）。
+// Python: pydantic Field(min_length=1) 校验 + build_error(COMPONENT_END_PARAM_INVALID)。
+func NewEndConfig(responseTemplate string) (*EndConfig, error) {
+	if responseTemplate == "" {
+		return nil, exception.BuildError(exception.StatusComponentEndParamInvalid,
+			exception.WithParam("reason", "response_template must not be empty"))
+	}
+	return &EndConfig{ResponseTemplate: responseTemplate}, nil
+}
+
+// End 工作流出口组件：模板格式化最终输出。
+// Python: end_comp.py:38-51 (End)。
+type End struct {
+	components.WorkflowComponent
+	// conf 配置（可 nil）
+	conf *EndConfig
+	// template 模板处理器（conf 非 nil 时建立）
+	template *TemplateProcessor
+	// batchTemplate 批渲染处理器（_render 懒建立）
+	batchTemplate *TemplateBatchProcessor
+	// mix 混合模式（模板+裸流并存）
+	mix bool
+}
+
+// NewEnd 构造：conf 非 nil → 校验 + 建 TemplateProcessor，失败抛
+// StatusComponentEndParamInvalid（reason 语义对齐 f"conf is invalid, {str(e)}"）。
+// Python: __init__（end_comp.py:39-51）。
+// InvokeFn/StreamFn/CollectFn/TransformFn 四槽在后续任务逐段绑定
+// （Python 类方法覆写 → Go 函数槽赋值）。
+func NewEnd(conf *EndConfig) (*End, error) {
+	e := &End{}
+	if conf != nil {
+		if conf.ResponseTemplate == "" {
+			return nil, exception.BuildError(exception.StatusComponentEndParamInvalid,
+				exception.WithParam("reason", "conf is invalid, response_template must not be empty"))
+		}
+		e.conf = conf
+		e.template = NewTemplateProcessor(conf.ResponseTemplate)
+	}
+	return e, nil
+}
+
+// SetMix 进入混合模式：模板数据源计数置 2 并复位。
+// Python: set_mix（end_comp.py:53-57）。
+func (e *End) SetMix() {
+	e.mix = true
+	if e.template != nil {
+		e.template.SetDataSourceCount(2)
+		e.template.mu.Lock()
+		e.template.reset()
+		e.template.mu.Unlock()
+	}
 }
