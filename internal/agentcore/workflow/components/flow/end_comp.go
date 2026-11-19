@@ -633,17 +633,53 @@ func NewEnd(conf *EndConfig) (*End, error) {
 	return e, nil
 }
 
-// render 批渲染：懒建 batchTemplate → 渲染 → notifyAll → 清空。
-// Python: _render（end_comp.py:214-245）；mix 分支见 renderMix。
+// render 批渲染：懒建 batchTemplate →（mix 首拍条件等待）→ 渲染 → notifyAll → 清空。
+// Python: _render（end_comp.py:214-245）一比一，mix 分支内联（规则 12.2）。
 func (e *End) render(ctx context.Context, inputs map[string]any, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
 	e.btMu.Lock()
 	if e.batchTemplate == nil {
 		e.batchTemplate = &TemplateBatchProcessor{template: e.template, inputs: inputs, notify: make(chan struct{})}
 		if e.mix {
+			// mix 首拍：等待第二拍渲染完成或超时降级（end_comp.py:219-238）
 			bt := e.batchTemplate
 			btCh := bt.notify
+			var timeoutCh <-chan time.Time
+			var timer *time.Timer
+			if timeout > 0 {
+				timer = time.NewTimer(time.Duration(timeout * float64(time.Second)))
+				timeoutCh = timer.C
+			}
 			e.btMu.Unlock()
-			return e.renderMix(ctx, bt, btCh, timeout, sess)
+			select {
+			case <-btCh: // 首拍渲染完成唤醒（notify_all，end_comp.py:220-223）
+				if timer != nil {
+					timer.Stop()
+				}
+			case <-timeoutCh:
+				// 渲染超时 error 日志（end_comp.py:225-231）
+				logger.Error(logComponent).
+					Float64("timeout", timeout).
+					Str("component_id", compIDOf(sess)).
+					Msg("End component render timeout")
+				if !bt.IsRendered() {
+					// 未渲染过 → 同步渲染兜底（end_comp.py:232-236）
+					answer, aerr := bt.Render(ctx, nil, sess)
+					e.btMu.Lock()
+					e.batchTemplate = nil
+					e.btMu.Unlock()
+					if aerr != nil {
+						return nil, aerr
+					}
+					return map[string]any{"response": answer}, nil
+				}
+				return nil, nil // 已渲染过 → 返回 None（end_comp.py:236）
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			e.btMu.Lock()
+			e.batchTemplate = nil
+			e.btMu.Unlock()
+			return nil, nil // mix 首拍（渲染完成后）：返回 None（end_comp.py:237-238）
 		}
 	}
 	bt := e.batchTemplate
@@ -660,47 +696,6 @@ func (e *End) render(ctx context.Context, inputs map[string]any, timeout float64
 	e.batchTemplate = nil
 	e.btMu.Unlock()
 	return map[string]any{"response": answer}, nil
-}
-
-// renderMix mix 模式首拍条件等待：渲染完成被唤醒或超时降级。
-// Python: _render mix 分支（end_comp.py:219-238）。
-func (e *End) renderMix(ctx context.Context, bt *TemplateBatchProcessor, btCh chan struct{}, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
-	var timeoutCh <-chan time.Time
-	var timer *time.Timer
-	if timeout > 0 {
-		timer = time.NewTimer(time.Duration(timeout * float64(time.Second)))
-		timeoutCh = timer.C
-	}
-	select {
-	case <-btCh: // 首拍渲染完成唤醒（notify_all，end_comp.py:220-223）
-		if timer != nil {
-			timer.Stop()
-		}
-	case <-timeoutCh:
-		// 渲染超时 error 日志（end_comp.py:225-231）
-		logger.Error(logComponent).
-			Float64("timeout", timeout).
-			Str("component_id", compIDOf(sess)).
-			Msg("End component render timeout")
-		if !bt.IsRendered() {
-			// 未渲染过 → 同步渲染兜底（end_comp.py:232-236）
-			answer, aerr := bt.Render(ctx, nil, sess)
-			e.btMu.Lock()
-			e.batchTemplate = nil
-			e.btMu.Unlock()
-			if aerr != nil {
-				return nil, aerr
-			}
-			return map[string]any{"response": answer}, nil
-		}
-		return nil, nil // 已渲染过 → 返回 None（end_comp.py:236）
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-	e.btMu.Lock()
-	e.batchTemplate = nil
-	e.btMu.Unlock()
-	return nil, nil // mix 首拍（渲染完成后）：返回 None（end_comp.py:237-238）
 }
 
 // envTimeoutToFloat env 超时值 → float64 秒（vertex.go anyToFloat64 同款语义，
