@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
@@ -126,12 +126,12 @@ func (s *PanelPipelineSuite) TestConfigSaveProbeFlattenAssemble() {
 	for _, e := range entries {
 		entryList = append(entryList, e)
 	}
-	warnings := externalcli.RefreshExternalCliBuiltinModels(context.Background(),
+	warnings := external.RefreshExternalCliBuiltinModels(context.Background(),
 		entryList, []string{"panel-custom"}, func(c map[string][]map[string]any) { seeded = c })
 	s.Empty(warnings)
 	s.Require().NotNil(seeded)
 	s.Equal("m1", seeded["panel-custom"][0]["name"])
-	reports := externalcli.LoadReportedModels()
+	reports := external.LoadReportedModels()
 	s.Equal(map[string][]string{"m1": {"low"}}, reports["panel-custom"], "报告落盘")
 
 	// ③ 四键展平（读面）——kind 未配置 enabled 时全 false，配置后 true
@@ -172,12 +172,12 @@ func (s *PanelPipelineSuite) TestConfigSaveProbeFlattenAssemble() {
 func (s *PanelPipelineSuite) TestDsh能力声明决定探测跳过() {
 	entries := []any{map[string]any{"cli_agent": "dsh"}}
 	var catalogs map[string][]map[string]any
-	warnings := externalcli.RefreshExternalCliBuiltinModels(context.Background(),
+	warnings := external.RefreshExternalCliBuiltinModels(context.Background(),
 		entries, []string{"dsh"}, func(c map[string][]map[string]any) { catalogs = c })
 	// 探测失败不阻塞：只警告（失败详情进日志）
 	s.Empty(warnings)
 	s.Nil(catalogs, "未声明 MODEL_DISCOVERY 的 kind 不产生播种目录")
-	s.NotContains(externalcli.LoadReportedModels(), "dsh", "dsh 上报不落盘（探测失败保旧报告）")
+	s.NotContains(external.LoadReportedModels(), "dsh", "dsh 上报不落盘（探测失败保旧报告）")
 }
 
 // TestSpawnModelChoiceChain spawn 模型选择链：装配修正后的目录 →
@@ -188,7 +188,7 @@ func (s *PanelPipelineSuite) TestSpawnModelChoiceChain() {
 		CLIAgent:      "panel-custom",
 		BuiltinModels: []schema.ExternalCliBuiltinModel{{Name: "m1", Efforts: []string{"low"}}},
 	}
-	plan, err := externalcli.PlanExternalModel(externalcli.PlanArgs{
+	plan, err := external.PlanExternalModel(external.PlanArgs{
 		CLIAgent: "panel-custom", BuiltinHint: "m1", EffortHint: "low",
 	}, entry, nil)
 	s.Require().NoError(err)
@@ -196,14 +196,14 @@ func (s *PanelPipelineSuite) TestSpawnModelChoiceChain() {
 	s.Equal("m1", plan.Primary.Model)
 	s.Equal("low", plan.Primary.Effort)
 
-	choice := externalcli.ModelChoice(plan.Primary)
+	choice := external.ModelChoice(plan.Primary)
 	s.Require().NotNil(choice)
 	s.Require().NotNil(choice.Model)
 	s.Equal("m1", *choice.Model)
 	s.Nil(choice.Endpoint, "builtin 挑选无端点（CLI 自身登录态）")
 
 	// 目录外模型 → PlanError 双受众文案（非静默透传）
-	_, err = externalcli.PlanExternalModel(externalcli.PlanArgs{
+	_, err = external.PlanExternalModel(external.PlanArgs{
 		CLIAgent: "panel-custom", BuiltinHint: "ghost",
 	}, entry, nil)
 	s.Require().Error(err)

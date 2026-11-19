@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -20,7 +20,7 @@ import (
 //
 // 跨子系统：swarm/agents/swarm（enrich seed 生产段 + 平台工厂注册）→
 // agent_teams/schema（TeamAgentSpec JSON 往返 + MaterializeBuildContext）→
-// agent_teams/runtime/externalcli（ResolveExternalPaths 消费端 cwd 选择链）。
+// agent_teams/external（ResolveExternalPaths 消费端 cwd 选择链）。
 type SwarmSeedSuite struct {
 	isuite.AgentSuite
 }
@@ -82,7 +82,7 @@ func (s *SwarmSeedSuite) TestExternalcli消费端吃到重建context() {
 	s.Require().NoError(received.MaterializeBuildContext())
 
 	ctx := &schema.TeamRuntimeContext{Role: schema.TeamRoleTeammate, MemberName: "beta"}
-	cwd, extraDirs := externalcli.ResolveExternalPaths(&received, ctx, "", "pay")
+	cwd, extraDirs := external.ResolveExternalPaths(&received, ctx, "", "pay")
 	s.Equal("/proj/cli", cwd, "projectless 显式 cwd/worktree 缺席时 cwd 取 project_dir")
 	// appendExtraDir 排除与 cwd 相同的路径：project_dir 即 cwd，不重复入列
 	for _, dir := range extraDirs {
@@ -100,6 +100,6 @@ func (s *SwarmSeedSuite) Test基线空壳不回归() {
 	s.Nil(spec.BuildContext, "无 seed 不得重建")
 
 	ctx := &schema.TeamRuntimeContext{Role: schema.TeamRoleTeammate, MemberName: "beta"}
-	cwd, _ := externalcli.ResolveExternalPaths(spec, ctx, "/explicit/cwd", "bare")
+	cwd, _ := external.ResolveExternalPaths(spec, ctx, "/explicit/cwd", "bare")
 	s.Equal("/explicit/cwd", cwd, "显式 cwd 优先路径不受 seed 链影响")
 }

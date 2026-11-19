@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 import (
 	"context"

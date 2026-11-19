@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -77,12 +76,12 @@ func (r *ExternalCliModelRules) Resolve(cliAgent, modelName, fallbackModelName, 
 	}
 	// 缺省、null、空白都表示「无兜底模型」。Python: :266
 	fallbackName := strings.TrimSpace(fallbackModelName)
-	hasAuthFallback := external.TakesAuthFallback(cliAgent)
+	hasAuthFallback := seamTakesAuthFallback(cliAgent)
 	if fallbackName != "" && !hasAuthFallback {
 		return nil, fmt.Sprintf("cli_agent '%s' has no authentication fallback; omit 'fallback_model_name'", cliAgent)
 	}
 	var allocation, fallbackAllocation *models.Allocation
-	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	providerFilter := seamProviderFilterForCLI(cliAgent)
 	compatibleEntries := r.CompatiblePoolEntries(cliAgent)
 	compatibleModelNames := r.compatibleModelNames(cliAgent)
 	preferredCurrentModel := r.preferredCurrentModel(cliAgent, compatibleEntries)
@@ -158,7 +157,7 @@ func (r *ExternalCliModelRules) Resolve(cliAgent, modelName, fallbackModelName, 
 // CompatiblePoolEntries 一个 CLI kind 的协议兼容池条目。
 // Python: compatible_pool_entries (tool_member.py:350-357)
 func (r *ExternalCliModelRules) CompatiblePoolEntries(cliAgent string) []models.ModelPoolEntry {
-	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	providerFilter := seamProviderFilterForCLI(cliAgent)
 	entries := r.team.GetModelPool()
 	if providerFilter == nil {
 		return entries
@@ -177,7 +176,7 @@ func (r *ExternalCliModelRules) CompatiblePoolEntries(cliAgent string) []models.
 // ——把它投影出来，兜底校验不会把模型组误判为空池。
 // Python: _compatible_model_names (tool_member.py:359-376)
 func (r *ExternalCliModelRules) compatibleModelNames(cliAgent string) []string {
-	providerFilter := external.ProviderFilterForCLI(cliAgent)
+	providerFilter := seamProviderFilterForCLI(cliAgent)
 	if r.team.IsModelGroupPool() {
 		seen := map[string]bool{}
 		names := []string{}
@@ -217,12 +216,12 @@ func (r *ExternalCliModelRules) preferredCurrentModel(cliAgent string, entries [
 	if currentName == "" || currentProvider == "" {
 		return ""
 	}
-	currentProtocol := external.ModelApiProtocol(currentProvider)
+	currentProtocol := seamModelApiProtocol(currentProvider)
 	for _, entry := range entries {
 		if entry.ModelName != currentName {
 			continue
 		}
-		if external.ModelApiProtocol(entry.APIProvider) == currentProtocol {
+		if seamModelApiProtocol(entry.APIProvider) == currentProtocol {
 			return currentName
 		}
 	}
@@ -408,7 +407,7 @@ func ExternalCliModelCatalogContext(team *TeamBackend) string {
 	if !team.IsModelGroupPool() && team.CurrentModelName() != "" && team.CurrentModelProvider() != "" {
 		currentModel = map[string]any{
 			"model_name": team.CurrentModelName(),
-			"protocol":   external.ModelApiProtocol(team.CurrentModelProvider()),
+			"protocol":   seamModelApiProtocol(team.CurrentModelProvider()),
 		}
 	}
 	compatibleByCLI := map[string][]map[string]string{}
@@ -418,21 +417,21 @@ func ExternalCliModelCatalogContext(team *TeamBackend) string {
 	}
 	sort.Strings(keys)
 	for _, cliAgent := range keys {
-		if !external.TakesAuthFallback(cliAgent) {
+		if !seamTakesAuthFallback(cliAgent) {
 			continue
 		}
-		providerFilter := external.ProviderFilterForCLI(cliAgent)
+		providerFilter := seamProviderFilterForCLI(cliAgent)
 		options := map[string]bool{}
 		if team.IsModelGroupPool() {
 			for _, item := range team.ListCliModels(providerFilter) {
 				if item.Model != "" {
-					options[item.Model+"|"+external.ModelApiProtocol(item.Provider)] = true
+					options[item.Model+"|"+seamModelApiProtocol(item.Provider)] = true
 				}
 			}
 		} else {
 			for _, entry := range rules.CompatiblePoolEntries(cliAgent) {
 				if entry.ModelName != "" {
-					options[entry.ModelName+"|"+external.ModelApiProtocol(entry.APIProvider)] = true
+					options[entry.ModelName+"|"+seamModelApiProtocol(entry.APIProvider)] = true
 				}
 			}
 		}

@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // spawn 主体：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/spawn.py（988 行的 :63-537 与
@@ -20,7 +20,6 @@ package externalcli
 import (
 	"context"
 	"fmt"
-	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"io"
 	"os"
 	"os/exec"
@@ -29,7 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
@@ -203,8 +202,8 @@ func BuildCliRuntime(ctx context.Context, rtc *schema.TeamRuntimeContext, opts O
 				rtc.CLIAgent)))
 	}
 	// 步骤 4：后端查找与 provider 路分发（:405-441）
-	backend := external.BackendFor(rtc.CLIAgent)
-	if backend != nil && backend.Kind == external.BackendKindProvider {
+	backend := BackendFor(rtc.CLIAgent)
+	if backend != nil && backend.Kind == BackendKindProvider {
 		// provider 不收的 7 项 SDK/adapter 专属配置，逐项收集、一次性报出
 		unsupported := map[string]bool{
 			"command_override":           opts.CommandOverride != nil,

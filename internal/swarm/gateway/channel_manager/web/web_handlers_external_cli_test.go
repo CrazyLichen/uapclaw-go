@@ -444,4 +444,3 @@ func TestExternalCLIDetect_参考版本恒返回(t *testing.T) {
 	assert.Equal(t, "missing", payload["status"])
 	assert.Equal(t, "0.144.4", payload["reference_version"], "缺路径分支也要带参考版本")
 }
-

@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // CLI 成员运行时：对齐 Python openjiuwen/agent_teams/external/runtime.py
 // （1093 行全文，一比一移植）。
@@ -30,9 +30,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"

@@ -15,7 +15,7 @@
 //     （reasonToMap 转换），typed reason 仍是本上下文的入参形状。
 //
 // 对应 Python 代码：openjiuwen/agent_teams/external/reliability.py（430 行）
-package externalcli
+package external
 
 import (
 	"context"

@@ -11,10 +11,11 @@
 //     → TestMergeExternalCliConfig
 //   - bound_group 提取 → TestBoundAgentGroupOf
 
-package experts
+package experts_test
 
 import (
 	"encoding/json"
+	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,7 +50,7 @@ func fixtureGroup(t *testing.T) string {
 func TestLoadAgentGroupPackageBundle(t *testing.T) {
 	t.Run("加载校验改写全链", func(t *testing.T) {
 		dir := fixtureGroup(t)
-		pkg, err := LoadAgentGroupPackageBundle(dir)
+		pkg, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.NoError(t, err)
 		require.Len(t, pkg.Templates, 2)
 		// 成员身份 = 目录名（agent_card.id 改写），manifest name 保持展示名
@@ -70,7 +71,7 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"),
 			[]byte(`{"package_type":"agent_template","agents":["leader"]}`), 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "package_type")
 	})
@@ -78,7 +79,7 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"),
 			[]byte(`{"package_type":"agent_group","name":"other","agents":["leader"]}`), 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must match directory")
 	})
@@ -86,7 +87,7 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"),
 			[]byte(`{"package_type":"agent_group","name":"`+filepath.Base(dir)+`","agents":["writer"]}`), 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must contain 'leader'")
 	})
@@ -94,14 +95,14 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"),
 			[]byte(`{"package_type":"agent_group","name":"`+filepath.Base(dir)+`","agents":["Leader"]}`), 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid agent name")
 	})
 	t.Run("非leader成员禁AGENT_md", func(t *testing.T) {
 		dir := fixtureGroup(t)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "agents/writer/AGENT.md"), []byte("x"), 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must not contain AGENT.md")
 	})
@@ -114,7 +115,7 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 		payload["runtime"] = map[string]any{"provider_name": "codex"}
 		updated, _ := json.Marshal(payload)
 		require.NoError(t, os.WriteFile(mPath, updated, 0o644))
-		_, err := LoadAgentGroupPackageBundle(dir)
+		_, err := experts.LoadAgentGroupPackageBundle(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "does not support external runtime")
 	})
@@ -122,7 +123,7 @@ func TestLoadAgentGroupPackageBundle(t *testing.T) {
 
 func TestReadAgentGroupCard(t *testing.T) {
 	dir := fixtureGroup(t)
-	card, err := ReadAgentGroupCard(dir)
+	card, err := experts.ReadAgentGroupCard(dir)
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Base(dir), card.Name)
 	assert.Equal(t, "be nice", card.Instruction)
@@ -132,11 +133,11 @@ func TestReadAgentGroupCard(t *testing.T) {
 }
 
 func TestGroupCapabilities(t *testing.T) {
-	assert.Empty(t, GroupCapabilities(map[string]any{}))
-	assert.Equal(t, []string{"a", "b"}, GroupCapabilities(map[string]any{
+	assert.Empty(t, experts.GroupCapabilities(map[string]any{}))
+	assert.Equal(t, []string{"a", "b"}, experts.GroupCapabilities(map[string]any{
 		"capabilities": []any{"a", map[string]any{"id": "b"}, "a", ""},
 	}))
-	assert.Equal(t, []string{"zh-tag"}, GroupCapabilities(map[string]any{
+	assert.Equal(t, []string{"zh-tag"}, experts.GroupCapabilities(map[string]any{
 		"tags": []any{map[string]any{"zh": "zh-tag"}},
 	}))
 }
@@ -204,7 +205,7 @@ func TestMergeExternalCliConfig(t *testing.T) {
 
 func TestBoundAgentGroupOf(t *testing.T) {
 	t.Run("未绑定得nil", func(t *testing.T) {
-		assert.Nil(t, BoundAgentGroupOf(&atschema.TeamAgentSpec{}))
+		assert.Nil(t, experts.BoundAgentGroupOf(&atschema.TeamAgentSpec{}))
 	})
 	t.Run("外部成员与快照成员分取", func(t *testing.T) {
 		spec := &atschema.TeamAgentSpec{
@@ -219,7 +220,7 @@ func TestBoundAgentGroupOf(t *testing.T) {
 				"nat1": {AgentTemplateSpec: &hschema.AgentTemplateSpec{}},
 			},
 		}
-		group := BoundAgentGroupOf(spec)
+		group := experts.BoundAgentGroupOf(spec)
 		require.NotNil(t, group)
 		assert.Equal(t, "g1", group.Name)
 		require.Len(t, group.Members, 2) // human_agent 无快照被排除

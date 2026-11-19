@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"testing"
 
 	"github.com/gorilla/websocket"

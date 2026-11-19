@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 外部 CLI 后端会话的尽力清理：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/session_cleanup.py（115 行全文）。

@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -80,12 +80,12 @@ func (s *ReliabilityDeliverySuite) newReliabilityRuntime(
 	bus messager.Messager,
 	statuses *[]atschema.MemberStatus,
 	db database.TeamDatabase,
-) *externalcli.ExternalHarnessMemberRuntime {
-	r, err := externalcli.NewExternalHarnessMemberRuntime(protocol,
+) *external.ExternalHarnessMemberRuntime {
+	r, err := external.NewExternalHarnessMemberRuntime(protocol,
 		func(_ any) (*harness_protocol.HarnessContext, error) {
 			return &harness_protocol.HarnessContext{AgentID: "m-1", AgentName: "memberB"}, nil
 		},
-		externalcli.ExternalHarnessMemberRuntimeOptions{AgentKind: "claude", CLIPath: "/bin/fake-cli"})
+		external.ExternalHarnessMemberRuntimeOptions{AgentKind: "claude", CLIPath: "/bin/fake-cli"})
 	s.Require().NoError(err)
 	r.BindReliabilityContext("sess-rel", memberBackend, "leader",
 		func(_ context.Context, status atschema.MemberStatus) error {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -134,17 +134,17 @@ func (s *MemberEventLoopSuite) TestEventLoop_全周期事件投影() {
 		{Event: harness_protocol.TurnLifecycleEvent{Kind: harness_protocol.TurnEventKindFinished}, TurnID: "t-1"},
 	}}
 
-	r, err := externalcli.NewExternalHarnessMemberRuntime(scripted,
+	r, err := external.NewExternalHarnessMemberRuntime(scripted,
 		func(_ any) (*harness_protocol.HarnessContext, error) {
 			return &harness_protocol.HarnessContext{AgentID: "m-1", AgentName: "member"}, nil
 		},
-		externalcli.ExternalHarnessMemberRuntimeOptions{AgentKind: "codex"})
+		external.ExternalHarnessMemberRuntimeOptions{AgentKind: "codex"})
 	s.Require().NoError(err)
 
-	var activities []*externalcli.AgentActivityEvent
+	var activities []*external.AgentActivityEvent
 	var rounds []string
 	var states []string
-	r.BindActivitySink(func(ev *externalcli.AgentActivityEvent) { activities = append(activities, ev) },
+	r.BindActivitySink(func(ev *external.AgentActivityEvent) { activities = append(activities, ev) },
 		"m-1", "exec", "label", "corr-1")
 	r.Subscribe(
 		func(_, new harness_protocol.HarnessState, _ string) {
@@ -195,11 +195,11 @@ func (s *MemberEventLoopSuite) TestEventLoop_轮次失败回调() {
 			Result: &harness_protocol.TurnResult{Error: &harness_protocol.TurnError{Message: "boom"}},
 		}, TurnID: "t-2"},
 	}}
-	r, err := externalcli.NewExternalHarnessMemberRuntime(scripted,
+	r, err := external.NewExternalHarnessMemberRuntime(scripted,
 		func(_ any) (*harness_protocol.HarnessContext, error) {
 			return &harness_protocol.HarnessContext{}, nil
 		},
-		externalcli.ExternalHarnessMemberRuntimeOptions{AgentKind: "claude"})
+		external.ExternalHarnessMemberRuntimeOptions{AgentKind: "claude"})
 	s.Require().NoError(err)
 
 	type roundRec struct {
@@ -229,11 +229,11 @@ func (s *MemberEventLoopSuite) TestEventLoop_轮次失败回调() {
 // Python: _start except 分支 (member_runtime.py:453-458)。
 func (s *MemberEventLoopSuite) TestEventLoop_启动失败上抛() {
 	boom := &failingStartHarness{}
-	r, err := externalcli.NewExternalHarnessMemberRuntime(boom,
+	r, err := external.NewExternalHarnessMemberRuntime(boom,
 		func(_ any) (*harness_protocol.HarnessContext, error) {
 			return &harness_protocol.HarnessContext{}, nil
 		},
-		externalcli.ExternalHarnessMemberRuntimeOptions{AgentKind: "codex"})
+		external.ExternalHarnessMemberRuntimeOptions{AgentKind: "codex"})
 	s.Require().NoError(err)
 	s.Error(r.Start(nil))
 }

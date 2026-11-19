@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 结构化 AGENT_ACTIVITY 进度事件的共享构造器。
 //

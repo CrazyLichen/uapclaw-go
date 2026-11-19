@@ -5,11 +5,11 @@ package message_handler
 // resolveExternal 在 dispatch.go prepareAgentDispatchMessage 与 outbound.go 出站点共同使用。
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"strings"
 	"time"
 

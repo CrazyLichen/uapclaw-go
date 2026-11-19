@@ -15,7 +15,7 @@
 //     ⤴️25.6）未移植，fetch_inbox 广播消息保留原始 content。
 //
 // Python: openjiuwen/agent_teams/external/client.py
-package externalcli
+package external
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"sort"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	inboundtags "github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -410,9 +409,9 @@ func (c *ExternalTeamClient) ReadInbox(ctx context.Context, markRead bool) (stri
 		bodies := map[string]string{}
 		// 消息只带绝对发送时间；前面的时钟锚点让读者知道每条是多久前发的。
 		parts = append(parts, inboundtags.RenderClock(inboundtags.FormatAbsoluteTime(nowMs)))
-		messagesText, err := external.RenderMessages(
+		messagesText, err := RenderMessages(
 			toMessageLikes(view.Messages),
-			external.RenderMessagesOptions{
+			RenderMessagesOptions{
 				IsHumanAgent: c.IsHumanAgent(),
 				Bodies:       bodies,
 			},
@@ -422,7 +421,7 @@ func (c *ExternalTeamClient) ReadInbox(ctx context.Context, markRead bool) (stri
 		}
 		parts = append(parts, messagesText)
 	}
-	board, err := external.RenderTaskBoard(
+	board, err := RenderTaskBoard(
 		toTaskLikes(view.Tasks), c.IsLeader(), nowMs, c.MemberName(),
 	)
 	if err != nil {
@@ -533,8 +532,8 @@ func SetSharedDBFactory(fn func(config database.DBConfigProvider) database.TeamD
 
 // toMessageLikes 把数据库消息行适配成 format 包的结构化视图。
 // Python 侧行对象直接满足 _MessageLike；Go 侧以薄适配器对齐。
-func toMessageLikes(rows []*database.TeamMessageBase) []external.MessageLike {
-	out := make([]external.MessageLike, 0, len(rows))
+func toMessageLikes(rows []*database.TeamMessageBase) []MessageLike {
+	out := make([]MessageLike, 0, len(rows))
 	for _, r := range rows {
 		row := r
 		out = append(out, &teamMessageLike{row: row})
@@ -543,8 +542,8 @@ func toMessageLikes(rows []*database.TeamMessageBase) []external.MessageLike {
 }
 
 // toTaskLikes 把数据库任务行适配成 format 包的结构化视图。
-func toTaskLikes(rows []*database.TeamTaskBase) []external.TaskLike {
-	out := make([]external.TaskLike, 0, len(rows))
+func toTaskLikes(rows []*database.TeamTaskBase) []TaskLike {
+	out := make([]TaskLike, 0, len(rows))
 	for _, r := range rows {
 		row := r
 		out = append(out, &teamTaskLike{row: row})

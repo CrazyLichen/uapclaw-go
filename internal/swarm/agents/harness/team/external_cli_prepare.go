@@ -1,7 +1,7 @@
 package team
 
 import (
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
@@ -22,7 +22,7 @@ func PrepareExternalCliAgents(specDict map[string]any) {
 		return
 	}
 	// ① 目录与最近上报对拍（external_cli_catalog.apply_reported_models，:48-53）
-	externalcli.ApplyReportedModels(entries)
+	external.ApplyReportedModels(entries)
 	// ② 自定义 agent 补 team-mcp server 命令（:57-69）
 	customNames := swarmcommon.CustomAgentNames()
 	if len(customNames) == 0 {

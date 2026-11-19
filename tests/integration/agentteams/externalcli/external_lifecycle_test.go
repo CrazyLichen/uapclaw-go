@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -28,7 +28,7 @@ import (
 
 // ExternalCliLifecycleSuite 外部 CLI 成员 adapter 路全生命周期集成套件。
 //
-// 跨子系统：spawn（externalcli.BuildCliRuntime）→ externalcli runtime +
+// 跨子系统：spawn（external.BuildCliRuntime）→ externalcli runtime +
 // tracker（ReinvokeCliRuntime + TeamContextTracker）→ schema（TeamAgentSpec
 // 校验器）→ session（AgentTeamSession 成员子会话）→ tools/database（InMemory
 // 团队库名册探针）。子进程用 t.TempDir() 下假 CLI 脚本承担，绝不打真实 CLI。
@@ -92,17 +92,17 @@ func (s *ExternalCliLifecycleSuite) TestAdapterLifecycle_一轮消息与tracker�
 	state := &sessionctx.SessionState{}
 	state.SetSessionID("sess-extcli-lifecycle")
 	ctx = sessionctx.WithSessionState(ctx, state)
-	tracker := externalcli.BuildTeamContextTracker(backend, &schema.TeamAgentSpec{}, rtc, "beta", "pay")
+	tracker := external.BuildTeamContextTracker(backend, &schema.TeamAgentSpec{}, rtc, "beta", "pay")
 	s.Require().NotNil(tracker)
 
-	rt, err := externalcli.BuildCliRuntime(ctx, rtc, externalcli.Options{
+	rt, err := external.BuildCliRuntime(ctx, rtc, external.Options{
 		CommandOverride:    []string{script},
 		InjectMCP:          boolPtr(false),
 		MemberAgentID:      "pay_beta",
 		TeamContextTracker: tracker,
 	})
 	s.Require().NoError(err, "BuildCliRuntime 应成功")
-	reinvoke, ok := rt.(*externalcli.ReinvokeCliRuntime)
+	reinvoke, ok := rt.(*external.ReinvokeCliRuntime)
 	s.Require().True(ok, "openclaw 是 one-shot，应返回 ReinvokeCliRuntime，got %T", rt)
 
 	// 成员子会话：真实团队会话派生（子系统 4），tracker 投递基线落在它上面

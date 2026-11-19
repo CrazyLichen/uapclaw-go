@@ -402,7 +402,7 @@ func TestValidate_judgeManifest分支(t *testing.T) {
 		"case_id": "c5", "score": 0.5, "status": "passed", "execution_status": "passed",
 		"artifacts": map[string]any{"harvested": []any{"out.txt"}},
 		"evaluation": map[string]any{
-			"method":  "llm_as_judge",
+			"method":   "llm_as_judge",
 			"metadata": map[string]any{"score_mode": "continuous", "judge_dir": "judge/j1"},
 		},
 	}

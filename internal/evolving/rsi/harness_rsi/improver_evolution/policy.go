@@ -13,10 +13,10 @@
 package improver_evolution
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"bytes"
 	"fmt"
 	"math"
 	"os"
@@ -451,13 +451,13 @@ func ProposePolicyCandidates(parent *VersionedImproverPolicy, feedbackAnalysis m
 	}
 
 	type supportedEntry struct {
-		sortSupport    float64
-		sortRate       float64
+		sortSupport     float64
+		sortRate        float64
 		sortOpportunity float64
-		patternID      string
-		changeJSON     string
-		pattern        map[string]any
-		recommendation map[string]any
+		patternID       string
+		changeJSON      string
+		pattern         map[string]any
+		recommendation  map[string]any
 	}
 	var supported []supportedEntry
 	for _, raw := range patternList {

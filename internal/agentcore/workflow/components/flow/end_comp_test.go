@@ -2,9 +2,9 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"errors"
 	"sync"
 	"testing"
 	"time"

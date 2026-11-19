@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 第三方 CLI 成员逐家启动知识：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/adapters.py（552 行全文一比一）。
@@ -24,8 +24,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-
-	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -565,11 +563,6 @@ func truncateSummary(s string) string {
 	}
 	return string(r[:summaryLimit])
 }
-func init() {
-	// 向 schema 校验器注册内置 adapter 名单（Python 校验器惰性 import
-	// available_adapters 的 Go 等价物，见 schema.AdapterNamesFunc 注释）。
-	schemaAdapterNamesHook()
-}
 
 // schemaAdapterNamesHook 注册 schema 包的 adapter 名单钩子。
 func schemaAdapterNamesHook() {
@@ -577,18 +570,14 @@ func schemaAdapterNamesHook() {
 }
 
 func init() {
-	// D-15.16-e14：adapter 面注入 external 包的 backends 缝
-	// （Python 同包直调 available_adapters/build_adapter；Go 为消
-	// tools → external → externalcli → tools 环，adapter 构造经缝回填）。
-	external.SetAdaptersProvider(AvailableAdapters)
-	external.SetAdaptersBuildProvider(func(name string) (*external.AdapterBuildResult, error) {
+	// 同包直调（Python available_adapters/build_adapter 同包语义）——
+	// e14 双缝的注入端随 15.16e 收口批整包回归位而撤销。
+	adaptersProviderFn = AvailableAdapters
+	adaptersBuildFn = func(name string) (*AdapterBuildResult, error) {
 		adapter, err := BuildAdapter(name, nil)
 		if err != nil {
 			return nil, err
 		}
-		return &external.AdapterBuildResult{
-			Name:    adapter.Name,
-			Command: adapter.Command,
-		}, nil
-	})
+		return &AdapterBuildResult{Name: adapter.Name, Command: adapter.Command}, nil
+	}
 }

@@ -6,13 +6,13 @@ package acp
 // WS 客户端族（L1526-1738）在 Task 9 补全。
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"io"
 	"os"
 	"sort"

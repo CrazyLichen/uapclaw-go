@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 外部 harness SPI 到 AgentTeam MemberRuntime 的桥接：对齐 Python
 // openjiuwen/agent_teams/external/member_runtime.py（1105 行）。

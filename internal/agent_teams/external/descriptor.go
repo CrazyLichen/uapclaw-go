@@ -1,6 +1,6 @@
 // 外部成员入团描述符：对齐 Python openjiuwen/agent_teams/external/descriptor.py
 // 与 spawn/external_cli_spawn.py 的 descriptor_from_context/_with_home_env。
-package externalcli
+package external
 
 import (
 	"context"

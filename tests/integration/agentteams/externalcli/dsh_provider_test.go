@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	deepseekharness "github.com/theoneLee/deepseek-harness-sdk-go"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -23,7 +23,7 @@ import (
 
 // DshProviderSuite 外部 CLI provider 路（dsh 栈）集成套件。
 //
-// 跨子系统：spawn（externalcli.BuildCliRuntime provider 分支 + memberModelConfig）
+// 跨子系统：spawn（external.BuildCliRuntime provider 分支 + memberModelConfig）
 // → externalcli（ExternalHarnessMemberRuntime）→ harness_providers（第三方注册缝）
 // → harness_providers/dsh（DshHarnessConfigFromMapping 校验 + ModelConfig 拒绝
 // 语义 + SDKFactory 缝）→ harness_protocol（HarnessContext/ModelChoice）。
@@ -86,7 +86,7 @@ func (s *DshProviderSuite) TestProvider路_端点映射与fallback丢弃() {
 	// fallback 同时给出：端点成员必须被丢弃，否则 dsh.ModelConfig 直接报错
 	fallback := &schema.ExternalCliModelConfig{Provider: "deepseek-official", Model: "lite"}
 
-	rt, err := externalcli.BuildCliRuntime(ctxValue, rtc, externalcli.Options{
+	rt, err := external.BuildCliRuntime(ctxValue, rtc, external.Options{
 		ExternalModelConfig:         primary,
 		FallbackExternalModelConfig: fallback,
 		InjectMCP:                   boolPtr(true),
@@ -94,11 +94,11 @@ func (s *DshProviderSuite) TestProvider路_端点映射与fallback丢弃() {
 		Cwd:                         s.T().TempDir(),
 	})
 	s.Require().NoError(err, "provider 路构建应成功（fallback 已被丢弃，否则 dsh 拒绝映射）")
-	harnessRT, ok := rt.(*externalcli.ExternalHarnessMemberRuntime)
+	harnessRT, ok := rt.(*external.ExternalHarnessMemberRuntime)
 	s.Require().True(ok, "provider 路应返回 ExternalHarnessMemberRuntime，got %T", rt)
 	s.Equal("deepseek-harness", harnessRT.ProviderName(), "真实 dsh 卡名经透传 wrapper 透出")
 	s.True(harnessRT.InjectMCP, "inject_mcp 透传")
-	s.Equal(externalcli.TeamMCPServerName, harnessRT.MCPServerName, "团队 MCP server 逻辑名")
+	s.Equal(external.TeamMCPServerName, harnessRT.MCPServerName, "团队 MCP server 逻辑名")
 
 	// provider config 断言（Create 收到的映射；JsonObject 冻结形态经 JSON
 	// 规范化后断言，避免 map 键形态差异）
@@ -111,8 +111,8 @@ func (s *DshProviderSuite) TestProvider路_端点映射与fallback丢弃() {
 	s.NotEmpty(normalized["cwd"], "cwd 公共键")
 	env, ok := normalized["env"].(map[string]any)
 	s.Require().True(ok, "env 公共键形状: %T", normalized["env"])
-	s.NotEmpty(env[externalcli.TeamJoinEnv], "join 描述符经 OPENJIUWEN_TEAM_JOIN 注入 provider env")
-	s.NotEmpty(env[externalcli.OpenjiuwenHomeEnv], "OPENJIUWEN_HOME 注入 provider env")
+	s.NotEmpty(env[external.TeamJoinEnv], "join 描述符经 OPENJIUWEN_TEAM_JOIN 注入 provider env")
+	s.NotEmpty(env[external.OpenjiuwenHomeEnv], "OPENJIUWEN_HOME 注入 provider env")
 
 	// SDKOptions 读回：真实 dsh harness 的配置面（Python _sdk_options 测试面）
 	dshHarness, ok := harnessRT.Harness().(*dsh.DshHarness)
@@ -140,7 +140,7 @@ func (s *DshProviderSuite) TestProvider路_dsh能力面拒绝() {
 	}
 
 	// effort：DSH has no reasoning effort setting
-	_, err := externalcli.BuildCliRuntime(ctxValue, rtc, externalcli.Options{
+	_, err := external.BuildCliRuntime(ctxValue, rtc, external.Options{
 		ExternalModelConfig: &schema.ExternalCliModelConfig{
 			APIBase: "http://x", Model: "deepseek-v4", Effort: "high",
 		},
@@ -152,7 +152,7 @@ func (s *DshProviderSuite) TestProvider路_dsh能力面拒绝() {
 	// 在 factory 能力守卫层（"has no authentication fallback"）；若卡声明了
 	// 该能力，provider.ModelConfig（provider.py:44-48）同样报
 	// "DSH has no authentication fallback"——两处语义一致。
-	_, err = externalcli.BuildCliRuntime(ctxValue, rtc, externalcli.Options{
+	_, err = external.BuildCliRuntime(ctxValue, rtc, external.Options{
 		FallbackExternalModelConfig: &schema.ExternalCliModelConfig{Model: "lite"},
 	})
 	s.Require().Error(err, "native 成员 fallback 必须被拒绝")

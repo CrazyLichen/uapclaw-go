@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -88,7 +88,7 @@ func (s *SessionCleanupSuite) TestCleanupExternalCLIBackendSessions_编排链() 
 	s.Require().True(db.Member().CreateMember(ctx, "charlie", "pay", "Charlie", "{}", "ready", "teammate", "", "", "build_mode", "", ""))
 
 	// 清理编排：claude 成员走 ⤵️15.7 延迟分支，openclaw/charlie 不清理
-	externalcli.CleanupExternalCLIBackendSessions(ctx, sessionID, []string{"pay"}, db)
+	external.CleanupExternalCLIBackendSessions(ctx, sessionID, []string{"pay"}, db)
 
 	// 成员行全部完好（清理不触碰共享团队库）
 	members, err := db.Member().GetTeamMembers(ctx, "pay", "")
@@ -103,8 +103,8 @@ func (s *SessionCleanupSuite) TestCleanupExternalCLIBackendSessions_编排链() 
 	s.True(cliAgents["openclaw"] && cliAgents["claude"], "cli_agent 选项读取链完好: %v", cliAgents)
 
 	// 防御分支：空会话 id / 未注册团队名——安静返回不 panic
-	externalcli.CleanupExternalCLIBackendSessions(ctx, "", []string{"pay"}, db)
-	externalcli.CleanupExternalCLIBackendSessions(ctx, sessionID, []string{"no-such-team"}, db)
+	external.CleanupExternalCLIBackendSessions(ctx, "", []string{"pay"}, db)
+	external.CleanupExternalCLIBackendSessions(ctx, sessionID, []string{"no-such-team"}, db)
 	members2, err := db.Member().GetTeamMembers(ctx, "pay", "")
 	s.Require().NoError(err)
 	s.Len(members2, 3, "防御分支不得触碰成员行")
@@ -114,9 +114,9 @@ func (s *SessionCleanupSuite) TestCleanupExternalCLIBackendSessions_编排链() 
 // 单成员入口对非延迟路径同样安静（openclaw 直接短路），claude 走 Debug 延迟
 // 分支不 panic。
 func (s *SessionCleanupSuite) TestCleanupExternalCLIBackendSession_单成员延迟分支() {
-	externalcli.CleanupExternalCLIBackendSession("openclaw", "sess-x", "alpha",
+	external.CleanupExternalCLIBackendSession("openclaw", "sess-x", "alpha",
 		&schema.ExternalCliAgentSpec{CLIAgent: "openclaw"})
-	externalcli.CleanupExternalCLIBackendSession("claude", "sess-x", "bravo",
+	external.CleanupExternalCLIBackendSession("claude", "sess-x", "bravo",
 		&schema.ExternalCliAgentSpec{CLIAgent: "claude"})
 	s.True(true, "两条路径安静返回（对齐 session_cleanup.py:55 except 分支形状）")
 }

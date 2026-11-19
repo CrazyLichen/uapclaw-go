@@ -1,5 +1,5 @@
 // 本文件是 external_cli_spawn 的 runtime 侧依赖接线：把 spawn 包
-// ExternalCliSpawnDeps 缝、externalcli.SetSharedDBFactory 缝接上具体实现。
+// ExternalCliSpawnDeps 缝、external.SetSharedDBFactory 缝接上具体实现。
 // 全部装配序逐条对位 external_cli_spawn.py:492-774；agent / externalcli /
 // prompts 的引用只在本包（runtime）发生，spawn 包保持零反向依赖（D-15.16-b1）。
 //
@@ -12,10 +12,10 @@ import (
 	externalbackends "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 
 	agent "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -31,7 +31,7 @@ import (
 // 创建时触发，与 SetRunTeamMemberFunc 同点接线）。
 func WireExternalCliSpawn() {
 	// externalcli client.go 的共享 DB 工厂（Python: spawn.shared_resources.get_shared_db）
-	externalcli.SetSharedDBFactory(spawn.GetSharedDB)
+	external.SetSharedDBFactory(spawn.GetSharedDB)
 	// spawn.ExternalCliSpawnDeps 缝
 	spawn.SetExternalCliSpawnDeps(&spawn.ExternalCliSpawnDeps{
 		BuildMemberSystemPrompt:     buildMemberSystemPrompt,
@@ -106,7 +106,7 @@ func externalCliMCPServerName(cliAgent string) string {
 	if cliAgent == "codex" {
 		return ""
 	}
-	return externalcli.TeamMCPServerName
+	return external.TeamMCPServerName
 }
 
 // buildExternalCliRuntime 构建 CLI runtime：cli_cfg 有/无两分支
@@ -114,7 +114,7 @@ func externalCliMCPServerName(cliAgent string) string {
 // （本地 CLI + project_dir ≠ cwd）的 project_dir 来源 BuildContext——
 // 15.16c seed 工厂落地前门卫按 Python project_dir=None 短路（⤴️15.16c）。
 func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeContext, args spawn.ExternalCliRuntimeArgs) (spawn.ExternalCliMemberRuntime, error) {
-	opts := externalcli.Options{
+	opts := external.Options{
 		Cwd:                         args.Cwd,
 		AddDirs:                     args.AddDirs,
 		ExternalModelConfig:         args.ExternalModelConfig,
@@ -176,7 +176,7 @@ func buildExternalCliRuntime(ctx context.Context, rtc *atschema.TeamRuntimeConte
 		// project_dir 经 BuildContext（D-15.13-k 过渡工厂未产出真值）⤴️15.16c
 		// 接线；此处保留调用形状，当前短路。
 	}
-	runtime, err := externalcli.BuildCliRuntime(ctx, rtc, opts)
+	runtime, err := external.BuildCliRuntime(ctx, rtc, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.Externa
 	}); ok {
 		spec := specOf(ta)
 		rtc := rtcOf(ta)
-		binder.BindTeamContextTracker(externalcli.BuildTeamContextTracker(
+		binder.BindTeamContextTracker(external.BuildTeamContextTracker(
 			ta.TeamBackend(), &spec, &rtc, ta.MemberName(), ta.TeamName(),
 		))
 	}
@@ -282,7 +282,7 @@ func bindExternalMemberOrchestration(ctx context.Context, teammate spawn.Externa
 	// 成员 ERROR 状态 + 重试进度事件）。
 	if tb := ta.TeamBackend(); tb != nil {
 		if binder, ok := runtimeValue.(interface {
-			BindReliabilityContext(string, *tools.TeamBackend, string, externalcli.UpdateStatusCallback, messager.Messager)
+			BindReliabilityContext(string, *tools.TeamBackend, string, external.UpdateStatusCallback, messager.Messager)
 		}); ok {
 			binder.BindReliabilityContext(
 				sessionID,

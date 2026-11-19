@@ -6,10 +6,10 @@ import (
 	"context"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
-	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
 	analyzerpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluation_result_analyzer"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
+	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluator"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 )
 

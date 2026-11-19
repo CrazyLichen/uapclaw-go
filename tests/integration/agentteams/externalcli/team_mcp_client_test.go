@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -21,7 +21,7 @@ import (
 // TeamMcpClientSuite ExternalTeamClient + team-mcp server 面 + 共享 DB 工厂
 // 的跨进程缝集成套件（15.16b）。
 //
-// 跨子系统：agent_teams/runtime/externalcli（ExternalTeamClient connect +
+// 跨子系统：agent_teams/external（ExternalTeamClient connect +
 // member scope 真团队工具）→ agent_teams/tools（TeamBackend / Task /
 // MessageManager 经 CreateTeamTools 构建的同一批 TeamTool 实例）→
 // agent_teams/spawn（GetSharedDB 共享数据库工厂缝）→ agent_teams/messager
@@ -59,11 +59,11 @@ func (s *TeamMcpClientSuite) ensureMemberRow(memberName string) {
 }
 
 // newClient 构建已连接的 member scope 客户端（共享 DB 工厂 → 内存库）。
-func (s *TeamMcpClientSuite) newClient(ctx context.Context, memberName string) *externalcli.ExternalTeamClient {
-	externalcli.SetSharedDBFactory(func(config database.DBConfigProvider) database.TeamDatabase {
+func (s *TeamMcpClientSuite) newClient(ctx context.Context, memberName string) *external.ExternalTeamClient {
+	external.SetSharedDBFactory(func(config database.DBConfigProvider) database.TeamDatabase {
 		return spawn.GetSharedDB(config)
 	})
-	descriptor := &externalcli.TeamJoinDescriptor{
+	descriptor := &external.TeamJoinDescriptor{
 		// 同团队全部成员共享同一会话 id（Python descriptor.session_id 同源）
 		SessionID:       "sess-it-team",
 		TeamName:        "team-it",
@@ -76,7 +76,7 @@ func (s *TeamMcpClientSuite) newClient(ctx context.Context, memberName string) *
 		DBConfig:        memDBConfig{},
 		TransportConfig: &atschema.MessagerTransportConfig{Backend: "inprocess"},
 	}
-	client := externalcli.NewExternalTeamClient(descriptor)
+	client := external.NewExternalTeamClient(descriptor)
 	s.Require().NoError(client.Connect(ctx))
 	return client
 }

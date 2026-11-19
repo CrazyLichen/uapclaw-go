@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor/recall"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -353,7 +352,7 @@ func isSpawnable(member *experts.AgentGroupMemberCard, declaredCLIKinds map[stri
 	if member.Card.RuntimeProvider != nil {
 		provider = *member.Card.RuntimeProvider
 	}
-	_, declared := declaredCLIKinds[external.CLIAgentForProvider(provider)]
+	_, declared := declaredCLIKinds[seamCLIAgentForProvider(provider)]
 	return declared
 }
 

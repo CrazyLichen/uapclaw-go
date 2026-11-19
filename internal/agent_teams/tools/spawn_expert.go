@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -438,7 +437,7 @@ func (r *ExpertTemplateResolver) groupMemberTemplate(expert, group string) (*Exp
 // fromPackage 从包组装 ExpertTemplate（external 翻译 + persona 渲染 + 快照）。
 // Python: _from_package (:828-845)
 func (r *ExpertTemplateResolver) fromPackage(ref experts.ExpertRef, template hschema.AgentTemplateSpec, card resources.AgentTemplateCard) (*ExpertTemplate, error) {
-	externalCLI, extErr := external.ExternalCliAgentSpecFromTemplate(&template)
+	externalCLI, extErr := seamExternalCliAgentSpecFromTemplate(&template)
 	if extErr != nil {
 		return nil, &expertUnavailable{msg: fmt.Sprintf("Expert '%s' has an unsupported runtime: %v", ref.Label(), extErr)}
 	}
@@ -540,7 +539,7 @@ func ExpertMemberCLIRuntime(team *TeamBackend, template *ExpertTemplate) (*atsch
 	if declared == nil {
 		return nil, false
 	}
-	merged, err := external.MergeExternalCliConfig(declared, template.ExternalCLI)
+	merged, err := seamMergeExternalCliConfig(declared, template.ExternalCLI)
 	if err != nil {
 		return nil, false
 	}

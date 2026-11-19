@@ -35,7 +35,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -70,18 +70,18 @@ const readInbox = "read_inbox"
 // ClientFactory 生产已连接 ExternalTeamClient 的工厂。
 // Python: ClientFactory = Callable[[], Awaitable[ExternalTeamClient]]（server.py:58）
 // Go 侧为同步构造（descriptor 从 env 或测试注入）。
-type ClientFactory func(ctx context.Context) (*externalcli.ExternalTeamClient, error)
+type ClientFactory func(ctx context.Context) (*external.ExternalTeamClient, error)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ConnectFromEnv 从 OPENJIWEN_TEAM_JOIN 环境变量构建并连接客户端。
 // Python: connect_from_env (server.py:60-64)
-func ConnectFromEnv(ctx context.Context) (*externalcli.ExternalTeamClient, error) {
-	descriptor, err := externalcli.TeamJoinDescriptorFromEnv(nil)
+func ConnectFromEnv(ctx context.Context) (*external.ExternalTeamClient, error) {
+	descriptor, err := external.TeamJoinDescriptorFromEnv(nil)
 	if err != nil {
 		return nil, err
 	}
-	client := externalcli.NewExternalTeamClient(descriptor)
+	client := external.NewExternalTeamClient(descriptor)
 	if err := client.Connect(ctx); err != nil {
 		return nil, err
 	}
@@ -94,10 +94,10 @@ func ConnectFromEnv(ctx context.Context) (*externalcli.ExternalTeamClient, error
 // 偏差 D-15.16-b11：启动时急切 connect + 静态工具注册（Python 为惰性
 // holder + 每请求 list_tools；scope 两者同源自描述符）。
 // Python: build_server (server.py:186-262)
-func BuildServer(ctx context.Context, clientFactory ClientFactory, scopeOverride string) (*mcpserver.MCPServer, *externalcli.ExternalTeamClient, error) {
+func BuildServer(ctx context.Context, clientFactory ClientFactory, scopeOverride string) (*mcpserver.MCPServer, *external.ExternalTeamClient, error) {
 	resolvedScope := scopeOverride
 	if resolvedScope == "" {
-		descriptor, err := externalcli.TeamJoinDescriptorFromEnv(nil)
+		descriptor, err := external.TeamJoinDescriptorFromEnv(nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -177,7 +177,7 @@ type operatorToolDef struct {
 	// tool MCP 工具定义
 	tool mcp.Tool
 	// handler 调用处理器
-	handler func(ctx context.Context, client *externalcli.ExternalTeamClient) mcpserver.ToolHandlerFunc
+	handler func(ctx context.Context, client *external.ExternalTeamClient) mcpserver.ToolHandlerFunc
 }
 
 // strSchema {"type": "string"} 属性。
@@ -210,7 +210,7 @@ func operatorToolDefs() []operatorToolDef {
 			"task board, rendered as text. Reading marks messages read. Call " +
 			"it at the start of a turn and whenever you expect new work; an " +
 			"empty inbox is normal."
-		defs = append(defs, operatorToolDef{tool: tool, handler: func(ctx context.Context, client *externalcli.ExternalTeamClient) mcpserver.ToolHandlerFunc {
+		defs = append(defs, operatorToolDef{tool: tool, handler: func(ctx context.Context, client *external.ExternalTeamClient) mcpserver.ToolHandlerFunc {
 			return func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				text, err := client.ReadInbox(ctx, true)
 				if err != nil {
@@ -228,7 +228,7 @@ func operatorToolDefs() []operatorToolDef {
 			`Send a direct message to a member (use "*" to broadcast to the team).`,
 			map[string]any{"to": strSchema(), "content": strSchema()},
 			[]string{"to", "content"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				messageID, err := client.SendMessage(ctx, argsString(args, "to"), argsString(args, "content"))
 				if err != nil {
 					return "", err
@@ -245,7 +245,7 @@ func operatorToolDefs() []operatorToolDef {
 				"dependencies": map[string]any{"type": "array", "items": strSchema()},
 			},
 			[]string{"title", "content"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				result, err := client.CreateTask(ctx, argsString(args, "title"), argsString(args, "content"),
 					argsStringPtr(args, "task_id"), argsStrings(args, "dependencies"))
 				if err != nil {
@@ -261,7 +261,7 @@ func operatorToolDefs() []operatorToolDef {
 			`Edit a task's title and/or content (pending / blocked tasks only).`,
 			map[string]any{"task_id": strSchema(), "title": strSchema(), "content": strSchema()},
 			[]string{"task_id"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				result, err := client.UpdateTask(ctx, argsString(args, "task_id"), argsStringPtr(args, "title"), argsStringPtr(args, "content"))
 				if err != nil {
 					return "", err
@@ -272,7 +272,7 @@ func operatorToolDefs() []operatorToolDef {
 			"List team tasks, optionally filtered by status.",
 			map[string]any{"status": strSchema()},
 			nil,
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				tasks, err := client.ListTasks(ctx, argsString(args, "status"))
 				if err != nil {
 					return "", err
@@ -289,7 +289,7 @@ func operatorToolDefs() []operatorToolDef {
 			"List pending tasks available to claim.",
 			map[string]any{},
 			nil,
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				tasks, err := client.ClaimableTasks(ctx)
 				if err != nil {
 					return "", err
@@ -304,7 +304,7 @@ func operatorToolDefs() []operatorToolDef {
 			`Get one task's full detail, or null if it does not exist.`,
 			map[string]any{"task_id": strSchema()},
 			[]string{"task_id"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				detail, err := client.GetTask(ctx, argsString(args, "task_id"))
 				if err != nil {
 					return "", err
@@ -318,7 +318,7 @@ func operatorToolDefs() []operatorToolDef {
 			"Claim a pending task.",
 			map[string]any{"task_id": strSchema()},
 			[]string{"task_id"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				result, err := client.ClaimTask(ctx, argsString(args, "task_id"))
 				if err != nil {
 					return "", err
@@ -329,7 +329,7 @@ func operatorToolDefs() []operatorToolDef {
 			"Complete a claimed task.",
 			map[string]any{"task_id": strSchema()},
 			[]string{"task_id"},
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				result, err := client.CompleteTask(ctx, argsString(args, "task_id"))
 				if err != nil {
 					return "", err
@@ -340,7 +340,7 @@ func operatorToolDefs() []operatorToolDef {
 			`List the team's members.`,
 			map[string]any{},
 			nil,
-			func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error) {
+			func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error) {
 				members, err := client.ListMembers(ctx)
 				if err != nil {
 					return "", err
@@ -358,7 +358,7 @@ func operatorToolDefs() []operatorToolDef {
 }
 
 // opTool 组装一个 operator 工具定义。
-func opTool(name, description string, properties map[string]any, required []string, dispatch func(ctx context.Context, client *externalcli.ExternalTeamClient, args map[string]any) (string, error)) operatorToolDef {
+func opTool(name, description string, properties map[string]any, required []string, dispatch func(ctx context.Context, client *external.ExternalTeamClient, args map[string]any) (string, error)) operatorToolDef {
 	schemaMap := map[string]any{
 		"type":       "object",
 		"properties": properties,
@@ -369,7 +369,7 @@ func opTool(name, description string, properties map[string]any, required []stri
 	tool := rawSchema(schemaMap)
 	tool.Name = name
 	tool.Description = description
-	return operatorToolDef{tool: tool, handler: func(ctx context.Context, client *externalcli.ExternalTeamClient) mcpserver.ToolHandlerFunc {
+	return operatorToolDef{tool: tool, handler: func(ctx context.Context, client *external.ExternalTeamClient) mcpserver.ToolHandlerFunc {
 		return func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			text, err := dispatch(ctx, client, request.GetArguments())
 			if err != nil {
@@ -386,7 +386,7 @@ func opTool(name, description string, properties map[string]any, required []stri
 // tool.invoke(arguments, member_name=..., display_name=...) 后
 // tool.render_for_llm(result)。Go 侧渲染等价物是 WrapInvokeWithLogging
 // 已注入的 __mapped_content（D-15.16-b8），缺失时走默认规则渲染。
-func callTeamTool(ctx context.Context, client *externalcli.ExternalTeamClient, name string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func callTeamTool(ctx context.Context, client *external.ExternalTeamClient, name string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	toolImpl, ok := client.Tools()[name]
 	if !ok {
 		return mcp.NewToolResultText(fmt.Sprintf("Unknown tool: %s", name)), nil

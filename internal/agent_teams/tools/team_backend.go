@@ -18,7 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
-	externalbackends "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -1764,9 +1763,9 @@ func (tb *TeamBackend) SpawnExternalCLI(ctx context.Context, in ExternalCLISpawn
 			fmt.Sprintf("cli_agent '%s' is not declared in TeamAgentSpec.external_cli_agents (declared: %s); add a static config entry for it first", in.CLIAgent, shown))
 	}
 	// Python: is_known_backend (team.py:3268)
-	if !externalbackends.IsKnownBackend(in.CLIAgent) {
+	if !seamIsKnownBackend(in.CLIAgent) {
 		return atschema.NewMemberOpResultFail(
-			fmt.Sprintf("Unknown cli_agent '%s'; known: %s", in.CLIAgent, strings.Join(externalbackends.AvailableBackends(), ", ")))
+			fmt.Sprintf("Unknown cli_agent '%s'; known: %s", in.CLIAgent, strings.Join(seamAvailableBackends(), ", ")))
 	}
 	// Python: missing_sdk_requirement (team.py:3270-3278)——D-15.16-e13 恒 nil。
 	if missing := missingSDKRequirement(in.CLIAgent); missing != "" {

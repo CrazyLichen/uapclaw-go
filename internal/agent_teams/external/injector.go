@@ -1,4 +1,4 @@
-package externalcli
+package external
 
 // 运行中外部 CLI agent 的旁路输入通道：对齐 Python
 // openjiuwen/agent_teams/external/cli_agent/injector.py。
@@ -10,7 +10,7 @@ package externalcli
 import (
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external/transport"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

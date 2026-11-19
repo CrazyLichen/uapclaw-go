@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"io"
 	"io/fs"
 	"net/http"
@@ -27,8 +28,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
-	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -36,6 +35,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	commandParser "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
@@ -781,7 +781,7 @@ func applyExternalCliConfigKeys(params map[string]any) error {
 // refreshExternalCliBuiltinModels 探测适配器：catalog 探测编排（externalcli 包）
 // + 播种目录回写（swarm/common 写链），对齐 Python 同模块直调。
 func refreshExternalCliBuiltinModels(entries []any, enabledNow []string) []string {
-	return externalcli.RefreshExternalCliBuiltinModels(context.Background(), entries, enabledNow,
+	return external.RefreshExternalCliBuiltinModels(context.Background(), entries, enabledNow,
 		func(catalogs map[string][]map[string]any) {
 			if err := swarmcommon.UpdateExternalCliBuiltinModelsInConfig(nil, catalogs); err != nil {
 				logger.Warn(logger.ComponentGateway).
@@ -4226,4 +4226,3 @@ func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string)
 		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
 	}
 }
-

@@ -1,13 +1,13 @@
 package team
 
 import (
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
@@ -22,7 +22,7 @@ func TestExternalCliPrepareSuite(t *testing.T) {
 // withReport 在真实 WorkspaceDir 报告路径落报告（WorkspaceDir 进程级缓存，
 // 包内已有测试可能已定型，故直接写真实路径并在收尾清理）。
 func (s *ExternalCliPrepareSuite) withReport(report map[string]map[string][]string) {
-	path := externalcli.ReportedModelsPath()
+	path := external.ReportedModelsPath()
 	s.Require().NoError(os.MkdirAll(filepath.Dir(path), 0o755))
 	data := "{}"
 	if report != nil {
