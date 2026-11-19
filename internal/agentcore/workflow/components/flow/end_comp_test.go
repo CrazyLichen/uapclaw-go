@@ -333,3 +333,37 @@ func TestEnd_SetMix_无模板(t *testing.T) {
 		t.Fatalf("SetMix 无模板不符: mix=%v", e.mix)
 	}
 }
+
+// TestEnd_Invoke_无模板_过滤None信封 验证 {"output": {...}}（end_comp.py:74-79）。
+func TestEnd_Invoke_无模板_过滤None信封(t *testing.T) {
+	e, _ := NewEnd(nil)
+	inner := newFakeVertexSession(t, "n1", "End")
+	out, err := e.OnInvoke(context.Background(), map[string]any{"a": 1, "b": nil}, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	wrapper, ok := out["output"].(map[string]any)
+	if !ok || wrapper["a"] != 1 || len(wrapper) != 1 {
+		t.Fatalf("期望 output 信封过滤 None: %v", out)
+	}
+}
+
+// TestEnd_Invoke_无模板_全None返回nil 验证 output 为 nil 时结果 nil（end_comp.py:79）。
+func TestEnd_Invoke_无模板_全None返回nil(t *testing.T) {
+	e, _ := NewEnd(nil)
+	inner := newFakeVertexSession(t, "n1", "End")
+	out, err := e.OnInvoke(context.Background(), map[string]any{"b": nil}, inner, nil)
+	if err != nil || out != nil {
+		t.Fatalf("期望 nil 输出: out=%v err=%v", out, err)
+	}
+}
+
+// TestEnd_Invoke_有模板_渲染 验证 {"response": 渲染串}（end_comp.py:70-73）。
+func TestEnd_Invoke_有模板_渲染(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	inner := newFakeVertexSession(t, "n1", "End")
+	out, err := e.OnInvoke(context.Background(), map[string]any{"n": "bob"}, inner, nil)
+	if err != nil || out["response"] != "Hi bob" {
+		t.Fatalf("模板渲染不符: out=%v err=%v", out, err)
+	}
+}

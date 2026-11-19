@@ -20,9 +20,10 @@ import (
 	"time"
 
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -427,7 +428,129 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		e.conf = conf
 		e.template = NewTemplateProcessor(conf.ResponseTemplate)
 	}
+	// InvokeFn 绑定（Python invoke，end_comp.py:59-89）
+	e.InvokeFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetComponentID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component invoke started")
+		var result map[string]any
+		if e.template != nil {
+			if inputs == nil {
+				inputs = map[string]any{}
+			}
+			r, rerr := e.render(ctx, inputs, envTimeoutToFloat(sess.GetEnv(constants.EndCompTemplateBranchRenderTimeoutKey)), sess)
+			if rerr != nil {
+				return nil, rerr
+			}
+			result = r
+		} else {
+			// 无模板：过滤 None 值 → {"output": ...} 信封（end_comp.py:75-79）
+			var output any
+			if inputs != nil {
+				filtered := make(map[string]any, len(inputs))
+				for k, v := range inputs {
+					if v != nil {
+						filtered[k] = v
+					}
+				}
+				if len(filtered) > 0 {
+					output = filtered
+				}
+			}
+			if output != nil {
+				result = map[string]any{"output": output}
+			}
+		}
+		logger.Debug(logComponent).
+			Str("component_id", sess.GetComponentID()).
+			Str("session_id", sess.GetSessionID()).
+			Bool("has_template", e.template != nil).
+			Bool("mix", e.mix).
+			Msg("End component invoke succeed")
+		return result, nil
+	}
 	return e, nil
+}
+
+// render 批渲染：懒建 batchTemplate → 渲染 → notifyAll → 清空。
+// Python: _render（end_comp.py:214-245）；mix 分支见 renderMix。
+func (e *End) render(ctx context.Context, inputs map[string]any, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
+	if e.batchTemplate == nil {
+		e.batchTemplate = &TemplateBatchProcessor{template: e.template, inputs: inputs, notify: make(chan struct{})}
+		if e.mix {
+			return e.renderMix(ctx, timeout, sess)
+		}
+	}
+	answer, err := e.batchTemplate.Render(ctx, nil, sess)
+	if err != nil {
+		return nil, err
+	}
+	e.batchTemplate.mu.Lock()
+	e.batchTemplate.notifyAll()
+	e.batchTemplate.mu.Unlock()
+	e.batchTemplate = nil
+	return map[string]any{"response": answer}, nil
+}
+
+// renderMix mix 模式首拍条件等待：渲染完成被唤醒或超时降级。
+// Python: _render mix 分支（end_comp.py:219-238）。
+func (e *End) renderMix(ctx context.Context, timeout float64, sess *session.NodeSessionFacade) (map[string]any, error) {
+	bt := e.batchTemplate
+	bt.mu.Lock()
+	btCh := bt.notify
+	bt.mu.Unlock()
+	var timeoutCh <-chan time.Time
+	var timer *time.Timer
+	if timeout > 0 {
+		timer = time.NewTimer(time.Duration(timeout * float64(time.Second)))
+		timeoutCh = timer.C
+	}
+	select {
+	case <-btCh: // 首拍渲染完成唤醒（notify_all，end_comp.py:220-223）
+		if timer != nil {
+			timer.Stop()
+		}
+	case <-timeoutCh:
+		// 渲染超时 error 日志（end_comp.py:225-231）
+		logger.Error(logComponent).
+			Float64("timeout", timeout).
+			Str("component_id", compIDOf(sess)).
+			Msg("End component render timeout")
+		if !bt.IsRendered() {
+			// 未渲染过 → 同步渲染兜底（end_comp.py:232-236）
+			answer, aerr := bt.Render(ctx, nil, sess)
+			e.batchTemplate = nil
+			if aerr != nil {
+				return nil, aerr
+			}
+			return map[string]any{"response": answer}, nil
+		}
+		return nil, nil // 已渲染过 → 返回 None（end_comp.py:236）
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	e.batchTemplate = nil
+	return nil, nil // mix 首拍（渲染完成后）：返回 None（end_comp.py:237-238）
+}
+
+// envTimeoutToFloat env 超时值 → float64 秒（vertex.go anyToFloat64 同款语义，
+// 本包独立实现避免引 graph 根包）。
+func envTimeoutToFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
+	}
 }
 
 // SetMix 进入混合模式：模板数据源计数置 2 并复位。
