@@ -833,6 +833,12 @@ func (s *TeamScheduler) announceAllDone(ctx context.Context, event *events.Event
 	s.dispatchTeamReviewFeedback(ctx)
 }
 
+// ReconcileRetirements 暴露退役 reconcile pass 供集成测试驱动。
+// Python: _reconcile_retirements 被调用面即 scan 内部；导出仅测试消费。
+func (s *TeamScheduler) ReconcileRetirements(ctx context.Context) (bool, error) {
+	return s.reconcileRetirements(ctx)
+}
+
 // dispatchTeamReviewFeedback 25.2b 接缝：板面清空时派发团队级评审反馈 rail
 // 调用（TeamSkillEvolutionRail.finalize_review_feedback）。25.2a 无消费方，
 // 计划裁决按 Python 原顺序保留调用点、函数体随 25.2b 落。
