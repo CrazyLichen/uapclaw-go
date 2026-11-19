@@ -51,6 +51,11 @@ var customAgentNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// CustomAgentsRoot 注册表根目录（导出供装配与测试消费）。
+func CustomAgentsRoot() string {
+	return customAgentsRoot()
+}
+
 // ListCustomAgents 返回全部已注册自定义 agent（注册表序）。
 // Python: list_custom_agents (custom_agent_runtime.py:83-86)
 func ListCustomAgents() []CustomAgent {

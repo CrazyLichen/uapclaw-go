@@ -28,6 +28,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -3748,8 +3749,16 @@ func chatSwarmflowReply(wc *WebChannel) methodHandler {
 
 // ──────────────────────────── 外部 CLI（B1b-5） ────────────────────────────
 
-// externalCLIAgentKinds 内置外部 CLI 种类（对齐 Python EXTERNAL_CLI_AGENT_KINDS）。
+// externalCLIAgentKinds 返回内置 + 注册表自定义 agent 的种类列表。
+// Python: external_cli_agent_kinds (config_panel/external_cli_read.py:24-28)。
+// 15.16d：自定义 agent 注册表已落地（swarm/common/custom_agent.go），kinds
+// 改为经注册表扩展。
 var externalCLIAgentKinds = []string{"claude", "codex"}
+
+// externalCLIAgentKindsFull 动态 kinds（含注册表自定义 agent）。
+func externalCLIAgentKindsFull() []string {
+	return swarmcommon.ExternalCliAgentKinds()
+}
 
 // externalCLIReferenceVersions 各内置 CLI 的参考版本（"期望版本"）。
 // Python: external_cli_reference_version (config_set_handlers.py:330-342) 读安装包元数据
@@ -3898,9 +3907,9 @@ func defaultExternalCLIInstallStatus() map[string]any {
 	}
 }
 
-// isKnownExternalCLIAgent 判断是否为内置外部 CLI 种类。
+// isKnownExternalCLIAgent 判断是否为已知外部 CLI 种类（内置 + 注册表自定义）。
 func isKnownExternalCLIAgent(agent string) bool {
-	for _, kind := range externalCLIAgentKinds {
+	for _, kind := range externalCLIAgentKindsFull() {
 		if kind == agent {
 			return true
 		}
@@ -3911,9 +3920,8 @@ func isKnownExternalCLIAgent(agent string) bool {
 // detectExternalCLIAgent 探测外部 CLI 的路径/版本，返回上游同形状的 DTO。
 // Python: detect_external_cli_agent / _detect_cli_at
 // (config_set_handlers.py:464-563)。本仓差异：
-//   - 无自定义 agent 注册表，未知种类直接回 status=unavailable；
 //   - reference_version 取 Python 侧包元数据（claude_agent_sdk / openai-codex），本仓无此依赖，恒回空串；
-//   - 不做 use_builtin 的托管 CLI 解析（managed runtime 未移植），退回 PATH 搜索。
+//   - 不做 use_builtin 的托管 CLI 解析（managed runtime 未移植，偏差 D-15.16-d7 桌面版专属），退回 PATH 搜索。
 func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[string]any {
 	if !isKnownExternalCLIAgent(cliAgent) {
 		return map[string]any{
