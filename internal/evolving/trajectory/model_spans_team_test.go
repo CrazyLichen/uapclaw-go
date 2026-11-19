@@ -403,9 +403,12 @@ func TestReplayWindows_单提交基线(t *testing.T) {
 
 // mustJSON 紧凑序列化助手。
 func mustJSON(value map[string]any) string {
-	data, _ := jsonMarshal(value)
+	data, _ := json.Marshal(value)
 	return string(data)
 }
+
+// fmtSprint 测试助手。
+func fmtSprint(v any) string { return fmt.Sprint(v) }
 
 // TestProjectTrajectoryMessages_无窗口缺窗报告 无提交窗口 → missing_context_window。
 // Python: messages.py project_trajectory_messages。
@@ -516,7 +519,3 @@ func TestInMemoryStore_SaveLoadQuery(t *testing.T) {
 		t.Fatalf("query = %d, %v", len(results), err)
 	}
 }
-
-// jsonMarshal / fmtSprint 测试助手（标准库薄封装）。
-func jsonMarshal(value any) ([]byte, error) { return json.Marshal(value) }
-func fmtSprint(v any) string                { return fmt.Sprint(v) }
