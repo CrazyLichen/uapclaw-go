@@ -53,7 +53,7 @@ func ProviderFilterForCLI(cliAgent string) func(string) bool {
 
 // CompatiblePoolModelNames 返回该 CLI 的 provider 过滤器接受的、去重排序的
 // 池模型名列表。
-// 模型解析器（plan_external_model 的池扫描）与双受众 auth 失败文案
+// 模型解析器（plan_external_model 的池扫描半区；完整解析器见 model_plan.go）
 // （ExternalMemberTurns 的 workaround 列表）共用，使"兼容池"概念只存在一份。
 // Python: compatible_pool_model_names (model_compat.py:45)
 func CompatiblePoolModelNames(cliAgent string, pool []models.ModelPoolEntry) []string {

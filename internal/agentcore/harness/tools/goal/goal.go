@@ -4,6 +4,7 @@ package goal
 // 提供 GoalReportSink（报告暂存）与 submit_goal_report / get_current_goal 两个工具。
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"fmt"
 
@@ -88,7 +89,7 @@ func NewSubmitGoalReportTool(sink *GoalReportSink, language, agentID string) (to
 		}
 		sink.Submit(goal.GoalAssessment{
 			Status:          status,
-			Evidence:        asString(inputs["evidence"]),
+			Evidence:        config.String(inputs["evidence"]),
 			RemainingWork:   optionalString(inputs["remaining_work"]),
 			NextInstruction: optionalString(inputs["next_instruction"]),
 		})
@@ -129,11 +130,6 @@ func NewGetCurrentGoalTool(goalManager *goal.GoalManager, language, agentID stri
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // asString 把 any 转为 string，nil 或非 string 返回空串。
-func asString(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // optionalString 把 any 转为 *string，nil 或空串返回 nil。
 func optionalString(v any) *string {
 	s, ok := v.(string)

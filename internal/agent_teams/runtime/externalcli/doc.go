@@ -23,6 +23,7 @@
 //	├── spawn.go             # BuildCliRuntime spawn 主体（provider/adapter 路与守卫）
 //	├── member_runtime.go    # ExternalHarnessMemberRuntime 骨架（provider 路）
 //	├── activity_emitter.go  # 结构化 AGENT_ACTIVITY 事件构造器（归包偏差 D-15.16-a4）
+//	├── custom_agent.go    # 自定义 agent 注册表半区（agents.json/激活校验语义，15.16d）
 //	├── reliability.go      # RuntimeReliabilityContext 投递半区（external/reliability.py）
 //	└── transport/           # 进程启动与驱动抽象子包（base/local）
 //

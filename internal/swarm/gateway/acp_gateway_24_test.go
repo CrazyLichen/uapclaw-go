@@ -1388,7 +1388,7 @@ func frameMethodOf(f map[string]any) string {
 
 // TestAcpGateway_NumericJsonrpcIDToolResponse IDE 把 string id 回成 number 时，
 // pending 仍须命中（Python str(id).strip() 语义）。
-// 回归点：strVal 只做 v.(string)，float64(777) → "" 会让 tool response 被判
+// 回归点：config.String 只做 v.(string)，float64(777) → "" 会让 tool response 被判
 // unknown 丢弃，agent 侧工具调用永久挂起（spec §7 承诺的 "id=777" 用例）。
 func TestAcpGateway_NumericJsonrpcIDToolResponse(t *testing.T) {
 	rec := newAcpDispatchRecorder()

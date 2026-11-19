@@ -264,15 +264,6 @@ func TestExternalCLIDetect_版本命令静默失败(t *testing.T) {
 	assert.NotEmpty(t, payload["message"])
 }
 
-// TestIsWindowsScriptPath_后缀判定 脚本后缀为真、可执行文件为假（与运行平台无关）。
-func TestIsWindowsScriptPath_后缀判定(t *testing.T) {
-	assert.True(t, isWindowsScriptPath("cli.bat"))
-	assert.True(t, isWindowsScriptPath("cli.CMD"))
-	assert.True(t, isWindowsScriptPath("cli.ps1"))
-	assert.False(t, isWindowsScriptPath("cli.exe"))
-	assert.False(t, isWindowsScriptPath("cli"))
-}
-
 // TestExternalCLIValidatePaths_params为空 params 非对象 → BAD_REQUEST。
 func TestExternalCLIValidatePaths_params为空(t *testing.T) {
 	_, err := callHandler(externalCLIValidatePaths(newTestChannel()), nil, "")
@@ -454,26 +445,3 @@ func TestExternalCLIDetect_参考版本恒返回(t *testing.T) {
 	assert.Equal(t, "0.144.4", payload["reference_version"], "缺路径分支也要带参考版本")
 }
 
-// TestParseVersionTuple 三段/两段/非数字/空串。
-func TestParseVersionTuple(t *testing.T) {
-	got, ok := parseVersionTuple("1.2.3")
-	assert.True(t, ok)
-	assert.Equal(t, [3]int{1, 2, 3}, got)
-
-	got, ok = parseVersionTuple("1.2")
-	assert.True(t, ok, "缺段按 0 补")
-	assert.Equal(t, [3]int{1, 2, 0}, got)
-
-	_, ok = parseVersionTuple("1.x.3")
-	assert.False(t, ok, "非数字段不可解析")
-
-	_, ok = parseVersionTuple("  ")
-	assert.False(t, ok)
-}
-
-// TestCompareVersionTuple 三段逐位比较。
-func TestCompareVersionTuple(t *testing.T) {
-	assert.Equal(t, -1, compareVersionTuple([3]int{0, 2, 100}, [3]int{0, 2, 115}))
-	assert.Equal(t, 0, compareVersionTuple([3]int{1, 0, 0}, [3]int{1, 0, 0}))
-	assert.Equal(t, 1, compareVersionTuple([3]int{1, 10, 0}, [3]int{1, 9, 9}))
-}

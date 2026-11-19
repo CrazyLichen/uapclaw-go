@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"testing"
 
@@ -131,7 +132,7 @@ func TestRegisterLocalHandler(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func TestStrVal(t *testing.T) {
-	assert.Equal(t, "x", strVal("x"))
-	assert.Equal(t, "", strVal(nil))
-	assert.Equal(t, "", strVal(123))
+	assert.Equal(t, "x", config.String("x"))
+	assert.Equal(t, "", config.String(nil))
+	assert.Equal(t, "", config.String(123))
 }

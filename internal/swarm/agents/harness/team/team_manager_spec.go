@@ -583,6 +583,10 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) (*atschema.Tea
 		}
 	}
 
+	// 步骤 6.5: 外部 CLI agent 预处理（Python config_loader.py:603，spec 构建前）
+	// 目录对拍 + 自定义 agent 补 team-mcp server 命令（15.16d）。
+	PrepareExternalCliAgents(specDict)
+
 	// 步骤 7: 从 dict 构建 TeamAgentSpec
 	spec := atschema.NewTeamAgentSpecFromDict(specDict)
 

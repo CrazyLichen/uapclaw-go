@@ -6,6 +6,7 @@ package acp
 // WS 客户端族（L1526-1738）在 Task 9 补全。
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"bufio"
 	"context"
 	"crypto/rand"
@@ -396,7 +397,7 @@ func (ch *AcpChannel) parseEnvelope(data map[string]any) *e2a.E2AEnvelope {
 // Python: _handle_jsonrpc_request (L1050-1086)。
 func (ch *AcpChannel) handleJsonrpcRequest(ctx context.Context, data map[string]any) {
 	rpcID := data["id"]
-	method := strings.TrimSpace(strVal(data["method"]))
+	method := strings.TrimSpace(config.String(data["method"]))
 	params, _ := data["params"].(map[string]any)
 	if params == nil {
 		params = map[string]any{}
@@ -678,7 +679,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 			Body: map[string]any{
 				"event_type": "chat.delta",
 				"delta_kind": deltaKind,
-				"delta":      strVal(payload["content"]),
+				"delta":      config.String(payload["content"]),
 				"payload":    payload,
 			},
 		}
@@ -687,9 +688,9 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 	// 分支二：模型报错，转成一条 JSON-RPC 错误帧并结束本轮
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatError {
 		c.Sequence++
-		errText := strVal(payload["error"])
+		errText := config.String(payload["error"])
 		if errText == "" {
-			errText = strVal(payload["content"])
+			errText = config.String(payload["content"])
 		}
 		if errText == "" {
 			errText = "Agent error"
@@ -796,9 +797,9 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 
 	// 分支六：兜底，剩下的响应当失败帧处理
 	c.Sequence++
-	errText := strVal(payload["error"])
+	errText := config.String(payload["error"])
 	if errText == "" {
-		errText = strVal(payload["content"])
+		errText = config.String(payload["content"])
 	}
 	if errText == "" {
 		errText = "request failed"
@@ -1112,7 +1113,7 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 	// 第一种：模型吐出的流式文字片段。把它转成 ACP 的增量更新发出去，
 	// 顺带补一条 token 用量；空片段直接丢掉，这轮还没结束，继续等后面的片段。
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatDelta {
-		text := strVal(payload["content"])
+		text := config.String(payload["content"])
 		if text == "" {
 			ch.mu.Unlock()
 			return false
@@ -1187,9 +1188,9 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		jsonrpcID := c.JSONRPCID
 		ch.mu.Unlock()
 		ch.cancelIdleFinalize(msg.ID)
-		errText := strVal(payload["error"])
+		errText := config.String(payload["error"])
 		if errText == "" {
-			errText = strVal(payload["content"])
+			errText = config.String(payload["content"])
 		}
 		if errText == "" {
 			errText = "Agent error"
@@ -1269,9 +1270,9 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 
 	jsonrpcID := c.JSONRPCID
 	ch.mu.Unlock()
-	errText := strVal(payload["error"])
+	errText := config.String(payload["error"])
 	if errText == "" {
-		errText = strVal(payload["content"])
+		errText = config.String(payload["content"])
 	}
 	if errText == "" {
 		errText = "request failed"
@@ -1388,11 +1389,6 @@ func cpStrAnyMap(m map[string]any) map[string]any {
 
 // strVal 任意值转 string（nil/非 string → 空串；bool/数字原样 Python str 语义近似——
 // 本包值域内仅 string|nil，取窄实现）。包内本地定义（跨包不可见同名实现）。
-func strVal(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
 // sessionId / messageId 在 Python 侧一律经 str() 收敛，数字也会变成 "123"；
 // strVal 只认 string，会把数字形态静默吞成空串。
@@ -1614,7 +1610,7 @@ func (ch *AcpChannel) handleGatewayFrame(data map[string]any) {
 		ch.handleGatewayJsonrpcRequest(data)
 		return
 	}
-	frameType := strings.TrimSpace(strVal(data["type"]))
+	frameType := strings.TrimSpace(config.String(data["type"]))
 	var msg *schema.Message
 	switch frameType {
 	case "res":
@@ -1682,9 +1678,9 @@ func (ch *AcpChannel) messageFromGatewayResponse(data map[string]any) *schema.Me
 	}
 	ok, _ := data["ok"].(bool)
 	if !ok {
-		errText := strVal(data["error"])
+		errText := config.String(data["error"])
 		if errText == "" {
-			errText = strVal(payload["error"])
+			errText = config.String(payload["error"])
 		}
 		if errText == "" {
 			errText = "request failed"
@@ -1702,7 +1698,7 @@ func (ch *AcpChannel) messageFromGatewayResponse(data map[string]any) *schema.Me
 // messageFromGatewayEvent type=event 帧重建 Message（activePrompt 反查）。
 // Python: _message_from_gateway_event (L1708-1730)。
 func (ch *AcpChannel) messageFromGatewayEvent(data map[string]any) *schema.Message {
-	eventName := strings.TrimSpace(strVal(data["event"]))
+	eventName := strings.TrimSpace(config.String(data["event"]))
 	payload, _ := data["payload"].(map[string]any)
 	if payload == nil {
 		payload = map[string]any{}
@@ -1850,10 +1846,10 @@ func LoadAcpChannelConfig(readRaw func() map[string]any) AcpChannelConfig {
 	if v, ok := acpConf["enabled"].(bool); ok {
 		conf.Enabled = v
 	}
-	if v := strings.TrimSpace(strVal(acpConf["channel_id"])); v != "" {
+	if v := strings.TrimSpace(config.String(acpConf["channel_id"])); v != "" {
 		conf.ChannelID = v
 	}
-	if v := strings.TrimSpace(strVal(acpConf["default_session_id"])); v != "" {
+	if v := strings.TrimSpace(config.String(acpConf["default_session_id"])); v != "" {
 		conf.DefaultSessionID = v
 	}
 	if m, ok := acpConf["metadata"].(map[string]any); ok {

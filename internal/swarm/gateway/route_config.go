@@ -130,11 +130,6 @@ func applyConfigFallback(cfg *GatewayServerConfig) {
 
 // strVal 安全取字符串（对齐 Python str(x or "")，仅 string 取值，数字请用
 // acp.NormalizeJSONRPCID）。
-func strVal(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
 // strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
 // sessionId / messageId 等字段在 Python 侧一律经 str() 收敛，数字也能落成
 // "123"；strVal 只认 string，会让数字形态静默变空串。
