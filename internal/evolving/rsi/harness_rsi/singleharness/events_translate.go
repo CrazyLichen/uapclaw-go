@@ -546,6 +546,8 @@ func optionalNumber(value any) *float64 {
 		return &f
 	case float64:
 		return &v
+	case *float64:
+		return v
 	case string:
 		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
 			return &f
