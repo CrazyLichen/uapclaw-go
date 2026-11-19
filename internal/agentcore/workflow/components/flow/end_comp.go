@@ -20,6 +20,7 @@ import (
 	"time"
 
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -318,8 +319,24 @@ func (p *TemplateProcessor) renderStreamLoop(ctx context.Context, inputs map[str
 			p.mu.Unlock()
 			continue
 		}
-		if ch, ok := value.(<-chan any); ok {
-			// 流叶子逐帧转发（end_comp.py:432-435）
+		if sr, ok := value.(*stream_actor.StreamReader); ok {
+			// 流叶子逐帧转发（end_comp.py:432-435）。
+			// 引擎 preStream 递出的流叶真实形态为 *stream_actor.StreamReader
+			//（D-17-3 修正：早期登记的 <-chan any 为单测假形态，2026-11-19 审查修正）；
+			// Next 拉取式消费，END_ 哨兵/超时/取消自然终止（base.go:448-466）。
+			for {
+				frame, ok := sr.Next(ctx)
+				if !ok {
+					break
+				}
+				p.mu.Lock()
+				f := templateFrame{Data: frame, Index: p.chunkIndex}
+				p.chunkIndex++
+				p.mu.Unlock()
+				out <- graphexe.StreamChunk[templateFrame]{Val: f}
+			}
+		} else if ch, ok := value.(<-chan any); ok {
+			// 测试形态兼容：chan 叶子逐帧转发（同 end_comp.py:432-435 语义）
 			for frame := range ch {
 				p.mu.Lock()
 				f := templateFrame{Data: frame, Index: p.chunkIndex}
@@ -341,10 +358,11 @@ func (p *TemplateProcessor) renderStreamLoop(ctx context.Context, inputs map[str
 	}
 }
 
-// consumeAllIterators 递归收集并耗尽 inputs 中所有 channel 叶子。
+// consumeAllIterators 递归收集并耗尽 inputs 中所有流叶子。
 // Python: TemplateProcessor._consume_all_iterators（end_comp.py:310-354）；
-// 偏差 D-17-3：AsyncGenerator/Generator → Go channel（含反射兜底任意 chan 种类）；
-// Python 逐迭代器耗尽异常仅 debug 日志，Go channel 无错误元素故省略。
+// 偏差 D-17-3（修正）：引擎流叶真实形态 *stream_actor.StreamReader（Next 拉取式，
+// END_ 哨兵/超时/取消终止）；<-chan any 为测试形态兼容；反射兜底任意 chan 种类；
+// Python 逐迭代器耗尽异常仅 debug 日志，Go channel/StreamReader 无错误元素故省略。
 func consumeAllIterators(data any) {
 	switch v := data.(type) {
 	case map[string]any:
@@ -354,6 +372,13 @@ func consumeAllIterators(data any) {
 	case []any:
 		for _, val := range v {
 			consumeAllIterators(val)
+		}
+	case *stream_actor.StreamReader:
+		// 引擎流叶耗尽（Python async for _ in iterator；Next 到哨兵/超时返回 false）
+		for {
+			if _, ok := v.Next(context.Background()); !ok {
+				break
+			}
 		}
 	case <-chan any:
 		for range v {

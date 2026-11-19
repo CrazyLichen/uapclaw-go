@@ -516,3 +516,32 @@ func TestActorShutdown_级联取消(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestStreamReader_EndFrame后幂等终止 验证 EndFrame 消费后队列置持久关闭态，
+// 再次 Next/耗尽立即返回 false（8.17 consumeAllIterators 收尾二次耗尽的幂等依赖；
+// 对齐 Python 生成器耗尽后重迭代空语义）。
+func TestStreamReader_EndFrame后幂等终止(t *testing.T) {
+	p := newTestProcessor(nil)
+	r := p.createGenerator("x", "A.foo", nil)
+	p.processorQueues["A.foo"][0].put("v1")
+	// 模拟 closeQueuesForSourceKey 投递 EndFrame 标记（base.go:677）
+	p.processorQueues["A.foo"][0].put(&utils.EndFrame{})
+	ctx := context.Background()
+	if v, ok := r.Next(ctx); !ok || v != "v1" {
+		t.Fatalf("首帧应取出: v=%v ok=%v", v, ok)
+	}
+	if _, ok := r.Next(ctx); ok {
+		t.Fatal("EndFrame 应终止流")
+	}
+	// 关键回归：终止后再耗尽必须立即 false，不得在空队列上永久阻塞
+	done := make(chan struct{})
+	go func() {
+		r.Next(ctx)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("EndFrame 后二次 Next 阻塞——持久关闭态缺失")
+	}
+}

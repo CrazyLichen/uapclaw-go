@@ -466,6 +466,10 @@ func (r *StreamReader) Next(ctx context.Context) (any, bool) {
 			Str("k_path", r.kPath).
 			Str("r_path", r.rPath).
 			Msgf("Receive EndFrame chunk of [%s.%s]", r.nodeID, r.kPath)
+		// 置持久关闭态：EndFrame 被本读取器消费后，后续再次 Next/耗尽立即返回 false
+		//（对齐 Python 生成器耗尽后重迭代空语义；8.17 consumeAllIterators 收尾二次
+		// 耗尽依赖此幂等性，否则空队列未关闭永久阻塞）。close 已入队帧仍可取。
+		r.q.close()
 		return nil, false
 	}
 	logger.Debug(logComponent).

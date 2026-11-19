@@ -2,12 +2,16 @@ package flow
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -583,5 +587,143 @@ func TestEnd_Invoke_有模板_Mix_超时兜底(t *testing.T) {
 	out, err := e.render(context.Background(), map[string]any{"n": "mix"}, 0.01, compSessM)
 	if err != nil || out == nil {
 		t.Fatalf("mix invoke 不符: out=%v err=%v", out, err)
+	}
+}
+
+// ──────────────────────────── StreamReader 叶子（D-17-3 修正回归） ────────────────────────────
+
+// newStreamReaderForTest 构造真实引擎形态的 StreamReader：
+// StreamProcessor + Generator(schema 引用路径) + Run 分发循环（背景 goroutine）。
+// 引擎 preStream 递给组件的流叶子即此形态（vertex.go:431-443 一比一）。
+func newStreamReaderForTest(t *testing.T, nodeID, rPath string) (*stream_actor.StreamProcessor, *stream_actor.StreamReader) {
+	t.Helper()
+	p := stream_actor.NewStreamProcessor(nodeID, nil, 0)
+	gen := p.Generator(map[string]any{"a": rPath}, nil)
+	sr, ok := gen["a"].(*stream_actor.StreamReader)
+	if !ok {
+		t.Fatalf("Generator 未产出 StreamReader 叶子: %T", gen["a"])
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go p.Run(ctx, ability.ComponentAbilityTransform)
+	return p, sr
+}
+
+// feedStreamReaderFrame 投递一帧（消息形状 {producer: {path: value}}，对齐 Run 路由）。
+func feedStreamReaderFrame(p *stream_actor.StreamProcessor, producer, path string, value any) {
+	p.Receive(stream_actor.StreamPayload{
+		Message:       map[string]any{producer: map[string]any{path: value}},
+		SourceAbility: ability.ComponentAbilityTransform,
+	})
+}
+
+// feedStreamReaderEnd 投递 END_ 哨兵（manager.py:122-124 end_message 同款形状）。
+func feedStreamReaderEnd(p *stream_actor.StreamProcessor, producer string) {
+	p.Receive(stream_actor.StreamPayload{
+		Message:       map[string]any{producer: "END_" + producer},
+		SourceAbility: ability.ComponentAbilityTransform,
+	})
+}
+
+// TestTemplateProcessor_RenderStream_StreamReader叶子回归 验证流叶判定走
+// *stream_actor.StreamReader 分支（D-17-3 修正：引擎真实递出物，非 <-chan any）。
+func TestTemplateProcessor_RenderStream_StreamReader叶子回归(t *testing.T) {
+	p, sr := newStreamReaderForTest(t, "end1", "${llm1.text}")
+	feedStreamReaderFrame(p, "llm1", "text", "f1")
+	feedStreamReaderFrame(p, "llm1", "text", "f2")
+	feedStreamReaderEnd(p, "llm1") // 主队列 FIFO：f1→f2→END，消费两帧后哨兵终止
+
+	tp := NewTemplateProcessor("{{a}}")
+	inputs := map[string]any{"a": sr}
+	var datas []any
+	for chunk := range tp.RenderStream(context.Background(), inputs, nil, 0) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		datas = append(datas, chunk.Val.Data)
+	}
+	if len(datas) != 2 || datas[0] != "f1" || datas[1] != "f2" {
+		t.Fatalf("StreamReader 叶子逐帧转发不符: %v", datas)
+	}
+}
+
+// TestTemplateProcessor_RenderStream_StreamReader叶子后到 验证模板位置驱动的惰性消费：
+// 渲染启动时队列已有帧，位置到达该段才消费（上屏顺序由位置决定，非到达顺序）。
+func TestTemplateProcessor_RenderStream_StreamReader叶子后到(t *testing.T) {
+	p, sr := newStreamReaderForTest(t, "end2", "${llm1.text}")
+	feedStreamReaderFrame(p, "llm1", "text", "late")
+	feedStreamReaderEnd(p, "llm1")
+	time.Sleep(50 * time.Millisecond) // 让帧先入队，模拟"位置未到先攒着"
+
+	tp := NewTemplateProcessor("A {{a}} B")
+	inputs := map[string]any{"a": sr}
+	var datas []any
+	for chunk := range tp.RenderStream(context.Background(), inputs, nil, 0) {
+		if chunk.Err != nil {
+			t.Fatalf("流中错误: %v", chunk.Err)
+		}
+		datas = append(datas, chunk.Val.Data)
+	}
+	if len(datas) != 3 || datas[0] != "A " || datas[1] != "late" || datas[2] != " B" {
+		t.Fatalf("惰性消费+静态段交错不符: %v", datas)
+	}
+}
+
+// TestConsumeAllIterators_StreamReader耗尽 验证收尾耗尽识别引擎流叶
+// （残帧被丢弃不上屏，队列悬挂收口）。
+func TestConsumeAllIterators_StreamReader耗尽(t *testing.T) {
+	p, sr := newStreamReaderForTest(t, "end3", "${llm1.text}")
+	feedStreamReaderFrame(p, "llm1", "text", "residual")
+	feedStreamReaderFrame(p, "llm1", "text", "residual2")
+	feedStreamReaderEnd(p, "llm1")
+
+	consumeAllIterators(map[string]any{"a": sr, "b": "scalar"})
+	// 耗尽后队列关闭，Next 立即 false——再次耗尽不阻塞即通过
+	done := make(chan struct{})
+	go func() {
+		consumeAllIterators(sr)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("二次耗尽阻塞，StreamReader 未被识别")
+	}
+}
+
+// TestEnd_OnTransform_真实StreamReader信封 端到端形状回归：
+// preStream 信封（单元素 dict-of-StreamReader）→ OnTransform → 信封帧逐个吐出。
+func TestEnd_OnTransform_真实StreamReader信封(t *testing.T) {
+	e, err := NewEnd(mustConfig("Hi {{a}}"))
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	p, sr := newStreamReaderForTest(t, "end4", "${llm1.text}")
+	feedStreamReaderFrame(p, "llm1", "text", "alice")
+	feedStreamReaderEnd(p, "llm1")
+
+	inner := newFakeVertexSession(t, "end4", "End")
+	envelope := make(chan map[string]any, 1)
+	envelope <- map[string]any{"a": sr}
+	close(envelope)
+
+	ch, err := e.OnTransform(context.Background(), envelope, inner, nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	var resp strings.Builder
+	for c := range ch {
+		if c.Err != nil {
+			t.Fatalf("流中错误: %v", c.Err)
+		}
+		// TRANSFORM 输出为逐帧信封 map[frame]=stream.OutputSchema{Payload:{response: 段文本}}
+		f, ok := c.Val["frame"].(stream.OutputSchema)
+		if !ok {
+			t.Fatalf("信封形状不符: %v", c.Val)
+		}
+		resp.WriteString(fmt.Sprintf("%v", f.Payload.(map[string]any)["response"]))
+	}
+	if resp.String() != "Hi alice" {
+		t.Fatalf("模板渲染 StreamReader 叶子不符: %q", resp.String())
 	}
 }
