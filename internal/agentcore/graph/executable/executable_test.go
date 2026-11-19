@@ -1,4 +1,4 @@
-package graph
+package executable
 
 import (
 	"context"

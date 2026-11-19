@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -303,4 +304,24 @@ type WorkflowVertexSession interface {
 // Python: session/internal/workflow.py NodeSession(session, node_id, node_type, skip_trace)。
 func NewWorkflowVertexSession(parent interfaces.InnerSession, nodeID, nodeType string, skipTrace bool) WorkflowVertexSession {
 	return internal.NewNodeSession(parent, nodeID, nodeType, skipTrace)
+}
+
+// NewComponentSession 组件级会话构造：校验入参为工作流顶点会话（底层须为
+// internal.NodeSession）并包装为组件开发者面门面。
+// Python: components/component.py:95-99 isinstance(session, NodeSession) 校验 +
+// Session(session, False/True) 包装（8.17 component.go 四钩子调用）。
+// 类型不符返回 StatusWorkflowInnerOrchestrationError（Python
+// WORKFLOW_INNER_ORCHESTRATION_ERROR 语义对齐）。
+func NewComponentSession(sess BaseSession, streamMode bool) (*NodeSessionFacade, error) {
+	vsess, ok := sess.(WorkflowVertexSession)
+	if !ok {
+		return nil, exception.BuildError(exception.StatusWorkflowInnerOrchestrationError,
+			exception.WithParam("reason", "session type must be NodeSession when component hook invoked"))
+	}
+	inner, ok2 := vsess.(*internal.NodeSession)
+	if !ok2 {
+		return nil, exception.BuildError(exception.StatusWorkflowInnerOrchestrationError,
+			exception.WithParam("reason", "session type must be NodeSession when component hook invoked"))
+	}
+	return NewNodeSessionFacade(inner, streamMode), nil
 }

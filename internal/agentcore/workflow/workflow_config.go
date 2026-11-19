@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -37,7 +37,7 @@ type NodeSpec struct {
 	// StreamIOConfigs 流式 I/O 配置
 	StreamIOConfigs *CompIOConfig `json:"stream_io_configs"`
 	// Abilities 组件支持的能力列表（default_factory=list）
-	Abilities []components.ComponentAbility `json:"abilities"`
+	Abilities []ability.ComponentAbility `json:"abilities"`
 	// MaxRetries 最大重试次数（ge=0，越界拒绝构造）
 	MaxRetries int `json:"max_retries"`
 	// Timeout 节点执行超时秒数；<=0 表示不超时
@@ -107,7 +107,7 @@ func WithMaxRetries(n int) NodeSpecOption {
 // max_retries ge=0：负值拒绝构造，对齐 pydantic ValidationError 抛出点。
 func NewNodeSpec(opts ...NodeSpecOption) (*NodeSpec, error) {
 	ns := &NodeSpec{
-		Abilities: []components.ComponentAbility{},
+		Abilities: []ability.ComponentAbility{},
 		Timeout:   -1.0,
 	}
 	for _, opt := range opts {

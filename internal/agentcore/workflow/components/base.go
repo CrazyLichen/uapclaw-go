@@ -1,5 +1,25 @@
 package components
 
+import "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
+
+// ComponentAbility 组件能力枚举：本体在 ability 叶包（破环迁移，偏差 D-17-8），
+// 此处别名保持 components.ComponentAbility 锚点（别名不产生新类型，
+// 与 ability.ComponentAbility 为同一类型身份）。
+// Python: openjiuwen/core/workflow/components/base.py ComponentAbility(Enum)
+type ComponentAbility = ability.ComponentAbility
+
+// 能力成员常量别名（本体见 ability 包）
+const (
+	// ComponentAbilityInvoke 同步批处理（batch in, batch out）
+	ComponentAbilityInvoke = ability.ComponentAbilityInvoke
+	// ComponentAbilityStream 流式输出（batch in, stream out）
+	ComponentAbilityStream = ability.ComponentAbilityStream
+	// ComponentAbilityCollect 聚合输出（stream in, batch out）
+	ComponentAbilityCollect = ability.ComponentAbilityCollect
+	// ComponentAbilityTransform 流到流（stream in, stream out）
+	ComponentAbilityTransform = ability.ComponentAbilityTransform
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowComponentMetadata 组件元数据
@@ -31,64 +51,9 @@ type ComponentState struct {
 	Status any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
-// ComponentAbility 组件能力，表示组件执行支持的 I/O 模式。
-// Python: openjiuwen/core/workflow/components/base.py ComponentAbility(Enum)
-// 成员为 (name, desc) 元组：name 供事件/trace 使用，desc 为人类可读说明。
-type ComponentAbility int
-
-const (
-	// ComponentAbilityInvoke 同步批处理（batch in, batch out）
-	ComponentAbilityInvoke ComponentAbility = iota
-	// ComponentAbilityStream 流式输出（batch in, stream out）
-	ComponentAbilityStream
-	// ComponentAbilityCollect 聚合输出（stream in, batch out）
-	ComponentAbilityCollect
-	// ComponentAbilityTransform 流到流（stream in, stream out）
-	ComponentAbilityTransform
-)
-
-// Name 返回能力内部名。
-// Python: ComponentAbility.name 属性
-func (a ComponentAbility) Name() string {
-	switch a {
-	case ComponentAbilityInvoke:
-		return "invoke"
-	case ComponentAbilityStream:
-		return "stream"
-	case ComponentAbilityCollect:
-		return "collect"
-	case ComponentAbilityTransform:
-		return "transform"
-	default:
-		return ""
-	}
-}
-
-// Desc 返回能力说明。
-// Python: ComponentAbility.desc 属性
-func (a ComponentAbility) Desc() string {
-	switch a {
-	case ComponentAbilityInvoke:
-		return "batch in, batch out"
-	case ComponentAbilityStream:
-		return "batch in, stream out"
-	case ComponentAbilityCollect:
-		return "stream in, batch out"
-	case ComponentAbilityTransform:
-		return "stream in, stream out"
-	default:
-		return ""
-	}
-}
-
-// AbilityValues 返回全部能力成员（对齐 Python 迭代 ComponentAbility 枚举，供源键反解）
+// AbilityValues 返回全部能力成员（委托 ability 叶包，锚点保持）
 func AbilityValues() []ComponentAbility {
-	return []ComponentAbility{
-		ComponentAbilityInvoke,
-		ComponentAbilityStream,
-		ComponentAbilityCollect,
-		ComponentAbilityTransform,
-	}
+	return ability.AbilityValues()
 }
