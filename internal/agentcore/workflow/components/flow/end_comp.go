@@ -639,7 +639,7 @@ func (e *End) render(ctx context.Context, inputs map[string]any, timeout float64
 			return e.renderMix(ctx, timeout, sess)
 		}
 	}
-	answer, err := e.batchTemplate.Render(ctx, nil, sess)
+	answer, err := e.batchTemplate.Render(ctx, inputs, sess)
 	if err != nil {
 		return nil, err
 	}

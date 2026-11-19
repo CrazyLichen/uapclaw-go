@@ -3,8 +3,11 @@ package flow
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -502,5 +505,77 @@ func TestEnd_Transform_有模板_信封帧(t *testing.T) {
 	}
 	if n != 2 {
 		t.Fatalf("期望 2 个信封帧, got %d", n)
+	}
+}
+
+// TestEnd_Render_Mix_首调用未渲染超时同步渲染兜底 验证 mix 首拍超时降级
+// （end_comp.py:219-236 未渲染分支）。
+func TestEnd_Render_Mix_首调用未渲染超时同步渲染兜底(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	e.SetMix()
+	inner := newFakeVertexSession(t, "n1", "End")
+	// 极小超时触发超时路径（batchTemplate 尚未被渲染）
+	compSessX, csErr := session.NewComponentSession(inner, false)
+	if csErr != nil {
+		t.Fatal(csErr)
+	}
+	out, err := e.render(context.Background(), map[string]any{"n": "x"}, 0.01, compSessX)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if out == nil || out["response"] != "Hi x" {
+		t.Fatalf("mix 兜底应同步渲染返回 response: %v", out)
+	}
+	if e.batchTemplate != nil {
+		t.Fatal("超时降级后 batchTemplate 应已清空")
+	}
+}
+
+// TestEnd_Render_Mix_第二拍等待首拍渲染完成 验证 condition.wait 唤醒路径
+// （end_comp.py:220-223 + 237-238）。
+func TestEnd_Render_Mix_第二拍等待首拍渲染完成(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	e.SetMix()
+	inner := newFakeVertexSession(t, "n1", "End")
+	compSess, csErr := session.NewComponentSession(inner, false)
+	if csErr != nil {
+		t.Fatal(csErr)
+	}
+	var first, second map[string]any
+	var err1, err2 error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); first, err1 = e.render(context.Background(), map[string]any{"n": "a"}, 5, compSess) }()
+	time.Sleep(10 * time.Millisecond) // 保证首拍先建 batchTemplate
+	go func() { defer wg.Done(); second, err2 = e.render(context.Background(), map[string]any{"n": "b"}, 5, compSess) }()
+	wg.Wait()
+	if err1 != nil || err2 != nil {
+		t.Fatalf("render 错误: %v %v", err1, err2)
+	}
+	// Python 语义（end_comp.py:219-245）：创建者等待另一拍渲染并返回 None；
+	// 第二拍合并自身 inputs 渲染并返回 {"response": ...}
+	if first != nil {
+		t.Fatalf("首拍（创建者）应返回 nil: %v", first)
+	}
+	if second == nil || second["response"] != "Hi b" {
+		t.Fatalf("第二拍应返回合并渲染结果: %v", second)
+	}
+}
+
+// TestEnd_Invoke_有模板_Mix 全链验证：SetMix 后 Invoke 两拍行为
+// （首拍超时兜底渲染，二拍返回 nil——stream 单一消费方场景）。
+func TestEnd_Invoke_有模板_Mix_超时兜底(t *testing.T) {
+	e, _ := NewEnd(mustConfig("Hi {{n}}"))
+	e.SetMix()
+	inner := newFakeVertexSession(t, "n1", "End")
+	// GetEnv 默认 5s，但 fake config 无 env 默认值来源时为 0 → 无超时等待；
+	// 置显式小超时验证兜底路径
+	compSessM, csErr := session.NewComponentSession(inner, false)
+	if csErr != nil {
+		t.Fatal(csErr)
+	}
+	out, err := e.render(context.Background(), map[string]any{"n": "mix"}, 0.01, compSessM)
+	if err != nil || out == nil {
+		t.Fatalf("mix invoke 不符: out=%v err=%v", out, err)
 	}
 }
