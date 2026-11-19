@@ -5,6 +5,7 @@ package message_handler
 // resolveExternal 在 dispatch.go prepareAgentDispatchMessage 与 outbound.go 出站点共同使用。
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -146,7 +147,7 @@ func (mh *MessageHandler) resolveAcpExternalSessionID(sessionID string, metadata
 	}
 	original := ""
 	if metadata != nil {
-		original = strings.TrimSpace(strVal(metadata[acpOriginalSessionIDKey]))
+		original = strings.TrimSpace(config.String(metadata[acpOriginalSessionIDKey]))
 	}
 	if original != "" {
 		return original

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -623,7 +624,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		return false
 	}
 	reqID := acp.NormalizeJSONRPCID(data["id"])
-	method := strings.TrimSpace(strVal(data["method"]))
+	method := strings.TrimSpace(config.String(data["method"]))
 	if reqID == "" || method == "" {
 		s.sendInlineError(ws, reqID, "invalid request")
 		return false

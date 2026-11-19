@@ -1,7 +1,6 @@
 package a2a
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -66,7 +65,7 @@ func MessageToText(msg *schema.Message) string {
 		return agentRequestFailedText
 	}
 	if content, ok := payload["content"]; ok {
-		return config.String(content)
+		return strVal(content)
 	}
 	if len(payload) > 0 {
 		// 偏差 D5：Python str(dict) 为单引号 repr，Go 用 JSON（确定性、可读）
@@ -126,7 +125,7 @@ func MapA2APartsToParams(m *sdka2a.Message) (string, []map[string]any) {
 			entry["uri"] = url
 		}
 		if data != nil {
-			entry["data"] = config.String(data)
+			entry["data"] = strVal(data)
 			entry["encoding"] = "base64"
 		}
 		if len(raw) > 0 {
@@ -173,7 +172,7 @@ func MessageToA2AParts(msg *schema.Message, fallbackToText bool) []*sdka2a.Part 
 	case nil, map[string]any, []any:
 		// 缺失 / 结构化内容不转文本（对齐 Python 跳过 dict/list）
 	default:
-		parts = append(parts, sdka2a.NewTextPart(config.String(content)))
+		parts = append(parts, sdka2a.NewTextPart(strVal(content)))
 	}
 
 	if result, ok := payload["result"].(string); ok {
@@ -185,7 +184,7 @@ func MessageToA2AParts(msg *schema.Message, fallbackToText bool) []*sdka2a.Part 
 	// 流式模式暴露工具进度
 	if msg.EventType == schema.EventTypeChatToolCall {
 		if toolCall, ok := payload["tool_call"].(map[string]any); ok && toolCall != nil {
-			name := strings.TrimSpace(config.String(toolCall["name"]))
+			name := strings.TrimSpace(strVal(toolCall["name"]))
 			if name == "" {
 				name = "tool"
 			}
@@ -193,7 +192,7 @@ func MessageToA2AParts(msg *schema.Message, fallbackToText bool) []*sdka2a.Part 
 		}
 	}
 	if msg.EventType == schema.EventTypeChatToolResult {
-		toolName := strings.TrimSpace(config.String(payload["tool_name"]))
+		toolName := strings.TrimSpace(strVal(payload["tool_name"]))
 		if toolResult, ok := payload["result"].(string); ok && strings.TrimSpace(toolResult) != "" {
 			label := "[tool_result] "
 			if toolName != "" {
@@ -241,7 +240,7 @@ func strVal(v any) string {
 // firstNonEmptyStr 返回第一个非空字符串化值。
 func firstNonEmptyStr(vals ...any) string {
 	for _, v := range vals {
-		if s := config.String(v); s != "" {
+		if s := strVal(v); s != "" {
 			return s
 		}
 	}
@@ -286,8 +285,8 @@ func filesToParts(raw any) []*sdka2a.Part {
 		}
 		mediaType := strings.TrimSpace(firstNonEmptyStr(fi["media_type"], fi["type"]))
 		url := strings.TrimSpace(firstNonEmptyStr(fi["url"], fi["uri"]))
-		data := strings.TrimSpace(config.String(fi["data"]))
-		rawText := strings.TrimSpace(config.String(fi["raw"]))
+		data := strings.TrimSpace(strVal(fi["data"]))
+		rawText := strings.TrimSpace(strVal(fi["raw"]))
 
 		if url != "" {
 			parts = append(parts, &sdka2a.Part{Content: sdka2a.URL(url), Filename: name, MediaType: mediaType})
