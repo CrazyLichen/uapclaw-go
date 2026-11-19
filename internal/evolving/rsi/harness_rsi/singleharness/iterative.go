@@ -3499,7 +3499,6 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) run(
 	if err != nil {
 		return IterativeSingleHarnessResult{}, err
 	}
-	datasetDir := dataset.DatasetDir
 	fingerprint, err := requestFingerprint(
 		request, sourceRefs,
 		o.config.MemberOptimizer.SiblingCandidateCount,
@@ -3692,12 +3691,9 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) run(
 			}
 		}
 		var plannedBatches [][]map[string]any
-		// Python: callable(getattr(type(self.data_loader), "load_files", None))
-		if request.datasetFilesUsable() {
-			plannedBatches, err = o.dataLoader.LoadFiles(request.DatasetFiles, epoch)
-		} else {
-			plannedBatches, err = o.dataLoader.Load(datasetDir, epoch)
-		}
+		// Python: callable(getattr(type(self.data_loader), "load_files", None)) 恒真，
+		// 恒走 load_files（空清单由 LoadFiles 报错，与 Python 一致）
+		plannedBatches, err = o.dataLoader.LoadFiles(request.DatasetFiles, epoch)
 		if err != nil {
 			return IterativeSingleHarnessResult{}, err
 		}
@@ -3712,7 +3708,8 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) run(
 		}
 		for batchIndex, plannedBatch := range batches {
 			if err := o.runBatch(ctx, batchRunParams{
-				epoch: epoch, batchIndex: batchIndex + 1, plannedBatch: plannedBatch,
+				epoch: epoch, resume: request.Resume,
+				batchIndex: batchIndex + 1, plannedBatch: plannedBatch,
 				state: state, statePath: statePath, outputDir: outputDir, dataset: dataset,
 				allCases: allCases, allCaseIDs: allCaseIDs, onEvent: onEvent,
 				totalIterations: totalIterations,
@@ -3751,12 +3748,6 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) run(
 		return IterativeSingleHarnessResult{}, err
 	}
 	return resultFromState(state, statePath, reportPath), nil
-}
-
-// datasetFilesUsable 等价 Python `callable(getattr(type(loader),"load_files",None))`——
-// Go 的 DataLoader 恒有 LoadFiles，因此以"数据集文件清单非空"为切换条件。
-func (r *IterativeSingleHarnessRequest) datasetFilesUsable() bool {
-	return len(r.DatasetFiles) > 0
 }
 
 // bindUsage 绑定模型用量观察者（Python: await bind_model_usage(state, output_dir)）。
@@ -3830,6 +3821,7 @@ type batchRefs struct {
 // batchRunParams 单批次运行参数。
 type batchRunParams struct {
 	epoch           int
+	resume          bool
 	batchIndex      int
 	plannedBatch    []map[string]any
 	state           map[string]any
@@ -3857,7 +3849,8 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) runBatch(
 	}
 	batchKey := fmt.Sprintf("epoch_%03d:batch_%03d", epoch, batchIndex)
 	completedBatch := mappingOrNil(mappingOrNil(state["completed_batches"])[batchKey])
-	if requestResume := toString(state["status"]) != ""; requestResume && len(completedBatch) > 0 {
+	// Python: if request.resume and isinstance(completed, dict)
+	if params.resume && len(completedBatch) > 0 {
 		// Python: if request.resume and isinstance(completed, dict)——run 入口已限定 resume，
 		// 此处以 completed_batches 已有记录为续跑信号
 		currentRefs = toString(completedBatch["after_harness_refs_path"])

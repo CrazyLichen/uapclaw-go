@@ -196,11 +196,8 @@ func runContinuousLoop(
 			return IterativeSingleHarnessResult{}, err
 		}
 		var planned [][]map[string]any
-		if request.datasetFilesUsable() {
-			planned, err = owner.dataLoader.LoadFiles(request.DatasetFiles, epoch)
-		} else {
-			planned, err = owner.dataLoader.Load(dataset.DatasetDir, epoch)
-		}
+		// Python 恒走 load_files（空清单由 LoadFiles 报错，与 Python 一致）
+		planned, err = owner.dataLoader.LoadFiles(request.DatasetFiles, epoch)
 		if err != nil {
 			return IterativeSingleHarnessResult{}, err
 		}
