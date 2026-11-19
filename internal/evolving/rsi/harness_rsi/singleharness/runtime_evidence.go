@@ -3,9 +3,9 @@ package singleharness
 
 import (
 	"encoding/json"
-	"strconv"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )

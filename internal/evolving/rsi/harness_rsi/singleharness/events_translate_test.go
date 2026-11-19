@@ -108,10 +108,10 @@ func TestRootNodeEvent(t *testing.T) {
 // TestEpochNodeEvent epoch 节点事件各分支。
 func TestEpochNodeEvent(t *testing.T) {
 	state := map[string]any{
-		"source_harness_refs_path":  "refs.yaml",
-		"epoch_checkpoints":         []any{},
-		"candidate_gates":           []any{},
-		"completed_batches":         map[string]any{},
+		"source_harness_refs_path": "refs.yaml",
+		"epoch_checkpoints":        []any{},
+		"candidate_gates":          []any{},
+		"completed_batches":        map[string]any{},
 	}
 	checkpoint := map[string]any{
 		"epoch":                      1,
@@ -212,11 +212,11 @@ func TestEpochParentID(t *testing.T) {
 // TestActiveEpochNodeEvent 活跃 epoch 快照。
 func TestActiveEpochNodeEvent(t *testing.T) {
 	state := map[string]any{
-		"source_harness_refs_path": "origin",
-		"epoch_checkpoints":        []any{},
-		"candidate_gates":          []any{},
-		"completed_batches":        map[string]any{},
-		"active_epoch":             5,
+		"source_harness_refs_path":              "origin",
+		"epoch_checkpoints":                     []any{},
+		"candidate_gates":                       []any{},
+		"completed_batches":                     map[string]any{},
+		"active_epoch":                          5,
 		"active_epoch_before_harness_refs_path": "origin",
 	}
 	event := ActiveEpochNodeEvent(state)
@@ -299,12 +299,12 @@ func TestNodeEventAndParentID(t *testing.T) {
 // TestPublicText 控制面词汇脱敏。
 func TestPublicText(t *testing.T) {
 	cases := map[string]string{
-		"gate_review_passed":        "reviews review passed",
-		"epoch_checkpoint_done":     "cycles reviews done",
-		"batch_attempt_failed":      "batch proposals failed",
-		"all_attempts_exhausted":    "all proposals exhausted",
-		"plain_text":                "plain text",
-		"The GATES were checked":    "The reviews were checked",
+		"gate_review_passed":     "reviews review passed",
+		"epoch_checkpoint_done":  "cycles reviews done",
+		"batch_attempt_failed":   "batch proposals failed",
+		"all_attempts_exhausted": "all proposals exhausted",
+		"plain_text":             "plain text",
+		"The GATES were checked": "The reviews were checked",
 	}
 	for input, want := range cases {
 		if got := publicText(input); got != want {

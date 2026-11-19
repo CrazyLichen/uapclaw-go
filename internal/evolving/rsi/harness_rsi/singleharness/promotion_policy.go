@@ -292,17 +292,17 @@ func FullEvaluationDecision(scores, baseline map[string]float64, targets map[str
 		deltas[caseID] = scores[caseID] - baseline[caseID]
 	}
 	return map[string]any{
-		"accepted":                       len(failedTargets) == 0 && len(regressedOthers) == 0 && averageImproved,
-		"reason":                         reason,
-		"score":                          score,
-		"baseline_score":                 baselineMean,
-		"full_score_delta":               score - baselineMean,
-		"target_cases_improved":          len(failedTargets) == 0,
-		"non_target_cases_retained":      len(regressedOthers) == 0,
-		"full_average_improved":          averageImproved,
-		"failed_target_case_ids":         failedTargets,
-		"regressed_non_target_case_ids":  regressedOthers,
-		"case_score_deltas":              deltas,
+		"accepted":                      len(failedTargets) == 0 && len(regressedOthers) == 0 && averageImproved,
+		"reason":                        reason,
+		"score":                         score,
+		"baseline_score":                baselineMean,
+		"full_score_delta":              score - baselineMean,
+		"target_cases_improved":         len(failedTargets) == 0,
+		"non_target_cases_retained":     len(regressedOthers) == 0,
+		"full_average_improved":         averageImproved,
+		"failed_target_case_ids":        failedTargets,
+		"regressed_non_target_case_ids": regressedOthers,
+		"case_score_deltas":             deltas,
 	}, nil
 }
 

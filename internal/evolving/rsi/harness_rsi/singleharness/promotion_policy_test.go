@@ -207,9 +207,9 @@ func TestFullEvaluationDecision(t *testing.T) {
 	targets := map[string]bool{"a": true}
 	scores := map[string]float64{"a": 0.9, "b": 0.55}
 	proof := map[string]any{
-		"identity":              "run-1",
-		"qualified":             true,
-		"target_case_ids":       []any{"a"},
+		"identity":               "run-1",
+		"qualified":              true,
+		"target_case_ids":        []any{"a"},
 		"baseline_scores_digest": Digest(baseline),
 	}
 	decision, err := FullEvaluationDecision(scores, baseline, targets, 0.1, proof, "run-1")

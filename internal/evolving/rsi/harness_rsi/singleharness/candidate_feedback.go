@@ -1035,7 +1035,9 @@ func searchMetrics(candidates []map[string]any, topM int, unavailableReason stri
 		}
 	}
 
-	gainOf := func(item map[string]any) float64 { return *optionalNumber(item["outcome"].(map[string]any)["target_gain"]) }
+	gainOf := func(item map[string]any) float64 {
+		return *optionalNumber(item["outcome"].(map[string]any)["target_gain"])
+	}
 	rankOf := func(item map[string]any) float64 {
 		rank := proposalRankValue(item)["predicted_rank"]
 		switch v := rank.(type) {
