@@ -108,8 +108,8 @@ type ExpandedMessage struct {
 	// ShownTaskID / ShownRevision 文档展示了该任务的 content 时的 (task_id,
 	// revision)（F_129）：投递位据此把它记为 assignee 已见。HasShownRevision
 	// 区分「展示了 revision 0」与「未展示」。
-	ShownTaskID    string
-	ShownRevision  int64
+	ShownTaskID      string
+	ShownRevision    int64
 	HasShownRevision bool
 }
 
