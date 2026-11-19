@@ -10,12 +10,12 @@ import (
 	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 )
 
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator

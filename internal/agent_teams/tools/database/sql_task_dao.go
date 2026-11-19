@@ -187,9 +187,10 @@ func (d *SQLTaskDao) AppendChangeNote(ctx context.Context, taskID string, revisi
 	return ok, err
 }
 
-// ClaimTask 认领任务：设置 assignee + pending→claimed FSM 校验。
-// Python: claim_task(task_id, member_name) → bool
-func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bool, error) {
+// ClaimTask 认领任务：设置 assignee + FSM 校验到 toStatus。
+// Python: claim_task(task_id, member_name, to_status=IN_PROGRESS/PLANNING) → bool
+// —— autonomous 自认领与 scheduled start 走 IN_PROGRESS，计划闸预留走 PLANNING。
+func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee, toStatus string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -204,15 +205,15 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 			return nil
 		}
-		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusClaimed).Msg("Invalid task status transition")
+		if !fsm.IsValidTaskTransition(task.Status, toStatus) {
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", toStatus).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: toStatus, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("Task claimed")
+		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Str("to_status", toStatus).Msg("Task claimed")
 		return nil
 	})
 	return ok, err
@@ -229,9 +230,10 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 		if result.Error != nil {
 			return nil
 		}
-		// Python: if task.status != claimed → error
-		if task.Status != fsm.TaskStatusClaimed {
-			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Can only reset claimed tasks")
+		// Python: reset 的合法来源是活跃态（IN_PROGRESS/PLANNING/IN_REVIEW，
+		// condition-named 状态机后转换表各自有 → PENDING）
+		if task.Status != fsm.TaskStatusInProgress && task.Status != fsm.TaskStatusPlanning && task.Status != fsm.TaskStatusInReview {
+			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Can only reset active tasks")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
@@ -248,8 +250,8 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 	return ok, err
 }
 
-// ApprovePlanTask 计划审批：claimed→plan_approved FSM 校验。
-// Python: approve_plan_task(task_id) → Optional[TeamTaskBase]
+// ApprovePlanTask 计划审批：PLANNING→IN_PROGRESS FSM 校验。
+// Python: approve_plan_task(task_id)：leader 审批放行
 func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -259,13 +261,13 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 		if result.Error != nil {
 			return nil
 		}
-		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPlanApproved) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPlanApproved).Msg("Invalid task status transition")
+		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusInProgress) {
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusInProgress).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusPlanApproved, UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusInProgress, UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Msg("Task plan approved")
 		return nil
@@ -324,8 +326,8 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 		if result.Error != nil {
 			return nil
 		}
-		// Python: if task.status in (claimed, plan_approved) → error
-		if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
+		// Python: 仅 IN_REVIEW 冻结（PLANNING/IN_PROGRESS 可编辑，F_129）
+		if task.Status == fsm.TaskStatusInReview {
 			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Cannot edit task in current status")
 			return nil
 		}
@@ -458,6 +460,162 @@ func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, t
 		logger.Error(logComponent).Str("task_id", task.TaskID).Str("reason", result.Reason).Msg("Failed to create task with dependencies")
 	}
 	return result
+}
+
+// GetDependentTaskIDs 返回依赖 dependsOnTaskID 的全部下游任务 id（去重）。
+// 下游任务 id 就是依赖边的 task_id 列，一条 SELECT task_id 即可回答。
+// Python: get_dependent_task_ids（task_dao.py L1630-1642）
+func (d *SQLTaskDao) GetDependentTaskIDs(ctx context.Context, dependsOnTaskID string) ([]string, error) {
+	table := d.depTableName(ctx)
+	var ids []string
+	err := d.db.WithContext(ctx).Table(table).
+		Where("depends_on_task_id = ?", dependsOnTaskID).
+		Distinct().Pluck("task_id", &ids).Error
+	return ids, err
+}
+
+// GetTasksByIDs 一条 IN 查询取多行（顺序未定义；缺失 id 跳过）。
+// Python: get_tasks_by_ids（task_dao.py L675-683）
+func (d *SQLTaskDao) GetTasksByIDs(ctx context.Context, taskIDs []string) ([]*TeamTaskBase, error) {
+	if len(taskIDs) == 0 {
+		return []*TeamTaskBase{}, nil
+	}
+	table := d.taskTableName(ctx)
+	var rows []*TeamTaskBase
+	err := d.db.WithContext(ctx).Table(table).Where("task_id IN ?", taskIDs).Find(&rows).Error
+	return rows, err
+}
+
+// GetRevisionSnapshot 取 (task_id, revision) 时刻的正文快照（F_129/D9）。
+// ⚠️ 已知偏差：Go 无 session_file_store 溢出机制，恒返回 (nil, nil)——
+// diff section 按契约优雅降级为空；回收条件 = Go 落任务正文溢出存储。
+// Python: get_revision_snapshot（task_dao.py L1473-1494）
+func (d *SQLTaskDao) GetRevisionSnapshot(_ context.Context, _, _ string, _ int64) (*string, error) {
+	return nil, nil
+}
+
+// GetSubtasks 取直接子任务行（F_129），正文不读（简报只渲染
+// id/title/assignee/status/revision；content 可能是溢出占位符）。
+// Python: get_subtasks（task_dao.py L781-794）
+func (d *SQLTaskDao) GetSubtasks(ctx context.Context, teamName, parentTaskID string) ([]*TeamTaskBase, error) {
+	table := d.taskTableName(ctx)
+	var rows []*TeamTaskBase
+	err := d.db.WithContext(ctx).Table(table).
+		Where("team_name = ? AND parent_task_id = ?", teamName, parentTaskID).
+		Find(&rows).Error
+	return rows, err
+}
+
+// GetOtherActiveTaskID 成员持有的另一条活跃任务 id，LIMIT 1 存在式探测。
+// 「活跃」覆盖三个非终态持有条件——PLANNING（计划闸）、IN_PROGRESS（执行）、
+// IN_REVIEW（验收闸，作者仍在岗）。
+// Python: get_other_active_task_id（task_dao.py L822-852）
+func (d *SQLTaskDao) GetOtherActiveTaskID(ctx context.Context, teamName, memberName, excludeTaskID string) (*string, error) {
+	table := d.taskTableName(ctx)
+	var id string
+	err := d.db.WithContext(ctx).Table(table).
+		Where(
+			"team_name = ? AND assignee = ? AND task_id <> ? AND status IN (?, ?, ?)",
+			teamName, memberName, excludeTaskID,
+			fsm.TaskStatusPlanning, fsm.TaskStatusInProgress, fsm.TaskStatusInReview,
+		).
+		Limit(1).Pluck("task_id", &id).Error
+	if err != nil {
+		return nil, err
+	}
+	if id == "" {
+		return nil, nil
+	}
+	return &id, nil
+}
+
+// StartTaskCAS 原子地把已归属 PENDING 任务推进到 toStatus（调度器侧 CAS）。
+// 谓词 WHERE assignee=member AND status=pending 使 PENDING 成为唯一合法前驱，
+// 且要求任务已归属 member_name——调度器代表记录的 owner 启动任务，不（重）指派。
+// resume_pending 由本次 start 消费（F_128）。
+// Python: start_task（task_dao.py L855-905）
+func (d *SQLTaskDao) StartTaskCAS(ctx context.Context, taskID, memberName, toStatus string) (bool, error) {
+	table := d.taskTableName(ctx)
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND assignee = ? AND status = ?", taskID, memberName, fsm.TaskStatusPending).
+		Updates(map[string]any{"status": toStatus, "resume_pending": false, "updated_at": GetCurrentTime()})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	started := result.RowsAffected == 1
+	if started {
+		logger.Info(logComponent).Str("task_id", taskID).Str("member", memberName).Msg("Task started by member")
+	} else {
+		logger.Debug(logComponent).Str("task_id", taskID).Str("member", memberName).
+			Int64("rowcount", result.RowsAffected).
+			Msg("CAS start did not apply: missing / not pending / not owned by this member")
+	}
+	return started, nil
+}
+
+// ObserveRevision 记录 assignee 被展示了 revision（F_129）。
+// 谓词 assignee=member AND observed_revision<revision 使记录单调且 owner 绑定。
+// Python: observe_revision（task_dao.py L1493-1511）
+func (d *SQLTaskDao) ObserveRevision(ctx context.Context, taskID, memberName string, revision int64) (bool, error) {
+	table := d.taskTableName(ctx)
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND assignee = ? AND observed_revision < ?", taskID, memberName, revision).
+		Update("observed_revision", revision)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+// GetUnseenRevisions 全队级「已指派、未终态、assignee 未见过当前 revision」窄投影。
+// Python: get_unseen_revisions（task_dao.py L723-752）
+func (d *SQLTaskDao) GetUnseenRevisions(ctx context.Context, teamName string) ([]UnseenRevisionRow, error) {
+	table := d.taskTableName(ctx)
+	var rows []struct {
+		TaskID        string
+		Status        string
+		Assignee      *string
+		ResumePending bool
+		Revision      int64
+	}
+	err := d.db.WithContext(ctx).Table(table).
+		Select("task_id, status, assignee, resume_pending, revision").
+		Where(
+			"team_name = ? AND assignee IS NOT NULL AND status NOT IN (?, ?) AND revision > observed_revision",
+			teamName, fsm.TaskStatusCompleted, fsm.TaskStatusCancelled,
+		).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UnseenRevisionRow, 0, len(rows))
+	for _, row := range rows {
+		assignee := ""
+		if row.Assignee != nil {
+			assignee = *row.Assignee
+		}
+		out = append(out, UnseenRevisionRow{
+			TaskID: row.TaskID, Status: row.Status, Assignee: assignee,
+			ResumePending: row.ResumePending, Revision: row.Revision,
+		})
+	}
+	return out, nil
+}
+
+// CountTasksTerminality 一条聚合查询返回 (total, non_terminal)。
+// Python: count_tasks_terminality（B_09）
+func (d *SQLTaskDao) CountTasksTerminality(ctx context.Context, teamName string) (int64, int64, error) {
+	table := d.taskTableName(ctx)
+	var total, nonTerminal int64
+	if err := d.db.WithContext(ctx).Table(table).Where("team_name = ?", teamName).Count(&total).Error; err != nil {
+		return 0, 0, err
+	}
+	if err := d.db.WithContext(ctx).Table(table).
+		Where("team_name = ? AND status NOT IN (?, ?)", teamName, fsm.TaskStatusCompleted, fsm.TaskStatusCancelled).
+		Count(&nonTerminal).Error; err != nil {
+		return 0, 0, err
+	}
+	return total, nonTerminal, nil
 }
 
 // GetTaskDependencies 查询任务依赖。
@@ -865,10 +1023,11 @@ func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []Edge
 		taskMap[tasks[i].TaskID] = &tasks[i]
 	}
 
-	// Python: TASK_DEPENDENCY_REJECT_STATUSES
+	// Python: TASK_DEPENDENCY_REJECT_STATUSES（graph.py L21-29：终态 + 三活跃态）
 	rejectStatuses := map[string]bool{
 		fsm.TaskStatusCompleted: true, fsm.TaskStatusCancelled: true,
-		fsm.TaskStatusClaimed: true, fsm.TaskStatusPlanApproved: true,
+		fsm.TaskStatusPlanning: true, fsm.TaskStatusInProgress: true,
+		fsm.TaskStatusInReview: true,
 	}
 	for _, e := range addEdges {
 		if _, ok := taskMap[e.TaskID]; !ok {

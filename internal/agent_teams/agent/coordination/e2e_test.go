@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
@@ -260,7 +261,13 @@ func TestEndToEnd_共享节流映射(t *testing.T) {
 
 	// 在 Member handler 中写入值，StaleTask handler 应能读到
 	memberThrottle := k.Dispatcher().Member.StaleClaimThrottle()
-	staleThrottle := k.Dispatcher().StaleTask.StaleClaimThrottle()
+	// F_62: StaleTask 可能是 scheduled 变体（CallbacksProvider 窄面）；
+	// 共享节流语义仅 autonomous 基类成立。
+	staleBase, okStale := k.Dispatcher().StaleTask.(*handlers.StaleTaskHandler)
+	if !okStale {
+		t.Skip("scheduled 变体不共享 Member 节流映射")
+	}
+	staleThrottle := staleBase.StaleClaimThrottle()
 
 	memberThrottle["task-1"] = 100.0
 	if val, ok := staleThrottle["task-1"]; !ok || val != 100.0 {

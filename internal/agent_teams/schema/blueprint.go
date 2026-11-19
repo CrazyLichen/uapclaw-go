@@ -144,6 +144,16 @@ type TeamAgentSpec struct {
 	//
 	// Python: enable_task_verification (blueprint.py L364)
 	EnableTaskVerification bool `json:"enable_task_verification,omitempty"`
+	// DefaultMaxReviewRounds 任务未显式给 max_review_rounds 时的默认评审轮数上限，
+	// 超限后 scheduler 升级给 leader 裁决（F_62）。必须 >= 1。
+	//
+	// Python: default_max_review_rounds (blueprint.py L422，默认 3)
+	DefaultMaxReviewRounds int `json:"default_max_review_rounds,omitempty"`
+	// ReviewStallTimeout 评审轮停滞判定窗口（秒）：一轮内没有任何 reviewer
+	// 投票超过该时长即升级给 leader（F_62）。必须 > 0。
+	//
+	// Python: review_stall_timeout (blueprint.py L430，默认 2400)
+	ReviewStallTimeout int `json:"review_stall_timeout,omitempty"`
 	// BootstrapMode 谁物化团队行，以及 leader 如何收到它的政策（F_122）
 	//
 	// "leader"（默认）：leader 调 build_team 工具，该工具创建团队并在结果里
@@ -284,13 +294,15 @@ func NewTeamAgentSpecFromDict(specDict map[string]any) *TeamAgentSpec {
 // NewTeamAgentSpec 创建默认 TeamAgentSpec。
 func NewTeamAgentSpec() TeamAgentSpec {
 	return TeamAgentSpec{
-		Agents:            make(map[string]DeepAgentSpec),
-		TeamName:          "agent_team",
-		Lifecycle:         TeamLifecycleTemporary,
-		TeammateMode:      MemberModeBuildMode,
-		SpawnMode:         "process",
-		Leader:            NewLeaderSpec(),
-		ModelPoolStrategy: "round_robin",
+		Agents:                 make(map[string]DeepAgentSpec),
+		TeamName:               "agent_team",
+		Lifecycle:              TeamLifecycleTemporary,
+		TeammateMode:           MemberModeBuildMode,
+		SpawnMode:              "process",
+		Leader:                 NewLeaderSpec(),
+		ModelPoolStrategy:      "round_robin",
+		DefaultMaxReviewRounds: 3,    // Python: default_max_review_rounds (blueprint.py L422)
+		ReviewStallTimeout:     2400, // Python: review_stall_timeout (blueprint.py L430)
 	}
 }
 
@@ -308,6 +320,21 @@ func (s *TeamAgentSpec) Validate() error {
 	}
 	if err := s.validateBootstrapMode(); err != nil {
 		return err
+	}
+	// 评审轮参数：0 视为未设置，按 pydantic 默认值补齐（Python 字段默认
+	// 3 / 2400，构造即有值；Go 字面量构造可能跳过 NewTeamAgentSpec）。
+	// Python: TeamAgentSpec.build() L753-760 校验 >= 1 / > 0
+	if s.DefaultMaxReviewRounds == 0 {
+		s.DefaultMaxReviewRounds = 3
+	}
+	if s.ReviewStallTimeout == 0 {
+		s.ReviewStallTimeout = 2400
+	}
+	if s.DefaultMaxReviewRounds < 1 {
+		return fmt.Errorf("default_max_review_rounds must be >= 1, got %d", s.DefaultMaxReviewRounds)
+	}
+	if s.ReviewStallTimeout <= 0 {
+		return fmt.Errorf("review_stall_timeout must be > 0 seconds, got %d", s.ReviewStallTimeout)
 	}
 	// external_cli_agents 嵌套模型校验（pydantic 构造期逐条跑子模型
 	// model_validator 的 Go 等价面）

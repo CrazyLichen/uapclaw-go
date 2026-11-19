@@ -1047,7 +1047,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 		return atschema.NewMemberOpResultSuccess()
 	}
 	// 步骤 3: 重置该成员的 CLAIMED 任务（通过 taskManager.Reset，对齐 Python）
-	tasks, _ := tb.taskManager.GetTasksByAssignee(ctx, memberName, string(atschema.TaskStatusClaimed))
+	tasks, _ := tb.taskManager.GetTasksByAssignee(ctx, memberName, string(atschema.TaskStatusInProgress))
 	// Python: reset_count 统计 + 汇总日志
 	resetCount := 0
 	for _, t := range tasks {

@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
 	"github.com/stretchr/testify/assert"
@@ -618,10 +619,9 @@ func TestApprovePlan(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
-	// 创建任务
+	// 创建任务（不预 Claim：condition-named 状态机下审批只从 PLANNING 出发，
+	// PENDING 由 submit_plan 预留进计划闸——对齐 Python submit_plan L60-66）
 	task, _ := tb.taskManager.Add(ctx, "Plan Task", "desc")
-	// Claim 任务
-	_, _ = tb.taskManager.Claim(ctx, task.TaskID)
 	// 设置成员为 PLAN_MODE
 	memDB := tb.DB().(*database.InMemoryTeamDatabase)
 	memDB.SetMemberMode("leader", tb.TeamName(), "plan_mode")
@@ -1488,7 +1488,7 @@ func TestStartup_taskScoped有开放任务时启动(t *testing.T) {
 	assignee := "scoped"
 	task, addErr := tb.taskManager.Add(ctx, "任务", "内容")
 	require.NoError(t, addErr)
-	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee)
+	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee, fsm.TaskStatusInProgress)
 	require.NoError(t, claimErr)
 	require.True(t, ok)
 

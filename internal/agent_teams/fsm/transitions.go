@@ -14,7 +14,12 @@ const (
 	MemberStatusRestarting        = "restarting"
 	MemberStatusShutdownRequested = "shutdown_requested"
 	MemberStatusShutdown          = "shut_down"
-	MemberStatusError             = "error"
+	// MemberStatusDormant 退役后的休眠态（options.lifetime=="dormant" 的 retire
+	// 目标，F_118）：runtime 已拆除，会话保留；显式单收件人唤醒走
+	// DORMANT→RESTARTING→READY。deliverable——发给它的直发消息仍会投递。
+	// Python: MemberStatus.DORMANT（schema/status.py L55）
+	MemberStatusDormant = "dormant"
+	MemberStatusError   = "error"
 )
 
 // ExecutionStatus 常量 — 对齐 Python: ExecutionStatus
@@ -31,14 +36,19 @@ const (
 	ExecutionStatusTimedOut        = "timed_out"
 )
 
-// TaskStatus 常量 — 对齐 Python: TaskStatus
+// TaskStatus 常量 — 对齐 Python: TaskStatus (schema/status.py L304-341)
+// condition-named 状态机：状态名描述"任务处于什么条件"，迁移（claim/start/
+// submit/approve/verify）不是状态。两个可选闸门 PLANNING（执行前，plan 闸）
+// 与 IN_REVIEW（执行后，verify 闸）结构对称，各有返工自环。
+// IN_PROGRESS 统一了旧模型的 CLAIMED / STARTED / PLAN_APPROVED 执行节点。
 const (
-	TaskStatusPending      = "pending"
-	TaskStatusClaimed      = "claimed"
-	TaskStatusPlanApproved = "plan_approved"
-	TaskStatusCompleted    = "completed"
-	TaskStatusCancelled    = "cancelled"
-	TaskStatusBlocked      = "blocked"
+	TaskStatusPending    = "pending"
+	TaskStatusBlocked    = "blocked"
+	TaskStatusPlanning   = "planning"
+	TaskStatusInProgress = "in_progress"
+	TaskStatusInReview   = "in_review"
+	TaskStatusCompleted  = "completed"
+	TaskStatusCancelled  = "cancelled"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -72,10 +82,15 @@ var MemberTransitions = map[string][]string{
 		MemberStatusReady, MemberStatusStopped, MemberStatusError, MemberStatusShutdown,
 	},
 	MemberStatusShutdownRequested: {
-		MemberStatusShutdown, MemberStatusError,
+		MemberStatusShutdown, MemberStatusDormant, MemberStatusError,
 	},
 	MemberStatusShutdown: {
 		MemberStatusRestarting,
+	},
+	// Python: status.py L153-157 —— DORMANT→RESTARTING 是显式单收件人唤醒；
+	// DORMANT→SHUTDOWN 是 leader shutdown_member：无 runtime，直接 settle。
+	MemberStatusDormant: {
+		MemberStatusRestarting, MemberStatusShutdown,
 	},
 	MemberStatusError: {
 		MemberStatusRestarting, MemberStatusReady, MemberStatusStopped,
@@ -84,12 +99,28 @@ var MemberTransitions = map[string][]string{
 }
 
 // MemberSettledStatuses 成员可以处于空闲时的状态集合（团队完成检查使用）。
-// Python: MEMBER_SETTLED_STATUSES
+// Python: MEMBER_SETTLED_STATUSES（status.py L172-180）
 var MemberSettledStatuses = map[string]bool{
 	MemberStatusReady:    true,
 	MemberStatusPaused:   true,
 	MemberStatusStopped:  true,
 	MemberStatusShutdown: true,
+	MemberStatusDormant:  true,
+}
+
+// MemberQuiescentStatuses 成员「未在动」状态集合（团队 idle 边判定使用）。
+// 补集 STARTING/BUSY/RESTARTING/SHUTDOWN_REQUESTED 是活跃集——各自都意味着
+// 工作正在运行或即将运行。DORMANT 成员必须保持 deliverable：唤醒它的直发
+// 消息仍会投递，故算静止。
+// Python: MEMBER_QUIESCENT_STATUSES（schema/status.py L202-213）
+var MemberQuiescentStatuses = map[string]bool{
+	MemberStatusUnstarted: true,
+	MemberStatusReady:     true,
+	MemberStatusPaused:    true,
+	MemberStatusStopped:   true,
+	MemberStatusShutdown:  true,
+	MemberStatusDormant:   true,
+	MemberStatusError:     true,
 }
 
 // ExecutionTransitions ExecutionStatus 状态转换表。
@@ -119,14 +150,57 @@ var ExecutionTransitions = map[string][]string{
 }
 
 // TaskTransitions TaskStatus 状态转换表。
-// Python: TASK_TRANSITIONS
+// Python: TASK_TRANSITIONS (schema/status.py L345-365)
+// 覆盖双调度模式与两个可选闸门的单一超集；任务走哪条路径由执行动作决定
+// （claim/start → IN_PROGRESS，submit_plan → PLANNING，
+// member_complete → IN_REVIEW/COMPLETED），不按 dispatch mode 分支。
 var TaskTransitions = map[string][]string{
-	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
-	TaskStatusPlanApproved: {TaskStatusCompleted, TaskStatusPending, TaskStatusCancelled},
-	TaskStatusBlocked:      {TaskStatusPending, TaskStatusCancelled},
-	TaskStatusCompleted:    {},
-	TaskStatusCancelled:    {},
+	TaskStatusPending: {
+		TaskStatusPlanning,   // plan_mode: 预留进入计划
+		TaskStatusInProgress, // claim（autonomous）/ start（scheduled）
+		TaskStatusBlocked,
+		TaskStatusCancelled,
+	},
+	TaskStatusBlocked: {
+		TaskStatusPending,
+		TaskStatusCancelled,
+	},
+	TaskStatusPlanning: {
+		TaskStatusPlanning,   // submit / reject 返工自环
+		TaskStatusInProgress, // approve_plan
+		TaskStatusPending,    // reset
+		TaskStatusBlocked,
+		TaskStatusCancelled,
+	},
+	TaskStatusInProgress: {
+		TaskStatusInReview,  // member_complete_task（有 reviewer）
+		TaskStatusCompleted, // member_complete_task（无 reviewer）
+		TaskStatusPending,   // reset
+		TaskStatusBlocked,
+		TaskStatusCancelled,
+	},
+	TaskStatusInReview: {
+		TaskStatusCompleted,  // verify pass
+		TaskStatusInProgress, // verify fail — 返工环
+		TaskStatusPending,    // reset
+		TaskStatusCancelled,
+	},
+	TaskStatusCompleted: {},
+	TaskStatusCancelled: {},
+}
+
+// TaskReassignableStatuses 任务 owner 可原位交换的状态集合（改派不改状态）。
+// 这是所有权问题不是进度问题，刻意不是终态的补集：PENDING/BLOCKED 是
+// scheduled 模式的静息态、无在飞推理，最安全；IN_PROGRESS 交接会损失原
+// owner 的在飞推理（TASK_REVOKED 负责让它丢弃）。两个闸门被排除——
+// PLANNING/IN_REVIEW 各有一份绑定在当前 owner 上的产物（已提交的计划/
+// 进行中的评审），换 owner 会让产物归属错人。
+//
+// Python: TASK_REASSIGNABLE_STATUSES (schema/status.py L399-405)
+var TaskReassignableStatuses = map[string]bool{
+	TaskStatusPending:    true,
+	TaskStatusBlocked:    true,
+	TaskStatusInProgress: true,
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

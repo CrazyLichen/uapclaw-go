@@ -411,7 +411,7 @@ func TestTaskOutcome_无backend返回nil(t *testing.T) {
 func TestTaskRevision_未读编辑触发通知(t *testing.T) {
 	tb, db := newTestBackend(t)
 	ctx := context.Background()
-	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusClaimed), "")
+	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusInProgress), "")
 	if ok, err := db.Task().AppendChangeNote(ctx, "t-1", 1, "改了要求", "leader"); err != nil || !ok {
 		t.Fatalf("AppendChangeNote = (%v,%v)", ok, err)
 	}
@@ -539,7 +539,7 @@ func TestTaskNotice_announce_wakes为假不发送(t *testing.T) {
 func TestTaskRevision_announce发送失败归还(t *testing.T) {
 	tb, db := newTestBackend(t)
 	ctx := context.Background()
-	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusClaimed), "")
+	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusInProgress), "")
 	_, _ = db.Task().AppendChangeNote(ctx, "t-1", 1, "改了", "leader")
 
 	tr := newTaskRevisionTracker(tb, "alice")
