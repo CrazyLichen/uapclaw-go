@@ -105,7 +105,8 @@ func TestRequirementResultsFromJudgeCriteria(t *testing.T) {
 	if len(items) != 4 {
 		t.Fatalf("应 4 条（空 ID 按 Python or 链生成 criterion_N，非映射跳过）: %d", len(items))
 	}
-	if items[2]["requirement_id"] != "criterion_4" {
+	// Python: enumerate(start=1)——第 3 项 index=3，生成 criterion_3
+	if items[2]["requirement_id"] != "criterion_3" {
 		t.Fatalf("空准则 ID 应按序号生成: %v", items[2])
 	}
 	if items[0]["passed"] != true {
