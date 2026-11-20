@@ -1,7 +1,12 @@
 package agent_teams
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -147,4 +152,90 @@ func MemberSkillVisibilityPath(teamName, memberName string) string {
 // 布局：{TeamHome(teamName)}/team-workspace/skills-visibility.json
 func TeamSkillVisibilityPath(teamName string) string {
 	return filepath.Join(TeamWorkspaceDir(teamName), SKILL_VISIBILITY_FILENAME)
+}
+
+// ──────────────────────────── 导出函数（25.7 T1 新增段） ────────────────────────────
+
+// SafePathSegment 返回不受信字符串的规范文件系统安全形式。
+// Python: paths.py safe_path_segment(value, fallback="_") (:272-274)
+func SafePathSegment(value string, fallback string) string {
+	return safeSegment(value, fallback)
+}
+
+// TeamSessionsDir 返回保存团队全部会话状态目录的父目录。
+// Python: paths.py team_sessions_dir(team_name) (:277-282)
+//
+// 布局：{team_home}/sessions/
+func TeamSessionsDir(teamName string) string {
+	return filepath.Join(TeamHome(teamName), "sessions")
+}
+
+// TeamSessionDir 返回团队下的单会话目录。
+// Python: paths.py team_session_dir(team_name, session_id) (:285-296)
+//
+// 布局：{team_home}/sessions/{session_id}/（session_id 净化为单段路径）。
+func TeamSessionDir(teamName string, sessionID string) string {
+	return filepath.Join(TeamSessionsDir(teamName), SafePathSegment(sessionID, "_"))
+}
+
+// TeamSessionWorktreesDir 返回团队会话拥有的 worktree 根目录。
+// Python: paths.py team_session_worktrees_dir(team_name, session_id) (:340-352)
+//
+// 布局：{team_home}/sessions/{session_id}/worktrees/
+func TeamSessionWorktreesDir(teamName string, sessionID string) string {
+	return filepath.Join(TeamSessionDir(teamName, sessionID), "worktrees")
+}
+
+// ProjectWorktreeHash 返回会话级 worktree 的稳定项目哈希段。
+// Python: paths.py project_worktree_hash(project_dir) (:317-329)
+//
+// 路径必须已存在。团队托管的 worktree 隔离锚定到显式项目目录；
+// 该值缺失时调用方不得静默用 cwd 或 workspace 替代。
+// 偏差 D-25.7-h：Python realpath→Go Abs+EvalSymlinks 组合（D-15.12-a 同款）。
+func ProjectWorktreeHash(projectDir string) (string, error) {
+	resolved, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", err
+	}
+	if r, err2 := filepath.EvalSymlinks(resolved); err2 == nil {
+		resolved = r
+	}
+	st, err := os.Stat(resolved)
+	if err != nil || !st.IsDir() {
+		return "", fmt.Errorf("project_dir does not exist: %s", projectDir)
+	}
+	digest := sha256.Sum256([]byte(resolved))
+	return hex.EncodeToString(digest[:])[:12], nil
+}
+
+// ──────────────────────────── 非导出函数（25.7 T1 新增段） ────────────────────────────
+
+// safeSegment 把不受信字符串净化为单段安全路径。
+// Python: paths.py _safe_segment(value, fallback="_") (:249-270)
+//
+// 把 [A-Za-z0-9_.-] 之外的字符替换为 _ 并剥掉首尾分隔符，结果永不逃逸
+// 父目录（无 /、无 ..）。用于来自不受信输入的路径段（session id 等）。
+func safeSegment(value string, fallback string) string {
+	if fallback == "" {
+		fallback = "_"
+	}
+	normalized := strings.TrimSpace(value)
+	var b strings.Builder
+	for _, r := range normalized {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') ||
+			r == '_' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	normalized = strings.Trim(b.String(), "._-")
+	runes := []rune(normalized)
+	if len(runes) > 96 {
+		normalized = string(runes[:96])
+	}
+	if normalized == "" {
+		return fallback
+	}
+	return normalized
 }
