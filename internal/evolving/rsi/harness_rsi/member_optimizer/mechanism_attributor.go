@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"os"
 	"path/filepath"
 	"sort"
@@ -656,7 +657,7 @@ func pyOrNoneTraceRefsFromAny(value any) []map[string]string {
 
 // pyDictReprOrdered 等价 Python str(dict)（Python 3.7+ 保插入序；Go 按固定序输出保证确定性）。
 func pyDictReprOrdered(m map[string]any) string {
-	return pyRepr(m)
+	return pythonsem.PyRepr(m)
 }
 
 // pyStrListSorted 角色键排序转 any 列表。

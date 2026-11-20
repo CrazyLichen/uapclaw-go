@@ -3,6 +3,7 @@ package routing
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -283,7 +284,7 @@ func describe(errorType string, statusCode *int, timeout any, detail string) str
 			return fmt.Sprintf("did not respond within %ss", t)
 		}
 		if f, ok := timeout.(float64); ok {
-			return fmt.Sprintf("did not respond within %ss", pyFloatRepr(f))
+			return fmt.Sprintf("did not respond within %ss", pythonsem.PyFloatRepr(f))
 		}
 		return "did not respond in time"
 	case errorType == "DeploymentNetworkError":
@@ -304,14 +305,6 @@ func describe(errorType string, statusCode *int, timeout any, detail string) str
 		return phrase
 	}
 	return "failed"
-}
-
-// pyFloatRepr 对齐 Python str(float) 的 "30.0" 形态。
-func pyFloatRepr(f float64) string {
-	s := fmt.Sprintf("%f", f)
-	s = strings.TrimRight(s, "0")
-	s = strings.TrimRight(s, ".")
-	return s + ".0"
 }
 
 // parseErrorText 从 intelli_router 消息推断 (error_type, status_code, timeout)

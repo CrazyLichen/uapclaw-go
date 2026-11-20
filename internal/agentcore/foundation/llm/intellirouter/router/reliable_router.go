@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"net/http"
 	"sort"
@@ -1360,7 +1361,7 @@ func usageToMetadata(usage map[string]any, modelName *string) *intellirouter.Usa
 		return nil // ← py:1526 if not usage
 	}
 	intValue := func(v any) int {
-		if v == nil || isBool(v) {
+		if v == nil || pythonsem.IsBool(v) {
 			return 0
 		}
 		f, err := toFloat64(v)
@@ -1374,7 +1375,7 @@ func usageToMetadata(usage map[string]any, modelName *string) *intellirouter.Usa
 		return i
 	}
 	optionalInt := func(v any) *int {
-		if v == nil || isBool(v) {
+		if v == nil || pythonsem.IsBool(v) {
 			return nil
 		}
 		f, err := toFloat64(v)
@@ -1388,7 +1389,7 @@ func usageToMetadata(usage map[string]any, modelName *string) *intellirouter.Usa
 		return &i
 	}
 	floatValue := func(v any) float64 {
-		if v == nil || isBool(v) {
+		if v == nil || pythonsem.IsBool(v) {
 			return 0.0
 		}
 		f, err := toFloat64(v)
@@ -1713,12 +1714,6 @@ func truthy(v any) bool {
 	default:
 		return true
 	}
-}
-
-// isBool Python isinstance(v, bool) 判定。
-func isBool(v any) bool {
-	_, ok := v.(bool)
-	return ok
 }
 
 // toFloat64 Python float(v) 等价（int/float64/数字字符串）。

@@ -211,10 +211,6 @@ func (e *featureEvidence) summary() map[string]any {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// LedgerSource 账本输入源：内存 ledger/cohort 映射（map[string]any）或 YAML/JSON 文件路径（string）。
-// 对应 Python TypeAlias `Mapping[str, Any] | str | Path`（偏差 D-e1-1：Go 无 Path 类型，路径即 string）。
-type LedgerSource = any
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // _LEDGER_TYPE 账本级 record_type 字面量
@@ -260,21 +256,19 @@ var _REGRESSION_AVAILABILITIES = map[string]bool{
 // ──────────────────────────── 非导出函数 ────────────────────────────
 // AnalyzeCandidateFeedbackLedgers 校验并汇总一份或多份 Candidate Feedback Ledger v1 输入
 // （对应 Python analyze_candidate_feedback_ledgers L45-231，步骤逐条对应）。
+// 入参为已加载的账本/cohort 映射序列；文件路径由调用方先经 LoadLedgerFile 转换
+// （D-e1-1 修订：联合类型收窄为单一映射形态）。
 // Python 的 bool/非有限数参数守卫在 Go 强类型下不可达（D-e1-6），仅保留 min_support_cohorts 下界检查。
 func AnalyzeCandidateFeedbackLedgers(
-	sources []LedgerSource,
+	sources []map[string]any,
 	minSupportCohorts int,
 	highValueGainThreshold float64,
 ) (map[string]any, error) {
 	if minSupportCohorts < 1 {
 		return nil, errors.New("min_support_cohorts must be at least 1")
 	}
-	normalizedSources, err := normalizeSources(sources)
-	if err != nil {
-		return nil, err
-	}
 	cohorts := make([]map[string]any, 0)
-	for sourceIndex, source := range normalizedSources {
+	for sourceIndex, source := range sources {
 		loaded, err := loadAndValidateSource(source, sourceIndex)
 		if err != nil {
 			return nil, err
@@ -470,7 +464,7 @@ func AnalyzeCandidateFeedbackLedgers(
 			"high_value_gain_threshold": highValueGainThreshold,
 		},
 		"input_summary": map[string]any{
-			"ledger_count":    len(normalizedSources),
+			"ledger_count":    len(sources),
 			"cohort_count":    len(cohorts),
 			"candidate_count": candidateCount,
 		},
@@ -516,28 +510,16 @@ func metricAvailabilityOut(metricAvailability map[string]map[string]any) map[str
 	return out
 }
 
-// normalizeSources 归一输入源列表（对应 Python _normalize_sources L345-353）。
-// Go 入参已为序列形态，仅校验每个元素是映射或路径字符串。
-func normalizeSources(sources []LedgerSource) ([]LedgerSource, error) {
-	for _, source := range sources {
-		switch source.(type) {
-		case map[string]any, string:
-		default:
-			return nil, errors.New("each source must be a ledger mapping or path")
-		}
-	}
-	return sources, nil
-}
-
 // loadAndValidateSource 加载并校验单个输入源，返回其 cohort 列表
-// （对应 Python _load_and_validate_source L356-371）。
-func loadAndValidateSource(source LedgerSource, sourceIndex int) ([]map[string]any, error) {
-	value, err := loadSource(source)
-	if err != nil {
-		return nil, err
+// （对应 Python _load_and_validate_source L356-371；映射浅拷贝对应 Python dict(source)）。
+func loadAndValidateSource(source map[string]any, sourceIndex int) ([]map[string]any, error) {
+	// 对应 Python dict(source) 的浅拷贝：仅顶层新建，嵌套共享（本包只读不改，语义等价）
+	shallow := make(map[string]any, len(source))
+	for key, value := range source {
+		shallow[key] = value
 	}
 	location := fmt.Sprintf("source[%d]", sourceIndex)
-	mapping, err := requireMapping(value, location)
+	mapping, err := requireMapping(shallow, location)
 	if err != nil {
 		return nil, err
 	}
@@ -572,42 +554,36 @@ func loadAndValidateSource(source LedgerSource, sourceIndex int) ([]map[string]a
 	return cohorts, nil
 }
 
-// loadSource 读取单个输入源（对应 Python _load_source L374-384）。
-// 映射原样返回；字符串按文件路径读取，.json 后缀（大小写不敏感）按 JSON 解析，
-// 其余按 YAML 解析。JSON 数字用 UseNumber 还原 Python 的 int/float 二分语义。
-func loadSource(source LedgerSource) (any, error) {
-	switch s := source.(type) {
-	case map[string]any:
-		// 对应 Python dict(source) 的浅拷贝：仅顶层新建，嵌套共享（本包只读不改，语义等价）
-		shallow := make(map[string]any, len(s))
-		for key, value := range s {
-			shallow[key] = value
-		}
-		return shallow, nil
-	case string:
-		info, err := os.Stat(s)
-		if err != nil || info.IsDir() {
-			return nil, errors.New(fmt.Sprintf("candidate feedback ledger does not exist: %s", s))
-		}
-		text, err := os.ReadFile(s)
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-		}
-		if strings.EqualFold(filepath.Ext(s), ".json") {
-			decoded, err := decodeJSONWithInts(text)
-			if err != nil {
-				return nil, errors.New(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-			}
-			return decoded, nil
-		}
-		var decoded any
-		if err := yamlUnmarshal(text, &decoded); err != nil {
-			return nil, errors.New(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-		}
-		return decoded, nil
-	default:
-		return nil, errors.New("sources must be a ledger mapping, path, or sequence of them")
+// LoadLedgerFile 读取 YAML/JSON 账本文件为映射（对应 Python _load_source 的路径分支）。
+// 供调用方在传入 AnalyzeCandidateFeedbackLedgers 前把文件路径转换为映射
+// （D-e1-1 修订：联合类型收窄为单一映射形态，路径转换外移至调用侧）。
+// .json 后缀（大小写不敏感）按 JSON 解析并保留 int/float 二分语义；其余按 YAML 解析。
+// 顶层非映射返回错误（Python 对应 source[i] must be a mapping，索引语境由调用侧补全）。
+func LoadLedgerFile(path string) (map[string]any, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return nil, fmt.Errorf("candidate feedback ledger does not exist: %s", path)
 	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read candidate feedback ledger %s: %s", path, err)
+	}
+	var decoded any
+	if strings.EqualFold(filepath.Ext(path), ".json") {
+		decoded, err = decodeJSONWithInts(text)
+	} else {
+		if err := yamlUnmarshal(text, &decoded); err != nil {
+			return nil, err
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read candidate feedback ledger %s: %s", path, err)
+	}
+	mapping, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("candidate feedback ledger must be a mapping: %s", path)
+	}
+	return mapping, nil
 }
 
 // decodeJSONWithInts 按 Python json.loads 的数字语义解码：无小数点/指数的整数还原为 int64，
