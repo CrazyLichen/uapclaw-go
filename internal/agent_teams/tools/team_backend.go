@@ -68,6 +68,16 @@ type TeamBackend struct {
 	predefinedMembers []atschema.TeamMemberSpec
 	// modelConfigAllocator 模型配置分配器
 	modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation
+	// snapshotLengthFn 会话上下文长度回调（leader/in-process 成员注入；nil 得 0）。
+	// Python: TeamBackend._snapshot_length。
+	snapshotLengthFn func() int
+	// storeCheckpointFn 快照存储回调（leader 命名空间）。Python: _store_checkpoint_fn。
+	storeCheckpointFn storeCheckpointFn
+	// listCheckpointFn 快照列表回调。Python: _checkpoint_list_fn。
+	listCheckpointFn func() map[string]map[string]any
+	// checkpoints 本地快照 dict（无回调时的回退存储）。
+	// Python: TeamBackend._checkpoints。
+	checkpoints map[string]storeCheckpointRecord
 	// currentModelName/currentModelProvider 团队当前模型（可空）。
 	// Python: team.py:287-288
 	currentModelName     string
@@ -674,6 +684,21 @@ func (tb *TeamBackend) GetMemberUpdatedAtState(ctx context.Context, memberName, 
 // Python: stamp_member_prompt_updated_at (team.py L2025-2038)
 func (tb *TeamBackend) StampMemberPromptUpdatedAt(_ context.Context, _ string, _ int64) {}
 
+// storeCheckpointRecord 命名快照记录（fork 半区）。
+// Python: TeamBackend._checkpoints 字典值形态。
+type storeCheckpointRecord struct {
+	// Count 快照处的消息数
+	Count int
+	// Description 快照描述
+	Description string
+	// CreatedBy 创建者成员名
+	CreatedBy string
+}
+
+// storeCheckpointFn 快照存储回调（leader 命名空间注入；nil 走本地 dict）。
+// Python: TeamBackend._store_checkpoint_fn。
+type storeCheckpointFn = func(name string, count int, description, createdBy string) map[string]any
+
 // ForkEnabled 该团队的上下文继承（fork）是否开放。
 //
 // 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段
@@ -682,6 +707,92 @@ func (tb *TeamBackend) StampMemberPromptUpdatedAt(_ context.Context, _ string, _
 //
 // Python: fork_enabled (team.py L505-517)
 func (tb *TeamBackend) ForkEnabled() bool { return false }
+
+// SnapshotContextLength 当前会话上下文长度（fork 快照的消息数）。
+// 无回调时 Debug 日志 + 返回 0（Python team.py:639-654 同款）。
+func (tb *TeamBackend) SnapshotContextLength() int {
+	if tb.snapshotLengthFn != nil {
+		result := tb.snapshotLengthFn()
+		logger.Debug(logComponent).
+			Str("member_name", tb.memberName).
+			Int("len", result).
+			Msg("[fork] snapshot_context_length")
+		return result
+	}
+	logger.Debug(logComponent).
+		Str("member_name", tb.memberName).
+		Msg("[fork] snapshot_context_length: NO callback")
+	return 0
+}
+
+// StoreCheckpoint 存命名快照；重名返回既有记录（团队全局唯一）。
+// 回调注入时委托 leader 命名空间；否则写本地 dict。
+// Python: store_checkpoint (team.py:654-691)
+func (tb *TeamBackend) StoreCheckpoint(name string, count int, description, createdBy string) map[string]any {
+	if createdBy == "" {
+		createdBy = tb.memberName
+	}
+	logger.Debug(logComponent).
+		Str("member_name", tb.memberName).
+		Str("name", name).
+		Int("count", count).
+		Msg("[fork] store_checkpoint")
+	if tb.storeCheckpointFn != nil {
+		return tb.storeCheckpointFn(name, count, description, createdBy)
+	}
+	if tb.checkpoints == nil {
+		tb.checkpoints = map[string]storeCheckpointRecord{}
+	}
+	if existing, ok := tb.checkpoints[name]; ok {
+		return map[string]any{
+			"count":       existing.Count,
+			"description": existing.Description,
+			"created_by":  existing.CreatedBy,
+		}
+	}
+	tb.checkpoints[name] = storeCheckpointRecord{Count: count, Description: description, CreatedBy: createdBy}
+	return nil
+}
+
+// ListCheckpoints 本团队的权威快照映射（优先回调命名空间）。
+// Python: list_checkpoints (team.py:692-702)
+func (tb *TeamBackend) ListCheckpoints() map[string]map[string]any {
+	if tb.listCheckpointFn != nil {
+		return tb.listCheckpointFn()
+	}
+	out := map[string]map[string]any{}
+	for name, record := range tb.checkpoints {
+		out[name] = map[string]any{
+			"count":       record.Count,
+			"description": record.Description,
+			"created_by":  record.CreatedBy,
+		}
+	}
+	return out
+}
+
+// PublishCheckpointCreated 发布 CHECKPOINT_CREATED 框架事件（leader 侧渲染为
+// announcement-only 注记，不触发回复）。事件发布失败仅告警不阻塞。
+// Python: publish_checkpoint_created (team.py:703-730)
+func (tb *TeamBackend) PublishCheckpointCreated(ctx context.Context, name string, count int, description string) {
+	if tb.messager == nil {
+		return
+	}
+	event := events.CheckpointCreatedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: tb.memberName},
+		Name:             name,
+		MessageCount:     count,
+		Description:      description,
+	}
+	// Python: TeamTopic.TEAM.build(get_session_id(), team_name)——TeamBackend 无会话 id 槽位（会话作用域由注册链承载），此处用空会话段；偏差 D-15.16-e21 登记。
+	topic := events.TeamTopicTeam.Build("", tb.teamName)
+	if err := tb.messager.Publish(ctx, topic, events.EventMessageFromEvent(event)); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[fork] publish checkpoint event failed")
+	}
+}
+
+// CheckpointCreatedEventAlias 值形态别名（TypedEvent 值接收者）。
+type CheckpointCreatedEventAlias = events.CheckpointCreatedEvent
 
 // SpawnMember 创建成员记录。
 // Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)

@@ -278,6 +278,10 @@ func CreateTeamTools(
 		// Python: spawn_teammate（tool_member.py SpawnTeammateTool）+ spawn_human_agent
 		// 两个独立工具（旧 SpawnMemberTool 的 role_type 分支拆分，规则 8 删旧）。
 		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, atschema.Language(opts.Language), modelConfigAlloc, opts.ForkEnabled)
+		// fork 半区两件（Python tool_factory.py:322-323 无条件注册 + :461-467
+		// fork 关闭时 allowed 剔除——死工具不进每个成员的工具面）。
+		allTools["checkpoint"] = newCheckpointTool(teamBackend, t, atschema.Language(opts.Language))
+		allTools["list_checkpoints"] = newListCheckpointsTool(teamBackend, t, atschema.Language(opts.Language))
 		allTools["spawn_human_agent"] = newSpawnHumanAgentTool(teamBackend, t)
 		allTools["shutdown_member"] = newShutdownMemberTool(teamBackend, t, opts.DispatchMode, atschema.Language(opts.Language))
 		allTools["approve_plan"] = newApprovePlanTool(teamBackend, t)
@@ -333,6 +337,10 @@ func CreateTeamTools(
 	// 专家三件：catalog 非 nil 时并入 allowed（Python create_team_tools 的
 	// allowed 含全部 all_tools 键，catalog None 才减 EXPERT_TOOLS；
 	// tool_factory.py:495-497）。
+	if !opts.ForkEnabled {
+		delete(allowed, "checkpoint")
+		delete(allowed, "list_checkpoints")
+	}
 	if opts.ExpertCatalog != nil {
 		for _, name := range expertTools {
 			allowed[name] = struct{}{}
