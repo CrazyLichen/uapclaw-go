@@ -117,10 +117,12 @@ type StreamReader struct {
 // payloadQueue 带锁无界内存队列（偏差 D2：Go chan 无法无界，等价实现 asyncio.Queue）。
 // put 永不阻塞；get 支持 ctx 取消与 close。
 type payloadQueue struct {
-	mu     sync.Mutex
-	cond   chan struct{} // 广播信号：每次 put/close 换新并关闭旧
-	items  []any
-	closed bool
+	mu   sync.Mutex
+	cond chan struct{} // 广播信号：每次 put/close 换新并关闭旧
+	// putCount 累计入队帧数（单调，测试观测用：帧被 Run 排空后仍可断言曾投递）
+	putCount int
+	items    []any
+	closed   bool
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -371,6 +373,14 @@ func (p *StreamProcessor) MainQueueLen() int {
 	return p.queue.len()
 }
 
+// TotalPutCount 累计投递帧数（观测/测试辅助）：单调计数，不随 Run 排空递减，
+// 供测试断言「曾产出 N 帧」而不受消费进度竞态影响（TestPostStream flaky 修复）。
+func (p *StreamProcessor) TotalPutCount() int {
+	p.queue.mu.Lock()
+	defer p.queue.mu.Unlock()
+	return p.queue.putCount
+}
+
 // Processor 取 ability 对应 processor（观测/测试辅助）
 func (a *StreamActor) Processor(ability ability.ComponentAbility) *StreamProcessor {
 	return a.processors[ability]
@@ -494,6 +504,7 @@ func newPayloadQueue() *payloadQueue {
 // put 入队（永不阻塞）
 func (q *payloadQueue) put(v any) {
 	q.mu.Lock()
+	q.putCount++
 	q.items = append(q.items, v)
 	old := q.cond
 	q.cond = make(chan struct{})

@@ -2,7 +2,9 @@ package components
 
 import (
 	"context"
+	"errors"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -10,9 +12,30 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ComponentComposable 组件组合契约：定义组件如何接入工作流图
+// （Python component.py:236-283 ComponentComposable ABC；与执行面
+// ComponentExecutable 双 mixin，修订偏差 D-17-1：单结构体 → 执行面基座嵌入 +
+// 组合面接口/基座双形态承载）。
+type ComponentComposable interface {
+	// AddComponent 将自身注册进图（Python add_component，wait_for_all 默认 False）
+	AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error
+	// ToExecutable 产出可执行体（Python to_executable）
+	ToExecutable() graphexe.GeneralExecutor
+}
+
+// BaseComponentComposable 组合面基座：纯组合件（只嵌组合面、无执行面）的默认实现
+// 承载者，回调经 ToExecutableFn 槽（基座永远只调槽，不调外层——无基类调子类问题）。
+type BaseComponentComposable struct {
+	// ToExecutableFn 产物槽（Python to_executable 的可执行体供应点；nil ≙ 未实现）
+	ToExecutableFn func() graphexe.GeneralExecutor
+}
+
 // WorkflowComponent 工作流组件基类：运行时面（四钩子适配）+ 构图面合成体。
 // Python: components/component.py:285-306 (WorkflowComponent) —— ComponentExecutable
-// 与 ComponentComposable 双 mixin 在 Go 以单结构体承载。
+// 与 ComponentComposable 双 mixin 在 Go 以「执行面基座嵌入 + 组合面合成体」承载
+// （修订偏差 D-17-1，8.14 spec §4：单结构体 → 双基座嵌入组合；组合面默认实现
+// 落于合成体——ToExecutable 自返回 ≙ isinstance(self, Executable) 恒真，
+// AddComponent ≙ 继承 mixin 默认实现，外层同名方法即可遮蔽 ≙ Python override）。
 // 偏差 D-17-1：Python Input/Output TypeVar=Any → Go 具体化 map[string]any。
 // 子类覆写方式：为四个函数槽赋值（Python 方法覆写 → Go 函数槽，8.10 AtomicNode 先例）；
 // 未赋值的钩子走 BaseExecutable 默认未实现错误。
@@ -22,6 +45,8 @@ import (
 // 后 Trigger，2.14 Model 门面先例）。
 type WorkflowComponent struct {
 	graphexe.BaseExecutable[map[string]any, map[string]any]
+	// BaseComponentComposable 组合面基座（Python ComponentComposable mixin 嵌入）
+	BaseComponentComposable
 
 	// InvokeFn 批入批出（Python invoke(inputs, Session(session, False), context)）
 	InvokeFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error)
@@ -36,6 +61,51 @@ type WorkflowComponent struct {
 }
 
 // ──────────────────────────── WorkflowComponent 方法 ────────────────────────────
+
+// ToExecutable 产出可执行体（Python component.py:263-283 to_executable）：
+// WorkflowComponent 自身即 Executable（嵌入 BaseExecutable），≙ isinstance 恒真返回 self。
+func (c *WorkflowComponent) ToExecutable() graphexe.GeneralExecutor {
+	return c
+}
+
+// AddComponent 将自身注册进图（Python component.py:248-260 默认实现落于合成体，
+// ≙ WorkflowComponent 继承 mixin 默认 add_component 并经 self.to_executable 取产物；
+// 外层再定义同名方法即可遮蔽，≙ Python override，8.14b SubWorkflowComponent 用）。
+func (c *WorkflowComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	opts := []graph.AddNodeOption{}
+	if waitForAll {
+		opts = append(opts, graph.WithWaitForAll())
+	}
+	g.AddNode(nodeID, c.ToExecutable(), opts...)
+	return nil
+}
+
+// ──────────────────────────── BaseComponentComposable 方法 ────────────────────────────
+
+// AddComponent 纯组合件默认实现（Python component.py:248-260；nil 槽 ≙
+// to_executable NotImplementedError 分支，文案复刻去类名）。
+func (m *BaseComponentComposable) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	if m.ToExecutableFn == nil {
+		return errors.New("Component is missing required method: to_executable()\n" +
+			"  → Expected signature: def to_executable(self) -> Executable")
+	}
+	opts := []graph.AddNodeOption{}
+	if waitForAll {
+		opts = append(opts, graph.WithWaitForAll())
+	}
+	g.AddNode(nodeID, m.ToExecutableFn(), opts...)
+	return nil
+}
+
+// ToExecutable 纯组合件产物（Python to_executable 转发槽）。
+func (m *BaseComponentComposable) ToExecutable() graphexe.GeneralExecutor {
+	if m.ToExecutableFn == nil {
+		return nil
+	}
+	return m.ToExecutableFn()
+}
+
+// ──────────────────────────── 占位待删────────────────────────────
 
 // TraceMetadata 组件追踪元数据（Python component.py:124-135，默认 None）
 func (c *WorkflowComponent) TraceMetadata() map[string]any {

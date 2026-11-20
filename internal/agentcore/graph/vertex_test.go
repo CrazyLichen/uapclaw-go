@@ -639,8 +639,10 @@ func TestPostStream_收口分流(t *testing.T) {
 	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
 	close(ch)
 	v.postStream(context.Background(), ch, ability.ComponentAbilityStream)
-	if am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen() != 2 {
-		t.Fatalf("应产出数据帧+END 哨兵帧, got %d", am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).MainQueueLen())
+	// 断言累计投递帧数（单调计数）：Run 会异步排空主队列，MainQueueLen 受消费
+	// 进度竞态影响不可直接断言（修复既有 -race 下 ~30% flaky）
+	if got := am.StreamActor("n2").Processor(ability.ComponentAbilityCollect).TotalPutCount(); got != 2 {
+		t.Fatalf("应产出数据帧+END 哨兵帧, got %d", got)
 	}
 	// 逐 chunk 转发：默认 transformer 无 schema → 原样透传
 	v2, am2 := newVertexAsProducer(t)
@@ -649,8 +651,8 @@ func TestPostStream_收口分流(t *testing.T) {
 	close(ch2)
 	v2.postStream(context.Background(), ch2, ability.ComponentAbilityStream)
 	p := am2.StreamActor("n2").Processor(ability.ComponentAbilityCollect)
-	if p.MainQueueLen() != 2 { // 数据帧 + END 帧
-		t.Fatalf("应产出数据帧+END 帧, got %d", p.MainQueueLen())
+	if got := p.TotalPutCount(); got != 2 { // 数据帧 + END 帧
+		t.Fatalf("应产出数据帧+END 帧, got %d", got)
 	}
 }
 

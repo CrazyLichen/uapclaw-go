@@ -30,7 +30,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	compability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -75,7 +75,7 @@ type Vertex struct {
 	// nodeConfig 节点规格（Python: self._node_config；NodeSession.NodeConfig() any 断言）
 	nodeConfig *workflow.NodeSpec
 	// componentAbility 组件能力面（Python: self._component_ability）
-	componentAbility []components.ComponentAbility
+	componentAbility []compability.ComponentAbility
 	// hasStreamCall 是否含流能力（Python: self._has_stream_call）
 	hasStreamCall bool
 	// hasCall 是否含批能力（Python: self._has_call）
@@ -161,10 +161,10 @@ func (v *Vertex) ShouldHandleMessage() bool {
 
 // streamAbilities 流入能力过滤（Python _stream_abilities，vertex.py:800-803：
 // 仅 COLLECT/TRANSFORM）
-func (v *Vertex) streamAbilities() []components.ComponentAbility {
-	var out []components.ComponentAbility
+func (v *Vertex) streamAbilities() []compability.ComponentAbility {
+	var out []compability.ComponentAbility
 	for _, a := range v.componentAbility {
-		if a == components.ComponentAbilityCollect || a == components.ComponentAbilityTransform {
+		if a == compability.ComponentAbilityCollect || a == compability.ComponentAbilityTransform {
 			out = append(out, a)
 		}
 	}
@@ -222,7 +222,7 @@ func (v *Vertex) Init(sess session.BaseSession, kwargs map[string]any) bool {
 	if v.nodeConfig != nil && len(v.nodeConfig.Abilities) > 0 {
 		v.componentAbility = v.nodeConfig.Abilities
 	} else {
-		v.componentAbility = []components.ComponentAbility{components.ComponentAbilityInvoke}
+		v.componentAbility = []compability.ComponentAbility{compability.ComponentAbilityInvoke}
 	}
 	// ⑥⑦ hasStreamCall/hasCall（vertex.py:96-97）
 	v.hasStreamCall = len(v.streamAbilities()) > 0
@@ -401,7 +401,7 @@ func triggerUntil(ctx context.Context, event string, data map[string]any) (resul
 }
 
 // runExecutable 执行单个能力的策略分派（Python _run_executable，vertex.py:114-236 步骤一比一）
-func (v *Vertex) runExecutable(ctx context.Context, ability components.ComponentAbility,
+func (v *Vertex) runExecutable(ctx context.Context, ability compability.ComponentAbility,
 	isSubgraph bool, config any, event chan struct{}) (bool, error) {
 	// 策略体共用错误通道（Python async 函数的异常沿 await 传播 → Go 以 error 返回值承载，
 	// 分类处理在 strategyError 分类段）
@@ -502,11 +502,11 @@ func (v *Vertex) runExecutable(ctx context.Context, ability components.Component
 		return nil
 	}
 	// 策略表（vertex.py:190-195）
-	strategies := map[components.ComponentAbility]func() error{
-		components.ComponentAbilityInvoke:    invokeStrategy,
-		components.ComponentAbilityStream:    streamStrategy,
-		components.ComponentAbilityCollect:   collectStrategy,
-		components.ComponentAbilityTransform: transformStrategy,
+	strategies := map[compability.ComponentAbility]func() error{
+		compability.ComponentAbilityInvoke:    invokeStrategy,
+		compability.ComponentAbilityStream:    streamStrategy,
+		compability.ComponentAbilityCollect:   collectStrategy,
+		compability.ComponentAbilityTransform: transformStrategy,
 	}
 	// 执行策略（vertex.py:198-199）
 	strategy, found := strategies[ability]
@@ -574,7 +574,7 @@ func (v *Vertex) runExecutable(ctx context.Context, ability components.Component
 }
 
 // debugAbilityRunning ABILITY_RUNNING 调试日志（vertex.py:131-135/142-146/171-175 公共字段）
-func (v *Vertex) debugAbilityRunning(ability components.ComponentAbility, phase string, payload any, isSubgraph bool) {
+func (v *Vertex) debugAbilityRunning(ability compability.ComponentAbility, phase string, payload any, isSubgraph bool) {
 	logger.Debug(logComponent).
 		Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
 		Str("graph_id", v.nodeSession.WorkflowID()).
@@ -605,7 +605,7 @@ func toMapAny(v any) map[string]any {
 
 // runExecutableWithRetry 带重试与超时的能力执行（Python _run_executable_with_retry，
 // vertex.py:238-287 步骤一比一）
-func (v *Vertex) runExecutableWithRetry(ctx context.Context, ability components.ComponentAbility,
+func (v *Vertex) runExecutableWithRetry(ctx context.Context, ability compability.ComponentAbility,
 	isSubgraph bool, config any, event chan struct{}) (bool, error) {
 	// ① 重试与超时配置（vertex.py:240-241；Python getattr(timeout, -1.0) 默认无超时，
 	// Go NodeSpec.Timeout<=0 同义）
@@ -724,9 +724,9 @@ func (v *Vertex) buildTimeoutError(ctx context.Context, cause error, timeout flo
 // runErrorRecovery 重试耗尽后的错误恢复（Python _run_error_recovery，vertex.py:332-362）：
 // 流式能力不可恢复；INVOKE/COLLECT 经 component_error_recovery 事件，
 // 命中则 postInvoke 恢复数据并返回成功
-func (v *Vertex) runErrorRecovery(ctx context.Context, ability components.ComponentAbility, err error) (bool, error) {
+func (v *Vertex) runErrorRecovery(ctx context.Context, ability compability.ComponentAbility, err error) (bool, error) {
 	// ① 流式输出不可恢复（vertex.py:335-337）
-	if ability != components.ComponentAbilityInvoke && ability != components.ComponentAbilityCollect {
+	if ability != compability.ComponentAbilityInvoke && ability != compability.ComponentAbilityCollect {
 		return false, err
 	}
 	// ② 节点异常配置（vertex.py:339-340）
@@ -824,7 +824,7 @@ spawnLoop:
 	for _, ability := range abilities {
 		e := make(chan struct{})
 		wg.Add(1)
-		go func(ab components.ComponentAbility) {
+		go func(ab compability.ComponentAbility) {
 			defer wg.Done()
 			// Python create_task(self._run_executable_with_retry(ability, event=e))：
 			// is_subgraph=False、config=None（vertex.py:742）
@@ -906,10 +906,10 @@ func (v *Vertex) callInternal(ctx context.Context, config any) error {
 	}
 	// ② 批入能力顺序执行（vertex.py:665-685）
 	isSubgraph := v.executable.GraphInvoker()
-	currentAbility := components.ComponentAbility(-1)
-	var callAbility []components.ComponentAbility
+	currentAbility := compability.ComponentAbility(-1)
+	var callAbility []compability.ComponentAbility
 	for _, ability := range v.componentAbility {
-		if ability == components.ComponentAbilityInvoke || ability == components.ComponentAbilityStream {
+		if ability == compability.ComponentAbilityInvoke || ability == compability.ComponentAbilityStream {
 			callAbility = append(callAbility, ability)
 		}
 	}
@@ -1387,7 +1387,7 @@ func (v *Vertex) clearInteractive() {
 
 // preStream 流入取数（Python _pre_stream，vertex.py:569-588 步骤一比一）：
 // 返回 schema 形状的输入树（$ref 叶子为 *StreamReader）
-func (v *Vertex) preStream(ctx context.Context, ability components.ComponentAbility) (map[string]any, error) {
+func (v *Vertex) preStream(ctx context.Context, ability compability.ComponentAbility) (map[string]any, error) {
 	// ① 组件开始埋点（vertex.py:571）
 	v.traceComponentBegin(ctx)
 	// ② 流式输入 schema（vertex.py:573-575）：非 dict → nil
@@ -1415,7 +1415,7 @@ func (v *Vertex) preStream(ctx context.Context, ability components.ComponentAbil
 }
 
 // postStream 流入产出收尾（Python _post_stream，vertex.py:590-628 步骤一比一）
-func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[map[string]any], ability components.ComponentAbility) {
+func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[map[string]any], ability compability.ComponentAbility) {
 	// ① 形态标记（vertex.py:591-593）
 	isSubGraph := v.nodeSession.ParentID() != ""
 	am := v.nodeSession.ActorManager()
@@ -1492,7 +1492,7 @@ func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[
 }
 
 // processChunk 单帧下发三分支（Python _process_chunk，vertex.py:630-654 步骤一比一）
-func (v *Vertex) processChunk(ctx context.Context, message any, isEndNode bool, endStreamIndex int, isSubGraph bool, ability components.ComponentAbility) {
+func (v *Vertex) processChunk(ctx context.Context, message any, isEndNode bool, endStreamIndex int, isSubGraph bool, ability compability.ComponentAbility) {
 	switch {
 	case isEndNode && !isSubGraph:
 		// End 非子图（vertex.py:635-646）：StreamSchemas 直用；否则 end-node-stream 信封
