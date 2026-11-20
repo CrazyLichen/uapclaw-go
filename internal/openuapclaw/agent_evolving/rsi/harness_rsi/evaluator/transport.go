@@ -3,7 +3,11 @@
 
 package evaluator
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -45,4 +49,9 @@ func TransientTransportError(errText string) string {
 		}
 	}
 	return ""
+}
+
+// init 向 judger 反转缝注册瞬态传输判定（evaluator/transport 能力）。
+func init() {
+	judger.RegisterTransientTransportError(TransientTransportError)
 }

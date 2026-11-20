@@ -6,7 +6,14 @@ import (
 	"strconv"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
+
+// init 向 judger 反转缝注册优化信号契约（evaluator/optimization_signals 能力）。
+func init() {
+	judger.RegisterOptimizationSignalsContract(OptimizationSignalsContract)
+}
 
 // OptimizationSignalsSchemaVersion 优化信号契约版本。
 const OptimizationSignalsSchemaVersion = 1
