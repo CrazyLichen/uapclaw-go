@@ -3,7 +3,7 @@ package ability
 import (
 	"context"
 	"errors"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"reflect"
 	"strings"
 	"sync"

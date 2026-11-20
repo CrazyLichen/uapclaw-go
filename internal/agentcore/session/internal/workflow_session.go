@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

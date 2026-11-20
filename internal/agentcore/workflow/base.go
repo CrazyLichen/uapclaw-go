@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	workflowconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -12,13 +13,8 @@ import (
 // 继承以嵌入 schema.BaseCard 承载（对应 openjiuwen/core/common/schema/card.py BaseCard）。
 // 偏差 D-1：Python input_params 为 dict|Type[BaseModel] Union，Go 用 map[string]any 承载，
 // Type[BaseModel] 形态由外层调用方自行转换为 JSON Schema map 后再传入。
-type WorkflowCard struct {
-	schema.BaseCard
-	// Version 工作流版本号（Python 默认 ''）
-	Version string `json:"version,omitempty"`
-	// InputParams 输入参数定义（JSON Schema map）；Python Optional，nil 语义=缺省
-	InputParams map[string]any `json:"input_params,omitempty"`
-}
+// WorkflowCard 工作流元数据卡片（叶包别名锚点，偏差 D-14-2）。
+type WorkflowCard = workflowconfig.WorkflowCard
 
 // WorkflowOutput 工作流执行结果。
 // Python: openjiuwen/core/workflow/base.py WorkflowOutput(BaseModel)
@@ -79,24 +75,6 @@ var (
 func NewWorkflowCard(opts ...schema.CardOption) *WorkflowCard {
 	return &WorkflowCard{BaseCard: *schema.NewBaseCard(opts...)}
 }
-
-// ToolInfo 返回工具信息，InputParams 为 nil 时传空 map（对齐 Python tool_info 的 `if self.input_params else {}`）。
-func (c *WorkflowCard) ToolInfo() schema.ToolInfoInterface {
-	params := c.InputParams
-	if params == nil {
-		params = map[string]any{}
-	}
-	return schema.NewToolInfo(c.Name, c.Description, params)
-}
-
-// AbilityName 返回能力名称。
-func (c *WorkflowCard) AbilityName() string { return c.Name }
-
-// AbilityID 返回能力唯一标识。
-func (c *WorkflowCard) AbilityID() string { return c.ID }
-
-// AbilityKind 返回能力类型（工作流）。
-func (c *WorkflowCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindWorkflow }
 
 // GenerateWorkflowKey 生成工作流缓存键。
 // Python: base.py generate_workflow_key → f"{workflow_id}_{workflow_version}"

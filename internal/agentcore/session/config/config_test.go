@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 )
 
 // TestNewSessionConfig_默认值加载 测试默认配置加载

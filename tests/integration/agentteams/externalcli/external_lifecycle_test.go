@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"

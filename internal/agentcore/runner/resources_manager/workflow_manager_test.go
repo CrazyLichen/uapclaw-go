@@ -3,7 +3,7 @@ package resources_manager
 import (
 	"context"
 	"errors"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"

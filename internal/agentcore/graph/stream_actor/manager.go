@@ -9,11 +9,22 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ActorSpecView 流调度所需规格视图（偏差 D-14-1 破环：stream_actor→workflow 依赖
+// 以窄接口承载——对齐 Python base/manager 模块拆分避环意图；*workflow.WorkflowSpec
+// 实现本接口，调用方源代码零改动）。
+type ActorSpecView interface {
+	// StreamEdgesView 常规边表
+	StreamEdgesView() map[string][]string
+	// StreamSourceGroupsView 流消费者 CNF 源组表
+	StreamSourceGroupsView() map[string][][]string
+	// CompConfigsAbilitiesView 组件能力表（comp_id -> abilities）
+	CompConfigsAbilitiesView() map[string][]ability.ComponentAbility
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -70,7 +81,7 @@ func (t *StreamTransform) GetByDefaultTransformer(originMessage map[string]any,
 }
 
 // NewActorManager 构造（Python __init__ 28-58 步骤一比一）。
-func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *StreamGraph,
+func NewActorManager(ctx context.Context, spec ActorSpecView, graph *StreamGraph,
 	subGraph bool, session ActorSession) (*ActorManager, error) {
 	// stream_generator_timeout 来自 session env（Python:55-56）
 	timeout := -1.0
@@ -82,11 +93,11 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 		}
 	}
 	m := &ActorManager{
-		streamEdges:        spec.StreamEdges,
+		streamEdges:        spec.StreamEdgesView(),
 		streams:            map[string]*StreamActor{},
 		streamsTransform:   &StreamTransform{},
 		activeProducerIDs:  map[string]map[ability.ComponentAbility]bool{},
-		consumerDict:       buildReverseGraph(spec.StreamEdges),
+		consumerDict:       buildReverseGraph(spec.StreamEdgesView()),
 		producerAbilities:  map[string]map[ability.ComponentAbility]bool{},
 		streamSourceGroups: map[string][][]string{},
 		workflowSession:    session,
@@ -102,13 +113,10 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 	}
 	// Python:37-56 逐消费者建 actor
 	for consumerID, producerIDs := range m.consumerDict {
-		consumerSpec := spec.CompConfigs[consumerID]
 		var consumerAbilities []ability.ComponentAbility
-		if consumerSpec != nil {
-			for _, ab := range consumerSpec.Abilities {
-				if ab == ability.ComponentAbilityCollect || ab == ability.ComponentAbilityTransform {
-					consumerAbilities = append(consumerAbilities, ab)
-				}
+		for _, ab := range spec.CompConfigsAbilitiesView()[consumerID] {
+			if ab == ability.ComponentAbilityCollect || ab == ability.ComponentAbilityTransform {
+				consumerAbilities = append(consumerAbilities, ab)
 			}
 		}
 		sources := map[string]bool{}
@@ -117,18 +125,15 @@ func NewActorManager(ctx context.Context, spec *workflow.WorkflowSpec, graph *St
 			if abilities == nil {
 				abilities = map[ability.ComponentAbility]bool{}
 			}
-			producerSpec := spec.CompConfigs[producerID]
-			if producerSpec != nil {
-				for _, ab := range producerSpec.Abilities {
-					if ab == ability.ComponentAbilityStream || ab == ability.ComponentAbilityTransform {
-						abilities[ab] = true
-						sources[producerID+"-"+ab.Name()] = true
-					}
+			for _, ab := range spec.CompConfigsAbilitiesView()[producerID] {
+				if ab == ability.ComponentAbilityStream || ab == ability.ComponentAbilityTransform {
+					abilities[ab] = true
+					sources[producerID+"-"+ab.Name()] = true
 				}
 			}
 			m.producerAbilities[producerID] = abilities
 		}
-		declaredGroups := spec.StreamSourceGroups[consumerID]
+		declaredGroups := spec.StreamSourceGroupsView()[consumerID]
 		var sourceGroups [][]string
 		if len(declaredGroups) == 0 {
 			// Python:51 未声明时默认每源单拆，按源排序

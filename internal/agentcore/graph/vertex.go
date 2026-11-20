@@ -29,8 +29,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	compability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )

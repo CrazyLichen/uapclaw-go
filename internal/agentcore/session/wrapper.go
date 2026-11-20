@@ -6,7 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

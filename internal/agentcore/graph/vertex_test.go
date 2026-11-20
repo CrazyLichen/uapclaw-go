@@ -19,8 +19,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sutils "github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 )
 
 // Task2 测试：结构体/构造/对账辅助/collectRefSourceIDs/Reset。

@@ -19,9 +19,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	flow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/flow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -47,20 +47,20 @@ type fakeInner struct {
 	wm *stream.StreamWriterManager
 }
 
-func (f *fakeInner) Config() config.SessionConfig                     { return f.cfg }
-func (f *fakeInner) State() state.SessionState                        { return f.st }
-func (f *fakeInner) Tracer() *tracer.Tracer                           { return nil }
+func (f *fakeInner) Config() config.SessionConfig { return f.cfg }
+func (f *fakeInner) State() state.SessionState    { return f.st }
+func (f *fakeInner) Tracer() *tracer.Tracer       { return nil }
 func (f *fakeInner) StreamWriterManager() *stream.StreamWriterManager {
 	if f.wm == nil {
 		f.wm = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	}
 	return f.wm
 }
-func (f *fakeInner) SessionID() string                                { return f.id }
-func (f *fakeInner) Checkpointer() interfaces.Checkpointer            { return nil }
-func (f *fakeInner) ActorManager() *stream_actor.ActorManager         { return f.am }
-func (f *fakeInner) Close() error                                     { return nil }
-func (f *fakeInner) WorkflowID() string                               { return wfIDEndRender }
+func (f *fakeInner) SessionID() string                        { return f.id }
+func (f *fakeInner) Checkpointer() interfaces.Checkpointer    { return nil }
+func (f *fakeInner) ActorManager() *stream_actor.ActorManager { return f.am }
+func (f *fakeInner) Close() error                             { return nil }
+func (f *fakeInner) WorkflowID() string                       { return wfIDEndRender }
 
 // fakeActorSess ActorManager 会话桩（对齐 workflow_vertex 集成同款）。
 type fakeActorSess struct{}

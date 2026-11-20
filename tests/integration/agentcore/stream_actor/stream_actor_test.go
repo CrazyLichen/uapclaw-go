@@ -17,8 +17,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────

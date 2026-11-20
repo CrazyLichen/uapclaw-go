@@ -11,8 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 )
 
 // ──────────────────────────── WorkflowSession 测试 ────────────────────────────

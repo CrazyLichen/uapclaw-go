@@ -4,7 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"

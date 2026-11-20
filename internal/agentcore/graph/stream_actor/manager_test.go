@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 

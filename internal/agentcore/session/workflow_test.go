@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
