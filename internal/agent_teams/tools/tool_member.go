@@ -1088,3 +1088,224 @@ func (l *listCheckpointsTool) MapResult(output map[string]any) string {
 func (l *listCheckpointsTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
+
+// ──────────────────────────── spawn_passive_human / spawn_bridge_agent / set_member_model ────────────────────────────
+
+// spawnPassiveHumanTool spawn_passive_human：注册无头像人类成员（出生 READY）。
+// schema 省模型名称/提示词（同 spawn_human_agent：无 harness 无字段可拒）；
+// HITT 检查为防御性兜底（工具在 HITT 关闭时不接线）。
+// Python: SpawnPassiveHumanTool (tool_member.py:1099-1160)
+type spawnPassiveHumanTool struct {
+	TeamTool
+	team *TeamBackend
+	t    locales.Translator
+}
+
+// newSpawnPassiveHumanTool 构造。Python: __init__ (:1112-1127)
+func newSpawnPassiveHumanTool(team *TeamBackend, t locales.Translator) *spawnPassiveHumanTool {
+	card := tool.ToolCard{BaseCard: schema.BaseCard{
+		ID:          "team.spawn_passive_human",
+		Name:        "spawn_passive_human",
+		Description: t("spawn_passive_human"),
+	}}
+	card.InputParams = []*schema.Param{
+		schema.NewStringParam("member_name", t("spawn_passive_human", "member_name"), true),
+		schema.NewStringParam("display_name", t("spawn_passive_human", "display_name"), true),
+		schema.NewStringParam("desc", t("spawn_passive_human", "desc"), true),
+	}
+	return &spawnPassiveHumanTool{TeamTool: NewTeamTool(&card), team: team, t: t}
+}
+
+// Invoke 执行。group_chat 运行时前置 + HITT 兜底 + 校验 + 委托。
+// Python: invoke (:1129-1157)
+func (s *spawnPassiveHumanTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	if s.team.ConversationMode() != "group_chat" {
+		return toolError("spawn_passive_human requires a group_chat runtime")
+	}
+	if err := ValidateMemberName(stringOfInput(inputs["member_name"])); err != "" {
+		return toolError(err)
+	}
+	if err := ValidateDisplayName(stringOfInput(inputs["display_name"])); err != "" {
+		return toolError(err)
+	}
+	if !s.team.HITTEnabled() {
+		return toolError("Cannot spawn passive human: HITT capability is disabled " +
+			"(enable_hitt=False on TeamAgentSpec or build_team). " +
+			"Enable HITT in the team spec or use spawn_teammate instead.")
+	}
+	result := s.team.SpawnPassiveHuman(ctx,
+		stringOfInput(inputs["member_name"]),
+		stringOfInput(inputs["display_name"]),
+		stringOfInput(inputs["desc"]))
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{"member_name": inputs["member_name"]})
+}
+
+// MapResult 模型面渲染。Python: render_for_llm (:1159-1160)
+func (s *spawnPassiveHumanTool) MapResult(output map[string]any) string {
+	if err, ok := output["error"].(string); ok && err != "" {
+		return err
+	}
+	data := output["data"].(map[string]any)
+	return fmt.Sprintf("Passive human member %s registered as READY", data["member_name"])
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (s *spawnPassiveHumanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// stringOfInput any → string（nil 安全）。
+func stringOfInput(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+// spawnBridgeAgentTool spawn_bridge_agent：桥接头像成员（本地 LLM 调度 +
+// 远端 agent 产出）。prompt 必填（远端经 adapter.connect 采用的私有系统
+// 提示词）。Bridge 能力检查为兜底（工具在 Bridge 关闭时不接线）。
+// Python: SpawnBridgeAgentTool (tool_member.py:1163-1269)
+type spawnBridgeAgentTool struct {
+	TeamTool
+	team *TeamBackend
+	t    locales.Translator
+}
+
+// newSpawnBridgeAgentTool 构造。Python: __init__ (:1176-1199)
+func newSpawnBridgeAgentTool(team *TeamBackend, t locales.Translator) *spawnBridgeAgentTool {
+	card := tool.ToolCard{BaseCard: schema.BaseCard{
+		ID:          "team.spawn_bridge_agent",
+		Name:        "spawn_bridge_agent",
+		Description: t("spawn_bridge_agent"),
+	}}
+	card.InputParams = []*schema.Param{
+		schema.NewStringParam("member_name", t("spawn_bridge_agent", "member_name"), true),
+		schema.NewStringParam("display_name", t("spawn_bridge_agent", "display_name"), false),
+		schema.NewStringParam("desc", t("spawn_bridge_agent", "desc"), false),
+		schema.NewStringParam("prompt", t("spawn_bridge_agent", "prompt"), true),
+		schema.NewStringParam("mailbox_inject_mode", t("spawn_bridge_agent", "mailbox_inject_mode"), false),
+		schema.NewStringParam("protocol", t("spawn_bridge_agent", "protocol"), false),
+
+		schema.NewStringParam("model_name", t("spawn_bridge_agent", "model_name"), false),
+	}
+	return &spawnBridgeAgentTool{TeamTool: NewTeamTool(&card), team: team, t: t}
+}
+
+// Invoke 执行。Bridge 兜底 + prompt 必填 + inject_mode 枚举 + adapter_config 形状。
+// Python: invoke (:1218-1258)
+func (s *spawnBridgeAgentTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	if !s.team.bridgeEnabled() {
+		return toolError("Cannot spawn bridge agent: Bridge capability is disabled " +
+			"(enable_bridge=False on TeamAgentSpec or build_team). " +
+			"Enable Bridge in the team spec or use spawn_teammate instead.")
+	}
+	desc := stringOfInput(inputs["desc"])
+	prompt := stringOfInput(inputs["prompt"])
+	if prompt == "" {
+		return toolError("spawn_bridge_agent requires a non-empty 'prompt' — it is the " +
+			"briefing the remote agent adopts via adapter.connect")
+	}
+	modeRaw := strings.ToLower(stringOfInput(inputs["mailbox_inject_mode"]))
+	if modeRaw == "" {
+		modeRaw = "passthrough"
+	}
+	if modeRaw != "passthrough" && modeRaw != "rephrase" {
+		return toolError(fmt.Sprintf("Invalid mailbox_inject_mode '%s'; expected 'passthrough' or 'rephrase'", modeRaw))
+	}
+	if _, ok := inputs["adapter_config"].(map[string]any); inputs["adapter_config"] != nil && !ok {
+		return toolError("adapter_config must be an object/dict")
+	}
+	adapterConfig, _ := inputs["adapter_config"].(map[string]any)
+	result := s.team.SpawnBridgeAgent(ctx,
+		stringOfInput(inputs["member_name"]),
+		stringOfInput(inputs["display_name"]),
+		desc, prompt,
+		stringOfInput(inputs["model_name"]),
+		modeRaw,
+		stringOfInput(inputs["protocol"]),
+		adapterConfig)
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{"member_name": inputs["member_name"]})
+}
+
+// MapResult 模型面渲染。Python: render_for_llm (:1261-1269)
+func (s *spawnBridgeAgentTool) MapResult(output map[string]any) string {
+	if err, ok := output["error"].(string); ok && err != "" {
+		return err
+	}
+	data := output["data"].(map[string]any)
+	return fmt.Sprintf("Bridge agent %s registered as READY", data["member_name"])
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (s *spawnBridgeAgentTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// spawnSetMemberModelTool set_member_model：切换运行中外部 CLI 成员的内置模型。
+// 实际切换经 TeamBackend 的 set_member_model_fn 回调（外部 CLI 运行时注入，
+// Python team.py:591 set_member_model_fn）——工具面只做入参校验与行持久化。
+// Python: SetMemberModelTool (tool_member.py:1400-1529 区段)
+type spawnSetMemberModelTool struct {
+	TeamTool
+	team *TeamBackend
+	t    locales.Translator
+}
+
+// newSetMemberModelTool 构造。
+func newSetMemberModelTool(team *TeamBackend, t locales.Translator) *spawnSetMemberModelTool {
+	card := tool.ToolCard{BaseCard: schema.BaseCard{
+		ID:          "team.set_member_model",
+		Name:        "set_member_model",
+		Description: t("set_member_model"),
+	}}
+	card.Properties = map[string]any{
+		"member_name":    map[string]any{"type": "string", "description": t("set_member_model", "member_name")},
+		"builtin_model":  map[string]any{"type": "object", "description": t("set_member_model", "builtin_model")},
+		"model_name":     map[string]any{"type": "string", "description": t("set_member_model", "model_name")},
+		"restart_member": map[string]any{"type": "boolean", "description": t("set_member_model", "restart_member")},
+	}
+	return &spawnSetMemberModelTool{TeamTool: NewTeamTool(&card), team: team, t: t}
+}
+
+// Invoke 执行。委托 set_member_model_fn（成员行持久化 + applied_live 切换）。
+// Python: invoke（member 行 builtin_model/model_ref 更新 + fn 回调）。
+func (s *spawnSetMemberModelTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName := stringOfInput(inputs["member_name"])
+	if memberName == "" {
+		return toolError("set_member_model requires 'member_name'")
+	}
+	if s.team.setMemberModelFn == nil {
+		return toolError("set_member_model is not available: no runtime hook wired for this member")
+	}
+	builtinModel := map[string]any(nil)
+	if m, ok := inputs["builtin_model"].(map[string]any); ok {
+		builtinModel = m
+	}
+	ok, err := s.team.setMemberModelFn(ctx, memberName, builtinModel, stringOfInput(inputs["model_name"]))
+	if err != nil {
+		return toolError(err.Error())
+	}
+	if !ok {
+		return toolError("set_member_model rejected the requested model")
+	}
+	return toolSuccess(map[string]any{"member_name": memberName})
+}
+
+// MapResult 模型面渲染。
+func (s *spawnSetMemberModelTool) MapResult(output map[string]any) string {
+	if err, ok := output["error"].(string); ok && err != "" {
+		return err
+	}
+	data := output["data"].(map[string]any)
+	return fmt.Sprintf("Model updated for member %s", data["member_name"])
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (s *spawnSetMemberModelTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}

@@ -280,6 +280,9 @@ func CreateTeamTools(
 		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, atschema.Language(opts.Language), modelConfigAlloc, opts.ForkEnabled)
 		// fork 半区两件（Python tool_factory.py:322-323 无条件注册 + :461-467
 		// fork 关闭时 allowed 剔除——死工具不进每个成员的工具面）。
+		allTools["spawn_passive_human"] = newSpawnPassiveHumanTool(teamBackend, t)
+		allTools["spawn_bridge_agent"] = newSpawnBridgeAgentTool(teamBackend, t)
+		allTools["set_member_model"] = newSetMemberModelTool(teamBackend, t)
 		allTools["checkpoint"] = newCheckpointTool(teamBackend, t, atschema.Language(opts.Language))
 		allTools["list_checkpoints"] = newListCheckpointsTool(teamBackend, t, atschema.Language(opts.Language))
 		allTools["spawn_human_agent"] = newSpawnHumanAgentTool(teamBackend, t)

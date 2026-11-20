@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,6 +79,11 @@ type TeamBackend struct {
 	// checkpoints 本地快照 dict（无回调时的回退存储）。
 	// Python: TeamBackend._checkpoints。
 	checkpoints map[string]storeCheckpointRecord
+	// translator 翻译闭包（构造注入；Python team.py 的 t）。
+	translator locales.Translator
+	// setMemberModelFn 运行中外部 CLI 成员的模型切换回调。
+	// Python: TeamBackend.set_member_model_fn (team.py:591)。
+	setMemberModelFn func(ctx context.Context, memberName string, builtinModel map[string]any, modelName string) (bool, error)
 	// currentModelName/currentModelProvider 团队当前模型（可空）。
 	// Python: team.py:287-288
 	currentModelName     string
@@ -197,6 +203,8 @@ type spawnMemberConfig struct {
 	permissionsOverride map[string]string
 	// lifetime task-scoped 成员的退役策略（空 = 常驻）
 	lifetime *database.MemberLifetime
+	// bridgeMeta 桥接成员元数据
+	bridgeMeta *database.MemberBridgeMeta
 	// agentTemplate 专家模板
 	agentTemplate *database.MemberAgentTemplate
 }
@@ -769,6 +777,103 @@ func (tb *TeamBackend) ListCheckpoints() map[string]map[string]any {
 		}
 	}
 	return out
+}
+
+// SpawnPassiveHuman 注册无头像人类成员（出生即 READY）。
+// 公开方法：build_team（预定义 PASSIVE_HUMAN spec）与 SpawnPassiveHumanTool
+// （动态孵化）调用。被动成员**无头像**：无 harness/无 LLM/无 prompt/无协调
+// 循环——只有名册行与消息总线地址。团队侧流量经 HITT 入站回调到达控制者，
+// 人通过 HumanAgentMessage（总线消息）或 HumanAgentToolCall 透传反向行动。
+// 状态从 READY 开始（合法终态）：启动清扫只找 UNSTARTED 行，恢复路径不会
+// 为它拉 runtime。HITT 关闭时 fail。MemberSpawnedEvent 发布 best-effort
+// （共享 _spawn_and_publish 助手属于本角色刻意跳过的启动路径）。
+// Python: spawn_passive_human (team.py:2535-2621)
+func (tb *TeamBackend) SpawnPassiveHuman(ctx context.Context, memberName, displayName, desc string) atschema.MemberOpResult {
+	if !tb.enableHITT {
+		return atschema.NewMemberOpResultFail(
+			"Cannot spawn passive human: HITT capability is disabled " +
+				"(enable_hitt=False on TeamAgentSpec or build_team)")
+	}
+	resolvedDisplayName := displayName
+	if resolvedDisplayName == "" {
+		resolvedDisplayName = tb.translate("hitt.passive_human_display_name", "被动人类成员")
+	}
+	resolvedDesc := desc
+	if resolvedDesc == "" {
+		resolvedDesc = tb.translate("hitt.passive_human_default_desc", "被动人类成员：由控制者通过 HITT 面板参与协作")
+	}
+	result := tb.SpawnMember(ctx, memberName, resolvedDisplayName, &agentschema.AgentCard{BaseCard: cschema.BaseCard{Name: resolvedDisplayName, Description: resolvedDesc}}, string(atschema.TeamRolePassiveHuman), resolvedDesc, "",
+		"", WithStatus(string(atschema.MemberStatusReady)))
+	if !result.OK {
+		logger.Warn(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", tb.teamName).
+			Str("reason", result.Reason).
+			Msg("Failed to register passive human")
+		return result
+	}
+	tb.publishMemberSpawned(ctx, memberName)
+	logger.Info(logComponent).
+		Str("member_name", memberName).
+		Msg("Passive human member registered as READY")
+	return result
+}
+
+// SpawnBridgeAgent 注册桥接头像成员（本地 LLM 作调度，产出由远端 agent 提供）。
+// bridge 关闭或缺 prompt（远端经 adapter.connect 采用的简报）即 fail。
+// mailbox_inject_mode：入站消息向远端中继时的出站包装格式。
+// Python: spawn_bridge_agent (team.py:2930-3030)
+func (tb *TeamBackend) SpawnBridgeAgent(ctx context.Context, memberName, displayName, desc, prompt, modelName, mailboxInjectMode, protocol string, adapterConfig map[string]any) atschema.MemberOpResult {
+	if !tb.bridgeEnabled() {
+		return atschema.NewMemberOpResultFail(
+			"Cannot spawn bridge agent: Bridge capability is disabled " +
+				"(enable_bridge=False on TeamAgentSpec or build_team)")
+	}
+	if prompt == "" {
+		return atschema.NewMemberOpResultFail(
+			"spawn_bridge_agent requires non-empty 'prompt' — it is the " +
+				"briefing the remote agent adopts via adapter.connect")
+	}
+	resolvedDisplayName := displayName
+	if resolvedDisplayName == "" {
+		resolvedDisplayName = memberName
+	}
+	resolvedDesc := desc
+	if resolvedDesc == "" {
+		resolvedDesc = prompt
+	}
+	memberCard := &agentschema.AgentCard{BaseCard: cschema.BaseCard{Name: resolvedDisplayName, Description: resolvedDesc}}
+	allocation := tb.AllocateModel(modelName)
+	result := tb.SpawnMember(ctx, memberName, resolvedDisplayName, memberCard,
+		string(atschema.TeamRoleBridgeAgent), resolvedDesc, prompt, "",
+		WithStatus(string(atschema.MemberStatusReady)), WithAllocation(allocation),
+		WithBridgeMeta(mailboxInjectMode, protocol, adapterConfig))
+	if !result.OK {
+		return result
+	}
+	// bridge 元数据（mailbox_inject_mode/protocol/adapter_config）随行 options
+	// 记入成员行——投递时按此找到 mailbox 配置。
+	tb.publishMemberSpawned(ctx, memberName)
+	return result
+}
+
+// publishMemberSpawned MemberSpawnedEvent best-effort 发布（passive/bridge 角色
+// 刻意跳过 _spawn_and_publish 助手，事件在此补发）。Python: try/except 仅告警。
+func (tb *TeamBackend) publishMemberSpawned(ctx context.Context, memberName string) {
+	if tb.messager == nil {
+		return
+	}
+	event := events.MemberSpawnedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
+	}
+	topic := events.TeamTopicTeam.Build("", tb.teamName)
+	if err := tb.messager.Publish(ctx, topic, events.EventMessageFromEvent(event)); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("member_name", memberName).
+			Msg("Failed to publish member spawned event")
+		return
+	}
+	logger.Debug(logComponent).Msg("Member spawned event published")
 }
 
 // PublishCheckpointCreated 发布 CHECKPOINT_CREATED 框架事件（leader 侧渲染为
@@ -2037,4 +2142,44 @@ func (tb *TeamBackend) ResolveBuiltinModel(cliAgent, model, effort string) (*dat
 		effective = declared.DefaultEffort
 	}
 	return &database.MemberBuiltinModel{Model: model, Effort: &effective}, ""
+}
+
+// ConversationMode 会话模式（"team" / "group_chat"）。group_chat 章节落
+// 字段前恒 "team"（Python team.py:265 默认值同款）。
+// Python: TeamBackend.conversation_mode (:265)
+func (tb *TeamBackend) ConversationMode() string { return "team" }
+
+// bridgeEnabled bridge 能力开关（TeamAgentSpec.enable_bridge；Go schema 无该
+// 字段——同 D-8 fork 模式恒 false，随 bridge 章节落字段解除）。
+// Python: TeamBackend._enable_bridge。
+func (tb *TeamBackend) bridgeEnabled() bool { return false }
+
+// translate 翻译闭包（构造注入；nil 回退默认中文文案）。
+// Python: TeamBackend.t（make_translator 产物构造注入）。
+func (tb *TeamBackend) translate(key, fallback string) string {
+	if tb.translator != nil {
+		parts := strings.SplitN(key, ".", 2)
+		if len(parts) == 2 {
+			return tb.translator(parts[0], parts[1])
+		}
+	}
+	return fallback
+}
+
+// WithBridgeMeta 桥接成员元数据（mailbox_inject_mode/protocol/adapter_config）
+// ——投递时按此找到 mailbox 配置。Python: spawn_member 的同名 kwargs。
+func WithBridgeMeta(mailboxInjectMode, protocol string, adapterConfig map[string]any) SpawnMemberOption {
+	return func(c *spawnMemberConfig) {
+		c.bridgeMeta = &database.MemberBridgeMeta{
+			MailboxInjectMode: mailboxInjectMode,
+			Protocol:          protocol,
+			AdapterConfig:     adapterConfig,
+		}
+	}
+}
+
+// SetMemberModelFn 注册外部 CLI 成员的模型切换回调。
+// Python: set_member_model_fn (team.py:591-592)
+func (tb *TeamBackend) SetMemberModelFn(fn func(ctx context.Context, memberName string, builtinModel map[string]any, modelName string) (bool, error)) {
+	tb.setMemberModelFn = fn
 }

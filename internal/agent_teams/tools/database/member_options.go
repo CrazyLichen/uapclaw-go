@@ -113,6 +113,9 @@ type TeamMemberOptions struct {
 	AgentTemplate *MemberAgentTemplate `json:"agent_template,omitempty"`
 	// Extra 未知键原样保留（对齐 pydantic extra="allow"）
 	Extra map[string]any `json:"-"`
+	// BridgeMeta 桥接成员元数据（nil = 非 bridge 成员）。
+	// Python: spawn_member(mailbox_inject_mode=, protocol=, adapter_config=) 落库形态。
+	BridgeMeta *MemberBridgeMeta `json:"member_bridge_meta,omitempty"`
 }
 
 // MemberOptionsInput BuildMemberOptions 的入参（对齐上游关键字参数）。
@@ -383,6 +386,11 @@ func GetMemberAgentTemplate(record any) *MemberAgentTemplate {
 	return GetMemberOptions(record).AgentTemplate
 }
 
+// GetMemberBridgeMeta 读成员行的桥接元数据（缺失得 nil）。
+func GetMemberBridgeMeta(record any) *MemberBridgeMeta {
+	return GetMemberOptions(record).BridgeMeta
+}
+
 // GetMemberLifetime 返回成员的退役策略（nil = 常驻）。
 // Python: get_member_lifetime (member_options.py:326-328)
 func GetMemberLifetime(record any) *MemberLifetime {
@@ -553,4 +561,16 @@ func strPtrOrNil(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// MemberBridgeMeta 桥接成员元数据（TeamMemberOptions.member_bridge_meta）。
+// Python: spawn_member(mailbox_inject_mode=, protocol=, adapter_config=) 的
+// 成员行落库形态（bridge 章节）。
+type MemberBridgeMeta struct {
+	// MailboxInjectMode 入站消息中继的出站包装格式（passthrough/rephrase）
+	MailboxInjectMode string `json:"mailbox_inject_mode"`
+	// Protocol 适配器查找键（Phase-1 空串）
+	Protocol string `json:"protocol"`
+	// AdapterConfig 自由形态适配器参数（timeout/endpoint/...）
+	AdapterConfig map[string]any `json:"adapter_config,omitempty"`
 }
