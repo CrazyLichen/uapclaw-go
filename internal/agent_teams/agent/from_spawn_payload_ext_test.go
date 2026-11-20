@@ -20,7 +20,7 @@ import (
 // TestFromSpawnPayload_materializeBuildContext 接线对齐 Python
 // from_spawn_payload 的 configure 前 materialize（team_agent.py:1467）。
 func TestFromSpawnPayload_materializeBuildContext(t *testing.T) {
-	swarm.RegisterSwarmBuildContextFactory()
+	swarm.RegisterSwarmProviders()
 	spec := atschema.NewTeamAgentSpec()
 	spec.TeamName = "team_seed"
 	spec.Agents = map[string]atschema.DeepAgentSpec{"leader": {}}

@@ -124,7 +124,7 @@ func orDefault(v, fallback string) string {
 // ⤴️群聊章节），步骤位置与分支结构保留。
 func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams) error {
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）
-	RegisterSwarmBuildContextFactory()
+	RegisterSwarmProviders()
 
 	// 步骤 2: _ensure_external_team_transport（:425 调用位；:457 原行号）
 	// 给跨进程 CLI 成员挂 hybrid 回传通道（15.16d）。
