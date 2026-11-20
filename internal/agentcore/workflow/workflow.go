@@ -119,9 +119,10 @@ func (w *Workflow) SetEndComp(endCompID string, component components.ComponentCo
 	return w
 }
 
-// AddConnection 常规边（workflow.py:279-293）。
-func (w *Workflow) AddConnection(srcCompID any, targetCompID string) *Workflow {
-	_ = w.internal.AddConnection(srcCompID, targetCompID)
+// AddConnection 常规边（workflow.py:279-293 add_connection）。
+// 偏差 D-14-6：Python src_comp_id: str|list[str] → Go []string（单源包一元素）。
+func (w *Workflow) AddConnection(srcCompIDs []string, targetCompID string) *Workflow {
+	_ = w.internal.AddConnection(srcCompIDs, targetCompID)
 	return w
 }
 
@@ -131,13 +132,16 @@ func (w *Workflow) AddStreamConnection(srcCompID, targetCompID string) *Workflow
 	return w
 }
 
-// AddConditionalConnection 条件边（workflow.py:311-326）。
+// AddConditionalConnection 条件边（workflow.py:311-326；src: str、router: Router 标注类型直传）。
 func (w *Workflow) AddConditionalConnection(srcCompID string, router graph.Router) *Workflow {
 	_ = w.internal.AddConditionalConnection(srcCompID, router)
 	return w
 }
 
 // Invoke 批式执行（workflow.py:328-408 一比一；kwargs 携带 is_sub/skip_inputs_validate）。
+// inputs 运行时闭集（D-17-1 收窄注记）：map[string]any（常规）|
+// *interaction.InteractiveInput（交互恢复，workflow.py:747 isinstance 探测同形）；
+// 两形态均在 validateInputs/图执行内显式分发，any 仅作闭集外层承载。
 func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
 	modelContext any, kwargs map[string]any) (*WorkflowOutput, error) {
 	if kwBool(kwargs, "is_sub") {
@@ -199,6 +203,7 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 }
 
 // Stream 流式执行门面（workflow.py:410-469；A' 签名：启动错误走第二返回值）。
+// inputs 闭集同 Invoke（map[string]any | *interaction.InteractiveInput）。
 func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
 	modelContext any, streamModes []stream.StreamMode, kwargs map[string]any) (<-chan WorkflowChunk, error) {
 	if kwBool(kwargs, "is_sub") {
@@ -220,8 +225,11 @@ func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterface
 
 // Draw mermaid 生成（workflow.py:471-499；偏差 D-d：_drawable 恒 nil，
 // 复刻 Python `_drawable is None` 分支返回空串/空字节；8.13 实施时回收）。
-func (w *Workflow) Draw(title, outputFormat string, expandSubgraph any, enableAnimation bool) any {
+// 偏差 D-14-7：expand_subgraph: int|bool（False/True 或展开层级）→ Go 收窄 bool
+// （层级语义当前零消费方，8.13 落地若需层级改 int）。
+func (w *Workflow) Draw(title, outputFormat string, expandSubgraph bool, enableAnimation bool) any {
 	_ = title
+	_ = expandSubgraph
 	switch outputFormat {
 	case "png":
 		return []byte(nil) // ≙ Python return b""

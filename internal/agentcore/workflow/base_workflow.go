@@ -191,27 +191,23 @@ func (w *BaseWorkflow) EndComp(endCompID string) error {
 	return nil
 }
 
-// AddConnection 常规边（Python _workflow.py:225-243；spec.Edges 单/多源双分支一比一）。
-func (w *BaseWorkflow) AddConnection(srcCompID any, targetCompID string) error {
-	if err := w.validateEdge(srcCompID, targetCompID, exception.StatusWorkflowEdgeInvalid); err != nil {
+// AddConnection 常规边（Python _workflow.py:225-243 add_connection）。
+// 偏差 D-14-6：Python src_comp_id: str|list[str] 运行时分发 → Go 收窄 []string
+// （单源由调用方包一元素列表），外层 Workflow.AddConnection 同形。
+func (w *BaseWorkflow) AddConnection(srcCompIDs []string, targetCompID string) error {
+	if err := w.validateEdge(srcCompIDs, targetCompID, exception.StatusWorkflowEdgeInvalid); err != nil {
 		return err
 	}
-	switch v := srcCompID.(type) {
-	case string:
-		w.graph.AddEdge([]string{v}, targetCompID)
-		w.appendEdge(v, targetCompID)
-	case []string:
-		w.graph.AddEdge(v, targetCompID)
-		for _, src := range v {
-			w.appendEdge(src, targetCompID)
-		}
+	w.graph.AddEdge(srcCompIDs, targetCompID)
+	for _, src := range srcCompIDs {
+		w.appendEdge(src, targetCompID)
 	}
 	return nil
 }
 
 // AddStreamConnection 流式边（Python _workflow.py:245-257；目标可执行体注册流消费者）。
 func (w *BaseWorkflow) AddStreamConnection(srcCompID string, targetCompID string) error {
-	if err := w.validateEdge(srcCompID, targetCompID, exception.StatusWorkflowStreamEdgeInvalid); err != nil {
+	if err := w.validateEdge([]string{srcCompID}, targetCompID, exception.StatusWorkflowStreamEdgeInvalid); err != nil {
 		return err
 	}
 	w.graph.AddEdge([]string{srcCompID}, targetCompID)
@@ -389,31 +385,16 @@ func (w *BaseWorkflow) validateCompAbility(compID string, abilities []components
 	return nil
 }
 
-// validateEdge 源端校验（Python _workflow.py:521-543；string/[]string 双分支一比一）。
-func (w *BaseWorkflow) validateEdge(srcCompID any, targetCompID string, code exception.StatusCode) error {
-	toStr := w.workflowToStr()
-	switch v := srcCompID.(type) {
-	case string:
-		if v == "" {
+// validateEdge 源端校验（Python _workflow.py:521-543 list 分支承载；str 形态由
+// 调用方包一元素列表归一，偏差 D-14-6）。
+func (w *BaseWorkflow) validateEdge(srcCompIDs []string, targetCompID string, code exception.StatusCode) error {
+	for _, id := range srcCompIDs {
+		if id == "" {
 			return exception.BuildError(code,
-				exception.WithParam("src_comp_id", v), exception.WithParam("target_comp_id", targetCompID),
-				exception.WithParam("reason", "src_comp_id cannot be empty or None"),
-				exception.WithParam("workflow", toStr))
+				exception.WithParam("src_comp_id", fmt.Sprintf("%v", srcCompIDs)), exception.WithParam("target_comp_id", targetCompID),
+				exception.WithParam("reason", "src_comp_id list contains empty or None value"),
+				exception.WithParam("workflow", w.workflowToStr()))
 		}
-	case []string:
-		for _, id := range v {
-			if id == "" {
-				return exception.BuildError(code,
-					exception.WithParam("src_comp_id", fmt.Sprintf("%v", v)), exception.WithParam("target_comp_id", targetCompID),
-					exception.WithParam("reason", "src_comp_id list contains empty or None value"),
-					exception.WithParam("workflow", toStr))
-			}
-		}
-	default:
-		return exception.BuildError(code,
-			exception.WithParam("target_comp_id", targetCompID),
-			exception.WithParam("reason", fmt.Sprintf("src_comp_id must be a string or list[string], got %T", srcCompID)),
-			exception.WithParam("workflow", toStr))
 	}
 	return nil
 }

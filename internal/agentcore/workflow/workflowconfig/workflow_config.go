@@ -63,21 +63,6 @@ type WorkflowSpec struct {
 	StartNodes []string `json:"start_nodes"`
 }
 
-// StreamEdgesView 流调度规格视图（stream_actor.ActorSpecView 实现，偏差 D-14-1）。
-func (s *WorkflowSpec) StreamEdgesView() map[string][]string { return s.StreamEdges }
-
-// StreamSourceGroupsView 流调度规格视图。
-func (s *WorkflowSpec) StreamSourceGroupsView() map[string][][]string { return s.StreamSourceGroups }
-
-// CompConfigsAbilitiesView 流调度规格视图。
-func (s *WorkflowSpec) CompConfigsAbilitiesView() map[string][]ability.ComponentAbility {
-	out := map[string][]ability.ComponentAbility{}
-	for id, cfg := range s.CompConfigs {
-		out[id] = cfg.Abilities
-	}
-	return out
-}
-
 // WorkflowConfig 工作流身份、图规格与嵌套上限。
 // Python: workflow_config.py WorkflowConfig。
 type WorkflowConfig struct {

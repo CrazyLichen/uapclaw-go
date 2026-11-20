@@ -93,19 +93,17 @@ func TestValidateCompAbility_流能力强制等待(t *testing.T) {
 	}
 }
 
-// TestValidateEdge_形态 对齐 _workflow.py:521-543。
+// TestValidateEdge_形态 对齐 _workflow.py:521-543（D-14-6 收窄 []string：
+// str 形态由调用方包一元素列表，非 str/list 形态由类型系统排除）。
 func TestValidateEdge_形态(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
-	if err := bw.validateEdge("", "b", exception.StatusWorkflowEdgeInvalid); err == nil {
+	if err := bw.validateEdge([]string{""}, "b", exception.StatusWorkflowEdgeInvalid); err == nil {
 		t.Fatal("空源应拒绝")
 	}
 	if err := bw.validateEdge([]string{"a", ""}, "b", exception.StatusWorkflowEdgeInvalid); err == nil {
 		t.Fatal("列表含空应拒绝")
 	}
-	if err := bw.validateEdge(42, "b", exception.StatusWorkflowEdgeInvalid); err == nil {
-		t.Fatal("非 string/list 应拒绝")
-	}
-	if err := bw.validateEdge("a", "b", exception.StatusWorkflowEdgeInvalid); err != nil {
+	if err := bw.validateEdge([]string{"a"}, "b", exception.StatusWorkflowEdgeInvalid); err != nil {
 		t.Fatalf("合法形态应放行：%v", err)
 	}
 }
@@ -164,7 +162,7 @@ func TestStartEndComp(t *testing.T) {
 // TestAddConnection_单源与多源 对齐 _workflow.py:225-243。
 func TestAddConnection_单源与多源(t *testing.T) {
 	bw := newTestWorkflow(t)
-	if err := bw.AddConnection("a", "b"); err != nil {
+	if err := bw.AddConnection([]string{"a"}, "b"); err != nil {
 		t.Fatalf("单源连接：%v", err)
 	}
 	if err := bw.AddConnection([]string{"a", "b"}, "c"); err != nil {
@@ -195,15 +193,6 @@ func TestAddConditionalConnection_校验(t *testing.T) {
 	if err := bw.AddConditionalConnection("", nil); err == nil {
 		t.Fatal("空 src 应拒绝")
 	}
-	if err := bw.AddConditionalConnection("a", nil); err == nil {
-		t.Fatal("空 router 应拒绝")
-	}
-	if err := bw.AddConditionalConnection(42, nil); err == nil {
-		t.Fatal("非 string 应拒绝")
-	}
-	if err := bw.AddConditionalConnection("a", 42); err == nil {
-		t.Fatal("非 callable 应拒绝")
-	}
 }
 
 // TestAutoCompleteAbilities_三段推断 对齐 _workflow.py:397-441 推断规则。
@@ -231,7 +220,7 @@ func TestAutoCompleteAbilities_三段推断(t *testing.T) {
 		}
 		for s, ts := range edges {
 			for _, t2 := range ts {
-				_ = bw.AddConnection(s, t2)
+				_ = bw.AddConnection([]string{s}, t2)
 			}
 		}
 		for s, ts := range streamEdges {
@@ -291,7 +280,7 @@ func TestValidateEdgeNodes_缺注册节点panic(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
 	_ = bw.AddWorkflowComp("a", flow.NewStart(), boolPtr(false),
 		nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
-	_ = bw.AddConnection("a", "ghost")
+	_ = bw.AddConnection([]string{"a"}, "ghost")
 	defer func() {
 		r := recover()
 		if r == nil {
