@@ -194,7 +194,7 @@ symphony:
 	s.True(types["interrupt.AskUserRail"], "teammate 物化 HITL 交互 rail")
 	tools := toolInstanceNames(parts)
 	s.True(tools["fetch_webpage"], "teammate 物化 core.web_fetch 工具")
-	s.True(tools["paid_search"], "teammate 物化 core.web_paid_search 工具")
+	s.NotContains(tools, "paid_search", "未配置付费 key 时 paid_search 应跳过（对齐 _build_web_paid_search :252 门控）")
 	s.True(tools["cron"], "teammate 物化 cron 工具组")
 
 	// 真实成员物化全链
