@@ -17,9 +17,10 @@ func TestParseTasks_围栏与裸数组(t *testing.T) {
 	if tasks[0].Status != autoharness.TaskStatusPending {
 		t.Fatalf("默认状态 = %v", tasks[0].Status)
 	}
+	// Python 语义：`"topic" in item` 键存在即收录（空字符串也收录）
 	bare := `[{"topic":"t2"},{"nope":1},{"topic":""}]`
 	tasks2 := ParseTasks(bare)
-	if len(tasks2) != 1 || tasks2[0].Topic != "t2" {
+	if len(tasks2) != 2 || tasks2[0].Topic != "t2" || tasks2[1].Topic != "" {
 		t.Fatalf("裸数组解析 = %+v", tasks2)
 	}
 	if got := ParseTasks("no json here"); len(got) != 0 {
