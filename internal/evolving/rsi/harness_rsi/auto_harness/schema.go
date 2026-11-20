@@ -967,11 +967,21 @@ func defaultImmutableFiles() []string {
 
 // newShortID 生成 12 位随机 hex（对齐 uuid.uuid4().hex[:12]）
 func newShortID() string {
-	buf := make([]byte, 6)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%x", time.Now().UnixNano())[:12]
+	return NewShortID(12)
+}
+
+// NewShortID 生成 n 位随机 hex（uuid4().hex[:n] 等价）
+func NewShortID(n int) string {
+	if n <= 0 {
+		return ""
 	}
-	return hex.EncodeToString(buf)
+	buf := make([]byte, (n+1)/2)
+	if _, err := rand.Read(buf); err != nil {
+		s := fmt.Sprintf("%x", time.Now().UnixNano())
+		return s[:n]
+	}
+	s := hex.EncodeToString(buf)
+	return s[:n]
 }
 
 // toString 任意值转字符串（对齐 Python str(value)）
