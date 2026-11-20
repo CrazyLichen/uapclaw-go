@@ -83,7 +83,7 @@ type stubJudger struct {
 	method string
 }
 
-func (s *stubJudger) MethodName() string          { return s.method }
+func (s *stubJudger) MethodName() string { return s.method }
 func (s *stubJudger) FailureResult(err string) *JudgeResult {
 	return failureResult(s.method, err)
 }
