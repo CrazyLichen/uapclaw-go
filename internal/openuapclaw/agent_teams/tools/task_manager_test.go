@@ -565,12 +565,14 @@ func TestTaskManager_SubmitPlan_不是PlanMode(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_不合法状态(t *testing.T) {
-	tm, _, _ := setupPlanModeTaskManager(t)
+	tm, db, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	// 分配给 leader1，agent1 不是认领人
-	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
+	// 分配给普通 teammate agent2（leader 不可被指派，Python assign L483），
+	// agent1 不是认领人。
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent2")
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_123")
 	if err == nil {
@@ -814,12 +816,15 @@ func TestTaskManager_AddBatch_带依赖(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_已认领非当前成员(t *testing.T) {
-	tm, _, _ := setupPlanModeTaskManager(t)
+	tm, db, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
+	// leader 不可被指派（Python assign L483），改用普通 teammate agent2 持票。
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	task, _ := tm.Add(ctx, "任务", "")
-	// leader1 认领（而非 agent1）
-	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
+	if result, err := tm.Assign(ctx, task.TaskID, "agent2"); err != nil || !result.OK {
+		t.Fatalf("Assign 给 agent2 应成功: ok=%v err=%v reason=%s", result.OK, err, result.Reason)
+	}
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_1")
 	if err == nil {
@@ -1247,3 +1252,122 @@ func TestTeamTaskManager_UpdateTask_两次编辑累加(t *testing.T) {
 		t.Fatalf("change_notes 应有 2 条, got %q", *got.ChangeNotes)
 	}
 }
+
+// setupReassignFixture 建 reassign 测试夹具：leader1 + agent1/agent2 + 一张
+// assignee=agent1、status 可指定的任务。返回 (tm, db, taskID)。
+func setupReassignFixture(status string) (*TeamTaskManager, *database.InMemoryTeamDatabase, string) {
+	db := database.NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	tm := NewTeamTaskManager(db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	db.Initialize(ctx)
+	owner := "agent1"
+	task := &database.TeamTaskBase{TaskID: "t-r", TeamName: "alpha", Title: "T", Content: "C",
+		Status: status, Assignee: &owner}
+	if ok, _ := db.Task().CreateTask(ctx, task); !ok {
+		panic("fixture create failed")
+	}
+	return tm, db, "t-r"
+}
+
+// TestTaskManager_Reassign 状态矩阵 + 事件序。Python: reassign (task_manager.py L1858-1920)
+func TestTaskManager_Reassign(t *testing.T) {
+	ctx := context.Background()
+
+	// 可改派三态：换人成功、状态原位保留。
+	for _, status := range []string{fsm.TaskStatusPending, fsm.TaskStatusBlocked, fsm.TaskStatusInProgress} {
+		tm, db, taskID := setupReassignFixture(status)
+		result, err := tm.Reassign(ctx, taskID, "agent2")
+		if err != nil {
+			t.Fatalf("Reassign(%s) 返回错误: %v", status, err)
+		}
+		if !result.OK {
+			t.Fatalf("Reassign(%s) 失败: %s", status, result.Reason)
+		}
+		got, _ := db.Task().GetTask(ctx, taskID)
+		if got.Status != status {
+			t.Errorf("Reassign(%s) 状态应原位保留: got %q", status, got.Status)
+		}
+		if got.Assignee == nil || *got.Assignee != "agent2" {
+			t.Errorf("Reassign(%s) 新 owner 应为 agent2: got %v", status, got.Assignee)
+		}
+	}
+
+	// 不可改派态（PLANNING / IN_REVIEW / 终态）：false + 原因。
+	for _, status := range []string{fsm.TaskStatusPlanning, fsm.TaskStatusInReview, fsm.TaskStatusCompleted} {
+		tm, _, taskID := setupReassignFixture(status)
+		result, err := tm.Reassign(ctx, taskID, "agent2")
+		if err != nil {
+			t.Fatalf("Reassign(%s) 返回错误: %v", status, err)
+		}
+		if result.OK {
+			t.Errorf("Reassign(%s) 应拒绝", status)
+		}
+	}
+
+	// 新 owner 是 leader：拒绝（_validate_task_owner，task_manager.py L167-181）。
+	tm, _, taskID := setupReassignFixture(fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, taskID, "leader1"); err != nil || result.OK {
+		t.Errorf("改派给 leader 应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 新 owner 不在团队：拒绝。
+	tm, _, taskID = setupReassignFixture(fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, taskID, "ghost"); err != nil || result.OK {
+		t.Errorf("改派给不存在成员应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 任务不存在：拒绝。
+	tm, _, _ = setupReassignFixture(fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, "nope", "agent2"); err != nil || result.OK {
+		t.Errorf("任务不存在应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 无旧 owner：拒绝（L1894）。
+	db2 := database.NewInMemoryTeamDatabase()
+	ctx2 := context.Background()
+	db2.CreateTeam(ctx2, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	db2.CreateMember(ctx2, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	tm2 := NewTeamTaskManager(db2, "alpha", "leader1", nil, nil, "", "", "leader1")
+	db2.Initialize(ctx2)
+	if _, err := db2.Task().CreateTask(ctx2, &database.TeamTaskBase{TaskID: "t-u", TeamName: "alpha",
+		Title: "T", Content: "C", Status: fsm.TaskStatusPending}); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := tm2.Reassign(ctx2, "t-u", "agent2"); err != nil || result.OK {
+		t.Errorf("无旧 owner 应拒绝: ok=%v err=%v", result.OK, err)
+	}
+}
+
+// TestTaskManager_ReassignBlockedWithOpenSubtasks F_82：BLOCKED 且有非终态子任务
+// 的工作挂在当前 owner 手上，不可换手。
+func TestTaskManager_ReassignBlockedWithOpenSubtasks(t *testing.T) {
+	ctx := context.Background()
+	tm, db, taskID := setupReassignFixture(fsm.TaskStatusBlocked)
+	if ok, err := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t-sub", TeamName: "alpha",
+		Title: "sub", Content: "C", Status: fsm.TaskStatusInProgress, ParentTaskID: strPtrOf("t-r")}); err != nil || !ok {
+		t.Fatalf("创建子任务失败: %v", err)
+	}
+	result, err := tm.Reassign(ctx, taskID, "agent2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OK {
+		t.Fatal("BLOCKED 带在跑子任务应拒绝换手（F_82）")
+	}
+}
+
+// TestTaskManager_ReassignEvents 事件序：REVOKED(old) → CLAIMED(new)。
+func TestTaskManager_ReassignEvents(t *testing.T) {
+	ctx := context.Background()
+	tm, _, taskID := setupReassignFixture(fsm.TaskStatusInProgress)
+	// Reassign 不返回错误时事件经 publishTaskEvent 发出（messager 为 nil 时尽力而为）。
+	if result, err := tm.Reassign(ctx, taskID, "agent2"); err != nil || !result.OK {
+		t.Fatalf("Reassign 失败: ok=%v err=%v reason=%s", result.OK, err, result.Reason)
+	}
+}
+
+func strPtrOf(s string) *string { return &s }

@@ -62,6 +62,42 @@ type TaskClaimedEvent struct {
 	TaskID string
 }
 
+// TaskRevokedEvent 改派撤回事件：成员名下任务被 reassign 换手给别人时发布，
+// member_name 携带**前任** assignee。与 TASK_RELEASED（票回到可认领池的看板
+// 唤醒）语义不同——这是给失去任务的成员的定向通知，dispatcher 据此把它从
+// 已不属于它的任务上 steer 开。新 assignee 另经 TASK_CLAIMED 单独通知。
+// Python: TaskRevokedEvent（schema/events.py L390-401）
+type TaskRevokedEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+}
+
+// TaskReleasedEvent 释放事件：任务 reset 回 PENDING 后发布，idle teammate
+// 得知票重新可认领（与 TASK_UNBLOCKED 同款下游 nudge）。
+// Python: TaskReleasedEvent（schema/events.py L379）
+type TaskReleasedEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+}
+
+// EventTypeName 事件类型名。
+func (e TaskRevokedEvent) EventTypeName() string { return TeamEventTaskRevoked }
+
+// ToPayload 转换为事件载荷（member_name = 前任 assignee）。
+func (e TaskRevokedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "member_name": e.MemberName}
+}
+
+// EventTypeName 事件类型名。
+func (e TaskReleasedEvent) EventTypeName() string { return TeamEventTaskReleased }
+
+// ToPayload 转换为事件载荷。
+func (e TaskReleasedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
 // TaskStartedEvent scheduled 派发启动事件（F_62）：调度器把已指派任务推进到
 // 执行——建队时的指派与执行开始是两个独立事件。
 // Python: TaskStartedEvent（schema/events.py，TeamEvent.TASK_STARTED L161）
@@ -153,7 +189,10 @@ func (e TaskClaimedEvent) EventTypeName() string { return TeamEventTaskClaimed }
 
 // ToPayload 转换为事件载荷。
 func (e TaskClaimedEvent) ToPayload() map[string]any {
-	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+	// member_name 是 BaseEventMessage 字段（Python pydantic 基类字段随 payload
+	// 序列化）；handler 据此判定向谁定向投递。此前缺该键导致 CLAIMED 永远
+	// 走不进 self 分支（parity 缺陷，随 25.4 修）。
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "member_name": e.MemberName}
 }
 
 // EventTypeName 返回任务完成事件类型名。
