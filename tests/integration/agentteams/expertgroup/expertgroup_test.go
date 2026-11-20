@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -349,4 +350,35 @@ func newEnrichFixtureSpec() *atschema.TeamAgentSpec {
 		Leader:   atschema.LeaderSpec{MemberName: "leader", Persona: "team prompt"},
 		Agents:   map[string]hschema.DeepAgentSpec{"leader": base(), "teammate": base()},
 	}
+}
+
+// ──────────────────────────── 工具描述资产防回归（e15 审查批） ────────────────────────────
+
+// TestTeamTools_描述非空_门控生效 经真实装配断言工具描述非空 + omit 门控生效
+// ——防止工具描述再丢失（e15 审查批：descs 树/slot 渲染/omit 塌缩回归防线）。
+func (s *ExpertGroupSuite) TestTeamTools_描述非空_门控生效() {
+	byName := s.fixtureTools(s.fixtureCatalog())
+
+	// 全部装配工具的 Description 非空且无 {{ 残留（渲染失败即空串）
+	empty := []string{}
+	residual := []string{}
+	for name, t := range byName {
+		desc := t.Card().Description
+		if desc == "" {
+			empty = append(empty, name)
+		}
+		if strings.Contains(desc, "{{") {
+			residual = append(residual, name)
+		}
+	}
+	s.Require().Empty(empty, "以下工具描述为空：%v", empty)
+	s.Require().Empty(residual, "以下工具描述残留 {{：%v", residual)
+
+	// spawn_teammate：全量描述含 fork 段；本轮 ForkEnabled=false（D-8）→
+	// allowed 剔除 checkpoint/list_checkpoints（工厂门控）
+	spawn, ok := byName["spawn_teammate"]
+	s.Require().True(ok)
+	s.Require().NotContains(spawn.Card().Description, "{{")
+	s.Require().NotContains(byName, "checkpoint")
+	s.Require().NotContains(byName, "list_checkpoints")
 }

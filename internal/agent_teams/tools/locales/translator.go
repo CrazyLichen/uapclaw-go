@@ -40,9 +40,14 @@ var descCache sync.Map
 // Python: make_translator(lang)
 func MakeTranslator(lang atschema.Language) Translator {
 	return func(tool string, key ...string) string {
-		// 无 key 或 key 为 "_desc" → 加载 Markdown 描述
+		// 无 key 或 key 为 "_desc" → 加载 Markdown 描述并渲染
+		// （Python make_translator 闭包：_desc 分支必经 _render_desc——
+		// slot 填充 + omit 塌缩；Go 侧 omit 经显式 RenderDesc 传参，
+		// 闭包形态无 omit（空集））。e15 审查修复：原直接返回 md 原文，
+		// slot 未填充（集成测试暴露 create_task/build_team/update_task/
+		// send_message 四工具描述残留 {{）。
 		if len(key) == 0 || key[0] == descKey {
-			return loadToolDesc(tool, string(lang))
+			return RenderDesc(tool, lang, map[string]bool{})
 		}
 		// 其他 key → 查 STRINGS 映射
 		dictKey := tool + "." + key[0]
