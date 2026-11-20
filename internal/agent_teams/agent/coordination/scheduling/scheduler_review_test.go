@@ -149,7 +149,11 @@ func TestReconcileReviews_派发不重派(t *testing.T) {
 	// followUp 释放标记后重扫；runner 注入 fake 无票 → runs 递增但不超过
 	// maxReviewRunsPerRound-1 次重派（首次 1 + 重派至多 1 = 2 后升级 no_vote）。
 	time.Sleep(200 * time.Millisecond)
-	if runs == 0 {
+	// runner 在 dispatchToReviewer goroutine 内递增，读取必须持同一把锁（-race）。
+	mu.Lock()
+	dispatched := runs
+	mu.Unlock()
+	if dispatched == 0 {
 		t.Fatal("reviewer must be dispatched at least once")
 	}
 }

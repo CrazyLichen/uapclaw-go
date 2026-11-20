@@ -219,10 +219,16 @@ func (s *TeamScheduler) dispatchReviewFeedback(ctx context.Context, task *databa
 		return
 	}
 	roundKey := [2]string{task.TaskID, fmt.Sprintf("%d", task.ReviewRound)}
+	// 去重账本会被事件总线扫描与 reviewer follow-up goroutine 的重扫
+	// （scheduler_review.go followUpUnvotedReviewer → scan）两条线并发读写，
+	// 与 DB 状态机无关，必须持锁（-race 实抓路径）。
+	s.reviewFeedbackMu.Lock()
 	if _, dispatched := s.reviewFeedbackRounds[roundKey]; dispatched {
+		s.reviewFeedbackMu.Unlock()
 		return
 	}
 	s.reviewFeedbackRounds[roundKey] = struct{}{}
+	s.reviewFeedbackMu.Unlock()
 	// Python: payload 构造（scheduler.py L645-655），键名是 rail 契约不得改动。
 	payload := map[string]any{
 		"team_id":      s.teamName,
@@ -235,19 +241,13 @@ func (s *TeamScheduler) dispatchReviewFeedback(ctx context.Context, task *databa
 		"feedback":     normalized,
 	}
 	// Python: asyncio.create_task 后台运行（scheduler.py L656-658）；Go goroutine
-	// + 在飞计数（mutex 内先增再派发），终态聚合 cond 等待同形。
-	s.reviewFeedbackMu.Lock()
-	s.reviewFeedbackInflight++
-	s.reviewFeedbackMu.Unlock()
+	// + WaitGroup（Add 先于 go，Done 随 goroutine），终态聚合 wg.Wait 同形。
+	// 聚合点与派发的互斥由 DB 状态机保证：派发前提是 ReviseTask 的
+	// IN_REVIEW CAS 成功（任务转 IN_PROGRESS、板未清），板清聚合触发时
+	// 业务上不存在在途新派发——Wait 无「等待期间新 Add」窗口。
+	s.reviewFeedbackWG.Add(1)
 	go func() {
-		defer func() {
-			s.reviewFeedbackMu.Lock()
-			s.reviewFeedbackInflight--
-			if s.reviewFeedbackInflight == 0 {
-				s.reviewFeedbackCond.Broadcast()
-			}
-			s.reviewFeedbackMu.Unlock()
-		}()
+		defer s.reviewFeedbackWG.Done()
 		// Python: _invoke_review_feedback_rail 的吞错日志形态（L660-671）。
 		if err := s.reviewFeedbackHandler(ctx, payload); err != nil {
 			logger.Error(logComponent).Err(err).

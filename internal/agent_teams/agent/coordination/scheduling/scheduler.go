@@ -186,13 +186,16 @@ type TeamScheduler struct {
 	allDoneAnnounced bool
 	// reviewFeedbackDispatched 评审反馈 rail 已派发标志（25.2b）。
 	reviewFeedbackDispatched bool
-	// reviewFeedbackInflight/Mu/Cond 评审反馈后台任务在飞计数（Python
+	// reviewFeedbackMu/WG 评审反馈派发的同步面（Python
 	// _review_feedback_tasks 集合：派发即后台运行，终态聚合 gather 等待）。
-	// 计数在 mutex 内先增再启 goroutine——WaitGroup 的 Add/Wait 并发竞争在这里
-	// 由「增量先于派发可见」消除（CI race 实证 WaitGroup 形态会漏等）。
-	reviewFeedbackMu       sync.Mutex
-	reviewFeedbackCond     *sync.Cond
-	reviewFeedbackInflight int
+	// Mu 只护去重账本 reviewFeedbackRounds——派发可来自事件总线扫描与
+	// reviewer follow-up goroutine 重扫两条线（无 DB 守卫的纯内存态）；
+	// WG 等待的「无在途新派发」由 DB 状态机互斥保证（ReviseTask 的
+	// IN_REVIEW CAS 成功才派发，派发后任务 IN_PROGRESS、板未清），故
+	// Wait 无「等待期间新 Add」窗口（勘误：早前注记的「WG 形态漏等」
+	// 系 Add 位置错误所致，非拓扑固有；2026-12-05 与用户复核 DB 守卫后改回 WG）。
+	reviewFeedbackMu sync.Mutex
+	reviewFeedbackWG sync.WaitGroup
 	// templateLoader 绑定团队后端 workspace cache 的 A 类加载器（懒绑定；
 	// reviewer_* 模板读演进值）。Python: _template_loader_cache（scheduler.py L157-169）。
 	templateLoader TemplateLoaderFunc
@@ -237,7 +240,6 @@ func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend 
 		revisionPushed:       map[revisionKey]struct{}{},
 		reviewFeedbackRounds: map[[2]string]struct{}{},
 	}
-	sched.reviewFeedbackCond = sync.NewCond(&sched.reviewFeedbackMu)
 	return sched
 }
 
@@ -891,11 +893,8 @@ func (s *TeamScheduler) dispatchTeamReviewFeedback(ctx context.Context) {
 	s.reviewFeedbackDispatched = true
 	// 任务级反馈回调在派发点已后台运行（asyncio.create_task 同形）；终态回调
 	// 等待它们完成后再聚合——防止最后一条任务的反馈与团队级演进竞速。
-	s.reviewFeedbackMu.Lock()
-	for s.reviewFeedbackInflight > 0 {
-		s.reviewFeedbackCond.Wait()
-	}
-	s.reviewFeedbackMu.Unlock()
+	// 「无在途新派发」由 DB 状态机保证（见 reviewFeedbackWG 字段注记）。
+	s.reviewFeedbackWG.Wait()
 	if _, err := s.reviewFeedbackFinalizer(ctx); err != nil {
 		logger.Error(logComponent).Err(err).
 			Msg("[scheduler] team review feedback rail failed")
