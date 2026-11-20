@@ -86,7 +86,9 @@ func TestParsePRDraft_严格与宽松(t *testing.T) {
 func TestParsePipelineSelection(t *testing.T) {
 	raw := "```json\n{\"pipeline_name\":\"meta\",\"reason\":\"r\",\"alternatives\":[\"extended\",\"junk\"],\"confidence\":0.8,\"risk_level\":\"low\",\"required_inputs\":[\"a\"],\"fallback_pipeline\":\"\"}\n```"
 	sel := ParsePipelineSelection(raw)
-	if sel == nil || sel.PipelineName != autoharness.MetaEvolvePipeline ||
+	// 注意：Python normalize_pipeline_name 为精确匹配别名，"meta" 原样返回
+	// （"meta"→meta_evolve_pipeline 的映射只存在于 normalize_pipeline_preference）
+	if sel == nil || sel.PipelineName != "meta" ||
 		len(sel.Alternatives) != 2 || sel.Alternatives[0] != "extended" ||
 		sel.Confidence != 0.8 || sel.FallbackPipeline != "" {
 		t.Fatalf("解析 = %+v", sel)

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	autoharness "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/auto_harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	autoharness "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/auto_harness"
 )
 
 // allowedPRKinds 允许的 PR kind 集合（对齐 _ALLOWED_PR_KINDS）
@@ -59,11 +59,13 @@ func ParseTasks(raw string) []autoharness.OptimizationTask {
 			continue
 		}
 		tasks = append(tasks, autoharness.OptimizationTask{
-			Topic:         jsonStrOf(topic),
-			Description:   jsonStrOf(item["description"]),
-			Files:         jsonStrSlice(item["files"]),
+			Topic:          jsonStrOf(topic),
+			Description:    jsonStrOf(item["description"]),
+			Files:          jsonStrSlice(item["files"]),
 			ExpectedEffect: jsonStrOf(item["expected_effect"]),
-			PipelineName:  autoharness.NormalizePipelineName(jsonStrOf(item["pipeline_name"])),
+			PipelineName:   autoharness.NormalizePipelineName(jsonStrOf(item["pipeline_name"])),
+			// dataclass 默认 status=TaskStatus.PENDING
+			Status: autoharness.TaskStatusPending,
 		})
 	}
 	return tasks
@@ -437,15 +439,15 @@ func rowToGap(cells []string) (autoharness.Gap, bool) {
 		}
 	}
 	return autoharness.Gap{
-		ID:               shortID8(),
-		Competitor:       cells[0],
-		Feature:          cells[1],
-		CurrentState:     cells[2],
-		GapDescription:   cells[3],
-		Impact:           impact,
-		Feasibility:      feasibility,
+		ID:                shortID8(),
+		Competitor:        cells[0],
+		Feature:           cells[1],
+		CurrentState:      cells[2],
+		GapDescription:    cells[3],
+		Impact:            impact,
+		Feasibility:       feasibility,
 		SuggestedApproach: cells[6],
-		TargetFiles:      targetFiles,
+		TargetFiles:       targetFiles,
 	}, true
 }
 
