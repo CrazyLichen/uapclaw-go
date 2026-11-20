@@ -1,8 +1,8 @@
 package skilldev
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

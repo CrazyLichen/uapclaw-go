@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── IsImageContentBlock ────────────────────────────

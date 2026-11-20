@@ -4,16 +4,16 @@ package testhelpers
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine"
-	ceiface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

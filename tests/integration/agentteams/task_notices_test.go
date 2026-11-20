@@ -14,15 +14,15 @@ import (
 	"context"
 	"time"
 
-	ateamprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/prompts"
+	ateamprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/scheduling"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tracker"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/scheduling"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 
 	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 )
 
 // ──────────────────────────── 新建 ────────────────────────────

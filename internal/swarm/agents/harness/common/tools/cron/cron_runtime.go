@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	agentcron "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/cron"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"

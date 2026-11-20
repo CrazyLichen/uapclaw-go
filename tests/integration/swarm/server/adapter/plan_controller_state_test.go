@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

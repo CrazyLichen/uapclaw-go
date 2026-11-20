@@ -4,7 +4,7 @@
 //
 // 覆盖 snapshot/delta/removed 全链路、顺序契约、压缩后基线回退、
 // provider 投影矩阵、重启恢复、多会话隔离、跨轮插入。
-// 跨 internal/openjiuwen/{harness,core/context_engine,core/session} 三个二级子系统。
+// 跨 internal/openuapclaw/{harness,core/context_engine,core/session} 三个二级子系统。
 //
 // 对应 Python：openjiuwen/harness/prompts/prompt_attachment_manager.py
 //

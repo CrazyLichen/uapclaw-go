@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/metadata"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

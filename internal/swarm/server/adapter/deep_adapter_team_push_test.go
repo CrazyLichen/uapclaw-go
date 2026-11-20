@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

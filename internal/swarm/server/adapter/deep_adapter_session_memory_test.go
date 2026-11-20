@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	cerails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/context_engineer"
+	cerails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 )
 
 // TestResolveSessionMemoryConfig_三态 覆盖 Python _resolve_session_memory_config 的取值语义。

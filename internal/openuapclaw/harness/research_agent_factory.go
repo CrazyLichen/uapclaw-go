@@ -1,0 +1,93 @@
+package harness
+
+import (
+	"context"
+
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	hpromts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateResearchAgent 创建并配置 ResearchAgent DeepAgent 实例。
+// Python: create_research_agent(model, card=..., system_prompt=..., ...)
+//
+// 预定义 ResearchAgent 配备 SysOperationRail，用户可自由覆盖配置。
+// 完整覆盖规则：如果用户传了 rails，则使用用户的，否则默认注入 [SysOperationRail()]。
+// Python: final_rails = rails if rails is not None else [SysOperationRail()]
+func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
+	language := hpromts.ResolveLanguage(params.Language)
+
+	// 完整覆盖规则：用户传了 rails 就用用户的，否则默认注入 SysOperationRail
+	// Python: create_research_agent 中 final_rails = rails if rails is not None else [SysOperationRail()]
+	finalRails := params.Rails
+	if finalRails == nil {
+		finalRails = []sainterfaces.AgentRail{rails.NewSysOperationRail()}
+	}
+
+	// 默认 AgentCard
+	// Python: final_card = card or AgentCard(name="research_agent", description=...)
+	card := params.Card
+	if card == nil {
+		desc := subagents.DefaultResearchAgentDescription(language)
+		card = agentschema.NewAgentCard(
+			agentschema.WithAgentName(subagents.ResearchAgentFactoryName),
+			agentschema.WithAgentDescription(desc),
+		)
+	}
+
+	// 默认 SystemPrompt
+	// Python: final_prompt = system_prompt or DEFAULT_RESEARCH_AGENT_SYSTEM_PROMPT.get(...)
+	systemPrompt := params.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = subagents.DefaultResearchAgentSystemPrompt(language)
+	}
+
+	// 默认 MaxIterations
+	// Python: max_iterations=50
+	maxIterations := params.MaxIterations
+	if maxIterations == 0 {
+		maxIterations = 50
+	}
+
+	// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为）
+	// Python: create_research_agent 不传 restrict_to_work_dir，SubAgentConfig 默认 True
+	restrictToWorkDir := true
+	if params.RestrictToWorkDir != nil {
+		restrictToWorkDir = *params.RestrictToWorkDir
+	}
+
+	// Python: subagents=subagents — 将 []SubAgentConfig 转为 []SubagentSpec 接口
+	var subagentSpecs []hschema.SubagentSpec
+	for i := range params.Subagents {
+		subagentSpecs = append(subagentSpecs, &params.Subagents[i])
+	}
+
+	// 转换为 CreateDeepAgentParams 并调用工厂
+	// Python: return create_deep_agent(model=model, card=final_card, ...)
+	return CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Model:              params.Model,
+		Card:               card,
+		SystemPrompt:       systemPrompt,
+		ToolCards:          params.Tools,
+		ToolInstances:      params.ToolInstances,
+		Mcps:               params.Mcps,
+		Rails:              finalRails,
+		EnableTaskLoop:     params.EnableTaskLoop,
+		MaxIterations:      maxIterations,
+		Workspace:          params.Workspace,
+		Skills:             params.Skills,
+		Backend:            params.Backend,
+		SysOperation:       params.SysOperation,
+		Language:           language,
+		PromptMode:         params.PromptMode,
+		EnableTaskPlanning: params.EnablePlanMode,
+		RestrictToWorkDir:  &restrictToWorkDir,
+		Subagents:          subagentSpecs,
+	})
+}

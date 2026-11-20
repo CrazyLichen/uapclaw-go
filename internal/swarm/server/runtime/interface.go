@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"

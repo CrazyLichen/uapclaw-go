@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )

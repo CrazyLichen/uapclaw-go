@@ -14,21 +14,21 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"strings"
 
-	harness_rsi "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi"
-	rsiconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/config"
-	evaluation_result_analyzer "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/evaluation_result_analyzer"
-	member_optimizer "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/member_optimizer"
+	harness_rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	rsiconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+	evaluation_result_analyzer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluation_result_analyzer"
+	member_optimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 )
 
 // ──────────────────────────── 测试替身（对齐 harness/rails/agent_fake_test.go 形制） ────────────────────────────

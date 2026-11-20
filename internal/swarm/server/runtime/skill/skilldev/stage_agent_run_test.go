@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

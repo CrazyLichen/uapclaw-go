@@ -3,9 +3,9 @@
 package suite
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/checkpointer"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

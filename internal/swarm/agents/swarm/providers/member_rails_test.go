@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 		"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
 

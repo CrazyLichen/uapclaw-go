@@ -1,0 +1,283 @@
+package interrupt
+
+import (
+	"context"
+	"strings"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ConfirmPayload 用户确认载荷。
+// Python: ConfirmPayload
+type ConfirmPayload struct {
+	// Approved 是否批准
+	Approved bool `json:"approved"`
+	// Feedback 反馈信息
+	Feedback string `json:"feedback"`
+	// AutoConfirm 是否自动确认（"始终允许"标记）
+	AutoConfirm bool `json:"auto_confirm"`
+	// PersistAllow 持久化意愿三态（统一线格式键 persist_allow，
+	// Python permission_engine/models.py:65）：nil = 未指定（按永久记住）；
+	// true = 永久记住；false = 会话内记住。
+	PersistAllow *bool `json:"persist_allow,omitempty"`
+}
+
+// ConfirmRequest 确认请求配置。
+// Python: ConfirmRequest
+type ConfirmRequest struct {
+	// Message 向用户展示的确认消息
+	Message string `json:"message"`
+	// PayloadSchema 用户输入的数据结构定义
+	PayloadSchema map[string]any `json:"payload_schema"`
+}
+
+// AutoConfirmKeyFn 自动确认键生成函数。
+// 接收 ToolCall，返回用于 session auto_confirm 配置查找的 key。
+// 默认使用 toolCall.Name。
+// Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+type AutoConfirmKeyFn func(toolCall *llmschema.ToolCall) string
+
+// ConfirmInterruptRailOption ConfirmInterruptRail 配置选项函数类型。
+type ConfirmInterruptRailOption func(*ConfirmInterruptRail)
+
+// ConfirmInterruptRail 确认中断 Rail。
+// 仅当 ConfirmPayload.Approved 为 true 时放行工具执行。
+// 支持 auto_confirm 机制：当 session 状态中对应 key 为 true 时自动放行。
+// Python: ConfirmInterruptRail(BaseInterruptRail) — openjiuwen/harness/rails/interrupt/confirm_rail.py
+type ConfirmInterruptRail struct {
+	BaseInterruptRail
+	// request 确认请求配置
+	request ConfirmRequest
+	// autoConfirmKeyFn 自动确认键生成函数（nil 时使用默认 toolCall.Name）
+	autoConfirmKeyFn AutoConfirmKeyFn
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// _ 编译时验证 ConfirmInterruptRail 满足 AgentRail 接口
+var _ agentinterfaces.AgentRail = (*ConfirmInterruptRail)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewConfirmInterruptRail 创建 ConfirmInterruptRail 实例。
+// 通过选项函数配置，例如：
+//
+//	interrupt.NewConfirmInterruptRail(
+//	    interrupt.WithConfirmToolNames("write_file", "edit_file"),
+//	    interrupt.WithAutoConfirmKeyFn(fn),
+//	)
+//
+// Python: ConfirmInterruptRail.__init__(tool_names)
+func NewConfirmInterruptRail(opts ...ConfirmInterruptRailOption) *ConfirmInterruptRail {
+	r := &ConfirmInterruptRail{
+		BaseInterruptRail: *NewBaseInterruptRail(),
+		request: ConfirmRequest{
+			Message:       "请批准或拒绝？",
+			PayloadSchema: ConfirmPayloadSchema(),
+		},
+	}
+	// 覆盖 ResolveInterruptFn
+	r.ResolveInterruptFn = r.resolveConfirmInterrupt
+	// Python: ConfirmInterruptRail.interrupt_kind = InterruptKind.CONFIRM（类属性 → 构造期注入）
+	r.SetInterruptKind(saschema.InterruptKindConfirm)
+	// 应用选项
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+// WithConfirmToolNames 设置需确认拦截的工具名列表。
+func WithConfirmToolNames(names ...string) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		for _, name := range names {
+			r.AddTool(name)
+		}
+	}
+}
+
+// WithAutoConfirmKeyFn 设置自动确认键生成函数。
+// 默认使用 toolCall.Name 作为 key；通过此选项可实现细粒度 auto_confirm，
+// 例如基于工具参数生成 key（如 "read_a" 对应读取 a.txt）。
+// Python: 子类覆写 ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+func WithAutoConfirmKeyFn(fn AutoConfirmKeyFn) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		r.autoConfirmKeyFn = fn
+	}
+}
+
+// WithConfirmMessage 设置确认请求消息。
+func WithConfirmMessage(msg string) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		r.request.Message = msg
+	}
+}
+
+// IsTruthyValue 判断任意值是否为 truthy。
+// Python: bool(value) — True/1/"yes"/"true"/非空字符串视为 truthy，False/0/""/"false"/"no" 为 falsy。
+// 对齐 Python ConfirmInterruptRail._is_auto_confirmed 的宽松真值判断逻辑。
+func IsTruthyValue(val any) bool {
+	if val == nil {
+		return false
+	}
+	// 先尝试 bool 类型断言
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	// 尝试数字类型：非零视为 truthy
+	switch n := val.(type) {
+	case int:
+		return n != 0
+	case int64:
+		return n != 0
+	case float64:
+		return n != 0
+	}
+	// 尝试字符串类型："yes"/"true"/非空字符串视为 truthy（"false"/"no"/"0"/空字符串为 falsy）
+	if s, ok := val.(string); ok {
+		s = strings.TrimSpace(strings.ToLower(s))
+		return s != "" && s != "false" && s != "no" && s != "0"
+	}
+	return false
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveConfirmInterrupt ConfirmInterruptRail 的中断解析逻辑。
+// auto_confirm → Approve（自动批准）；无输入 → Interrupt（中断）；
+// approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）。
+// Python: ConfirmInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
+func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
+	_ context.Context,
+	_ *agentinterfaces.AgentCallbackContext,
+	toolCall *llmschema.ToolCall,
+	userInput any,
+	autoConfirmConfig map[string]any,
+) InterruptDecision {
+	autoConfirmKey := r.getAutoConfirmKey(toolCall)
+
+	// 无用户输入
+	if userInput == nil {
+		// 检查 auto_confirm
+		if isAutoConfirmed(autoConfirmConfig, autoConfirmKey) {
+			return r.Approve(nil)
+		}
+		return r.Interrupt(&saschema.InterruptRequest{
+			Message:        r.request.Message,
+			PayloadSchema:  r.request.PayloadSchema,
+			AutoConfirmKey: autoConfirmKey,
+		})
+	}
+
+	// 解析用户输入为 ConfirmPayload
+	payload, ok := r.parseConfirmInput(userInput)
+	if !ok {
+		return r.Interrupt(&saschema.InterruptRequest{
+			Message:        r.request.Message,
+			PayloadSchema:  r.request.PayloadSchema,
+			AutoConfirmKey: autoConfirmKey,
+		})
+	}
+
+	// approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）
+	if payload.Approved {
+		return r.Approve(nil)
+	}
+	feedback := payload.Feedback
+	if feedback == "" {
+		feedback = "User feedback: rejected\n action"
+	}
+	return r.Reject(feedback)
+}
+
+// getAutoConfirmKey 返回 auto_confirm 配置键。
+// 优先使用 autoConfirmKeyFn（细粒度），否则默认使用 toolCall.Name。
+// Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+func (r *ConfirmInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
+	if r.autoConfirmKeyFn != nil {
+		return r.autoConfirmKeyFn(toolCall)
+	}
+	if toolCall == nil {
+		return ""
+	}
+	return toolCall.Name
+}
+
+// parseConfirmInput 解析用户输入为 ConfirmPayload。
+// 支持 ConfirmPayload / map[string]any 两种格式。
+func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload, bool) {
+	switch input := userInput.(type) {
+	case *ConfirmPayload:
+		return input, true
+	case map[string]any:
+		payload := &ConfirmPayload{}
+		// approved 为必填字段，缺少或类型不匹配时重新中断（对齐 Python model_validate 行为）
+		v, hasApproved := input["approved"]
+		if !hasApproved {
+			return nil, false
+		}
+		b, ok := v.(bool)
+		if !ok {
+			return nil, false
+		}
+		payload.Approved = b
+		if v, ok := input["feedback"]; ok {
+			if s, ok := v.(string); ok {
+				payload.Feedback = s
+			}
+		}
+		if v, ok := input["auto_confirm"]; ok {
+			if b, ok := v.(bool); ok {
+				payload.AutoConfirm = b
+			}
+		}
+		return payload, true
+	default:
+		return nil, false
+	}
+}
+
+// isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
+// Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
+// Python 的 config.get(key, False) 使用宽松真值判断：
+// True/1/"yes"/"true"/非空字符串都视为 truthy。
+func isAutoConfirmed(config map[string]any, key string) bool {
+	if config == nil {
+		return false
+	}
+	val, ok := config[key]
+	if !ok {
+		return false
+	}
+	return IsTruthyValue(val)
+}
+
+// ConfirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。
+// 严格对齐 Python Pydantic ConfirmPayload.model_json_schema() 输出。
+func ConfirmPayloadSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"approved": map[string]any{
+				"title": "Approved",
+				"type":  "boolean",
+			},
+			"feedback": map[string]any{
+				"default": "",
+				"title":   "Feedback",
+				"type":    "string",
+			},
+			"auto_confirm": map[string]any{
+				"default": false,
+				"title":   "Auto Confirm",
+				"type":    "boolean",
+			},
+		},
+		"required": []string{"approved"},
+		"title":    "ConfirmPayload",
+	}
+}

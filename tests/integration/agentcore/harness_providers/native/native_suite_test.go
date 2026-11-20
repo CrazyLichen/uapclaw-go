@@ -13,15 +13,15 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	modelclients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	securityrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
-	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
-	nativeprov "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/native"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
+	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	nativeprov "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/native"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"

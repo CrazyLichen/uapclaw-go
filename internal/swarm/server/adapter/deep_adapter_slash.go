@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 

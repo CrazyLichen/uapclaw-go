@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 

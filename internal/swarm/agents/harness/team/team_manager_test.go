@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

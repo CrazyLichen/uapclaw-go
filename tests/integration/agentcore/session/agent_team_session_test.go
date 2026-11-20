@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/graph/pregel"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/checkpointer"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────

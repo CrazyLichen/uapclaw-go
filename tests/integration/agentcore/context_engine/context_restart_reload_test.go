@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/schema"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/checkpointer"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

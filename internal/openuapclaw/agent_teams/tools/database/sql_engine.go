@@ -1,0 +1,635 @@
+package database
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SqlTeamDatabase SQL 数据库门面。
+// Python: TeamDatabase (openjiuwen/agent_teams/tools/database/__init__.py)
+// 拥有 *gorm.DB 生命周期和跨表事务，单表操作通过 DAO 属性调用。
+type SqlTeamDatabase struct {
+	// db GORM 数据库实例
+	db *gorm.DB
+	// config 数据库配置
+	config DatabaseConfig
+	// teamDao TeamDao 实例
+	teamDao *SQLTeamDao
+	// memberDao MemberDao 实例
+	memberDao *SQLMemberDao
+	// taskDao TaskDao 实例
+	taskDao *SQLTaskDao
+	// messageDao MessageDao 实例
+	messageDao *SQLMessageDao
+	// initialized 是否已初始化
+	initialized bool
+	// mu 保护并发初始化
+	mu sync.Mutex
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件
+	logComponent = logger.ComponentCommon
+	// Python: TeamTaskBase (team_task_{suffix})
+	//
+	// reviewer / revision / observed_revision / change_notes 是 25.0c 为任务通知
+	// 补的四列（Q1 裁决：只改建表 DDL，不写 ALTER 迁移——任务表是每 session
+	// 一张动态表，随会话重建；老会话读到零值即「无验收门 / 无编辑」，而编辑功能
+	// 本身由 25.4 才落，老会话本就没有编辑数据）。
+	createTaskTableDDL = `CREATE TABLE IF NOT EXISTS team_task_%s (
+    task_id      TEXT PRIMARY KEY,
+    team_name    TEXT NOT NULL DEFAULT '',
+    title        TEXT NOT NULL DEFAULT '',
+    content      TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT '',
+    assignee     TEXT,
+    updated_at   INTEGER NOT NULL DEFAULT 0,
+    reviewer          TEXT,
+    review_round      INTEGER NOT NULL DEFAULT 0,
+    max_review_rounds INTEGER,
+    summary           TEXT,
+    note              TEXT,
+    parent_task_id    TEXT,
+    created_by        TEXT,
+    resume_pending    INTEGER NOT NULL DEFAULT 0,
+    revision          INTEGER NOT NULL DEFAULT 0,
+    observed_revision INTEGER NOT NULL DEFAULT 0,
+    parent_revision   INTEGER NOT NULL DEFAULT 0,
+    change_notes      TEXT
+)`
+	// Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
+	// 复合主键 (task_id, depends_on_task_id)，task_id 和 depends_on_task_id 引用同 suffix 的 team_task
+	createDepTableDDL = `CREATE TABLE IF NOT EXISTS team_task_dependency_%s (
+    task_id            TEXT NOT NULL DEFAULT '',
+    depends_on_task_id TEXT NOT NULL DEFAULT '',
+    team_name          TEXT NOT NULL DEFAULT '',
+    resolved           INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (task_id, depends_on_task_id)
+)`
+	// Python: TeamMessageBase (team_message_{suffix})
+	createMessageTableDDL = `CREATE TABLE IF NOT EXISTS team_message_%s (
+    message_id       TEXT PRIMARY KEY,
+    team_name        TEXT NOT NULL DEFAULT '',
+    from_member_name TEXT NOT NULL DEFAULT '',
+    to_member_name   TEXT,
+    content          TEXT NOT NULL DEFAULT '',
+    meta             TEXT,
+    timestamp        INTEGER NOT NULL DEFAULT 0,
+    broadcast        INTEGER NOT NULL DEFAULT 0,
+    is_read          INTEGER DEFAULT NULL
+)`
+	// Python: MessageReadStatusBase (message_read_status_{suffix})
+	createReadStatusTableDDL = `CREATE TABLE IF NOT EXISTS message_read_status_%s (
+    member_name TEXT NOT NULL DEFAULT '',
+    team_name   TEXT NOT NULL DEFAULT '',
+    read_at     INTEGER DEFAULT NULL,
+    PRIMARY KEY (member_name, team_name)
+)`
+	// Python: TeamTaskReviewVoteBase (team_review_vote_{suffix})（F_62）
+	// 追加式票事实表：改票 = INSERT 新行，计票取每 reviewer 的最新行。
+	createReviewVoteTableDDL = `CREATE TABLE IF NOT EXISTS team_review_vote_%s (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_name    TEXT NOT NULL DEFAULT '',
+    task_id      TEXT NOT NULL DEFAULT '',
+    review_round INTEGER NOT NULL DEFAULT 0,
+    reviewer     TEXT NOT NULL DEFAULT '',
+    decision     TEXT NOT NULL DEFAULT '',
+    feedback     TEXT,
+    created_at   INTEGER NOT NULL DEFAULT 0
+)`
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	_ TeamDatabase = (*SqlTeamDatabase)(nil) // SqlTeamDatabase 必须满足 TeamDatabase 接口
+
+	// Python: TeamTaskBase index=True 字段
+	// 列: team_name, status, assignee, updated_at
+	createTaskIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_task_team_name ON team_task_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_status ON team_task_%s (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_assignee ON team_task_%s (assignee)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_updated_at ON team_task_%s (updated_at)`,
+	}
+	// Python: TeamTaskDependencyBase index=True 字段
+	// 索引列: team_name, resolved
+	createDepIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_dep_team_name ON team_task_dependency_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_dep_resolved ON team_task_dependency_%s (resolved)`,
+	}
+	// Python: TeamMessageBase index=True 字段
+	// 列: team_name, to_member_name, timestamp, broadcast, is_read
+	createMessageIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_msg_team_name ON team_message_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_to_member_name ON team_message_%s (to_member_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_timestamp ON team_message_%s (timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_broadcast ON team_message_%s (broadcast)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_is_read ON team_message_%s (is_read)`,
+	}
+	// Python: MessageReadStatusBase index=True 字段
+	// 索引列: read_at
+	createReadStatusIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_readstat_read_at ON message_read_status_%s (read_at)`,
+	}
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewSqlTeamDatabase 创建 SQL 数据库实例（未初始化，需调用 Initialize）。
+func NewSqlTeamDatabase(config DatabaseConfig) *SqlTeamDatabase {
+	return &SqlTeamDatabase{config: config}
+}
+
+// Initialize 初始化数据库引擎、创建表、接入 DAO。
+// Python: TeamDatabase.initialize() — 带双重检查锁的惰性初始化
+func (s *SqlTeamDatabase) Initialize(ctx context.Context) error {
+	if s.initialized {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.initialized {
+		return nil
+	}
+
+	db, err := s.newGormDB(ctx)
+	if err != nil {
+		return err
+	}
+	s.db = db
+	s.teamDao = &SQLTeamDao{db: db}
+	s.memberDao = &SQLMemberDao{db: db}
+	s.taskDao = &SQLTaskDao{db: db}
+	s.messageDao = &SQLMessageDao{db: db}
+	s.initialized = true
+
+	// Python: 初始化后执行 create_cur_session_tables
+	return s.CreateCurSessionTables(ctx)
+}
+
+// CreateCurSessionTables 创建当前会话动态表。
+// Python: create_cur_session_tables(engine)
+func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
+	if s.db == nil {
+		return nil
+	}
+	sessionID := sessionctx.GetSessionID(ctx)
+	if sessionID == "" {
+		// Python: team_logger.warning("No session_id in context, cannot create session tables")
+		logger.Warn(logComponent).Msg("no session_id in context, cannot create session tables")
+		return nil
+	}
+	suffix := SanitizeSessionIDForTable(sessionID)
+	err := createSessionTablesDDL(s.db, suffix)
+	if err != nil {
+		return err
+	}
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session dynamic tables ready")
+	return nil
+}
+
+// DropCurSessionTables 删除当前会话动态表。
+// Python: drop_cur_session_tables(engine)
+func (s *SqlTeamDatabase) DropCurSessionTables(ctx context.Context) error {
+	if s.db == nil {
+		return nil
+	}
+	sessionID := sessionctx.GetSessionID(ctx)
+	if sessionID == "" {
+		logger.Warn(logComponent).Msg("no session_id in context, cannot drop session tables")
+		return nil
+	}
+	suffix := SanitizeSessionIDForTable(sessionID)
+	dropSessionTablesDDL(s.db, suffix)
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session dynamic tables dropped")
+	return nil
+}
+
+// CleanupAllRuntimeState 清理所有运行时状态（删除动态表 + 清空静态表）。
+// Python: cleanup_all_runtime_state(engine) -> (deleted_tables, cleared_tables)
+func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string, []string, error) {
+	if s.db == nil {
+		return nil, nil, nil
+	}
+
+	var droppedTables []string
+	var clearedTables []string
+
+	// Python: _get_table_names(sync_conn)
+	tableNames, err := s.db.Migrator().GetTables()
+	if err != nil {
+		return nil, nil, fmt.Errorf("获取表名列表失败: %w", err)
+	}
+
+	// Python: 匹配 TEAM_DYNAMIC_TABLE_PREFIXES → DROP
+	for _, name := range tableNames {
+		if isDynamicTable(name) {
+			if dropErr := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(name))).Error; dropErr != nil {
+				logger.Warn(logComponent).Str("table", name).Err(dropErr).Msg("failed to drop dynamic table")
+			} else {
+				droppedTables = append(droppedTables, name)
+			}
+		}
+	}
+
+	// Python: 匹配 TEAM_STATIC_TABLES_TO_CLEAR → DELETE FROM
+	for _, name := range TeamStaticTablesToClear {
+		if containsString(tableNames, name) {
+			if clearErr := s.db.Exec(fmt.Sprintf("DELETE FROM %s", quoteTableName(name))).Error; clearErr != nil {
+				logger.Warn(logComponent).Str("table", name).Err(clearErr).Msg("failed to clear static table")
+			} else {
+				clearedTables = append(clearedTables, name)
+			}
+		}
+	}
+
+	logger.Info(logComponent).
+		Strs("deleted_dynamic_tables", droppedTables).
+		Strs("cleared_static_tables", clearedTables).
+		Msg("team runtime state cleanup completed")
+	return droppedTables, clearedTables, nil
+}
+
+// DropSessionTablesByID 按 sessionID 删除动态表。
+// Python: drop_session_tables_by_id(engine, session_id) -> dropped
+func (s *SqlTeamDatabase) DropSessionTablesByID(ctx context.Context, sessionID string) ([]string, error) {
+	if s.db == nil || sessionID == "" {
+		return nil, nil
+	}
+	suffix := SanitizeSessionIDForTable(sessionID)
+
+	// Python: 遍历 TEAM_DYNAMIC_TABLE_PREFIXES，检查表是否存在，DROP
+	var dropped []string
+	tableNames, _ := s.db.Migrator().GetTables()
+	for _, prefix := range TeamDynamicTablePrefixes {
+		expectedTable := prefix + suffix
+		if containsString(tableNames, expectedTable) {
+			if dropErr := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(expectedTable))).Error; dropErr != nil {
+				logger.Warn(logComponent).Str("table", expectedTable).Err(dropErr).Msg("failed to drop session table")
+			} else {
+				dropped = append(dropped, expectedTable)
+			}
+		}
+	}
+
+	if len(dropped) > 0 {
+		logger.Info(logComponent).Str("session_id", sessionID).Strs("dropped", dropped).Msg("session dynamic tables dropped by ID")
+	}
+	return dropped, nil
+}
+
+// ForceDeleteTeamSession 跨表拆卸：删 team_info 行 + 删成员 + drop 会话动态表。
+// Python: force_delete_team_session(team_name) -> bool
+func (s *SqlTeamDatabase) ForceDeleteTeamSession(ctx context.Context, teamName string) bool {
+	if !s.initialized {
+		return false
+	}
+	// Python: await self.team.delete_team(team_name)
+	s.teamDao.DeleteTeam(ctx, teamName)
+
+	// Python: 删除该团队所有成员
+	s.db.WithContext(ctx).Table("team_member").Where("team_name = ?", teamName).Delete(nil)
+
+	// Python: try: await _drop_cur_session_tables(self.engine)
+	if err := s.DropCurSessionTables(ctx); err != nil {
+		logger.Error(logComponent).Str("team_name", teamName).Err(err).Msg("failed to force delete team session dynamic tables")
+		return false
+	}
+
+	logger.Info(logComponent).Str("team_name", teamName).Msg("force delete team session data completed")
+	return true
+}
+
+// Close 关闭数据库引擎并释放连接。
+// Python: TeamDatabase.close()
+func (s *SqlTeamDatabase) Close() error {
+	if s.db != nil {
+		sqlDB, err := s.db.DB()
+		if err == nil && sqlDB != nil {
+			_ = sqlDB.Close()
+		}
+		s.db = nil
+		s.initialized = false
+		s.teamDao = nil
+		s.memberDao = nil
+		s.taskDao = nil
+		s.messageDao = nil
+		logger.Info(logComponent).Msg("SQL database engine closed")
+	}
+	return nil
+}
+
+// Team 返回 TeamDao。对齐 Python: self.team = TeamDao(...)
+func (s *SqlTeamDatabase) Team() TeamDao { return s.teamDao }
+
+// Member 返回 MemberDao。对齐 Python: self.member = MemberDao(...)
+func (s *SqlTeamDatabase) Member() MemberDao { return s.memberDao }
+
+// Task 返回 TaskDao。对齐 Python: self.task = TaskDao(...)
+func (s *SqlTeamDatabase) Task() TaskDao { return s.taskDao }
+
+// Message 返回 MessageDao。对齐 Python: self.message = MessageDao(...)
+func (s *SqlTeamDatabase) Message() MessageDao { return s.messageDao }
+
+// WithTx 返回绑定指定事务的临时 DAO 实例，用于跨表操作。
+func (s *SqlTeamDatabase) WithTx(tx *gorm.DB) (TeamDao, MemberDao, TaskDao, MessageDao) {
+	return s.teamDao.withTx(tx),
+		s.memberDao.withTx(tx),
+		s.taskDao.withTx(tx),
+		s.messageDao.withTx(tx)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newGormDB 根据 config 创建配置好的 *gorm.DB。
+// Python: initialize_engine(config) -> (AsyncEngine, async_sessionmaker)
+func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
+	gormConfig := &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	}
+
+	var db *gorm.DB
+	var err error
+
+	switch s.config.DBType {
+	case DatabaseTypeSQLite:
+		connStr := s.config.ConnectionString
+		if connStr == "" || connStr == ":memory:" {
+			// Python: :memory: 用 StaticPool
+			db, err = gorm.Open(sqlite.Open(":memory:"), gormConfig)
+		} else {
+			// Python: 文件模式，确保父目录存在
+			dbPath := filepath.FromSlash(connStr)
+			if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
+				_ = os.MkdirAll(dir, 0o755)
+			}
+			// Python: WAL + busy_timeout
+			dsn := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=%d", dbPath, s.config.DBTimeout*1000)
+			db, err = gorm.Open(sqlite.Open(dsn), gormConfig)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("SQLite 引擎创建失败: %w", err)
+		}
+		// Python: PRAGMA foreign_keys=ON
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			_, _ = sqlDB.Exec("PRAGMA foreign_keys=ON")
+			if s.config.DBEnableWAL && connStr != ":memory:" && connStr != "" {
+				_, _ = sqlDB.Exec("PRAGMA journal_mode=WAL")
+			}
+			// Python: AsyncAdaptedQueuePool(pool_size=5, max_overflow=0)
+			if connStr != "" && connStr != ":memory:" {
+				sqlDB.SetMaxOpenConns(5)
+				sqlDB.SetMaxIdleConns(5)
+			}
+		}
+
+	case DatabaseTypePostgreSQL:
+		connStr := s.config.ConnectionString
+		if connStr == "" {
+			return nil, fmt.Errorf("PostgreSQL 需要非空 connection_string")
+		}
+		db, err = gorm.Open(postgres.Open(connStr), gormConfig)
+		if err != nil {
+			return nil, fmt.Errorf("PostgreSQL 引擎创建失败: %w", err)
+		}
+		// Python: pool_size=10, max_overflow=20, pool_recycle=1800
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			sqlDB.SetMaxOpenConns(10)
+			sqlDB.SetMaxIdleConns(10)
+			sqlDB.SetConnMaxLifetime(1800e9) // 1800 秒
+		}
+
+	case DatabaseTypeMySQL:
+		// MySQL 驱动未 vendor，暂不支持，返回错误提示
+		return nil, fmt.Errorf("MySQL 驱动未纳入 vendor，请使用 SQLite 或 PostgreSQL")
+
+	default:
+		return nil, fmt.Errorf("不支持的数据库类型: %s", s.config.DBType)
+	}
+
+	// Python: await conn.run_sync(SQLModel.metadata.create_all) — 建静态表
+	if autoErr := db.AutoMigrate(&Team{}, &TeamMember{}); autoErr != nil {
+		return nil, fmt.Errorf("静态表迁移失败: %w", autoErr)
+	}
+
+	// Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
+	ensureTeamMemberRoleColumn(db)
+
+	// Python: await conn.run_sync(_ensure_team_member_options_column) — 补 options 列并合并 legacy
+	ensureTeamMemberOptionsColumn(db)
+
+	// Python: await conn.run_sync(_ensure_team_info_capability_columns) — 迁移补能力列
+	ensureTeamInfoCapabilityColumns(db)
+
+	logger.Info(logComponent).Str("db_type", string(s.config.DBType)).Msg("SQL database engine initialized")
+	return db, nil
+}
+
+// ensureTeamMemberRoleColumn 检查并补充 team_member 表的 role 列。
+// Python: _ensure_team_member_role_column(sync_conn)
+// SQLModel.metadata.create_all 只创建不存在的表，不会 ALTER 已有表。
+// 旧版 DB 缺 role 列时，INSERT 会失败，因此需要探测并补列。
+func ensureTeamMemberRoleColumn(db *gorm.DB) {
+	columns, err := db.Migrator().ColumnTypes(&TeamMember{})
+	if err != nil {
+		return
+	}
+	for _, col := range columns {
+		if col.Name() == "role" {
+			return // 已存在
+		}
+	}
+	// 补列：对齐 Python ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'
+	db.Exec("ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'")
+	logger.Info(logComponent).Msg("migrating team_member table: adding role column with default 'teammate'")
+}
+
+// ensureTeamMemberOptionsColumn 为已存在的 team_member 表补齐 options 列，
+// 把 legacy model_ref_json 的内容合并进 options，然后删除旧列。
+//
+// AutoMigrate 只建缺失的表、只加缺失的列，不会改存量行；因此升级上来的库里
+// options 列是新加的空列，而 model_ref 只存在于 model_ref_json。这里逐行合并，
+// 让老数据在新代码下仍能读到模型引用；合并完成后旧列即无用，一并删掉。
+//
+// Python: _ensure_team_member_options_column (database/engine.py L350-381)
+func ensureTeamMemberOptionsColumn(db *gorm.DB) {
+	columns, err := db.Migrator().ColumnTypes(&TeamMember{})
+	if err != nil {
+		return
+	}
+	hasOptions, hasLegacy := false, false
+	for _, col := range columns {
+		switch col.Name() {
+		case "options":
+			hasOptions = true
+		case "model_ref_json":
+			hasLegacy = true
+		}
+	}
+	if !hasOptions {
+		db.Exec("ALTER TABLE team_member ADD COLUMN options TEXT")
+		logger.Info(logComponent).Msg("migrating team_member table: adding options column")
+	}
+	if !hasLegacy {
+		return
+	}
+
+	// 合并阶段：用 row struct 读取（此时 ModelRefJSON 字段已删除，故走原生 SQL）
+	type legacyRow struct {
+		MemberName   string
+		TeamName     string
+		Options      string
+		ModelRefJSON string
+	}
+	var rows []legacyRow
+	if err := db.Table("team_member").
+		Select("member_name, team_name, options, model_ref_json").
+		Scan(&rows).Error; err != nil {
+		logger.Warn(logComponent).Err(err).Msg("migrating team_member options: read legacy rows failed")
+		return
+	}
+	for _, row := range rows {
+		merged := MergeLegacyMemberOptions(row.Options, nil, row.ModelRefJSON)
+		if merged == row.Options {
+			continue
+		}
+		db.Exec(
+			"UPDATE team_member SET options = ? WHERE member_name = ? AND team_name = ?",
+			merged, row.MemberName, row.TeamName,
+		)
+	}
+	if dropErr := db.Exec("ALTER TABLE team_member DROP COLUMN model_ref_json").Error; dropErr != nil {
+		logger.Warn(logComponent).Err(dropErr).
+			Msg("migrating team_member options: drop legacy model_ref_json failed")
+		return
+	}
+	logger.Info(logComponent).Msg("migrating team_member options: merged legacy model_ref_json and dropped the column")
+}
+
+// ensureTeamInfoCapabilityColumns 为已存在的 team_info 表补齐 F_62 能力列。
+//
+// team_info 是**静态表**，在用户存量库里已经建好：gorm AutoMigrate 只加列
+// 不删列，但旧库升级上来时缺这两列会让 INSERT 失败。
+// （注意与 team_task_* 动态表不同——那些随 session 重建，只改建表 DDL 即可。）
+//
+// Python: _ensure_team_info_capability_columns (database/engine.py L384-405)
+func ensureTeamInfoCapabilityColumns(db *gorm.DB) {
+	columns, err := db.Migrator().ColumnTypes(&Team{})
+	if err != nil {
+		return
+	}
+	hasDispatch, hasVerification := false, false
+	for _, col := range columns {
+		switch col.Name() {
+		case "dispatch_mode":
+			hasDispatch = true
+		case "enable_task_verification":
+			hasVerification = true
+		}
+	}
+	if !hasDispatch {
+		db.Exec("ALTER TABLE team_info ADD COLUMN dispatch_mode TEXT NOT NULL DEFAULT 'autonomous'")
+		logger.Info(logComponent).Msg("migrating team_info table: adding dispatch_mode column with default 'autonomous'")
+	}
+	if !hasVerification {
+		db.Exec("ALTER TABLE team_info ADD COLUMN enable_task_verification BOOLEAN NOT NULL DEFAULT 0")
+		logger.Info(logComponent).Msg("migrating team_info table: adding enable_task_verification column with default 0")
+	}
+}
+
+// createSessionTablesDDL 用手写 DDL 创建4张动态表并建立索引。
+// Python: create_cur_session_tables(engine) — 逐模型调用 __table__.create(checkfirst=True)
+// 索引对齐 Python SQLModel 的 index=True 声明。
+func createSessionTablesDDL(db *gorm.DB, suffix string) error {
+	// 建表
+	tableStmts := []string{
+		fmt.Sprintf(createTaskTableDDL, suffix),
+		fmt.Sprintf(createDepTableDDL, suffix),
+		fmt.Sprintf(createMessageTableDDL, suffix),
+		fmt.Sprintf(createReadStatusTableDDL, suffix),
+		fmt.Sprintf(createReviewVoteTableDDL, suffix),
+	}
+	for _, stmt := range tableStmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("创建动态表失败: %w", err)
+		}
+	}
+
+	// 建索引：对齐 Python SQLModel index=True
+	indexGroups := [][]string{
+		createTaskIndexesDDL,
+		createDepIndexesDDL,
+		createMessageIndexesDDL,
+		createReadStatusIndexesDDL,
+	}
+	for _, group := range indexGroups {
+		for _, tmpl := range group {
+			if err := db.Exec(fmt.Sprintf(tmpl, suffix)).Error; err != nil {
+				return fmt.Errorf("创建动态表索引失败: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// dropSessionTablesDDL 用 DDL 删除4张动态表。
+// Python: drop_cur_session_tables(engine) — 逐模型调用 __table__.drop(checkfirst=True)
+func dropSessionTablesDDL(db *gorm.DB, suffix string) {
+	tables := []string{
+		"team_task_dependency_" + suffix,
+		"team_task_" + suffix,
+		"team_message_" + suffix,
+		"message_read_status_" + suffix,
+		"team_review_vote_" + suffix,
+	}
+	for _, t := range tables {
+		if dbErr := db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(t))).Error; dbErr != nil {
+			logger.Warn(logComponent).Str("table", t).Err(dbErr).Msg("failed to drop dynamic table")
+		}
+	}
+}
+
+// isDynamicTable 判断表名是否为动态表（按前缀匹配）。
+// Python: table_name.startswith(TEAM_DYNAMIC_TABLE_PREFIXES)
+func isDynamicTable(tableName string) bool {
+	for _, prefix := range TeamDynamicTablePrefixes {
+		if len(tableName) > len(prefix) && tableName[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// quoteTableName 给表名加引号（SQLite/PostgreSQL 通用）。
+// Python: quoted_name = table_name.replace('"', '""')
+func quoteTableName(name string) string {
+	return `"` + name + `"`
+}
+
+// containsString 检查字符串切片是否包含指定值。
+func containsString(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
+}

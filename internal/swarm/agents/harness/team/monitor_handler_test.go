@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

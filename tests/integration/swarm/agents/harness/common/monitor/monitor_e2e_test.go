@@ -11,9 +11,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
-	monitor "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
+	monitor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

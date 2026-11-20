@@ -1,0 +1,20 @@
+package agent_mode
+
+import (
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateTaskTool 创建 task_tool 工具实例列表，供 AgentModeRail 动态注册。
+// Python: create_task_tool(parent_agent, available_agents, language, agent_id) L127-152
+func CreateTaskTool(parentAgent hinterfaces.DeepAgentInterface, availableAgents, language string) []tool.Tool {
+	agentID := ""
+	if card := parentAgent.Card(); card != nil {
+		agentID = card.ID
+	}
+	t := subagent.NewTaskTool(parentAgent, availableAgents, language, agentID)
+	return []tool.Tool{t}
+}

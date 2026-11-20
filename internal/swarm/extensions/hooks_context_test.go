@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

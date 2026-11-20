@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	securityrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

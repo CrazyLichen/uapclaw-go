@@ -1,0 +1,543 @@
+package schema
+
+import (
+	"math"
+	"os"
+	"strconv"
+	"strings"
+
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	workspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SubagentSpec 子 Agent 规格接口。
+// 允许 *SubAgentConfig 和 *DeepAgent 以统一类型返回。
+// Python: _find_subagent_spec 返回 Optional[SubAgentConfig | DeepAgent]。
+// 放在 schema 包以避免 schema↔interfaces 循环依赖。
+type SubagentSpec interface {
+	// SpecName 返回规格名称，用于匹配 subagent_type。
+	SpecName() string
+}
+
+// VisionModelConfig 视觉模型运行时配置
+type VisionModelConfig struct {
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础地址
+	BaseURL string `json:"base_url"`
+	// Model 模型名称
+	Model string `json:"model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
+}
+
+// VideoModelConfig 视频模型运行时配置
+// Go 扩展设计决策：Python 中视频工具使用 VisionModelConfig 和 VISION_ 前缀环境变量，
+// Go 独立定义 VideoModelConfig 和 VIDEO_ 前缀，支持视频/视觉使用不同模型。
+type VideoModelConfig struct {
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础地址
+	BaseURL string `json:"base_url"`
+	// Model 模型名称（默认 glm-4.6v）
+	Model string `json:"model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
+	// ThinkingEnabled 是否启用思维模式（对齐 jiuwenswarm: thinking_enabled）
+	ThinkingEnabled bool `json:"thinking_enabled"`
+}
+
+// AudioModelConfig 音频模型运行时配置
+type AudioModelConfig struct {
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础地址
+	BaseURL string `json:"base_url"`
+	// TranscriptionModel 语音转录模型名称
+	TranscriptionModel string `json:"transcription_model"`
+	// QAModel 语音问答模型名称
+	QAModel string `json:"question_answering_model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
+	// HTTPTimeout HTTP 请求超时秒数
+	HTTPTimeout int `json:"http_timeout"`
+	// MaxAudioBytes 最大音频字节数
+	MaxAudioBytes int `json:"max_audio_bytes"`
+	// ACRAccessKey ACR Cloud 访问密钥
+	ACRAccessKey string `json:"acr_access_key"`
+	// ACRAccessSecret ACR Cloud 访问密钥
+	ACRAccessSecret string `json:"acr_access_secret"`
+	// ACRBaseURL ACR Cloud 基础地址
+	ACRBaseURL string `json:"acr_base_url"`
+}
+
+// ModelSelectionEntry 模型选择条目，替代 Python Dict[Model, str]
+type ModelSelectionEntry struct {
+	// Model 模型实例
+	Model *llm.Model `json:"model,omitempty"`
+	// ModeName 模式名称
+	ModeName string `json:"mode_name"`
+}
+
+// SubAgentConfig 子 Agent 配置
+type SubAgentConfig struct {
+	// AgentCard Agent 身份卡片
+	AgentCard *schema.AgentCard `json:"agent_card,omitempty"`
+	// SystemPrompt 系统提示词
+	SystemPrompt string `json:"system_prompt"`
+	// Tools 工具卡片列表
+	// Python: SubAgentConfig.tools 中 List[ToolCard] 部分
+	Tools []*tool.ToolCard `json:"tools,omitempty"`
+	// ToolInstances 工具实例列表，对齐 Python: SubAgentConfig.tools 中 List[Tool] 部分
+	// 运行时注入，不从 YAML 反序列化
+	ToolInstances []tool.Tool `json:"-"`
+	// Mcps MCP 服务器配置列表
+	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
+	// Model 模型实例
+	Model *llm.Model `json:"model,omitempty"`
+	// Rails Rail 列表
+	Rails []sainterfaces.AgentRail `json:"-"`
+	// Skills 技能名称列表
+	Skills []string `json:"skills,omitempty"`
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
+	Backend any `json:"-"`
+	// InvocationLogDir 调用日志目录（17.4b2 增强件，Python DeepAgentSpec.invocation_log_dir）
+	InvocationLogDir string `json:"invocation_log_dir,omitempty"`
+	// Workspace 工作空间
+	Workspace *workspace.Workspace `json:"workspace,omitempty"`
+	// SysOperation 系统操作实例
+	SysOperation sysop.SysOperation `json:"-"`
+	// Language 语言
+	Language string `json:"language,omitempty"`
+	// PromptMode 提示词模式
+	PromptMode PromptMode `json:"prompt_mode,omitempty"`
+	// EnableTaskLoop 是否启用任务循环
+	EnableTaskLoop bool `json:"enable_task_loop"`
+	// MaxIterations 最大迭代次数
+	MaxIterations int `json:"max_iterations,omitempty"`
+	// FactoryName 工厂名称
+	FactoryName string `json:"factory_name,omitempty"`
+	// FactoryKwargs 工厂参数（any 占位，Python 原型为 Dict[str, Any]）
+	FactoryKwargs map[string]any `json:"factory_kwargs,omitempty"`
+	// EnablePlanMode 是否启用规划模式
+	EnablePlanMode bool `json:"enable_plan_mode"`
+	// RestrictToWorkDir 是否限制在工作目录
+	RestrictToWorkDir bool `json:"restrict_to_work_dir"`
+}
+
+// SubagentCreateParams 子 Agent 创建参数。
+// Python: DeepAgent.create_subagent 中 create_kwargs 字典。
+// 替代 map[string]any，提供类型安全的参数传递。
+type SubagentCreateParams struct {
+	// Model 模型实例
+	Model *llm.Model
+	// Card Agent 身份卡片
+	Card *schema.AgentCard
+	// SystemPrompt 系统提示词
+	SystemPrompt string
+	// Tools 工具卡片列表
+	// Python: create_kwargs["tools"] 中 List[ToolCard] 部分
+	Tools []*tool.ToolCard
+	// ToolInstances 工具实例列表，对齐 Python: create_kwargs["tools"] 中 List[Tool] 部分
+	ToolInstances []tool.Tool
+	// Mcps MCP 服务器配置列表
+	Mcps []*mcptypes.McpServerConfig
+	// Rails Rail 列表
+	Rails []sainterfaces.AgentRail
+	// EnableTaskLoop 是否启用任务循环
+	EnableTaskLoop bool
+	// MaxIterations 最大迭代次数
+	MaxIterations int
+	// Workspace 工作空间
+	Workspace *workspace.Workspace
+	// Skills 技能名称列表
+	Skills []string
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
+	Backend any
+	// InvocationLogDir 调用日志目录（17.4b2 增强件；spec 值优先，否则继承父配置）
+	InvocationLogDir string
+	// SysOperation 系统操作实例
+	SysOperation sysop.SysOperation
+	// Language 语言
+	Language string
+	// PromptMode 提示词模式
+	PromptMode PromptMode
+	// Subagents 子 Agent 列表（创建时为 nil）
+	Subagents []SubAgentConfig
+	// EnableAsyncSubagent 是否启用异步子 Agent
+	EnableAsyncSubagent bool
+	// AddGeneralPurposeAgent 是否添加通用 Agent
+	AddGeneralPurposeAgent bool
+	// EnablePlanMode 是否启用规划模式
+	EnablePlanMode bool
+	// RestrictToWorkDir 是否限制在工作目录。
+	// 使用 *bool 指针以区分"未设置"(nil)和"显式设为 false"。
+	// Python: restrict_to_work_dir 默认 True，但只有显式传参时才覆盖。
+	RestrictToWorkDir *bool
+}
+
+// TaskLoopNoProgressGuardConfig 任务循环无进展守卫配置。
+// 连续若干轮「有 answer 但内容过短」即判定模型没有实质进展，停止任务循环。
+// Python: TaskLoopNoProgressGuardConfig (harness/schema/config.py)
+type TaskLoopNoProgressGuardConfig struct {
+	// Enabled 是否启用
+	Enabled bool `json:"enabled"`
+	// MaxConsecutiveEmptyAnswers 连续短答案轮次阈值
+	MaxConsecutiveEmptyAnswers int `json:"max_consecutive_empty_answers"`
+	// MinAnswerChars 视为有实质内容的最小字符数
+	MinAnswerChars int `json:"min_answer_chars"`
+}
+
+// DeepAgentConfig DeepAgent 运行时配置中枢
+type DeepAgentConfig struct {
+	// Model 预构建的 LLM 模型实例
+	Model *llm.Model `json:"model,omitempty"`
+	// Card Agent 身份卡片
+	Card *schema.AgentCard `json:"card,omitempty"`
+	// SystemPrompt 注入到 ReAct Agent 的系统提示词
+	SystemPrompt string `json:"system_prompt,omitempty"`
+	// ContextEngineConfig 上下文引擎配置
+	ContextEngineConfig *ceschema.ContextEngineConfig `json:"context_engine_config,omitempty"`
+	// EnableTaskLoop 是否启用外层任务循环
+	EnableTaskLoop bool `json:"enable_task_loop"`
+	// EnableAsyncSubagent 是否启用异步子 Agent 模式
+	EnableAsyncSubagent bool `json:"enable_async_subagent"`
+	// AddGeneralPurposeAgent 是否添加通用目的 Agent 作为子 Agent
+	AddGeneralPurposeAgent bool `json:"add_general_purpose_agent"`
+	// MaxIterations 内层 ReAct 单次 invoke 的迭代上限，0（未配置）表示不限
+	MaxIterations int `json:"max_iterations,omitempty"`
+	// TaskLoopNoProgressGuard 任务循环无进展守卫
+	TaskLoopNoProgressGuard TaskLoopNoProgressGuardConfig `json:"task_loop_no_progress_guard"`
+	// SkillBudgetMaxSkills 技能提示词最大技能数，0 表示不限
+	// Python: DeepAgentConfig.skill_budget_max_skills
+	SkillBudgetMaxSkills int `json:"skill_budget_max_skills,omitempty"`
+	// SkillBudgetMaxTotalChars 技能提示词字符总预算，0 表示不限
+	// Python: DeepAgentConfig.skill_budget_max_total_chars
+	SkillBudgetMaxTotalChars int `json:"skill_budget_max_total_chars,omitempty"`
+	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
+	// Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
+	Subagents []SubagentSpec `json:"-"`
+	// Tools 挂载到 Agent 的工具卡片
+	Tools []*tool.ToolCard `json:"tools,omitempty"`
+	// Mcps 挂载到 Agent 的 MCP 服务器配置
+	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
+	// Workspace 工作空间
+	Workspace *workspace.Workspace `json:"workspace,omitempty"`
+	// Skills 技能定义列表
+	Skills []string `json:"skills,omitempty"`
+	// EnableSkillDiscovery 是否启用技能发现
+	EnableSkillDiscovery bool `json:"enable_skill_discovery"`
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
+	Backend any `json:"-"`
+	// InvocationLogDir 调用日志目录（17.4b2 增强件，Python DeepAgentConfig.invocation_log_dir）
+	InvocationLogDir string `json:"invocation_log_dir,omitempty"`
+	// SysOperation 系统操作实例
+	SysOperation sysop.SysOperation `json:"-"`
+	// AutoCreateWorkspace 是否自动创建工作空间
+	AutoCreateWorkspace bool `json:"auto_create_workspace"`
+	// CompletionTimeout 单次任务循环迭代完成超时秒数，0 表示使用默认值 600.0
+	CompletionTimeout float64 `json:"completion_timeout,omitempty"`
+	// Language 语言，空表示使用默认值 "cn"
+	Language string `json:"language,omitempty"`
+	// PromptMode 提示词注入模式
+	PromptMode PromptMode `json:"prompt_mode,omitempty"`
+	// VisionModelConfig 视觉模型配置
+	VisionModelConfig *VisionModelConfig `json:"vision_model_config,omitempty"`
+	// AudioModelConfig 音频模型配置
+	AudioModelConfig *AudioModelConfig `json:"audio_model_config,omitempty"`
+	// EnableReadImageMultimodal 是否启用图片多模态读取。
+	// nil=auto（按 supports_vision 声明/模态探测缓存判定）。
+	// Python: schema/config.py:285 enable_read_image_multimodal: Optional[bool] = None
+	EnableReadImageMultimodal *bool `json:"enable_read_image_multimodal,omitempty"`
+	// Rails Rail 列表
+	Rails []sainterfaces.AgentRail `json:"-"`
+	// EnablePlanMode 是否启用规划模式
+	EnablePlanMode bool `json:"enable_plan_mode"`
+	// ModelSelection 模型选择列表
+	ModelSelection []ModelSelectionEntry `json:"model_selection,omitempty"`
+	// ProgressiveToolEnabled 是否启用渐进式工具暴露
+	ProgressiveToolEnabled bool `json:"progressive_tool_enabled"`
+	// ToolSearchLimit tool_search 默认结果条数（有效范围 1..20），0 表示使用默认值 5
+	ToolSearchLimit int `json:"tool_search_limit,omitempty"`
+	// DefaultMode 默认 Agent 执行模式
+	DefaultMode AgentMode `json:"default_mode,omitempty"`
+	// Permissions 权限策略配置
+	Permissions *PermissionsSection `json:"permissions,omitempty"`
+	// PermissionHost 权限宿主回调（any 占位，⤵️ 9.1 回填为 PermissionHostCallback 接口）
+	PermissionHost any `json:"-"`
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// DefaultCompletionTimeout 默认完成超时秒数
+	DefaultCompletionTimeout = 600.0
+	// DefaultToolSearchLimit tool_search 默认结果条数（对齐上游 5）
+	DefaultToolSearchLimit = 5
+	// DefaultLanguage 默认语言
+	DefaultLanguage = "cn"
+	// DefaultOpenAIBaseURL 默认 OpenAI 基础地址
+	DefaultOpenAIBaseURL = "https://api.openai.com/v1"
+	// DefaultOpenAIVisionModel 默认 OpenAI 视觉模型
+	DefaultOpenAIVisionModel = "gpt-4.1-mini"
+	// DefaultOpenRouterVisionModel 默认 OpenRouter 视觉模型
+	DefaultOpenRouterVisionModel = "google/gemini-2.5-pro"
+	// DefaultOpenAIAudioTranscriptionModel 默认 OpenAI 语音转录模型
+	DefaultOpenAIAudioTranscriptionModel = "gpt-4o-transcribe"
+	// DefaultOpenAIAudioQAModel 默认 OpenAI 语音问答模型
+	DefaultOpenAIAudioQAModel = "gpt-4o-audio-preview"
+	// DefaultACRBaseURL 默认 ACR Cloud 基础地址
+	DefaultACRBaseURL = "https://identify-ap-southeast-1.acrcloud.com/v1/identify"
+	// DefaultAudioHTTPTimeout 默认音频 HTTP 超时秒数
+	DefaultAudioHTTPTimeout = 20
+	// DefaultMaxAudioBytes 默认最大音频字节数
+	DefaultMaxAudioBytes = 25 * 1024 * 1024
+	// DefaultVideoModel 默认视频理解模型（对齐 jiuwenswarm: glm-4.6v）
+	DefaultVideoModel = "glm-4.6v"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SpecName 返回规格名称，用于子 Agent 匹配。
+// 实现 SubagentSpec 接口。
+// Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
+func (c *SubAgentConfig) SpecName() string {
+	if c.AgentCard == nil {
+		return ""
+	}
+	return c.AgentCard.Name
+}
+
+// NewVisionModelConfig 创建带默认值的视觉模型配置
+func NewVisionModelConfig() *VisionModelConfig {
+	return &VisionModelConfig{
+		BaseURL:    DefaultOpenAIBaseURL,
+		Model:      DefaultOpenAIVisionModel,
+		MaxRetries: 3,
+	}
+}
+
+// FromEnv 从环境变量构建视觉模型配置
+func (VisionModelConfig) FromEnv() VisionModelConfig {
+	apiKey := envOr(
+		"VISION_API_KEY",
+		"OPENROUTER_API_KEY",
+		"OPENAI_API_KEY",
+	)
+
+	baseURL := envOr(
+		"VISION_BASE_URL",
+		"VISION_API_BASE",
+		"OPENROUTER_BASE_URL",
+		"OPENAI_BASE_URL",
+	)
+	if baseURL == "" {
+		baseURL = DefaultOpenAIBaseURL
+	}
+
+	model := os.Getenv("VISION_MODEL")
+	if model == "" {
+		model = os.Getenv("VISION_MODEL_NAME")
+	}
+	if model == "" {
+		if containsOpenRouter(baseURL) {
+			model = DefaultOpenRouterVisionModel
+		} else {
+			model = DefaultOpenAIVisionModel
+		}
+	}
+
+	return VisionModelConfig{
+		APIKey:     apiKey,
+		BaseURL:    baseURL,
+		Model:      model,
+		MaxRetries: parseIntEnv("VISION_MAX_RETRIES", 3),
+	}
+}
+
+// NewAudioModelConfig 创建带默认值的音频模型配置
+func NewAudioModelConfig() *AudioModelConfig {
+	return &AudioModelConfig{
+		BaseURL:            DefaultOpenAIBaseURL,
+		TranscriptionModel: DefaultOpenAIAudioTranscriptionModel,
+		QAModel:            DefaultOpenAIAudioQAModel,
+		MaxRetries:         3,
+		HTTPTimeout:        DefaultAudioHTTPTimeout,
+		MaxAudioBytes:      DefaultMaxAudioBytes,
+		ACRBaseURL:         DefaultACRBaseURL,
+	}
+}
+
+// NewVideoModelConfig 创建带默认值的视频模型配置
+func NewVideoModelConfig() *VideoModelConfig {
+	return &VideoModelConfig{
+		Model:      DefaultVideoModel,
+		MaxRetries: 3,
+	}
+}
+
+// FromEnv 从环境变量构建视频模型配置
+func (VideoModelConfig) FromEnv() VideoModelConfig {
+	apiKey := os.Getenv("VIDEO_API_KEY")
+	baseURL := envOr("VIDEO_API_BASE", "ZHIPU_API_URL", "API_BASE")
+	if baseURL == "" {
+		baseURL = DefaultOpenAIBaseURL
+	}
+	model := envOr("VIDEO_MODEL_NAME", "MODEL_NAME")
+	if model == "" {
+		model = DefaultVideoModel
+	}
+	thinkingEnabled := os.Getenv("VIDEO_THINKING_ENABLED") == "true"
+	return VideoModelConfig{
+		APIKey:          apiKey,
+		BaseURL:         baseURL,
+		Model:           model,
+		MaxRetries:      parseIntEnv("VIDEO_MAX_RETRIES", 3),
+		ThinkingEnabled: thinkingEnabled,
+	}
+}
+
+// FromEnv 从环境变量构建音频模型配置
+func (AudioModelConfig) FromEnv() AudioModelConfig {
+	baseURL := envOr(
+		"AUDIO_BASE_URL",
+		"AUDIO_API_BASE",
+		"OPENAI_BASE_URL",
+	)
+	if baseURL == "" {
+		baseURL = DefaultOpenAIBaseURL
+	}
+
+	return AudioModelConfig{
+		APIKey: envOr(
+			"AUDIO_API_KEY",
+			"OPENAI_API_KEY",
+		),
+		BaseURL: baseURL,
+		TranscriptionModel: envOrWithDefault(
+			DefaultOpenAIAudioTranscriptionModel,
+			"AUDIO_TRANSCRIPTION_MODEL",
+			"AUDIO_MODEL_NAME",
+		),
+		QAModel: envOrWithDefault(
+			DefaultOpenAIAudioQAModel,
+			"AUDIO_QUESTION_ANSWERING_MODEL",
+		),
+		MaxRetries:      parseIntEnv("AUDIO_MAX_RETRIES", 3),
+		HTTPTimeout:     parseIntEnv("AUDIO_HTTP_TIMEOUT", DefaultAudioHTTPTimeout),
+		MaxAudioBytes:   parseIntEnv("AUDIO_MAX_AUDIO_BYTES", DefaultMaxAudioBytes),
+		ACRAccessKey:    os.Getenv("ACR_ACCESS_KEY"),
+		ACRAccessSecret: os.Getenv("ACR_ACCESS_SECRET"),
+		ACRBaseURL:      envOrDefault("ACR_BASE_URL", DefaultACRBaseURL),
+	}
+}
+
+// NewDeepAgentConfig 创建带默认值的 DeepAgent 配置
+// Python: DeepAgentConfig 字段默认值（max_iterations=None 表示不限，completion_timeout=600.0 等）
+func NewDeepAgentConfig() *DeepAgentConfig {
+	return &DeepAgentConfig{
+		AutoCreateWorkspace: true,
+		// Python 默认 None=auto（schema/config.py:285），交由声明/探测解析链判定
+		TaskLoopNoProgressGuard: TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
+		CompletionTimeout:       DefaultCompletionTimeout,
+		ToolSearchLimit:         DefaultToolSearchLimit,
+		Language:                DefaultLanguage,
+	}
+}
+
+// ResolveInnerReactMaxIterations 解析内层 ReAct 循环的迭代上限。
+// 0（未配置）表示不限（math.MaxInt）；其余值（含负数）原样透传，即使启用了
+// 外层 task loop。负数不做降级——与上游一致：上游只判 `is None`，显式值原样用。
+// Python: resolve_inner_react_max_iterations() (harness/schema/config.py:174-182)
+func (c *DeepAgentConfig) ResolveInnerReactMaxIterations() int {
+	if c.MaxIterations == 0 {
+		return math.MaxInt
+	}
+	return c.MaxIterations
+}
+
+// EffectiveCompletionTimeout 返回有效的完成超时秒数，0 取默认值
+func (c *DeepAgentConfig) EffectiveCompletionTimeout() float64 {
+	if c.CompletionTimeout == 0 {
+		return DefaultCompletionTimeout
+	}
+	return c.CompletionTimeout
+}
+
+// EffectiveLanguage 返回有效的语言，空取默认值
+func (c *DeepAgentConfig) EffectiveLanguage() string {
+	if c.Language == "" {
+		return DefaultLanguage
+	}
+	return c.Language
+}
+
+// EffectiveRestrictToWorkDir 返回有效的 RestrictToWorkDir 值
+// Python 默认值为 True，Go 通过 NewSubAgentConfig 构造函数设置默认值
+func (c *SubAgentConfig) EffectiveRestrictToWorkDir() bool {
+	return c.RestrictToWorkDir
+}
+
+// NewSubAgentConfig 创建子 Agent 配置
+// Python 中 restrict_to_work_dir 默认为 True，Go 零值为 false，需显式设置
+func NewSubAgentConfig() *SubAgentConfig {
+	return &SubAgentConfig{
+		RestrictToWorkDir: true,
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// envOr 依次检查多个环境变量，返回第一个非空值，均空则返回空字符串
+func envOr(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// envOrDefault 读取环境变量，空则返回默认值
+func envOrDefault(name string, defaultVal string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return defaultVal
+}
+
+// envOrWithDefault 依次检查多个环境变量，均空则返回默认值
+func envOrWithDefault(defaultVal string, names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return defaultVal
+}
+
+// parseIntEnv 从环境变量解析整数，失败或空则返回默认值
+func parseIntEnv(name string, defaultVal int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
+// containsOpenRouter 判断 URL 是否包含 openrouter.ai
+func containsOpenRouter(url string) bool {
+	return strings.Contains(url, "openrouter.ai")
+}

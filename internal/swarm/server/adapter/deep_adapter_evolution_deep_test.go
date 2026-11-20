@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

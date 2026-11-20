@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	interruptrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 带状态的 fake session ────────────────────────────

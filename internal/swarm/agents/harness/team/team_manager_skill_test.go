@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/team_workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 

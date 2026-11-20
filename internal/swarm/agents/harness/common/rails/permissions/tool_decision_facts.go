@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/fileguard"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	workflow "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	workflow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

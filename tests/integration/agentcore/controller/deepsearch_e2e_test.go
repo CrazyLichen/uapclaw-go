@@ -5,7 +5,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"strings"
 	"sync"
 	"testing"
@@ -13,12 +13,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/config"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/modules"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

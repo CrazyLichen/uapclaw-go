@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hsections "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
-	memrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"

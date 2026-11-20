@@ -9,15 +9,15 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/inboundtags"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/prompts"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tracker"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

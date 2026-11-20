@@ -1,0 +1,139 @@
+package resources_manager
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentMgr Agent 资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
+// Python: AgentMgr (openjiuwen/core/runner/resources_manager/agent_manager.py)
+type AgentMgr struct {
+	AbstractManager[interfaces.BaseAgent]
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewAgentMgr 创建 Agent 资源管理器。
+func NewAgentMgr() AgentMgr {
+	return AgentMgr{
+		AbstractManager: NewAbstractManager[interfaces.BaseAgent](),
+	}
+}
+
+// AddAgent 注册 Agent 提供者。
+// 调用 AbstractManager.RegisterProvider 将 provider 包装后存入注册表。
+// Python: AgentMgr.add_agent(agent_id, provider)
+//
+// ⤵️ 预留：9.84 DistRunner + 10.3.3 AgentAdapter 实现后回填分布式逻辑。
+// 回填内容：
+//   - _is_remote_agent 判断（检查 provider 是否为 RemoteAgent 实例）
+//   - _remote_agents dict（存储 RemoteAgent 引用）
+//   - AddAgent 中 AgentAdapter + interface_url 分支
+//   - RemoveAgent 中 AgentAdapter.stop() 清理
+//   - GetAgent 中 _remote_agents.get() 优先查找
+func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
+	if agentID == "" {
+		return exception.BuildError(exception.StatusResourceIDValueInvalid,
+			exception.WithParam("resource_type", "agent"),
+			exception.WithParam("reason", "Agent ID 为空"),
+		)
+	}
+	if provider == nil {
+		return exception.BuildError(exception.StatusResourceProviderInvalid,
+			exception.WithParam("resource_type", "agent"),
+			exception.WithParam("reason", "Agent 提供者为 nil"),
+		)
+	}
+
+	// 将 AgentProvider 包装为 AbstractManager 所需的 func(context.Context) (T, error) 签名
+	wrappedProvider := func(ctx context.Context) (interfaces.BaseAgent, error) {
+		// AgentProvider 签名为 func(ctx, card) → (BaseAgent, error)
+		// 此处 card 为 nil，由 provider 内部自行处理
+		// ⤵️ 预留：分布式场景下从 AgentAdapter 获取 card
+		return provider(ctx, nil)
+	}
+
+	err := m.registerProvider(agentID, wrappedProvider)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "AGENT_ADD_ERROR").
+			Str("agent_id", agentID).
+			Err(err).
+			Msg("failed to add agent")
+		return exception.BuildError(exception.StatusResourceAddError,
+			exception.WithParam("card", agentID),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "AGENT_ADD_SUCCESS").
+		Str("agent_id", agentID).
+		Msg("agent added")
+	return nil
+}
+
+// RemoveAgent 注销 Agent 提供者，返回被注销的 provider。
+// Python: AgentMgr.remove_agent(agent_id)
+//
+// ⤵️ 预留：9.84 + 10.3.3 实现后回填：RemoteAgent 的清理逻辑（stop AgentAdapter、pop _remote_agents）
+func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
+	unwrapped, err := m.unregisterProvider(agentID)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "AGENT_REMOVE_ERROR").
+			Str("agent_id", agentID).
+			Err(err).
+			Msg("failed to remove agent")
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_id", agentID),
+			exception.WithParam("resource_type", "agent"),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+
+	// 将 wrapped provider 还原为 AgentProvider
+	provider := func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error) {
+		return unwrapped(ctx)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "AGENT_REMOVE_SUCCESS").
+		Str("agent_id", agentID).
+		Msg("agent removed")
+	return provider, nil
+}
+
+// GetAgent 获取 Agent 实例。
+// 调用 AbstractManager.GetResource 获取 provider 并执行。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_agent 返回 None 行为。
+// Python: AgentMgr.get_agent(agent_id)
+//
+// ⤵️ 预留：9.84 + 10.3.3 实现后回填：_remote_agents.get() 优先查找逻辑
+func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.BaseAgent, error) {
+	agent, err := m.getResource(ctx, agentID)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "AGENT_GET_ERROR").
+			Str("agent_id", agentID).
+			Err(err).
+			Msg("failed to get agent")
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_id", agentID),
+			exception.WithParam("resource_type", "agent"),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+	return agent, nil
+}

@@ -1,0 +1,131 @@
+package interfaces
+
+import (
+	"context"
+
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentConfig Agent 配置接口
+type AgentConfig interface {
+	// ModelName 返回模型名称
+	ModelName() string
+	// MemScopeID 返回内存作用域标识
+	MemScopeID() string
+	// GetContextEngineConfig 返回上下文引擎配置
+	GetContextEngineConfig() ceschema.ContextEngineConfig
+	// GetModelClientConfig 返回模型客户端配置（可能为 nil）
+	GetModelClientConfig() *llmschema.ModelClientConfig
+	// Validate 校验配置的合法性
+	Validate() error
+}
+
+// BaseAgent 基础 Agent 接口
+type BaseAgent interface {
+	// ── 核心三方法 ──
+
+	// Configure 配置 Agent。
+	// Python: BaseAgent.configure(config)
+	Configure(ctx context.Context, config AgentConfig) error
+
+	// Invoke 非流式调用 Agent。
+	// Python: BaseAgent.invoke(inputs, session)
+	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (map[string]any, error)
+
+	// Stream 流式调用 Agent。
+	// Python: BaseAgent.stream(inputs, session, stream_modes)
+	Stream(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error)
+
+	// ── 访问器 ──
+
+	// Card 返回 Agent 身份卡片。
+	// Python: BaseAgent.card 属性
+	Card() *agentschema.AgentCard
+
+	// Config 返回当前配置。
+	// Python: BaseAgent.config 属性
+	Config() AgentConfig
+
+	// AbilityManager 返回能力管理器。
+	// Python: BaseAgent.ability_manager 属性
+	AbilityManager() AbilityManagerInterface
+
+	// CallbackManager 返回回调管理器。
+	// Python: BaseAgent.agent_callback_manager 属性
+	CallbackManager() *AgentCallbackManager
+
+	// SystemPromptBuilder 返回系统提示词构建器接口。
+	// Python: agent.system_prompt_builder 属性（harness 层扩展）。
+	// ReActAgent 和 DeepAgent 均实现此方法。
+	SystemPromptBuilder() saprompt.SystemPromptBuilderInterface
+
+	// ── 回调/Rail 注册 ──
+
+	// RegisterCallback 注册回调。
+	// Python: BaseAgent.register_callback(event, callback, priority)
+	RegisterCallback(ctx context.Context, event AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error
+
+	// RegisterRail 注册 Rail。
+	// Python: BaseAgent.register_rail(rail)
+	RegisterRail(ctx context.Context, rail AgentRail, opts ...cb.CallbackOption) error
+
+	// UnregisterRail 注销 Rail。
+	// Python: BaseAgent.unregister_rail(rail)
+	UnregisterRail(ctx context.Context, rail AgentRail) error
+}
+
+// AgentOptions Agent 调用选项
+type AgentOptions struct {
+	// Session 会话实例（可选）
+	// Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
+	Session sessioninterfaces.SessionFacade
+	// StreamModes 流式输出模式（可选）
+	// Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
+	StreamModes []stream.StreamMode
+	// StreamLifecycleOwner 由 stream 层把自己声明为「生命周期所有者」。
+	// 置位后 invoke 不再处理中断/异常的上下文清洗与 finally 清理，全部交给
+	// stream 侧统一处理（避免双份 save/commit，且 commit 失败能补偿）。
+	// Python: invoke(..., _stream_lifecycle_owner=True)
+	StreamLifecycleOwner bool
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// AgentOption Agent 调用选项函数
+type AgentOption func(*AgentOptions)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithSession 设置会话选项。
+func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
+	return func(o *AgentOptions) { o.Session = sess }
+}
+
+// WithStreamLifecycleOwner 声明本次 invoke 的生命周期由 stream 层拥有。
+// 仅 stream 内部调用链使用；普通 Invoke 调用方不应传。
+// Python: ReActAgent._inner_stream → invoke(..., _stream_lifecycle_owner=True)
+func WithStreamLifecycleOwner() AgentOption {
+	return func(o *AgentOptions) { o.StreamLifecycleOwner = true }
+}
+
+// WithStreamModes 设置流式模式选项。
+func WithStreamModes(modes []stream.StreamMode) AgentOption {
+	return func(o *AgentOptions) { o.StreamModes = modes }
+}
+
+// NewAgentOptions 创建 Agent 选项，应用所有选项函数。
+func NewAgentOptions(opts ...AgentOption) *AgentOptions {
+	o := &AgentOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}

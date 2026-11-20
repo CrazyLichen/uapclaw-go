@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	model_clients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

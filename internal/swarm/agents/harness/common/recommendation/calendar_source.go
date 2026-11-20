@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )

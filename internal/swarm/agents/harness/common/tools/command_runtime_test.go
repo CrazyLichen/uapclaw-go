@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 )
 
 // TestCurrentCommandRuntimePaths 验证四个路径锚点均非空

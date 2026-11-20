@@ -9,7 +9,7 @@ import (
 	"slices"
 	"sync"
 
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 

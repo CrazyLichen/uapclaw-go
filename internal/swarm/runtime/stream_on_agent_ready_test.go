@@ -7,15 +7,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/modules"
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/agents"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

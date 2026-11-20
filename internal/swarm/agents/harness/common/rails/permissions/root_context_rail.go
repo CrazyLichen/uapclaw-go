@@ -16,9 +16,9 @@ import (
 	"fmt"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	sysoperation "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	sysoperation "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"

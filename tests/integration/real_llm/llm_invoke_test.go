@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
-	model_clients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

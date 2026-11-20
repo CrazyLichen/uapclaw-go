@@ -1,0 +1,40 @@
+package output_parsers
+
+import (
+	"fmt"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ExtractText 从 BaseOutputParser.Parse 的输入中提取文本和模型名称。
+// Python: BaseOutputParser.parse() 中 isinstance(llm_output, (str, AssistantMessage)) 的处理。
+// 输入可以是 string 或 *AssistantMessage：
+//   - string → 直接返回文本，modelName 为空
+//   - *AssistantMessage → 提取 .Content 文本 + .UsageMetadata.ModelName
+//   - 其他类型 → 记录 warning 日志，返回空字符串
+//
+// 返回值: (text, modelName)
+func ExtractText(input any) (string, string) {
+	switch v := input.(type) {
+	case string:
+		return v, ""
+	case *llmschema.AssistantMessage:
+		if v == nil {
+			return "", ""
+		}
+		modelName := ""
+		if v.UsageMetadata != nil {
+			modelName = v.UsageMetadata.ModelName
+		}
+		return v.Content.Text(), modelName
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("input_type", fmt.Sprintf("%T", input)).
+			Msg("unsupported Parse input type")
+		return "", ""
+	}
+}

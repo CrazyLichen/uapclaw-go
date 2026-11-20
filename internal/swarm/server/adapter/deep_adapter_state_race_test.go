@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // TestDeepAdapter_StateConcurrentPublishAndRead 并发发布模型/配置与读取，

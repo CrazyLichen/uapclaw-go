@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	tool "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	hsections "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
-	ce "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/context_engineer"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	ce "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

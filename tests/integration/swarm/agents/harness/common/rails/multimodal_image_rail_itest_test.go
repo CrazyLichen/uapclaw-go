@@ -24,9 +24,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	ceiface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	rails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

@@ -3,9 +3,9 @@
 // Package llm_client 提供 LLM 客户端 C 组对齐（C-A~C-G）的集成测试。
 //
 // 测试跨三个子系统：
-//   - internal/openjiuwen/core/foundation/llm（客户端 + 共享 Transport + usage 抽取）
-//   - internal/openjiuwen/core/foundation/llm/schema（配置与超时语义）
-//   - internal/openjiuwen/core/context_engine/usage（会话级 KV cache 用量聚合）
+//   - internal/openuapclaw/core/foundation/llm（客户端 + 共享 Transport + usage 抽取）
+//   - internal/openuapclaw/core/foundation/llm/schema（配置与超时语义）
+//   - internal/openuapclaw/core/context_engine/usage（会话级 KV cache 用量聚合）
 //
 // 覆盖：
 //   - 流式持续输出不被总超时切断（C-01）+ usage 归一字段落到聚合层（C-04）

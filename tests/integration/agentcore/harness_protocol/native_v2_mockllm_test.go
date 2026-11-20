@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/native"
+	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/native"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

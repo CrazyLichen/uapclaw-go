@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/cwd"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

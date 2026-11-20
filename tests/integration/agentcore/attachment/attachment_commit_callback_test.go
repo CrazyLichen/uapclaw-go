@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	model_clients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )

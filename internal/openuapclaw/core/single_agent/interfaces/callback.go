@@ -1,0 +1,1216 @@
+package interfaces
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentRail Agent 生命周期 Rail 接口。
+// Rail 是 class-based 的生命周期钩子容器，允许在 Agent 执行流程的
+// 特定时机注入拦截逻辑（重试、提前终止、steering 等）。
+// 嵌入 BaseRail 后只需覆盖关心的钩子方法，并在 GetCallbacks() 中
+// 声明已覆盖的事件映射。
+// Python: AgentRail(ABC) (openjiuwen/core/single_agent/rail/base.py L451-573)
+type AgentRail interface {
+	// Priority 返回执行优先级（数值越大越先执行）
+	Priority() int
+	// CallbackPriorityFor 返回本 rail 在指定事件上的优先级（数值越大越先执行）。
+	// Python: AgentRail.callback_priority(event)
+	// 默认实现由 BaseRail 转发 Priority()，既有 rail 无需改动。
+	CallbackPriorityFor(event AgentCallbackEvent) int
+	// Init Rail 初始化钩子（注册时调用，用于工具自注册等）
+	Init(ctx context.Context, agent BaseAgent) error
+	// Uninit Rail 注销钩子（注销时调用，用于工具清理等）
+	Uninit(agent BaseAgent) error
+
+	// ── 12 个生命周期钩子方法 ──
+
+	// BeforeInvoke invoke 开始前
+	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnUserMessage 用户消息写入历史前（每轮一次）
+	OnUserMessage(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeSteeringDrain 待处理 steering 消息离队之前（仅在有积压时触发）
+	BeforeSteeringDrain(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterInvoke invoke 完成后
+	AfterInvoke(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeTaskIteration 外层任务循环迭代开始前
+	BeforeTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterTaskIteration 外层任务循环迭代完成后
+	AfterTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeModelCall LLM 调用前
+	BeforeModelCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterModelCall LLM 响应后
+	AfterModelCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnModelException LLM 调用异常
+	OnModelException(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeToolCall 工具执行前
+	BeforeToolCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterToolCall 工具执行后
+	AfterToolCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnToolException 工具执行异常
+	OnToolException(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterReactIteration 内层 ReAct 单次迭代完全成功后（模型 + 全部工具 + ToolMessage 均已写入）
+	AfterReactIteration(ctx context.Context, cbc *AgentCallbackContext) error
+
+	// GetCallbacks 提取已覆盖的钩子方法映射，供 RegisterRail 批量注册。
+	GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc
+}
+
+// EventInputs 回调事件输入接口。
+// 各事件类型对应不同的 Inputs 结构体，均实现此接口。
+// 调用方通过 type switch 获取具体类型。
+// Python: EventInputs = Union[InvokeInputs, ModelCallInputs, ToolCallInputs, TaskIterationInputs, Dict]
+type EventInputs interface {
+	// EventKind 返回事件输入的种类标识
+	EventKind() string
+}
+
+// InvokeQuery Invoke 阶段的查询输入接口。
+// Python: InvokeInputs.query: Optional[str, InteractiveInput]
+// InvokeQueryString（普通字符串）和 *InteractiveInput（中断恢复）均实现此接口。
+type InvokeQuery interface {
+	// IsInteractiveInput 检查是否为交互式输入（中断恢复）
+	IsInteractiveInput() bool
+	// PlainText 提取纯文本表示。
+	PlainText() string
+}
+
+// railConfig Rail 包所需的最小 Config 接口。
+// 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法。
+type railConfig any
+
+// AgentCallbackContext Rail 系统与 Agent 运行时之间的核心中介对象。
+// 承载三个控制机制：Retry（重试）、Force Finish（提前终止）、Steering（外部注入）。
+// 在 ReAct 循环中创建，跨事件生命周期持久存在（extra 字段）。
+// Python: openjiuwen/core/single_agent/rail/base.py AgentCallbackContext (L226-416)
+type AgentCallbackContext struct {
+	// agent 当前 Agent 实例引用
+	agent BaseAgent
+	// event 当前回调事件类型（由 Fire 设置）
+	event AgentCallbackEvent
+	// inputs 当前事件的输入数据（随事件变化）
+	inputs EventInputs
+	// config 运行时配置（最小化接口，预留）
+	config railConfig
+	// session 当前 Session
+	session sessioninterfaces.SessionFacade
+	// modelContext 当前 ModelContext
+	modelContext ceinterface.ModelContext
+	// extra 跨 rail 通信字典（单次 invoke 内跨事件持久，子 ctx 共享）
+	extra map[string]any
+	// extraMuPtr 保护 extra 字典的并发读写。
+	// 必须为指针：ForkForToolCall 创建的子上下文共享父的 extra map，
+	// 若各自持有独立的 sync.RWMutex 值，锁的是不同实例，对共享 map 的
+	// 并发写不加锁（多工具并行 BeforeToolCall 时数据竞争）。
+	extraMuPtr *sync.RWMutex
+	// exception 异常对象（在错误事件上设置）
+	exception error
+	// retryAttempt 当前重试索引号
+	retryAttempt int
+
+	// retryRequest 重试请求信号
+	retryRequest *RetryRequest
+	// forceFinishRequest 强制终止请求信号
+	forceFinishRequest *ForceFinishRequest
+	// steeringQueue 外部注入的 steering 消息队列
+	steeringQueue chan string
+	// contextUsageAttribution 本次请求的用量归属（owner 与调用血缘）
+	// 由 extraMuPtr 一并保护：模型调用前刷新、rail 读取可能跨协程。
+	// Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
+	contextUsageAttribution map[string]any
+}
+
+// AgentCallbackManager PerAgent 实例级回调管理器。
+// Python: AgentCallbackManager (openjiuwen/core/single_agent/agent_callback_manager.py)
+// 不自持回调存储，将注册/触发委托给全局 CallbackFramework，
+// 通过 "{agentID}_{event}" 前缀实现命名空间隔离。
+type AgentCallbackManager struct {
+	// agentID Agent 唯一标识，用于构造事件名前缀
+	agentID string
+}
+
+// BaseRail AgentRail 的 no-op 默认实现。
+// 用户嵌入此结构体后只需覆盖关心的钩子方法，并在 GetCallbacks() 中
+// 通过 CallbackFrom + BuildCallbacks 声明已覆盖的事件映射。
+// Python: AgentRail 基类的 10 个默认 no-op 方法
+type BaseRail struct {
+	// priority 执行优先级（数值越大越先执行），默认 50
+	priority int
+}
+
+// OnUserMessage 用户消息写入历史前的默认空实现。
+func (r *BaseRail) OnUserMessage(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// BeforeSteeringDrain 默认 no-op。
+func (r *BaseRail) BeforeSteeringDrain(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// RunContext 结构化运行时上下文（心跳等场景）。
+// Python: RunContext (openjiuwen/core/single_agent/rail/base.py L56-62)
+type RunContext struct {
+	// Reason 心跳触发原因
+	Reason HeartbeatReason
+	// SessionID 会话标识
+	SessionID string
+	// ContextMode 上下文模式（如 "lightweight"）
+	ContextMode string
+	// GoalID 目标标识（仅 run_kind=goal 时有效）
+	// Python: RunContext.goal_id（deep_agent.py L3773-3777）
+	GoalID string
+	// Revision 目标修订号（上游默认 0，0 是合法值）
+	// Python: RunContext.revision
+	Revision int
+	// Extra 额外上下文信息
+	Extra map[string]any
+}
+
+// InvokeInputs BEFORE/AFTER_INVOKE 事件输入。
+// Python: InvokeInputs (openjiuwen/core/single_agent/rail/base.py L68-96)
+type InvokeInputs struct {
+	// Query 用户查询输入（普通字符串或交互式输入）
+	Query InvokeQuery
+	// ConversationID 会话/对话标识
+	ConversationID string
+	// Result Agent invoke 结果（invoke 完成后填充）
+	Result map[string]any
+	// RunKind 运行模式（normal/heartbeat/cron）
+	RunKind RunKind
+	// RunContext 结构化运行时上下文
+	RunContext *RunContext
+	// ParentSessionID 拥有本子会话的产品会话标识（血缘）
+	// Python: InvokeInputs.parent_session_id（rail/base.py L273）
+	ParentSessionID string
+	// InvocationID 本次 agent 执行标识
+	// Python: InvokeInputs.invocation_id（rail/base.py L274）
+	InvocationID string
+	// ParentInvocationID 父级执行标识
+	// Python: InvokeInputs.parent_invocation_id（rail/base.py L275）
+	ParentInvocationID string
+	// DelegationID 委派链上的任务标识
+	// Python: InvokeInputs.delegation_id（rail/base.py L276）
+	DelegationID string
+	// AgentPath 根到当前 agent 的路径
+	// Python: InvokeInputs.agent_path（rail/base.py L277）
+	AgentPath []string
+	// Depth 调用树深度
+	// Python: InvokeInputs.depth（rail/base.py L278）
+	Depth int
+	// TurnNumber 本轮所属的逻辑用户 turn 号（1-based）；0 表示未提供
+	// Python: InvokeInputs.turn_number（rail/base.py L279，Optional[int]）
+	TurnNumber int
+	// Extra 额外参数，透传到 ReActAgent inputs（如 _steering_queue）
+	// 对齐 Python: DeepAgent.invoke(inputs) 中 inputs 为 dict，额外 key 自然保留
+	Extra map[string]any
+}
+
+// GenerationOptions 父调用的生成选项，用于让重放请求体与父调用一致。
+// Python: prompt_suggestion.py:282-287 从 config 读的
+// llm_return_token_ids / llm_logprobs / llm_top_logprobs 三元组。
+//
+// 定义在 interfaces 包的原因：agents 包（产出方）与 recommendation 包
+// （消费方）都依赖本包，放在此处可让两边共用同一类型，
+// 避免「两个同构类型导致类型断言静默失败」。
+type GenerationOptions struct {
+	// ReturnTokenIDs 是否请求 token IDs
+	ReturnTokenIDs bool
+	// Logprobs 是否请求 logprobs
+	Logprobs bool
+	// TopLogprobs top_logprobs 数量
+	TopLogprobs int
+}
+
+// ModelCallInputs BEFORE/AFTER_MODEL_CALL 事件输入。
+// Python: ModelCallInputs (openjiuwen/core/single_agent/rail/base.py L103-116)
+type ModelCallInputs struct {
+	// Messages 发送给 LLM 的消息列表
+	Messages []llmschema.BaseMessage
+	// Tools 工具定义列表
+	Tools []cschema2.ToolInfoInterface
+	// ModelContext 当前 ModelContext
+	ModelContext ceinterface.ModelContext
+	// Response LLM 响应（调用完成后填充）
+	Response *llmschema.AssistantMessage
+	// ContextUsageAttribution 本次上报的用量归属快照
+	// Python: ctx.inputs.context_usage_attribution（动态属性，react_agent.py L1483/L1703/L1779）
+	ContextUsageAttribution map[string]any
+	// ReactIteration 内层 ReAct 循环的当前轮次（1-based）。
+	// Python: rail/base.py:319 react_iteration: int = 0
+	// 来源：cbc.extra["_react_iteration"]（由 ReAct 循环写入）
+	ReactIteration int
+}
+
+// SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。
+// 只在"有积压的模型调用前"触发；空队列不发事件。它只问 rails 一个问题：
+// 本次模型调用吸收多少积压？没被放行的按原序留队，循环在队列非空时继续，
+// 剩下的由后续模型调用接走。
+// 刻意选在**队列被取走之前**：事后再限制意味着先全取再把多余塞回去，
+// 而塞回去的会排在期间新到的消息之后。
+// Python: SteeringDrainInputs (openjiuwen/core/single_agent/rail/base.py L402-427)
+type SteeringDrainInputs struct {
+	// Pending 当前排队条数（只读上下文，供"只压大批次"的 rail 参考）
+	Pending int
+	// Limit 本次最多吸收几条；nil 表示全部。
+	// rails 按优先级依次写，后写的覆盖先写的（上游原注释：the value standing
+	// at the end is the one that applies）。非空队列始终至少放行 1 条。
+	Limit *int
+}
+
+// EventKind 返回事件输入种类标识。
+func (s *SteeringDrainInputs) EventKind() string { return "steering_drain_inputs" }
+
+// UserMessageInputs ON_USER_MESSAGE 事件输入。
+// 一批即将被 join 成一条 UserMessage 的输入，最旧在前。这是 rails 唯一
+// 还能把输入**当作输入**处理的时刻：此后它们就是一条普通历史消息，会被
+// compaction 重写，不能再按位置定位，也不能再改（改一条消息会让其后每一
+// 个 KV-cache 条目失效）。
+// Python: UserMessageInputs (openjiuwen/core/single_agent/rail/base.py L378-399)
+type UserMessageInputs struct {
+	// Parts 排队输入列表，最旧在前（可变，rails 原地增删）
+	// rails 在这里丢弃被后续条目取代的整条输入，或 insert(0, ...) 前插
+	// 模型应优先读到的上下文。留下来的用换行 join 成消息体，因此一条
+	// 就是一个完整输入，丢掉一条不影响其余。
+	Parts []string
+	// Source 批次来源：query（新一轮或 follow-up）/ steering（轮中注入）/ resume（中断恢复）
+	Source string
+}
+
+// EventKind 返回事件输入种类标识。
+func (u *UserMessageInputs) EventKind() string { return "user_message_inputs" }
+
+// ToolCallInputs BEFORE/AFTER_TOOL_CALL 事件输入。
+// Python: ToolCallInputs (openjiuwen/core/single_agent/rail/base.py L119-134)
+type ToolCallInputs struct {
+	// ToolCall 原始工具调用对象
+	ToolCall *llmschema.ToolCall
+	// ToolName 工具名称（before 钩子可改写）
+	ToolName string
+	// ToolArgs 工具参数字典（对齐 Python ToolCallInputs.tool_args: Any，运行时 dict）
+	ToolArgs map[string]any
+	// ToolResult 工具执行结果。
+	// 两种语义（对齐 Python tool_result: Optional[Any]）：
+	//   1. 拦截预设值：before_tool_call 中 Rail 设置 _skip_tool=True 并预设 ToolResult，
+	//      此时值为 map[string]any{"error": errorMsg}
+	//   2. 工具执行结果：after_tool_call 中 ability_manager 填入 tool.invoke() 的原始返回值，
+	//      类型取决于工具实现，通常为 map[string]any
+	ToolResult any
+	// ToolMsg 工具返回消息（调用完成后填充）
+	ToolMsg *llmschema.ToolMessage
+}
+
+// TaskIterationInputs BEFORE/AFTER_TASK_ITERATION 事件输入。
+// Python: TaskIterationInputs (openjiuwen/core/single_agent/rail/base.py L137-162)
+type TaskIterationInputs struct {
+	// Iteration 1-based 外层循环迭代索引
+	Iteration int
+	// LoopEvent 触发本次迭代的事件对象
+	LoopEvent any
+	// ConversationID 会话/对话标识
+	ConversationID string
+	// Result 迭代结果（迭代完成后填充）
+	Result map[string]any
+	// Query 本次迭代的有效查询（before_task_iteration 钩子可修改）
+	Query string
+	// RetrievalQuery 专用检索查询，优先于 Query 用于记忆检索。
+	// Python: getattr(ctx.inputs, "retrieval_query", None) or query
+	// 由 trajectory_generator 在 self_refine 场景设置
+	RetrievalQuery string
+	// IsFollowUp 是否由 controller follow-up 触发
+	IsFollowUp bool
+	// RunKind 运行模式，由 executor 从 task metadata 回填。
+	// Python: TaskIterationInputs.run_kind (rail/base.py L361-363)
+	RunKind RunKind
+	// RunContext 结构化运行时上下文，由 executor 从 task metadata 回填。
+	// Python: TaskIterationInputs.run_context (rail/base.py L365)
+	RunContext *RunContext
+}
+
+// MapInputs 任意字典事件输入，作为 EventInputs 的兜底类型。
+// Python: EventInputs = Union[..., Dict[str, Any]]
+type MapInputs struct {
+	// Data 任意事件输入数据
+	Data map[string]any
+}
+
+// RetryRequest 重试指令，由 on_exception 钩子产生。
+// Python: RetryRequest (openjiuwen/core/single_agent/rail/base.py L165-169)
+type RetryRequest struct {
+	// DelaySeconds 重试前等待秒数
+	DelaySeconds float64
+}
+
+// ForceFinishRequest 提前终止信号，使 Agent 循环立即返回结果。
+// Python: ForceFinishRequest (openjiuwen/core/single_agent/rail/base.py L172-176)
+type ForceFinishRequest struct {
+	// Result 提前终止时返回的结果
+	Result map[string]any
+}
+
+// callbackEntry 事件→回调映射条目，BuildCallbacks 的参数。
+type callbackEntry struct {
+	event AgentCallbackEvent
+	fn    cb.PerAgentCallbackFunc
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// AgentCallbackEvent Agent 生命周期回调事件类型。
+// 定义 per-Agent 实例级的 10 个生命周期事件，
+// 供 AgentCallbackManager 注册回调和 AgentRail 钩子使用。
+// 与框架层 GlobalAgentEventType（全局观测事件）是不同层次：
+//   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
+//   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
+//
+// 事件值即 Python AgentRail 对应方法名，无需额外 EVENT_METHOD_MAP 映射。
+// AgentCallbackManager 注册时通过 agentID 前缀构造唯一事件名
+// （如 "{agentID}_before_invoke"），与框架层事件互不冲突。
+// Python: openjiuwen/core/single_agent/rail/base.py (AgentCallbackEvent)
+type AgentCallbackEvent string
+
+// InvokeQueryString 普通字符串查询，实现 InvokeQuery 接口。
+type InvokeQueryString string
+
+// RunKind 运行模式枚举。
+type RunKind string
+
+// HeartbeatReason 心跳触发原因枚举。
+type HeartbeatReason string
+
+// StreamChunkInspectorFunc 流式分片检查器。
+// Python 把 bound method 存进 ctx.extra["_stream_chunk_inspectors"] 列表；
+// Go 用函数值等价（method value 即绑定 receiver 的函数值）。去重由调用方
+// （rail）按代码指针判断，对齐 Python 的 __self__ 身份比较。
+// Python: model_anomaly_detection_rail.ModelAnomalyDetectionRail.inspect_stream_chunk
+type StreamChunkInspectorFunc func(ctx context.Context, cbc *AgentCallbackContext, chunk *llmschema.AssistantMessageChunk) error
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// CallbackBeforeInvoke invoke 开始前
+	CallbackBeforeInvoke AgentCallbackEvent = "before_invoke"
+	// CallbackOnUserMessage 用户消息写入历史前（每轮一次）
+	CallbackOnUserMessage AgentCallbackEvent = "on_user_message"
+	// CallbackAfterInvoke invoke 完成后
+	CallbackAfterInvoke AgentCallbackEvent = "after_invoke"
+	// CallbackBeforeTaskIteration 外层任务循环迭代开始前
+	CallbackBeforeTaskIteration AgentCallbackEvent = "before_task_iteration"
+	// CallbackAfterTaskIteration 外层任务循环迭代完成后
+	CallbackAfterTaskIteration AgentCallbackEvent = "after_task_iteration"
+	// CallbackBeforeModelCall LLM 调用前
+	CallbackBeforeModelCall AgentCallbackEvent = "before_model_call"
+	// CallbackAfterModelCall LLM 响应后
+	CallbackAfterModelCall AgentCallbackEvent = "after_model_call"
+	// CallbackOnModelException LLM 调用异常
+	CallbackOnModelException AgentCallbackEvent = "on_model_exception"
+	// CallbackBeforeToolCall 工具执行前
+	CallbackBeforeToolCall AgentCallbackEvent = "before_tool_call"
+	// CallbackAfterToolCall 工具执行后
+	CallbackAfterToolCall AgentCallbackEvent = "after_tool_call"
+	// CallbackOnToolException 工具执行异常
+	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
+	// CallbackAfterReactIteration 内层 ReAct 单次迭代完全成功后（模型 + 全部工具 + ToolMessage 均已写入）
+	// Python: AgentCallbackEvent.AFTER_REACT_ITERATION
+	CallbackAfterReactIteration AgentCallbackEvent = "after_react_iteration"
+	// CallbackBeforeSteeringDrain 待处理 steering 消息离队之前（仅在有积压时触发）
+	// rails 通过写 SteeringDrainInputs.Limit 决定本次模型调用吸收几条，其余留在队列原位。
+	// Python: AgentCallbackEvent.BEFORE_STEERING_DRAIN (rail/base.py L516)
+	CallbackBeforeSteeringDrain AgentCallbackEvent = "before_steering_drain"
+)
+
+const (
+	// RunKindNormal 正常运行
+	RunKindNormal RunKind = "normal"
+	// RunKindHeartbeat 心跳运行
+	RunKindHeartbeat RunKind = "heartbeat"
+	// RunKindCron 定时任务运行
+	RunKindCron RunKind = "cron"
+	// RunKindGoal 持续目标运行
+	// Python: RunKind.GOAL (openjiuwen/core/single_agent/rail/base.py L242)
+	RunKindGoal RunKind = "goal"
+)
+
+const (
+	// HeartbeatReasonInterval 定时心跳
+	HeartbeatReasonInterval HeartbeatReason = "interval"
+	// HeartbeatReasonManual 手动触发心跳
+	HeartbeatReasonManual HeartbeatReason = "manual"
+)
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+	// steeringQueueSize steering 队列缓冲区大小
+	steeringQueueSize = 4096
+)
+
+const (
+	// ExtraKeyStreamChunkInspectors 流式分片检查器列表的 extra 键。
+	// 字符串与上游一致，便于与 Python 侧对拍。
+	// Python: model_anomaly_detection_rail._STREAM_CHUNK_INSPECTORS_KEY
+	ExtraKeyStreamChunkInspectors = "_stream_chunk_inspectors"
+	// ExtraKeyModelVisibleOutputEmitted 本次模型调用是否已向用户输出可见内容。
+	// Python: rail/base.py MODEL_VISIBLE_OUTPUT_EMITTED_KEY
+	ExtraKeyModelVisibleOutputEmitted = "_model_visible_output_emitted"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ErrSteeringQueueFull steering 队列已满
+var ErrSteeringQueueFull = errors.New("steering 队列已满")
+
+// BaseEventMethodMap 基础事件→方法名映射（9个，不含 task-iteration）。
+// Python: EVENT_METHOD_MAP (openjiuwen/core/single_agent/rail/base.py L434-442)
+// 注意：Python 的 EVENT_METHOD_MAP 亦含 after_react_iteration，
+// 此映射仅用于 DeepAgentRail.get_callbacks 分层。
+var BaseEventMethodMap = map[AgentCallbackEvent]string{
+	CallbackBeforeInvoke:        "BeforeInvoke",
+	CallbackAfterInvoke:         "AfterInvoke",
+	CallbackBeforeModelCall:     "BeforeModelCall",
+	CallbackAfterModelCall:      "AfterModelCall",
+	CallbackOnModelException:    "OnModelException",
+	CallbackBeforeToolCall:      "BeforeToolCall",
+	CallbackAfterToolCall:       "AfterToolCall",
+	CallbackOnToolException:     "OnToolException",
+	CallbackAfterReactIteration: "AfterReactIteration",
+}
+
+// DeepEventMethodMap DeepAgent 扩展事件→方法名映射（2个 task-iteration hooks）。
+// Python: DEEP_EVENT_METHOD_MAP (openjiuwen/harness/rails/base.py L22-25)
+var DeepEventMethodMap = map[AgentCallbackEvent]string{
+	CallbackBeforeTaskIteration: "BeforeTaskIteration",
+	CallbackAfterTaskIteration:  "AfterTaskIteration",
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewAgentCallbackContext 创建 AgentCallbackContext 实例。
+// Python: AgentCallbackContext(agent=..., inputs=..., session=...)
+func NewAgentCallbackContext(
+	agent BaseAgent,
+	inputs EventInputs,
+	sess sessioninterfaces.SessionFacade,
+) *AgentCallbackContext {
+	return &AgentCallbackContext{
+		agent:      agent,
+		inputs:     inputs,
+		session:    sess,
+		extra:      make(map[string]any),
+		extraMuPtr: &sync.RWMutex{},
+	}
+}
+
+// Agent 返回当前 Agent 实例引用
+func (c *AgentCallbackContext) Agent() BaseAgent { return c.agent }
+
+// Event 返回当前回调事件类型
+func (c *AgentCallbackContext) Event() AgentCallbackEvent { return c.event }
+
+// SetEvent 设置当前回调事件类型
+func (c *AgentCallbackContext) SetEvent(event AgentCallbackEvent) { c.event = event }
+
+// Inputs 返回当前事件输入数据
+func (c *AgentCallbackContext) Inputs() EventInputs { return c.inputs }
+
+// SetInputs 设置当前事件输入数据
+func (c *AgentCallbackContext) SetInputs(inputs EventInputs) { c.inputs = inputs }
+
+// Config 返回运行时配置（最小化接口）
+func (c *AgentCallbackContext) Config() railConfig { return c.config }
+
+// SetConfig 设置运行时配置
+func (c *AgentCallbackContext) SetConfig(config railConfig) { c.config = config }
+
+// Session 返回当前 Session
+func (c *AgentCallbackContext) Session() sessioninterfaces.SessionFacade { return c.session }
+
+// ModelContext 返回当前 ModelContext
+func (c *AgentCallbackContext) ModelContext() ceinterface.ModelContext { return c.modelContext }
+
+// SetModelContext 设置 ModelContext
+func (c *AgentCallbackContext) SetModelContext(mc ceinterface.ModelContext) { c.modelContext = mc }
+
+// ContextUsageAttribution 返回本次请求的用量归属（owner 与调用血缘）。
+// Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
+func (c *AgentCallbackContext) ContextUsageAttribution() map[string]any {
+	mu := c.extraLock()
+	mu.RLock()
+	defer mu.RUnlock()
+	if c.contextUsageAttribution == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(c.contextUsageAttribution))
+	for k, v := range c.contextUsageAttribution {
+		out[k] = v
+	}
+	return out
+}
+
+// SetContextUsageAttribution 替换本次请求的用量归属。
+// 内层 ReActAgent 在 invoke 起点与每次模型调用上报前各刷新一次。
+// Python: ctx.context_usage_attribution（rail/base.py L579）
+func (c *AgentCallbackContext) SetContextUsageAttribution(attribution map[string]any) {
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
+	if attribution == nil {
+		c.contextUsageAttribution = nil
+		return
+	}
+	c.contextUsageAttribution = make(map[string]any, len(attribution))
+	for k, v := range attribution {
+		c.contextUsageAttribution[k] = v
+	}
+}
+
+// Extra 返回 extra 通信字典。
+// Deprecated: S-24——返回的 map 引用绕过 extraMu 锁保护，并发读写有
+// fatal error（concurrent map read and map write）风险。请改用
+// GetExtra/SetExtra/DeleteExtra 线程安全方法。仅为兼容既有测试与
+// 只读遍历场景保留。
+func (c *AgentCallbackContext) Extra() map[string]any { return c.extra }
+
+// GetExtra 线程安全地读取 extra 字典中的值。
+func (c *AgentCallbackContext) GetExtra(key string) (any, bool) {
+	mu := c.extraLock()
+	mu.RLock()
+	defer mu.RUnlock()
+	v, ok := c.extra[key]
+	return v, ok
+}
+
+// SetExtra 线程安全地设置 extra 字典中的值。
+func (c *AgentCallbackContext) SetExtra(key string, value any) {
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
+	c.extra[key] = value
+}
+
+// DeleteExtra 线程安全地删除 extra 字典中的值，返回被删除的值。
+func (c *AgentCallbackContext) DeleteExtra(key string) (any, bool) {
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
+	v, ok := c.extra[key]
+	if ok {
+		delete(c.extra, key)
+	}
+	return v, ok
+}
+
+// StreamChunkInspectors 返回当前已注册的流式分片检查器（副本）。
+// Python: react_agent.py L1897 — ctx.extra.get("_stream_chunk_inspectors") or []
+func (c *AgentCallbackContext) StreamChunkInspectors() []StreamChunkInspectorFunc {
+	v, ok := c.GetExtra(ExtraKeyStreamChunkInspectors)
+	if !ok {
+		return nil
+	}
+	list, ok := v.([]StreamChunkInspectorFunc)
+	if !ok {
+		// 静默返回 nil 会让检查器无声消失，排查成本极高：明确记录类型不符。
+		logger.Warn(logComponent).
+			Str("event_type", "extra_type_mismatch").
+			Str("key", ExtraKeyStreamChunkInspectors).
+			Str("want", "[]StreamChunkInspectorFunc").
+			Str("got", fmt.Sprintf("%T", v)).
+			Msg("extra value has unexpected type, ignored")
+		return nil
+	}
+	out := make([]StreamChunkInspectorFunc, len(list))
+	copy(out, list)
+	return out
+}
+
+// SetStreamChunkInspectors 覆盖流式分片检查器列表；空列表等价于清除。
+func (c *AgentCallbackContext) SetStreamChunkInspectors(list []StreamChunkInspectorFunc) {
+	if len(list) == 0 {
+		c.DeleteExtra(ExtraKeyStreamChunkInspectors)
+		return
+	}
+	cp := make([]StreamChunkInspectorFunc, len(list))
+	copy(cp, list)
+	c.SetExtra(ExtraKeyStreamChunkInspectors, cp)
+}
+
+// SetModelVisibleOutputEmitted 标记本次模型调用是否已输出可见内容。
+// Python: react_agent.py L1908/L1918 — ctx.extra[MODEL_VISIBLE_OUTPUT_EMITTED_KEY] = True
+func (c *AgentCallbackContext) SetModelVisibleOutputEmitted(emitted bool) {
+	c.SetExtra(ExtraKeyModelVisibleOutputEmitted, emitted)
+}
+
+// ModelVisibleOutputEmitted 返回本次模型调用是否已输出可见内容。
+func (c *AgentCallbackContext) ModelVisibleOutputEmitted() bool {
+	v, ok := c.GetExtra(ExtraKeyModelVisibleOutputEmitted)
+	if !ok {
+		return false
+	}
+	b, ok := v.(bool)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "extra_type_mismatch").
+			Str("key", ExtraKeyModelVisibleOutputEmitted).
+			Str("want", "bool").
+			Str("got", fmt.Sprintf("%T", v)).
+			Msg("extra value has unexpected type, treated as false")
+	}
+	return b
+}
+
+// Exception 返回异常对象
+func (c *AgentCallbackContext) Exception() error { return c.exception }
+
+// SetException 设置异常对象。
+func (c *AgentCallbackContext) SetException(err error) { c.exception = err }
+
+// RetryAttempt 返回当前重试索引号
+func (c *AgentCallbackContext) RetryAttempt() int { return c.retryAttempt }
+
+// SetRetryAttempt 设置当前重试索引号
+func (c *AgentCallbackContext) SetRetryAttempt(attempt int) { c.retryAttempt = attempt }
+
+// BindSteeringQueue 绑定外部 steering 队列。
+// Python: AgentCallbackContext.bind_steering_queue(queue)
+func (c *AgentCallbackContext) BindSteeringQueue(q chan string) {
+	c.steeringQueue = q
+}
+
+// PushSteering 非阻塞推送 steering 消息。
+// Python: AgentCallbackContext.push_steering(msg)
+func (c *AgentCallbackContext) PushSteering(msg string) error {
+	if c.steeringQueue == nil {
+		return nil
+	}
+	select {
+	case c.steeringQueue <- msg:
+		return nil
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "steering_queue_full").
+			Str("msg", msg).
+			Msg("steering queue is full")
+		return ErrSteeringQueueFull
+	}
+}
+
+// DrainSteering 非阻塞取走待处理 steering 消息，最旧优先。
+// limit 为 nil 表示不限（全部取走）；非 nil 时上限为 max(1, *limit)——
+// 非空队列始终至少放行 1 条，否则 HasPendingSteering 会让 ReAct 循环
+// 在一个永不消费的积压上空转。未被取走的留在队列原位。
+// Python: AgentCallbackContext.drain_steering(limit) (rail/base.py L725-785)
+func (c *AgentCallbackContext) DrainSteering(limit *int) []string {
+	if c.steeringQueue == nil {
+		return nil
+	}
+	take := 0 // 0 表示不限
+	if limit != nil {
+		take = *limit
+		if take < 1 {
+			take = 1
+		}
+	}
+	var msgs []string
+	for take == 0 || len(msgs) < take {
+		select {
+		case msg := <-c.steeringQueue:
+			msgs = append(msgs, msg)
+		default:
+			return msgs
+		}
+	}
+	return msgs
+}
+
+// SteeringPendingCount 返回当前排队条数。
+// Python: AgentCallbackContext.steering_pending_count() (rail/base.py L787-791)
+func (c *AgentCallbackContext) SteeringPendingCount() int {
+	if c.steeringQueue == nil {
+		return 0
+	}
+	return len(c.steeringQueue)
+}
+
+// HasPendingSteering 检查是否有待处理的 steering 消息。
+// Python: AgentCallbackContext.has_pending_steering() -> bool
+func (c *AgentCallbackContext) HasPendingSteering() bool {
+	if c.steeringQueue == nil {
+		return false
+	}
+	return len(c.steeringQueue) > 0
+}
+
+// SteeringQueue 返回绑定的 steering 队列。
+// Python: AgentCallbackContext.steering_queue 属性
+func (c *AgentCallbackContext) SteeringQueue() chan string {
+	return c.steeringQueue
+}
+
+// FireLifecycle 触发 before/after 事件对的生命周期包装。
+// Python: AgentCallbackContext.lifecycle() async context manager
+func (c *AgentCallbackContext) FireLifecycle(
+	ctx context.Context,
+	before, after AgentCallbackEvent,
+	fn func() error,
+) error {
+	savedInputs := c.inputs
+
+	if err := c.Fire(ctx, before); err != nil {
+		return err
+	}
+
+	var origErr error
+	err := fn()
+	if err != nil {
+		origErr = err
+		c.exception = err
+	}
+
+	c.inputs = savedInputs
+
+	// context 已取消 → 跳过 after 事件（对齐 Python CancelledError 保护）
+	if ctx.Err() != nil {
+		if origErr != nil {
+			return origErr
+		}
+		return nil
+	}
+
+	// 触发 after 钩子，对齐 Python lifecycle() 错误处理
+	afterErr := c.Fire(ctx, after)
+	if afterErr != nil {
+		if origErr != nil {
+			// after 回调出错但有原始异常 → log 不掩盖
+			logger.Error(logComponent).
+				Str("event", string(after)).
+				Err(afterErr).
+				Msg("after callback errored, masking original exception")
+			return origErr
+		}
+		// after 回调出错且无原始异常 → 返回 after 错误
+		return afterErr
+	}
+
+	if origErr != nil {
+		return origErr
+	}
+	return nil
+}
+
+// Fire 触发回调事件。
+// Python: AgentCallbackContext.fire(event)
+func (c *AgentCallbackContext) Fire(ctx context.Context, event AgentCallbackEvent) error {
+	c.event = event
+	if c.agent == nil {
+		return nil
+	}
+	manager := c.agent.CallbackManager()
+	if manager == nil {
+		return nil
+	}
+	return manager.Execute(ctx, event, c)
+}
+
+// RequestRetry 请求重试。
+// Python: AgentCallbackContext.request_retry(delay_seconds)
+func (c *AgentCallbackContext) RequestRetry(delaySeconds float64) {
+	if delaySeconds < 0 {
+		delaySeconds = 0
+	}
+	c.retryRequest = &RetryRequest{DelaySeconds: delaySeconds}
+}
+
+// ConsumeRetryRequest 消费重试请求（一次性）。
+// Python: AgentCallbackContext.consume_retry_request()
+func (c *AgentCallbackContext) ConsumeRetryRequest() *RetryRequest {
+	req := c.retryRequest
+	c.retryRequest = nil
+	return req
+}
+
+// RequestForceFinish 请求提前终止。
+// Python: AgentCallbackContext.request_force_finish(result)
+func (c *AgentCallbackContext) RequestForceFinish(result map[string]any) {
+	c.forceFinishRequest = &ForceFinishRequest{Result: result}
+}
+
+// ConsumeForceFinish 消费提前终止请求（一次性）。
+// Python: AgentCallbackContext.consume_force_finish()
+func (c *AgentCallbackContext) ConsumeForceFinish() *ForceFinishRequest {
+	req := c.forceFinishRequest
+	c.forceFinishRequest = nil
+	return req
+}
+
+// HasForceFinishRequest 检查是否有待处理的提前终止请求。
+func (c *AgentCallbackContext) HasForceFinishRequest() bool {
+	return c.forceFinishRequest != nil
+}
+
+// ForkForToolCall 为单个工具调用创建隔离的子上下文。
+// Python: AbilityManager.execute 中 tool_ctx = AgentCallbackContext(..., extra=ctx.extra)
+//
+// 并发说明：Python 注释明示 "Each tool call gets an isolated callback context
+// to avoid races between concurrent BEFORE/AFTER_TOOL_CALL hooks"——Python 的
+// extra=ctx.extra 共享在 asyncio 单线程下安全（before hook 到 pop("_skip_tool")
+// 之间无切换点）；Go 多工具为真并行，若共享同一 map，A 工具 Reject 写入的
+// _skip_tool=true 会被 B 工具的 DeleteExtra 读到，导致跳过决策串位。
+// 因此 fork 时对 extra 做浅拷贝快照，各工具的写入互相隔离；
+// 跨工具传播的信号不走 extra（force-finish 走字段传播、steering 走 channel），
+// 不受此拷贝影响。
+func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *AgentCallbackContext {
+	// 快照父 extra（父的写入在 fork 前完成，读锁内拷贝保证与并发 fork 一致）
+	forkedExtra := make(map[string]any, len(c.extra))
+	mu := c.extraLock()
+	mu.RLock()
+	for k, v := range c.extra {
+		forkedExtra[k] = v
+	}
+	mu.RUnlock()
+
+	return &AgentCallbackContext{
+		agent: c.agent,
+		inputs: &ToolCallInputs{
+			ToolCall: toolCall,
+			ToolName: toolCall.Name,
+			ToolArgs: parseToolArguments(toolCall.Arguments),
+		},
+		config:        c.config,
+		session:       c.session,
+		modelContext:  c.modelContext,
+		extra:         forkedExtra,
+		extraMuPtr:    &sync.RWMutex{},
+		steeringQueue: c.steeringQueue,
+	}
+}
+
+// NewAgentCallbackManager 创建回调管理器。
+func NewAgentCallbackManager(agentID string) *AgentCallbackManager {
+	return &AgentCallbackManager{agentID: agentID}
+}
+
+// RegisterCallback 注册回调。
+// Python: AgentCallbackManager.register_callback(event, callback, priority)
+func (m *AgentCallbackManager) RegisterCallback(ctx context.Context, event AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) {
+	agentEvent := m.getAgentEvent(event)
+	cb.GetCallbackFramework().OnPerAgent(agentEvent, fn, opts...)
+}
+
+// RegisterRail 批量注册一个 Rail 实例的所有回调。
+// Python: AgentCallbackManager.register_rail(rail)
+func (m *AgentCallbackManager) RegisterRail(ctx context.Context, r AgentRail, opts ...cb.CallbackOption) error {
+	callbacks := r.GetCallbacks()
+	for event, fn := range callbacks {
+		// Python: priority = rail.callback_priority(event)，每事件单独取
+		priority := r.CallbackPriorityFor(event)
+		allOpts := append([]cb.CallbackOption{cb.WithPriority(priority)}, opts...)
+		m.RegisterCallback(ctx, event, fn, allOpts...)
+		logger.Debug(logComponent).
+			Str("event_type", "rail_register_callback").
+			Str("event", string(event)).
+			Int("priority", priority).
+			Msg("Rail hook registered to callback framework")
+	}
+	return nil
+}
+
+// UnregisterRail 批量注销一个 Rail 实例的所有回调。
+// Python: AgentCallbackManager.unregister_rail(rail)
+func (m *AgentCallbackManager) UnregisterRail(_ context.Context, r AgentRail) error {
+	callbacks := r.GetCallbacks()
+	for event, fn := range callbacks {
+		m.Unregister(event, fn)
+		logger.Debug(logComponent).
+			Str("event_type", "rail_unregister_callback").
+			Str("event", string(event)).
+			Msg("Rail hook unregistered from callback framework")
+	}
+	return nil
+}
+
+// Unregister 注销指定事件上的单个回调。
+func (m *AgentCallbackManager) Unregister(event AgentCallbackEvent, fn cb.PerAgentCallbackFunc) {
+	agentEvent := m.getAgentEvent(event)
+	cb.GetCallbackFramework().OffPerAgent(agentEvent, fn)
+}
+
+// Clear 清除回调。
+func (m *AgentCallbackManager) Clear(events ...AgentCallbackEvent) {
+	fw := cb.GetCallbackFramework()
+	if len(events) == 0 {
+		for _, e := range AllCallbackEvents() {
+			fw.OffAllPerAgent(m.getAgentEvent(e))
+		}
+		return
+	}
+	for _, e := range events {
+		fw.OffAllPerAgent(m.getAgentEvent(e))
+	}
+}
+
+// HasHooks 检查指定事件是否有已注册的回调。
+func (m *AgentCallbackManager) HasHooks(event AgentCallbackEvent) bool {
+	agentEvent := m.getAgentEvent(event)
+	return cb.GetCallbackFramework().HasPerAgentHooks(agentEvent)
+}
+
+// Execute 触发指定事件的所有回调。
+// Python: AgentCallbackManager.execute(event, ctx)
+func (m *AgentCallbackManager) Execute(ctx context.Context, event AgentCallbackEvent, railCtx *AgentCallbackContext) error {
+	agentEvent := m.getAgentEvent(event)
+	return cb.GetCallbackFramework().TriggerPerAgent(ctx, agentEvent, railCtx)
+}
+
+// NewBaseRail 创建默认优先级(50)的 BaseRail。
+func NewBaseRail() *BaseRail {
+	return &BaseRail{priority: 50}
+}
+
+// Priority 返回优先级。
+func (r *BaseRail) Priority() int {
+	return r.priority
+}
+
+// CallbackPriorityFor 默认返回 Priority()，使既有 rail 保持全事件统一优先级。
+// Python: AgentRail.callback_priority(event)（基类默认返回 self.priority）
+func (r *BaseRail) CallbackPriorityFor(_ AgentCallbackEvent) int {
+	return r.Priority()
+}
+
+// WithPriority 设置优先级（Functional Options 模式）。
+func (r *BaseRail) WithPriority(p int) *BaseRail {
+	r.priority = p
+	return r
+}
+
+// Init 默认 no-op。
+func (r *BaseRail) Init(_ context.Context, _ BaseAgent) error { return nil }
+
+// Uninit 默认 no-op。
+func (r *BaseRail) Uninit(_ BaseAgent) error { return nil }
+
+// BeforeInvoke 默认 no-op。
+func (r *BaseRail) BeforeInvoke(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// AfterInvoke 默认 no-op。
+func (r *BaseRail) AfterInvoke(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// BeforeTaskIteration 默认 no-op。
+func (r *BaseRail) BeforeTaskIteration(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// AfterTaskIteration 默认 no-op。
+func (r *BaseRail) AfterTaskIteration(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// BeforeModelCall 默认 no-op。
+func (r *BaseRail) BeforeModelCall(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// AfterModelCall 默认 no-op。
+func (r *BaseRail) AfterModelCall(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// OnModelException 默认 no-op。
+func (r *BaseRail) OnModelException(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// BeforeToolCall 默认 no-op。
+func (r *BaseRail) BeforeToolCall(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// AfterToolCall 默认 no-op。
+func (r *BaseRail) AfterToolCall(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// OnToolException 默认 no-op。
+func (r *BaseRail) OnToolException(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// AfterReactIteration 默认 no-op。
+func (r *BaseRail) AfterReactIteration(_ context.Context, _ *AgentCallbackContext) error {
+	return nil
+}
+
+// GetCallbacks 返回空映射（默认无钩子覆盖）。
+func (r *BaseRail) GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return make(map[AgentCallbackEvent]cb.PerAgentCallbackFunc)
+}
+
+// CallbackFrom 创建一条事件→回调映射条目。
+func (r *BaseRail) CallbackFrom(event AgentCallbackEvent, fn cb.PerAgentCallbackFunc) callbackEntry {
+	return callbackEntry{event: event, fn: fn}
+}
+
+// BuildCallbacks 从多条映射条目构建 GetCallbacks 返回值。
+func (r *BaseRail) BuildCallbacks(entries ...callbackEntry) map[AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	m := make(map[AgentCallbackEvent]cb.PerAgentCallbackFunc, len(entries))
+	for _, e := range entries {
+		m[e.event] = e.fn
+	}
+	return m
+}
+
+// AllCallbackEvents 返回所有 AgentCallbackEvent 枚举值。
+func AllCallbackEvents() []AgentCallbackEvent {
+	return []AgentCallbackEvent{
+		CallbackBeforeInvoke,
+		CallbackOnUserMessage,
+		CallbackAfterInvoke,
+		CallbackBeforeTaskIteration,
+		CallbackAfterTaskIteration,
+		CallbackBeforeModelCall,
+		CallbackAfterModelCall,
+		CallbackOnModelException,
+		CallbackBeforeToolCall,
+		CallbackAfterToolCall,
+		CallbackOnToolException,
+		CallbackAfterReactIteration,
+		CallbackBeforeSteeringDrain,
+	}
+}
+
+// AllBaseCallbackEvents 返回 8 个基础回调事件（不含 task-iteration）。
+func AllBaseCallbackEvents() []AgentCallbackEvent {
+	return []AgentCallbackEvent{
+		CallbackBeforeInvoke,
+		CallbackOnUserMessage,
+		CallbackAfterInvoke,
+		CallbackBeforeModelCall,
+		CallbackAfterModelCall,
+		CallbackOnModelException,
+		CallbackBeforeToolCall,
+		CallbackAfterToolCall,
+		CallbackOnToolException,
+		CallbackBeforeSteeringDrain,
+	}
+}
+
+// AllDeepCallbackEvents 返回 2 个 DeepAgent 扩展回调事件（task-iteration）。
+func AllDeepCallbackEvents() []AgentCallbackEvent {
+	return []AgentCallbackEvent{
+		CallbackBeforeTaskIteration,
+		CallbackAfterTaskIteration,
+	}
+}
+
+// String 实现 fmt.Stringer 接口。
+func (e AgentCallbackEvent) String() string {
+	return string(e)
+}
+
+// GoString 实现 fmt.GoStringer 接口。
+func (e AgentCallbackEvent) GoString() string {
+	return fmt.Sprintf("interfaces.AgentCallbackEvent(%q)", string(e))
+}
+
+// NewRunContext 创建 RunContext 实例。
+func NewRunContext() *RunContext {
+	return &RunContext{Extra: make(map[string]any)}
+}
+
+// NewInvokeQueryString 从字符串构造 InvokeQuery。
+func NewInvokeQueryString(s string) InvokeQuery {
+	return InvokeQueryString(s)
+}
+
+// QueryFromInputs 从 inputs map 中提取 query 字段，返回 InvokeQuery 接口。
+func QueryFromInputs(inputs map[string]any) InvokeQuery {
+	q := inputs["query"]
+	if q == nil {
+		return NewInvokeQueryString("")
+	}
+	if ii, ok := q.(*interaction.InteractiveInput); ok {
+		return ii
+	}
+	if qs, ok := q.(InvokeQueryString); ok {
+		return qs
+	}
+	if s, ok := q.(string); ok {
+		return NewInvokeQueryString(s)
+	}
+	return NewInvokeQueryString(fmt.Sprintf("%v", q))
+}
+
+// NewMapInputs 创建 MapInputs 实例。
+func NewMapInputs() *MapInputs {
+	return &MapInputs{Data: make(map[string]any)}
+}
+
+// IsInteractiveInput 实现 InvokeQuery 接口，普通字符串查询始终返回 false。
+func (q InvokeQueryString) IsInteractiveInput() bool { return false }
+
+// PlainText 实现 InvokeQuery 接口，返回字符串本身。
+func (q InvokeQueryString) PlainText() string { return string(q) }
+
+// IsHeartbeat 检查是否为心跳运行。
+func (i *InvokeInputs) IsHeartbeat() bool {
+	return i.RunKind == RunKindHeartbeat
+}
+
+// IsLightweightContext 检查是否启用轻量上下文模式。
+func (i *InvokeInputs) IsLightweightContext() bool {
+	if i.RunContext != nil && i.RunContext.ContextMode != "" {
+		return i.RunContext.ContextMode == "lightweight"
+	}
+	return false
+}
+
+// IsCron 检查是否为定时任务运行。
+func (i *InvokeInputs) IsCron() bool {
+	return i.RunKind == RunKindCron
+}
+
+// IsGoal 检查是否为持续目标运行。
+// Python: RunKind.GOAL 判定（rail/base.py L242）
+func (i *InvokeInputs) IsGoal() bool {
+	return i.RunKind == RunKindGoal
+}
+
+// EventKind 实现 EventInputs 接口
+func (i *InvokeInputs) EventKind() string { return "invoke" }
+
+// EventKind 实现 EventInputs 接口
+func (i *ModelCallInputs) EventKind() string { return "model_call" }
+
+// EventKind 实现 EventInputs 接口
+func (i *ToolCallInputs) EventKind() string { return "tool_call" }
+
+// EventKind 实现 EventInputs 接口
+func (i *TaskIterationInputs) EventKind() string { return "task_iteration" }
+
+// EventKind 实现 EventInputs 接口
+func (m *MapInputs) EventKind() string { return "map" }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extraLock 返回 extra 字典的并发保护锁。
+// S-24: ForkForToolCall 创建的子上下文持有独立锁（extra 为父快照拷贝，
+// 父子不共享 map，无跨锁写入）；历史路径下 extraMuPtr 未初始化的上下文
+// 返回独立的临时锁（仅保证不 panic，不提供跨 goroutine 保护）。
+// 注意：调用方须避免在持其他锁时嵌套调用 SetExtra/GetExtra（潜在死锁）。
+func (c *AgentCallbackContext) extraLock() *sync.RWMutex {
+	if c.extraMuPtr != nil {
+		return c.extraMuPtr
+	}
+	return &sync.RWMutex{}
+}
+
+// parseToolArguments 将 JSON 字符串解析为 map[string]any
+// Python: json.loads(tool_call.arguments) if isinstance(str) else tool_call.arguments
+func parseToolArguments(args string) map[string]any {
+	if args == "" {
+		return map[string]any{}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(args), &result); err != nil {
+		return map[string]any{}
+	}
+	return result
+}
+
+// getAgentEvent 生成带 agentID 前缀的事件名。
+func (m *AgentCallbackManager) getAgentEvent(event AgentCallbackEvent) string {
+	return m.agentID + "_" + string(event)
+}

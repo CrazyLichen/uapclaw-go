@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	runtimesandbox "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 

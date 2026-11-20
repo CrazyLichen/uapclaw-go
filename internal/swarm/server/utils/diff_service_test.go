@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/filesystem"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 

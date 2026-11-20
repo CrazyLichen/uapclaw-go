@@ -3,7 +3,7 @@ package team
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

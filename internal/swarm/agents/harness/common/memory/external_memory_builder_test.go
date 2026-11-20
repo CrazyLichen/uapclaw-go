@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	memrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/memory"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 

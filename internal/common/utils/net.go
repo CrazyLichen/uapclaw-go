@@ -5,7 +5,7 @@
 //   - openjiuwen/core/common/utils/url_utils.py
 //
 // HTTP 头清洗相关功能已迁移至：
-//   - internal/openjiuwen/core/foundation/llm/headers_helper/ (SanitizeHeaders, ProtectedHeaders 等)
+//   - internal/openuapclaw/core/foundation/llm/headers_helper/ (SanitizeHeaders, ProtectedHeaders 等)
 
 package utils
 

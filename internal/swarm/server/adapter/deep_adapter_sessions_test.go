@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )

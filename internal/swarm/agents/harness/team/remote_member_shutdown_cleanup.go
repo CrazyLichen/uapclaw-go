@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
-	runner "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	runner "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )

@@ -1,0 +1,155 @@
+package observability
+
+import (
+	"context"
+	"fmt"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ObservabilityRail DeepAgent 可观测性 Rail。
+// Python: ObservabilityRail(DeepAgentRail) (rail.py)
+//
+// 仅覆盖 task_iteration 边界（Callback 层未覆盖的缺口）。
+// LLM/Tool/Agent 生命周期钩子故意不覆盖——OtelCallbackHandler 已处理，避免重复 span。
+type ObservabilityRail struct {
+	rails.DeepAgentRail
+	// injectedTracer 可选显式注入的 tracer（测试用）
+	injectedTracer trace.Tracer
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// spanKey task_iteration span 在 railCtx.Extra 中的存储键
+	// Python: _SPAN_KEY = "_otel_task_iter_span"
+	spanKey = "_otel_task_iter_span"
+	// railTracerName Rail 层 tracer 名称
+	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability.rail"
+	railTracerName = "openjiuwen.agent_teams.observability.rail"
+	// observabilityRailPriority Rail 执行优先级
+	// Python: ObservabilityRail.priority = 10（低优先级：可观测性最后执行）
+	observabilityRailPriority = 10
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewObservabilityRail 创建 ObservabilityRail。
+// Python: ObservabilityRail(tracer=...)
+func NewObservabilityRail(tracer trace.Tracer) *ObservabilityRail {
+	r := &ObservabilityRail{
+		injectedTracer: tracer,
+	}
+	r.DeepAgentRail = *rails.NewDeepAgentRail()
+	// Python: priority: int = 10 —— 覆盖 DeepAgentRail 默认的 50，确保所有 rail 处理完后再开 span
+	r.WithPriority(observabilityRailPriority)
+	return r
+}
+
+// BeforeTaskIteration 每个 task_iteration 开始时：打开 span。
+// Python: ObservabilityRail.before_task_iteration(ctx)
+func (r *ObservabilityRail) BeforeTaskIteration(ctx context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("error", rec).Msg("otel rail before_task_iteration error")
+		}
+	}()
+
+	// Python: inputs = ctx.inputs
+	inputs := railCtx.Inputs()
+	// Python: iteration = int(getattr(inputs, "iteration", 0) or 0)
+	iteration := 0
+	if inputs != nil {
+		iteration = extractIteration(inputs)
+	}
+	// Python: is_follow_up = bool(getattr(inputs, "is_follow_up", False))
+	isFollowUp := extractIsFollowUp(inputs)
+
+	// Python: span = self._tracer().start_span(name=f"deepagent.task_iteration.{iteration}", kind=SpanKind.INTERNAL)
+	_, span := r.tracer().Start(ctx,
+		fmt.Sprintf("deepagent.task_iteration.%d", iteration),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+	// Python: span.set_attribute(DA_TASK_ITERATION, iteration)
+	span.SetAttributes(
+		attribute.Int(DATaskIteration, iteration),
+		attribute.Bool(DATaskIsFollowUp, isFollowUp),
+	)
+	// Python: ctx.extra[_SPAN_KEY] = span
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	railCtx.SetExtra(spanKey, span)
+	return nil
+}
+
+// AfterTaskIteration 每个 task_iteration 结束时：关闭 span。
+// Python: ObservabilityRail.after_task_iteration(ctx)
+func (r *ObservabilityRail) AfterTaskIteration(_ context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("error", rec).Msg("otel rail after_task_iteration error")
+		}
+	}()
+
+	// Python: span: Span | None = ctx.extra.pop(_SPAN_KEY, None)
+	// S-24: 裸 map 读+删迁移 DeleteExtra（线程安全，语义对齐 pop）
+	spanVal, ok := railCtx.DeleteExtra(spanKey)
+	if !ok {
+		return nil
+	}
+	span, ok := spanVal.(trace.Span)
+	if !ok {
+		return nil
+	}
+
+	// Python: if ctx.exception is not None: span.record_exception / set_status(ERROR)
+	if railCtx.Exception() != nil {
+		span.RecordError(railCtx.Exception())
+		span.SetStatus(codes.Error, railCtx.Exception().Error())
+	} else {
+		// Python: span.set_status(Status(StatusCode.OK))
+		span.SetStatus(codes.Ok, "")
+	}
+	// Python: span.end()
+	span.End()
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// tracer 解析 tracer。
+// Python: ObservabilityRail._tracer()
+func (r *ObservabilityRail) tracer() trace.Tracer {
+	if r.injectedTracer != nil {
+		return r.injectedTracer
+	}
+	return GetTracer(railTracerName)
+}
+
+// extractIteration 从 inputs 中提取 iteration 数值。
+// Python: int(getattr(inputs, "iteration", 0) or 0) —— 鸭子类型直读属性，
+// 仅 TaskIterationInputs 携带 iteration 属性，其余事件类型（含 dict）
+// 一律返回默认值 0。
+func extractIteration(inputs agentinterfaces.EventInputs) int {
+	if ti, ok := inputs.(*agentinterfaces.TaskIterationInputs); ok && ti != nil {
+		return ti.Iteration
+	}
+	return 0
+}
+
+// extractIsFollowUp 从 inputs 中提取 is_follow_up 布尔值。
+// Python: bool(getattr(inputs, "is_follow_up", False)) —— 仅 TaskIterationInputs
+// 携带 is_follow_up 属性，其余事件类型一律返回默认值 false。
+func extractIsFollowUp(inputs agentinterfaces.EventInputs) bool {
+	if ti, ok := inputs.(*agentinterfaces.TaskIterationInputs); ok && ti != nil {
+		return ti.IsFollowUp
+	}
+	return false
+}

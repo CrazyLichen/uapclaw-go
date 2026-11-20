@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/fileguard"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )

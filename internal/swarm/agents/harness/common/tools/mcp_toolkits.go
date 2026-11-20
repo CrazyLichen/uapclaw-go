@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

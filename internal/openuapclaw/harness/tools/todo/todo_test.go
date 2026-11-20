@@ -1,0 +1,1165 @@
+package todo
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	"sync"
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// mockFsOperation 模拟文件系统操作
+type mockFsOperation struct {
+	// data 文件内容存储（key=路径, value=内容）
+	data map[string]string
+	// mu 并发保护
+	mu sync.Mutex
+	// readErr 模拟读取错误
+	readErr error
+	// writeErr 模拟写入错误
+	writeErr error
+}
+
+// mockSession 模拟会话对象
+type mockSession struct {
+	// sessionID 会话标识
+	sessionID string
+}
+
+func (m *mockSession) GetSessionID() string                             { return m.sessionID }
+func (m *mockSession) UpdateState(_ map[string]any)                     {}
+func (m *mockSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }
+func (m *mockSession) DumpState() map[string]any                        { return nil }
+func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return nil }
+func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
+func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
+func (m *mockSession) ClearSession(_ context.Context)                   {}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewMockFsOperation 创建模拟文件系统操作
+func NewMockFsOperation() *mockFsOperation {
+	return &mockFsOperation{
+		data: make(map[string]string),
+	}
+}
+
+// ReadFile 实现 FsOperation 接口
+func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_operation.FsOption) (*result.ReadFileResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.readErr != nil {
+		return nil, m.readErr
+	}
+	content, ok := m.data[path]
+	if !ok {
+		return nil, fmt.Errorf("file not found: %s", path)
+	}
+	return &result.ReadFileResult{BaseResult: result.BaseResult{Code: 0}, Data: &result.ReadFileData{Content: content}}, nil
+}
+
+// WriteFile 实现 FsOperation 接口
+func (m *mockFsOperation) WriteFile(_ context.Context, path string, content string, _ ...sys_operation.FsOption) (*result.WriteFileResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.writeErr != nil {
+		return nil, m.writeErr
+	}
+	m.data[path] = content
+	return &result.WriteFileResult{BaseResult: result.BaseResult{Code: 0}}, nil
+}
+
+// ListFiles 实现 FsOperation 接口
+func (m *mockFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListFilesResult, error) {
+	return &result.ListFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
+}
+
+// ListDirectories 实现 FsOperation 接口
+func (m *mockFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListDirsResult, error) {
+	return &result.ListDirsResult{BaseResult: result.BaseResult{Code: 0}}, nil
+}
+
+// SearchFiles 实现 FsOperation 接口
+func (m *mockFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.SearchFilesResult, error) {
+	return &result.SearchFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
+}
+
+// ListTools 实现 FsOperation 接口
+func (m *mockFsOperation) ListTools() []*tool.ToolCard {
+	return nil
+}
+
+// ReadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) ReadFileStream(_ context.Context, _ string, _ ...sys_operation.FsOption) (<-chan result.ReadFileStreamResult, error) {
+	return nil, nil
+}
+
+// UploadFile 实现 FsOperation 接口
+func (m *mockFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.UploadFileResult, error) {
+	return nil, nil
+}
+
+// UploadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.UploadFileStreamResult, error) {
+	return nil, nil
+}
+
+// DownloadFile 实现 FsOperation 接口
+func (m *mockFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.DownloadFileResult, error) {
+	return nil, nil
+}
+
+// DownloadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.DownloadFileStreamResult, error) {
+	return nil, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newTestTodoTool 创建测试用 TodoTool
+func newTestTodoTool() (TodoTool, *mockFsOperation) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	return todoTool, fs
+}
+
+// TestNewTodoLockManager 测试创建锁管理器
+func TestNewTodoLockManager(t *testing.T) {
+	mgr := NewTodoLockManager()
+	if mgr == nil {
+		t.Fatal("NewTodoLockManager 返回 nil")
+	}
+	if len(mgr.locks) != 0 {
+		t.Fatalf("期望初始 locks 为空，实际 %d", len(mgr.locks))
+	}
+}
+
+// TestTodoLockManager_Operation 测试获取会话锁
+func TestTodoLockManager_Operation(t *testing.T) {
+	mgr := NewTodoLockManager()
+
+	lock1 := mgr.Operation("session1")
+	if lock1 == nil {
+		t.Fatal("Operation 返回 nil")
+	}
+
+	// 再次获取同一会话应返回同一把锁
+	lock1Again := mgr.Operation("session1")
+	if lock1Again != lock1 {
+		t.Fatal("同一会话应返回同一把锁")
+	}
+
+	// 不同会话返回不同锁
+	lock2 := mgr.Operation("session2")
+	if lock2 == lock1 {
+		t.Fatal("不同会话应返回不同锁")
+	}
+}
+
+// TestTodoLockManager_CleanupSession 测试清除会话锁
+func TestTodoLockManager_CleanupSession(t *testing.T) {
+	mgr := NewTodoLockManager()
+	_ = mgr.Operation("session1")
+	_ = mgr.Operation("session2")
+
+	mgr.CleanupSession("session1")
+
+	if _, ok := mgr.locks["session1"]; ok {
+		t.Fatal("session1 应被清除")
+	}
+	if _, ok := mgr.locks["session2"]; !ok {
+		t.Fatal("session2 应保留")
+	}
+}
+
+// TestTodoTool_GetFilePath 测试获取文件路径
+func TestTodoTool_GetFilePath(t *testing.T) {
+	todoTool, _ := newTestTodoTool()
+	path := todoTool.GetFilePath("session123")
+	expected := "/tmp/workspace/session123/todo.json"
+	if path != expected {
+		t.Fatalf("GetFilePath = %q, want %q", path, expected)
+	}
+}
+
+// TestTodoTool_LoadTodos_空文件 测试加载空文件
+// 文件不存在时 LoadTodos 返回错误，对齐 Python 抛异常行为
+func TestTodoTool_LoadTodos_空文件(t *testing.T) {
+	todoTool, _ := newTestTodoTool()
+	_, err := todoTool.LoadTodos(context.Background(), "session1")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoTool_LoadTodos_正常数据 测试加载正常数据
+func TestTodoTool_LoadTodos_正常数据(t *testing.T) {
+	todoTool, fs := newTestTodoTool()
+	// 预写数据
+	data := `[{"id":"task1","content":"任务1","activeForm":"执行任务1","description":"描述1","status":"pending"}]`
+	fs.data[todoTool.GetFilePath("session1")] = data
+
+	items, err := todoTool.LoadTodos(context.Background(), "session1")
+	if err != nil {
+		t.Fatalf("LoadTodos 返回错误: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("期望 1 项，实际 %d", len(items))
+	}
+	if items[0].ID != "task1" {
+		t.Fatalf("ID = %q, want %q", items[0].ID, "task1")
+	}
+	if items[0].Status != hschema.TodoStatusPending {
+		t.Fatalf("Status = %v, want pending", items[0].Status)
+	}
+}
+
+// TestTodoTool_LoadTodos_无效JSON 测试加载无效 JSON
+func TestTodoTool_LoadTodos_无效JSON(t *testing.T) {
+	todoTool, fs := newTestTodoTool()
+	fs.data[todoTool.GetFilePath("session1")] = "invalid json"
+
+	_, err := todoTool.LoadTodos(context.Background(), "session1")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoTool_SaveTodos 测试保存待办事项
+func TestTodoTool_SaveTodos(t *testing.T) {
+	todoTool, fs := newTestTodoTool()
+	items := []hschema.TodoItem{
+		{
+			ID:          "task1",
+			Content:     "任务1",
+			ActiveForm:  "执行任务1",
+			Description: "描述1",
+			Status:      hschema.TodoStatusInProgress,
+		},
+		{
+			ID:          "task2",
+			Content:     "任务2",
+			ActiveForm:  "执行任务2",
+			Description: "描述2",
+			Status:      hschema.TodoStatusPending,
+		},
+	}
+
+	err := todoTool.SaveTodos(context.Background(), "session1", items)
+	if err != nil {
+		t.Fatalf("SaveTodos 返回错误: %v", err)
+	}
+
+	// 验证文件内容
+	savedData, ok := fs.data[todoTool.GetFilePath("session1")]
+	if !ok {
+		t.Fatal("文件未写入")
+	}
+	var saved []map[string]any
+	if err := json.Unmarshal([]byte(savedData), &saved); err != nil {
+		t.Fatalf("JSON 解码失败: %v", err)
+	}
+	if len(saved) != 2 {
+		t.Fatalf("期望 2 项，实际 %d", len(saved))
+	}
+}
+
+// TestTodoTool_SaveTodos_写入失败 测试保存写入失败
+func TestTodoTool_SaveTodos_写入失败(t *testing.T) {
+	todoTool, fs := newTestTodoTool()
+	fs.writeErr = fmt.Errorf("disk full")
+
+	items := []hschema.TodoItem{{ID: "task1", Content: "t1", ActiveForm: "a1", Description: "d1", Status: hschema.TodoStatusPending}}
+	err := todoTool.SaveTodos(context.Background(), "session1", items)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoTool_CleanupSession 测试清理会话
+func TestTodoTool_CleanupSession(t *testing.T) {
+	todoTool, _ := newTestTodoTool()
+	todoTool.lockManager.Operation("session1")
+	todoTool.CleanupSession("session1")
+	if _, ok := todoTool.lockManager.locks["session1"]; ok {
+		t.Fatal("session1 锁应被清除")
+	}
+}
+
+// TestExtractSessionID_正常 测试提取会话 ID 正常情况
+func TestExtractSessionID_正常(t *testing.T) {
+	sessionOpt := tool.WithToolSession(&mockSession{sessionID: "sess123"})
+	sessionID, err := extractSessionID([]tool.ToolOption{sessionOpt})
+	if err != nil {
+		t.Fatalf("extractSessionID 返回错误: %v", err)
+	}
+	if sessionID != "sess123" {
+		t.Fatalf("sessionID = %q, want %q", sessionID, "sess123")
+	}
+}
+
+// TestExtractSessionID_无Session 测试提取会话 ID 无 session 情况
+func TestExtractSessionID_无Session(t *testing.T) {
+	_, err := extractSessionID(nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestFormatTodoItems 测试格式化待办事项
+func TestFormatTodoItems(t *testing.T) {
+	items := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusPending},
+	}
+	result := formatTodoItems(items)
+	if result == "" {
+		t.Fatal("formatTodoItems 返回空字符串")
+	}
+}
+
+// TestFormatTodoItems_空列表 测试格式化空列表
+func TestFormatTodoItems_空列表(t *testing.T) {
+	result := formatTodoItems(nil)
+	if result != "" {
+		t.Fatalf("期望空字符串，实际 %q", result)
+	}
+}
+
+// TestValidateSingleInProgress 测试单 in_progress 校验
+func TestValidateSingleInProgress(t *testing.T) {
+	// 无 in_progress：通过
+	err := validateSingleInProgress(nil)
+	if err != nil {
+		t.Fatalf("期望通过，实际错误: %v", err)
+	}
+
+	// 只有一个 in_progress：通过
+	existing := []hschema.TodoItem{{ID: "existing", Status: hschema.TodoStatusInProgress}}
+	err = validateSingleInProgress(existing)
+	if err != nil {
+		t.Fatalf("期望通过（只有一个 in_progress），实际错误: %v", err)
+	}
+
+	// 两个 in_progress：失败
+	multiple := []hschema.TodoItem{
+		{ID: "a", Status: hschema.TodoStatusInProgress},
+		{ID: "b", Status: hschema.TodoStatusInProgress},
+	}
+	err = validateSingleInProgress(multiple)
+	if err == nil {
+		t.Fatal("期望返回错误（多个 in_progress），实际为 nil")
+	}
+}
+
+// TestValidateTargetTaskStatus 测试目标任务状态校验
+func TestValidateTargetTaskStatus(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Status: hschema.TodoStatusPending},
+	}
+
+	// in_progress + 允许 [in_progress, pending]：通过
+	idx, err := validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending})
+	if err != nil {
+		t.Fatalf("期望通过，实际错误: %v", err)
+	}
+	if idx != 0 {
+		t.Fatalf("索引 = %d, want 0", idx)
+	}
+
+	// pending + 只允许 [pending]：通过
+	idx, err = validateTargetTaskStatus(todos, "t2", []hschema.TodoStatus{hschema.TodoStatusPending})
+	if err != nil {
+		t.Fatalf("期望通过，实际错误: %v", err)
+	}
+	if idx != 1 {
+		t.Fatalf("索引 = %d, want 1", idx)
+	}
+
+	// in_progress + 只允许 [pending]：失败
+	_, err = validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusPending})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+
+	// 不存在的 ID：失败
+	_, err = validateTargetTaskStatus(todos, "nonexistent", []hschema.TodoStatus{hschema.TodoStatusPending})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestValidateSingleTodoItem 测试单任务校验
+func TestValidateSingleTodoItem(t *testing.T) {
+	err := validateSingleTodoItem(map[string]any{"id": "task1", "content": "内容", "activeForm": "进行中", "description": "描述", "status": "pending"})
+	if err != nil {
+		t.Fatalf("期望通过，实际错误: %v", err)
+	}
+
+	err = validateSingleTodoItem(map[string]any{})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyUpdate 测试 update 操作
+func TestTodoModifyUpdate(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "旧内容", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusPending},
+	}
+
+	result, _, err := updateTodos(todos, []map[string]any{
+		{"id": "t1", "status": "completed"},
+		{"id": "t2", "status": "in_progress"},
+	})
+	if err != nil {
+		t.Fatalf("updateTodos 返回错误: %v", err)
+	}
+	if result[0].Status != hschema.TodoStatusCompleted {
+		t.Fatalf("t1 状态应为 completed")
+	}
+	if result[1].Status != hschema.TodoStatusInProgress {
+		t.Fatalf("t2 状态应为 in_progress")
+	}
+}
+
+// TestTodoModifyUpdate_重复InProgress 测试 update 操作多个 in_progress
+func TestTodoModifyUpdate_重复InProgress(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Status: hschema.TodoStatusPending},
+	}
+
+	_, _, err := updateTodos(todos, []map[string]any{
+		{"id": "t2", "status": "in_progress"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误（多个 in_progress），实际为 nil")
+	}
+}
+
+// TestTodoModifyUpdate_不存在的ID 测试 update 操作不存在的 ID
+func TestTodoModifyUpdate_不存在的ID(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
+
+	_, _, err := updateTodos(todos, []map[string]any{
+		{"id": "nonexistent", "status": "completed"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyDelete 测试 delete 操作
+func TestTodoModifyDelete(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1"},
+		{ID: "t2", Content: "任务2"},
+		{ID: "t3", Content: "任务3"},
+	}
+
+	result, _, err := deleteTodos(todos, []string{"t2"})
+	if err != nil {
+		t.Fatalf("deleteTodos 返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("期望 2 项，实际 %d", len(result))
+	}
+	if result[0].ID != "t1" || result[1].ID != "t3" {
+		t.Fatal("删除结果不正确")
+	}
+}
+
+// TestTodoModifyDelete_空IDs 测试 delete 操作空 IDs
+func TestTodoModifyDelete_空IDs(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	_, _, err := deleteTodos(todos, nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyCancel 测试 cancel 操作
+func TestTodoModifyCancel(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Status: hschema.TodoStatusPending},
+		{ID: "t2", Status: hschema.TodoStatusInProgress},
+	}
+
+	result, _, err := cancelTodos(todos, []string{"t1"})
+	if err != nil {
+		t.Fatalf("cancelTodos 返回错误: %v", err)
+	}
+	if result[0].Status != hschema.TodoStatusCancelled {
+		t.Fatal("t1 应为 cancelled")
+	}
+	if result[1].Status != hschema.TodoStatusInProgress {
+		t.Fatal("t2 应保持 in_progress")
+	}
+}
+
+// TestTodoModifyCancel_不存在的ID 测试 cancel 操作不存在的 ID
+// Python: 不存在的 ID 静默跳过，返回提示消息而非错误
+func TestTodoModifyCancel_不存在的ID(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	result, msg, err := cancelTodos(todos, []string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("期望无错误（静默跳过），实际错误: %v", err)
+	}
+	if result[0].Status != hschema.TodoStatusPending {
+		t.Fatal("t1 应保持 pending")
+	}
+	if msg == "" {
+		t.Fatal("期望返回提示消息")
+	}
+}
+
+// TestTodoModifyAppend 测试 append 操作
+func TestTodoModifyAppend(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
+	}
+
+	result, _, err := appendTodos(todos, []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
+	})
+	if err != nil {
+		t.Fatalf("appendTodos 返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("期望 2 项，实际 %d", len(result))
+	}
+	if result[1].ID != "t2" {
+		t.Fatalf("新任务 ID = %q, want %q", result[1].ID, "t2")
+	}
+}
+
+// TestTodoModifyAppend_重复ID 测试 append 操作重复 ID
+func TestTodoModifyAppend_重复ID(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
+
+	_, _, err := appendTodos(todos, []map[string]any{
+		{"id": "t1", "content": "重复", "status": "pending"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误（重复 ID），实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertAfter 测试 insert_after 操作
+func TestTodoModifyInsertAfter(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
+		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
+	}
+
+	result, _, err := insertAfterTodos(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
+	})
+	if err != nil {
+		t.Fatalf("insertAfterTodos 返回错误: %v", err)
+	}
+	if len(result) != 3 {
+		t.Fatalf("期望 3 项，实际 %d", len(result))
+	}
+	if result[1].ID != "t2" {
+		t.Fatalf("插入位置不正确，result[1].ID = %q, want %q", result[1].ID, "t2")
+	}
+}
+
+// TestTodoModifyInsertAfter_无效目标状态 测试 insert_after 操作目标状态无效
+func TestTodoModifyInsertAfter_无效目标状态(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusCompleted},
+	}
+
+	_, _, err := insertAfterTodos(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误（目标状态无效），实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertBefore 测试 insert_before 操作
+func TestTodoModifyInsertBefore(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
+		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
+	}
+
+	result, _, err := insertBeforeTodos(todos, "t3", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
+	})
+	if err != nil {
+		t.Fatalf("insertBeforeTodos 返回错误: %v", err)
+	}
+	if len(result) != 3 {
+		t.Fatalf("期望 3 项，实际 %d", len(result))
+	}
+	if result[1].ID != "t2" {
+		t.Fatalf("插入位置不正确，result[1].ID = %q, want %q", result[1].ID, "t2")
+	}
+}
+
+// TestTodoModifyInsertBefore_无效目标状态 测试 insert_before 操作目标状态无效
+func TestTodoModifyInsertBefore_无效目标状态(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
+	}
+
+	_, _, err := insertBeforeTodos(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误（目标状态无效），实际为 nil")
+	}
+}
+
+// TestTodoItemFromMap 测试从 map 构造 TodoItem
+func TestTodoItemFromMap(t *testing.T) {
+	item := todoItemFromMap(map[string]any{
+		"id":          "task1",
+		"content":     "内容",
+		"activeForm":  "进行中",
+		"description": "描述",
+		"status":      "in_progress",
+	})
+	if item.ID != "task1" {
+		t.Fatalf("ID = %q, want %q", item.ID, "task1")
+	}
+	if item.Status != hschema.TodoStatusInProgress {
+		t.Fatalf("Status = %v, want in_progress", item.Status)
+	}
+}
+
+// TestTodoItemFromMap_缺省ID 测试从 map 构造 TodoItem 缺省 ID
+func TestTodoItemFromMap_缺省ID(t *testing.T) {
+	item := todoItemFromMap(map[string]any{
+		"content": "内容",
+	})
+	if item.ID == "" {
+		t.Fatal("ID 不应为空，应自动生成")
+	}
+	if item.Status != hschema.TodoStatusPending {
+		t.Fatalf("Status = %v, want pending", item.Status)
+	}
+}
+
+// TestCreateTodosTool 测试创建待办事项工具集
+func TestCreateTodosTool(t *testing.T) {
+	fs := NewMockFsOperation()
+	tools, _ := CreateTodosTool("/tmp/workspace", fs, "cn", "agent1")
+	if len(tools) != 4 {
+		t.Fatalf("期望 4 个工具，实际 %d", len(tools))
+	}
+	for i, tl := range tools {
+		if tl == nil {
+			t.Fatalf("tools[%d] 为 nil", i)
+		}
+	}
+}
+
+// TestTodoModifyUpdate_部分字段更新 测试 update 操作部分字段更新
+func TestTodoModifyUpdate_部分字段更新(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "旧内容", ActiveForm: "旧进行中", Description: "旧描述", Status: hschema.TodoStatusPending},
+	}
+
+	result, _, err := updateTodos(todos, []map[string]any{
+		{"id": "t1", "content": "新内容"},
+	})
+	if err != nil {
+		t.Fatalf("updateTodos 返回错误: %v", err)
+	}
+	if result[0].Content != "新内容" {
+		t.Fatalf("Content = %q, want %q", result[0].Content, "新内容")
+	}
+	if result[0].ActiveForm != "旧进行中" {
+		t.Fatalf("ActiveForm 不应被修改")
+	}
+	if result[0].Description != "旧描述" {
+		t.Fatalf("Description 不应被修改")
+	}
+}
+
+// TestTodoModifyUpdate_selectedModelID 测试 update 操作更新 selected_model_id
+func TestTodoModifyUpdate_selectedModelID(t *testing.T) {
+	todos := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusPending, SelectedModelID: "fast"},
+	}
+
+	result, _, err := updateTodos(todos, []map[string]any{
+		{"id": "t1", "selected_model_id": "smart"},
+	})
+	if err != nil {
+		t.Fatalf("updateTodos 返回错误: %v", err)
+	}
+	if result[0].SelectedModelID != "smart" {
+		t.Fatalf("SelectedModelID = %q, want %q", result[0].SelectedModelID, "smart")
+	}
+}
+
+// TestTodoModifyUpdate_空更新列表 测试 update 操作空更新列表
+func TestTodoModifyUpdate_空更新列表(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	_, _, err := updateTodos(todos, nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+	// 验证是 exception 错误
+	baseErr, ok := err.(*exception.BaseError)
+	if !ok {
+		t.Fatal("错误类型应为 *exception.BaseError")
+	}
+	_ = baseErr
+}
+
+// TestTodoModifyCancel_空IDs 测试 cancel 操作空 IDs
+func TestTodoModifyCancel_空IDs(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	_, _, err := cancelTodos(todos, nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyAppend_空列表 测试 append 操作空列表
+func TestTodoModifyAppend_空列表(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	_, _, err := appendTodos(todos, nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertAfter_空Items 测试 insert_after 操作空 items
+func TestTodoModifyInsertAfter_空Items(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
+	_, _, err := insertAfterTodos(todos, "t1", nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertBefore_空Items 测试 insert_before 操作空 items
+func TestTodoModifyInsertBefore_空Items(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
+	_, _, err := insertBeforeTodos(todos, "t1", nil)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertAfter_不存在的目标 测试 insert_after 操作不存在的目标
+func TestTodoModifyInsertAfter_不存在的目标(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
+	_, _, err := insertAfterTodos(todos, "nonexistent", []map[string]any{
+		{"id": "t2", "content": "任务2", "status": "pending"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyInsertBefore_不存在的目标 测试 insert_before 操作不存在的目标
+func TestTodoModifyInsertBefore_不存在的目标(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
+	_, _, err := insertBeforeTodos(todos, "nonexistent", []map[string]any{
+		{"id": "t2", "content": "任务2", "status": "pending"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyUpdate_无效状态 测试 update 操作无效状态
+func TestTodoModifyUpdate_无效状态(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
+	_, _, err := updateTodos(todos, []map[string]any{
+		{"id": "t1", "status": "invalid_status"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestTodoModifyUpdate_缺少ID 测试 update 操作缺少 ID
+func TestTodoModifyUpdate_缺少ID(t *testing.T) {
+	todos := []hschema.TodoItem{{ID: "t1"}}
+	_, _, err := updateTodos(todos, []map[string]any{
+		{"status": "completed"},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestNewTodoCreateTool_Invoke 测试 TodoCreateTool 通过 Invoke 调用
+func TestNewTodoCreateTool_Invoke(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	tl := NewTodoCreateTool(todoTool, "cn", "agent1")
+
+	result, err := tl.Invoke(context.Background(), map[string]any{
+		"tasks": []any{
+			map[string]any{"id": "t1", "content": "任务1", "activeForm": "执行任务1", "description": "描述1"},
+			map[string]any{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2"},
+		},
+	}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if _, ok := result["message"].(string); !ok {
+		t.Fatal("期望 message 字段存在且为字符串")
+	}
+}
+
+// TestNewTodoCreateTool_Invoke_无Session 测试 TodoCreateTool 无 session 调用
+func TestNewTodoCreateTool_Invoke_无Session(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	tl := NewTodoCreateTool(todoTool, "cn", "agent1")
+
+	_, err := tl.Invoke(context.Background(), map[string]any{
+		"tasks": []any{map[string]any{"id": "t1", "content": "任务1", "activeForm": "a1", "description": "d1"}},
+	})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestNewTodoCreateTool_Invoke_校验失败 测试 TodoCreateTool 校验失败
+func TestNewTodoCreateTool_Invoke_校验失败(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	tl := NewTodoCreateTool(todoTool, "cn", "agent1")
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	// 空 tasks
+	_, err := tl.Invoke(context.Background(), map[string]any{"tasks": []any{}}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误（空 tasks），实际为 nil")
+	}
+
+	// 缺少 content
+	_, err = tl.Invoke(context.Background(), map[string]any{
+		"tasks": []any{map[string]any{"id": "t1", "activeForm": "a1", "description": "d1"}},
+	}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误（缺少 content），实际为 nil")
+	}
+
+	// 缺少 id
+	_, err = tl.Invoke(context.Background(), map[string]any{
+		"tasks": []any{map[string]any{"content": "c1", "activeForm": "a1", "description": "d1"}},
+	}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误（缺少 id），实际为 nil")
+	}
+
+	// 重复 id
+	_, err = tl.Invoke(context.Background(), map[string]any{
+		"tasks": []any{
+			map[string]any{"id": "t1", "content": "c1", "activeForm": "a1", "description": "d1"},
+			map[string]any{"id": "t1", "content": "c2", "activeForm": "a2", "description": "d2"},
+		},
+	}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误（重复 id），实际为 nil")
+	}
+}
+
+// TestNewTodoListTool_Invoke 测试 TodoListTool 通过 Invoke 调用
+func TestNewTodoListTool_Invoke(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	// 预写数据
+	items := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", ActiveForm: "执行任务1", Description: "描述1", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Content: "任务2", ActiveForm: "执行任务2", Description: "描述2", Status: hschema.TodoStatusPending},
+		{ID: "t3", Content: "任务3", ActiveForm: "执行任务3", Description: "描述3", Status: hschema.TodoStatusCompleted},
+	}
+	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
+
+	tl := NewTodoListTool(todoTool, "cn", "agent1")
+	result, err := tl.Invoke(context.Background(), map[string]any{}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if _, ok := result["tasks"]; !ok {
+		t.Fatal("期望 tasks 字段存在")
+	}
+}
+
+// TestNewTodoListTool_Invoke_空列表 测试 TodoListTool 空列表
+// 需要预写空数组，因为 LoadTodos 文件不存在时返回错误
+func TestNewTodoListTool_Invoke_空列表(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	// 预写空数组
+	_ = todoTool.SaveTodos(context.Background(), "sess1", nil)
+
+	tl := NewTodoListTool(todoTool, "cn", "agent1")
+	result, err := tl.Invoke(context.Background(), map[string]any{}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if _, ok := result["tasks"]; !ok {
+		t.Fatal("期望 tasks 字段存在")
+	}
+}
+
+// TestNewTodoListTool_Invoke_全完成序列化为空数组 验证 T-01 修复：
+// 任务全部 completed/cancelled 时 tasks 序列化为 [] 而非 null（对齐 Python）。
+func TestNewTodoListTool_Invoke_全完成序列化为空数组(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	// 预写全部已完成的任务
+	items := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusCompleted},
+		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusCancelled},
+	}
+	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
+
+	tl := NewTodoListTool(todoTool, "cn", "agent1")
+	result, err := tl.Invoke(context.Background(), map[string]any{}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	tasks, ok := result["tasks"]
+	if !ok {
+		t.Fatal("期望 tasks 字段存在")
+	}
+	// 序列化后应为 [] 而非 null（下游 JSON 反序列化按数组处理）
+	data, err := json.Marshal(map[string]any{"tasks": tasks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"tasks":[]`)) {
+		t.Errorf("tasks 应序列化为 [] 而非 null: %s", data)
+	}
+}
+
+// TestNewTodoGetTool_Invoke 测试 TodoGetTool 通过 Invoke 调用
+func TestNewTodoGetTool_Invoke(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	items := []hschema.TodoItem{{ID: "t1", Content: "任务1", ActiveForm: "执行任务1", Description: "描述1", Status: hschema.TodoStatusPending}}
+	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
+
+	tl := NewTodoGetTool(todoTool, "cn", "agent1")
+	result, err := tl.Invoke(context.Background(), map[string]any{"id": "t1"}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if _, ok := result["todo"]; !ok {
+		t.Fatal("期望 todo 字段存在")
+	}
+}
+
+// TestNewTodoGetTool_Invoke_未找到 测试 TodoGetTool 未找到
+func TestNewTodoGetTool_Invoke_未找到(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	tl := NewTodoGetTool(todoTool, "cn", "agent1")
+	_, err := tl.Invoke(context.Background(), map[string]any{"id": "nonexistent"}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestNewTodoModifyTool_Invoke 测试 TodoModifyTool 通过 Invoke 调用
+func TestNewTodoModifyTool_Invoke(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	// 先创建待办事项
+	createTool := NewTodoCreateTool(todoTool, "cn", "agent1")
+	_, _ = createTool.Invoke(context.Background(), map[string]any{
+		"tasks": []any{
+			map[string]any{"id": "t1", "content": "任务1", "activeForm": "a1", "description": "d1"},
+			map[string]any{"id": "t2", "content": "任务2", "activeForm": "a2", "description": "d2"},
+		},
+	}, sessOpt)
+
+	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
+
+	// update 动作：t1→completed、t2→in_progress 批量更新状态
+	result, err := modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "update",
+		"todos": []any{
+			map[string]any{"id": "t1", "status": "completed"},
+			map[string]any{"id": "t2", "status": "in_progress"},
+		},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("update 操作返回错误: %v", err)
+	}
+	if _, ok := result["message"].(string); !ok {
+		t.Fatal("期望 message 字段存在且为字符串")
+	}
+
+	// cancel 取消操作
+	result, err = modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "cancel",
+		"ids":    []any{"t2"},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("cancel 操作返回错误: %v", err)
+	}
+	_ = result
+
+	// delete — 先创建再删
+	_, _ = createTool.Invoke(context.Background(), map[string]any{
+		"tasks": []any{map[string]any{"id": "t3", "content": "任务3", "activeForm": "a3", "description": "d3"}},
+	}, sessOpt)
+	result, err = modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "delete",
+		"ids":    []any{"t3"},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("delete 操作返回错误: %v", err)
+	}
+	_ = result
+
+	// append 追加操作
+	result, err = modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "append",
+		"todos":  []any{map[string]any{"id": "t4", "content": "追加任务", "activeForm": "执行追加", "description": "追加描述", "status": "pending"}},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("append 操作返回错误: %v", err)
+	}
+	_ = result
+}
+
+// TestNewTodoModifyTool_InsertActions 测试 TodoModifyTool insert 操作
+func TestNewTodoModifyTool_InsertActions(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	// 先创建
+	createTool := NewTodoCreateTool(todoTool, "cn", "agent1")
+	_, _ = createTool.Invoke(context.Background(), map[string]any{
+		"tasks": []any{
+			map[string]any{"id": "t1", "content": "任务1", "activeForm": "a1", "description": "d1"},
+			map[string]any{"id": "t3", "content": "任务3", "activeForm": "a3", "description": "d3"},
+		},
+	}, sessOpt)
+
+	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
+
+	// insert_after 后插操作
+	result, err := modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "insert_after",
+		"todo_data": map[string]any{
+			"target_id": "t1",
+			"items":     []any{map[string]any{"id": "t2", "content": "插入任务", "activeForm": "执行插入", "description": "插入描述", "status": "pending"}},
+		},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("insert_after 操作返回错误: %v", err)
+	}
+	_ = result
+
+	// insert_before 前插操作
+	result, err = modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "insert_before",
+		"todo_data": map[string]any{
+			"target_id": "t3",
+			"items":     []any{map[string]any{"id": "t2b", "content": "前插任务", "activeForm": "执行前插", "description": "前插描述", "status": "pending"}},
+		},
+	}, sessOpt)
+	if err != nil {
+		t.Fatalf("insert_before 操作返回错误: %v", err)
+	}
+	_ = result
+}
+
+// TestNewTodoModifyTool_无效Action 测试 TodoModifyTool 无效 action
+func TestNewTodoModifyTool_无效Action(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
+	_, err := modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "invalid_action",
+	}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestNewTodoModifyTool_缺少TodoData 测试 TodoModifyTool 缺少 todo_data
+func TestNewTodoModifyTool_缺少TodoData(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
+	_, err := modifyTool.Invoke(context.Background(), map[string]any{
+		"action": "insert_after",
+	}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestNewTodoGetTool_Invoke_空ID 测试 TodoGetTool 空 ID
+func TestNewTodoGetTool_Invoke_空ID(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+	sessOpt := tool.WithToolSession(&mockSession{sessionID: "sess1"})
+
+	tl := NewTodoGetTool(todoTool, "cn", "agent1")
+	_, err := tl.Invoke(context.Background(), map[string]any{"id": ""}, sessOpt)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSession) GetParentSessionID() string { return "" }

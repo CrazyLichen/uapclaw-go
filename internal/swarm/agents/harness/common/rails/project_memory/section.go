@@ -3,7 +3,7 @@ package project_memory
 import (
 	"strings"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

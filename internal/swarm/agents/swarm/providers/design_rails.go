@@ -2,8 +2,8 @@ package providers
 
 import (
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // design_rails.go + designer_tools.go 合并说明（同段登记）：

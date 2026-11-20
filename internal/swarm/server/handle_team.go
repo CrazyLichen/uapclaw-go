@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

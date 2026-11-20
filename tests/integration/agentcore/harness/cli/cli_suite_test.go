@@ -13,12 +13,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/cli/agent"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/cli/storage"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/cli/ui/repl"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/storage"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/repl"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

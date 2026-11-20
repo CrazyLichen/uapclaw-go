@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/agents"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/config"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

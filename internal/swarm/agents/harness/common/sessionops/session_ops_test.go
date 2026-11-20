@@ -3,7 +3,7 @@ package sessionops
 import (
 	"context"
 	"encoding/json"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"os"
 	"path/filepath"
 	"strings"

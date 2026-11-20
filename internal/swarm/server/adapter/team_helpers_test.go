@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"

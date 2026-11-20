@@ -1,0 +1,115 @@
+//go:build integration
+
+package tool_call
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// MakeSyncMCPCaller 创建同步 MCP 调用函数。
+// 返回的 APIWrapperFunc 内部会：创建 MCP 客户端 → 连接 → 调用工具 → 断开连接。
+// Python: openjiuwen/agent_evolving/optimizer/tool_call/callable_fortest.py (make_sync_mcp_caller)
+//
+//	Python 使用 SSETransport + Client + asyncio.run，Go 使用已有 MCP 客户端体系
+//
+// 运行方式: go test -tags=integration ./internal/openuapclaw/agent_evolving/optimizer/tool_call/...
+func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
+	return func(tool map[string]any, toolInput map[string]any) (string, int) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Python: transport = SSETransport(url=url); client = Client(transport)
+		mcpConfig := mcptypes.NewMcpServerConfig(name, url, "sse")
+		client, err := mcp.NewMcpClient(mcpConfig)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "MakeSyncMCPCaller").
+				Str("url", url).
+				Str("name", name).
+				Err(err).
+				Msg("failed to create MCP client")
+			result, _ := json.Marshal(map[string]string{
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
+				"response": "",
+			})
+			return string(result), 12
+		}
+
+		// Python: async with client:
+		if err := client.Connect(ctx); err != nil {
+			logger.Error(logComponent).
+				Str("method", "MakeSyncMCPCaller").
+				Str("url", url).
+				Err(err).
+				Msg("failed to connect MCP server")
+			result, _ := json.Marshal(map[string]string{
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
+				"response": "",
+			})
+			return string(result), 12
+		}
+		defer client.Disconnect(ctx)
+
+		// Python: tool_name = tool_arguments["name"]
+		toolName, _ := toolInput["name"].(string)
+		if toolName == "" {
+			if n, ok := tool["name"]; ok {
+				toolName = fmt.Sprintf("%v", n)
+			}
+		}
+
+		// Python: arguments = tool_arguments.get("arguments")
+		arguments := make(map[string]any)
+		if args, ok := toolInput["arguments"]; ok && args != nil {
+			switch v := args.(type) {
+			case map[string]any:
+				arguments = v
+			case string:
+				// Python: if isinstance(arguments, str): arguments = json.loads(arguments)
+				if jsonErr := json.Unmarshal([]byte(v), &arguments); jsonErr != nil {
+					logger.Error(logComponent).
+						Str("method", "MakeSyncMCPCaller").
+						Str("tool_name", toolName).
+						Err(jsonErr).
+						Msg("failed to parse parameter string as JSON")
+					result, _ := json.Marshal(map[string]string{
+						"error":    fmt.Sprintf("请求无效，解析参数失败: %v", jsonErr),
+						"response": "",
+					})
+					return string(result), 12
+				}
+			}
+		}
+
+		// Python: result = await client.call_tool(tool_name, arguments)
+		callResult, err := client.CallTool(ctx, toolName, arguments)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "MakeSyncMCPCaller").
+				Str("tool_name", toolName).
+				Err(err).
+				Msg("failed to invoke MCP tool")
+			result, _ := json.Marshal(map[string]string{
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
+				"response": "",
+			})
+			return string(result), 12
+		}
+
+		// Python: return result.content[0].text → json.dumps({'response': output})
+		responseStr := fmt.Sprintf("%v", callResult)
+		result, _ := json.Marshal(map[string]any{
+			"response": responseStr,
+		})
+		return string(result), 0
+	}
+}

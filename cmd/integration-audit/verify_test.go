@@ -45,10 +45,10 @@ func (f *fakeRunner) RunGoTest(testDir string, profilePath string) error {
 // （2026-12-04 openjiuwen 粒度重排：子系统=openjiuwen/{core,harness,agent_teams…}，
 // 每新粒度子系统合计 <30 行。）
 const baselinePollutionProfile = `mode: set
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/session.go:100.13,102.2 2 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state.go:50.13,52.2 22 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/agent.go:30.13,32.2 15 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry/registry.go:40.13,42.2 20 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/session.go:100.13,102.2 2 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state.go:50.13,52.2 22 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/agent.go:30.13,32.2 15 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry/registry.go:40.13,42.2 20 1
 github.com/uapclaw/uapclaw-go/internal/common/schema/schema.go:1.13,2.2 5 1
 github.com/uapclaw/uapclaw-go/internal/swarm/server/server.go:60.13,62.2 2 1
 `
@@ -57,21 +57,21 @@ github.com/uapclaw/uapclaw-go/internal/swarm/server/server.go:60.13,62.2 2 1
 // harness 573 / core 1183（runner+engine+foundation+session）/ agent_teams 150 /
 // extensions 120 / dev_tools 100 行；harness/rails count=0 块不计。
 const realCrossCoverageProfile = `mode: set
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/agent.go:1.13,80.2 573 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/runner.go:1.13,60.2 383 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/engine.go:1.13,70.2 298 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/client.go:1.13,50.2 274 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/session.go:1.13,40.2 228 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry/registry.go:1.13,60.2 150 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/extensions/message_queue/pulsar.go:1.13,50.2 120 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/dev_tools/agentbuilder/builder.go:1.13,40.2 100 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/rail.go:1.13,10.2 20 0
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/agent.go:1.13,80.2 573 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/runner.go:1.13,60.2 383 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/engine.go:1.13,70.2 298 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/client.go:1.13,50.2 274 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/session.go:1.13,40.2 228 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry/registry.go:1.13,60.2 150 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/message_queue/pulsar.go:1.13,50.2 120 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/dev_tools/agentbuilder/builder.go:1.13,40.2 100 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/rail.go:1.13,10.2 20 0
 `
 
 // twoSubsystemProfile 两子系统真实覆盖（单模块性质，不达标）。
 const twoSubsystemProfile = `mode: set
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/agent.go:1.13,80.2 130 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/session.go:1.13,40.2 24 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/agent.go:1.13,80.2 130 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/session.go:1.13,40.2 24 1
 `
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -127,10 +127,10 @@ func TestVerifyCoverage_真实跨子系统通过(t *testing.T) {
 	dv := vr.Dirs[0]
 	assert.True(t, dv.Passed)
 	assert.Len(t, dv.Qualified, 5)
-	assert.Contains(t, dv.Qualified, "openjiuwen/harness")
-	assert.Contains(t, dv.Qualified, "openjiuwen/core")
+	assert.Contains(t, dv.Qualified, "openuapclaw/harness")
+	assert.Contains(t, dv.Qualified, "openuapclaw/core")
 	// count=0 的块（rails.go 20 行）不计入 harness 聚合值
-	assert.Equal(t, 573, dv.SubsystemLines["openjiuwen/harness"])
+	assert.Equal(t, 573, dv.SubsystemLines["openuapclaw/harness"])
 }
 
 // TestVerifyCoverage_两子系统不达标 测单模块性质目录（如 task_loop：harness 130 + 基线）
@@ -152,7 +152,7 @@ func TestVerifyCoverage_两子系统不达标(t *testing.T) {
 
 	dv := vr.Dirs[0]
 	assert.False(t, dv.Passed)
-	assert.Equal(t, []string{"openjiuwen/harness"}, dv.Qualified)
+	assert.Equal(t, []string{"openuapclaw/harness"}, dv.Qualified)
 }
 
 // TestVerifyCoverage_跳过已有静态违规的灰区目录 测空壳目录不浪费 CI 时间跑覆盖验证
@@ -231,11 +231,11 @@ func TestVerifyCoverage_无灰区目录时直接通过(t *testing.T) {
 func TestParseProfileSubsystemLines(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "p.out")
 	content := `mode: set
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/agent.go:1.13,80.2 573 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/rail.go:1.13,10.2 27 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/runner.go:1.13,60.2 383 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/agent.go:1.13,80.2 573 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/rail.go:1.13,10.2 27 1
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/runner.go:1.13,60.2 383 1
 github.com/uapclaw/uapclaw-go/internal/common/schema/schema.go:1.13,2.2 5 1
-github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/session.go:1.13,40.2 228 0
+github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/session.go:1.13,40.2 228 0
 github.com/uapclaw/uapclaw-go/agentcore/notinternal.go:1.13,2.2 5 1
 github.com/other/project/internal/foo/bar.go:1.13,2.2 5 1
 `
@@ -246,8 +246,8 @@ github.com/other/project/internal/foo/bar.go:1.13,2.2 5 1
 	// harness 两文件聚合 573+27=600；session count=0 排除；common 过滤；
 	// 非本仓库路径排除
 	assert.Equal(t, map[string]int{
-		"openjiuwen/harness": 600,
-		"openjiuwen/core":    383,
+		"openuapclaw/harness": 600,
+		"openuapclaw/core":    383,
 	}, got)
 }
 
@@ -263,13 +263,13 @@ func TestParseProfileSubsystemLines_空档案(t *testing.T) {
 
 // TestSubsystemOfProfileFile 测档案字段到子系统的提取
 func TestSubsystemOfProfileFile(t *testing.T) {
-	assert.Equal(t, "openjiuwen/harness",
-		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/agent.go:1.13,80.2"))
-	assert.Equal(t, "openjiuwen/core",
-		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/runner.go:1.13"))
-	// 二级包内文件（internal/openjiuwen/core/runner.go → 子系统 openjiuwen/core）
-	assert.Equal(t, "openjiuwen/core",
-		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner.go:1.13"))
+	assert.Equal(t, "openuapclaw/harness",
+		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/agent.go:1.13,80.2"))
+	assert.Equal(t, "openuapclaw/core",
+		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/runner.go:1.13"))
+	// 二级包内文件（internal/openuapclaw/core/runner.go → 子系统 openuapclaw/core）
+	assert.Equal(t, "openuapclaw/core",
+		subsystemOfProfileFile("github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner.go:1.13"))
 	assert.Equal(t, "", subsystemOfProfileFile("no-slash-no-go-colon"))
 }
 
@@ -282,8 +282,8 @@ package fake_test
 
 import (
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	session "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	session "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 `
@@ -293,8 +293,8 @@ import (
 	pkgs, err := collectCoverPkgs(root)
 	require.NoError(t, err)
 	assert.Equal(t, strings.Join([]string{
-		"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner",
-		"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session",
+		"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner",
+		"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session",
 	}, ","), pkgs)
 }
 
@@ -349,14 +349,14 @@ func TestNewRealGoTestRunner_成功路径(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "tests", "integration", "x"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "tests", "integration", "x", "x_test.go"),
-		[]byte("package x_test\nimport \"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner\"\n"), 0o644))
+		[]byte("package x_test\nimport \"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner\"\n"), 0o644))
 
 	r, err := newRunner(root)
 	require.NoError(t, err)
 	require.IsType(t, &realGoTestRunner{}, r)
 	real := r.(*realGoTestRunner)
 	assert.Equal(t, verifyGoTestTags, real.tags)
-	assert.Equal(t, "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner", real.coverPkgs)
+	assert.Equal(t, "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner", real.coverPkgs)
 	assert.True(t, real.cgo)
 }
 

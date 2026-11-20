@@ -2,7 +2,7 @@ package team
 
 import (
 	"encoding/json"
-	external "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
+	external "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
 	"os"
 	"path/filepath"
 	"testing"

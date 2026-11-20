@@ -3,7 +3,7 @@ package team
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
 )
 
 // TestGetTeamEventType_已映射 验证已映射的 SDK 事件类型

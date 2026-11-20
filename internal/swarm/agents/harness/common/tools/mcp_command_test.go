@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // TestCheckCommandSafety_危险命令表 覆盖 Python _DANGEROUS_COMMAND_PATTERNS 全部 10 组正则。

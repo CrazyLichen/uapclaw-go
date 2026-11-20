@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	teamharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

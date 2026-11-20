@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	teamharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

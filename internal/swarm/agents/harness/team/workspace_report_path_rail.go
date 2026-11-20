@@ -4,9 +4,9 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

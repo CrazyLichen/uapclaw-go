@@ -11,9 +11,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/index"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
-	lite "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/index"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 )
 
 // ──────────────────────────── 测试套件 ────────────────────────────

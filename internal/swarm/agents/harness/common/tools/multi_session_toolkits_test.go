@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	stream "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/config"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	stream "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // fakeSessionAgent 测试用 BaseAgent——记录 Invoke 调用并返回预置结果

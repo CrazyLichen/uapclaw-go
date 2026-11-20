@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	coredreaming "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/dreaming"
+	coredreaming "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/dreaming"
 	swarmdreaming "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory/dreaming"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

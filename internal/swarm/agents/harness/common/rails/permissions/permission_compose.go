@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/fileguard"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/netguard"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/toolguard"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/netguard"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/toolguard"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

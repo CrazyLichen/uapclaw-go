@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/dreaming"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/dreaming"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

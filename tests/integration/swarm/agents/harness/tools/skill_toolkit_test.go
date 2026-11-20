@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	skillops "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/operator/skill_call"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	skillops "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

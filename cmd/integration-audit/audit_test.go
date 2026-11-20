@@ -47,9 +47,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 type FakeSuite struct {
@@ -79,9 +79,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 type FakeSuite struct {
@@ -109,8 +109,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
 )
 
 type FakeSuite struct {
@@ -135,10 +135,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
-	sessioncore "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
+	sessioncore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 type FakeSuite struct {
@@ -170,7 +170,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 )
 
 type FakeSuite struct {
@@ -195,8 +195,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
 )
 
 type FakeSuite struct {
@@ -231,9 +231,9 @@ func TestAudit_真集成测试通过(t *testing.T) {
 	dir := result.Dirs[0]
 	assert.Equal(t, "tests/integration/agentcore/real", dir.Dir)
 	assert.Len(t, dir.CallSpan, 3)
-	assert.Contains(t, dir.CallSpan, "openjiuwen/core")
-	assert.Contains(t, dir.CallSpan, "openjiuwen/agent_teams")
-	assert.Contains(t, dir.CallSpan, "openjiuwen/harness")
+	assert.Contains(t, dir.CallSpan, "openuapclaw/core")
+	assert.Contains(t, dir.CallSpan, "openuapclaw/agent_teams")
+	assert.Contains(t, dir.CallSpan, "openuapclaw/harness")
 	assert.Equal(t, 1, dir.EffectiveTests)
 }
 
@@ -296,7 +296,7 @@ func TestAudit_别名import真实调用(t *testing.T) {
 
 	dir := result.Dirs[0]
 	assert.Len(t, dir.CallSpan, 3)
-	assert.Contains(t, dir.CallSpan, "openjiuwen/core")
+	assert.Contains(t, dir.CallSpan, "openuapclaw/core")
 }
 
 // TestAudit_common公共层不计跨度 测 common/* import 被过滤
@@ -314,7 +314,7 @@ func TestAudit_common公共层不计跨度(t *testing.T) {
 	require.NoError(t, err)
 
 	dir := result.Dirs[0]
-	assert.Equal(t, []string{"openjiuwen/core"}, dir.CallSpan)
+	assert.Equal(t, []string{"openuapclaw/core"}, dir.CallSpan)
 }
 
 // TestAudit_缺BuildTag违规 测无 //go:build integration 的文件被标记
@@ -368,7 +368,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 )
 
 type FakeSuite struct {
@@ -393,8 +393,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/registry"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 type FakeSuite struct {
@@ -432,8 +432,8 @@ func (s *FakeSuite) TestB() {
 
 // TestSubsystemOf 测子系统路径提取
 func TestSubsystemOf(t *testing.T) {
-	assert.Equal(t, "openjiuwen/core", subsystemOf("github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"))
-	assert.Equal(t, "openjiuwen/core", subsystemOf("github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"))
+	assert.Equal(t, "openuapclaw/core", subsystemOf("github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"))
+	assert.Equal(t, "openuapclaw/core", subsystemOf("github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"))
 	assert.Equal(t, "", subsystemOf("github.com/uapclaw/uapclaw-go/internal/common/logger"))
 	assert.Equal(t, "config", subsystemOf("github.com/uapclaw/uapclaw-go/internal/config"))
 	assert.Equal(t, "", subsystemOf("github.com/other/project/internal/foo/bar"))

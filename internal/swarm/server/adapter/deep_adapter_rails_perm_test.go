@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	secrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

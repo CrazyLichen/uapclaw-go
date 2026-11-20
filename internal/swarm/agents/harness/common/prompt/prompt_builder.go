@@ -4,10 +4,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

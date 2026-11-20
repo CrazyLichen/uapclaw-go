@@ -9,7 +9,7 @@
 //
 // 链路：config acp_agents profile → acpchat.NewAcpChatTool → tool.Invoke →
 // acp.AcpStdioClient（spawn 子进程）→ testdata/fakeacp 假对端 → 聚合文本回落。
-// 真实调用横跨 internal/swarm/acp、internal/swarm/agents、internal/openjiuwen/core/foundation
+// 真实调用横跨 internal/swarm/acp、internal/swarm/agents、internal/openuapclaw/core/foundation
 // 三个二级子系统（integration-audit 第一层门禁要求 ≥3）。
 //
 // 文件目录：

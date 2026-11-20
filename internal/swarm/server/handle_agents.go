@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"

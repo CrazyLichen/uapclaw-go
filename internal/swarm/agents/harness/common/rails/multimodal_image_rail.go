@@ -14,9 +14,9 @@ import (
 	"context"
 	"sync"
 
-	hsrails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	hsrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 )

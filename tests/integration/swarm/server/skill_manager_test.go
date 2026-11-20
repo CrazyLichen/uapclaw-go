@@ -17,9 +17,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/team_workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"

@@ -1,0 +1,322 @@
+package skills
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ListSkillTool 列出所有可用技能或通过 LLM 路由筛选相关技能。
+// 通过 getSkills 回调获取当前已启用技能列表。
+// 当 query 为空时返回所有技能；当 query 非空且 listSkillModel 可用时，
+// 使用 LLM 路由筛选与任务相关的技能；当 listSkillModel 不可用时回退返回全部技能。
+// Python: ListSkillTool (openjiuwen/harness/tools/skills/list_skill.py)
+type ListSkillTool struct {
+	// card 工具配置卡片
+	card *tool.ToolCard
+	// getSkills 返回会话可见技能视图的回调函数
+	getSkills skillGetter
+	// listSkillModel 用于技能路由的 LLM 模型（可选）
+	listSkillModel *llm.Model
+	// language 语言标识（"cn"/"en"）
+	language string
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewListSkillTool 创建 ListSkillTool 实例。
+// Python: ListSkillTool.__init__(get_skills, list_skill_model, language, agent_id)
+func NewListSkillTool(
+	getSkills skillGetter,
+	listSkillModel *llm.Model,
+	language string,
+	agentID string,
+) *ListSkillTool {
+	card, _ := ptools.BuildToolCard("list_skill", "ListSkillTool", language, nil, agentID)
+
+	return &ListSkillTool{
+		card:           card,
+		getSkills:      getSkills,
+		listSkillModel: listSkillModel,
+		language:       language,
+	}
+}
+
+// Invoke 执行 list_skill 工具，列出技能或路由筛选技能。
+// 一比一复刻 Python ListSkillTool.invoke()：
+//  1. query 为空 → 返回所有技能（mode="all"）
+//  2. query 非空 + listSkillModel 为 nil → 返回全部技能（mode="all", fallback 消息）
+//  3. query 非空 + listSkillModel 可用 → routeSkills 路由筛选（mode="filtered"）
+//  4. routeSkills 失败 → success=false, error=err.Error()
+//
+// Python: ListSkillTool.invoke(inputs, **kwargs)
+func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
+	query := ""
+	if v, ok := inputs["query"]; ok {
+		query = fmt.Sprintf("%v", v)
+	}
+	query = trimSpace(query)
+
+	callOpts := tool.NewToolCallOptions(opts...)
+	var sess sessioninterfaces.SessionFacade
+	if callOpts != nil {
+		sess = callOpts.Session
+	}
+
+	if query == "" {
+		// 一比一复刻 Python: if not query → ToolOutput(success=True, data={"skills": ..., "mode": "all"})
+		logger.Info(logComponent).
+			Str("mode", "all").
+			Msg("ListSkillTool no query, returning all skills")
+		return map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"skills": t.dumpAllSkills(sess),
+				"mode":   "all",
+			},
+		}, nil
+	}
+
+	if t.listSkillModel == nil {
+		// 一比一复刻 Python: if list_skill_model is None → fallback all with message
+		logger.Info(logComponent).
+			Str("query", query).
+			Str("mode", "all_fallback").
+			Msg("ListSkillTool no model configured, falling back to return all skills")
+		return map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"skills":  t.dumpAllSkills(sess),
+				"mode":    "all",
+				"message": "list_skill_model is not configured, fallback to all skills.",
+			},
+		}, nil
+	}
+
+	// 一比一复刻 Python: route_skills → select_skills_by_names → filtered result
+	selectedNames, routeErr := t.routeSkills(ctx, query, sess)
+	if routeErr != nil {
+		logger.Error(logComponent).
+			Str("query", query).
+			Err(routeErr).
+			Msg("ListSkillTool failed to route skills")
+		return map[string]any{
+			"success": false,
+			"error":   routeErr.Error(),
+		}, nil
+	}
+
+	selectedSkills := t.selectSkillsByNames(selectedNames, sess)
+
+	logger.Info(logComponent).
+		Str("query", query).
+		Str("mode", "filtered").
+		Int("selected_count", len(selectedSkills)).
+		Msg("ListSkillTool routed and filtered skills successfully")
+
+	// 一比一复刻 Python: selected_skill_names = [skill.name for skill in selected_skills]
+	selectedNamesResult := make([]string, 0, len(selectedSkills))
+	for _, s := range selectedSkills {
+		selectedNamesResult = append(selectedNamesResult, s.Name)
+	}
+
+	return map[string]any{
+		"success": true,
+		"data": map[string]any{
+			"skills":               t.dumpSkills(selectedSkills),
+			"mode":                 "filtered",
+			"selected_skill_names": selectedNamesResult,
+		},
+	}, nil
+}
+
+// Stream ListSkillTool 不支持流式调用。
+// Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
+func (t *ListSkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.NewErrStreamNotSupported(t.card.ID)
+}
+
+// Card 返回工具配置卡片。
+func (t *ListSkillTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *ListSkillTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// dumpAllSkills 转换所有当前已启用技能为可序列化字典列表。
+// 一比一复刻 Python: ListSkillTool._dump_all_skills()
+func (t *ListSkillTool) dumpAllSkills(sess sessioninterfaces.SessionFacade) []map[string]any {
+	allSkills := t.getSkills(sess)
+	if allSkills == nil {
+		allSkills = []*skillpkg.Skill{}
+	}
+	return t.dumpSkills(allSkills)
+}
+
+// dumpSkills 将技能对象列表转为可序列化字典列表。
+// 一比一复刻 Python: ListSkillTool._dump_skills(skills):
+//
+//	Python: skill_dict = skill.asdict(include_directory=True)
+//	Python: skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
+func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
+	results := make([]map[string]any, 0, len(skills))
+	for _, s := range skills {
+		skillDict := s.AsDict(true)
+		// 一比一复刻 Python: skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
+		skillDict["skill_md_path"] = filepath.Join(s.Directory, "SKILL.md")
+		results = append(results, skillDict)
+	}
+	return results
+}
+
+// routeSkills 通过 LLM 路由筛选与查询相关的技能名称。
+// 一比一复刻 Python: ListSkillTool._route_skills(query):
+//
+//	Python: payload = self._dump_all_skills()
+//	Python: response = await self.list_skill_model.invoke(messages=[...])
+//	Python: content = getattr(response, "content", "") or ""
+//	Python: return self._parse_selected_skill_names(content)
+func (t *ListSkillTool) routeSkills(ctx context.Context, query string, sess sessioninterfaces.SessionFacade) ([]string, error) {
+	payload := t.dumpAllSkills(sess)
+	payloadJSON, jsonErr := json.Marshal(payload)
+	if jsonErr != nil {
+		logger.Error(logComponent).
+			Str("query", query).
+			Err(jsonErr).
+			Msg("ListSkillTool failed to serialize skill list")
+		return nil, fmt.Errorf("序列化技能列表失败: %w", jsonErr)
+	}
+
+	// 一比一复刻 Python 提示词，不允许自行翻译
+	systemPrompt := sections.GetListSkillSystemPrompt(t.language)
+
+	// 一比一复刻 Python: UserMessage(content=(f"User task:\n{query}\n\nAvailable skills:\n{json.dumps(payload, ...)}\n\nReturn only ..."))
+	userContent := fmt.Sprintf(
+		"User task:\n%s\n\nAvailable skills:\n%s\n\nReturn only the names of the skills that are relevant to the task.",
+		query,
+		string(payloadJSON),
+	)
+
+	msgs := model_clients.NewMessagesParam(
+		llmschema.NewSystemMessage(systemPrompt),
+		llmschema.NewUserMessage(userContent),
+	)
+
+	response, invokeErr := t.listSkillModel.Invoke(ctx, msgs)
+	if invokeErr != nil {
+		logger.Error(logComponent).
+			Str("query", query).
+			Err(invokeErr).
+			Msg("ListSkillTool LLM routing call failed")
+		return nil, fmt.Errorf("LLM 路由调用失败: %w", invokeErr)
+	}
+
+	content := ""
+	if response != nil {
+		content = response.Content.Text()
+	}
+
+	return parseSelectedSkillNames(content), nil
+}
+
+// parseSelectedSkillNames 解析 LLM 输出中的技能名称列表。
+// 一比一复刻 Python: ListSkillTool._parse_selected_skill_names(content):
+//  1. strip 后为空则返回空列表
+//  2. 去除 ``` 代码块包裹
+//  3. json.loads 后取 data.get("skills", []) 并过滤空字符串
+func parseSelectedSkillNames(content string) []string {
+	text := trimSpace(content)
+	if text == "" {
+		return []string{}
+	}
+
+	// 一比一复刻 Python: if text.startswith("```") → 去除首尾代码块标记
+	if strings.HasPrefix(text, "```") {
+		lines := strings.Split(text, "\n")
+		if len(lines) > 0 {
+			lines = lines[1:]
+		}
+		if len(lines) > 0 && trimSpace(lines[len(lines)-1]) == "```" {
+			lines = lines[:len(lines)-1]
+		}
+		text = trimSpace(strings.Join(lines, "\n"))
+	}
+
+	// 一比一复刻 Python: json.loads → data.get("skills", [])
+	var data map[string]any
+	if unmarshalErr := json.Unmarshal([]byte(text), &data); unmarshalErr != nil {
+		logger.Warn(logComponent).
+			Str("raw_content", content).
+			Err(unmarshalErr).
+			Msg("ListSkillTool JSON parse failed")
+		return []string{}
+	}
+
+	skillsRaw, ok := data["skills"]
+	if !ok {
+		return []string{}
+	}
+	skillsList, ok := skillsRaw.([]any)
+	if !ok {
+		return []string{}
+	}
+
+	// 一比一复刻 Python: [str(item).strip() for item in skills if str(item).strip()]
+	result := make([]string, 0, len(skillsList))
+	for _, item := range skillsList {
+		s := trimSpace(fmt.Sprintf("%v", item))
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// selectSkillsByNames 按名称列表选择技能对象。
+// 一比一复刻 Python: ListSkillTool._select_skills_by_names(names):
+//
+//	Python: if not names → []
+//	Python: skill_map = {skill.name: skill for skill in self.get_skills() or []}
+//	Python: selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
+func (t *ListSkillTool) selectSkillsByNames(names []string, sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
+	if len(names) == 0 {
+		return []*skillpkg.Skill{}
+	}
+
+	allSkills := t.getSkills(sess)
+	if allSkills == nil {
+		allSkills = []*skillpkg.Skill{}
+	}
+
+	// 一比一复刻 Python: skill_map = {skill.name: skill for skill in skills}
+	skillMap := make(map[string]*skillpkg.Skill, len(allSkills))
+	for _, s := range allSkills {
+		skillMap[s.Name] = s
+	}
+
+	selected := make([]*skillpkg.Skill, 0, len(names))
+	for _, name := range names {
+		s, ok := skillMap[name]
+		if ok {
+			selected = append(selected, s)
+		}
+	}
+	return selected
+}

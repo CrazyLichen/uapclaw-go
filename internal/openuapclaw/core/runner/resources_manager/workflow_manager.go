@@ -1,0 +1,152 @@
+package resources_manager
+
+import (
+	"context"
+	workflow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowconfig"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer/decorator"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// WorkflowMgr 工作流资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
+// GetWorkflow 支持可选的 tracer 装饰：当 session 非 nil 时，返回装饰后的工作流实例。
+// Python: WorkflowMgr (openjiuwen/core/runner/resources_manager/workflow_manager.py)
+type WorkflowMgr struct {
+	AbstractManager[interfaces.Workflow]
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewWorkflowMgr 创建工作流资源管理器。
+func NewWorkflowMgr() WorkflowMgr {
+	return WorkflowMgr{
+		AbstractManager: NewAbstractManager[interfaces.Workflow](),
+	}
+}
+
+// AddWorkflow 注册工作流提供者。
+// Python: WorkflowMgr.add_workflow(workflow_id, provider)
+func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) error {
+	if workflowID == "" {
+		return exception.BuildError(exception.StatusResourceIDValueInvalid,
+			exception.WithParam("resource_type", "workflow"),
+			exception.WithParam("reason", "工作流 ID 为空"),
+		)
+	}
+	if provider == nil {
+		return exception.BuildError(exception.StatusResourceProviderInvalid,
+			exception.WithParam("resource_type", "workflow"),
+			exception.WithParam("reason", "工作流提供者为 nil"),
+		)
+	}
+
+	// 将 WorkflowProvider 包装为 AbstractManager 所需的 func(context.Context) (T, error) 签名
+	wrappedProvider := func(ctx context.Context) (interfaces.Workflow, error) {
+		return provider(ctx, nil)
+	}
+
+	err := m.registerProvider(workflowID, wrappedProvider)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "WORKFLOW_ADD_ERROR").
+			Str("workflow_id", workflowID).
+			Err(err).
+			Msg("failed to add workflow")
+		return exception.BuildError(exception.StatusResourceAddError,
+			exception.WithParam("card", workflowID),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "WORKFLOW_ADD_SUCCESS").
+		Str("workflow_id", workflowID).
+		Msg("workflow added")
+	return nil
+}
+
+// AddWorkflows 批量注册工作流提供者。
+// Python: WorkflowMgr.add_workflows(workflows)
+func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
+	for _, entry := range workflows {
+		if entry.ID == "" || entry.Provider == nil {
+			logger.Error(logComponent).
+				Str("event_type", "WORKFLOW_ADD_ERROR").
+				Str("workflow_id", entry.ID).
+				Msg("batch add workflows skipped invalid entry")
+			continue
+		}
+		if err := m.AddWorkflow(entry.ID, entry.Provider); err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "WORKFLOW_ADD_ERROR").
+				Str("workflow_id", entry.ID).
+				Err(err).
+				Msg("failed to batch add workflows")
+		}
+	}
+}
+
+// RemoveWorkflow 注销工作流提供者，返回被注销的 provider。
+// Python: WorkflowMgr.remove_workflow(workflow_id)
+func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error) {
+	unwrapped, err := m.unregisterProvider(workflowID)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "WORKFLOW_REMOVE_ERROR").
+			Str("workflow_id", workflowID).
+			Err(err).
+			Msg("failed to remove workflow")
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_id", workflowID),
+			exception.WithParam("resource_type", "workflow"),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+
+	// 将 wrapped provider 还原为 WorkflowProvider
+	provider := func(ctx context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) {
+		return unwrapped(ctx)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "WORKFLOW_REMOVE_SUCCESS").
+		Str("workflow_id", workflowID).
+		Msg("workflow removed")
+	return provider, nil
+}
+
+// GetWorkflow 获取工作流实例。
+// 先调用 GetResource 获取工作流，如果 session 非 nil 则调用 decorator.DecorateWorkflowWithTrace 进行追踪装饰。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_workflow 返回 None 行为。
+// Python: WorkflowMgr.get_workflow(workflow_id, session)
+func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, session decorator.TracerSession) (interfaces.Workflow, error) {
+	w, err := m.getResource(ctx, workflowID)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "WORKFLOW_GET_ERROR").
+			Str("workflow_id", workflowID).
+			Err(err).
+			Msg("failed to get workflow")
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_id", workflowID),
+			exception.WithParam("resource_type", "workflow"),
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+
+	// 资源不存在时返回 nil，对齐 Python 的 None 返回
+	if w == nil {
+		return nil, nil
+	}
+
+	// 如果 session 非 nil，进行追踪装饰
+	if session != nil {
+		w = decorator.DecorateWorkflowWithTrace(w, session)
+	}
+
+	return w, nil
+}

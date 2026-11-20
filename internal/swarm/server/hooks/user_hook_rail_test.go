@@ -3,13 +3,13 @@ package hooks
 import (
 	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"strings"
 	"testing"
 
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 )
 

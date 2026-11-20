@@ -17,9 +17,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	harness_rsi "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi"
-	evaluation_result_analyzer "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/evaluation_result_analyzer"
-	member_optimizer "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/member_optimizer"
+	harness_rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	evaluation_result_analyzer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluation_result_analyzer"
+	member_optimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 )
 
 // AnalyzerReadLayerSuite 诊断读件层集成套件。

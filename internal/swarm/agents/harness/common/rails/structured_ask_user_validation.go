@@ -25,11 +25,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	sessionstate "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

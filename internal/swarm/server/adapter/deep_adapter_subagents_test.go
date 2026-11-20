@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/subagents"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 

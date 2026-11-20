@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	teamworkspace "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/team_workspace"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	teamworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 

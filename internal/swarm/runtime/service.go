@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"

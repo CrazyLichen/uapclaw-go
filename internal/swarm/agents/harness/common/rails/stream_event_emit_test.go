@@ -3,16 +3,16 @@ package rails
 import (
 	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 辅助类型 ────────────────────────────

@@ -3,8 +3,8 @@ package adapter
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

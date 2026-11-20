@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	llm "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/modalityprobe"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 

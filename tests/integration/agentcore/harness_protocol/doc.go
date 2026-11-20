@@ -2,15 +2,15 @@
 
 // Package harness_protocol 提供 15.3 交互与钩子控制面的集成测试。
 //
-// 被测对象是 internal/openjiuwen/harness_protocol 的控制面契约
+// 被测对象是 internal/openuapclaw/harness_protocol 的控制面契约
 // （HarnessInteractionHandler / HarnessHookDispatcher / ValidateInteractionResponse），
 // 但它本身是纯契约包（go list -deps 零 internal 依赖），因此真链路必须由
 // 真实子系统驱动：
 //
-//	internal/openjiuwen/agent_teams/harness           L2 团队成员交互契约（HarnessState 消费者）
-//	internal/openjiuwen/core/session             *session.Session 会话生命周期
-//	internal/openjiuwen/core/session/interaction  *InteractiveInput 应答载体
-//	internal/openjiuwen/harness_protocol    被测契约
+//	internal/openuapclaw/agent_teams/harness           L2 团队成员交互契约（HarnessState 消费者）
+//	internal/openuapclaw/core/session             *session.Session 会话生命周期
+//	internal/openuapclaw/core/session/interaction  *InteractiveInput 应答载体
+//	internal/openuapclaw/harness_protocol    被测契约
 //
 // fake 只扮「外部 CLI provider」这一进程边界角色：provider 在独立进程里
 // 通过 stdio 与宿主交换 15.3 的请求/应答（Python: harness_providers/base.py

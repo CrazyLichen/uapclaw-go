@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )

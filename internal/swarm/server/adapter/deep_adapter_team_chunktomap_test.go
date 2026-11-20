@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	ateamschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	ateamschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 )
 

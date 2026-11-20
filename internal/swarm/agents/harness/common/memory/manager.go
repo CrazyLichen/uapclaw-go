@@ -17,7 +17,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-sqlite3"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

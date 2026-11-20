@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // TestDuckduckgoSearch_挑战页降级 验证 DDG 挑战页报错后 searchFree 循环降级到 jina 引擎。

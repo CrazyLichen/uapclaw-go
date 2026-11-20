@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	headers "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/headers_helper"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	headers "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/headers_helper"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

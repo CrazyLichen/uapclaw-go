@@ -3,7 +3,7 @@ package auto_permission
 import (
 	"testing"
 
-	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // TestToolInvocation_字段可赋值 验证四个字段的类型与读写

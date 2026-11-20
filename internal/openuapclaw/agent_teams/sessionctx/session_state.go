@@ -1,0 +1,134 @@
+package sessionctx
+
+import (
+	"context"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	"sync"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SessionState 每-TeamAgent 的可变 session 状态容器。
+// Python: _session_id_context (contextvars.ContextVar)
+//
+// 通过 context.Value 传播 *SessionState 指针：
+//   - 同一 TeamAgent 内的 goroutine 共享同一 SessionState 引用，SetSessionID 后立即可见
+//   - 子 Teammate 调用 InitSessionState 创建新实例 + WithSessionState 派生新 ctx，父不受影响
+//
+// 并发安全：所有字段读写通过 sync.RWMutex 保护。
+// Python 不需要锁因为 asyncio 是单线程协程。
+type SessionState struct {
+	mu        sync.RWMutex
+	sessionID string
+}
+
+// sessionStateKeyType SessionState 的 context key 类型。
+type sessionStateKeyType struct{}
+
+// memberIDKeyType 成员 ID 的 context key 类型。
+// 对齐 Python: _member_id_context (contextvars.ContextVar)
+type memberIDKeyType struct{}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// InitSessionState 创建新的 SessionState 实例。
+// Python: _session_id_context = ContextVar("session_id", default=None)
+func InitSessionState() *SessionState {
+	return &SessionState{}
+}
+
+// WithSessionState 将 SessionState 注入 context。
+// Python: set_session_id(session_id) — 但 Go 通过 context.Value 传播指针
+func WithSessionState(ctx context.Context, state *SessionState) context.Context {
+	return context.WithValue(ctx, sessionStateKeyType{}, state)
+}
+
+// SessionStateFromCtx 从 context 中获取 SessionState。
+// 返回 nil 表示当前 context 未绑定 SessionState。
+func SessionStateFromCtx(ctx context.Context) *SessionState {
+	if s, ok := ctx.Value(sessionStateKeyType{}).(*SessionState); ok {
+		return s
+	}
+	return nil
+}
+
+// GetSessionID 从 context 中获取当前 session_id。
+// Python: get_session_id() -> Optional[str]
+// 读取优先级：SessionState.sessionID → ""（空字符串）
+func GetSessionID(ctx context.Context) string {
+	if s := SessionStateFromCtx(ctx); s != nil {
+		return s.GetSessionID()
+	}
+	return ""
+}
+
+// GetSessionID 获取当前 session_id。
+func (s *SessionState) GetSessionID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sessionID
+}
+
+// SetSessionID 设置当前 session_id。
+// Python: set_session_id(session_id) -> Token
+// Go 不需要 Token，直接原地修改，同一指针的 goroutine 立即可见。
+func (s *SessionState) SetSessionID(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionID = sessionID
+}
+
+// SetSessionIDIfAbsent 临时把 session_id 设为给定值，返回还原函数。
+//
+// 用于"某段逻辑需要 session 上下文、但当前 ctx 未带"的场景（如 pause/stop 阶段的
+// 团队记忆提取）。三者短路：目标为空、ctx 无 SessionState、ctx 已有非空 session_id 时，
+// 都不做任何修改，返回空操作。
+// 对齐 Python _extract_with_session_context 的 token 语义（manager.py:322-333）：
+// Python 用 contextvar token 还原，Go 用共享 SessionState 的原值还原。
+func SetSessionIDIfAbsent(ctx context.Context, sessionID string) func() {
+	if sessionID == "" {
+		return func() {}
+	}
+	state := SessionStateFromCtx(ctx)
+	if state == nil {
+		return func() {}
+	}
+	prev := state.GetSessionID()
+	if prev != "" {
+		return func() {}
+	}
+	state.SetSessionID(sessionID)
+	return func() { state.SetSessionID(prev) }
+}
+
+// WithMemberID 将成员 ID 注入 context。
+// 对齐 Python: set_member_id(member_name) — Python 用 contextvars.ContextVar，
+// Go 通过 context.WithValue 传播，返回新 ctx 供下游使用。
+func WithMemberID(ctx context.Context, memberName string) context.Context {
+	return context.WithValue(ctx, memberIDKeyType{}, memberName)
+}
+
+// MemberIDFromCtx 从 context 中获取成员 ID。
+// 返回空字符串表示当前 context 未绑定成员 ID。
+// 对齐 Python: get_member_id()
+func MemberIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(memberIDKeyType{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// ──────────────────────────── 导出函数（续：KV 亲和访问器） ────────────────────────────
+
+// GetCacheIdentity 返回默认缓存身份（本类型无独立 cache identity，返回零值）。
+// Python: 各 Session 子类的 get_cache_identity；Go 侧未迁该能力时由
+// kv_cache.ResolveSessionLineage 的 fallback 链兜住。
+func (s *SessionState) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回父会话标识；本类型无父会话，返回空串。
+// Python: agent.py:74 get_parent_session_id() -> str | None
+func (s *SessionState) GetParentSessionID() string {
+	return ""
+}

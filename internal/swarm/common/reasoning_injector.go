@@ -90,7 +90,7 @@ func buildModelRequestKwargs(modelName string, modelConfigDict map[string]any) m
 	// Python: reasoning_injector.py:115-140 context_window 处理。
 	// 偏差注记：Python 运行时探测 core 是否已有正式字段（core_has_context_window_field，
 	// :15-40）决定出口是否 pop。Go 侧 ModelRequestConfig.ContextWindow 正式字段已存在
-	// （internal/openjiuwen/core/foundation/llm/schema/config.go:214，测试固化不外发语义），
+	// （internal/openuapclaw/core/foundation/llm/schema/config.go:214，测试固化不外发语义），
 	// 故取"已加字段"分支：不 pop，仅做归一清理。
 	if raw, ok := requestKwargs["context_window"]; ok {
 		normalized := normalizeContextWindow(raw)

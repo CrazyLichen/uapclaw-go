@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

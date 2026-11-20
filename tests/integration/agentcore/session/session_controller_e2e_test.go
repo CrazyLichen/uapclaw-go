@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/controller"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/controller"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 )
 
 // ──────────────────────────── 测试套件 ────────────────────────────

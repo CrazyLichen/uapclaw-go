@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	sessionstate "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
-	sysoperation "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysoperation "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

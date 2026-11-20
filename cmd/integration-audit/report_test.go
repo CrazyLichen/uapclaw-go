@@ -36,8 +36,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
 type FakeSuite struct {
@@ -306,7 +306,7 @@ func TestRunCLI_verify模式_JSON输出(t *testing.T) {
 	// 灰区目录被运行
 	require.Len(t, payload.Verify.Dirs, 1)
 	assert.True(t, payload.Verify.Dirs[0].Passed)
-	assert.Contains(t, payload.Verify.Dirs[0].Qualified, "openjiuwen/harness")
+	assert.Contains(t, payload.Verify.Dirs[0].Qualified, "openuapclaw/harness")
 }
 
 // TestPrintVerifyReport_文本输出 测验证报告文本含门禁判定与覆盖分布
@@ -314,8 +314,8 @@ func TestPrintVerifyReport_文本输出(t *testing.T) {
 	vr := &VerifyResult{
 		Dirs: []*DirVerify{{
 			Dir:            "tests/integration/fake",
-			SubsystemLines: map[string]int{"openjiuwen/harness": 542, "openjiuwen/core/session": 24},
-			Qualified:      []string{"openjiuwen/harness"},
+			SubsystemLines: map[string]int{"openuapclaw/harness": 542, "openuapclaw/core/session": 24},
+			Qualified:      []string{"openuapclaw/harness"},
 			Passed:         false,
 			Reason:         "真实覆盖 1 个子系统（要求 ≥ 3，每子系统 ≥ 30 行）",
 		}},
@@ -335,8 +335,8 @@ func TestPrintVerifyReport_文本输出(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "覆盖交叉验证")
 	assert.Contains(t, out, "[不通过]")
-	assert.Contains(t, out, "openjiuwen/harness:542*")
-	assert.Contains(t, out, "openjiuwen/core/session:24")
+	assert.Contains(t, out, "openuapclaw/harness:542*")
+	assert.Contains(t, out, "openuapclaw/core/session:24")
 	assert.Contains(t, out, "处置指引")
 }
 

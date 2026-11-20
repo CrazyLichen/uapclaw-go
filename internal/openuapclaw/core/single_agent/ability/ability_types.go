@@ -1,0 +1,171 @@
+package ability
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AbilityExecutionError 能力执行统一异常，嵌入 BaseError 并关联 ToolMessage。
+// Python: AbilityExecutionError
+type AbilityExecutionError struct {
+	*exception.BaseError
+	// ToolMessage 关联的工具返回消息
+	ToolMessage *llmschema.ToolMessage
+}
+
+// saschema.ExecuteResult 单个工具调用的执行结果。
+// 实际定义在 saschema (single_agent/schema) 包，本包直接使用 saschema.ExecuteResult。
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// emptySuccessText 工具成功但无可渲染文本时的兜底文案。
+	// 模型收到空字符串会当成"工具什么都没做"，给一句明确的占位更利于继续推理。
+	// Python: EMPTY_SUCCESS_TEXT (foundation/tool/base.py:23)
+	emptySuccessText = "Tool succeeded with empty output."
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// InterruptAutoConfirmKey 中断自动确认状态键。
+// Python: openjiuwen/core/single_agent/interrupt/state.py INTERRUPT_AUTO_CONFIRM_KEY
+var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewAbilityExecutionError 创建能力执行错误。
+// Python: AbilityExecutionError(status=..., msg=..., tool_message=...)
+func NewAbilityExecutionError(
+	status exception.StatusCode,
+	toolCallID string,
+	msg string,
+	opts ...exception.ErrorOption,
+) *AbilityExecutionError {
+	allOpts := append([]exception.ErrorOption{exception.WithMsg(msg)}, opts...)
+	return &AbilityExecutionError{
+		BaseError:   exception.NewBaseError(status, allOpts...),
+		ToolMessage: llmschema.NewToolMessage(toolCallID, msg),
+	}
+}
+
+// BuildToolMessageContent 从执行结果中提取 ToolMessage 的 content 字段。
+// 提取逻辑（对齐 Python _build_tool_message_content）：
+//
+//	路径 1: map[string]any — 按 key 提取
+//	  1a. data.content 提取
+//	  1b. success=false + error 提取
+//	  1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
+//	  1d. 普通 map — JSON 序列化
+//	路径 2: 反射提取（对齐 Python getattr(result, "data", None)）
+//	路径 3: 最终 fallback — fmt.Sprintf("%v", result)
+func BuildToolMessageContent(result any) string {
+	// 路径 1：map[string]any — 按 key 提取
+	if m, ok := result.(map[string]any); ok {
+		// 1a-mapped: 对齐 Python MappedToolOutput.__str__()
+		// 工具返回 map 中含 __mapped_content 键时，优先返回其值作为 LLM 友好文本
+		if mapped, ok := m["__mapped_content"]; ok {
+			if s, ok := mapped.(string); ok && s != "" {
+				return s
+			}
+		}
+		// 1b. data.content 提取
+		if data, ok := m["data"].(map[string]any); ok {
+			if content, ok := data["content"]; ok {
+				if s := fmt.Sprintf("%v", content); s != "" {
+					return s
+				}
+			}
+		}
+		// 1b. success=false + error 提取
+		if success, ok := m["success"].(bool); ok && !success {
+			if errVal, ok := m["error"]; ok {
+				return fmt.Sprintf("%v", errVal)
+			}
+		}
+		// 1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
+		// Python: LocalFunction 返回 string 时，Go 包装为 {"result": v}，
+		// 需解包后递归，使 "search..." 走到路径 3 的 fmt.Sprintf("%v", result) 返回原值。
+		if v, ok := m["result"]; ok && len(m) == 1 {
+			return BuildToolMessageContent(v)
+		}
+		// 1d. 普通 map — JSON 序列化（对齐 Python str(dict)）
+		if jsonBytes, err := json.Marshal(m); err == nil {
+			return string(jsonBytes)
+		}
+	}
+
+	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
+	// MCP 工具结果以结构体形态透传（success / data / error 三字段），
+	// 走到这里时按字段名取值，避免把 "&{true map[] }" 这种 Go 字形交给模型。
+	v := reflect.ValueOf(result)
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return emptySuccessText
+		}
+		v = v.Elem()
+	}
+	if v.Kind() == reflect.Struct {
+		hasData := false
+		if f := v.FieldByName("Data"); f.IsValid() {
+			hasData = true
+			if dataMap, ok := f.Interface().(map[string]any); ok {
+				if content, ok := dataMap["content"]; ok {
+					if s := fmt.Sprintf("%v", content); s != "" {
+						return s
+					}
+				}
+			}
+		}
+		if f := v.FieldByName("Success"); f.IsValid() && f.Kind() == reflect.Bool && !f.Bool() {
+			// 字段名两种写法都要认：MCPToolResult 用 Err，早期实现用 Error
+			for _, name := range []string{"Err", "Error"} {
+				if ef := v.FieldByName(name); ef.IsValid() {
+					if s := fmt.Sprintf("%v", ef.Interface()); s != "" {
+						return s
+					}
+				}
+			}
+		}
+		if hasData {
+			// 是带 Data 的结果结构体但没取到文本：给兜底文案，
+			// 不落到路径 3 打印结构体字形
+			return emptySuccessText
+		}
+	}
+
+	// 路径 3：最终 fallback
+	return fmt.Sprintf("%v", result)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// errorToExecuteResult 将 error 转换为 saschema.ExecuteResult。
+// 用于降级路径（cbc==nil）和 railedExecuteSingleToolCall 的异常处理。
+// 转换规则：
+//   - ToolInterruptException → Result=tie（平局）, ToolMsg=nil
+//   - AbilityExecutionError  → Result=err（错误）, ToolMsg=aee.ToolMessage
+//   - 其他 error             → Result=err（错误）, ToolMsg=兜底构建
+func errorToExecuteResult(err error, toolCallID string) saschema.ExecuteResult {
+	var tie *saschema.ToolInterruptException
+	if errors.As(err, &tie) {
+		return saschema.ExecuteResult{Result: tie}
+	}
+	var toolMsg *llmschema.ToolMessage
+	var execErr *AbilityExecutionError
+	if errors.As(err, &execErr) {
+		toolMsg = execErr.ToolMessage
+	}
+	if toolMsg == nil {
+		toolMsg = llmschema.NewToolMessage(toolCallID, err.Error())
+	}
+	return saschema.ExecuteResult{Result: err, ToolMsg: toolMsg}
+}

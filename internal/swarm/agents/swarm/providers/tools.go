@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	agenttoolkits "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"

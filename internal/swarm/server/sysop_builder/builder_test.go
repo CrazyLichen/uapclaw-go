@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── CreateLocalSysOpCard 测试 ────────────────────────────

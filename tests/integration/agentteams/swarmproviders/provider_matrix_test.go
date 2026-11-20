@@ -29,10 +29,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	agentcore "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
+	agentcore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

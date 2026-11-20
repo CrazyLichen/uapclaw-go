@@ -12,15 +12,15 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	maschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/team_runtime"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	maschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/team_runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────

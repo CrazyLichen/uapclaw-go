@@ -19,10 +19,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/experts"
-	hres "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/resources"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/experts"
+	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	cmschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

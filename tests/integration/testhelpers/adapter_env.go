@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	model_clients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"

@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 	_ "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev/stages"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"

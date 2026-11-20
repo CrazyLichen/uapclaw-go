@@ -17,9 +17,9 @@ import (
 
 	"os"
 
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 

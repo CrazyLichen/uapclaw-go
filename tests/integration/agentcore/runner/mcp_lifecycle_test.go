@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp"
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp/types"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

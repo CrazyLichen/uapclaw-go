@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	tool "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	browser "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/browser_move"
-	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	browser "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/browser_move"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

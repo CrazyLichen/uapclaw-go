@@ -7,9 +7,9 @@ package utils
 import (
 	"testing"
 
-	cschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	cschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // TestPayloadToMap_nil nil 返回 nil

@@ -11,16 +11,16 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/sessionctx"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
-	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

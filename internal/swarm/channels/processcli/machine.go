@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	permissiontools "github.com/uapclaw/uapclaw-go/internal/common/permission_tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"

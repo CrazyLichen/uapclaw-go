@@ -25,7 +25,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/redaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/redaction"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

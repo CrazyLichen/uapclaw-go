@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	foundationtool "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	foundationtool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	schemaswarm "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

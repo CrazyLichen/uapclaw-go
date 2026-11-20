@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	llm "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
-	harness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/skills"
-	hres "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/resources"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
+	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

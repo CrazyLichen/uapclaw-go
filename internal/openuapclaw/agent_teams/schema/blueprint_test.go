@@ -1,0 +1,579 @@
+package schema
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	harnessschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+)
+
+// TestNewTeamModelConfig 测试默认 TeamModelConfig 创建
+func TestNewTeamModelConfig(t *testing.T) {
+	cfg := models.NewTeamModelConfig()
+	if cfg.ModelRequestConfig == nil {
+		t.Error("ModelRequestConfig 不应为 nil")
+	}
+	if cfg.ModelClientConfig.Timeout != 60.0 {
+		t.Errorf("期望 Timeout=60.0, 实际=%f", cfg.ModelClientConfig.Timeout)
+	}
+}
+
+// TestTeamModelConfig_Build_留桩 测试 Build 不 panic 且返回值可用。
+// 15.15 起真实现（Python deep_agent_spec.py:127-132 ModelSpec.build）：
+// 本包测试未注册 MockLLM 客户端，构造失败按语义降级返回 nil（warn 告警）。
+func TestTeamModelConfig_Build_留桩(t *testing.T) {
+	r := models.NewTeamModelConfig().Build()
+	_ = r // 未注册客户端环境下允许 nil；注册环境返回模型实例
+}
+
+// TestNewLeaderSpec 测试默认 LeaderSpec
+func TestNewLeaderSpec(t *testing.T) {
+	_ = SetLanguage(LanguageCN)
+	s := NewLeaderSpec()
+	if s.MemberName != "team_leader" {
+		t.Errorf("期望 'team_leader', 实际=%q", s.MemberName)
+	}
+	if s.DisplayName != "Team Leader" {
+		t.Errorf("期望 'Team Leader', 实际=%q", s.DisplayName)
+	}
+}
+
+// TestNewLeaderSpec_英文 测试英文 LeaderSpec
+func TestNewLeaderSpec_英文(t *testing.T) {
+	_ = SetLanguage(LanguageEN)
+	defer func() { _ = SetLanguage(LanguageCN) }()
+	if NewLeaderSpec().Persona != "Genius project management expert" {
+		t.Error("期望英文 persona")
+	}
+}
+
+// TestTransportSpec_Build_未注册 测试未注册传输类型报错
+func TestTransportSpec_Build_未注册(t *testing.T) {
+	_, err := TransportSpec{Type: "unknown"}.Build()
+	if err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestTransportSpec_Build_内置 测试内置传输类型
+func TestTransportSpec_Build_内置(t *testing.T) {
+	cfg, err := TransportSpec{Type: "inprocess"}.Build()
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	if cfg.Backend != "inprocess" {
+		t.Errorf("期望 inprocess, 实际=%q", cfg.Backend)
+	}
+}
+
+// TestStorageSpec_Build_未注册 测试未注册存储类型报错
+func TestStorageSpec_Build_未注册(t *testing.T) {
+	_, err := StorageSpec{Type: "unknown"}.Build()
+	if err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestStorageSpec_Build_内置 测试内置存储类型
+func TestStorageSpec_Build_内置(t *testing.T) {
+	cfg, err := StorageSpec{Type: "sqlite"}.Build()
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	if dbCfg.DBType != database.DatabaseTypeSQLite {
+		t.Errorf("期望 sqlite, 实际=%q", dbCfg.DBType)
+	}
+}
+
+// TestEnsureBuiltinInfraRegistered 测试内置基础设施注册
+func TestEnsureBuiltinInfraRegistered(t *testing.T) {
+	ensureBuiltinInfraRegistered()
+	for _, n := range []string{"inprocess", "pyzmq"} {
+		if _, ok := transportRegistry[n]; !ok {
+			t.Errorf("传输 %q 未注册", n)
+		}
+	}
+	for _, n := range []string{"sqlite", "postgresql", "mysql", "memory"} {
+		if _, ok := storageRegistry[n]; !ok {
+			t.Errorf("存储 %q 未注册", n)
+		}
+	}
+}
+
+// TestTeamAgentSpec_Validate_正常 测试正常验证
+func TestTeamAgentSpec_Validate_正常(t *testing.T) {
+	s := NewTeamAgentSpec()
+	if err := (&s).Validate(); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_Validate_PoolRouter互斥 测试互斥
+func TestTeamAgentSpec_Validate_PoolRouter互斥(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.ModelPool = []models.ModelPoolEntry{{ModelName: "test"}}
+	s.ModelRouter = &models.ModelRouterConfig{APIBaseURL: "http://localhost"}
+	if err := (&s).Validate(); err == nil {
+		t.Error("期望互斥报错")
+	}
+}
+
+// TestTeamAgentSpec_DefaultTransportForSpawnMode_inprocess 测试自动填充
+func TestTeamAgentSpec_DefaultTransportForSpawnMode_inprocess(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.SpawnMode = "inprocess"
+	_ = (&s).Validate()
+	if s.Transport == nil || s.Transport.Type != "inprocess" {
+		t.Error("期望自动填充 inprocess")
+	}
+}
+
+// TestTeamAgentSpec_DefaultTransportForSpawnMode_process 测试不填充
+func TestTeamAgentSpec_DefaultTransportForSpawnMode_process(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.SpawnMode = "process"
+	_ = (&s).Validate()
+	if s.Transport != nil {
+		t.Error("期望不填充")
+	}
+}
+
+// TestTeamAgentSpec_ValidateReservedNames_正常 测试正常
+func TestTeamAgentSpec_ValidateReservedNames_正常(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.PredefinedMembers = []TeamMemberSpec{{MemberName: "coder", RoleType: TeamRoleTeammate}}
+	if err := (&s).validateReservedNames(); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ValidateReservedNames_保留名 测试保留名
+func TestTeamAgentSpec_ValidateReservedNames_保留名(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.PredefinedMembers = []TeamMemberSpec{{MemberName: "user", RoleType: TeamRoleTeammate}}
+	if err := (&s).validateReservedNames(); err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestTeamAgentSpec_ValidateReservedNames_HumanAgent允许 测试 HITT 允许
+func TestTeamAgentSpec_ValidateReservedNames_HumanAgent允许(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.EnableHITT = true
+	s.PredefinedMembers = []TeamMemberSpec{{MemberName: "human_agent", RoleType: TeamRoleHumanAgent}}
+	if err := (&s).validateReservedNames(); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ValidateReservedNames_Leader保留名 测试 Leader 保留名
+func TestTeamAgentSpec_ValidateReservedNames_Leader保留名(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.Leader.MemberName = "user"
+	if err := (&s).validateReservedNames(); err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestTeamAgentSpec_ValidateHittConsistency_正常 测试 HITT 正常
+func TestTeamAgentSpec_ValidateHittConsistency_正常(t *testing.T) {
+	s := NewTeamAgentSpec()
+	if err := (&s).validateHittConsistency(); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ValidateHittConsistency_未启用 测试 HITT 未启用
+func TestTeamAgentSpec_ValidateHittConsistency_未启用(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.PredefinedMembers = []TeamMemberSpec{{MemberName: "human_agent", RoleType: TeamRoleHumanAgent}}
+	if err := (&s).validateHittConsistency(); err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestTeamAgentSpec_ValidateLeaderModelResolved_有模型 测试有模型
+func TestTeamAgentSpec_ValidateLeaderModelResolved_有模型(t *testing.T) {
+	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {Model: &models.TeamModelConfig{}}}}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
+	if err := ValidateLeaderModelResolved(spec, nil, ts); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ValidateLeaderModelResolved_无模型 测试无模型
+func TestTeamAgentSpec_ValidateLeaderModelResolved_无模型(t *testing.T) {
+	spec := TeamAgentSpec{Leader: LeaderSpec{}, Agents: map[string]DeepAgentSpec{"leader": {}}}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
+	if err := ValidateLeaderModelResolved(spec, nil, ts); err == nil {
+		t.Error("期望报错")
+	}
+}
+
+// TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型 测试分配模型
+func TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型(t *testing.T) {
+	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {}}}
+	m := &models.TeamModelConfig{}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
+	if err := ValidateLeaderModelResolved(spec, m, ts); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ValidateLeaderModelResolved_无池 测试无池
+func TestTeamAgentSpec_ValidateLeaderModelResolved_无池(t *testing.T) {
+	if err := ValidateLeaderModelResolved(TeamAgentSpec{}, nil, TeamSpec{}); err != nil {
+		t.Errorf("报错: %v", err)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_默认 测试默认 DB，SQLite 时自动填充 connection_string
+func TestTeamAgentSpec_ResolveDBConfig_默认(t *testing.T) {
+	// 设置临时工作区以获取可预测路径
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	path.ResetCache()
+
+	s := NewTeamAgentSpec()
+	cfg := (&s).ResolveDBConfig()
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	if dbCfg.DBType != database.DatabaseTypeSQLite {
+		t.Errorf("期望 sqlite, 实际=%q", dbCfg.DBType)
+	}
+	// SQLite 且 connection_string 为空时，应自动填充（目录名带前导点，对齐 Python .agent_teams）
+	expected := filepath.Join(tmpDir, ".agent_teams", "team.db")
+	if dbCfg.ConnectionString != expected {
+		t.Errorf("期望 connection_string=%q, 实际=%q", expected, dbCfg.ConnectionString)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_存储配置 测试带存储
+func TestTeamAgentSpec_ResolveDBConfig_存储配置(t *testing.T) {
+	s := NewTeamAgentSpec()
+	s.Storage = &StorageSpec{Type: "memory"}
+	cfg := (&s).ResolveDBConfig()
+	memCfg, ok := cfg.(database.MemoryDatabaseConfig)
+	if !ok {
+		t.Fatal("期望 MemoryDatabaseConfig")
+	}
+	if memCfg.DBType != database.DatabaseTypeMemory {
+		t.Errorf("期望 memory, 实际=%q", memCfg.DBType)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_SQLite已有连接字符串 测试 SQLite 已有 connection_string 时不覆盖
+func TestTeamAgentSpec_ResolveDBConfig_SQLite已有连接字符串(t *testing.T) {
+	// 注册一个自定义 sqlite builder，预设 connection_string
+	customName := "sqlite_with_conn_test"
+	RegisterStorage(customName, func(_ map[string]any) (any, error) {
+		cfg := database.NewDatabaseConfig()
+		cfg.ConnectionString = "/custom/path/team.db"
+		return cfg, nil
+	})
+
+	s := NewTeamAgentSpec()
+	s.Storage = &StorageSpec{Type: customName}
+	cfg := (&s).ResolveDBConfig()
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	// 已有 connection_string，不应被覆盖
+	if dbCfg.ConnectionString != "/custom/path/team.db" {
+		t.Errorf("期望 connection_string 保持 /custom/path/team.db, 实际=%q", dbCfg.ConnectionString)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径 测试 SQLite 自动填充路径正确性
+func TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	path.ResetCache()
+
+	s := NewTeamAgentSpec()
+	cfg := (&s).ResolveDBConfig()
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	// 验证路径以 .agent_teams/team.db 结尾
+	if !strings.HasSuffix(dbCfg.ConnectionString, ".agent_teams"+string(filepath.Separator)+"team.db") {
+		t.Errorf("connection_string 应以 .agent_teams/team.db 结尾, 实际=%q", dbCfg.ConnectionString)
+	}
+}
+
+// TestTeamAgentSpec_Build 测试 Build 校验并返回 spec
+func TestTeamAgentSpec_Build(t *testing.T) {
+	s := NewTeamAgentSpec()
+	r, err := (&s).Build()
+	if err != nil {
+		t.Fatalf("期望无错误, 实际=%v", err)
+	}
+	if r == nil {
+		t.Fatal("期望非 nil spec, 实际=nil")
+	}
+	if r.TeamName != s.TeamName {
+		t.Errorf("期望 TeamName=%q, 实际=%q", s.TeamName, r.TeamName)
+	}
+}
+
+// TestNewDeepAgentSpec 测试默认 DeepAgentSpec
+func TestNewDeepAgentSpec(t *testing.T) {
+	s := NewDeepAgentSpec()
+	if s.MaxIterations != 15 {
+		t.Errorf("期望 15, 实际=%d", s.MaxIterations)
+	}
+	if !s.AutoCreateWorkspace {
+		t.Error("期望 true")
+	}
+	if s.CompletionTimeout != 600.0 {
+		t.Errorf("期望 600.0, 实际=%f", s.CompletionTimeout)
+	}
+}
+
+// TestDeepAgentSpec_JSON序列化 测试 JSON 往返
+func TestDeepAgentSpec_JSON序列化(t *testing.T) {
+	s := DeepAgentSpec{
+		Card:                  agentschema.NewAgentCard(),
+		SystemPrompt:          "test",
+		MaxIterations:         20,
+		EnableTaskLoop:        true,
+		AutoCreateWorkspace:   false,
+		CompletionTimeout:     300.0,
+		Skills:                []string{"s1", "s2"},
+		ApprovalRequiredTools: []string{"t1"},
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	var d DeepAgentSpec
+	if err := json.Unmarshal(data, &d); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if d.SystemPrompt != s.SystemPrompt {
+		t.Errorf("不匹配")
+	}
+	if d.MaxIterations != s.MaxIterations {
+		t.Errorf("不匹配")
+	}
+}
+
+// TestRegisterTransport 测试自定义传输注册
+func TestRegisterTransport(t *testing.T) {
+	nt := "custom_transport_test"
+	RegisterTransport(nt, func(_ map[string]any) (MessagerTransportConfig, error) {
+		cfg := NewMessagerTransportConfig()
+		cfg.Backend = nt
+		return cfg, nil
+	})
+	cfg, err := TransportSpec{Type: nt}.Build()
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	if cfg.Backend != nt {
+		t.Errorf("不匹配")
+	}
+}
+
+// TestRegisterStorage 测试自定义存储注册
+func TestRegisterStorage(t *testing.T) {
+	nt := "custom_storage_test"
+	RegisterStorage(nt, func(_ map[string]any) (any, error) { return database.NewMemoryDatabaseConfig(), nil })
+	cfg, err := StorageSpec{Type: nt}.Build()
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	memCfg, ok := cfg.(database.MemoryDatabaseConfig)
+	if !ok {
+		t.Fatal("期望 MemoryDatabaseConfig")
+	}
+	if memCfg.DBType != database.DatabaseTypeMemory {
+		t.Errorf("不匹配")
+	}
+}
+
+// TestWorkspaceSpec_JSON序列化 测试 WorkspaceSpec JSON
+func TestWorkspaceSpec_JSON序列化(t *testing.T) {
+	s := WorkspaceSpec{RootPath: "/tmp/ws", Language: "cn", StableBase: true}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	var d WorkspaceSpec
+	if err := json.Unmarshal(data, &d); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if d.RootPath != s.RootPath {
+		t.Errorf("不匹配")
+	}
+}
+
+// TestVisionModelSpec_JSON序列化 测试 VisionModelSpec JSON
+func TestVisionModelSpec_JSON序列化(t *testing.T) {
+	s := VisionModelSpec{APIKey: "k", BaseURL: "http://localhost", Model: "gpt-4-vision", MaxRetries: 3}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	var d VisionModelSpec
+	if err := json.Unmarshal(data, &d); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if d.Model != s.Model {
+		t.Errorf("不匹配")
+	}
+}
+
+// TestTeamAgentSpec_新增能力字段 验证 25.0g 补的 6 个字段可读写。
+// Python: blueprint.py L350 dispatch_mode / L374 enable_member_messaging /
+// L385 max_subtask_depth / L395 bootstrap_mode
+func TestTeamAgentSpec_新增能力字段(t *testing.T) {
+	spec := TeamAgentSpec{
+		DispatchMode:          "scheduled",
+		EnableMemberMessaging: true,
+		MaxSubtaskDepth:       2,
+		BootstrapMode:         "framework",
+		BoundGroupName:        "grp",
+		SwarmflowEnabled:      true,
+	}
+	if spec.DispatchMode != "scheduled" {
+		t.Fatal("DispatchMode 未保存")
+	}
+	if !spec.EnableMemberMessaging {
+		t.Fatal("EnableMemberMessaging 未保存")
+	}
+	if spec.MaxSubtaskDepth != 2 {
+		t.Fatal("MaxSubtaskDepth 未保存")
+	}
+	if spec.BootstrapMode != "framework" {
+		t.Fatal("BootstrapMode 未保存")
+	}
+	if spec.BoundGroupName != "grp" {
+		t.Fatal("BoundGroupName 未保存")
+	}
+	if !spec.SwarmflowEnabled {
+		t.Fatal("SwarmflowEnabled 未保存")
+	}
+}
+
+// TestTeamAgentSpec_Validate_bootstrap需要scheduled 验证跨字段校验。
+// Python: _validate_bootstrap_mode (blueprint.py L781-793)
+func TestTeamAgentSpec_Validate_bootstrap需要scheduled(t *testing.T) {
+	spec := TeamAgentSpec{BootstrapMode: "framework", DispatchMode: "autonomous"}
+	if err := spec.Validate(); err == nil {
+		t.Fatal("framework + autonomous 应报错")
+	}
+	spec.DispatchMode = "scheduled"
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("framework + scheduled 不应报错：%v", err)
+	}
+}
+
+// TestTeamAgentSpec_BuildContext槽位 验证 build_context 活载体语义：
+// 不参与序列化（Python exclude=True），进程内持有活 BuildContext 实例。
+func TestTeamAgentSpec_BuildContext槽位(t *testing.T) {
+	spec := TeamAgentSpec{BuildContext: &harnessschema.BuildContext{ProjectDir: "/tmp/p"}}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "build_context") {
+		t.Fatalf("build_context 不应参与序列化: %s", data)
+	}
+	if spec.BuildContext.GetProjectDir() != "/tmp/p" {
+		t.Fatalf("活载体取值失败: %v", spec.BuildContext)
+	}
+}
+
+// TestTeamAgentSpec_MaterializeBuildContext_无注册静默 对齐 Python
+// build_context_from_seed（build_context.py:146-160）：未注册平台工厂时
+// 静默返回 nil（上游明确语义）。D-15.13-k 过渡默认工厂已回收（15.16c），
+// 注册面归平台（internal/swarm/agents/swarm registry 测试覆盖重建链）。
+func TestTeamAgentSpec_MaterializeBuildContext_无注册静默(t *testing.T) {
+	spec := &TeamAgentSpec{BuildContextSeed: map[string]any{
+		"project_dir":      "/proj",
+		"team_outputs_dir": "/out",
+	}}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != nil {
+		t.Fatal("未注册工厂时活载体应保持 nil（静默语义）")
+	}
+}
+
+// TestTeamAgentSpec_MaterializeBuildContext_无种子行为不变 对齐 Python
+// build_context 为 None / seed 为空的 no-op 分支（blueprint.py:695）。
+func TestTeamAgentSpec_MaterializeBuildContext_无种子行为不变(t *testing.T) {
+	spec := &TeamAgentSpec{}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != nil {
+		t.Fatal("无种子时活载体应保持 nil")
+	}
+	spec.BuildContextSeed = map[string]any{}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != nil {
+		t.Fatal("空种子时活载体应保持 nil")
+	}
+}
+
+// TestTeamAgentSpec_MaterializeBuildContext_活载体优先 对齐 Python 幂等守卫
+// 首条：活上下文已设时不被种子覆盖（blueprint.py:695）。
+func TestTeamAgentSpec_MaterializeBuildContext_活载体优先(t *testing.T) {
+	live := &harnessschema.BuildContext{ProjectDir: "/live"}
+	spec := &TeamAgentSpec{
+		BuildContext:     live,
+		BuildContextSeed: map[string]any{"project_dir": "/seed"},
+	}
+	if err := spec.MaterializeBuildContext(); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if spec.BuildContext != live {
+		t.Fatal("活载体已存在时不应被种子覆盖")
+	}
+}
+
+// TestTeamAgentSpec_BuildContextSeed_JSON往返 对齐 Python：build_context_seed
+// 随 model_dump/model_validate 传输（blueprint.py:660-663），而 build_context
+// 为 Field(exclude=True)（blueprint.py:645）。
+func TestTeamAgentSpec_BuildContextSeed_JSON往返(t *testing.T) {
+	spec := &TeamAgentSpec{BuildContextSeed: map[string]any{"project_dir": "/proj"}}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"build_context_seed"`) {
+		t.Fatal("种子应随 JSON 传输（Python 非 exclude 字段）")
+	}
+	var back TeamAgentSpec
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.BuildContextSeed["project_dir"] != "/proj" {
+		t.Fatalf("种子往返丢失: %v", back.BuildContextSeed)
+	}
+	if back.BuildContext != nil {
+		t.Fatal("活载体不参与序列化（Python exclude=True）")
+	}
+}

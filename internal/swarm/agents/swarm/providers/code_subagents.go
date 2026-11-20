@@ -1,10 +1,10 @@
 package providers
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	subagents "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/subagents"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	subagents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

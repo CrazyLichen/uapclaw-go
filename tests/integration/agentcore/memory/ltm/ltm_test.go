@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/kv"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/config"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/ltm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/ltm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

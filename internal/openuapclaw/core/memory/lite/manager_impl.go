@@ -1,0 +1,2073 @@
+package lite
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unicode/utf8"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/mattn/go-sqlite3"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// dbExecutor 数据库操作接口，兼容 *sql.DB 和 *sql.Tx
+type dbExecutor interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// SessionDeltaState 会话增量状态。对齐 Python SessionDeltaState
+type SessionDeltaState struct {
+	// LastSize 上次文件大小
+	LastSize int
+	// PendingBytes 待处理字节
+	PendingBytes int
+	// PendingMessages 待处理消息计数。对齐 Python pending_messages: int = 0
+	PendingMessages int
+}
+
+// memoryIndexManager 记忆索引管理器实现。对齐 Python MemoryIndexManager
+type memoryIndexManager struct {
+	// 基础信息
+	agentID   string
+	workspace *workspace.Workspace
+	nodeName  string
+	memoryDir string
+	settings  *MemorySettings
+
+	// 数据库
+	db     *sql.DB
+	dbPath string
+
+	// Embedding 嵌入
+	provider    EmbeddingProvider
+	providerKey string
+
+	// 状态
+	mu sync.Mutex
+	// dirty 是否需要重新同步（文件监听协程写、搜索路径读，用原子避免数据竞争）
+	dirty        atomic.Bool
+	closed       bool
+	ftsAvailable bool
+	ftsError     string
+	// ftsMigrated 本次初始化刚把 chunks_fts 从旧 tokenizer 迁到 trigram。
+	// 迁移 DROP 了旧表但没动 files/chunks 行，增量 sync 会因 hash 未变而跳过，
+	// 必须 force 全量重写一遍才能填满新表。对齐 Python self._fts_migrated。
+	ftsMigrated     bool
+	vectorAvailable bool
+	vectorError     string
+	vectorDims      *int
+
+	// 文件监听
+	watcher       *fsnotify.Watcher
+	watcherInit   atomic.Bool // AfterFunc 写 + watchLoop 读，跨 goroutine 须原子（race 修复）
+	watchDebounce time.Duration
+	watchTimer    *time.Timer
+	watchMu       sync.Mutex
+
+	// cachedCwdState 首次从真实请求 ctx 捕获的 CwdState（atomic.Value 存 *cwd.CwdState）。
+	// 后台 watch/interval 同步的 ctx 由 context.Background() 派生，天然缺 CwdState；
+	// 沙箱开启（RestrictToSandbox 且未配 SandboxRoot）时会导致所有读取被拒。
+	// 捕获后注入后台 ctx，等价 Python contextvar 在任务创建时继承上下文。
+	cachedCwdState atomic.Value
+
+	// 定时同步
+	intervalCancel context.CancelFunc
+
+	// 会话增量。对齐 Python sessions_dirty / sessions_dirty_files / session_warm / _session_pending_files / _session_deltas
+	// 注：Python 中这些字段也是声明但未实现操作逻辑的脚手架，Go 同步对齐
+	sessionsDirty       bool
+	sessionsDirtyFiles  map[string]struct{}
+	sessionWarm         map[string]struct{}
+	sessionPendingFiles map[string]struct{}
+	sessionDeltas       map[string]*SessionDeltaState
+	sessionTimer        *time.Timer
+
+	// 外部依赖
+	embeddingConfig *apiEmbedding.EmbeddingConfig
+	sysOperation    sysop.SysOperation
+	// llm LLM 实例。对齐 Python ctx.manager.llm
+	llm *llm.Model
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// metaKey 元数据键名
+	metaKey = "memory_index_meta_v1"
+	// snippetMaxChars 摘要最大字符数
+	snippetMaxChars = 700
+	// vectorTable vec0 虚拟表名
+	vectorTable = "chunks_vec"
+	// ftsTable FTS5 虚拟表名
+	ftsTable = "chunks_fts"
+	// embeddingCacheTable embedding 缓存表名
+	embeddingCacheTable = "embedding_cache"
+	// sessionDirtyDebounceMs session 文件脏标记防抖间隔。对齐 Python SESSION_DIRTY_DEBOUNCE_MS
+	sessionDirtyDebounceMs = 5000
+	// likeFallbackScore 短 token 走 LIKE 兜底时的固定分数。
+	// 需高于默认 minScore(0.3) 才能被检索出来，又要低于 BM25 命中，排在 FTS 结果之后。
+	// 对齐 Python _search_keyword 的 like_score（manager.py:1511）。
+	likeFallbackScore = 0.5
+	// defaultKeywordMinScore 纯关键词检索的兜底阈值。
+	// 配置项未填（<=0）时用它，避免沿用 0.3 把 BM25 中等分命中全部滤掉。
+	// 对齐 Python settings.query.get("keywordMinScore", 0.1)。
+	defaultKeywordMinScore = 0.1
+	// noEmbeddingProviderKey 未配置 embedding 时的 providerKey 占位值。
+	// 与"有 provider 的指纹"必不相同，从而让补上 key 之后能检测到配置变化并重建。
+	// 对齐 Python self.provider_key = "none:no-embedding"（manager.py:653）。
+	noEmbeddingProviderKey = "none:no-embedding"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// indexCache 管理器缓存
+var indexCache sync.Map
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Initialize 初始化管理器。对齐 Python MemoryIndexManager.initialize
+func (m *memoryIndexManager) Initialize(ctx context.Context) error {
+	m.dbPath = m.resolveDBPath()
+
+	if err := EnsureDir(filepath.Dir(m.dbPath)); err != nil {
+		return fmt.Errorf("确保数据库目录失败: %w", err)
+	}
+
+	var err error
+	m.db, err = sql.Open("sqlite3", m.dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
+	if err != nil {
+		return fmt.Errorf("打开数据库失败: %w", err)
+	}
+	m.db.SetMaxOpenConns(1)
+
+	if err := m.ensureSchema(); err != nil {
+		return fmt.Errorf("建 schema 失败: %w", err)
+	}
+
+	if err := m.initializeProvider(ctx); err != nil {
+		return fmt.Errorf("初始化 provider 失败: %w", err)
+	}
+
+	if err := m.loadVectorExtension(); err != nil {
+		m.vectorAvailable = false
+		m.vectorError = err.Error()
+		logger.Warn(logComponent).Err(err).Msg("failed to load vec0 extension, falling back to in-memory cosine")
+	}
+
+	// 初始化阶段的重建判定：配置变更时先清表再全量重建，而不是在脏索引上增量改。
+	//
+	// 两件事分开判：
+	//   - configRebuild：embedding 配置（provider/model/providerKey/chunkTokens）变了
+	//   - ftsMigration：chunks_fts 刚从旧 tokenizer 迁到 trigram，需要 force 重写一遍
+	//
+	// provider 不可用属运行期健康问题而非配置变更，needsRebuildOnConfigChange 对此返回
+	// false，保留既有向量索引等端点恢复。
+	//
+	// 对齐 Python MemoryIndexManager.initialize（manager.py:344-370）。
+	configRebuild, configReason := m.needsRebuildOnConfigChange()
+	ftsMigration := m.needsFtsMigrationReindex()
+	switch {
+	case configRebuild:
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", configReason).
+			Msg("embedding config changed, clearing index tables before rebuild")
+		if err := m.clearIndexTables(); err != nil {
+			return fmt.Errorf("清空索引表失败: %w", err)
+		}
+		if err := m.Sync(ctx, "initial", true); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("initial reindex failed")
+		}
+	case ftsMigration:
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", "fts_migration").
+			Msg("chunks_fts migrated to trigram, forcing full reindex")
+		if err := m.Sync(ctx, "fts_migration", true); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fts migration reindex failed")
+		}
+	default:
+		if err := m.Sync(ctx, "initial", false); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("initial sync failed")
+		}
+	}
+
+	// 文件监听
+	if m.settings.Sync.Watch {
+		m.setupFileWatcher()
+	}
+
+	// 定时同步
+	m.ensureIntervalSync()
+
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("memorymanagerinitialization completed")
+	return nil
+}
+
+// Sync 同步索引。对齐 Python MemoryIndexManager.sync
+func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool) error {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.mu.Unlock()
+
+	// 捕获调用方 CwdState：后续后台同步（watch/interval）用它重建 ctx。
+	m.captureCwdState(ctx)
+
+	// 重建判定收敛到 needsReindex（A/B/C 三处共用），force 时跳过判定。
+	// Python: needs_full_reindex = force or await self._should_full_reindex()
+	needReindex, reindexReason := m.needsReindex()
+	if force {
+		needReindex, reindexReason = true, "forced"
+	}
+	if needReindex {
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", reindexReason).
+			Msg("performing full index rebuild")
+		return m.runReindex(ctx, reindexReason)
+	}
+
+	logger.Debug(logComponent).Str("reason", reason).Msg("incremental sync")
+
+	if containsSource(m.settings.Sources, "memory") && m.dirty.Load() {
+		if err := m.syncMemoryFiles(ctx, false); err != nil {
+			return err
+		}
+		m.dirty.Store(false)
+	}
+
+	if containsSource(m.settings.Sources, "sessions") {
+		if err := m.syncSessionFiles(ctx, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// needsRebuildOnConfigChange 判定 embedding 配置相对上次索引是否已变更（需重建）。
+//
+// 在 init 阶段求值——此时可以清空索引表后重建，而不必在有脏数据的索引上原地改。
+// 无历史索引（无 meta）时返回 false：那种情况 sync 会正常全量建索引，没有"重建"一说。
+//
+// 只比对 provider / model / providerKey / chunkTokens 四项，与上游一致。provider 为 nil
+// 时返回 false：端点不可用是运行期健康状态，不是配置变更，应保留既有向量索引、降级用
+// 关键词检索，等端点恢复。
+//
+// 对齐 Python MemoryIndexManager._needs_rebuild_on_config_change（manager.py:376-407）。
+func (m *memoryIndexManager) needsRebuildOnConfigChange() (bool, string) {
+	if m.provider == nil {
+		return false, ""
+	}
+	meta, err := m.readMeta()
+	if err != nil {
+		// 无历史索引（或 meta 损坏）→ 交给正常 sync 建，不算配置变更
+		return false, ""
+	}
+	if meta["provider"] != m.provider.ID() {
+		return true, "provider_changed"
+	}
+	if meta["model"] != m.provider.Model() {
+		return true, "model_changed"
+	}
+	if meta["providerKey"] != m.providerKey {
+		return true, "provider_key_changed"
+	}
+	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
+		return true, "chunking_changed"
+	}
+	return false, ""
+}
+
+// clearIndexTables 清空全部索引表，供配置变更后重建使用。
+//
+// 清四张表：files（文件指纹）、chunks（分块正文）、chunks_vec（向量，按存在性）、
+// chunks_fts（全文，按存在性）。留空后 runReindex 会重新写入完整索引。
+//
+// 对齐 Python MemoryIndexManager._clear_index_tables（manager.py:412）。
+func (m *memoryIndexManager) clearIndexTables() error {
+	tables := []string{"files", "chunks"}
+	if m.vectorAvailable {
+		tables = append(tables, vectorTable)
+	}
+	if m.ftsAvailable {
+		tables = append(tables, ftsTable)
+	}
+	for _, table := range tables {
+		if _, err := m.db.Exec(fmt.Sprintf("DELETE FROM %s", table)); err != nil {
+			// 虚拟表（vec0 / fts5 contentless）的 DELETE 可能不被支持，降级为 Debug
+			logger.Debug(logComponent).Err(err).Str("table", table).
+				Msg("failed to clear index table")
+		}
+	}
+	logger.Info(logComponent).Msg("index tables cleared")
+	return nil
+}
+
+// Search 混合搜索。对齐 Python MemoryIndexManager.search
+func (m *memoryIndexManager) Search(ctx context.Context, query string, opts SearchOpts) ([]SearchResult, error) {
+	// 搜索前同步
+	onSearch := m.settings.Sync.OnSearch
+	if onSearch && m.dirty.Load() {
+		if err := m.Sync(ctx, "search", false); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("pre-search sync failed")
+		}
+	}
+
+	cleaned := strings.TrimSpace(query)
+	if len(cleaned) == 0 {
+		return nil, nil
+	}
+
+	minScore := opts.MinScore
+	if minScore == 0 {
+		minScore = m.settings.Query.MinScore
+	}
+
+	maxResults := opts.MaxResults
+	if maxResults <= 0 {
+		maxResults = int(m.settings.Query.MaxResults)
+	}
+
+	candidateMultiplier := m.settings.Query.Hybrid.CandidateMultiplier
+	if candidateMultiplier == 0 {
+		candidateMultiplier = 2.0
+	}
+	if opts.Hybrid.CandidateMultiplier != 0 {
+		candidateMultiplier = opts.Hybrid.CandidateMultiplier
+	}
+	candidates := int(float64(maxResults) * candidateMultiplier)
+	if candidates < 1 {
+		candidates = 1
+	}
+	if candidates > 200 {
+		candidates = 200
+	}
+
+	// FTS5 关键词搜索
+	var keywordResults []SearchResult
+	hybridEnabled := m.settings.Query.Hybrid.Enabled
+	if opts.Hybrid.Enabled {
+		hybridEnabled = true
+	}
+	if hybridEnabled && m.ftsAvailable {
+		var err error
+		keywordResults, err = m.searchKeyword(ctx, cleaned, candidates)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Msg("keyword search failed")
+		}
+	}
+
+	// 向量搜索
+	// Python: _embed_query_with_timeout 60s 超时保护
+	// provider 为 nil 表示未配置 embedding（或已运行期降级），此时跳过向量侧、只用关键词。
+	var queryVec []float64
+	var hasVector bool
+	if m.provider != nil {
+		embedCtx, embedCancel := context.WithTimeout(ctx, 60*time.Second)
+		var embedErr error
+		queryVec, embedErr = m.provider.EmbedQuery(embedCtx, cleaned)
+		embedCancel()
+		if embedErr != nil {
+			if embedCtx.Err() == context.DeadlineExceeded {
+				logger.Warn(logComponent).Err(embedErr).Msg("embedding query timed out")
+			} else {
+				logger.Error(logComponent).Err(embedErr).Msg("embedding query failed")
+			}
+			queryVec = nil
+		}
+	}
+	// Python: has_vector = any(v != 0 for v in query_vec)
+	for _, v := range queryVec {
+		if v != 0 {
+			hasVector = true
+			break
+		}
+	}
+
+	var vectorResults []SearchResult
+	if hasVector {
+		var err error
+		vectorResults, err = m.searchVector(ctx, queryVec, candidates)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Msg("vector search failed")
+		}
+	}
+
+	// 非混合模式
+	if !hybridEnabled {
+		results := vectorResults
+		var filtered []SearchResult
+		for _, r := range results {
+			if r.Score >= minScore {
+				filtered = append(filtered, r)
+			}
+		}
+		if len(filtered) > maxResults {
+			filtered = filtered[:maxResults]
+		}
+		return filtered, nil
+	}
+
+	// 无向量时跳过混合打分，直接用关键词原始分数。
+	//
+	// 用更低的 keywordMinScore：纯 BM25 分数常在 0.1~0.3，沿用 minScore(0.3) 会把
+	// 真实命中全滤掉、搜索返回空。对齐 Python search 的 `if not has_vector` 分支
+	// （manager.py:1370-1378）。
+	if !hasVector {
+		keywordMinScore := m.settings.Query.KeywordMinScore
+		if keywordMinScore <= 0 {
+			keywordMinScore = defaultKeywordMinScore
+		}
+		filtered := make([]SearchResult, 0, len(keywordResults))
+		for _, r := range keywordResults {
+			if r.Score >= keywordMinScore {
+				filtered = append(filtered, r)
+			}
+		}
+		if len(filtered) > maxResults {
+			filtered = filtered[:maxResults]
+		}
+		return filtered, nil
+	}
+
+	// 混合合并
+	vectorWeight := m.settings.Query.Hybrid.VectorWeight
+	textWeight := m.settings.Query.Hybrid.TextWeight
+	if opts.Hybrid.VectorWeight != 0 {
+		vectorWeight = opts.Hybrid.VectorWeight
+	}
+	if opts.Hybrid.TextWeight != 0 {
+		textWeight = opts.Hybrid.TextWeight
+	}
+	merged := mergeHybridResults(vectorResults, keywordResults, vectorWeight, textWeight)
+
+	var filtered []SearchResult
+	for _, r := range merged {
+		if r.Score >= minScore {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) > maxResults {
+		filtered = filtered[:maxResults]
+	}
+	return filtered, nil
+}
+
+// ReadFile 读取记忆文件内容。对齐 Python MemoryIndexManager.read_file
+func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error) {
+	var fullPath string
+	if filepath.IsAbs(relPath) {
+		fullPath = relPath
+	} else if relPath == "USER.md" {
+		userPath := m.workspace.GetNodePath("USER.md")
+		if userPath != nil {
+			fullPath = *userPath
+		} else {
+			fullPath = filepath.Join(m.memoryDir, relPath)
+		}
+	} else {
+		fullPath = filepath.Join(m.memoryDir, relPath)
+	}
+
+	var content string
+	if m.sysOperation != nil {
+		readResult, err := m.sysOperation.Fs().ReadFile(ctx, fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("读取文件失败: %w", err)
+		}
+		if readResult != nil {
+			if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+				return nil, fsErr
+			}
+			if readResult.Data != nil {
+				content = readResult.Data.Content
+			}
+		}
+	} else {
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("读取文件失败: %w", err)
+		}
+		content = string(data)
+	}
+
+	allLines := strings.Split(content, "\n")
+	totalLines := len(allLines)
+
+	var contentLines []string
+	if fromLine != nil {
+		start := max(0, *fromLine-1)
+		end := totalLines
+		if lines != nil {
+			end = min(totalLines, start+*lines)
+		}
+		// Python 切片 all_lines[start:end] 在 start 越过末尾时静默返回空列表；
+		// Go 的 slice 表达式会越界 panic（slice bounds out of range [98:3]），
+		// 必须显式把 start 钳到 end 以内才能等价。
+		if start > end {
+			start = end
+		}
+		contentLines = allLines[start:end]
+	} else {
+		contentLines = allLines
+	}
+
+	fromLineVal := 1
+	if fromLine != nil {
+		fromLineVal = *fromLine
+	}
+
+	return &ReadFileResult{
+		Path:       relPath,
+		Text:       strings.Join(contentLines, "\n"),
+		TotalLines: totalLines,
+		FromLine:   fromLineVal,
+		ToLine:     fromLineVal + len(contentLines) - 1,
+	}, nil
+}
+
+// Status 返回系统状态报告。对齐 Python MemoryIndexManager.status
+func (m *memoryIndexManager) Status() *StatusResult {
+	if m.db == nil {
+		return &StatusResult{Available: false}
+	}
+
+	var fileCount, chunkCount int
+	_ = m.db.QueryRow("SELECT COUNT(*) FROM files").Scan(&fileCount)
+	_ = m.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunkCount)
+
+	// 按来源统计
+	sourceCounts := make([]SourceCount, 0)
+	rows, err := m.db.Query("SELECT source, COUNT(*) as files FROM files GROUP BY source")
+	if err == nil {
+		for rows.Next() {
+			var source string
+			var files int
+			if rows.Scan(&source, &files) == nil {
+				sourceCounts = append(sourceCounts, SourceCount{Source: source, Files: files})
+			}
+		}
+		_ = rows.Close()
+	}
+
+	// 缓存条目数
+	var cacheEntries int
+	_ = m.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", embeddingCacheTable)).Scan(&cacheEntries)
+
+	ftsEnabled := m.settings.Store.Fts.Enabled
+	vecEnabled := m.settings.Store.Vector.Enabled
+	cacheEnabled := m.settings.Cache.Enabled
+
+	// provider/model 取实际实例（Python: self.provider.id / self.provider.model）。
+	// 曾取 settings 值：embed 缺 key 时 CreateEmbeddingProvider 会静默降级成 mock，
+	// 而 status 仍报 openai_compatible/text-embedding-v3，导致排查时误判"检索已配置"。
+	providerID, providerModel := "", ""
+	if m.provider != nil {
+		providerID = m.provider.ID()
+		providerModel = m.provider.Model()
+	}
+
+	return &StatusResult{
+		Available:    true,
+		Provider:     providerID,
+		Model:        providerModel,
+		Files:        fileCount,
+		Chunks:       chunkCount,
+		SourceCounts: sourceCounts,
+		Dirty:        m.dirty.Load(),
+		FTS: FTSStatus{
+			Enabled:   ftsEnabled,
+			Available: m.ftsAvailable,
+			Error:     m.ftsError,
+		},
+		Vector: VectorStatus{
+			Enabled:   vecEnabled,
+			Available: m.vectorAvailable,
+			Error:     m.vectorError,
+			Dims:      m.vectorDims,
+		},
+		Cache: CacheStatus{
+			Enabled: cacheEnabled,
+			Entries: cacheEntries,
+		},
+	}
+}
+
+// IsClosed 检查管理器是否已关闭
+func (m *memoryIndexManager) IsClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closed
+}
+
+// LLM 返回 LLM 实例。对齐 Python ctx.manager.llm
+func (m *memoryIndexManager) LLM() *llm.Model {
+	return m.llm
+}
+
+// Close 关闭管理器。对齐 Python MemoryIndexManager.close
+func (m *memoryIndexManager) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+
+	// 停止定时同步
+	if m.intervalCancel != nil {
+		m.intervalCancel()
+	}
+
+	// 停止文件监听
+	if m.watcher != nil {
+		_ = m.watcher.Close()
+	}
+
+	// 停止 session 防抖定时器。对齐 Python: if self._session_timer: self._session_timer.cancel()
+	if m.sessionTimer != nil {
+		m.sessionTimer.Stop()
+		m.sessionTimer = nil
+	}
+
+	// 关闭数据库
+	if m.db != nil {
+		_ = m.db.Close()
+	}
+
+	// 从缓存中移除
+	cacheKey := fmt.Sprintf("%s:%s:%s", m.agentID, m.nodeName, m.memoryDir)
+	indexCache.Delete(cacheKey)
+
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("memorymanager closed")
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getBaseDirForFile 获取文件相对路径计算的基础目录。对齐 Python _get_base_dir_for_file
+// USER.md 位于 workspace 根目录，其他文件使用 memoryDir
+func (m *memoryIndexManager) getBaseDirForFile(fp string) string {
+	if m.workspace != nil {
+		if userMDPath := m.workspace.GetNodePath("USER.md"); userMDPath != nil {
+			if filepath.Clean(fp) == filepath.Clean(*userMDPath) {
+				if m.workspace.RootPath != "" {
+					return m.workspace.RootPath
+				}
+			}
+		}
+	}
+	return m.memoryDir
+}
+
+// isRecentSessionFile 判断 session 文件是否为最近两天（今天/昨天）的记录。
+// Python: _is_recent_session_file
+func isRecentSessionFile(filename string) bool {
+	// 匹配 YYYY-MM-DD.md 格式
+	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})\.md$`)
+	matches := re.FindStringSubmatch(filename)
+	if len(matches) < 2 {
+		return false
+	}
+	fileDateStr := matches[1]
+	fileDate, err := time.Parse("2006-01-02", fileDateStr)
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterday := today.AddDate(0, 0, -1)
+	fileDay := time.Date(fileDate.Year(), fileDate.Month(), fileDate.Day(), 0, 0, 0, 0, fileDate.Location())
+	return fileDay.Equal(today) || fileDay.Equal(yesterday)
+}
+
+// getMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
+func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
+	if params.Workspace == nil {
+		return nil, fmt.Errorf("workspace 为 nil")
+	}
+	nodePath := params.Workspace.GetNodePath(params.NodeName)
+	memoryDir := ""
+	if nodePath != nil {
+		memoryDir = *nodePath
+	}
+	cacheKey := fmt.Sprintf("%s:%s:%s", params.AgentID, params.NodeName, memoryDir)
+
+	if cached, ok := indexCache.Load(cacheKey); ok {
+		mgr := cached.(*memoryIndexManager)
+		// M-15: Close() 持锁写 closed、Sync 持锁读，此处 sync.Map Load 后
+		// 无锁直接读 mgr.closed 构成 data race（450d0f98 修了两处 IsClosed
+		// 锁读，此处残留）。经 IsClosed() 锁读对齐。
+		if !mgr.IsClosed() {
+			return mgr, nil
+		}
+		_ = mgr.Close()
+	}
+
+	settings := params.Settings
+	if settings == nil {
+		settings = CreateMemorySettings(memoryDir, nil)
+	}
+
+	mgr := &memoryIndexManager{
+		agentID:             params.AgentID,
+		workspace:           params.Workspace,
+		nodeName:            params.NodeName,
+		memoryDir:           memoryDir,
+		settings:            settings,
+		watchDebounce:       2 * time.Second,
+		sessionsDirtyFiles:  make(map[string]struct{}),
+		sessionWarm:         make(map[string]struct{}),
+		sessionPendingFiles: make(map[string]struct{}),
+		sessionDeltas:       make(map[string]*SessionDeltaState),
+		embeddingConfig:     params.EmbeddingConfig,
+		sysOperation:        params.SysOperation,
+		llm:                 params.LLM,
+	}
+	// 新建实例需要首次全量同步（等价原 dirty: true）
+	mgr.dirty.Store(true)
+
+	// 用调用方 ctx 初始化：首次全量索引要读文件，沙箱根来自 ctx 的 CwdState
+	initCtx := params.Ctx
+	if initCtx == nil {
+		initCtx = context.Background()
+	}
+	if err := mgr.Initialize(initCtx); err != nil {
+		logger.Error(logComponent).Err(err).Msg("initializationmemorymanager failed")
+		return nil, err
+	}
+
+	indexCache.Store(cacheKey, mgr)
+	return mgr, nil
+}
+
+// clearMemoryManagerCache 清除缓存。对齐 Python clear_memory_manager_cache
+func clearMemoryManagerCache() {
+	indexCache.Range(func(key, value any) bool {
+		if mgr, ok := value.(*memoryIndexManager); ok {
+			_ = mgr.Close()
+		}
+		indexCache.Delete(key)
+		return true
+	})
+}
+
+// closeMemoryManagersFor 关闭指定 agent 在指定工作空间上的全部管理器。
+//
+// 匹配条件与缓存键一致：agent_id + workspace.root_path。逐个 Close 而不是只从缓存
+// 里删——只删不关会留下文件监听与定时器（Python 注释里点名过这个坑）。
+// 返回关闭个数，调用方据此打日志。
+// 对齐 Python aclose_memory_managers_for（manager.py:1727-1755）。
+func closeMemoryManagersFor(agentID string, ws *workspace.Workspace) int {
+	rootPath := ""
+	if ws != nil {
+		rootPath = ws.RootPath
+	}
+	closed := 0
+	indexCache.Range(func(key, value any) bool {
+		mgr, ok := value.(*memoryIndexManager)
+		if !ok {
+			return true
+		}
+		if mgr.agentID != agentID || mgr.memoryDir == "" {
+			return true
+		}
+		// 按工作空间根路径匹配：同一 agentID 在不同 workspace 上是不同实例
+		mgrRoot := ""
+		if mgr.workspace != nil {
+			mgrRoot = mgr.workspace.RootPath
+		}
+		if mgrRoot != rootPath {
+			return true
+		}
+		if err := mgr.Close(); err != nil {
+			logger.Warn(logComponent).
+				Str("agent_id", agentID).
+				Err(err).
+				Msg("failed to close memory manager for agent")
+			return true
+		}
+		closed++
+		return true
+	})
+	return closed
+}
+
+// resolveDBPath 解析数据库路径。对齐 Python _resolve_db_path
+func (m *memoryIndexManager) resolveDBPath() string {
+	storePath := "memory.db"
+	if m.settings.Store.Path != "" {
+		storePath = m.settings.Store.Path
+	}
+	if filepath.IsAbs(storePath) {
+		return storePath
+	}
+	// Python: 处理 workspace_name 前缀
+	workspaceName := filepath.Base(m.memoryDir)
+	if strings.HasPrefix(storePath, workspaceName+"/") || strings.HasPrefix(storePath, workspaceName+`\`) {
+		storePath = storePath[len(workspaceName)+1:]
+	}
+	return filepath.Join(m.memoryDir, storePath)
+}
+
+// ensureSchema 建数据库表。对齐 Python _ensure_schema
+func (m *memoryIndexManager) ensureSchema() error {
+	// meta 表
+	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"); err != nil {
+		return fmt.Errorf("建 meta 表失败: %w", err)
+	}
+	// files 表
+	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, source TEXT, hash TEXT, mtime INTEGER, size INTEGER)"); err != nil {
+		return fmt.Errorf("建 files 表失败: %w", err)
+	}
+	// chunks 表
+	if _, err := m.db.Exec(`CREATE TABLE IF NOT EXISTS chunks (
+		id TEXT PRIMARY KEY, path TEXT, source TEXT, start_line INTEGER, end_line INTEGER,
+		hash TEXT, model TEXT, text TEXT, embedding BLOB, updated_at INTEGER
+	)`); err != nil {
+		return fmt.Errorf("建 chunks 表失败: %w", err)
+	}
+	// embedding_cache 表
+	if _, err := m.db.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		provider TEXT, model TEXT, provider_key TEXT, hash TEXT PRIMARY KEY,
+		embedding BLOB, dims INTEGER, updated_at INTEGER
+	)`, embeddingCacheTable)); err != nil {
+		return fmt.Errorf("建 embedding_cache 表失败: %w", err)
+	}
+	// FTS5 虚拟表
+	ftsEnabled := m.settings.Store.Fts.Enabled
+	if ftsEnabled {
+		// 旧表（默认 unicode61）不切分 CJK，中文查询永远匹配不到，必须先 DROP 重建为
+		// trigram。DROP 后本表为空，files/chunks 行还在 → 增量 sync 会因 hash 未变而
+		// 跳过，故置 ftsMigrated 让 initialize 走 force 全量重写。
+		// 对齐 Python _ensure_schema 的 legacy 迁移（manager.py:579-606）。
+		if m.ftsTableIsLegacy() {
+			logger.Info(logComponent).
+				Msg("migrating chunks_fts from unicode61 to trigram tokenizer")
+			if _, err := m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", ftsTable)); err != nil {
+				logger.Debug(logComponent).Err(err).Msg("skipping legacy chunks_fts drop")
+			}
+			m.ftsMigrated = true
+		}
+
+		_, err := m.db.Exec(fmt.Sprintf(
+			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1, tokenize='trigram')",
+			ftsTable,
+		))
+		if err != nil {
+			m.ftsAvailable = false
+			m.ftsError = err.Error()
+			logger.Warn(logComponent).Err(err).Msg("failed to create FTS5 table")
+		} else {
+			m.ftsAvailable = true
+		}
+	}
+	return nil
+}
+
+// ftsTableIsLegacy 判断 chunks_fts 是否以旧 tokenizer（非 trigram）建成。
+//
+// 存在且 DDL 里没有 tokenize=trigram 即为旧表，须 DROP 重建；表不存在不算旧表
+// （首次建库走正常 CREATE）。对齐 Python _fts_table_is_legacy（manager.py:609）。
+func (m *memoryIndexManager) ftsTableIsLegacy() bool {
+	if m.db == nil {
+		return false
+	}
+	var ddl sql.NullString
+	// 注意：必须是内联字面量而非 `?` 参数——SQLite 对 sqlite_master 的 name 列可参数化，
+	// 但 mattn/go-sqlite3 在部分版本下该查询走 schema 缓存路径，参数化会拿到空行。
+	err := m.db.QueryRow(fmt.Sprintf(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name = '%s'", ftsTable,
+	)).Scan(&ddl)
+	if err != nil {
+		// 表不存在（sql.ErrNoRows）或查询失败：都不算旧表
+		return false
+	}
+	if !ddl.Valid || ddl.String == "" {
+		return false
+	}
+	// sqlite_master 保存的是原始 DDL，tokenizer 可能写成 tokenize='trigram'
+	// （带引号）或 tokenize=trigram，两种形态都要认出，故先去掉单双引号再比较。
+	normalized := strings.NewReplacer("'", "", `"`, "", " ", "").Replace(strings.ToLower(ddl.String))
+	return !strings.Contains(normalized, "tokenize=trigram")
+}
+
+// needsFtsMigrationReindex 判断是否因刚迁移 chunks_fts 而需要 force 全量重建。
+//
+// 两个条件同时满足才是真：本次初始化刚 DROP 过旧表（ftsMigrated），且 meta 里还没有
+// ftsTrigram 记录。后者让结论跨进程收敛——某进程 force 重建并写入 ftsTrigram 后，
+// 后续进程就不会重复重建。
+// 对齐 Python _needs_fts_migration_reindex（manager.py:409）。
+func (m *memoryIndexManager) needsFtsMigrationReindex() bool {
+	if !m.ftsMigrated {
+		return false
+	}
+	meta, err := m.readMeta()
+	if err != nil {
+		// 无 meta（全新库）→ chunks_fts 本来就空，正常 sync 会填满，无需 force
+		return false
+	}
+	if v, ok := meta["ftsTrigram"].(bool); ok && v {
+		return false
+	}
+	return true
+}
+
+// initializeProvider 初始化嵌入提供者。对齐 Python _initialize_provider
+func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
+	provider, err := CreateEmbeddingProvider(
+		m.settings.Provider,
+		m.settings.Model,
+		m.settings.Fallback,
+		m.embeddingConfig,
+	)
+	if err != nil {
+		return err
+	}
+	// provider 为 nil 表示未配置 embedding：记忆系统照常工作，但只用 FTS5 关键词检索。
+	// 这是正常降级，不是错误——绝不能塞一个 mock provider，那样向量侧会用伪随机值
+	// 污染检索结果并写进持久化的 chunks.embedding / embedding_cache。
+	// 对齐 Python _initialize_provider 的 provider=None 分支（manager.py:651-659）。
+	if provider == nil {
+		m.provider = nil
+		m.providerKey = noEmbeddingProviderKey
+		logger.Info(logComponent).
+			Str("event_type", "memory_init").
+			Msg("embedding provider not configured (no api_key); memory will use FTS5 keyword search only")
+		return nil
+	}
+	m.provider = provider
+	// providerKey 用配置指纹：含归一化 base_url 与 api_key 哈希，换端点/密钥都能检测到。
+	// 早先只拼 id:model，换端点或只换密钥时判定不出"配置变了"。
+	// 对齐 Python: self.provider_key = self.provider.config_fingerprint（manager.py:669）。
+	m.providerKey = provider.ConfigFingerprint()
+	// 打实际实例值：settings 里永远是配置值，mock 降级时会把排查者误导成"已配置"
+	logger.Info(logComponent).
+		Str("provider", provider.ID()).
+		Str("model", provider.Model()).
+		Msg("embedding provider initialized")
+	return nil
+}
+
+// loadVectorExtension 加载 vec0.so 扩展。对齐 Python _load_vector_extension
+func (m *memoryIndexManager) loadVectorExtension() error {
+	vecEnabled := m.settings.Store.Vector.Enabled
+	if !vecEnabled || m.db == nil {
+		return nil
+	}
+
+	vecPath := ResolveVec0Path()
+	if _, err := os.Stat(vecPath); err != nil {
+		return fmt.Errorf("vec0.so 不存在: %s", vecPath)
+	}
+
+	conn, err := m.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("获取连接失败: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	err = conn.Raw(func(driverConn any) error {
+		dc, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			return fmt.Errorf("不支持 LoadExtension 的驱动类型")
+		}
+		return LoadVec0Extension(dc, vecPath)
+	})
+	if err != nil {
+		return fmt.Errorf("加载 vec0 扩展失败: %w", err)
+	}
+
+	m.vectorAvailable = true
+	logger.Info(logComponent).Str("vec_path", vecPath).Msg("vec0 extension loaded")
+	return nil
+}
+
+// readMeta 读取索引元数据。缺失或解析失败时返回 error（调用方视为需要重建）。
+func (m *memoryIndexManager) readMeta() (map[string]any, error) {
+	var value string
+	if err := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey).Scan(&value); err != nil {
+		return nil, err
+	}
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(value), &meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+// needsReindex 统一重建判定 —— A（provider）/ B（向量维度）两处共用这一入口，
+// 避免两份 if 各自漂移。
+// 对齐 Python _should_full_reindex（manager.py:906）：比对 provider / model / providerKey / chunkTokens。
+// ⚠️ 差异：Python 比对的是 self.provider.id（**实例值**），这里保持一致；历史 Go 实现比对
+// settings 里的配置值，导致「embed 缺 key 静默降级为 mock」后，补好 key 也永不重建。
+// Go 扩展一项：vectorDims（维度变化初筛）。
+// 原因取值：meta_missing / provider_unavailable / provider_changed / model_changed
+// / provider_key_changed / chunking_changed / vector_dims_changed
+//
+// 注：分词器（gse）版本判定已随 E-04 删除——索引侧改为写原文后，分词器不再影响索引内容，
+// 该判据失去意义。
+func (m *memoryIndexManager) needsReindex() (bool, string) {
+	meta, err := m.readMeta()
+	if err != nil {
+		return true, "meta_missing"
+	}
+	if m.provider == nil {
+		logger.Error(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", "provider_unavailable").
+			Msg("embedding provider unavailable, reindexing text only")
+		return true, "provider_unavailable"
+	}
+	// Python: if meta.get("provider") != self.provider.id: return True
+	if meta["provider"] != m.provider.ID() {
+		return true, "provider_changed"
+	}
+	// Python: if meta.get("model") != self.provider.model: return True
+	if meta["model"] != m.provider.Model() {
+		return true, "model_changed"
+	}
+	// providerKey 含归一化 base_url 与 api_key 哈希：换端点/换密钥都会翻转。
+	// 早于该字段存在的老 meta（或旧的 id:model 形态）必定不匹配 → 重建一次后写入新 meta，
+	// 这是天然的向后兼容迁移路径。
+	// 对齐 Python _should_full_reindex 的 providerKey 比对（manager.py:942）。
+	if meta["providerKey"] != m.providerKey {
+		return true, "provider_key_changed"
+	}
+	// Python: if meta.get("chunkTokens") != settings.chunking.get("tokens"): return True
+	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
+		return true, "chunking_changed"
+	}
+	// Go 扩展：向量维度变化初筛（B）。真实维度由 ensureVectorTable 解析 sqlite_master 兜底。
+	if dims, ok := metaInt(meta, "vectorDims"); ok && dims != m.provider.Dims() {
+		return true, "vector_dims_changed"
+	}
+	return false, ""
+}
+
+// metaInt 从 meta 取整数值（JSON 反序列化后数字是 float64）。
+func metaInt(meta map[string]any, key string) (int, bool) {
+	v, ok := meta[key].(float64)
+	if !ok {
+		return 0, false
+	}
+	return int(v), true
+}
+
+// runReindex 全量重建。对齐 Python _run_reindex
+//
+// reason 只用于日志（provider_changed / vector_dims_changed / segmenter_changed …），
+// 便于用户一眼看出"为什么这次要重建"。
+//
+// 必须 force 同步：否则 hash 未变的文件会被 skip，重建后索引仍然是空的
+// （配置切换模型/dims 时正是这种情形——文件没动，但旧向量已失效）。
+// 对齐 Python _run_reindex 里 sync(force=True)（manager.py:963-967）。
+func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) error {
+	logger.Info(logComponent).
+		Str("event_type", "memory_reindex_triggered").
+		Str("reason", reason).
+		Msg("running full reindex")
+	if containsSource(m.settings.Sources, "memory") {
+		if err := m.syncMemoryFiles(ctx, true); err != nil {
+			return err
+		}
+		m.dirty.Store(false)
+	}
+	if containsSource(m.settings.Sources, "sessions") {
+		if err := m.syncSessionFiles(ctx, true); err != nil {
+			return err
+		}
+	}
+	// provider/model 记实例值（Python: self.provider.id / self.provider.model）。
+	// 记配置值会让「mock 降级 → 配置未变」永远判定不出需要重建。
+	providerID, providerModel := "", ""
+	if m.provider != nil {
+		providerID = m.provider.ID()
+		providerModel = m.provider.Model()
+	}
+	meta := map[string]any{
+		"provider":     providerID,
+		"model":        providerModel,
+		"providerKey":  m.providerKey,
+		"chunkTokens":  m.settings.Chunking.Tokens,
+		"chunkOverlap": m.settings.Chunking.Overlap,
+		// ftsTrigram 标记 chunks_fts 已迁到 trigram，initialize 据此跳过迁移重建
+		"ftsTrigram": m.ftsAvailable,
+	}
+	if m.vectorAvailable && m.vectorDims != nil {
+		meta["vectorDims"] = *m.vectorDims
+	}
+	return m.writeMeta(meta)
+}
+
+// syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
+//
+// force 为 true 时跳过 hash 比对、无条件重建每个文件的索引。这是"向量配置切换后
+// 重建"的正确语义——文件内容没变，但旧向量已失效，必须重新嵌入。
+func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context, force bool) error {
+	// Python: files = list_memory_files(self.workspace, node_name=self.node_name)
+	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
+
+	logger.Debug(logComponent).Int("file_count", len(files)).Bool("force", force).Msg("syncing memory files")
+
+	activePaths := make(map[string]bool)
+	for _, fp := range files {
+		// Python: _get_base_dir_for_file — USER.md 用 workspace root
+		baseDir := m.getBaseDirForFile(fp)
+		entry, err := m.buildFileEntry(fp, baseDir)
+		if err != nil {
+			continue
+		}
+		activePaths[entry.Path] = true
+
+		if !force {
+			var hash string
+			row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
+			if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+				continue
+			}
+		}
+		if err := m.indexFile(ctx, entry, "memory"); err != nil {
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("indexfile failed")
+		}
+	}
+
+	// 删除不存在的文件（先收集再删除：rows 持有唯一连接，直接删会自锁）
+	stalePaths, err := m.collectStalePaths("memory", activePaths)
+	if err != nil {
+		return err
+	}
+	for _, path := range stalePaths {
+		m.removeFileFromIndex(context.Background(), path)
+	}
+	return nil
+}
+
+// syncSessionFiles 同步 session 文件。对齐 Python _sync_session_files
+//
+// force 语义同 syncMemoryFiles。
+func (m *memoryIndexManager) syncSessionFiles(ctx context.Context, force bool) error {
+	sessionsDir := filepath.Join(m.memoryDir, "sessions")
+	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	var sessionFiles []string
+	_ = filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return nil
+		}
+		// Python: _is_recent_session_file — 只索引今天/昨天的 session
+		if !isRecentSessionFile(filepath.Base(path)) {
+			return nil
+		}
+		sessionFiles = append(sessionFiles, path)
+		return nil
+	})
+
+	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Bool("force", force).Msg("syncing session files")
+
+	activePaths := make(map[string]bool)
+	for _, sessionFile := range sessionFiles {
+		entry, err := m.buildFileEntry(sessionFile, m.memoryDir)
+		if err != nil {
+			continue
+		}
+		activePaths[entry.Path] = true
+
+		if !force {
+			var hash string
+			row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
+			if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+				continue
+			}
+		}
+		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("index session file failed")
+		}
+	}
+
+	// 删除不存在的文件（先收集再删除：rows 持有唯一连接，直接删会自锁）
+	stalePaths, err := m.collectStalePaths("sessions", activePaths)
+	if err != nil {
+		return err
+	}
+	for _, path := range stalePaths {
+		m.removeFileFromIndex(context.Background(), path)
+	}
+	return nil
+}
+
+// collectStalePaths 收集索引中已不存在的文件路径。
+// 必须先把 rows 读完并关闭再调用方执行删除：SQLite 连接池上限为 1，
+// rows 未关闭时连接被占用，另行开启事务会永久阻塞。
+func (m *memoryIndexManager) collectStalePaths(source string, activePaths map[string]bool) ([]string, error) {
+	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", source)
+	if err != nil {
+		return nil, err
+	}
+	var stale []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			continue
+		}
+		if !activePaths[path] {
+			stale = append(stale, path)
+		}
+	}
+	_ = rows.Close()
+	return stale, nil
+}
+
+// indexFile 索引单个文件。对齐 Python _index_file
+func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, source string) error {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	absPath := entry.AbsPath
+	var content string
+	if m.sysOperation != nil {
+		// Python: 使用 sys_operation 读取文件。失败以 BaseResult.Code 表达、err 恒 nil；
+		// 若只判 err，沙箱拒绝会得到空 content → ChunkMarkdown("") → 删旧 chunk + 写入
+		// 空 chunk + 更新 hash，等价永久清空该文件索引且下轮因 hash 相同不再重试。
+		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: %w", err)
+		}
+		if readResult == nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: 结果为空: %s", absPath)
+		}
+		if fsErr := fsResultError(readResult.BaseResult, "索引记忆文件", absPath); fsErr != nil {
+			_ = tx.Rollback()
+			logger.Error(logComponent).Err(fsErr).Str("path", entry.Path).Msg("index file read failed")
+			return fsErr
+		}
+		if readResult.Data == nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: 结果无数据: %s", absPath)
+		}
+		content = readResult.Data.Content
+	} else {
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: %w", err)
+		}
+		content = string(data)
+	}
+
+	chunkTokens := int(m.settings.Chunking.Tokens)
+	chunkOverlap := int(m.settings.Chunking.Overlap)
+	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
+
+	// 清除旧索引
+	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
+	if m.ftsAvailable {
+		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
+	}
+
+	for _, chunk := range chunks {
+		if err := m.indexChunkWithTx(ctx, tx, entry.Path, source, chunk); err != nil {
+			logger.Warn(logComponent).Err(err).Str("path", entry.Path).Msg("index chunk failed")
+		}
+	}
+
+	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
+		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// indexChunk 索引单个 chunk。对齐 Python _index_chunk
+func (m *memoryIndexManager) indexChunk(ctx context.Context, filePath, source string, chunk MemoryChunk) error {
+	return m.indexChunkWithTx(ctx, m.db, filePath, source, chunk)
+}
+
+// indexChunkWithTx 使用指定 DB/TX 索引单个 chunk
+func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor, filePath, source string, chunk MemoryChunk) error {
+	chunkID := fmt.Sprintf("%s:%d:%d", filePath, chunk.StartLine, chunk.EndLine)
+	chunkHash := HashText(chunk.Text)
+
+	var embBlob []byte
+	emb, err := m.getEmbeddingWithTx(ctx, db, chunk.Text)
+	if err == nil && emb != nil {
+		embBlob = vectorToBlob(emb)
+	}
+
+	// model 列记提供者模型名。未配置 embedding 时记 NULL——表示这些 chunk 没有向量，
+	// 不是"用某个模型算过"。对齐 Python model_name = self.provider.model if self.provider else None。
+	var modelName any
+	if m.provider != nil {
+		modelName = m.provider.Model()
+	}
+
+	// Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
+	var rowid int64
+	err = db.QueryRow(
+		"INSERT OR REPLACE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid",
+		chunkID, filePath, source, chunk.StartLine, chunk.EndLine, chunkHash, modelName, chunk.Text, embBlob, time.Now().Unix(),
+	).Scan(&rowid)
+	if err != nil {
+		return err
+	}
+
+	// FTS5 全文搜索索引写入。
+	//
+	// 写入原文：chunks_fts 用 trigram 分词器自行切分，不需要我们预先把词切好。
+	// 这与上游一致（manager.py:1075 直接把 entry 内容写进 FTS 表），也让"2 字中文词
+	// 匹配不到"的问题改由查询侧 LIKE 兜底处理，而不是靠索引侧预分词绕过。
+	if m.ftsAvailable && rowid > 0 {
+		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
+			rowid, chunkID, filePath, source, chunk.Text)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Msg("failed to insert FTS5")
+		}
+	}
+
+	// vec0 向量索引写入
+	if m.vectorAvailable && emb != nil && rowid > 0 {
+		if m.ensureVectorTable(len(emb)) {
+			_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, embedding) VALUES (?, vec_f32(?))", vectorTable),
+				rowid, embBlob)
+			if err != nil {
+				logger.Debug(logComponent).Err(err).Msg("failed to insert vec0")
+			}
+		}
+	}
+
+	return nil
+}
+
+// removeFileFromIndex 删除文件索引。对齐 Python _remove_file_from_index
+func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath string) {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex failed to begin transaction")
+		return
+	}
+
+	if m.vectorAvailable {
+		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
+		if err == nil {
+			for rows.Next() {
+				var rowid int64
+				if rows.Scan(&rowid) == nil {
+					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", vectorTable), rowid)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
+	if m.ftsAvailable {
+		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
+		if err == nil {
+			for rows.Next() {
+				var rowid int64
+				if rows.Scan(&rowid) == nil {
+					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", ftsTable), rowid)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
+	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", filePath)
+	_, _ = tx.Exec("DELETE FROM files WHERE path = ?", filePath)
+
+	if err := tx.Commit(); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex failed to commit transaction")
+	}
+}
+
+// buildFileEntry 构建文件索引条目。对齐 Python build_file_entry
+func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (*FileEntry, error) {
+	stat, err := os.Stat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+	relPath, err := filepath.Rel(baseDir, absPath)
+	if err != nil {
+		relPath = absPath
+	}
+	return &FileEntry{
+		Path:    relPath,
+		AbsPath: absPath,
+		Hash:    HashText(string(content)),
+		MtimeMs: stat.ModTime().UnixMilli(),
+		Size:    stat.Size(),
+	}, nil
+}
+
+// getEmbedding 获取 embedding（带缓存）。对齐 Python _get_embedding
+func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]float64, error) {
+	return m.getEmbeddingWithTx(ctx, m.db, text)
+}
+
+// getEmbeddingWithTx 在指定 dbExecutor 上取 embedding（事务内复用同一连接）。
+func (m *memoryIndexManager) getEmbeddingWithTx(ctx context.Context, db dbExecutor, text string) ([]float64, error) {
+	if m.provider == nil {
+		return nil, nil
+	}
+	usesOwnTx := true
+	var tx *sql.Tx
+	if t, ok := db.(*sql.Tx); ok {
+		tx = t
+		usesOwnTx = false
+	}
+	if usesOwnTx {
+		var err error
+		tx, err = m.db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	textHash := HashText(text)
+
+	// 查缓存
+	cacheEnabled := m.settings.Cache.Enabled
+	if cacheEnabled {
+		row := tx.QueryRow(
+			fmt.Sprintf("SELECT embedding FROM %s WHERE provider = ? AND model = ? AND provider_key = ? AND hash = ?", embeddingCacheTable),
+			m.provider.ID(), m.provider.Model(), m.providerKey, textHash,
+		)
+		var blob []byte
+		if err := row.Scan(&blob); err == nil && blob != nil {
+			if usesOwnTx {
+				_ = tx.Rollback()
+			}
+			return blobToVector(blob), nil
+		}
+	}
+
+	emb, err := m.provider.EmbedQuery(ctx, text)
+	if err != nil {
+		if usesOwnTx {
+			_ = tx.Rollback()
+		}
+		return nil, err
+	}
+
+	// 写缓存
+	if cacheEnabled && emb != nil {
+		_, _ = tx.Exec(
+			fmt.Sprintf("INSERT OR REPLACE INTO %s (provider, model, provider_key, hash, embedding, dims, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", embeddingCacheTable),
+			m.provider.ID(), m.provider.Model(), m.providerKey, textHash, vectorToBlob(emb), len(emb), time.Now().Unix(),
+		)
+	}
+
+	if usesOwnTx {
+		if err := tx.Commit(); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("getEmbedding failed to commit transaction")
+		}
+	}
+	return emb, nil
+}
+
+// ensureVectorTable 确保 vec0 虚拟表存在。对齐 Python _ensure_vector_table
+func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
+	if !m.vectorAvailable {
+		return false
+	}
+	if m.vectorDims != nil && *m.vectorDims == dims {
+		return true
+	}
+
+	// 已存在表的**真实维度**只能从建表语句解析（vec0 没有维度系统表）。
+	// 旧实现只比进程内的 m.vectorDims：新进程该字段为 nil，
+	// CREATE VIRTUAL TABLE IF NOT EXISTS 对旧维度表是空操作 → 新维度向量写不进去。
+	var existingSQL string
+	_ = m.db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", vectorTable,
+	).Scan(&existingSQL)
+
+	oldDims, _ := parseVecTableDims(existingSQL)
+	if needVecTableRebuild(existingSQL, dims) {
+		if existingSQL != "" {
+			_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
+			logger.Warn(logComponent).
+				Str("event_type", "memory_vector_table_recreated").
+				Int("old_dims", oldDims).
+				Int("new_dims", dims).
+				Msg("vector table dims mismatch, recreating")
+		}
+		if _, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims)); err != nil {
+			m.vectorAvailable = false
+			m.vectorError = err.Error()
+			return false
+		}
+		logger.Info(logComponent).Int("dims", dims).Msg("vec0 virtual table created")
+	}
+
+	m.vectorDims = &dims
+	return true
+}
+
+// searchVector vec0 向量搜索。对齐 Python _search_vector
+func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
+	if !m.vectorAvailable {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+	if m.vectorDims == nil {
+		sample, err := m.provider.EmbedQuery(ctx, "sample")
+		if err != nil {
+			return nil, err
+		}
+		m.ensureVectorTable(len(sample))
+	} else {
+		// Python: 即使已有值也重新确认 vec0 表存在
+		m.ensureVectorTable(*m.vectorDims)
+	}
+	if !m.vectorAvailable {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+
+	queryBlob := vectorToBlob(queryVec)
+	sourceFilter, sourceParams := m.buildSourceFilter()
+
+	// 获取 chunk 映射
+	chunkMap := make(map[int64]ChunkData)
+	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var rowid int64
+		var id, path, source, text string
+		var startLine, endLine int
+		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
+			continue
+		}
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+		}
+	}
+	_ = rows.Close()
+
+	if len(chunkMap) == 0 {
+		return nil, nil
+	}
+
+	// vec0 搜索
+	placeholders := make([]string, len(chunkMap))
+	args := make([]any, 0, len(chunkMap)+2)
+	args = append(args, queryBlob)
+	i := 0
+	for rowid := range chunkMap {
+		placeholders[i] = "?"
+		args = append(args, rowid)
+		i++
+	}
+	query := fmt.Sprintf("SELECT rowid, vec_distance_cosine(embedding, vec_f32(?)) as distance FROM %s WHERE rowid IN (%s) ORDER BY distance LIMIT ?",
+		vectorTable, strings.Join(placeholders, ","))
+	args = append(args, limit)
+
+	vecRows, err := m.db.Query(query, args...)
+	if err != nil {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+	defer func() { _ = vecRows.Close() }()
+
+	var results []SearchResult
+	for vecRows.Next() {
+		var rowid int64
+		var distance float64
+		if err := vecRows.Scan(&rowid, &distance); err != nil {
+			continue
+		}
+		if chunk, ok := chunkMap[rowid]; ok {
+			score := math.Max(0, 1-distance/2)
+			results = append(results, SearchResult{
+				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+				Snippet: chunk.Snippet, Score: score,
+			})
+		}
+	}
+	return results, nil
+}
+
+// searchVectorFallback 内存余弦相似度 fallback。对齐 Python _search_vector_fallback
+func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
+	sourceFilter, sourceParams := m.buildSourceFilter()
+	rows, err := m.db.Query(fmt.Sprintf("SELECT id, path, source, start_line, end_line, text, embedding FROM chunks WHERE %s AND embedding IS NOT NULL", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var results []SearchResult
+	for rows.Next() {
+		var id, path, source, text string
+		var startLine, endLine int
+		var embBlob []byte
+		if err := rows.Scan(&id, &path, &source, &startLine, &endLine, &text, &embBlob); err != nil {
+			continue
+		}
+		vec := blobToVector(embBlob)
+		if len(vec) != len(queryVec) {
+			continue
+		}
+		similarity := CosineSimilarity(queryVec, vec)
+		results = append(results, SearchResult{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+			Score:   similarity,
+		})
+	}
+	// 按分数排序
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
+// searchKeyword 关键词检索：长 token 走 trigram FTS，短 token 走 LIKE 兜底。
+//
+// 长 token（≥3 字符）命中 BM25 排名索引；短 token（<3，典型是两个汉字）无法与
+// trigram 匹配，退回 `text LIKE '%tok%'` 扫 chunks.text。两路结果按 chunk id 合并，
+// 冲突时 FTS 分数优先，LIKE 命中给固定分。
+//
+// 对齐 Python _search_keyword（manager.py:1425-1520）。
+func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	longTokens, shortTokens := SplitQueryTokens(query)
+	if len(longTokens) == 0 && len(shortTokens) == 0 {
+		return nil, nil
+	}
+
+	sourceFilter, sourceParams := m.buildSourceFilter()
+	// 获取 chunk 映射
+	chunkMap := make(map[int64]ChunkData)
+	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var rowid int64
+		var id, path, source, text string
+		var startLine, endLine int
+		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
+			continue
+		}
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+		}
+	}
+	_ = rows.Close()
+
+	if len(chunkMap) == 0 {
+		return nil, nil
+	}
+
+	var results []SearchResult
+	seenIDs := make(map[string]struct{})
+
+	// 长 token 走 FTS。限定 rowid 仍存在于 chunks：chunks_fts 是 contentless，历次重建
+	// 可能残留孤儿 rowid，不限定的话高分孤儿会先填满 LIMIT，把真实命中挤出去。
+	if ftsQuery := BuildFTSQuery(query); ftsQuery != "" && m.ftsAvailable {
+		rowidPlaceholders := make([]string, 0, len(chunkMap))
+		rowidArgs := make([]any, 0, len(chunkMap)+2)
+		rowidArgs = append(rowidArgs, ftsQuery)
+		for rowid := range chunkMap {
+			rowidPlaceholders = append(rowidPlaceholders, "?")
+			rowidArgs = append(rowidArgs, rowid)
+		}
+		rowidArgs = append(rowidArgs, limit)
+
+		ftsRows, ftsErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid, rank FROM %s WHERE %s MATCH ? AND rowid IN (%s) ORDER BY rank LIMIT ?",
+			ftsTable, ftsTable, strings.Join(rowidPlaceholders, ","),
+		), rowidArgs...)
+		if ftsErr != nil {
+			logger.Debug(logComponent).Err(ftsErr).Msg("FTS5 query failed")
+		} else {
+			for ftsRows.Next() {
+				var rowid int64
+				var rank float64
+				if scanErr := ftsRows.Scan(&rowid, &rank); scanErr != nil {
+					continue
+				}
+				chunk, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[chunk.ID]; dup {
+					continue
+				}
+				seenIDs[chunk.ID] = struct{}{}
+				results = append(results, SearchResult{
+					ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+					StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+					Snippet: chunk.Snippet, Score: BM25RankToScore(rank),
+				})
+			}
+			_ = ftsRows.Close()
+		}
+	}
+
+	// 短 token 走 LIKE 兜底：trigram 匹配不了 <3 字符，只能扫 chunks.text。
+	// 无索引，但记忆分块量小，全表扫可接受。固定分要高于 minScore(0.3) 又低于
+	// FTS 命中，保证"能搜到"且排在 BM25 结果之后。
+	if len(shortTokens) > 0 {
+		likeClauses := make([]string, 0, len(shortTokens))
+		likeArgs := make([]any, 0, len(sourceParams)+len(shortTokens)+1)
+		likeArgs = append(likeArgs, sourceParams...)
+		for _, tok := range shortTokens {
+			likeClauses = append(likeClauses, `text LIKE ? ESCAPE '\'`)
+			likeArgs = append(likeArgs, EscapeLikePattern(tok))
+		}
+		likeArgs = append(likeArgs, limit)
+
+		likeRows, likeErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid FROM chunks WHERE %s AND (%s) LIMIT ?",
+			sourceFilter, strings.Join(likeClauses, " OR "),
+		), likeArgs...)
+		if likeErr != nil {
+			logger.Debug(logComponent).Err(likeErr).Msg("keyword LIKE fallback failed")
+		} else {
+			for likeRows.Next() {
+				var rowid int64
+				if scanErr := likeRows.Scan(&rowid); scanErr != nil {
+					continue
+				}
+				chunk, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[chunk.ID]; dup {
+					continue
+				}
+				seenIDs[chunk.ID] = struct{}{}
+				results = append(results, SearchResult{
+					ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+					StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+					Snippet: chunk.Snippet, Score: likeFallbackScore,
+				})
+			}
+			_ = likeRows.Close()
+		}
+	}
+
+	return results, nil
+}
+
+// buildSourceFilter 构建 SQL source 过滤条件。对齐 Python _build_source_filter
+func (m *memoryIndexManager) buildSourceFilter() (string, []any) {
+	sources := m.settings.Sources
+	if len(sources) == 0 {
+		return "1=0", nil
+	}
+	if len(sources) == 1 {
+		return "source = ?", []any{sources[0]}
+	}
+	placeholders := make([]string, len(sources))
+	args := make([]any, len(sources))
+	for i, s := range sources {
+		placeholders[i] = "?"
+		args[i] = s
+	}
+	return fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ",")), args
+}
+
+// mergeHybridResults 混合搜索结果合并。对齐 Python _merge_hybrid_results
+func mergeHybridResults(vectorResults, keywordResults []SearchResult, vectorWeight, textWeight float64) []SearchResult {
+	// 用 id 做合并键
+	type mergeEntry struct {
+		result      SearchResult
+		vectorScore float64
+		textScore   float64
+	}
+	byID := make(map[string]*mergeEntry)
+
+	for _, r := range vectorResults {
+		e := &mergeEntry{result: r, vectorScore: r.Score, textScore: 0.0}
+		byID[r.ID] = e
+	}
+
+	for _, r := range keywordResults {
+		if existing, exists := byID[r.ID]; exists {
+			existing.textScore = r.Score
+		} else {
+			e := &mergeEntry{result: r, vectorScore: 0.0, textScore: r.Score}
+			byID[r.ID] = e
+		}
+	}
+
+	results := make([]SearchResult, 0, len(byID))
+	for _, e := range byID {
+		e.result.Score = vectorWeight*e.vectorScore + textWeight*e.textScore
+		results = append(results, e.result)
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+	return results
+}
+
+// setupFileWatcher 设置文件监听。对齐 Python _setup_file_watcher
+func (m *memoryIndexManager) setupFileWatcher() {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("failed to create file watcher")
+		return
+	}
+	m.watcher = watcher
+
+	// 监听路径
+	watchPaths := make(map[string]bool)
+	if m.memoryDir != "" {
+		if _, err := os.Stat(m.memoryDir); err == nil {
+			watchPaths[m.memoryDir] = true
+		}
+	}
+
+	// Python: 监听 daily_memory 子目录
+	if m.memoryDir != "" {
+		dailyDir := filepath.Join(m.memoryDir, "daily_memory")
+		if _, err := os.Stat(dailyDir); err == nil {
+			watchPaths[dailyDir] = true
+		}
+	}
+	// Python: 监听 workspace root（用于 USER.md）
+	if m.workspace != nil {
+		if m.workspace.RootPath != "" {
+			if _, err := os.Stat(m.workspace.RootPath); err == nil {
+				watchPaths[m.workspace.RootPath] = true
+			}
+		}
+	}
+
+	// 添加额外路径
+	for _, ep := range m.settings.ExtraPaths {
+		fullPath := filepath.Join(m.memoryDir, ep)
+		if _, err := os.Stat(fullPath); err == nil {
+			watchPaths[fullPath] = true
+		}
+	}
+
+	for p := range watchPaths {
+		if err := watcher.Add(p); err != nil {
+			logger.Warn(logComponent).Err(err).Str("path", p).Msg("failed to add watch path")
+		}
+	}
+
+	// 启动监听 goroutine
+	go m.watchLoop()
+
+	// 延迟 1 秒后标记为已初始化，避免初始扫描触发
+	// （watchLoop 并发读 watcherInit——atomic 写，race 修复）
+	time.AfterFunc(1*time.Second, func() {
+		m.watcherInit.Store(true)
+		logger.Debug(logComponent).Int("watch_paths", len(watchPaths)).Msg("file watcher initialized")
+	})
+}
+
+// watchLoop 监听循环
+func (m *memoryIndexManager) watchLoop() {
+	for {
+		select {
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				return
+			}
+			if !m.watcherInit.Load() {
+				continue
+			}
+			if IsMemoryPath(event.Name) {
+				m.scheduleWatchSync()
+			}
+		case _, ok := <-m.watcher.Errors:
+			if !ok {
+				return
+			}
+		}
+	}
+}
+
+// scheduleWatchSync 防抖同步。对齐 Python schedule_watch_sync
+func (m *memoryIndexManager) scheduleWatchSync() {
+	m.dirty.Store(true)
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+
+	debounceMs := m.settings.Sync.WatchDebounceMs
+
+	if m.watchTimer != nil {
+		m.watchTimer.Stop()
+	}
+	m.watchTimer = time.AfterFunc(time.Duration(debounceMs)*time.Millisecond, func() {
+		// race 修复：closed 在锁保护下读写（Close 持 mu 写），此处经 IsClosed 锁读
+		if m.IsClosed() {
+			return
+		}
+		if err := m.Sync(m.backgroundContext(), "watch", false); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("file watcher sync failed")
+		}
+	})
+}
+
+// ensureIntervalSync 设置定时同步。对齐 Python _ensure_interval_sync
+func (m *memoryIndexManager) ensureIntervalSync() {
+	minutes := m.settings.Sync.IntervalMinutes
+	if minutes <= 0 {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.intervalCancel = cancel
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(minutes) * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// race 修复：closed 在锁保护下读写（Close 持 mu 写），此处经 IsClosed 锁读
+				if m.IsClosed() {
+					return
+				}
+				if err := m.Sync(m.backgroundContext(), "interval", false); err != nil {
+					logger.Warn(logComponent).Err(err).Msg("periodic sync failed")
+				}
+			}
+		}
+	}()
+
+	logger.Info(logComponent).Int("interval_minutes", minutes).Msg("periodic sync enabled")
+}
+
+// writeMeta 写入元数据。对齐 Python _write_meta
+func (m *memoryIndexManager) writeMeta(meta map[string]any) error {
+	tx, err := m.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	_, err = tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", metaKey, string(data))
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// vectorToBlob 向量转二进制。对齐 Python vector_to_blob
+func vectorToBlob(vec []float64) []byte {
+	blob := make([]byte, len(vec)*4)
+	for i, v := range vec {
+		bits := math.Float32bits(float32(v))
+		blob[i*4] = byte(bits)
+		blob[i*4+1] = byte(bits >> 8)
+		blob[i*4+2] = byte(bits >> 16)
+		blob[i*4+3] = byte(bits >> 24)
+	}
+	return blob
+}
+
+// blobToVector 二进制转向量。对齐 Python blob_to_vector
+func blobToVector(blob []byte) []float64 {
+	if len(blob)%4 != 0 {
+		return nil
+	}
+	vec := make([]float64, len(blob)/4)
+	for i := range vec {
+		bits := uint32(blob[i*4]) | uint32(blob[i*4+1])<<8 | uint32(blob[i*4+2])<<16 | uint32(blob[i*4+3])<<24
+		vec[i] = float64(math.Float32frombits(bits))
+	}
+	return vec
+}
+
+// truncateString 截断字符串（按 Unicode 码点长度，CJK 安全）。
+// 对齐 Python: s[:max_len] 使用字符长度而非字节长度。
+func truncateString(s string, maxLen int) string {
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:maxLen])
+}
+
+// containsSource 检查 sources 列表是否包含指定来源
+func containsSource(sources []string, source string) bool {
+	for _, s := range sources {
+		if s == source {
+			return true
+		}
+	}
+	return false
+}
+
+// captureCwdState 记住首次从真实请求 ctx 捕获的 CwdState。
+// 后台同步（fsnotify 防抖 / 定时器）的 ctx 由 context.Background() 派生，没有
+// CwdState；沙箱开启且未显式配置 SandboxRoot 时，resolvePath 会因沙箱根为空而
+// 拒绝所有绝对路径。这里缓存一次真实 ctx 的 CwdState 供后台复用，等价 Python
+// contextvar 在后台任务创建时继承上下文。
+func (m *memoryIndexManager) captureCwdState(ctx context.Context) {
+	state := cwd.CwdStateFromCtx(ctx)
+	if state == nil {
+		return
+	}
+	if prev, ok := m.cachedCwdState.Load().(*cwd.CwdState); ok && prev == state {
+		return
+	}
+	m.cachedCwdState.Store(state)
+}
+
+// backgroundContext 构造后台同步 ctx：有缓存的 CwdState 时注入，否则退化为 Background。
+func (m *memoryIndexManager) backgroundContext() context.Context {
+	ctx := context.Background()
+	if state, ok := m.cachedCwdState.Load().(*cwd.CwdState); ok && state != nil {
+		ctx = cwd.WithCwdState(ctx, state)
+	}
+	return ctx
+}

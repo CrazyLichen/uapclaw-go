@@ -11,7 +11,7 @@ package rsi
 import (
 	"context"
 	"encoding/json"
-	agentface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/member_optimizer/agentface"
+	agentface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/agentface"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,10 +20,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
-	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/member_optimizer"
-	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/rsi/harness_rsi/member_optimizer/agents"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/agents"
 )
 
 // MemberAttributionFakeChainSuite 定责→定病根→选择 全链 suite。

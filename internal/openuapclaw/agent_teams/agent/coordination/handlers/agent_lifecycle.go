@@ -1,0 +1,229 @@
+package handlers
+
+import (
+	"context"
+
+	types "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
+	schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentLifecycleHandler 处理 agent 生命周期事件：用户输入、待机、清理、工具审批、计划审批。
+// EVENT_METHOD_MAP 事件到方法映射：
+//   - user_input          → onUserInput
+//   - team_standby        → onStandby
+//   - team_cleaned        → onCleaned
+//   - tool_approval_result → onToolApprovalResult
+//   - task_plan_response  → onTaskPlanResponse
+//
+// Python: AgentLifecycleHandler
+type AgentLifecycleHandler struct {
+	BaseCoordinationHandler
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 协调子系统的日志组件
+const logComponent = logger.ComponentTeam
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewAgentLifecycleHandler 创建 AgentLifecycleHandler 实例。
+// Python: AgentLifecycleHandler.__init__
+func NewAgentLifecycleHandler(
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
+) *AgentLifecycleHandler {
+	return &AgentLifecycleHandler{
+		BaseCoordinationHandler: NewBaseCoordinationHandler(host, bp, inf, pollCtrl),
+	}
+}
+
+// GetCallbacks 返回 event_key → 回调方法注册表。
+// Python: AgentLifecycleHandler.get_callbacks
+func (h *AgentLifecycleHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
+		string(types.InnerEventTypeUserInput): h.OnUserInput,
+		events.TeamEventStandby:               h.OnStandby,
+		events.TeamEventCleaned:               h.OnCleaned,
+		events.TeamEventToolApprovalResult:    h.OnToolApprovalResult,
+		events.TeamEventTaskPlanResponse:      h.OnTaskPlanResponse,
+	}
+}
+
+// OnUserInput 转发协调引导的用户输入到 agent。
+// Python: AgentLifecycleHandler.on_user_input
+func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.CoordinationEvent) {
+	if !event.IsInner() {
+		return
+	}
+	// 对齐 Python: content = event.payload.get("content", "") — content 缺失时用空字符串替代，仍投递
+	contentStr := ""
+	if c, ok := event.Inner.Payload["content"]; ok && c != nil {
+		contentStr, _ = c.(string)
+	}
+	// 对齐 Python: self._round.deliver_input(content)（Python 默认 use_steer=True）
+	if err := h.round.DeliverInput(ctx, contentStr, true, nil); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", string(event.Inner.EventType)).
+			Msg("on_user_input: deliver_input failed")
+	}
+}
+
+// OnStandby 收到 TEAM_STANDBY 事件时暂停周期轮询。
+// Python: AgentLifecycleHandler.on_standby
+func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.CoordinationEvent) {
+	memberName := h.blueprint.DispatcherMemberName()
+	// 对齐 Python: team_logger.info("[{}] received TEAM_STANDBY, pausing polls", member_name)
+	logger.Info(logComponent).Str("member_name", memberName).Msg("received TEAM_STANDBY, pausing polls")
+	h.poll.PausePolls()
+}
+
+// OnCleaned 收到 TEAM_CLEANED 事件，非 leader 成员关闭自身。
+// Leader 不关闭（需要存活等待下次交互）。
+// Python: AgentLifecycleHandler.on_cleaned
+func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.CoordinationEvent) {
+	if h.blueprint.Role() == schema.TeamRoleLeader {
+		// 对齐 Python: team_logger.debug("[{}] ignoring TEAM_CLEANED on leader path", member_name)
+		logger.Debug(logComponent).Str("member_name", h.blueprint.DispatcherMemberName()).Msg("ignoring TEAM_CLEANED on leader path")
+		return
+	}
+	// 对齐 Python: team_logger.info("[{}] received TEAM_CLEANED, shutting down coordination", member_name)
+	logger.Info(logComponent).Str("member_name", h.blueprint.DispatcherMemberName()).Msg("received TEAM_CLEANED, shutting down coordination")
+	if err := h.lifecycle.ShutdownSelf(ctx); err != nil {
+		logger.Error(logComponent).
+			Str("member_name", h.blueprint.DispatcherMemberName()).
+			Err(err).
+			Msg("on_cleaned: shutdown_self failed")
+	}
+}
+
+// OnToolApprovalResult 收到工具审批结果后恢复 HITL 中断。
+// 仅当事件的目标成员名匹配自身时才处理。
+// Python: AgentLifecycleHandler.on_tool_approval_result
+func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event types.CoordinationEvent) {
+	if event.IsInner() {
+		return
+	}
+	// 对齐 Python: 仅处理目标为自己的事件
+	memberName := h.blueprint.DispatcherMemberName()
+	em := event.Transport
+	targetMember, _ := em.Payload["member_name"].(string)
+	if targetMember != "" && targetMember != memberName {
+		return
+	}
+
+	// 构建 InteractiveInput 输入，恢复中断
+	// 对齐 Python: InteractiveInput(tool_call_id=..., approved=..., feedback=..., auto_confirm=...)
+	input := buildInteractiveInput(em.Payload)
+	if input == nil {
+		logger.Debug(logComponent).Msg("on_tool_approval_result: cannot build InteractiveInput, skipped")
+		return
+	}
+
+	// 对齐 Python: team_logger.debug("[{}] received tool approval result for tool_call_id={}, approved={}", ...)
+	toolCallID, _ := em.Payload["tool_call_id"].(string)
+	approved, _ := em.Payload["approved"].(bool)
+	logger.Debug(logComponent).
+		Str("member_name", memberName).
+		Str("tool_call_id", toolCallID).
+		Bool("approved", approved).
+		Msg("received tool approval result")
+
+	if err := h.round.ResumeInterrupt(ctx, input); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", em.EventType).
+			Msg("on_tool_approval_result: resume_interrupt failed")
+	}
+}
+
+// OnTaskPlanResponse 收到 Leader 对成员计划的审批决策后恢复 HITL 中断。
+// 仅当事件目标为自己且含 tool_call_id 时处理。
+// Python: AgentLifecycleHandler.on_task_plan_response
+func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event types.CoordinationEvent) {
+	if event.IsInner() {
+		return
+	}
+	memberName := h.blueprint.DispatcherMemberName()
+	em := event.Transport
+	targetMember, _ := em.Payload["member_name"].(string)
+	if targetMember != "" && targetMember != memberName {
+		return
+	}
+
+	// 对齐 Python: on_task_plan_response 使用 plan_id 而非 auto_confirm
+	toolCallIDPlan, _ := em.Payload["tool_call_id"].(string)
+	if toolCallIDPlan == "" {
+		return
+	}
+	approvedPlan, _ := em.Payload["approved"].(bool)
+	feedbackPlan, _ := em.Payload["feedback"].(string)
+	planID, _ := em.Payload["plan_id"].(string)
+	inputPlan, errPlan := interaction.NewInteractiveInput()
+	if errPlan != nil {
+		logger.Debug(logComponent).Msg("on_task_plan_response: cannot create InteractiveInput, skipped")
+		return
+	}
+	valuePlan := map[string]any{
+		"approved": approvedPlan,
+		"feedback": feedbackPlan,
+		"plan_id":  planID,
+	}
+	if errPlan = inputPlan.Update(toolCallIDPlan, valuePlan); errPlan != nil {
+		logger.Debug(logComponent).Err(errPlan).Msg("on_task_plan_response: InteractiveInput.Update failed, skipped")
+		return
+	}
+	input := inputPlan
+
+	// 对齐 Python: team_logger.debug("[{}] received task plan response for tool_call_id={}, approved={}", ...)
+	logger.Debug(logComponent).
+		Str("member_name", memberName).
+		Str("tool_call_id", toolCallIDPlan).
+		Bool("approved", approvedPlan).
+		Msg("received task plan response")
+
+	if err := h.round.ResumeInterrupt(ctx, input); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", em.EventType).
+			Msg("on_task_plan_response: resume_interrupt failed")
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildInteractiveInput 从事件 payload 构建 InteractiveInput 结构。
+// 对齐 Python: InteractiveInput(); interactive_input.update(tool_call_id, {...})
+func buildInteractiveInput(payload map[string]any) *interaction.InteractiveInput {
+	toolCallID, _ := payload["tool_call_id"].(string)
+	if toolCallID == "" {
+		return nil
+	}
+	approved, _ := payload["approved"].(bool)
+	feedback, _ := payload["feedback"].(string)
+	autoConfirm, _ := payload["auto_confirm"].(bool)
+
+	// 对齐 Python: InteractiveInput() + update(tool_call_id, value)
+	input, err := interaction.NewInteractiveInput()
+	if err != nil {
+		return nil
+	}
+	value := map[string]any{
+		"approved":     approved,
+		"feedback":     feedback,
+		"auto_confirm": autoConfirm,
+	}
+	if err := input.Update(toolCallID, value); err != nil {
+		logger.Debug(logComponent).Err(err).Str("tool_call_id", toolCallID).Msg("buildInteractiveInput: Update failed")
+		return nil
+	}
+	return input
+}

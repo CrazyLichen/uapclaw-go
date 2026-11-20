@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/dreaming"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/dreaming"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	task_loop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/task_loop"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	task_loop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

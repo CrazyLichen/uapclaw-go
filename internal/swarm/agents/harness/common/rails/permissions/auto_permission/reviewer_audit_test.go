@@ -3,7 +3,7 @@ package auto_permission
 import (
 	"testing"
 
-	hsecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	hsecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

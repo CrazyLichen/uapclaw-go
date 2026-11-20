@@ -10,13 +10,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
-	hsections "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
-	agentmode "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	agentmode "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

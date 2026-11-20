@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
-	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

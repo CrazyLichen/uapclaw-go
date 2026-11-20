@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	evolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

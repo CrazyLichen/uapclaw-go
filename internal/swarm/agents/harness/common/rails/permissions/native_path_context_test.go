@@ -3,7 +3,7 @@ package permissions
 import (
 	"testing"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 )
 
 // ──────────────────────────── NativePathGuardProjection 接口方法（9.90d-1 Task 13） ────────────────────────────

@@ -1,0 +1,770 @@
+package lite
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/wk8/go-ordered-map/v2"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/update"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// maxIndexLines MEMORY.md 索引最大行数。对齐 Python MAX_INDEX_LINES
+	maxIndexLines = 200
+	// maxConflictRetries 乐观并发最大重试次数。对齐 Python _MAX_CONFLICT_RETRIES
+	maxConflictRetries = 2
+)
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// fileLocks 文件级锁注册表。对齐 Python _file_locks: Dict[str, asyncio.Lock]
+	// 注意：与 Python asyncio.Lock 不同，Go 的 sync.Mutex 是进程级互斥，保护范围更强
+	fileLocks = make(map[string]*sync.Mutex)
+	// fileLocksMu 保护 fileLocks 注册表的互斥锁。对齐 Python _file_locks_init_lock
+	fileLocksMu sync.Mutex
+	// memoryIndexLock MEMORY.md 索引锁。对齐 Python _memory_index_lock
+	memoryIndexLock sync.Mutex
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ValidateCodingMemoryPath 验证路径在 coding_memory 目录内。对齐 Python validate_coding_memory_path
+func ValidateCodingMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
+	if ws == nil {
+		return false, "Workspace 未初始化"
+	}
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return false, "无效路径：不允许目录遍历"
+	}
+	if !strings.HasSuffix(path, ".md") {
+		return false, "路径必须以 .md 结尾"
+	}
+	memoryDir := ""
+	if nodePath := ws.GetNodePath("coding_memory"); nodePath != nil {
+		memoryDir = *nodePath
+	}
+	if memoryDir == "" {
+		return false, "coding_memory 节点未配置"
+	}
+	resolved := filepath.Join(memoryDir, filepath.Base(path))
+	return true, resolved
+}
+
+// CodingMemoryReadWithContext 读取 coding_memory 文件。对齐 Python coding_memory_read_with_context
+func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) (result *CodingReadResult) {
+	// Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryReadWithContext panic occurred")
+			result = &CodingReadResult{Success: false, Path: path, Error: fmt.Sprintf("内部错误: %v", r)}
+		}
+	}()
+
+	ws := toolCtx.Workspace
+	if ws == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryReadWithContext: Workspace not initialized")
+		return &CodingReadResult{Success: false, Path: path, Error: "Workspace 未初始化"}
+	}
+	isValid, resolvedPath := ValidateCodingMemoryPath(path, ws)
+	if !isValid {
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolvedPath).Msg("CodingMemoryReadWithContext: path validation failed")
+		return &CodingReadResult{Success: false, Path: path, Error: resolvedPath}
+	}
+	fullPath := resolvedPath
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Error(logComponent).Msg("memory read failed, no available sys_operation")
+		return &CodingReadResult{Success: false, Path: path, Error: "读取失败，无可用 sys_operation"}
+	}
+	// Python: 使用 line_range 读取
+	fsOpts := []sysop.FsOption{}
+	if offset != nil {
+		if limit != nil {
+			fsOpts = append(fsOpts, sysop.WithFsLineRange(*offset, *offset+*limit-1))
+		} else {
+			fsOpts = append(fsOpts, sysop.WithFsLineRange(*offset, -1))
+		}
+	}
+	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryReadWithContext: failed to read file")
+		return &CodingReadResult{Success: false, Path: path, Error: err.Error()}
+	}
+	if readResult != nil {
+		if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+			logger.Warn(logComponent).Err(fsErr).Str("path", path).Msg("CodingMemoryReadWithContext: failed to read file")
+			return &CodingReadResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
+	var content string
+	if readResult != nil && readResult.Data != nil {
+		content = readResult.Data.Content
+	}
+	rows := strings.Split(content, "\n")
+	n := len(rows)
+	fromIdx := 0
+	if offset != nil {
+		fromIdx = *offset - 1
+		if fromIdx < 0 {
+			fromIdx = 0
+		}
+	}
+	toIdx := n
+	if limit != nil {
+		toIdx = fromIdx + *limit
+		if toIdx > n {
+			toIdx = n
+		}
+	}
+	return &CodingReadResult{
+		Success:    true,
+		Path:       fullPath,
+		Content:    strings.Join(rows[fromIdx:toIdx], "\n"),
+		TotalLines: n,
+		StartLine:  fromIdx + 1,
+		EndLine:    toIdx,
+		Truncated:  limit != nil && toIdx < n,
+	}
+}
+
+// CodingMemoryWriteWithContext 写入 coding_memory 文件。对齐 Python coding_memory_write_with_context
+//
+// 完整流程：
+//  1. 校验路径 → ValidateCodingMemoryPath
+//  2. 解析 frontmatter → ParseFrontmatter + ValidateFrontmatter
+//  3. 丰富 frontmatter → EnrichFrontmatter (时间戳)
+//  4. 重建内容 → RebuildContentWithFrontmatter
+//  5. 提取 body → ExtractBody
+//  6. 快照目录文件列表 → snapshotMemoryFiles
+//  7. 冲突检测（分创建/追加两种模式）
+//  8. 获取文件级锁 → getFileLock
+//  9. 验证快照是否过期 → 乐观并发重试（最多 2 次）
+//  10. 实际写入（创建/追加）
+//  11. 更新 MEMORY.md 索引 → upsertMemoryIndex
+//  12. 返回 WriteResult
+func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) (result map[string]any) {
+	// Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext panic occurred")
+			result = map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": fmt.Sprintf("内部错误: %v", r)}
+		}
+	}()
+
+	if toolCtx == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: toolCtx is nil")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
+	}
+	ws := toolCtx.Workspace
+	if ws == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: Workspace not initialized")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
+	}
+	isValid, resolved := ValidateCodingMemoryPath(path, ws)
+	if !isValid {
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: path validation failed")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": resolved}
+	}
+	// Python: step 2: frontmatter 解析验证
+	fm := ParseFrontmatter(content)
+	if fm == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter parse failed")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "必须包含 frontmatter(name/description/type)"}
+	}
+	if ok, err := ValidateFrontmatter(fm); !ok {
+		logger.Warn(logComponent).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter validation failed")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err}
+	}
+	// Python: step 3-4: 丰富 frontmatter 并重建内容
+	fm = EnrichFrontmatter(fm, false)
+	content = RebuildContentWithFrontmatter(content, fm)
+	// Python: step 5: 提取 body
+	body := ExtractBody(content)
+	if body == "" {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: no content body")
+		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": "无内容体"}
+	}
+
+	basename := filepath.Base(resolved)
+	memoryDir := resolveMemoryDir(toolCtx, resolved)
+
+	// Python: step 6-9: 乐观并发 — 冲突检测在锁外运行，快照验证在锁内
+	var conflict ConflictResult
+	for attempt := 0; attempt < maxConflictRetries; attempt++ {
+		// Python: step 6: 快照目录文件列表
+		snapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
+		fileExists := snapshot[basename]
+
+		if !fileExists {
+			// Python: step 7a: 创建模式 — 搜索相似文件
+			conflict = ConflictResult{}
+			similarFiles := searchSimilar(ctx, toolCtx, body, basename, 5, 0.75)
+
+			// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
+			var actions []*update.MemoryActionItem
+			if similarFiles.Len() > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+				actions = runChecker(ctx, toolCtx.Manager.LLM(), basename, body, similarFiles)
+			}
+
+			// 冗余检查: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
+			if len(actions) > 0 && !containsActionForID(actions, basename) {
+				return (&WriteResult{
+					Success: true,
+					Path:    resolved,
+					Mode:    WriteModeSkip,
+					Type:    fm["type"],
+					Note:    "内容与已有记忆重复",
+				}).ToDict()
+			}
+
+			// 收集冲突信息（对齐 Python: conflicting = [a.id for a in actions if a.id != basename and a.status == MemoryStatus.DELETE]）
+			if len(actions) > 0 {
+				var conflicting []string
+				for _, a := range actions {
+					if a.ID != basename && a.Status == update.MemoryStatusDelete {
+						conflicting = append(conflicting, a.ID)
+					}
+				}
+				if len(conflicting) > 0 {
+					conflict.ConflictDetected = true
+					conflict.ConflictingFiles = conflicting
+					conflict.Note = fmt.Sprintf(
+						"与以下记忆冲突: %s。请使用 coding_memory_read 查看后再用 coding_memory_edit 更新。",
+						strings.Join(conflicting, ", "),
+					)
+				}
+				// Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
+			}
+		} else {
+			// Python: step 7b: 追加模式 — 搜索自身 + 相似文件
+			conflict = *prepareAppendMode(ctx, toolCtx, resolved, basename, body, fm)
+			// Python: if result.get("mode") == WriteMode.SKIP.value: return result
+			if conflict.Skip {
+				return (&WriteResult{
+					Success: true,
+					Path:    resolved,
+					Mode:    WriteModeSkip,
+					Type:    fm["type"],
+					Note:    "内容与已有记忆重复",
+				}).ToDict()
+			}
+		}
+
+		// Python: step 8-9: 文件级锁保护实际写入 + 快照验证
+		fileLock := getFileLock(resolved)
+		snapshotStale := false
+		fileLock.Lock()
+		currentSnapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
+		if !snapshotEqual(currentSnapshot, snapshot) {
+			// Python: 快照过期，并发写入产生了新文件，重试冲突检测
+			logger.Info(logComponent).
+				Int("attempt", attempt+1).
+				Msg("snapshot expired, retrying conflict detection")
+			snapshotStale = true
+		} else {
+			// Python: step 10: 实际写入
+			sysOp := toolCtx.SysOperation
+			if sysOp == nil {
+				fileLock.Unlock()
+				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": "无可用 sys_operation"}
+			}
+			if !fileExists {
+				// 创建新文件
+				writeRes, wErr := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
+				if wErr != nil {
+					fileLock.Unlock()
+					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": wErr.Error()}
+				}
+				if writeRes != nil {
+					if fsErr := fsResultError(writeRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+						fileLock.Unlock()
+						return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": fsErr.Error()}
+					}
+				}
+			} else {
+				// 追加到已有文件
+				appendToExistingFile(ctx, toolCtx, resolved, body, fm)
+			}
+		}
+		fileLock.Unlock()
+
+		if snapshotStale {
+			continue
+		}
+
+		// Python: step 11: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
+		upsertMemoryIndex(ctx, toolCtx, memoryDir, basename, fm)
+
+		// Python: step 12: 返回 WriteResult
+		writeMode := WriteModeCreate
+		if fileExists {
+			writeMode = WriteModeAppend
+		}
+		wr := &WriteResult{
+			Success:          true,
+			Path:             resolved,
+			Mode:             writeMode,
+			Type:             fm["type"],
+			ConflictDetected: conflict.ConflictDetected,
+			ConflictingFiles: conflict.ConflictingFiles,
+			Note:             conflict.Note,
+		}
+		return wr.ToDict()
+	}
+
+	// Python: 超过重试次数，降级为无快照验证写入
+	logger.Warn(logComponent).
+		Int("max_retries", maxConflictRetries).
+		Bool("conflict_detected", conflict.ConflictDetected).
+		Interface("conflicting_files", conflict.ConflictingFiles).
+		Msg("max conflict retries exceeded, skipping snapshot verification and writing directly")
+
+	fileLock := getFileLock(resolved)
+	fileLock.Lock()
+	currentSnapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
+	fileExistsNow := currentSnapshot[basename]
+	sysOp := toolCtx.SysOperation
+	if sysOp != nil {
+		if !fileExistsNow {
+			// T07: 对齐 Python — 降级写入时也检查错误
+			degradedRes, dErr := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
+			if dErr != nil {
+				logger.Error(logComponent).Err(dErr).Str("path", resolved).Msg("degraded write failed")
+				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": dErr.Error()}
+			}
+			if degradedRes != nil {
+				if fsErr := fsResultError(degradedRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+					logger.Error(logComponent).Err(fsErr).Str("path", resolved).Msg("degraded write failed")
+					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": fsErr.Error()}
+				}
+			}
+		} else {
+			appendToExistingFile(ctx, toolCtx, resolved, body, fm)
+		}
+	}
+	fileLock.Unlock()
+
+	upsertMemoryIndex(ctx, toolCtx, memoryDir, basename, fm)
+
+	writeMode := WriteModeCreate
+	if fileExistsNow {
+		writeMode = WriteModeAppend
+	}
+	wr := &WriteResult{
+		Success:          true,
+		Path:             resolved,
+		Mode:             writeMode,
+		Type:             fm["type"],
+		ConflictDetected: conflict.ConflictDetected,
+		ConflictingFiles: conflict.ConflictingFiles,
+		Note:             conflict.Note,
+	}
+	return wr.ToDict()
+}
+
+// CodingMemoryEditWithContext 编辑 coding_memory 文件。对齐 Python coding_memory_edit_with_context
+func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) (result *CodingEditResult) {
+	// Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryEditWithContext panic occurred")
+			result = &CodingEditResult{Error: fmt.Sprintf("内部错误: %v", r)}
+		}
+	}()
+
+	if oldText == "" {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text is empty")
+		return &CodingEditResult{Error: "old_text 不能为空"}
+	}
+	if toolCtx == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: toolCtx is nil")
+		return &CodingEditResult{Error: "Workspace 未初始化"}
+	}
+	ws := toolCtx.Workspace
+	if ws == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: Workspace not initialized")
+		return &CodingEditResult{Error: "Workspace 未初始化"}
+	}
+	isValid, resolved := ValidateCodingMemoryPath(path, ws)
+	if !isValid {
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryEditWithContext: path validation failed")
+		return &CodingEditResult{Error: resolved}
+	}
+	memoryDir := resolveMemoryDir(toolCtx, resolved)
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: no sys_operation available")
+		return &CodingEditResult{Error: "无可用 sys_operation"}
+	}
+
+	// Python: 文件级锁保护 read-then-write，防止与其他 write/edit 协程竞争
+	fileLock := getFileLock(resolved)
+	fileLock.Lock()
+	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
+	if err != nil || readResult == nil || readResult.Data == nil {
+		fileLock.Unlock()
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryEditWithContext: failed to read file")
+		return &CodingEditResult{Error: fmt.Sprintf("读取文件失败: %s", path)}
+	}
+	if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", resolved); fsErr != nil {
+		fileLock.Unlock()
+		logger.Warn(logComponent).Err(fsErr).Str("path", path).Msg("CodingMemoryEditWithContext: failed to read file")
+		return &CodingEditResult{Error: fsErr.Error()}
+	}
+	content := readResult.Data.Content
+	occurrences := strings.Count(content, oldText)
+	if occurrences == 0 {
+		fileLock.Unlock()
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text not found")
+		return &CodingEditResult{Error: "old_text 在文件中未找到"}
+	}
+	if occurrences > 1 {
+		fileLock.Unlock()
+		logger.Warn(logComponent).Str("path", path).Int("occurrences", occurrences).Msg("CodingMemoryEditWithContext: old_text appears multiple times")
+		return &CodingEditResult{Error: fmt.Sprintf("old_text 出现 %d 次，请更精确地指定", occurrences)}
+	}
+	newContent := strings.Replace(content, oldText, newText, 1)
+	editRes, err := sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
+	fileLock.Unlock()
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("coding_memory_edit edit failed")
+		return &CodingEditResult{Error: err.Error()}
+	}
+	if editRes != nil {
+		if fsErr := fsResultError(editRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Msg("coding_memory_edit edit failed")
+			return &CodingEditResult{Error: fsErr.Error()}
+		}
+	}
+
+	// Python: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
+	fm := ParseFrontmatter(newContent)
+	if fm != nil {
+		if ok, _ := ValidateFrontmatter(fm); ok {
+			upsertMemoryIndex(ctx, toolCtx, memoryDir, filepath.Base(resolved), fm)
+		}
+	}
+
+	return &CodingEditResult{Success: true, Path: resolved, NewContent: newContent}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveMemoryDir 解析 coding_memory 目录。对齐 Python _resolve_memory_dir
+func resolveMemoryDir(ctx *CodingMemoryToolContext, resolvedPath string) string {
+	if ctx != nil && ctx.CodingMemoryDir != "" {
+		return ctx.CodingMemoryDir
+	}
+	return filepath.Dir(resolvedPath)
+}
+
+// searchSimilar 语义搜索相似记忆。对齐 Python _search_similar
+// 返回 orderedmap 保留搜索结果的插入顺序，对齐 Python dict 的插入顺序语义。
+func searchSimilar(ctx context.Context, toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) *orderedmap.OrderedMap[string, string] {
+	oldMemories := orderedmap.New[string, string]()
+	if toolCtx == nil || toolCtx.Manager == nil {
+		return oldMemories
+	}
+	results, err := toolCtx.Manager.Search(ctx, body, SearchOpts{MaxResults: topK})
+	if err != nil {
+		return oldMemories
+	}
+	memoryDir := toolCtx.CodingMemoryDir
+	for _, r := range results {
+		if r.Score <= threshold || r.Path == "MEMORY.md" || r.Path == excludePath {
+			continue
+		}
+		// 读取文件内容
+		sysOp := toolCtx.SysOperation
+		if sysOp == nil {
+			continue
+		}
+		fullPath := filepath.Join(memoryDir, r.Path)
+		readResult, err := sysOp.Fs().ReadFile(ctx, fullPath)
+		if err != nil || readResult == nil || readResult.Data == nil {
+			continue
+		}
+		if fsResultError(readResult.BaseResult, "读取记忆文件", fullPath) != nil {
+			continue
+		}
+		oldBody := ExtractBody(readResult.Data.Content)
+		if oldBody != "" {
+			oldMemories.Set(r.Path, oldBody)
+		}
+	}
+	return oldMemories
+}
+
+// runChecker 调用 MemUpdateChecker 执行 LLM 冲突检测。
+// Python: _run_checker(coding_memory_manager, new_id, new_body, old_memories)
+// Python 内部从 coding_memory_manager 获取 llm，无 LLM 返回 []，有 LLM 调用 checker.check()
+func runChecker(ctx context.Context, model *llm.Model, newID string, newBody string, oldMemories *orderedmap.OrderedMap[string, string]) []*update.MemoryActionItem {
+	if model == nil {
+		return []*update.MemoryActionItem{}
+	}
+	// 构建有序 map（对齐 Python dict 插入顺序）
+	newMemOrdered := orderedmap.New[string, string]()
+	newMemOrdered.Set(newID, newBody)
+	checker := &update.MemUpdateChecker{}
+	items, err := checker.Check(ctx, newMemOrdered, oldMemories, update.WithModel(model))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker conflict check failed")
+		return []*update.MemoryActionItem{}
+	}
+	return items
+}
+
+// prepareAppendMode 准备追加模式并返回冲突检测结果。对齐 Python _prepare_append_mode
+func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) *ConflictResult {
+	result := &ConflictResult{}
+
+	// 构建旧记忆：自身文件 + 其他相似文件（对齐 Python: old_memories）
+	// 使用 orderedmap 保留插入顺序，对齐 Python dict 的插入顺序语义
+	oldMemories := orderedmap.New[string, string]()
+
+	// 读取自身文件（对齐 Python: existing_body → old_memories["__self__"]）
+	sysOp := toolCtx.SysOperation
+	if sysOp != nil {
+		readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
+		if err == nil && readResult != nil && readResult.Data != nil &&
+			fsResultError(readResult.BaseResult, "读取记忆文件", resolved) == nil {
+			existingBody := ExtractBody(readResult.Data.Content)
+			if existingBody != "" {
+				oldMemories.Set("__self__", existingBody)
+			}
+		}
+	}
+
+	// 其他相似文件（对齐 Python: other = await _search_similar(...)）
+	// searchSimilar 返回 orderedmap，直接合并保留插入顺序
+	other := searchSimilar(ctx, toolCtx, body, basename, 5, 0.75)
+	for pair := other.Oldest(); pair != nil; pair = pair.Next() {
+		oldMemories.Set(pair.Key, pair.Value)
+	}
+
+	// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
+	var actions []*update.MemoryActionItem
+	if oldMemories.Len() > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+		actions = runChecker(ctx, toolCtx.Manager.LLM(), basename, body, oldMemories)
+	}
+
+	// 冗余检查: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
+	if len(actions) > 0 && !containsActionForID(actions, basename) {
+		result.Skip = true
+		return result
+	}
+
+	// 收集冲突信息（对齐 Python: conflicting = [a.id for a in actions if a.id != basename and a.status == MemoryStatus.DELETE]）
+	if len(actions) > 0 {
+		var conflicting []string
+		for _, a := range actions {
+			if a.ID != basename && a.Status == update.MemoryStatusDelete {
+				// Python: basename if a.id == "__self__" else a.id
+				if a.ID == "__self__" {
+					conflicting = append(conflicting, basename)
+				} else {
+					conflicting = append(conflicting, a.ID)
+				}
+			}
+		}
+		if len(conflicting) > 0 {
+			result.ConflictDetected = true
+			result.ConflictingFiles = conflicting
+			result.Note = fmt.Sprintf(
+				"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
+				strings.Join(conflicting, ", "),
+			)
+		}
+	} else if other.Len() > 0 {
+		// 无 LLM 结果时，基于 searchSimilar 结果判断冲突
+		conflicting := make([]string, 0, other.Len())
+		for pair := other.Oldest(); pair != nil; pair = pair.Next() {
+			conflicting = append(conflicting, pair.Key)
+		}
+		result.ConflictDetected = true
+		result.ConflictingFiles = conflicting
+		result.Note = fmt.Sprintf(
+			"与 %s 冲突。请使用 coding_memory_read 查看，然后 coding_memory_edit 更新。",
+			strings.Join(conflicting, ", "),
+		)
+	}
+
+	return result
+}
+
+// snapshotMemoryFiles 快照目录下的 .md 文件列表（排除 MEMORY.md）。对齐 Python _snapshot_memory_files
+// 使用 sys_operation.Fs().ListFiles() 读取目录，对齐 Python ctx.sys_operation.fs().list_files()
+// 返回 map[string]bool 对齐 Python frozenset 语义（无序、去重、O(1) 查找）
+func snapshotMemoryFiles(ctx context.Context, toolCtx *CodingMemoryToolContext, memoryDir string) map[string]bool {
+	if memoryDir == "" {
+		return nil
+	}
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		return nil
+	}
+	listResult, err := sysOp.Fs().ListFiles(ctx, memoryDir)
+	if err != nil || listResult == nil || listResult.Data == nil {
+		return nil
+	}
+	if fsResultError(listResult.BaseResult, "列出记忆目录", memoryDir) != nil {
+		return nil
+	}
+	names := make(map[string]bool)
+	for _, item := range listResult.Data.ListItems {
+		if item.IsDirectory {
+			continue
+		}
+		name := item.Name
+		if !strings.HasSuffix(strings.ToLower(name), ".md") {
+			continue
+		}
+		if strings.EqualFold(name, "memory.md") {
+			continue
+		}
+		names[name] = true
+	}
+	return names
+}
+
+// snapshotEqual 比较两个快照是否相等。对齐 Python frozenset != frozenset
+func snapshotEqual(a, b map[string]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// getFileLock 获取文件级锁。对齐 Python _get_file_lock
+// 使用双重检查锁定模式，确保每个文件路径只有一个锁对象
+func getFileLock(path string) *sync.Mutex {
+	fileLocksMu.Lock()
+	defer fileLocksMu.Unlock()
+	if lock, ok := fileLocks[path]; ok {
+		return lock
+	}
+	lock := &sync.Mutex{}
+	fileLocks[path] = lock
+	return lock
+}
+
+// upsertMemoryIndex 增量更新 MEMORY.md 索引。对齐 Python _upsert_memory_index
+// 使用 memoryIndexLock 保护并发修改，防止不同文件写入协程同时修改 MEMORY.md
+func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, memoryDir string, filename string, fm map[string]string) {
+	memoryIndexLock.Lock()
+	defer memoryIndexLock.Unlock()
+
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		return
+	}
+	if fm["name"] == "" || fm["description"] == "" {
+		logger.Debug(logComponent).Str("path", filename).Msg("upsertMemoryIndex: name or description is empty, skipping index update")
+		return
+	}
+
+	indexPath := filepath.Join(memoryDir, "MEMORY.md")
+	newEntry := fmt.Sprintf("- [%s](%s) — %s", fm["name"], filename, fm["description"])
+
+	var lines []string
+	readResult, err := sysOp.Fs().ReadFile(ctx, indexPath)
+	if err == nil && readResult != nil && readResult.Data != nil {
+		lines = strings.Split(readResult.Data.Content, "\n")
+	} else if err != nil {
+		// Python: Failed to read memory index 时记录 warning
+		logger.Warn(logComponent).Err(err).Str("path", indexPath).Msg("upsertMemoryIndex: read MEMORY.md index failed")
+	}
+
+	// Python: 如果文件名已存在则更新条目，否则在头部插入新条目
+	found := false
+	for i, line := range lines {
+		if strings.Contains(line, fmt.Sprintf("](%s)", filename)) {
+			lines[i] = newEntry
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append([]string{newEntry}, lines...)
+	}
+
+	// Python: 限制行数
+	if len(lines) > maxIndexLines {
+		lines = lines[:maxIndexLines]
+	}
+	newContent := strings.Join(lines, "\n")
+	_, _ = sysOp.Fs().WriteFile(ctx, indexPath, newContent, sysop.WithFsCreateIfNotExist(true), sysop.WithFsPrependNewline(false))
+}
+
+// appendToExistingFile 追加内容到已有文件并更新 frontmatter。对齐 Python _append_to_existing_file
+func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext, resolved string, body string, fm map[string]string) {
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Error(logComponent).Msg("appendToExistingFile: sys_operation is nil")
+		return
+	}
+
+	// Python: 追加 body
+	_, err := sysOp.Fs().WriteFile(ctx, resolved, "\n\n"+body,
+		sysop.WithFsAppend(true),
+		sysop.WithFsCreateIfNotExist(false),
+	)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("failed to append content")
+		return
+	}
+
+	// Python: 更新 frontmatter updated_at
+	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
+	if err != nil || readResult == nil || readResult.Data == nil {
+		return
+	}
+	fmParsed := ParseFrontmatter(readResult.Data.Content)
+	if fmParsed != nil {
+		fmParsed = EnrichFrontmatter(fmParsed, true)
+		updatedContent := RebuildContentWithFrontmatter(readResult.Data.Content, fmParsed)
+		_, _ = sysOp.Fs().WriteFile(ctx, resolved, updatedContent, sysop.WithFsCreateIfNotExist(false))
+	}
+}
+
+// readFileSafe 安全读取文件内容。对齐 Python _read_file_safe
+func readFileSafe(ctx context.Context, toolCtx *CodingMemoryToolContext, filepath string) string {
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		return ""
+	}
+	readResult, err := sysOp.Fs().ReadFile(ctx, filepath)
+	if err != nil || readResult == nil || readResult.Data == nil {
+		return ""
+	}
+	return readResult.Data.Content
+}
+
+// containsActionForID 检查 action 列表中是否包含指定 ID 的 ADD 操作。
+func containsActionForID(actions []*update.MemoryActionItem, id string) bool {
+	for _, a := range actions {
+		if a.ID == id && a.Status == update.MemoryStatusAdd {
+			return true
+		}
+	}
+	return false
+}

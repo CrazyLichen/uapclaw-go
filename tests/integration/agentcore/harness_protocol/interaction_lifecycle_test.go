@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

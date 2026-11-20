@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/agents"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

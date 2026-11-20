@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/context"
-	iface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/usage"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/usage"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
