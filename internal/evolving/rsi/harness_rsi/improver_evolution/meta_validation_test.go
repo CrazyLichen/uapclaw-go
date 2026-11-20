@@ -128,9 +128,16 @@ func TestImproverIdentity_四类问题逐字(t *testing.T) {
 		t.Fatalf("unexpected: %v", issues)
 	}
 
-	// 值为空串 → invalid_improver_identity_field
+	// 值为纯空白 → invalid_improver_identity_field（空串走 missing 分支，同 Python value == ""）
 	rec = checkpointFixture("a")
-	rec["improver_version_id"] = ""
+	rec["improver_version_id"] = "  "
+	_, issues = improverIdentity([]map[string]any{rec}, "baseline")
+	if len(issues) != 1 || issues[0]["code"] != "invalid_improver_identity_field" {
+		t.Fatalf("unexpected: %v", issues)
+	}
+	// 值为非字符串 → invalid_improver_identity_field
+	rec = checkpointFixture("a")
+	rec["improver_version_id"] = 123
 	_, issues = improverIdentity([]map[string]any{rec}, "baseline")
 	if len(issues) != 1 || issues[0]["code"] != "invalid_improver_identity_field" {
 		t.Fatalf("unexpected: %v", issues)
@@ -225,6 +232,7 @@ func TestPairIssues_全分支(t *testing.T) {
 	base = checkpointFixture("a")
 	base["split"] = "meta_train"
 	cand = checkpointFixture("a")
+	cand["split"] = "meta_train"
 	issues = pairIssues("a", base, cand, map[string]bool{})
 	count := 0
 	for _, issue := range issues {
