@@ -49,6 +49,12 @@ func (f *fakeCoordinator) CloseSession(
 	return result, f.closeErr
 }
 
+// MarkSessionWaitingForInput 停泊（本 fake 不触达，no-op）。
+func (f *fakeCoordinator) MarkSessionWaitingForInput(string, int) {}
+
+// ResumeWaitingForInput 恢复（本 fake 不触达，no-op）。
+func (f *fakeCoordinator) ResumeWaitingForInput(string, int) {}
+
 // fakeCleaner 可清理的 manager 替身。
 type fakeCleaner struct {
 	// recorder 步骤记录

@@ -34,6 +34,12 @@ type CoordinatorPort interface {
 	QuiesceSession(sessionID string, generation *int) (*SessionLifecycleContext, error)
 	// Close 关闭协调器，返回超时会话
 	Close(waitTimeout *time.Duration, timedOut *[]string) error
+	// MarkSessionWaitingForInput 停泊空闲团队代次的全部持久响应 owner
+	// Python: RuntimeSessionCoordinator.mark_session_waiting_for_input（coordinator.py:961-979）
+	MarkSessionWaitingForInput(sessionID string, generation int)
+	// ResumeWaitingForInput 把新输入代次的等待持久 owner 置回运行
+	// Python: RuntimeSessionCoordinator.resume_waiting_for_input（coordinator.py:982-991）
+	ResumeWaitingForInput(sessionID string, generation int)
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
