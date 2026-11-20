@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
@@ -211,8 +212,11 @@ func TestBuildContextProcessorRail_开关门控(t *testing.T) {
 	assert.NotNil(t, out3, "注入后应产出 rail")
 }
 
-// fakeContextProcessorRail 注入回环用例的 rail 占位。
-type fakeContextProcessorRail struct{}
+// fakeContextProcessorRail 注入回环用例的 rail 占位（嵌入 BaseRail 满足
+// AgentRail 接口面）。
+type fakeContextProcessorRail struct {
+	rails.DeepAgentRail
+}
 
 // TestBuildModelAnomalyDetection_开关门控 execution_guard 门控（params 入口）。
 func TestBuildModelAnomalyDetection_开关门控(t *testing.T) {
