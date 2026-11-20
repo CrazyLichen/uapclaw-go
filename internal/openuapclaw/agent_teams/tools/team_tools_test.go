@@ -1,9 +1,13 @@
 package tools
 
 import (
+	"context"
+	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/locales"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -253,4 +257,106 @@ func TestExtractStringSlice(t *testing.T) {
 			t.Logf("JSON 路径: %v", result)
 		}
 	})
+}
+
+// setupReassignToolFixture 建 UpdateTaskTool/ClaimTaskTool 测试夹具。
+func setupReassignToolFixture(t *testing.T) (*TeamBackend, *database.InMemoryTeamDatabase, context.Context) {
+	t.Helper()
+	db := database.NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.Initialize(ctx)
+	backend := NewTeamBackend("alpha", "leader1", true, db, nil, WithLeaderMemberName("leader1"))
+	return backend, db, ctx
+}
+
+// TestUpdateTaskTool_ReassignKeepsStatus 原子改派：状态原位保留，不发 RELEASED。
+// Python: tool_task.py L1810-1822。
+func TestUpdateTaskTool_ReassignKeepsStatus(t *testing.T) {
+	backend, db, ctx := setupReassignToolFixture(t)
+	owner := "agent1"
+	if ok, _ := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t1", TeamName: "alpha",
+		Title: "T", Content: "C", Status: fsm.TaskStatusInProgress, Assignee: &owner}); !ok {
+		t.Fatal("夹具建任务失败")
+	}
+	tr := locales.MakeTranslator("cn")
+	tool := newUpdateTaskTool(backend, tr)
+	out, err := tool.Invoke(ctx, map[string]any{"task_id": "t1", "assignee": "agent2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := out["success"].(bool); !ok {
+		t.Fatalf("改派应成功: %v", out)
+	}
+	got, _ := db.Task().GetTask(ctx, "t1")
+	if got.Status != fsm.TaskStatusInProgress {
+		t.Errorf("状态应原位保留 in_progress: got %q", got.Status)
+	}
+	if got.Assignee == nil || *got.Assignee != "agent2" {
+		t.Errorf("新 owner 应为 agent2: got %v", got.Assignee)
+	}
+}
+
+// TestUpdateTaskTool_ReassignBusyRejected one-active 前置：新 owner 持在办票时
+// 改派被拒且任务原 owner 不变。Python: tool_task.py L1800-1807。
+func TestUpdateTaskTool_ReassignBusyRejected(t *testing.T) {
+	backend, db, ctx := setupReassignToolFixture(t)
+	owner := "agent1"
+	busy := "agent2"
+	if ok, _ := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t1", TeamName: "alpha",
+		Title: "T", Content: "C", Status: fsm.TaskStatusInProgress, Assignee: &owner}); !ok {
+		t.Fatal("夹具建任务失败")
+	}
+	if ok, _ := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t2", TeamName: "alpha",
+		Title: "T2", Content: "C", Status: fsm.TaskStatusInProgress, Assignee: &busy}); !ok {
+		t.Fatal("夹具建在办票失败")
+	}
+	tool := newUpdateTaskTool(backend, locales.MakeTranslator("cn"))
+	out, err := tool.Invoke(ctx, map[string]any{"task_id": "t1", "assignee": "agent2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := out["success"].(bool); ok {
+		t.Fatal("改派给在办票成员应被拒")
+	}
+	if msg, _ := out["error"].(string); !strings.Contains(msg, "already has an active task #t2") {
+		t.Errorf("错误文案应含 one-active 原因: %q", msg)
+	}
+	got, _ := db.Task().GetTask(ctx, "t1")
+	if got.Assignee == nil || *got.Assignee != "agent1" {
+		t.Errorf("被拒后原 owner 应保持不变: got %v", got.Assignee)
+	}
+}
+
+// TestClaimTaskTool_BusyRejected claim 工具边界的 one-active 前置。
+// Python: tool_task.py L2049-2058。
+func TestClaimTaskTool_BusyRejected(t *testing.T) {
+	backend, db, ctx := setupReassignToolFixture(t)
+	// backend 以 leader1 身份构建；claim 工具按 member_name=agent1 探测需要
+	// teammate 视角，另建一个 backend。
+	teammate := NewTeamBackend("alpha", "agent1", false, db, nil)
+	busy := "agent1"
+	if ok, _ := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t-held", TeamName: "alpha",
+		Title: "Held", Content: "C", Status: fsm.TaskStatusInProgress, Assignee: &busy}); !ok {
+		t.Fatal("夹具建在办票失败")
+	}
+	if ok, _ := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t-open", TeamName: "alpha",
+		Title: "Open", Content: "C", Status: fsm.TaskStatusPending}); !ok {
+		t.Fatal("夹具建可认领票失败")
+	}
+	tool := newClaimTaskTool(teammate.TaskManager(), locales.MakeTranslator("cn"))
+	out, err := tool.Invoke(ctx, map[string]any{"task_id": "t-open", "status": "claimed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := out["success"].(bool); ok {
+		t.Fatal("已持在办票时再认领应被拒")
+	}
+	if msg, _ := out["error"].(string); !strings.Contains(msg, "You already have an active task #t-held") {
+		t.Errorf("错误文案应含 one-active 原因: %q", msg)
+	}
+	_ = backend
 }
