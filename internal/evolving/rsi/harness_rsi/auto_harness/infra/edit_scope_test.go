@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -47,13 +48,12 @@ func TestNormalizeRepoPath(t *testing.T) {
 // TestRenderEditScope
 func TestRenderEditScope(t *testing.T) {
 	out := RenderEditScope("")
-	if !containsStr([]string{out}, "本轮允许变更范围") ||
-		!containsStr([]string{out}, "jiuwenswarm/**") ||
-		!containsStr([]string{out}, "docs/en/") ||
-		!containsStr([]string{out}, "不要自行越界") {
-		t.Fatalf("RenderEditScope = %q", out)
+	for _, want := range []string{"本轮允许变更范围", "jiuwenswarm/**", "docs/en/", "不要自行越界"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("RenderEditScope 缺 %q: %q", want, out)
+		}
 	}
-	if out2 := RenderEditScope("自定义头"); !containsStr([]string{out2}, "自定义头") {
+	if out2 := RenderEditScope("自定义头"); !strings.Contains(out2, "自定义头") {
 		t.Fatalf("自定义头未生效")
 	}
 }
