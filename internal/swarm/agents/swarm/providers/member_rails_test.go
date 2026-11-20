@@ -204,7 +204,7 @@ func TestBuildContextProcessorRail_开关门控(t *testing.T) {
 
 	// 注入回环：注入后产出 rail
 	providers.SetContextProcessorRailBuilder(func(config map[string]any) agentinterfaces.AgentRail {
-		return fakeContextProcessorRail{}
+		return &fakeContextProcessorRail{}
 	})
 	defer providers.SetContextProcessorRailBuilder(nil)
 	out3, err3 := provider(map[string]any{}, newTestView())
