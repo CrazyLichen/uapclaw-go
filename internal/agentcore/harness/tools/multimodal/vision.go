@@ -42,7 +42,6 @@ type VQAInput struct {
 // Python: ImageOCRTool.__init__ + ImageOCRTool.invoke
 // 使用 tool.NewTool[ImageOCRInput, map[string]any] 模式
 func NewImageOCRTool(
-	client modelclients.BaseModelClient,
 	config *hschema.VisionModelConfig,
 	language, agentID string,
 ) tool.Tool {
@@ -63,7 +62,10 @@ func NewImageOCRTool(
 				return nil, err
 			}
 
-			// 3. 调用视觉模型
+			// 3. 调用视觉模型（Python: _call_vision_model 内部
+			// OpenAI(api_key=config.api_key, base_url=config.base_url)（vision.py:114）
+			// 每调用现建 client——Go 等价在调用期自建）
+			client := clientFromVisionConfig(config)
 			text, model, err := CallVisionModel(ctx, client, imageContent, prompt, config)
 			if err != nil {
 				return nil, err
@@ -91,7 +93,6 @@ func NewImageOCRTool(
 // Python: VisualQuestionAnsweringTool.__init__ + VisualQuestionAnsweringTool.invoke
 // 可选先 OCR 再 VQA（对齐 Python: include_ocr=True 默认）
 func NewVisualQuestionAnsweringTool(
-	client modelclients.BaseModelClient,
 	config *hschema.VisionModelConfig,
 	language, agentID string,
 ) tool.Tool {
@@ -114,6 +115,7 @@ func NewVisualQuestionAnsweringTool(
 			if input.IncludeOCR != nil {
 				includeOCR = *input.IncludeOCR
 			}
+			client := clientFromVisionConfig(config)
 			if includeOCR {
 				ocrPrompt := input.OCRPrompt
 				if ocrPrompt == "" {
@@ -167,13 +169,14 @@ func NewVisualQuestionAnsweringTool(
 // CreateVisionTools 创建视觉工具集。
 // Python: create_vision_tools(language, vision_model_config, agent_id) -> list[Tool]
 func CreateVisionTools(
-	client modelclients.BaseModelClient,
 	config *hschema.VisionModelConfig,
 	language, agentID string,
 ) []tool.Tool {
+	// Python: create_vision_tools (:297-315)：完整性门控 + 两件直构
+	// （client 在各工具 invoke 期自建，对齐 _call_vision_model :114）
 	return []tool.Tool{
-		NewImageOCRTool(client, config, language, agentID),
-		NewVisualQuestionAnsweringTool(client, config, language, agentID),
+		NewImageOCRTool(config, language, agentID),
+		NewVisualQuestionAnsweringTool(config, language, agentID),
 	}
 }
 
@@ -185,4 +188,14 @@ func ocrTextOrNone(ocrText string) string {
 		return "No OCR used"
 	}
 	return ocrText
+}
+
+// clientFromVisionConfig 视觉模型客户端（invoke 期自建）。
+// Python: _call_vision_model 内 OpenAI(api_key=config.api_key,
+// base_url=config.base_url)（vision.py:114）每调用新建；Go 镜像该语义。
+func clientFromVisionConfig(config *hschema.VisionModelConfig) modelclients.BaseModelClient {
+	if config == nil {
+		return nil
+	}
+	return modelClientFactory(config.APIKey, config.BaseURL, config.Model, config.MaxRetries)
 }

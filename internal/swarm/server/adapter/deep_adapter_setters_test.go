@@ -59,37 +59,16 @@ func TestResolveModelClientFromConfig_空配置返回nil(t *testing.T) {
 	}
 }
 
-// TestResolveMultimediaModelClients 验证三类多媒体客户端解析器都能安全降级。
+// TestResolveMultimediaModelClients 验证视频客户端解析器安全降级。
+// （vision/audio 解析器已随 2026-12-04 multimodal client 下沉删除——
+// client 由工具 invoke 期自建，adapter 不再预建。）
 func TestResolveMultimediaModelClients(t *testing.T) {
-	t.Run("vision 空配置返回 nil", func(t *testing.T) {
-		d := NewDeepAdapter()
-		d.visionModelConfig = &hschema.VisionModelConfig{}
-		if got := d.resolveVisionModelClient(); got != nil {
-			t.Fatalf("空配置应返回 nil，实际 %T", got)
-		}
-	})
-
-	t.Run("audio 空配置返回 nil", func(t *testing.T) {
-		d := NewDeepAdapter()
-		d.audioModelConfig = &hschema.AudioModelConfig{}
-		if got := d.resolveAudioModelClient(); got != nil {
-			t.Fatalf("空配置应返回 nil，实际 %T", got)
-		}
-	})
-
 	t.Run("video 空配置返回 nil", func(t *testing.T) {
 		d := NewDeepAdapter()
 		d.videoModelConfig = &hschema.VideoModelConfig{}
 		if got := d.resolveVideoModelClient(); got != nil {
 			t.Fatalf("空配置应返回 nil，实际 %T", got)
 		}
-	})
-
-	t.Run("audio 使用 QAModel 字段", func(t *testing.T) {
-		d := NewDeepAdapter()
-		d.audioModelConfig = &hschema.AudioModelConfig{QAModel: "qa-model", BaseURL: "http://localhost"}
-		// 仅验证取 QAModel 分支不 panic；空 api_key 下构建失败返回 nil
-		_ = d.resolveAudioModelClient()
 	})
 }
 

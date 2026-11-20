@@ -23,6 +23,17 @@ import (
 // ──────────────────────────── 辅助函数 ────────────────────────────
 
 // mockVisionClient 用于测试的 mock 视觉模型客户端
+// stubModelClient 把 modelClientFactory 指到测试桩（对齐 Python 测试
+// monkeypatch OpenAI 客户端的手法）；注册 t.Cleanup 恢复。
+func stubModelClient(t *testing.T, mock modelclients.BaseModelClient) {
+	t.Helper()
+	orig := modelClientFactory
+	modelClientFactory = func(string, string, string, int) modelclients.BaseModelClient {
+		return mock
+	}
+	t.Cleanup(func() { modelClientFactory = orig })
+}
+
 type mockVisionClient struct {
 	// responses 每次调用返回的结果序列（支持模拟重试场景）
 	responses []mockVisionResponse

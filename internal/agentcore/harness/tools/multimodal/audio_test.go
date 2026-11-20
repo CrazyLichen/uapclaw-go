@@ -23,7 +23,8 @@ func TestNewAudioTranscriptionTool_Invoke成功(t *testing.T) {
 	}
 	config := newTestAudioConfig()
 
-	transcriptionTool := NewAudioTranscriptionTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	transcriptionTool := NewAudioTranscriptionTool(config, "cn", "test-agent")
 
 	// 使用本地文件
 	tmpDir := t.TempDir()
@@ -50,7 +51,8 @@ func TestNewAudioTranscriptionTool_Invoke失败(t *testing.T) {
 	}
 	config := newTestAudioConfig()
 
-	transcriptionTool := NewAudioTranscriptionTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	transcriptionTool := NewAudioTranscriptionTool(config, "cn", "test-agent")
 
 	_, err := transcriptionTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "https://example.com/audio.mp3",
@@ -66,7 +68,8 @@ func TestNewAudioTranscriptionTool_Sandbox路径(t *testing.T) {
 	}
 	config := newTestAudioConfig()
 
-	transcriptionTool := NewAudioTranscriptionTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	transcriptionTool := NewAudioTranscriptionTool(config, "cn", "test-agent")
 
 	_, err := transcriptionTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "/home/user/sandbox/audio.mp3",
@@ -79,7 +82,8 @@ func TestNewAudioTranscriptionTool_Sandbox路径(t *testing.T) {
 func TestNewAudioTranscriptionTool_配置无效(t *testing.T) {
 	mockClient := &mockAudioClient{transcriptionText: "test"}
 	// nil 配置
-	transcriptionTool := NewAudioTranscriptionTool(mockClient, nil, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	transcriptionTool := NewAudioTranscriptionTool(nil, "cn", "test-agent")
 
 	_, err := transcriptionTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "/path/audio.mp3",
@@ -97,7 +101,8 @@ func TestNewAudioQATool_Invoke成功(t *testing.T) {
 	}
 	config := newTestAudioConfig()
 
-	qaTool := NewAudioQATool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	qaTool := NewAudioQATool(config, "cn", "test-agent")
 
 	tmpDir := t.TempDir()
 	audioFile := filepath.Join(tmpDir, "test.mp3")
@@ -130,7 +135,8 @@ func TestNewAudioQATool_Invoke失败(t *testing.T) {
 	}
 	config := newTestAudioConfig()
 
-	qaTool := NewAudioQATool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	qaTool := NewAudioQATool(config, "cn", "test-agent")
 
 	_, err := qaTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "https://example.com/audio.mp3",
@@ -146,7 +152,8 @@ func TestNewAudioQATool_配置无效(t *testing.T) {
 	// 空 base_url
 	config := &hschema.AudioModelConfig{APIKey: "test"}
 
-	qaTool := NewAudioQATool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	qaTool := NewAudioQATool(config, "cn", "test-agent")
 
 	_, err := qaTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "/path/audio.mp3",
@@ -166,7 +173,8 @@ func TestNewAudioMetadataTool_时长和ACR未配置(t *testing.T) {
 	config.ACRAccessKey = ""
 	config.ACRAccessSecret = ""
 
-	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	metadataTool := NewAudioMetadataTool(config, "cn", "test-agent")
 
 	tmpDir := t.TempDir()
 	audioFile := filepath.Join(tmpDir, "test.wav")
@@ -196,7 +204,8 @@ func TestNewAudioMetadataTool_时长超过15秒(t *testing.T) {
 	config.ACRAccessKey = "test-key"
 	config.ACRAccessSecret = "test-secret"
 
-	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	metadataTool := NewAudioMetadataTool(config, "cn", "test-agent")
 
 	tmpDir := t.TempDir()
 	// 创建 20 秒 WAV 文件 (44100 * 20 = 882000 samples)
@@ -224,7 +233,8 @@ func TestCreateAudioTools(t *testing.T) {
 	mockClient := &mockAudioClient{transcriptionText: "test"}
 	config := newTestAudioConfig()
 
-	toolList := CreateAudioTools(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	toolList := CreateAudioTools(config, "cn", "test-agent")
 	if len(toolList) != 3 {
 		t.Fatalf("CreateAudioTools 应返回 3 个工具, got %d", len(toolList))
 	}
@@ -242,21 +252,24 @@ func TestCreateAudioTools(t *testing.T) {
 func TestAudioTranscriptionTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{transcriptionText: "ok"}
 	config := newTestAudioConfig()
-	audioTool := NewAudioTranscriptionTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	audioTool := NewAudioTranscriptionTool(config, "cn", "test-agent")
 	var _ = audioTool
 }
 
 func TestAudioQATool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{invokeResponses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestAudioConfig()
-	audioTool := NewAudioQATool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	audioTool := NewAudioQATool(config, "cn", "test-agent")
 	var _ = audioTool
 }
 
 func TestAudioMetadataTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{}
 	config := newTestAudioConfig()
-	audioTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	audioTool := NewAudioMetadataTool(config, "cn", "test-agent")
 	var _ = audioTool
 }
 
@@ -306,7 +319,8 @@ func TestNewAudioMetadataTool_ACR成功(t *testing.T) {
 	config.ACRAccessSecret = "test-secret"
 	config.ACRBaseURL = server.URL
 
-	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	metadataTool := NewAudioMetadataTool(config, "cn", "test-agent")
 
 	tmpDir := t.TempDir()
 	audioFile := filepath.Join(tmpDir, "short.wav")
@@ -337,7 +351,8 @@ func TestNewAudioMetadataTool_ACR失败(t *testing.T) {
 	config.ACRAccessSecret = "test-secret"
 	config.ACRBaseURL = server.URL
 
-	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	metadataTool := NewAudioMetadataTool(config, "cn", "test-agent")
 
 	tmpDir := t.TempDir()
 	audioFile := filepath.Join(tmpDir, "short.wav")
@@ -368,7 +383,8 @@ func TestNewAudioMetadataTool_配置无效(t *testing.T) {
 	// 空 base_url
 	config := &hschema.AudioModelConfig{APIKey: "test"}
 
-	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	metadataTool := NewAudioMetadataTool(config, "cn", "test-agent")
 
 	_, err := metadataTool.Invoke(context.Background(), map[string]any{
 		"audio_path_or_url": "/path/audio.mp3",

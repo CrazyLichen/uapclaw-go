@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -42,7 +43,6 @@ type AudioMetadataInput struct {
 // Python: AudioTranscriptionTool.__init__ + AudioTranscriptionTool.invoke
 // 使用 TranscribeAudio 接口调用 /audio/transcriptions
 func NewAudioTranscriptionTool(
-	client modelclients.BaseModelClient,
 	config *hschema.AudioModelConfig,
 	language, agentID string,
 ) tool.Tool {
@@ -51,7 +51,8 @@ func NewAudioTranscriptionTool(
 	fn := func(ctx context.Context, input AudioTranscriptionInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// Python: AudioTranscriptionTool.invoke 的 try/except + finally 清理
 		result, err := func() (map[string]any, error) {
-			// 校验配置（对齐 Python: _require_audio_model_config + _build_openai_client）
+			// 校验配置（对齐 Python: _require_audio_model_config + _build_openai_client——
+			// client 在调用期自建，等价 Python invoke 内 _build_openai_client）
 			if config == nil || config.BaseURL == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalAudioConfigInvalid,
@@ -76,7 +77,9 @@ func NewAudioTranscriptionTool(
 				}
 			}()
 
-			// 调用转写（对齐 Python: _call_with_retries(config, _invoke_audio_transcription, audio_path)）
+			// 调用转写（对齐 Python: _call_with_retries(config,
+			// _invoke_audio_transcription, audio_path)；client 调用期自建）
+			client := clientFromAudioConfig(config)
 			var resp *llmschema.TranscriptionResponse
 			retryErr := callWithRetries(config.MaxRetries, func() error {
 				var invokeErr error
@@ -114,7 +117,6 @@ func NewAudioTranscriptionTool(
 // Python: AudioQuestionAnsweringTool.__init__ + AudioQuestionAnsweringTool.invoke
 // 使用 input_audio content block + chat.completions
 func NewAudioQATool(
-	client modelclients.BaseModelClient,
 	config *hschema.AudioModelConfig,
 	language, agentID string,
 ) tool.Tool {
@@ -122,7 +124,7 @@ func NewAudioQATool(
 
 	fn := func(ctx context.Context, input AudioQAInput, opts ...tool.ToolOption) (map[string]any, error) {
 		result, err := func() (map[string]any, error) {
-			// 校验配置
+			// 校验配置（client 调用期自建，同 transcription）
 			if config == nil || config.BaseURL == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalAudioConfigInvalid,
@@ -162,7 +164,10 @@ func NewAudioQATool(
 
 			messages := modelclients.NewMessagesParam(systemMsg, userMsg)
 
-			// 调用 chat.completions（对齐 Python: _call_with_retries(config, _invoke_audio_question_answering, audio_path, question)）
+			// 调用 chat.completions（对齐 Python: _call_with_retries(config,
+			// _invoke_audio_question_answering, audio_path, question)；client
+			// 调用期自建）
+			client := clientFromAudioConfig(config)
 			var resp *llmschema.AssistantMessage
 			retryErr := callWithRetries(config.MaxRetries, func() error {
 				var invokeErr error
@@ -209,7 +214,6 @@ func NewAudioQATool(
 // Python: AudioMetadataTool.__init__ + AudioMetadataTool.invoke
 // 获取时长 + ACRCloud 识别
 func NewAudioMetadataTool(
-	client modelclients.BaseModelClient,
 	config *hschema.AudioModelConfig,
 	language, agentID string,
 ) tool.Tool {
@@ -217,7 +221,7 @@ func NewAudioMetadataTool(
 
 	fn := func(ctx context.Context, input AudioMetadataInput, opts ...tool.ToolOption) (map[string]any, error) {
 		result, err := func() (map[string]any, error) {
-			// 校验配置
+			// 校验配置（client 调用期自建，同 transcription）
 			if config == nil || config.BaseURL == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalAudioConfigInvalid,
@@ -305,14 +309,13 @@ func NewAudioMetadataTool(
 // CreateAudioTools 创建音频工具集。
 // Python: create_audio_tools(language, audio_model_config, agent_id) -> list[Tool]
 func CreateAudioTools(
-	client modelclients.BaseModelClient,
 	config *hschema.AudioModelConfig,
 	language, agentID string,
 ) []tool.Tool {
 	return []tool.Tool{
-		NewAudioTranscriptionTool(client, config, language, agentID),
-		NewAudioQATool(client, config, language, agentID),
-		NewAudioMetadataTool(client, config, language, agentID),
+		NewAudioTranscriptionTool(config, language, agentID),
+		NewAudioQATool(config, language, agentID),
+		NewAudioMetadataTool(config, language, agentID),
 	}
 }
 
@@ -321,4 +324,29 @@ func CreateAudioTools(
 // roundDuration 四舍五入到2位小数（对齐 Python: round(duration, 2)）
 func roundDuration(d float64) float64 {
 	return float64(int(d*100+0.5)) / 100
+}
+
+// modelClientFactory 模型客户端工厂（测试注入点：单测以桩替换实现
+// mock 注入，对齐 Python 测试 monkeypatch OpenAI 客户端的手法）。
+var modelClientFactory = func(apiKey, apiBase, model string, maxRetries int) modelclients.BaseModelClient {
+	m, err := llm.InitModel("OpenAI", model, apiKey, apiBase,
+		llm.WithInitMaxRetries(maxRetries),
+		llm.WithInitVerifySSL(false),
+	)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("model_name", model).
+			Msg("multimodal model client build failed")
+		return nil
+	}
+	return m.GetClient()
+}
+
+// clientFromAudioConfig 音频模型客户端（invoke 期自建）。
+// Python: _build_openai_client(audio_model_config)（invoke 内）——Go 镜像
+// 该语义。
+func clientFromAudioConfig(config *hschema.AudioModelConfig) modelclients.BaseModelClient {
+	if config == nil {
+		return nil
+	}
+	return modelClientFactory(config.APIKey, config.BaseURL, config.QAModel, config.MaxRetries)
 }

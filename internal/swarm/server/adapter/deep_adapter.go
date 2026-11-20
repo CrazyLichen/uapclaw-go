@@ -2605,15 +2605,11 @@ func parseApprovalAnswersFromAny(answers any) []ApprovalAnswer {
 	return nil
 }
 
-// resolveVisionModelClient 基于 visionModelConfig 构建 BaseModelClient。
-func (d *DeepAdapter) resolveVisionModelClient() modelclients.BaseModelClient {
-	return d.resolveModelClientFromConfig(d.visionModelConfig.APIKey, d.visionModelConfig.BaseURL, d.visionModelConfig.Model, d.visionModelConfig.MaxRetries)
-}
-
-// resolveAudioModelClient 基于 audioModelConfig 构建 BaseModelClient。
-func (d *DeepAdapter) resolveAudioModelClient() modelclients.BaseModelClient {
-	return d.resolveModelClientFromConfig(d.audioModelConfig.APIKey, d.audioModelConfig.BaseURL, d.audioModelConfig.QAModel, d.audioModelConfig.MaxRetries)
-}
+// （历史注记：resolveVisionModelClient/resolveAudioModelClient 已随
+// 2026-12-04 multimodal client 下沉删除——Python create_vision_tools/
+// create_audio_tools 的 client 由工具 invoke 期自建（vision.py:114 /
+// audio.py _build_openai_client），adapter 不再预建；video 仍构造期建
+// （对齐 video_understanding.py:99-107 构造期 init_model）。规则 8。）
 
 // resolveVideoModelClient 基于 videoModelConfig 构建 BaseModelClient。
 func (d *DeepAdapter) resolveVideoModelClient() modelclients.BaseModelClient {

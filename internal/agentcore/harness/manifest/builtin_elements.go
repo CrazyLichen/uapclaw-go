@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	clirails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -36,7 +35,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
@@ -193,7 +191,7 @@ func registerCoreToolProviders() {
 		if cfg == nil || !isVisionModelConfigComplete(cfg) {
 			return nil, nil
 		}
-		return toolsToAny(multimodal.CreateVisionTools(visionAudioClient(cfg.APIKey, cfg.BaseURL, cfg.Model, cfg.MaxRetries), cfg, webLanguage(ctx), webAgentID(ctx))), nil
+		return toolsToAny(multimodal.CreateVisionTools(cfg, webLanguage(ctx), webAgentID(ctx))), nil
 	})
 	// core.audio → 音频工具组
 	// Python: _build_audio_tool_group (:319-366)：dedicated=false 或无
@@ -206,9 +204,9 @@ func registerCoreToolProviders() {
 			// Python: AudioMetadataTool(language, AudioModelConfig(), agent_id)
 			// ——Go 基座 NewAudioMetadataTool 需要 client 形参；metadata 不调
 			// 模型，nil client 即可（偏差注记：基座签名差异）。
-			return toolsToAny([]tool.Tool{multimodal.NewAudioMetadataTool(nil, &hschema.AudioModelConfig{}, language, agentID)}), nil
+			return toolsToAny([]tool.Tool{multimodal.NewAudioMetadataTool(&hschema.AudioModelConfig{}, language, agentID)}), nil
 		}
-		return toolsToAny(multimodal.CreateAudioTools(visionAudioClient(audioCfg.APIKey, audioCfg.BaseURL, audioCfg.QAModel, audioCfg.MaxRetries), audioCfg, language, agentID)), nil
+		return toolsToAny(multimodal.CreateAudioTools(audioCfg, language, agentID)), nil
 	})
 }
 
@@ -335,23 +333,6 @@ func boolParamOr(params map[string]any, key string, fallback bool) bool {
 func strParam(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
-}
-
-// visionAudioClient 视觉/音频模型客户端。
-// Python: create_vision_tools/create_audio_tools 内部自建 client；Go 基座
-// 签名要求外部传入，此处镜像 deep_adapter.resolveModelClientFromConfig
-// （Python init_model(provider="OpenAI", ...)）——偏差注记。
-func visionAudioClient(apiKey, apiBase, model string, maxRetries int) modelclients.BaseModelClient {
-	m, err := llm.InitModel("OpenAI", model, apiKey, apiBase,
-		llm.WithInitMaxRetries(maxRetries),
-		llm.WithInitVerifySSL(false),
-	)
-	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("model", model).
-			Msg("vision/audio model client build failed")
-		return nil
-	}
-	return m.GetClient()
 }
 
 // skillUseDirs SkillUseRail 目录派生。

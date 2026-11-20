@@ -18,7 +18,8 @@ func TestNewImageOCRTool_Invoke成功(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	ocrTool := NewImageOCRTool(config, "cn", "test-agent")
 
 	// 使用 tool.Invoke 调用
 	result, err := ocrTool.Invoke(context.Background(), map[string]any{
@@ -43,7 +44,8 @@ func TestNewImageOCRTool_Invoke失败(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	ocrTool := NewImageOCRTool(config, "cn", "test-agent")
 
 	_, err := ocrTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "https://example.com/image.png",
@@ -68,7 +70,8 @@ func TestNewImageOCRTool_Sandbox路径(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	ocrTool := NewImageOCRTool(config, "cn", "test-agent")
 
 	_, err := ocrTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "/home/user/sandbox/image.png",
@@ -84,7 +87,8 @@ func TestNewImageOCRTool_自定义提示词(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	ocrTool := NewImageOCRTool(config, "cn", "test-agent")
 
 	result, err := ocrTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "https://example.com/image.png",
@@ -106,7 +110,8 @@ func TestNewVisualQuestionAnsweringTool_Invoke成功_不含OCR(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	vqaTool := NewVisualQuestionAnsweringTool(config, "cn", "test-agent")
 
 	result, err := vqaTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "https://example.com/image.png",
@@ -134,7 +139,8 @@ func TestNewVisualQuestionAnsweringTool_Invoke成功_含OCR(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	vqaTool := NewVisualQuestionAnsweringTool(config, "cn", "test-agent")
 
 	result, err := vqaTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "https://example.com/image.png",
@@ -163,7 +169,8 @@ func TestNewVisualQuestionAnsweringTool_Invoke失败(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	vqaTool := NewVisualQuestionAnsweringTool(config, "cn", "test-agent")
 
 	_, err := vqaTool.Invoke(context.Background(), map[string]any{
 		"image_path_or_url": "https://example.com/image.png",
@@ -185,7 +192,8 @@ func TestNewVisualQuestionAnsweringTool_默认含OCR(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	vqaTool := NewVisualQuestionAnsweringTool(config, "cn", "test-agent")
 
 	// 不传 include_ocr 字段 → 应默认为 true → 触发 OCR 步骤
 	result, err := vqaTool.Invoke(context.Background(), map[string]any{
@@ -211,7 +219,8 @@ func TestCreateVisionTools(t *testing.T) {
 	}
 	config := newTestVisionConfig()
 
-	toolList := CreateVisionTools(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	toolList := CreateVisionTools(config, "cn", "test-agent")
 	if len(toolList) != 2 {
 		t.Fatalf("CreateVisionTools 应返回 2 个工具, got %d", len(toolList))
 	}
@@ -230,14 +239,16 @@ func TestCreateVisionTools(t *testing.T) {
 func TestImageOCRTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestVisionConfig()
-	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	ocrTool := NewImageOCRTool(config, "cn", "test-agent")
 	var _ = ocrTool
 }
 
 func TestVQATool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestVisionConfig()
-	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+	stubModelClient(t, mockClient)
+	vqaTool := NewVisualQuestionAnsweringTool(config, "cn", "test-agent")
 	var _ = vqaTool
 }
 

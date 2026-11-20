@@ -256,8 +256,9 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	//   Python: current_tools=self._vision_tools, registered=self._vision_tools_registered,
 	//   Python: enabled=self._vision_model_config is not None, create_fn=..., warn_label="vision tools")
 	if d.visionModelConfig != nil && !d.visionToolsRegistered {
-		client := d.resolveVisionModelClient()
-		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), "")
+		// Python: create_vision_tools(language, config, agent_id)——client 在
+		// 工具 invoke 期自建（_call_vision_model :114），adapter 不预建
+		visionTools := multimodal.CreateVisionTools(d.visionModelConfig, d.resolveRuntimeLanguage(), "")
 		cards := make([]*tool.ToolCard, len(visionTools))
 		for i, t := range visionTools {
 			cards[i] = t.Card()
@@ -304,7 +305,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 			// Python: create_audio_tools(audio_model_config=None) → 过滤 audio_metadata
 			// 注意：Python 此模式下 audio_metadata 调用时 config=None 会报错，
 			// Go 保持一致行为：创建工具但 config 不完整时调用会返回错误
-			metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), "")
+			metadataTool := multimodal.NewAudioMetadataTool(nil, d.resolveRuntimeLanguage(), "")
 			d.syncToolsToManager(ctx, []*tool.ToolCard{metadataTool.Card()}, []tool.Tool{metadataTool}, nil, "audio")
 			d.audioTools = []tool.Tool{metadataTool}
 			d.audioToolsRegistered = true
@@ -313,8 +314,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	} else {
 		// 情况3: 完整配置 → 全部音频工具
 		if !d.audioToolsRegistered {
-			client := d.resolveAudioModelClient()
-			audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), "")
+			audioTools := multimodal.CreateAudioTools(d.audioModelConfig, d.resolveRuntimeLanguage(), "")
 			cards := make([]*tool.ToolCard, len(audioTools))
 			for i, t := range audioTools {
 				cards[i] = t.Card()
@@ -620,8 +620,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           Python: self._vision_tools.append(tool)
 	//       Python: self._vision_tools_registered = bool(self._vision_tools)
 	if d.visionModelConfig != nil {
-		client := d.resolveVisionModelClient()
-		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), agentID)
+		visionTools := multimodal.CreateVisionTools(d.visionModelConfig, d.resolveRuntimeLanguage(), agentID)
 		for _, t := range visionTools {
 			if err := runner.GetResourceMgr().AddTool(t); err != nil {
 				logger.Warn(logComponent).Err(err).Msg("failed to register vision tool to ResourceMgr")
@@ -642,7 +641,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 	} else if d.audioModelConfig == nil {
 		// 情况2: 有独立 key 但无 model config → 仅注册 audio_metadata（metadata-only）
-		metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), agentID)
+		metadataTool := multimodal.NewAudioMetadataTool(nil, d.resolveRuntimeLanguage(), agentID)
 		if err := runner.GetResourceMgr().AddTool(metadataTool); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("failed to register audio_metadata tool to ResourceMgr")
 		}
@@ -652,8 +651,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		logger.Info(logComponent).Msg("getToolCards: audio tools metadata-only mode")
 	} else {
 		// 情况3: 完整配置 → 全部音频工具
-		client := d.resolveAudioModelClient()
-		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), agentID)
+		audioTools := multimodal.CreateAudioTools(d.audioModelConfig, d.resolveRuntimeLanguage(), agentID)
 		for _, t := range audioTools {
 			if err := runner.GetResourceMgr().AddTool(t); err != nil {
 				logger.Warn(logComponent).Err(err).Msg("failed to register audio tool to ResourceMgr")
