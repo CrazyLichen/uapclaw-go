@@ -364,5 +364,5 @@ type fakeBackend struct{}
 func (f *fakeBackend) Create(_ context.Context, slug, _, targetPath string) (*WorktreeCreateResult, error) {
 	return &WorktreeCreateResult{WorktreePath: targetPath, WorktreeBranch: WorktreeBranchName(slug)}, nil
 }
-func (f *fakeBackend) Remove(_ context.Context, _, _ string) bool { return true }
+func (f *fakeBackend) Remove(_ context.Context, _, _ string, _ bool) bool { return true }
 func (f *fakeBackend) Exists(_ context.Context, _ string) bool    { return false }

@@ -514,3 +514,37 @@ func mergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 导出函数（跨包消费面） ────────────────────────────
+// Python git.py 的函数均为模块级导出；Go 侧这些小写符号需要被 agent_teams/worktree
+// 等包消费，以下导出包装为可见性转换（非新增逻辑，规则 9 对齐 Python 导出面）。
+
+// FindCanonicalGitRoot 返回规范 git 仓库根；无仓库返回空串。
+// Python: git.py find_canonical_git_root(cwd) (:228)
+func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
+	return findCanonicalGitRoot(ctx, cwd)
+}
+
+// RevParse 解析 ref/SHA 到提交 SHA；失败返回空串。
+// Python: git.py rev_parse(ref, cwd) (:161)
+func RevParse(ctx context.Context, ref, cwd string) (string, error) {
+	return revParse(ctx, ref, cwd)
+}
+
+// IsRefAncestor 判断祖先关系；nil 表示无法验证。
+// Python: git.py is_ref_ancestor(ancestor_ref, descendant_ref, cwd) (:445)
+func IsRefAncestor(ctx context.Context, ancestorRef, descendantRef, cwd string) *bool {
+	return isRefAncestor(ctx, ancestorRef, descendantRef, cwd)
+}
+
+// MergeBase 返回两 ref 的公共祖先 SHA；无法判定返回空串。
+// Python: git.py merge_base(first_ref, second_ref, cwd) (:473)
+func MergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
+	return mergeBase(ctx, firstRef, secondRef, cwd)
+}
+
+// StatusPorcelain 返回 git status --porcelain 行列表。
+// Python: git.py status_porcelain(cwd) (:404)
+func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
+	return statusPorcelain(ctx, cwd)
+}

@@ -194,7 +194,8 @@ func ResolveCurrentSessionMemberWorktree(
 	configurator TeamContextProvider,
 	memberWorktreeInfo map[string]*MemberWorktreeInfo,
 	memberName string,
-	ownerScope func(teamName, memberName string) (WorktreeOwnerScope, error),
+	// ownerScope 闭包携带 ctx（偏差 D-25.7-e：Python contextvar 全局态 → Go 显式传参）
+	ownerScope func(ctx context.Context, teamName, memberName string) (WorktreeOwnerScope, error),
 	logForeign bool,
 ) (*ResolvedMemberWorktree, error) {
 	teamBackend, teamName, ok := TeamContext(configurator)
@@ -218,7 +219,7 @@ func ResolveCurrentSessionMemberWorktree(
 		return nil, nil
 	}
 
-	scope, err := ownerScope(teamName, memberName)
+	scope, err := ownerScope(ctx, teamName, memberName)
 	if err != nil {
 		return nil, err
 	}

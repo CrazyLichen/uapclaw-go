@@ -49,7 +49,8 @@ type WorktreeBackend interface {
 	Create(ctx context.Context, slug, repoRoot, targetPath string) (*WorktreeCreateResult, error)
 	// Remove 删除 worktree。
 	// Python: WorktreeBackend.remove(worktree_path, repo_root)
-	Remove(ctx context.Context, worktreePath, repoRoot string) bool
+	// Remove 删除 worktree 及其分支；force=true 容忍未提交变更。
+	Remove(ctx context.Context, worktreePath, repoRoot string, force bool) bool
 	// Exists 检查 worktree 是否存在。
 	// Python: WorktreeBackend.exists(worktree_path)
 	Exists(ctx context.Context, worktreePath string) bool
@@ -201,9 +202,9 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 
 // Remove 删除 worktree 及其分支。
 // Python: GitBackend.remove(worktree_path, repo_root)
-func (g *GitBackend) Remove(ctx context.Context, worktreePath, repoRoot string) bool {
+func (g *GitBackend) Remove(ctx context.Context, worktreePath, repoRoot string, force bool) bool {
 	branch, _ := getCurrentBranch(ctx, worktreePath)
-	ok := worktreeRemove(ctx, worktreePath, repoRoot, true)
+	ok := worktreeRemove(ctx, worktreePath, repoRoot, force)
 	if ok && branch != "" && strings.HasPrefix(branch, "worktree-") {
 		_ = branchDelete(ctx, branch, repoRoot)
 	}

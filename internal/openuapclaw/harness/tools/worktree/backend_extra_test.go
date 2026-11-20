@@ -87,7 +87,7 @@ func TestGitBackend_Remove_删除worktree与分支(t *testing.T) {
 	_, err := backend.Create(context.Background(), "feature-d", repo, target)
 	require.NoError(t, err)
 
-	assert.True(t, backend.Remove(context.Background(), target, repo))
+	assert.True(t, backend.Remove(context.Background(), target, repo, true))
 	assert.NoDirExists(t, target)
 
 	branches := exec.Command("git", "-C", repo, "branch", "--list", "worktree-feature-d")

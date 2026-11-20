@@ -168,7 +168,7 @@ func TestResolveCurrentSessionMemberWorktree_无DB无缓存返回nil(t *testing.
 
 	resolved, err := ResolveCurrentSessionMemberWorktree(ctx, cfg,
 		map[string]*MemberWorktreeInfo{}, "m1",
-		func(teamName, memberName string) (WorktreeOwnerScope, error) {
+		func(ctx context.Context, teamName, memberName string) (WorktreeOwnerScope, error) {
 			return WorktreeOwnerScope{SessionID: "s1"}, nil
 		}, false)
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestResolveCurrentSessionMemberWorktree_DB命中构建(t *testing.T) {
 
 	resolved, err := ResolveCurrentSessionMemberWorktree(ctx, cfg,
 		map[string]*MemberWorktreeInfo{}, "m1",
-		func(teamName, memberName string) (WorktreeOwnerScope, error) { return scope, nil }, false)
+		func(ctx context.Context, teamName, memberName string) (WorktreeOwnerScope, error) { return scope, nil }, false)
 	require.NoError(t, err)
 	require.NotNil(t, resolved)
 	assert.True(t, resolved.DBMatchesScope)
@@ -222,7 +222,7 @@ func TestResolveCurrentSessionMemberWorktree_外来不日志条件(t *testing.T)
 
 	resolved, err := ResolveCurrentSessionMemberWorktree(ctx, cfg,
 		map[string]*MemberWorktreeInfo{}, "m1",
-		func(teamName, memberName string) (WorktreeOwnerScope, error) {
+		func(ctx context.Context, teamName, memberName string) (WorktreeOwnerScope, error) {
 			return WorktreeOwnerScope{SessionID: "s1", ProjectHash: "ph", ManagedRoot: "/root"}, nil
 		}, true)
 	require.NoError(t, err)

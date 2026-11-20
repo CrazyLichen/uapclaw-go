@@ -250,7 +250,8 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 
 	// action 为 "remove"
 	if repoRoot != "" {
-		m.removeWorktreeInternal(ctx, session.WorktreePath, repoRoot)
+		// Python exit: _remove_worktree(force=discard_changes)（manager.py:237）
+		m.removeWorktreeInternal(ctx, session.WorktreePath, repoRoot, discardChanges)
 	}
 
 	SetCurrentSession(ctx, nil)
@@ -283,18 +284,26 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 // Python: WorktreeManager.create_owner_worktree(slug)
 //
 // 与 Enter 不同，不修改 ContextVar session 或更改进程 CWD。
-func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) (*WorktreeCreateResult, error) {
+func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string, sourceDir ...string) (*WorktreeCreateResult, error) {
 	if err := ValidateSlug(slug); err != nil {
 		return nil, err
 	}
 
-	currentCwd, cwdErr := cwd.GetCwd(ctx)
-	if cwdErr != nil {
-		return nil, cwdErr
+	// source_dir 可选：省略时回退当前 agent CWD（Python manager.py:339-341）
+	resolveRoot := ""
+	if len(sourceDir) > 0 && sourceDir[0] != "" {
+		resolveRoot = sourceDir[0]
+	} else {
+		currentCwd, cwdErr := cwd.GetCwd(ctx)
+		if cwdErr != nil {
+			return nil, cwdErr
+		}
+		resolveRoot = currentCwd
 	}
-	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
+	repoRoot, err := findCanonicalGitRoot(ctx, resolveRoot)
 	if err != nil || repoRoot == "" {
-		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
+		return nil, fmt.Errorf("Cannot create owner worktree: not in a git repository. " +
+			"Select a project directory for this session before using worktree isolation")
 	}
 
 	targetPath, err := m.resolveTargetPath(ctx, slug)
@@ -446,7 +455,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 			}
 		}
 
-		if m.removeWorktreeInternal(ctx, wtPath, repoRoot) {
+		if m.removeWorktreeInternal(ctx, wtPath, repoRoot, force) {
 			removed = append(removed, wtPath)
 			if m.eventHandler != nil {
 				_ = m.eventHandler(ctx, &WorktreeRemovedEvent{
@@ -473,7 +482,13 @@ func (m *WorktreeManager) CleanupTeamWorktrees(ctx context.Context, teamName str
 // RemoveWorktree 删除单个 worktree。
 // Python: WorktreeManager.remove_worktree(worktree_path, repo_root)
 func (m *WorktreeManager) RemoveWorktree(ctx context.Context, worktreePath, repoRoot string) bool {
-	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot)
+	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot, false)
+}
+
+// RemoveWorktreeForce 以 force 删除（容忍未提交变更）。
+// Python: manager.remove_worktree(worktree_path, repo_root, force=True)（调用方传 force）
+func (m *WorktreeManager) RemoveWorktreeForce(ctx context.Context, worktreePath, repoRoot string) bool {
+	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot, true)
 }
 
 // resolveTargetPath 计算 worktree 文件系统路径。
@@ -694,7 +709,7 @@ func (m *WorktreeManager) checkChanges(ctx context.Context, wtPath string) *Work
 
 // removeWorktreeInternal 通过后端删除 worktree。
 // Python: WorktreeManager._remove_worktree(wt_path, repo_root)
-func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, repoRoot string) bool {
+func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, repoRoot string, force bool) bool {
 	// 仓库锁串行化删除关键段（Python manager.py:402-405 _remove_worktree）
 	release, lockErr := RepoLock(repoRoot, m.config.RepoLockTimeout, m.config.RepoLock)
 	if lockErr != nil {
@@ -703,7 +718,7 @@ func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, re
 		return false
 	}
 	defer release()
-	return m.backend.Remove(ctx, wtPath, repoRoot)
+	return m.backend.Remove(ctx, wtPath, repoRoot, force)
 }
 
 // postCreationSetup 新 worktree 的后置设置。

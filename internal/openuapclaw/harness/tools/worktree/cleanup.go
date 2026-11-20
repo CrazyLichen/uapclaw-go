@@ -115,7 +115,8 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 			continue
 		}
 
-		if backend.Remove(ctx, wtPath, repoRoot) {
+		// Python cleanup.py:93-95 stale 清理恒 force（对齐 upstream remove_worktree(force=True) 语义）
+		if backend.Remove(ctx, wtPath, repoRoot, true) {
 			removed++
 		}
 	}
