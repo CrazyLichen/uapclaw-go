@@ -822,7 +822,8 @@ func TestStablePatterns_排序错位方向判定(t *testing.T) {
 	fe.comparableCohorts["c3"] = true
 	fe.increaseCohorts["c1"] = true
 	fe.increaseCohorts["c3"] = true
-	fe.decreaseCohorts["c2"] = true
+	fe.increaseCohorts["c2"] = true
+	fe.decreaseCohorts["c3"] = true
 	patterns := stablePatterns(
 		1, []string{"c1", "c2"}, []string{}, []string{}, []string{},
 		[]string{}, []string{},
