@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 	"unicode"
@@ -80,4 +81,22 @@ func asExitError(err error, target **exec.ExitError) bool {
 		*target = e
 	}
 	return ok
+}
+
+// pathExists 判断路径存在（对齐 Path.exists()）
+func pathExists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// isDir 判断路径是目录（对齐 Path.is_dir()）
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// isRegularFile 判断路径是常规文件（对齐 Path.is_file()）
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
