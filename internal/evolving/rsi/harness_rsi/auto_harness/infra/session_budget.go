@@ -16,8 +16,8 @@ const warnThreshold = 0.8
 // SessionBudgetController 管理单次会话的时钟预算与 API 成本预算
 // （对齐 class SessionBudgetController）。
 type SessionBudgetController struct {
-	wallClockSecs  float64
-	costLimitUSD   float64
+	wallClockSecs   float64
+	costLimitUSD    float64
 	taskTimeoutSecs float64
 	// start 会话起始时间（单调时钟；nil=未 start，用 isStarted 区分）
 	start      time.Time
@@ -133,10 +133,10 @@ func maxFloat(a, b float64) float64 {
 
 // FixLoopResult 修复循环执行结果（对齐 dataclass FixLoopResult）
 type FixLoopResult struct {
-	Success   bool     `yaml:"success" json:"success"`
-	Attempts  int      `yaml:"attempts" json:"attempts"`
-	Phase     int      `yaml:"phase" json:"phase"`
-	ErrorLog  []string `yaml:"error_log" json:"error_log"`
+	Success  bool     `yaml:"success" json:"success"`
+	Attempts int      `yaml:"attempts" json:"attempts"`
+	Phase    int      `yaml:"phase" json:"phase"`
+	ErrorLog []string `yaml:"error_log" json:"error_log"`
 }
 
 // FixLoopCIRunner 运行 CI，返回 (passed, errors)（对齐 ci_runner 协程）；
