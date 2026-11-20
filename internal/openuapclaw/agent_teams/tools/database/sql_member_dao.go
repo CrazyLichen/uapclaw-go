@@ -318,3 +318,27 @@ func (d *SQLMemberDao) ResetPausedMemberExecutionStatus(ctx context.Context, tea
 func (d *SQLMemberDao) withTx(tx *gorm.DB) *SQLMemberDao {
 	return &SQLMemberDao{db: tx}
 }
+
+// UpdateMemberWorktree 更新成员的 worktree 隔离元数据。
+// Python: update_member_worktree (member_dao.py:755-782)
+func (d *SQLMemberDao) UpdateMemberWorktree(ctx context.Context, memberName, teamName string, worktree *MemberWorktreeOptions, isolation, worktreePath string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		logger.Error(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("Member not found for worktree update")
+		return false
+	}
+	options := SetMemberWorktreeOptions(member.Options, worktree, isolation, worktreePath)
+	if options == member.Options {
+		return true
+	}
+	now := GetCurrentTime()
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Updates(map[string]any{"options": options, "updated_at": now})
+	return true
+}

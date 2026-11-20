@@ -427,6 +427,22 @@ func (db *InMemoryTeamDatabase) UpdateMemberServedModel(_ context.Context, membe
 	return true
 }
 
+// UpdateMemberWorktree 更新成员的 worktree 隔离元数据（内存实现）。
+// Python: update_member_worktree (member_dao.py:755-782)
+func (db *InMemoryTeamDatabase) UpdateMemberWorktree(_ context.Context, memberName, teamName string, worktree *MemberWorktreeOptions, isolation, worktreePath string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists {
+		// Python: member not found → error 日志 + False
+		return false
+	}
+	member.Options = SetMemberWorktreeOptions(member.Options, worktree, isolation, worktreePath)
+	member.UpdatedAt = GetCurrentTime()
+	return true
+}
+
 // PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用（内存实现）。
 // Python: promote_member_fallback_model (member_dao.py:844-868)
 func (db *InMemoryTeamDatabase) PromoteMemberFallbackModel(_ context.Context, memberName, teamName string) bool {

@@ -114,6 +114,12 @@ type MemberDao interface {
 	// 发生在 build_team 写入成员行之前）。
 	// Python: update_member_served_model (member_dao.py:807)
 	UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool
+	// UpdateMemberWorktree 更新成员的 worktree 隔离元数据。
+	// worktree 非 nil 时整段替换；否则按 isolation/worktreePath 增量写
+	//（二者皆空时清空 worktree 段，对齐 Python 调用方传 isolation-only 的复用场景）。
+	// 返回行是否存在。
+	// Python: MemberDao.update_member_worktree (member_dao.py:755-782)
+	UpdateMemberWorktree(ctx context.Context, memberName, teamName string, worktree *MemberWorktreeOptions, isolation, worktreePath string) bool
 	// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用。
 	// Python: MemberDao.promote_member_fallback_model (member_dao.py:844-868)
 	PromoteMemberFallbackModel(ctx context.Context, memberName, teamName string) bool
