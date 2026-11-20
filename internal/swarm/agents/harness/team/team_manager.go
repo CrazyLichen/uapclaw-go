@@ -107,6 +107,21 @@ type TeamManager struct {
 	// 事件广播回调，由 adapter 层注入（将事件广播到 channel waiters）
 	// 对齐 Python: _broadcast_event(channel_id, session_id, event)
 	onEventBroadcast func(channelID, sessionID string, event map[string]any)
+
+	// ─── R-7 账本（25.2 回填；Python 同名 dict 一比一） ───
+
+	// sessionGenerations 会话当前代次。
+	sessionGenerations map[string]int
+	// roundStateReporter Runtime 轮状态观察者。
+	roundStateReporter func(sessionID string, generation int, running bool)
+	// pendingWaitersTM 会话级等待者（与 adapter 层 channel 级 pendingWaiters 分立）。
+	pendingWaitersTM map[string][]tmPendingWaiter
+	// waiterGenerations (session\x00request) → 登记代次。
+	waiterGenerations map[string]int
+	// exclusiveWaiters session → 排他等待者 requestID。
+	exclusiveWaiters map[string]string
+	// attachWaiterIDs session → 仅观察等待者集合。
+	attachWaiterIDs map[string]map[string]bool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -157,6 +172,11 @@ func NewTeamManager() *TeamManager {
 		teamSkillSyncTargets:    make(map[string]SkillSyncTarget),
 		teamEvolutionWatchers:   make(map[string]context.CancelFunc),
 		teamEvolutionEnabled:    make(map[string]bool),
+		sessionGenerations:      make(map[string]int),
+		pendingWaitersTM:        make(map[string][]tmPendingWaiter),
+		waiterGenerations:       make(map[string]int),
+		exclusiveWaiters:        make(map[string]string),
+		attachWaiterIDs:         make(map[string]map[string]bool),
 	}
 }
 

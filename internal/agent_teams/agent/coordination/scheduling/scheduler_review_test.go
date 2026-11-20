@@ -297,3 +297,30 @@ func (f *fakeReviewTaskMgr) GetTasksByAssignee(_ context.Context, _, _ string) (
 func (f *fakeReviewTaskMgr) OpenTaskCountsByAssignee(_ context.Context) (map[string]int, error) {
 	return map[string]int{}, nil
 }
+
+// ──────────────────────────── R-6（25.2 spec §4 回填） ────────────────────────────
+
+// TestDeactivate_在飞自然跑完 Deactivate 停扫描但已派发的 reviewer 运行体
+// 自然完成（不 cancel——自清理语义对齐）。
+// Python: deactivate（scheduler.py L192-195）+ 计划 R-6。
+func TestDeactivate_在飞自然跑完(t *testing.T) {
+	task := reviewTaskFixture2()
+	mgr := &fakeReviewTaskMgr{tasks: map[string]*database.TeamTaskBase{"task-s1": task}}
+	s, _ := newReviewScheduler(t, mgr, &fakeReviewBackend{enabled: true})
+	finished := make(chan struct{})
+	s.SetReviewerRunner(func(_ context.Context, _ string, _ *database.TeamTaskBase) bool {
+		// 模拟较长的在飞评审。
+		time.Sleep(50 * time.Millisecond)
+		close(finished)
+		return true
+	})
+	_, _ = s.reconcileReviews(context.Background())
+	// 在飞期间 deactivate。
+	s.Deactivate()
+	select {
+	case <-finished:
+		// 在飞运行体自然跑完 ✓。
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight reviewer must finish naturally after deactivate")
+	}
+}
