@@ -282,10 +282,9 @@ func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
 	if len(got) != 2 || got[0].Err != nil {
 		t.Fatalf("期望两帧无错误, got %v", got)
 	}
-	// 转发形态：{"frame": <stream.Schema>} 信封（End Go 同款）
-	f0, ok := got[0].Val["frame"].(*sessionStream.OutputSchema)
-	if !ok || f0.Payload.(map[string]any)["out"] != "a" {
-		t.Fatalf("期望帧信封承载原 Schema, got %v", got[0].Val)
+	// 转发形态：Schema 载荷 dict（D-14b-6，流边路径提取可用形态）
+	if got[0].Val["out"] != "a" {
+		t.Fatalf("期望帧承载载荷 dict, got %v", got[0].Val)
 	}
 	// 累积的是原始帧值：Schema 帧 BuildFinalResult 跳过（对齐 Python isinstance dict）
 	merged, _ := comp.streamState.BuildFinalResult()

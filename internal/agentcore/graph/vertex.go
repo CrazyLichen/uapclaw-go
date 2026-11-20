@@ -1531,10 +1531,24 @@ func (v *Vertex) processChunk(ctx context.Context, message any, isEndNode bool, 
 			_ = writer.Write(ctx, messageStreamData)
 		}
 	case isEndNode && isSubGraph:
-		// End 子图（vertex.py:647-650）：OutputSchema 取 payload 直发子图流
+		// End 子图（vertex.py:647-650）：OutputSchema 取 payload 直发子图流。
+		// Python chunk 即 OutputSchema 对象，chunk.payload 为纯 dict；Go 组件经
+		// StreamFn 槽产出 {"frame": OutputSchema} 承载信封（D-17-1），须同点剥离，
+		// 否则信封残骸进入子图流队列，下游「节点.字段」路径提取失败且 END 帧
+		// 因 sourcePathMap 空不投 EndFrame → 流入读取器永不关 → 挂死
+		//（Python 官方流式组件产出普通 dict，本分支语义即还原该形态）
 		messageStreamData := message
-		if os, ok := message.(*stream.OutputSchema); ok {
-			messageStreamData = os.Payload
+		switch msg := message.(type) {
+		case *stream.OutputSchema:
+			messageStreamData = msg.Payload
+		case stream.OutputSchema:
+			messageStreamData = msg.Payload
+		case map[string]any:
+			if os, ok := msg["frame"].(*stream.OutputSchema); ok {
+				messageStreamData = os.Payload
+			} else if os, ok := msg["frame"].(stream.OutputSchema); ok {
+				messageStreamData = os.Payload
+			}
 		}
 		v.traceComponentStreamOutput(ctx, messageStreamData)
 		if q, err := v.nodeSession.ActorManager().SubWorkflowStream(); err == nil {

@@ -157,14 +157,51 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 			defer close(out)
 			for frame := range subCh {
 				if c.cacheStream {
+					// 累积原始 Schema 帧：BuildFinalResult 只认 dict 帧（Python isinstance(output, dict)
+					// 对 OutputSchema 模型帧跳过），缓存语义与此对齐
 					c.streamState.Accumulate(frame)
 				}
-				out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"frame": frame}}
+				// 转发形态取 Schema 的载荷 dict（D-14b-6）：下游流式消费方经流边 actor 按
+				// "节点.字段" 路径从 payload 提取值（Python 官方流式组件 StreamCompNode 产出
+				// 普通 dict 即此形态）；{"frame": schema} 信封会使路径提取 nil 且 END 帧因
+				// sourcePathMap 空不投 EndFrame → StreamReader 永不关 → transform 挂死
+				//（Python 同链路 OutputSchema 对象无 __getitem__ 同样断裂，属上游死路径，
+				// Go 以 Payload dict 对齐官方流式组件产出形态承载）
+				out <- graphexe.StreamChunk[map[string]any]{Val: schemaPayloadMap(frame)}
 			}
 		}()
 		return out, nil
 	}
 	return c, nil
+}
+
+// schemaPayloadMap 从流帧 Schema 提取载荷 dict（D-14b-6 转发形态）：
+// OutputSchema/TraceSchema 取 Payload、CustomSchema 取 Data；载荷非 dict 时
+// 退回 {"frame": schema} 信封承载（非 dict 载荷本就无字段引用语义）。
+func schemaPayloadMap(frame workflow.WorkflowChunk) map[string]any {
+	switch s := frame.(type) {
+	case *stream.OutputSchema:
+		if m, ok := s.Payload.(map[string]any); ok {
+			return m
+		}
+	case stream.OutputSchema:
+		if m, ok := s.Payload.(map[string]any); ok {
+			return m
+		}
+	case *stream.CustomSchema:
+		return s.Data
+	case stream.CustomSchema:
+		return s.Data
+	case *stream.TraceSchema:
+		if m, ok := s.Payload.(map[string]any); ok {
+			return m
+		}
+	case stream.TraceSchema:
+		if m, ok := s.Payload.(map[string]any); ok {
+			return m
+		}
+	}
+	return map[string]any{"frame": frame}
 }
 
 // invokeSubWorkflow 批式调用逻辑（Python invoke :78-84 步骤一比一）：
