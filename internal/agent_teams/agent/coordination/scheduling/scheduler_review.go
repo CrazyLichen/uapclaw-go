@@ -91,10 +91,13 @@ func (s *TeamScheduler) reconcileReviews(ctx context.Context) (bool, error) {
 			if votedSet[reviewer] {
 				continue
 			}
+			s.ledgerMu.Lock()
 			if _, dispatched := s.reviewDispatched[dispatchKey]; dispatched {
+				s.ledgerMu.Unlock()
 				continue
 			}
 			s.reviewDispatched[dispatchKey] = struct{}{}
+			s.ledgerMu.Unlock()
 			// 派发时带正文重读它操作的那一条任务——板面扫描保持无正文。
 			fullTask := s.withContent(ctx, task)
 			s.dispatchToReviewer(ctx, reviewer, fullTask)
@@ -177,8 +180,13 @@ func (s *TeamScheduler) settleFailOrEscalate(ctx context.Context, task *database
 		roundKey := [2]string{task.TaskID, fmt.Sprintf("%d", task.ReviewRound)}
 		assignee := derefStr(task.Assignee)
 		if assignee != "" {
-			if _, requested := s.summaryRequested[roundKey]; !requested {
+			s.ledgerMu.Lock()
+			_, requested := s.summaryRequested[roundKey]
+			if !requested {
 				s.summaryRequested[roundKey] = struct{}{}
+			}
+			s.ledgerMu.Unlock()
+			if !requested {
 				s.sendAsLeader(ctx, assignee, MetaReworkSummary(task, maxRounds))
 			}
 		}
@@ -222,13 +230,13 @@ func (s *TeamScheduler) dispatchReviewFeedback(ctx context.Context, task *databa
 	// 去重账本会被事件总线扫描与 reviewer follow-up goroutine 的重扫
 	// （scheduler_review.go followUpUnvotedReviewer → scan）两条线并发读写，
 	// 与 DB 状态机无关，必须持锁（-race 实抓路径）。
-	s.reviewFeedbackMu.Lock()
+	s.ledgerMu.Lock()
 	if _, dispatched := s.reviewFeedbackRounds[roundKey]; dispatched {
-		s.reviewFeedbackMu.Unlock()
+		s.ledgerMu.Unlock()
 		return
 	}
 	s.reviewFeedbackRounds[roundKey] = struct{}{}
-	s.reviewFeedbackMu.Unlock()
+	s.ledgerMu.Unlock()
 	// Python: payload 构造（scheduler.py L645-655），键名是 rail 契约不得改动。
 	payload := map[string]any{
 		"team_id":      s.teamName,
@@ -327,14 +335,18 @@ func (s *TeamScheduler) followUpUnvotedReviewer(ctx context.Context, reviewer st
 		return
 	}
 	runKey := [3]string{task.TaskID, fmt.Sprintf("%d", task.ReviewRound), reviewer}
+	s.ledgerMu.Lock()
 	runs := s.reviewRuns[runKey] + 1
 	s.reviewRuns[runKey] = runs
+	s.ledgerMu.Unlock()
 	if runs < reviewRunsMaxReviewRunsPerRound {
 		logger.Warn(logComponent).Str("reviewer", reviewer).
 			Str("task_id", task.TaskID).Int64("round", task.ReviewRound).
 			Int("run", runs).Int("max", reviewRunsMaxReviewRunsPerRound).
 			Msg("[reviewer_no_vote] ended without a vote; dispatching again")
+		s.ledgerMu.Lock()
 		delete(s.reviewDispatched, runKey)
+		s.ledgerMu.Unlock()
 		if s.active {
 			_ = s.scan(ctx)
 		}
