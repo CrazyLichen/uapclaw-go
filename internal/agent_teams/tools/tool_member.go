@@ -606,7 +606,7 @@ var (
 	builtinModelSlots = []string{"builtin_model_param_rows", "builtin_model_usage"}
 )
 
-func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
+func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, language atschema.Language, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
 	externalCLIEnabled := len(team.DeclaredCLIKinds()) > 0
 	builtinModelsEnabled := externalCLIEnabled && team.BuiltinModelsEnabled()
 	st := &spawnTeammateTool{
@@ -639,7 +639,13 @@ func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAl
 		omitList = append(omitList, name)
 	}
 	sort.Strings(omitList)
-	description := t("spawn_teammate", omitList...)
+	// omit 门控经 RenderDesc（Python make_translator 的 omit= 形参；
+	// e15 审查发现 Go 原Translator 调用把 omit 列表当 STRINGS key——门控失效）。
+	omitSet := map[string]bool{}
+	for _, name := range omitList {
+		omitSet[name] = true
+	}
+	description := locales.RenderDesc("spawn_teammate", language, omitSet)
 	// 卡片：id=team.spawn_teammate，描述经 omit_slots 门控（Python :574-580）。
 	card := tool.ToolCard{BaseCard: schema.BaseCard{ID: "team.spawn_teammate", Name: "spawn_teammate", Description: description}}
 	st.TeamTool = NewTeamTool(&card)

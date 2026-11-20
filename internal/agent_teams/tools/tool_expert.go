@@ -12,6 +12,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"sort"
 	"strings"
 
@@ -374,7 +375,8 @@ func newViewExpertsTool(catalog experts.ExpertCatalog, t locales.Translator, lan
 	scoped := dispatchMode == "scheduled" && boundGroup != nil
 	description := t("view_experts")
 	if !scoped {
-		description = t("view_experts", boundScopeSlot)
+		// omit 门控：非 scoped 时塌缩 bound_scope 槽（e15 审查修正）。
+		description = locales.RenderDesc("view_experts", atschema.Language(language), map[string]bool{boundScopeSlot: true})
 	}
 	card := tool.ToolCard{BaseCard: schema.BaseCard{ID: "team.view_experts", Name: "view_experts", Description: description}}
 	card.Properties = map[string]any{

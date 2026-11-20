@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	agent_teams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
 	"regexp"
 	"strings"
@@ -276,9 +277,9 @@ func CreateTeamTools(
 		allTools["clean_team"] = newCleanTeamTool(teamBackend, t)
 		// Python: spawn_teammate（tool_member.py SpawnTeammateTool）+ spawn_human_agent
 		// 两个独立工具（旧 SpawnMemberTool 的 role_type 分支拆分，规则 8 删旧）。
-		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, modelConfigAlloc, opts.ForkEnabled)
+		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, atschema.Language(opts.Language), modelConfigAlloc, opts.ForkEnabled)
 		allTools["spawn_human_agent"] = newSpawnHumanAgentTool(teamBackend, t)
-		allTools["shutdown_member"] = newShutdownMemberTool(teamBackend, t)
+		allTools["shutdown_member"] = newShutdownMemberTool(teamBackend, t, opts.DispatchMode, atschema.Language(opts.Language))
 		allTools["approve_plan"] = newApprovePlanTool(teamBackend, t)
 		allTools["approve_tool"] = newApproveToolCallTool(teamBackend, t)
 		allTools["list_members"] = newListMembersTool(teamBackend, t)
@@ -445,9 +446,16 @@ func newCleanTeamTool(team *TeamBackend, t locales.Translator) *CleanTeamTool {
 }
 
 // newShutdownMemberTool 创建 ShutdownMemberTool 实例。
-func newShutdownMemberTool(team *TeamBackend, t locales.Translator) *ShutdownMemberTool {
+func newShutdownMemberTool(team *TeamBackend, t locales.Translator, dispatchMode string, language atschema.Language) *ShutdownMemberTool {
+	// lifetime 描述槽门控（Python tool_member.py:1295）：scheduled + 内联成员
+	// 开关才保留；INLINE_TASK_MEMBER_ENABLED 恒 false（constants.go:27）→ 恒 omit。
+	lifetimeEnabled := dispatchMode == "scheduled" && agent_teams.InlineTaskMemberEnabled
+	description := t("shutdown_member")
+	if !lifetimeEnabled {
+		description = locales.RenderDesc("shutdown_member", language, map[string]bool{"shutdown_member_lifetime": true})
+	}
 	return &ShutdownMemberTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.shutdown_member", "shutdown_member", t("shutdown_member"),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.shutdown_member", "shutdown_member", description,
 			[]*schema.Param{
 				schema.NewStringParam("member_name", t("shutdown_member", "member_name"), true),
 				schema.NewBooleanParam("force", t("shutdown_member", "force"), false),
