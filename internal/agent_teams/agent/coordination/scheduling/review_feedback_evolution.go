@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
+	skillopt "github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/skill_call"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -53,7 +54,7 @@ type TeamEvolutionRailLike interface {
 	// ReviewStore 演进存储（证据面）。
 	ReviewStore() *checkpointingStore
 	// ReviewGenerator 优化器（LLM/模型名）。
-	ReviewGenerator() ReviewGeneratorLike
+	ReviewGenerator() *skillopt.TeamSkillExperienceOptimizer
 	// ReviewLanguage rail 语言。
 	ReviewLanguage() string
 	// AutoSave 自动保存开关。
@@ -68,12 +69,6 @@ type TeamEvolutionRailLike interface {
 
 // checkpointingStore 别名（证据面直接用具体存储类型）。
 type checkpointingStore = checkpointing.EvolutionStore
-
-// ReviewGeneratorLike 优化器窄面。
-type ReviewGeneratorLike interface {
-	LLM() *llm.Model
-	ModelName() string
-}
 
 // TaskFeedbackObservation 保留到终态聚合的一条任务反馈观察。
 // Python: TaskFeedbackObservation (review_feedback_evolution.py L44-54)。
@@ -467,11 +462,17 @@ func (c *ReviewFeedbackEvolutionCoordinator) matchingNewSkillPatterns(reusableGu
 }
 
 // getMemberTrajectory 承担者成员轨迹投影。
-// Python: _get_member_trajectory。偏差：Go 侧无 select_member_spans 等价面
-// （team 轨迹投影），返回 nil（上下文无轨迹证据，归因按无轨迹分支封闭）——
-// 回收条件 = team 轨迹成员投影面落地。
-func (c *ReviewFeedbackEvolutionCoordinator) getMemberTrajectory(_ TeamEvolutionRailLike, _ string) *trajectory.Trajectory {
-	return nil
+// Python: _get_member_trajectory（select_member_spans 投影 + merge）。
+// 偏差 D-25.2b-16：Go 侧无 select_member_spans 等价投影面，回落团队全窗
+// （证据面宽于上游——归因偏保守方向不受影响：读取证明仍需真实 span）。
+// 回收条件 = team 轨迹成员投影面落地后收紧为成员子集。
+func (c *ReviewFeedbackEvolutionCoordinator) getMemberTrajectory(teamRail TeamEvolutionRailLike, assignee string) *trajectory.Trajectory {
+	traj := c.getTeamTrajectory(teamRail)
+	if traj == nil {
+		logger.Warn(logComponent).Str("assignee", assignee).
+			Msg("[ReviewFeedbackEvolution] no team trajectory for evidence")
+	}
+	return traj
 }
 
 // getTeamTrajectory 团队轨迹。

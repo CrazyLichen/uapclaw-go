@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
+	skillopt "github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/skill_call"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -21,10 +22,10 @@ type fakeCoordinatorRail struct {
 	autoSave       bool
 }
 
-func (f *fakeCoordinatorRail) ReviewStore() *checkpointing.EvolutionStore { return nil }
-func (f *fakeCoordinatorRail) ReviewGenerator() ReviewGeneratorLike       { return nil }
-func (f *fakeCoordinatorRail) ReviewLanguage() string                     { return "cn" }
-func (f *fakeCoordinatorRail) AutoSave() bool                             { return f.autoSave }
+func (f *fakeCoordinatorRail) ReviewStore() *checkpointing.EvolutionStore              { return nil }
+func (f *fakeCoordinatorRail) ReviewGenerator() *skillopt.TeamSkillExperienceOptimizer { return nil }
+func (f *fakeCoordinatorRail) ReviewLanguage() string                                  { return "cn" }
+func (f *fakeCoordinatorRail) AutoSave() bool                                          { return f.autoSave }
 func (f *fakeCoordinatorRail) EvolveFromExternalSignals(_ context.Context, signals []*signal.EvolutionSignal, _ []map[string]any, _ *trajectory.Trajectory, userQuery string, _ *bool) evolution.ExternalEvolutionResult {
 	name := ""
 	if len(signals) > 0 && signals[0].SkillName != nil {

@@ -1801,10 +1801,12 @@ func (r *TeamSkillEvolutionRail) ReviewGenerator() *skillopt.TeamSkillExperience
 	return r.generator
 }
 
-// RailGetTrajectory 团队 scope 干净窗口（协调器轨迹证据消费）。
+// RailGetTrajectory 会话干净窗口（协调器轨迹证据消费）。
 // Python: rail.get_trajectory(session_id=..., team_id=...)。
+// 偏差 D-25.2b-17：Go 侧捕获窗口恒 agent scope（rail_scope 捕获键不分区），
+// 读会话窗口作为证据面；回收条件 = rail 捕获键支持 team scope。
 func (r *TeamSkillEvolutionRail) RailGetTrajectory(sessionID, teamID string) (*trajectory.Trajectory, error) {
-	return r.GetTrajectory(sessionID, "", teamID)
+	return r.GetTrajectory(sessionID, "", "")
 }
 
 // RailDrainApprovalEvents 排干待审批事件（payload map 形态）。
