@@ -176,6 +176,10 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 
 	// 步骤 7: base = SwarmBuildContext(...)（:485-535）
 	base := NewSwarmBuildContext(SwarmBuildContextParams{
+		// Python: config=config（assembly.py:485，SwarmBuildContext config 字段
+		// context.py:124）——providers 工厂经 ctx.config 读开关（15.16f 执行期
+		// 集成矩阵发现的 parity 缺口：此前未传，工厂拿到 nil config）。
+		Config:                  legacyConfigMap(),
 		SessionID:               p.SessionID,
 		RequestID:               p.RequestID,
 		UserID:                  p.UserID,
