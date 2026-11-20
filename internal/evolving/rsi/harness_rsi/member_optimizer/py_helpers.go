@@ -5,7 +5,7 @@ package memberoptimizer
 
 import (
 	"fmt"
-	"sort"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 )
 
 // pyStr 等价 Python str(value)：None → ""、float 整数值保留 .0 语义按 %v。
@@ -54,7 +54,7 @@ func pyListStr(value any) string {
 			if i > 0 {
 				out += ", "
 			}
-			out += pyRepr(item)
+			out += pythonsem.PyRepr(item)
 		}
 		return out + "]"
 	case []map[string]any:
@@ -66,54 +66,11 @@ func pyListStr(value any) string {
 			if i > 0 {
 				out += ", "
 			}
-			out += pyRepr(item)
+			out += pythonsem.PyRepr(item)
 		}
 		return out + "]"
 	default:
-		return pyRepr(value)
-	}
-}
-
-// pyRepr 等价 Python repr：字符串带单引号，其余按 str。
-func pyRepr(value any) string {
-	switch v := value.(type) {
-	case string:
-		return "'" + v + "'"
-	case []any:
-		out := "["
-		for i, item := range v {
-			if i > 0 {
-				out += ", "
-			}
-			out += pyRepr(item)
-		}
-		return out + "]"
-	case []string:
-		out := "["
-		for i, item := range v {
-			if i > 0 {
-				out += ", "
-			}
-			out += "'" + item + "'"
-		}
-		return out + "]"
-	case map[string]any:
-		// Python dict repr：键带单引号、冒号后无空格、项间 ", "
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		out := "{"
-		for i, key := range keys {
-			if i > 0 {
-				out += ", "
-			}
-			out += "'" + key + "': " + pyRepr(v[key])
-		}
-		return out + "}"
-	default:
-		return pyStr(value)
+		return pythonsem.PyRepr(value)
 	}
 }
 

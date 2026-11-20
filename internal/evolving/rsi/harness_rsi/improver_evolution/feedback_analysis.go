@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"os"
 	"path/filepath"
@@ -209,10 +211,6 @@ func (e *featureEvidence) summary() map[string]any {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// LedgerSource 账本输入源：内存 ledger/cohort 映射（map[string]any）或 YAML/JSON 文件路径（string）。
-// 对应 Python TypeAlias `Mapping[str, Any] | str | Path`（偏差 D-e1-1：Go 无 Path 类型，路径即 string）。
-type LedgerSource = any
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // _LEDGER_TYPE 账本级 record_type 字面量
@@ -258,21 +256,19 @@ var _REGRESSION_AVAILABILITIES = map[string]bool{
 // ──────────────────────────── 非导出函数 ────────────────────────────
 // AnalyzeCandidateFeedbackLedgers 校验并汇总一份或多份 Candidate Feedback Ledger v1 输入
 // （对应 Python analyze_candidate_feedback_ledgers L45-231，步骤逐条对应）。
+// 入参为已加载的账本/cohort 映射序列；文件路径由调用方先经 LoadLedgerFile 转换
+// （D-e1-1 修订：联合类型收窄为单一映射形态）。
 // Python 的 bool/非有限数参数守卫在 Go 强类型下不可达（D-e1-6），仅保留 min_support_cohorts 下界检查。
 func AnalyzeCandidateFeedbackLedgers(
-	sources []LedgerSource,
+	sources []map[string]any,
 	minSupportCohorts int,
 	highValueGainThreshold float64,
 ) (map[string]any, error) {
 	if minSupportCohorts < 1 {
-		return nil, errNew("min_support_cohorts must be at least 1")
-	}
-	normalizedSources, err := normalizeSources(sources)
-	if err != nil {
-		return nil, err
+		return nil, errors.New("min_support_cohorts must be at least 1")
 	}
 	cohorts := make([]map[string]any, 0)
-	for sourceIndex, source := range normalizedSources {
+	for sourceIndex, source := range sources {
 		loaded, err := loadAndValidateSource(source, sourceIndex)
 		if err != nil {
 			return nil, err
@@ -317,7 +313,7 @@ func AnalyzeCandidateFeedbackLedgers(
 			comparableIDs = append(comparableIDs, cohortID)
 			gains := make([]float64, 0, len(cohort["candidates"].([]any)))
 			for _, item := range cohort["candidates"].([]any) {
-				gains = append(gains, pyFloat(item.(map[string]any)["outcome"].(map[string]any)["target_gain"]))
+				gains = append(gains, pythonsem.PyFloat(item.(map[string]any)["outcome"].(map[string]any)["target_gain"]))
 			}
 			if len(gains) > 0 && maxFloat(gains) <= 0.0 {
 				nonpositiveIDs = append(nonpositiveIDs, cohortID)
@@ -330,7 +326,7 @@ func AnalyzeCandidateFeedbackLedgers(
 		}
 
 		selectionRegret := cohort["metrics"].(map[string]any)["selection_regret"].(map[string]any)
-		if selectionRegret["status"] == "available" && pyFloat(selectionRegret["value"]) > 0.0 {
+		if selectionRegret["status"] == "available" && pythonsem.PyFloat(selectionRegret["value"]) > 0.0 {
 			positiveSelectionRegretIDs = append(positiveSelectionRegretIDs, cohortID)
 		}
 
@@ -379,13 +375,13 @@ func AnalyzeCandidateFeedbackLedgers(
 			newlyPassed, hasNewly := verifier["newly_passed_requirements_count"]
 			regressed, hasRegressed := verifier["regressed_requirements_count"]
 			partialProgressCases, hasPartial := verifier["partial_progress_case_count"]
-			if !(hasRemaining && isNonnegativeInt(remaining) && pyInt(remaining) > 0) {
+			if !(hasRemaining && isNonnegativeInt(remaining) && pythonsem.PyInt(remaining) > 0) {
 				continue
 			}
 			partialRepairOpportunityIDs[cohortID] = true
-			newlyPassedObserved := hasNewly && isNonnegativeInt(newlyPassed) && pyInt(newlyPassed) > 0
-			noRegression := hasRegressed && isNonnegativeInt(regressed) && pyInt(regressed) == 0
-			partialProgressObserved := hasPartial && isNonnegativeInt(partialProgressCases) && pyInt(partialProgressCases) > 0
+			newlyPassedObserved := hasNewly && isNonnegativeInt(newlyPassed) && pythonsem.PyInt(newlyPassed) > 0
+			noRegression := hasRegressed && isNonnegativeInt(regressed) && pythonsem.PyInt(regressed) == 0
+			partialProgressObserved := hasPartial && isNonnegativeInt(partialProgressCases) && pythonsem.PyInt(partialProgressCases) > 0
 			if newlyPassedObserved && noRegression && partialProgressObserved {
 				partialRepairSupportIDs[cohortID] = true
 			}
@@ -468,7 +464,7 @@ func AnalyzeCandidateFeedbackLedgers(
 			"high_value_gain_threshold": highValueGainThreshold,
 		},
 		"input_summary": map[string]any{
-			"ledger_count":    len(normalizedSources),
+			"ledger_count":    len(sources),
 			"cohort_count":    len(cohorts),
 			"candidate_count": candidateCount,
 		},
@@ -514,28 +510,16 @@ func metricAvailabilityOut(metricAvailability map[string]map[string]any) map[str
 	return out
 }
 
-// normalizeSources 归一输入源列表（对应 Python _normalize_sources L345-353）。
-// Go 入参已为序列形态，仅校验每个元素是映射或路径字符串。
-func normalizeSources(sources []LedgerSource) ([]LedgerSource, error) {
-	for _, source := range sources {
-		switch source.(type) {
-		case map[string]any, string:
-		default:
-			return nil, errNew("each source must be a ledger mapping or path")
-		}
-	}
-	return sources, nil
-}
-
 // loadAndValidateSource 加载并校验单个输入源，返回其 cohort 列表
-// （对应 Python _load_and_validate_source L356-371）。
-func loadAndValidateSource(source LedgerSource, sourceIndex int) ([]map[string]any, error) {
-	value, err := loadSource(source)
-	if err != nil {
-		return nil, err
+// （对应 Python _load_and_validate_source L356-371；映射浅拷贝对应 Python dict(source)）。
+func loadAndValidateSource(source map[string]any, sourceIndex int) ([]map[string]any, error) {
+	// 对应 Python dict(source) 的浅拷贝：仅顶层新建，嵌套共享（本包只读不改，语义等价）
+	shallow := make(map[string]any, len(source))
+	for key, value := range source {
+		shallow[key] = value
 	}
 	location := fmt.Sprintf("source[%d]", sourceIndex)
-	mapping, err := requireMapping(value, location)
+	mapping, err := requireMapping(shallow, location)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +539,7 @@ func loadAndValidateSource(source LedgerSource, sourceIndex int) ([]map[string]a
 		}
 		rawList, ok := cohortsValue.([]any)
 		if !ok {
-			return nil, errNew(location + ".cohorts must be a list")
+			return nil, errors.New(location + ".cohorts must be a list")
 		}
 		rawCohorts = rawList
 	}
@@ -570,42 +554,36 @@ func loadAndValidateSource(source LedgerSource, sourceIndex int) ([]map[string]a
 	return cohorts, nil
 }
 
-// loadSource 读取单个输入源（对应 Python _load_source L374-384）。
-// 映射原样返回；字符串按文件路径读取，.json 后缀（大小写不敏感）按 JSON 解析，
-// 其余按 YAML 解析。JSON 数字用 UseNumber 还原 Python 的 int/float 二分语义。
-func loadSource(source LedgerSource) (any, error) {
-	switch s := source.(type) {
-	case map[string]any:
-		// 对应 Python dict(source) 的浅拷贝：仅顶层新建，嵌套共享（本包只读不改，语义等价）
-		shallow := make(map[string]any, len(s))
-		for key, value := range s {
-			shallow[key] = value
-		}
-		return shallow, nil
-	case string:
-		info, err := os.Stat(s)
-		if err != nil || info.IsDir() {
-			return nil, errNew(fmt.Sprintf("candidate feedback ledger does not exist: %s", s))
-		}
-		text, err := os.ReadFile(s)
-		if err != nil {
-			return nil, errNew(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-		}
-		if strings.EqualFold(filepath.Ext(s), ".json") {
-			decoded, err := decodeJSONWithInts(text)
-			if err != nil {
-				return nil, errNew(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-			}
-			return decoded, nil
-		}
-		var decoded any
-		if err := yamlUnmarshal(text, &decoded); err != nil {
-			return nil, errNew(fmt.Sprintf("failed to read candidate feedback ledger %s: %s", s, err))
-		}
-		return decoded, nil
-	default:
-		return nil, errNew("sources must be a ledger mapping, path, or sequence of them")
+// LoadLedgerFile 读取 YAML/JSON 账本文件为映射（对应 Python _load_source 的路径分支）。
+// 供调用方在传入 AnalyzeCandidateFeedbackLedgers 前把文件路径转换为映射
+// （D-e1-1 修订：联合类型收窄为单一映射形态，路径转换外移至调用侧）。
+// .json 后缀（大小写不敏感）按 JSON 解析并保留 int/float 二分语义；其余按 YAML 解析。
+// 顶层非映射返回错误（Python 对应 source[i] must be a mapping，索引语境由调用侧补全）。
+func LoadLedgerFile(path string) (map[string]any, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return nil, fmt.Errorf("candidate feedback ledger does not exist: %s", path)
 	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read candidate feedback ledger %s: %s", path, err)
+	}
+	var decoded any
+	if strings.EqualFold(filepath.Ext(path), ".json") {
+		decoded, err = decodeJSONWithInts(text)
+	} else {
+		if err := yamlUnmarshal(text, &decoded); err != nil {
+			return nil, err
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read candidate feedback ledger %s: %s", path, err)
+	}
+	mapping, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("candidate feedback ledger must be a mapping: %s", path)
+	}
+	return mapping, nil
 }
 
 // decodeJSONWithInts 按 Python json.loads 的数字语义解码：无小数点/指数的整数还原为 int64，
@@ -667,7 +645,7 @@ func validateCohort(value any, location string) (map[string]any, error) {
 	if err := requireExact(cohort["record_type"], _COHORT_TYPE, location+".record_type"); err != nil {
 		return nil, err
 	}
-	identity, err := requireMapping(mapValue(cohort, "cohort"), location+".cohort")
+	identity, err := requireMapping(pythonsem.MapValue(cohort, "cohort"), location+".cohort")
 	if err != nil {
 		return nil, err
 	}
@@ -680,39 +658,39 @@ func validateCohort(value any, location string) (map[string]any, error) {
 	}
 	rawCandidates, ok := candidatesValue.([]any)
 	if !ok {
-		return nil, errNew(location + ".candidates must be a list")
+		return nil, errors.New(location + ".candidates must be a list")
 	}
 	// 对应 Python identity.get("candidate_count") != len(candidates)
-	if !pyEqual(identity["candidate_count"], len(rawCandidates)) {
-		return nil, errNew(location + ".cohort.candidate_count must match candidates length")
+	if !pythonsem.PyEqual(identity["candidate_count"], len(rawCandidates)) {
+		return nil, errors.New(location + ".cohort.candidate_count must match candidates length")
 	}
 	for candidateIndex, candidate := range rawCandidates {
 		if _, err := validateCandidate(candidate, fmt.Sprintf("%s.candidates[%d]", location, candidateIndex)); err != nil {
 			return nil, err
 		}
 	}
-	metrics, err := requireMapping(mapValue(cohort, "metrics"), location+".metrics")
+	metrics, err := requireMapping(pythonsem.MapValue(cohort, "metrics"), location+".metrics")
 	if err != nil {
 		return nil, err
 	}
 	for _, metricName := range _METRIC_NAMES {
-		metric, err := requireMapping(mapValue(metrics, metricName), fmt.Sprintf("%s.metrics.%s", location, metricName))
+		metric, err := requireMapping(pythonsem.MapValue(metrics, metricName), fmt.Sprintf("%s.metrics.%s", location, metricName))
 		if err != nil {
 			return nil, err
 		}
 		status, _ := metric["status"].(string)
 		if !_METRIC_STATUSES[status] {
-			return nil, errNew(fmt.Sprintf("%s.metrics.%s.status has unsupported value %s",
-				location, metricName, pyRepr(metric["status"])))
+			return nil, errors.New(fmt.Sprintf("%s.metrics.%s.status has unsupported value %s",
+				location, metricName, pythonsem.PyRepr(metric["status"])))
 		}
 		if status == "available" {
-			if !isNumber(metric["value"]) {
-				return nil, errNew(location + fmt.Sprintf(".metrics.%s.value must be finite when available", metricName))
+			if !pythonsem.IsNumber(metric["value"]) {
+				return nil, errors.New(location + fmt.Sprintf(".metrics.%s.value must be finite when available", metricName))
 			}
 		} else {
 			valuePresent := metric["value"] != nil
 			if valuePresent {
-				return nil, errNew(location + fmt.Sprintf(".metrics.%s.value must be null when unavailable", metricName))
+				return nil, errors.New(location + fmt.Sprintf(".metrics.%s.value must be null when unavailable", metricName))
 			}
 			if err := requireNonemptyText(metric["reason"],
 				fmt.Sprintf("%s.metrics.%s.reason", location, metricName)); err != nil {
@@ -735,7 +713,7 @@ func validateCandidate(value any, location string) (map[string]any, error) {
 	if err := requireNonemptyText(candidate["candidate_fingerprint"], location+".candidate_fingerprint"); err != nil {
 		return nil, err
 	}
-	identity, err := requireMapping(mapValue(candidate, "identity"), location+".identity")
+	identity, err := requireMapping(pythonsem.MapValue(candidate, "identity"), location+".identity")
 	if err != nil {
 		return nil, err
 	}
@@ -746,15 +724,15 @@ func validateCandidate(value any, location string) (map[string]any, error) {
 	}
 	caseIDs, ok := identity["target_case_ids"].([]any)
 	if !ok {
-		return nil, errNew(location + ".identity.target_case_ids must be a list")
+		return nil, errors.New(location + ".identity.target_case_ids must be a list")
 	}
 	_ = caseIDs
-	rank, err := requireMapping(mapValue(candidate, "proposal_rank"), location+".proposal_rank")
+	rank, err := requireMapping(pythonsem.MapValue(candidate, "proposal_rank"), location+".proposal_rank")
 	if err != nil {
 		return nil, err
 	}
 	if _, ok := rank["rank_frozen"].(bool); !ok {
-		return nil, errNew(location + ".proposal_rank.rank_frozen must be a boolean")
+		return nil, errors.New(location + ".proposal_rank.rank_frozen must be a boolean")
 	}
 	if err := requireNonemptyText(rank["ranking_policy"], location+".proposal_rank.ranking_policy"); err != nil {
 		return nil, err
@@ -762,70 +740,70 @@ func validateCandidate(value any, location string) (map[string]any, error) {
 	// 对应 Python "ranking_features" in rank and not isinstance(dict)
 	if features, present := rank["ranking_features"]; present {
 		if _, ok := features.(map[string]any); !ok {
-			return nil, errNew(location + ".proposal_rank.ranking_features must be a mapping when present")
+			return nil, errors.New(location + ".proposal_rank.ranking_features must be a mapping when present")
 		}
 	}
-	outcome, err := requireMapping(mapValue(candidate, "outcome"), location+".outcome")
+	outcome, err := requireMapping(pythonsem.MapValue(candidate, "outcome"), location+".outcome")
 	if err != nil {
 		return nil, err
 	}
-	if gain := outcome["target_gain"]; gain != nil && !isNumber(gain) {
-		return nil, errNew(location + ".outcome.target_gain must be finite or null")
+	if gain := outcome["target_gain"]; gain != nil && !pythonsem.IsNumber(gain) {
+		return nil, errors.New(location + ".outcome.target_gain must be finite or null")
 	}
 
-	activation, err := requireMapping(mapValue(candidate, "activation"), location+".activation")
+	activation, err := requireMapping(pythonsem.MapValue(candidate, "activation"), location+".activation")
 	if err != nil {
 		return nil, err
 	}
 	availability, _ := activation["availability"].(string)
 	state, _ := activation["state"].(string)
 	if !_ACTIVATION_AVAILABILITIES[availability] {
-		return nil, errNew(fmt.Sprintf("%s.activation.availability has unsupported value %s",
-			location, pyRepr(activation["availability"])))
+		return nil, errors.New(fmt.Sprintf("%s.activation.availability has unsupported value %s",
+			location, pythonsem.PyRepr(activation["availability"])))
 	}
 	if !_ACTIVATION_STATES[state] {
-		return nil, errNew(fmt.Sprintf("%s.activation.state has unsupported value %s",
-			location, pyRepr(activation["state"])))
+		return nil, errors.New(fmt.Sprintf("%s.activation.state has unsupported value %s",
+			location, pythonsem.PyRepr(activation["state"])))
 	}
 	if availability == "observed" && state != "triggered" && state != "not_triggered" {
-		return nil, errNew(location + ".activation.state must be triggered or not_triggered when observed")
+		return nil, errors.New(location + ".activation.state must be triggered or not_triggered when observed")
 	}
 	if availability != "observed" && state != availability {
-		return nil, errNew(fmt.Sprintf("%s.activation.state must preserve unavailable state %s",
-			location, pyRepr(availability)))
+		return nil, errors.New(fmt.Sprintf("%s.activation.state must preserve unavailable state %s",
+			location, pythonsem.PyRepr(availability)))
 	}
 	surfaces, ok := activation["surfaces"].([]any)
 	if !ok {
-		return nil, errNew(location + ".activation.surfaces must be a list of non-empty strings")
+		return nil, errors.New(location + ".activation.surfaces must be a list of non-empty strings")
 	}
 	for _, surface := range surfaces {
 		text, ok := surface.(string)
 		if !ok || text == "" {
-			return nil, errNew(location + ".activation.surfaces must be a list of non-empty strings")
+			return nil, errors.New(location + ".activation.surfaces must be a list of non-empty strings")
 		}
 	}
 
-	regression, err := requireMapping(mapValue(candidate, "regression"), location+".regression")
+	regression, err := requireMapping(pythonsem.MapValue(candidate, "regression"), location+".regression")
 	if err != nil {
 		return nil, err
 	}
-	target, err := requireMapping(mapValue(regression, "target"), location+".regression.target")
+	target, err := requireMapping(pythonsem.MapValue(regression, "target"), location+".regression.target")
 	if err != nil {
 		return nil, err
 	}
 	targetAvailability, _ := target["availability"].(string)
 	if !_REGRESSION_AVAILABILITIES[targetAvailability] {
-		return nil, errNew(fmt.Sprintf("%s.regression.target.availability has unsupported value %s",
-			location, pyRepr(target["availability"])))
+		return nil, errors.New(fmt.Sprintf("%s.regression.target.availability has unsupported value %s",
+			location, pythonsem.PyRepr(target["availability"])))
 	}
 	count, hasCount := target["regressed_case_count"]
 	if targetAvailability == "observed" {
 		// 对应 Python isinstance(count, bool) or not isinstance(int) or count < 0
-		if isBool(count) || !isInt(count) || pyInt(count) < 0 || !hasCount {
-			return nil, errNew(location + ".regression.target.regressed_case_count must be non-negative")
+		if pythonsem.IsBool(count) || !pythonsem.IsInt(count) || pythonsem.PyInt(count) < 0 || !hasCount {
+			return nil, errors.New(location + ".regression.target.regressed_case_count must be non-negative")
 		}
 	} else if hasCount && count != nil {
-		return nil, errNew(location + ".regression.target.regressed_case_count must be null when unavailable")
+		return nil, errors.New(location + ".regression.target.regressed_case_count must be null when unavailable")
 	}
 	return candidate, nil
 }
@@ -839,7 +817,7 @@ func activationStateValue(activation map[string]any) any {
 func requireMapping(value any, location string) (map[string]any, error) {
 	mapping, ok := value.(map[string]any)
 	if !ok {
-		return nil, errNew(location + " must be a mapping")
+		return nil, errors.New(location + " must be a mapping")
 	}
 	return mapping, nil
 }
@@ -847,8 +825,8 @@ func requireMapping(value any, location string) (map[string]any, error) {
 // requireExact 要求值与期望严格相等（对应 Python _require_exact L789-791）。
 // 数值跨类型相等复刻 Python `1 == 1.0` 语义。
 func requireExact(value any, expected any, location string) error {
-	if !pyEqual(value, expected) {
-		return errNew(fmt.Sprintf("%s must be %s, got %s", location, pyRepr(expected), pyRepr(value)))
+	if !pythonsem.PyEqual(value, expected) {
+		return errors.New(fmt.Sprintf("%s must be %s, got %s", location, pythonsem.PyRepr(expected), pythonsem.PyRepr(value)))
 	}
 	return nil
 }
@@ -857,34 +835,17 @@ func requireExact(value any, expected any, location string) error {
 func requireNonemptyText(value any, location string) error {
 	text, ok := value.(string)
 	if !ok || strings.TrimSpace(text) == "" {
-		return errNew(location + " must be a non-empty string")
+		return errors.New(location + " must be a non-empty string")
 	}
 	return nil
 }
 
-// isNumber 判断是否有限数且非布尔（对应 Python _is_number L799-800）
-func isNumber(value any) bool {
-	if isBool(value) {
-		return false
-	}
-	switch v := value.(type) {
-	case int:
-		return true
-	case int64:
-		return true
-	case float64:
-		return !math.IsInf(v, 0) && !math.IsNaN(v)
-	default:
-		return false
-	}
-}
-
 // isNonnegativeInt 判断是否非负整数且非布尔（对应 Python _is_nonnegative_int L803-804）
 func isNonnegativeInt(value any) bool {
-	if isBool(value) || !isInt(value) {
+	if pythonsem.IsBool(value) || !pythonsem.IsInt(value) {
 		return false
 	}
-	return pyInt(value) >= 0
+	return pythonsem.PyInt(value) >= 0
 }
 
 // comparabilityReason 判定 cohort 不可比较的原因，可比较返回空串
@@ -920,7 +881,7 @@ func comparabilityReason(cohort map[string]any) string {
 		ranks = append(ranks, item.(map[string]any)["proposal_rank"].(map[string]any)["predicted_rank"])
 	}
 	for _, r := range ranks {
-		if isBool(r) || !isInt(r) {
+		if pythonsem.IsBool(r) || !pythonsem.IsInt(r) {
 			return "predicted_rank_missing"
 		}
 	}
@@ -931,7 +892,7 @@ func comparabilityReason(cohort map[string]any) string {
 	}
 	actual := map[int64]bool{}
 	for _, r := range ranks {
-		actual[pyInt(r)] = true
+		actual[pythonsem.PyInt(r)] = true
 	}
 	if len(actual) != len(expected) {
 		return "predicted_ranks_not_permutation"
@@ -945,7 +906,7 @@ func comparabilityReason(cohort map[string]any) string {
 		candidate := item.(map[string]any)
 		candidateIdentity := candidate["identity"].(map[string]any)
 		for _, field := range requiredFields {
-			if !pyEqual(candidateIdentity[field], identity[field]) {
+			if !pythonsem.PyEqual(candidateIdentity[field], identity[field]) {
 				return field + "_mismatch"
 			}
 		}
@@ -956,10 +917,10 @@ func comparabilityReason(cohort map[string]any) string {
 		if candidate["proposal_rank"].(map[string]any)["rank_frozen"] != true {
 			return "candidate_rank_not_frozen"
 		}
-		if !pyEqual(candidate["proposal_rank"].(map[string]any)["ranking_policy"], identity["ranking_policy"]) {
+		if !pythonsem.PyEqual(candidate["proposal_rank"].(map[string]any)["ranking_policy"], identity["ranking_policy"]) {
 			return "candidate_ranking_policy_mismatch"
 		}
-		if !isNumber(candidate["outcome"].(map[string]any)["target_gain"]) {
+		if !pythonsem.IsNumber(candidate["outcome"].(map[string]any)["target_gain"]) {
 			return "target_gain_missing"
 		}
 	}
@@ -1054,7 +1015,7 @@ func pyStr(value any) string {
 func collectHighValueOutsideTopM(cohort map[string]any, threshold float64, opportunityIDs, supportIDs *[]string) error {
 	best := cohort["metrics"].(map[string]any)["best_of_k_gain"].(map[string]any)
 	topM := cohort["metrics"].(map[string]any)["top_m_gain"].(map[string]any)
-	if pyFloat(best["value"]) <= threshold {
+	if pythonsem.PyFloat(best["value"]) <= threshold {
 		return nil
 	}
 	cohortID := cohort["cohort"].(map[string]any)["cohort_id"].(string)
@@ -1062,20 +1023,20 @@ func collectHighValueOutsideTopM(cohort map[string]any, threshold float64, oppor
 	candidateID := best["candidate_id"]
 	var candidate map[string]any
 	for _, item := range cohort["candidates"].([]any) {
-		if pyEqual(item.(map[string]any)["candidate_id"], candidateID) {
+		if pythonsem.PyEqual(item.(map[string]any)["candidate_id"], candidateID) {
 			candidate = item.(map[string]any)
 			break
 		}
 	}
 	if candidate == nil {
-		return errNew(fmt.Sprintf("cohort %s best_of_k_gain candidate_id is not in candidates", pyRepr(cohortID)))
+		return errors.New(fmt.Sprintf("cohort %s best_of_k_gain candidate_id is not in candidates", pythonsem.PyRepr(cohortID)))
 	}
 	effectiveM := topM["effective_m"]
-	if isBool(effectiveM) || !isInt(effectiveM) || pyInt(effectiveM) < 1 {
-		return errNew(fmt.Sprintf("cohort %s top_m_gain.effective_m must be a positive integer", pyRepr(cohortID)))
+	if pythonsem.IsBool(effectiveM) || !pythonsem.IsInt(effectiveM) || pythonsem.PyInt(effectiveM) < 1 {
+		return errors.New(fmt.Sprintf("cohort %s top_m_gain.effective_m must be a positive integer", pythonsem.PyRepr(cohortID)))
 	}
 	predictedRank := candidate["proposal_rank"].(map[string]any)["predicted_rank"]
-	if pyInt(predictedRank) > pyInt(effectiveM) {
+	if pythonsem.PyInt(predictedRank) > pythonsem.PyInt(effectiveM) {
 		*supportIDs = append(*supportIDs, cohortID)
 	}
 	return nil
@@ -1116,17 +1077,17 @@ func collectFeatureEvidence(cohort map[string]any, featureEvidence map[string]*f
 				continue
 			}
 			feature := differing[0]
-			firstGain := pyFloat(first["outcome"].(map[string]any)["target_gain"])
-			secondGain := pyFloat(second["outcome"].(map[string]any)["target_gain"])
+			firstGain := pythonsem.PyFloat(first["outcome"].(map[string]any)["target_gain"])
+			secondGain := pythonsem.PyFloat(second["outcome"].(map[string]any)["target_gain"])
 			firstScore := first["proposal_rank"].(map[string]any)["predicted_score"]
 			secondScore := second["proposal_rank"].(map[string]any)["predicted_score"]
-			if firstGain == secondGain || !isNumber(firstScore) || !isNumber(secondScore) {
+			if firstGain == secondGain || !pythonsem.IsNumber(firstScore) || !pythonsem.IsNumber(secondScore) {
 				continue
 			}
-			if pyFloat(firstScore) == pyFloat(secondScore) {
+			if pythonsem.PyFloat(firstScore) == pythonsem.PyFloat(secondScore) {
 				continue
 			}
-			predictedWinnerIsFirst := pyFloat(firstScore) > pyFloat(secondScore)
+			predictedWinnerIsFirst := pythonsem.PyFloat(firstScore) > pythonsem.PyFloat(secondScore)
 			realizedWinnerIsFirst := firstGain > secondGain
 			aligned := predictedWinnerIsFirst == realizedWinnerIsFirst
 			adjustment := ""
@@ -1170,8 +1131,8 @@ func numericRankingFeatures(candidate map[string]any) map[string]float64 {
 	}
 	out := map[string]float64{}
 	for key, value := range raw {
-		if isNumber(value) {
-			out[key] = pyFloat(value)
+		if pythonsem.IsNumber(value) {
+			out[key] = pythonsem.PyFloat(value)
 		}
 	}
 	return out
@@ -1367,7 +1328,7 @@ func requireUniqueCohortIDs(cohorts []map[string]any) error {
 	}
 	sort.Strings(duplicates)
 	if len(duplicates) > 0 {
-		return errNew(fmt.Sprintf("duplicate cohort_id across inputs: %s", strings.Join(duplicates, ", ")))
+		return errors.New(fmt.Sprintf("duplicate cohort_id across inputs: %s", strings.Join(duplicates, ", ")))
 	}
 	return nil
 }
@@ -1495,7 +1456,7 @@ func writeCanonicalJSON(buf *bytes.Buffer, value any) error {
 			buf.WriteByte(']')
 			return nil
 		default:
-			return errNew(fmt.Sprintf("unsupported canonical JSON type %T", value))
+			return errors.New(fmt.Sprintf("unsupported canonical JSON type %T", value))
 		}
 	}
 }
@@ -1506,7 +1467,7 @@ func canonicalFloatRepr(f float64) string {
 		// 校验链已保证有限数；防御性兜底
 		return "null"
 	}
-	return pyFloatRepr(f)
+	return pythonsem.PyFloatRepr(f)
 }
 
 // writeJSONString 写出 JSON 字符串字面量（非 ASCII 原文，转义仅 JSON 必需字符）

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"os"
 	"path/filepath"
@@ -90,39 +91,49 @@ func cloneMap(m map[string]any) map[string]any {
 	return out
 }
 
-func TestLoadSource_路径不存在返回逐字错误(t *testing.T) {
-	_, err := loadSource("/nonexistent/ledger.yaml")
+// mustLoadLedger 测试助手：LoadLedgerFile 转换文件路径为映射
+func mustLoadLedger(t *testing.T, path string) map[string]any {
+	t.Helper()
+	m, err := LoadLedgerFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestLoadLedgerFile_路径不存在返回逐字错误(t *testing.T) {
+	_, err := LoadLedgerFile("/nonexistent/ledger.yaml")
 	assertErrMsg(t, err, "candidate feedback ledger does not exist: /nonexistent/ledger.yaml")
 }
 
-func TestLoadSource_目录路径等同不存在(t *testing.T) {
+func TestLoadLedgerFile_目录路径等同不存在(t *testing.T) {
 	dir := t.TempDir()
-	_, err := loadSource(dir)
+	_, err := LoadLedgerFile(dir)
 	assertErrMsg(t, err, "candidate feedback ledger does not exist: "+dir)
 }
 
-func TestLoadSource_读取失败包装逐字错误(t *testing.T) {
+func TestLoadLedgerFile_读取失败包装逐字错误(t *testing.T) {
 	// 无读权限模拟：传一个不存在文件的中间目录不可行，改用坏 JSON 内容
 	p := filepath.Join(t.TempDir(), "bad.json")
 	if err := os.WriteFile(p, []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := loadSource(p)
+	_, err := LoadLedgerFile(p)
 	if err == nil || !strings.HasPrefix(err.Error(), "failed to read candidate feedback ledger "+p+": ") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestLoadSource_JSON后缀数字保留整数语义(t *testing.T) {
+func TestLoadLedgerFile_JSON后缀数字保留整数语义(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "led.JSON") // casefold 比较
 	if err := os.WriteFile(p, []byte(`{"schema_version":1,"n":1.5,"i":2}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	v, err := loadSource(p)
+	v, err := LoadLedgerFile(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := v.(map[string]any)
+	m := v
 	if _, ok := m["schema_version"].(int64); !ok {
 		t.Fatalf("JSON 整数应还原为 int64，got %T", m["schema_version"])
 	}
@@ -134,24 +145,19 @@ func TestLoadSource_JSON后缀数字保留整数语义(t *testing.T) {
 	}
 }
 
-func TestLoadSource_YAML解析(t *testing.T) {
+func TestLoadLedgerFile_YAML解析(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "led.yaml")
 	if err := os.WriteFile(p, []byte("schema_version: 1\nk: v\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	v, err := loadSource(p)
+	v, err := LoadLedgerFile(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := v.(map[string]any)
+	m := v
 	if m["k"] != "v" {
 		t.Fatalf("unexpected: %v", m)
 	}
-}
-
-func TestNormalizeSources_元素类型非法(t *testing.T) {
-	_, err := normalizeSources([]LedgerSource{123})
-	assertErrMsg(t, err, "each source must be a ledger mapping or path")
 }
 
 func TestLoadAndValidateSource_cohort单记录形态(t *testing.T) {
@@ -185,11 +191,6 @@ func TestLoadAndValidateSource_ledger形态校验错误逐字(t *testing.T) {
 	v3["cohorts"] = "x"
 	_, err = loadAndValidateSource(v3, 0)
 	assertErrMsg(t, err, "source[0].cohorts must be a list")
-}
-
-func TestLoadAndValidateSource_非映射入参(t *testing.T) {
-	_, err := loadAndValidateSource(123, 0)
-	assertErrMsg(t, err, "sources must be a ledger mapping, path, or sequence of them")
 }
 
 func TestValidateCohort_错误分支逐字(t *testing.T) {
@@ -398,13 +399,13 @@ func TestValidateCohort_候选校验带位置前缀(t *testing.T) {
 }
 
 func TestIsNumber_排除布尔与非有限数(t *testing.T) {
-	if isNumber(true) || isNumber("1") || isNumber(nil) {
+	if pythonsem.IsNumber(true) || pythonsem.IsNumber("1") || pythonsem.IsNumber(nil) {
 		t.Fatal("bool/string/nil 不应是数字")
 	}
-	if !isNumber(1) || !isNumber(1.5) || !isNumber(int64(3)) {
+	if !pythonsem.IsNumber(1) || !pythonsem.IsNumber(1.5) || !pythonsem.IsNumber(int64(3)) {
 		t.Fatal("int/int64/float64 应是数字")
 	}
-	if isNumber(math.Inf(1)) || isNumber(math.Inf(-1)) {
+	if pythonsem.IsNumber(math.Inf(1)) || pythonsem.IsNumber(math.Inf(-1)) {
 		t.Fatal("Inf 不是有限数")
 	}
 }
@@ -882,7 +883,7 @@ func TestCohortRate_结构与排序(t *testing.T) {
 const goldenDir = "testdata/golden"
 
 func TestTrainingLedgerDigest_跨语言逐字节一致(t *testing.T) {
-	cohorts, err := loadAndValidateSource(goldenDir+"/feedback_analysis_input_1.yaml", 0)
+	cohorts, err := loadAndValidateSource(mustLoadLedger(t, goldenDir+"/feedback_analysis_input_1.yaml"), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -902,7 +903,7 @@ func TestTrainingLedgerDigest_跨语言逐字节一致(t *testing.T) {
 
 func TestAnalyzeCandidateFeedbackLedgers_黄金样例双向断言(t *testing.T) {
 	report, err := AnalyzeCandidateFeedbackLedgers(
-		[]LedgerSource{goldenDir + "/feedback_analysis_input_1.yaml"}, 2, 0.1)
+		[]map[string]any{mustLoadLedger(t, goldenDir+"/feedback_analysis_input_1.yaml")}, 2, 0.1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -911,7 +912,7 @@ func TestAnalyzeCandidateFeedbackLedgers_黄金样例双向断言(t *testing.T) 
 	if err := json.Unmarshal(raw, &expected); err != nil {
 		t.Fatal(err)
 	}
-	if !pyDeepEqual(report, expected) {
+	if !pythonsem.PyDeepEqual(report, expected) {
 		t.Fatal("报告与 Python 黄金样例不一致")
 	}
 	// 紧凑序列化 hash 与 Python 记录一致（D-e1-3 实证）
@@ -938,6 +939,6 @@ func TestAnalyzeCandidateFeedbackLedgers_参数校验(t *testing.T) {
 
 func TestAnalyzeCandidateFeedbackLedgers_跨输入重复cohortID(t *testing.T) {
 	c := comparableCohortFixture()
-	_, err := AnalyzeCandidateFeedbackLedgers([]LedgerSource{c, comparableCohortFixture()}, 1, 0.0)
+	_, err := AnalyzeCandidateFeedbackLedgers([]map[string]any{c, comparableCohortFixture()}, 1, 0.0)
 	assertErrMsg(t, err, "duplicate cohort_id across inputs: cc1")
 }
