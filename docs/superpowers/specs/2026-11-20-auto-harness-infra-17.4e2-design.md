@@ -35,7 +35,7 @@
 
 1. **配置零门槛**：所有键有默认值（repo_url 默认 gitcode agent-core、base_branch 默认 develop-auto-harness、pipeline 默认 auto）；配置文件不存在时 bootstrap 复制出厂模板；gitcode_token 可走 env `GITCODE_ACCESS_TOKEN` 兜底（`gitcode_token_env` 键）。
 2. **无本地仓库时自动 clone**：`_ensure_base_repo` — 有 local_repo → fetch + worktree add；无 → 目标路径无 .git 则从远端 clone 缓存，有则 fetch，再 worktree add。clone 失败 → RuntimeError → 任务 failed。不 `git init` 凭空建仓。
-3. **平台仅 GitCode（默认）+ GitHub（gh CLI）**：PR 创建走 `api.gitcode.com/api/v5` REST；GitHub 走 gh，缺 gh 报安装提示。
+3. **PR 创建仅 GitCode 一条通道**：走 `api.gitcode.com/api/v5` REST，硬编码域名，无平台切换开关。`github_cli.py` 不是 PR 通道，是"GitHub-first 源码策略"调研阶段的 gh 预制检查（检测/自动安装/登录态检查），且当前在 Python 侧**零调用**（预留死代码，照抄复刻不新增调用点）。
 4. **出厂模板 vs 用户配置**：出厂 config.yaml 仅在用户配置缺失时复制为起点；运行时一律读用户文件。
 
 ## 四、对齐纪律
