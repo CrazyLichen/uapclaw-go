@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// fakeRunner 记录调用并按脚本返回
+// fakeRunner 记录调用并按脚本返回（键为命令前缀，取最长匹配）
 type fakeRunner struct {
-	calls  []string
-	resps  map[string]CommandResult
-	deflt  CommandResult
+	calls []string
+	resps map[string]CommandResult
+	deflt CommandResult
 	runErr error
 }
 
@@ -23,8 +23,14 @@ func (f *fakeRunner) Run(_ context.Context, dir string, _ []string, name string,
 	if f.runErr != nil {
 		return CommandResult{}, f.runErr
 	}
-	if r, ok := f.resps[cmd]; ok {
-		return r, nil
+	best, matched := "", false
+	for key := range f.resps {
+		if strings.HasPrefix(cmd, key) && (!matched || len(key) > len(best)) {
+			best, matched = key, true
+		}
+	}
+	if matched {
+		return f.resps[best], nil
 	}
 	return f.deflt, nil
 }

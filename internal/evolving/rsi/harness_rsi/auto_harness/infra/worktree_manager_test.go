@@ -2,6 +2,7 @@ package infra
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -78,8 +79,8 @@ func TestWorktreeManager_EnsureBaseRepo_三分支(t *testing.T) {
 	if err != nil || base3 != cacheDir {
 		t.Fatalf("clone 分支: %v %q", err, base3)
 	}
-	if runner3.calls[0] != fmt.Sprintf("dir=%s cmd=git clone -b develop-auto-harness https://gitcode.com/openJiuwen/agent-core.git %s", cacheDir, cacheDir) {
-		t.Fatalf("clone cwd = %q", runner3.calls[0])
+	if runner3.calls[0] != fmt.Sprintf("dir=%s cmd=git clone -b develop-auto-harness https://gitcode.com/openJiuwen/agent-core.git %s", filepath.Dir(cacheDir), cacheDir) {
+		t.Fatalf("clone cwd 应为缓存父目录 = %q", runner3.calls[0])
 	}
 
 	// clone 失败 → RuntimeError 语义
@@ -99,6 +100,10 @@ func TestWorktreeManager_EnsureBaseRepo_三分支(t *testing.T) {
 func TestWorktreeManager_Prepare(t *testing.T) {
 	localRepo := t.TempDir()
 	runner := newFakeRunner()
+	// 默认失败：命中"分支不存在（show-ref != 0）"与"remote 不存在（get-url != 0）"两条 Python 分支
+	runner.deflt = CommandResult{ExitCode: 1, Output: ""}
+	runner.resps["git fetch origin"] = CommandResult{ExitCode: 0, Output: "fetched"}
+	runner.resps["git worktree prune"] = CommandResult{ExitCode: 0, Output: ""}
 	cfg := newTestWorktreeConfig(localRepo)
 	cfg.WorktreesDir = t.TempDir()
 	mgr := NewWorktreeManager(nil, runner, func() WorktreeConfigSnapshot { return cfg }, "u", "tok")
