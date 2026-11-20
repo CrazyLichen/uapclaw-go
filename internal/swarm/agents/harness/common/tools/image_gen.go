@@ -108,6 +108,12 @@ func ApplyImageGenModelConfigFromYAML(configBase map[string]any) {
 
 // newGenerateImageTool 构造 generate_image 工具。
 // Python: generate_image (image_tools.py L417-480)
+// NewGenerateImageToolPublic 生成图片工具的导出构造（15.16f 补导出：
+// providers 工厂消费，Python 侧为模块级单例 generate_image）。
+func NewGenerateImageToolPublic() tool.Tool {
+	return newGenerateImageTool()
+}
+
 func newGenerateImageTool() tool.Tool {
 	card := tool.NewToolCard(
 		"generate_image",

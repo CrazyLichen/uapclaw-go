@@ -28,6 +28,7 @@ import (
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -792,13 +793,13 @@ var toolParamBuilders = map[string]func(map[string]any) map[string]any{
 	},
 	manifest.Vision: func(c map[string]any) map[string]any {
 		// Python: _vision_tool_params (config_specs.py:610-612)
-		return map[string]any{"vision_model_config": VisionModelConfigParams(c)}
+		return map[string]any{"vision_model_config": providers.VisionModelConfigParams(c)}
 	},
 	manifest.Audio: func(c map[string]any) map[string]any {
 		// Python: _audio_tool_params (config_specs.py:615-620)
 		return map[string]any{
-			"dedicated":          AudioDedicatedConfigured(c),
-			"audio_model_config": AudioModelConfigParams(c),
+			"dedicated":          providers.AudioDedicatedConfigured(c),
+			"audio_model_config": providers.AudioModelConfigParams(c),
 		}
 	},
 }

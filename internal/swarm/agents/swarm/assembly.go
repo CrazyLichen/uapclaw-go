@@ -124,7 +124,7 @@ func orDefault(v, fallback string) string {
 // ⤴️群聊章节），步骤位置与分支结构保留。
 func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams) error {
 	// 步骤 1: 注册种子工厂（对齐 :456 register_swarm_providers 的工厂段）
-	RegisterSwarmBuildContextFactory()
+	RegisterSwarmProviders()
 
 	// 步骤 2: _ensure_external_team_transport（:425 调用位；:457 原行号）
 	// 给跨进程 CLI 成员挂 hybrid 回传通道（15.16d）。
@@ -176,6 +176,10 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 
 	// 步骤 7: base = SwarmBuildContext(...)（:485-535）
 	base := NewSwarmBuildContext(SwarmBuildContextParams{
+		// Python: config=config（assembly.py:485，SwarmBuildContext config 字段
+		// context.py:124）——providers 工厂经 ctx.config 读开关（15.16f 执行期
+		// 集成矩阵发现的 parity 缺口：此前未传，工厂拿到 nil config）。
+		Config:                  legacyConfigMap(),
 		SessionID:               p.SessionID,
 		RequestID:               p.RequestID,
 		UserID:                  p.UserID,

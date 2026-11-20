@@ -14,6 +14,8 @@
 //	├── team_model_config.go # TeamModelConfig（可序列化模型配置，上游同文件）
 //	├── deep_agent_spec.go # RailSpec/BuiltinToolSpec 声明式规格 + Build（经 provider 注册表）
 //	├── rail_registry.go # rail provider 注册表（type 名 → 工厂，RWMutex 保护）
+//	├── tool_registry.go # tool provider 注册表（BuiltinToolSpec.Build 查表，对齐 deep_agent_spec.py:67-88）
+//	├── subagent_registry.go # subagent provider 注册表（SubAgentSpec.Build factory_name 查表，对齐 :383-384）
 //	├── rail_spec_support.go # rail 解析辅助（内置元素钩子 / 未知类型告警 / 最小上下文）
 //	├── extension_spec.go # 扩展元素规格类型（15.15 全量：PluginSpec/AgentTemplateSpec 等 + 路径校验）
 //	├── permissions_section.go # 权限配置段纯数据类型（PermissionsSection 及子结构）

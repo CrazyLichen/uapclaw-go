@@ -214,14 +214,23 @@ type SubAgentSpec struct {
 // Build 物化成运行时 SubAgentConfig。
 // Python: deep_agent_spec.py:254-330 SubAgentSpec.build
 //
-// ⚠️ 已知偏差：Python 先查 _SUBAGENT_PROVIDER_REGISTRY（factory_name 命中时
-// 直接交 provider 构造）。Go 侧注册表 ⤵️ 15.14（manifest catalog）未落地，
-// 该分支条件恒为假、走正常路径——语义在注册表落地前等价。
+// factory_name 命中注册表时直接交 provider 构造（:383-384）；未命中
+// 落到正常路径（对齐 Python if 条件不成立的语义）。
 func (s *SubAgentSpec) Build(
 	parentModel *llm.Model,
 	language string,
 	ctx BuildContextInterface,
 ) (*SubAgentConfig, error) {
+	// Python: if self.factory_name and self.factory_name in _SUBAGENT_PROVIDER_REGISTRY:
+	//   return _SUBAGENT_PROVIDER_REGISTRY[self.factory_name](
+	//       dict(self.factory_kwargs), context)（:383-384）
+	if s.FactoryName != "" {
+		if provider, ok := LookupSubagentProvider(s.FactoryName); ok {
+			return provider(s.FactoryKwargs, ctx)
+		}
+		// 未命中 → 继续正常路径（对齐 Python if 条件不成立）
+	}
+
 	// Python: resolved_model = self.model.build() if self.model else None
 	var resolvedModel *llm.Model
 	if s.Model != nil {

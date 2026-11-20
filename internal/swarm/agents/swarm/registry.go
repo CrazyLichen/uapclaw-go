@@ -5,6 +5,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 )
@@ -21,19 +23,39 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// RegisterSwarmBuildContextFactory 幂等注册平台种子工厂。
-// 驱动 build-context 种子工厂注册缝（Python: register_swarm_providers
-// registry.py:180-198 中的工厂注册段）。安全地可多次调用，只有首次执行
-// 注册；覆盖注册语义（后者覆盖前者）由 core 侧注册函数保证。
-// 偏差 D-15.16-c3：Python register_swarm_providers 的 rails 目录注册段
-// （register_from_catalog / ensure_harness_elements_registered）⤵️15.16f（2026-12-02 改标：15.7/15.8 仅 cc/cx SDK provider，swarm 平台要素归 15.16f），
-// 本节不含。
-func RegisterSwarmBuildContextFactory() {
+// RegisterSwarmProviders 幂等注册全部 swarm 平台 provider 与种子工厂。
+// 三步顺序不可换（Python: register_swarm_providers registry.py:180-200）：
+//  1. EnsureHarnessElementsRegistered（对齐 ensure_harness_elements_registered）
+//  2. 显式注册 swarm.* rail/tool/subagent provider——偏差 F6：Python 靠
+//     @harness_element + manifest catalog + register_from_catalog 自动同步，
+//     Go 无 catalog 机制（rails/registration.go 偏差 D-9 延伸），改为显式
+//     调用清单，顺序按 registry.py:48-58 import 段排列；遗漏由
+//     TestRegisterSwarmProviders_幂等且全集注册 的常量层对拍兜住
+//  3. RegisterBuildContextFactory（种子工厂，覆盖注册语义由 core 保证）
+//
+// D-15.16-c3 已随本节回收（原独立 RegisterSwarmBuildContextFactory 并入，
+// 规则 8）。同时注入 providers 包的 team/adapter 基座构造函数
+// （D-15.16f-view 配套缝：providers↔team 成环，经父包无环注入）。
+func RegisterSwarmProviders() {
 	registeredMu.Lock()
 	defer registeredMu.Unlock()
 	if registered {
 		return
 	}
+	// 步骤 1
+	rails.EnsureHarnessElementsRegistered()
+	// 步骤 2：rail（member_rails → code_rails → builtin → design → skills）
+	providers.RegisterMemberRailProviders()
+	providers.RegisterCodeRailProviders()
+	providers.RegisterBuiltinRailProviders()
+	providers.RegisterDesignProviders()
+	providers.RegisterSkillProviders()
+	// 步骤 2：tool（tools → runtime_tools → designer）
+	providers.RegisterToolProviders()
+	providers.RegisterRuntimeToolProviders()
+	// 步骤 2：subagent（code_subagents）
+	providers.RegisterSubagentProviders()
+	// 步骤 3
 	atschema.RegisterBuildContextFactory(buildSwarmContextFromSeed)
 	registered = true
 }
@@ -206,3 +228,34 @@ const (
 	// SwarmMultimodalImage Python: providers/builtin_rails.py:43
 	SwarmMultimodalImage = "swarm.multimodal_image"
 )
+
+// SwarmRailNamesForTest 返回常量层全部 swarm.* rail 注册名（测试全集对拍用；
+// 非测试代码不得消费）。
+func SwarmRailNamesForTest() map[string]bool {
+	return map[string]bool{
+		PersonalContext:              true,
+		RuntimePrompt:                true,
+		TeamSkillStoragePolicy:       true,
+		TeamSkillLibraryReload:       true,
+		TeamWorkspaceReportPath:      true,
+		OrganizationAvailability:     true,
+		OrganizationModel:            true,
+		OrganizationOwnerInbox:       true,
+		ContextProcessor:             true,
+		ModelAnomalyDetection:        true,
+		PluginRails:                  true,
+		SkillRetrievalPrompt:         true,
+		SymphonyOrchestrationPrompt:  true,
+		SwarmHeartbeat:               true,
+		SessionMessagingRoute:        true,
+		TeamPermissionPolicy:         true,
+		TeamPermission:               true,
+		TeamSkillEvolution:           true,
+		TeamSkillCreate:              true,
+		MemberSkillEvolution:         true,
+		DesignerAuthoring:            true,
+		DesignerExecution:            true,
+		DesignerSurfaceSanitizer:     true,
+		MemberSkillToolkit:           true,
+	}
+}

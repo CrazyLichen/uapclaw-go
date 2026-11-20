@@ -77,29 +77,47 @@ func (s RailSpec) Build(
 	return provider(s.Params, ctx)
 }
 
-// Build 通过已注册的 tool provider 构造工具实例（本版为骨架）。
+// Build 通过已注册的 tool provider 构造工具实例（或列表）。
 //
-// ⤵️ 领域十五：tool provider 注册表（register_tool_provider）尚未落地，
-// 本方法当前恒返回 (nil, nil)——与「未知 tool type」同语义：跳过但不中断。
-// 领域十五补注册表后，把函数体替换为查表调用即可，签名不变。
+// 步骤对齐上游（deep_agent_spec.py:326-340）：
+//  1. 确保内置元素已注册（ensure_builtin_elements_registered）
+//  2. 查表；查不到 → **报错**（与 RailSpec 的 warn+skip 不同：上游这里是
+//     raise ValueError，因为缺工具会让成员能力静默残缺，属构造错误）
+//  3. ctx 为 nil → 自建最小上下文（仅 language，对齐 :337-338）
+//  4. 调 provider(dict(params), ctx)
 //
-// 参数（对齐上游 :307-337，签名先定形）：
-//   - language：供 provider 注入语言（类适配器在构造器接受时会注入）
-//   - toolID：预留给逐成员 tool-id 命名空间；按 agent 限定的 id 改写在
-//     AbilityManager.Add 里做，因此不传给 provider
+// 返回 any：provider 可能返回单个工具、工具列表（调用方 _as_built_list 摊平）。
 //
-// Python: BuiltinToolSpec.build (deep_agent_spec.py:307-337)
+// Python: BuiltinToolSpec.build (deep_agent_spec.py:307-340)
 func (s BuiltinToolSpec) Build(
 	language string, toolID string, ctx BuildContextInterface,
 ) (any, error) {
-	// 不查表（注册表未落地），直接按「未知 type」语义跳过。
+	// 步骤 1：确保内置元素已注册
+	// Python: ensure_builtin_elements_registered()（:328）
+	ensureBuiltinElementsRegisteredHook()
+
+	// 步骤 2：查表
+	// Python: factory = _TOOL_PROVIDER_REGISTRY.get(self.type)（:329）
+	provider, ok := LookupToolProvider(s.Type)
+	if !ok {
+		// Python: raise ValueError(f"Unknown tool type '{self.type}'. "
+		//   f"Registered types: {list(_TOOL_PROVIDER_REGISTRY)}")（:330-334）
+		return nil, fmt.Errorf("Unknown tool type '%s'. Registered types: %v", s.Type, sortedToolTypeNames())
+	}
+
+	// 步骤 3：ctx 为 nil 时自建最小上下文（仅 language，对齐 :337-338）
+	if ctx == nil {
+		ctx = &BuildContext{Language: language}
+	}
+
+	// 步骤 4：调 provider
+	// Python: return factory(dict(self.params), context)（:339-340）
 	//
-	// 这里刻意**不**记 warn：上游只在真查表失败时告警，而本版根本没实现
-	// 查表，每轮都告警会刷屏。
-	_ = language
+	// toolID 形参：上游 build 签名无该参数（调用方 :402 组装
+	// tid = f"{sa_prefix}.{item.type}" 但不传给 factory）；Go 保留形参
+	// 是为签约定形（对齐既有注释说明），与上游一致不透传 provider。
 	_ = toolID
-	_ = ctx
-	return nil, nil
+	return provider(s.Params, ctx)
 }
 
 // ValidateRailSpecs 校验一组 rail 声明（类型名非空）。

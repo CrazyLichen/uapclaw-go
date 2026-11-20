@@ -130,7 +130,7 @@ func (s *ConfigRoundtripSuite) TestTeamAgentSpecValidate_嵌套校验与mcp默�
 
 // TestBuildContextSeed_往返与materialize BuildContextSeed 的序列化往返：
 // seed 随 JSON 往返保留（BuildContext 以 json:"-" 排除，blueprint.py:645/660），
-// MaterializeBuildContext 经平台工厂（swarm.RegisterSwarmBuildContextFactory，
+// MaterializeBuildContext 经平台工厂（swarm.RegisterSwarmProviders（15.16f 改名，原 RegisterSwarmBuildContextFactory），
 // registry.py:160-198）重建活载体，提取器取回路径。
 //
 // 15.16c：D-15.13-k 过渡默认工厂已回收——平台工厂是唯一注册面，
@@ -139,7 +139,7 @@ func (s *ConfigRoundtripSuite) TestTeamAgentSpecValidate_嵌套校验与mcp默�
 //
 // Python: materialize_build_context (blueprint.py:685-699)。
 func (s *ConfigRoundtripSuite) TestBuildContextSeed_往返与materialize() {
-	swarm.RegisterSwarmBuildContextFactory()
+	swarm.RegisterSwarmProviders()
 	seed := map[string]any{
 		"session_id":       "sess-1",
 		"team_id":          "pay",
