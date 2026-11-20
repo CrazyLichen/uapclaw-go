@@ -182,7 +182,7 @@ func (s *TeamScheduler) settleFailOrEscalate(ctx context.Context, task *database
 				s.sendAsLeader(ctx, assignee, MetaReworkSummary(task, maxRounds))
 			}
 		}
-		s.dispatchReviewFeedback(task, feedback)
+		s.dispatchReviewFeedback(ctx, task, feedback)
 		return false
 	}
 	result, err := s.taskMgr.SettleReview(ctx, task.TaskID, "fail", feedback)
@@ -195,17 +195,27 @@ func (s *TeamScheduler) settleFailOrEscalate(ctx context.Context, task *database
 	if assignee := derefStr(task.Assignee); assignee != "" {
 		s.sendAsLeader(ctx, assignee, MetaRework(task, maxRounds, feedback))
 	}
-	s.dispatchReviewFeedback(task, feedback)
+	s.dispatchReviewFeedback(ctx, task, feedback)
 	return true
 }
 
-// dispatchReviewFeedback 失败一轮后通知挂载的 Core 团队演进 Rail。
-// 偏差 D-25.2b-13②：rail 的 handle_review_feedback 回调随 Task 10/11 的
-// rail 挂点落地后接线；当前仅维护去重账本。
-// Python: _dispatch_review_feedback (scheduler.py L627-658)。
-func (s *TeamScheduler) dispatchReviewFeedback(task *database.TeamTaskBase, feedback string) {
+// SetReviewFeedbackHandler 注入任务级反馈回调（挂载 rail 的 HandleReviewFeedback；
+// 装配点注入）。sessionID 进入反馈负载（Python build_context.session_id）。
+func (s *TeamScheduler) SetReviewFeedbackHandler(sessionID string, handler func(ctx context.Context, payload map[string]any) error) {
+	s.reviewFeedbackSessionID = sessionID
+	s.reviewFeedbackHandler = handler
+}
+
+// dispatchReviewFeedback 失败一轮后即派发反馈回调（后台运行）。
+// Python: _dispatch_review_feedback (scheduler.py L627-658)——构造负载、去重后
+// create_task 后台运行；Go 侧 goroutine + reviewFeedbackWG，终态聚合
+// （dispatchTeamReviewFeedback）Wait 等待同形。
+func (s *TeamScheduler) dispatchReviewFeedback(ctx context.Context, task *database.TeamTaskBase, feedback string) {
 	normalized := strings.TrimSpace(feedback)
 	if normalized == "" {
+		return
+	}
+	if s.reviewFeedbackHandler == nil {
 		return
 	}
 	roundKey := [2]string{task.TaskID, fmt.Sprintf("%d", task.ReviewRound)}
@@ -213,8 +223,39 @@ func (s *TeamScheduler) dispatchReviewFeedback(task *database.TeamTaskBase, feed
 		return
 	}
 	s.reviewFeedbackRounds[roundKey] = struct{}{}
-	// 回调面随 Task 10/11 落地（rail.HandleReviewFeedback）；账本先行保持
-	// 去重语义与上游一致。
+	// Python: payload 构造（scheduler.py L645-655），键名是 rail 契约不得改动。
+	payload := map[string]any{
+		"team_id":      s.teamName,
+		"session_id":   s.reviewFeedbackSessionID,
+		"task_id":      task.TaskID,
+		"review_round": task.ReviewRound,
+		"task_title":   task.Title,
+		"task_content": task.Content,
+		"assignee":     derefStr(task.Assignee),
+		"feedback":     normalized,
+	}
+	// Python: asyncio.create_task 后台运行（scheduler.py L656-658）；Go goroutine
+	// + 在飞计数（mutex 内先增再派发），终态聚合 cond 等待同形。
+	s.reviewFeedbackMu.Lock()
+	s.reviewFeedbackInflight++
+	s.reviewFeedbackMu.Unlock()
+	go func() {
+		defer func() {
+			s.reviewFeedbackMu.Lock()
+			s.reviewFeedbackInflight--
+			if s.reviewFeedbackInflight == 0 {
+				s.reviewFeedbackCond.Broadcast()
+			}
+			s.reviewFeedbackMu.Unlock()
+		}()
+		// Python: _invoke_review_feedback_rail 的吞错日志形态（L660-671）。
+		if err := s.reviewFeedbackHandler(ctx, payload); err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("task_id", fmt.Sprint(payload["task_id"])).
+				Str("review_round", fmt.Sprint(payload["review_round"])).
+				Msg("[scheduler] review feedback Rail failed")
+		}
+	}()
 }
 
 // handleUndecided 开放轮的停滞处置：超过停滞超时后升级一次。

@@ -186,9 +186,13 @@ type TeamScheduler struct {
 	allDoneAnnounced bool
 	// reviewFeedbackDispatched 评审反馈 rail 已派发标志（25.2b）。
 	reviewFeedbackDispatched bool
-	// reviewFeedbackTasks 评审反馈异步任务集合（25.2b）。
-	reviewFeedbackTasksMu sync.Mutex
-	reviewFeedbackTasks   []func(context.Context) error
+	// reviewFeedbackInflight/Mu/Cond 评审反馈后台任务在飞计数（Python
+	// _review_feedback_tasks 集合：派发即后台运行，终态聚合 gather 等待）。
+	// 计数在 mutex 内先增再启 goroutine——WaitGroup 的 Add/Wait 并发竞争在这里
+	// 由「增量先于派发可见」消除（CI race 实证 WaitGroup 形态会漏等）。
+	reviewFeedbackMu       sync.Mutex
+	reviewFeedbackCond     *sync.Cond
+	reviewFeedbackInflight int
 	// templateLoader 绑定团队后端 workspace cache 的 A 类加载器（懒绑定；
 	// reviewer_* 模板读演进值）。Python: _template_loader_cache（scheduler.py L157-169）。
 	templateLoader TemplateLoaderFunc
@@ -196,6 +200,10 @@ type TeamScheduler struct {
 	reviewerRunner ReviewerRunnerFunc
 	// reviewFeedbackFinalizer 终态反馈聚合回调（装配点注入，25.2b）。
 	reviewFeedbackFinalizer func(ctx context.Context) (bool, error)
+	// reviewFeedbackSessionID 反馈负载的 session_id（装配点注入；Python build_context.session_id）。
+	reviewFeedbackSessionID string
+	// reviewFeedbackHandler 任务级反馈回调（挂载 rail 的 HandleReviewFeedback；25.2b）。
+	reviewFeedbackHandler func(ctx context.Context, payload map[string]any) error
 	// reviewFeedbackRounds 评审反馈 rail 已派发的 (task_id, round)（25.2b）。
 	reviewFeedbackRounds map[[2]string]struct{}
 }
@@ -209,7 +217,7 @@ type TemplateLoaderFunc func(name, language string) (*ateamprompts.PromptTemplat
 // NewTeamScheduler 构造调度器。构造期只建账本，不做任何 IO。
 // Python: __init__（scheduler.py L110-159）
 func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend SchedulerBackend, msgSender LeaderMessageSender, defaultMaxRounds, stallTimeoutSeconds int64, teamName, language string) *TeamScheduler {
-	return &TeamScheduler{
+	sched := &TeamScheduler{
 		host:                 host,
 		taskMgr:              taskMgr,
 		backend:              backend,
@@ -229,6 +237,8 @@ func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend 
 		revisionPushed:       map[revisionKey]struct{}{},
 		reviewFeedbackRounds: map[[2]string]struct{}{},
 	}
+	sched.reviewFeedbackCond = sync.NewCond(&sched.reviewFeedbackMu)
+	return sched
 }
 
 // SetTemplateLoader 绑定 per-team A 类加载器（团队后端 workspace cache；
@@ -379,9 +389,10 @@ func (s *TeamScheduler) scan(ctx context.Context) error {
 // 一条聚合 COUNT。
 // Python: _rearm_all_done（scheduler.py L255-268）
 func (s *TeamScheduler) rearmAllDone(ctx context.Context) error {
-	// 25.2b：板面清空后终态评审反馈聚合（一次性标志语义在上游函数内）。
-	s.dispatchTeamReviewFeedback(ctx)
-
+	// 勘误 D-25.3-2：上游 _rearm_all_done（scheduler.py L255-268）不派发终态
+	// 反馈聚合——板清聚合只挂 digestTaskDone 与 announceAllDone 两点
+	// （scheduler.py L1177/L1222）。25.2b 曾误挂于此，导致 once-only 标志被
+	// 首轮扫描挥霍（任务级反馈尚未派发即聚合）。
 	if !s.allDoneAnnounced {
 		return nil
 	}
@@ -878,11 +889,13 @@ func (s *TeamScheduler) dispatchTeamReviewFeedback(ctx context.Context) {
 		return
 	}
 	s.reviewFeedbackDispatched = true
-	// 任务级反馈回调在后台运行以免延迟任务交接；终态回调等待它们完成后再
-	// 聚合——防止最后一条任务的反馈与团队级演进竞速。
-	for _, task := range s.reviewFeedbackTasks {
-		_ = task(ctx)
+	// 任务级反馈回调在派发点已后台运行（asyncio.create_task 同形）；终态回调
+	// 等待它们完成后再聚合——防止最后一条任务的反馈与团队级演进竞速。
+	s.reviewFeedbackMu.Lock()
+	for s.reviewFeedbackInflight > 0 {
+		s.reviewFeedbackCond.Wait()
 	}
+	s.reviewFeedbackMu.Unlock()
 	if _, err := s.reviewFeedbackFinalizer(ctx); err != nil {
 		logger.Error(logComponent).Err(err).
 			Msg("[scheduler] team review feedback rail failed")
