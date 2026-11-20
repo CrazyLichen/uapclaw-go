@@ -186,9 +186,17 @@ type TeamScheduler struct {
 	allDoneAnnounced bool
 	// reviewFeedbackDispatched 评审反馈 rail 已派发标志（25.2b）。
 	reviewFeedbackDispatched bool
-	// reviewFeedbackTasks 评审反馈异步任务集合（25.2b）。
-	reviewFeedbackTasksMu sync.Mutex
-	reviewFeedbackTasks   []func(context.Context) error
+	// ledgerMu 调度器共享账本的守护锁。Python 侧这些 dict 依赖单线程事件
+	// 循环的隐式串行（协程只在 await 处切换）；Go 的 reviewer follow-up
+	// goroutine 会跨线调 scan（scheduler_review.go followUpUnvotedReviewer，
+	// 结构对齐 Python 协程内直接扫），asyncio 的隐式串行必须显式化——
+	// 所有账本读写点持本锁，锁内只包账本段不包 IO。
+	// WG 等待的「无在途新派发」由 DB 状态机互斥保证（ReviseTask 的
+	// IN_REVIEW CAS 成功才派发，派发后任务 IN_PROGRESS、板未清），故
+	// Wait 无「等待期间新 Add」窗口（勘误：早前注记的「WG 形态漏等」
+	// 系 Add 位置错误所致，非拓扑固有；2026-12-05 与用户复核 DB 守卫后改回 WG）。
+	ledgerMu sync.Mutex
+	reviewFeedbackWG sync.WaitGroup
 	// templateLoader 绑定团队后端 workspace cache 的 A 类加载器（懒绑定；
 	// reviewer_* 模板读演进值）。Python: _template_loader_cache（scheduler.py L157-169）。
 	templateLoader TemplateLoaderFunc
@@ -196,6 +204,10 @@ type TeamScheduler struct {
 	reviewerRunner ReviewerRunnerFunc
 	// reviewFeedbackFinalizer 终态反馈聚合回调（装配点注入，25.2b）。
 	reviewFeedbackFinalizer func(ctx context.Context) (bool, error)
+	// reviewFeedbackSessionID 反馈负载的 session_id（装配点注入；Python build_context.session_id）。
+	reviewFeedbackSessionID string
+	// reviewFeedbackHandler 任务级反馈回调（挂载 rail 的 HandleReviewFeedback；25.2b）。
+	reviewFeedbackHandler func(ctx context.Context, payload map[string]any) error
 	// reviewFeedbackRounds 评审反馈 rail 已派发的 (task_id, round)（25.2b）。
 	reviewFeedbackRounds map[[2]string]struct{}
 }
@@ -209,7 +221,7 @@ type TemplateLoaderFunc func(name, language string) (*ateamprompts.PromptTemplat
 // NewTeamScheduler 构造调度器。构造期只建账本，不做任何 IO。
 // Python: __init__（scheduler.py L110-159）
 func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend SchedulerBackend, msgSender LeaderMessageSender, defaultMaxRounds, stallTimeoutSeconds int64, teamName, language string) *TeamScheduler {
-	return &TeamScheduler{
+	sched := &TeamScheduler{
 		host:                 host,
 		taskMgr:              taskMgr,
 		backend:              backend,
@@ -229,6 +241,7 @@ func NewTeamScheduler(host SchedulerHost, taskMgr SchedulerTaskManager, backend 
 		revisionPushed:       map[revisionKey]struct{}{},
 		reviewFeedbackRounds: map[[2]string]struct{}{},
 	}
+	return sched
 }
 
 // SetTemplateLoader 绑定 per-team A 类加载器（团队后端 workspace cache；
@@ -244,7 +257,9 @@ func (s *TeamScheduler) SetTemplateLoader(loader TemplateLoaderFunc) {
 func (s *TeamScheduler) Activate(ctx context.Context) {
 	first := !s.active
 	s.active = true
+	s.ledgerMu.Lock()
 	s.allDoneAnnounced = false
+	s.ledgerMu.Unlock()
 	if first {
 		logger.Info(logComponent).Str("team_name", s.teamName).Msg("[scheduler] activated for team")
 	}
@@ -365,11 +380,13 @@ func (s *TeamScheduler) scan(ctx context.Context) error {
 	}
 	// stranded 账本裁剪：只保留仍然搁浅的对（改派/完成即掉出）。
 	// Python: self._stranded_escalated &= stranded（scheduler.py L252）
+	s.ledgerMu.Lock()
 	for key := range s.strandedEscalated {
 		if _, still := stranded[key]; !still {
 			delete(s.strandedEscalated, key)
 		}
 	}
+	s.ledgerMu.Unlock()
 	return nil
 }
 
@@ -379,10 +396,14 @@ func (s *TeamScheduler) scan(ctx context.Context) error {
 // 一条聚合 COUNT。
 // Python: _rearm_all_done（scheduler.py L255-268）
 func (s *TeamScheduler) rearmAllDone(ctx context.Context) error {
-	// 25.2b：板面清空后终态评审反馈聚合（一次性标志语义在上游函数内）。
-	s.dispatchTeamReviewFeedback(ctx)
-
-	if !s.allDoneAnnounced {
+	// 勘误 D-25.3-2：上游 _rearm_all_done（scheduler.py L255-268）不派发终态
+	// 反馈聚合——板清聚合只挂 digestTaskDone 与 announceAllDone 两点
+	// （scheduler.py L1177/L1222）。25.2b 曾误挂于此，导致 once-only 标志被
+	// 首轮扫描挥霍（任务级反馈尚未派发即聚合）。
+	s.ledgerMu.Lock()
+	armed := s.allDoneAnnounced
+	s.ledgerMu.Unlock()
+	if !armed {
 		return nil
 	}
 	open, err := s.taskMgr.HasOpenTasks(ctx)
@@ -390,7 +411,9 @@ func (s *TeamScheduler) rearmAllDone(ctx context.Context) error {
 		return err
 	}
 	if open {
+		s.ledgerMu.Lock()
 		s.allDoneAnnounced = false
+		s.ledgerMu.Unlock()
 		logger.Info(logComponent).Msg("[scheduler] board reopened after wrap-up, all-done re-armed")
 	}
 	return nil
@@ -426,13 +449,15 @@ func (s *TeamScheduler) skipRetiredOwner(ctx context.Context, task *database.Tea
 	}
 	pair := handoffKey{TaskID: task.TaskID, Owner: owner}
 	stranded[pair] = struct{}{}
-	if _, byPolicy := s.policyRetired[owner]; !byPolicy {
-		return true
-	}
-	if _, escalated := s.strandedEscalated[pair]; escalated {
-		return true
+	s.ledgerMu.Lock()
+	_, byPolicy := s.policyRetired[owner]
+	_, alreadyEscalated := s.strandedEscalated[pair]
+	if !byPolicy || alreadyEscalated {
+		s.ledgerMu.Unlock()
+		return !byPolicy
 	}
 	s.strandedEscalated[pair] = struct{}{}
+	s.ledgerMu.Unlock()
 	logger.Warn(logComponent).
 		Str("task_id", task.TaskID).Str("status", task.Status).Str("owner", owner).
 		Msg("[scheduler] task is assigned to shut-down member; escalating to the leader")
@@ -565,7 +590,10 @@ func (s *TeamScheduler) reconcileHandoffs(ctx context.Context, retired map[strin
 			continue
 		}
 		pair := handoffKey{TaskID: task.TaskID, Owner: owner}
-		if _, known := s.handoffKnown[pair]; known {
+		s.ledgerMu.Lock()
+		_, known := s.handoffKnown[pair]
+		s.ledgerMu.Unlock()
+		if known {
 			continue
 		}
 		has, err := s.ownerHasStartHandoff(ctx, owner, task.TaskID)
@@ -573,7 +601,9 @@ func (s *TeamScheduler) reconcileHandoffs(ctx context.Context, retired map[strin
 			return acted, err
 		}
 		if has {
+			s.ledgerMu.Lock()
 			s.handoffKnown[pair] = struct{}{}
+			s.ledgerMu.Unlock()
 			continue
 		}
 		logger.Info(logComponent).
@@ -614,11 +644,13 @@ func (s *TeamScheduler) sendTaskStart(ctx context.Context, task *database.TeamTa
 	owner := *task.Assignee
 	sent := s.sendAsLeader(ctx, owner, MetaTaskStart(task, resume))
 	if sent {
+		s.ledgerMu.Lock()
 		s.handoffKnown[handoffKey{TaskID: task.TaskID, Owner: owner}] = struct{}{}
 		// handoff 按投递时的任务现状渲染，所以已携带本 revision：不再单独发
 		// revision mail（F_129）。
 		// Python: self._revision_pushed.add((task.task_id, int(getattr(task, "revision", 0) or 0)))
 		s.revisionPushed[revisionKey{TaskID: task.TaskID, Revision: task.Revision}] = struct{}{}
+		s.ledgerMu.Unlock()
 	}
 	return sent
 }
@@ -678,7 +710,9 @@ func (s *TeamScheduler) reconcileRetirements(ctx context.Context) (bool, error) 
 			continue
 		}
 		if row.Lifetime == "shutdown" {
+			s.ledgerMu.Lock()
 			s.policyRetired[row.MemberName] = struct{}{}
+			s.ledgerMu.Unlock()
 		}
 		logger.Info(logComponent).
 			Str("member", row.MemberName).Str("lifetime", row.Lifetime).Str("was", row.Status).
@@ -704,7 +738,10 @@ func (s *TeamScheduler) reconcileRevisions(ctx context.Context) (bool, error) {
 	acted := false
 	for _, row := range rows {
 		key := revisionKey{TaskID: row.TaskID, Revision: row.Revision}
-		if _, pushed := s.revisionPushed[key]; pushed {
+		s.ledgerMu.Lock()
+		_, pushed := s.revisionPushed[key]
+		s.ledgerMu.Unlock()
+		if pushed {
 			continue
 		}
 		var meta map[string]any
@@ -716,7 +753,9 @@ func (s *TeamScheduler) reconcileRevisions(ctx context.Context) (bool, error) {
 			continue
 		}
 		if s.sendAsLeader(ctx, row.Assignee, meta) {
+			s.ledgerMu.Lock()
 			s.revisionPushed[key] = struct{}{}
+			s.ledgerMu.Unlock()
 			logger.Info(logComponent).
 				Str("revision", strconv.FormatInt(row.Revision, 10)).
 				Str("task_id", row.TaskID).Str("assignee", row.Assignee).
@@ -766,13 +805,16 @@ func (s *TeamScheduler) sendAsLeader(ctx context.Context, memberName string, met
 // Python: _escalate（scheduler.py L1120-1145）
 func (s *TeamScheduler) escalate(ctx context.Context, task *database.TeamTaskBase, content, kind string) {
 	key := escalateKey{TaskID: task.TaskID, ReviewRound: task.ReviewRound, Kind: kind}
+	s.ledgerMu.Lock()
 	if _, sent := s.escalated[key]; sent {
+		s.ledgerMu.Unlock()
 		logger.Debug(logComponent).
 			Str("kind", kind).Str("task_id", task.TaskID).Int64("round", task.ReviewRound).
 			Msg("[scheduler] escalation for task round already sent; skipped")
 		return
 	}
 	s.escalated[key] = struct{}{}
+	s.ledgerMu.Unlock()
 	logger.Info(logComponent).
 		Str("task_id", task.TaskID).Int64("round", task.ReviewRound).Str("message", content).
 		Msg("[scheduler] escalating task round to the leader")
@@ -789,10 +831,13 @@ func (s *TeamScheduler) escalate(ctx context.Context, task *database.TeamTaskBas
 // 的 owner，leader 只从父任务听到工作一次。它仍计入 all-done 检查。
 // Python: _digest_task_done（scheduler.py L1147-1178）
 func (s *TeamScheduler) digestTaskDone(ctx context.Context, task *database.TeamTaskBase, verified bool) {
+	s.ledgerMu.Lock()
 	if _, done := s.digestedTasks[task.TaskID]; done {
+		s.ledgerMu.Unlock()
 		return
 	}
 	s.digestedTasks[task.TaskID] = struct{}{}
+	s.ledgerMu.Unlock()
 	total, remaining, err := s.taskMgr.BoardCounts(ctx)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("[scheduler] board_counts failed during digest")
@@ -801,8 +846,14 @@ func (s *TeamScheduler) digestTaskDone(ctx context.Context, task *database.TeamT
 	if task.ParentTaskID == nil {
 		_ = s.host.DeliverInput(ctx, RenderLeaderTaskDone(task, verified), false, nil)
 	}
+	announceAllDone := false
+	s.ledgerMu.Lock()
 	if remaining == 0 && total > 0 && !s.allDoneAnnounced {
 		s.allDoneAnnounced = true
+		announceAllDone = true
+	}
+	s.ledgerMu.Unlock()
+	if announceAllDone {
 		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(total), false, nil)
 	}
 	if remaining == 0 && total > 0 {
@@ -823,7 +874,10 @@ func (s *TeamScheduler) digestCompletion(ctx context.Context, event *events.Even
 	if taskID == "" {
 		return
 	}
-	if _, done := s.digestedTasks[taskID]; done {
+	s.ledgerMu.Lock()
+	_, done := s.digestedTasks[taskID]
+	s.ledgerMu.Unlock()
+	if done {
 		return
 	}
 	task, err := s.taskMgr.Get(ctx, taskID)
@@ -854,8 +908,14 @@ func (s *TeamScheduler) announceAllDone(ctx context.Context, event *events.Event
 			return
 		}
 	}
+	announce := false
+	s.ledgerMu.Lock()
 	if !s.allDoneAnnounced {
 		s.allDoneAnnounced = true
+		announce = true
+	}
+	s.ledgerMu.Unlock()
+	if announce {
 		_ = s.host.DeliverInput(ctx, RenderLeaderAllDone(int64(payloadInt(event.Payload, "task_count"))), false, nil)
 	}
 	s.dispatchTeamReviewFeedback(ctx)
@@ -874,15 +934,17 @@ func (s *TeamScheduler) dispatchTeamReviewFeedback(ctx context.Context) {
 	if s.reviewFeedbackFinalizer == nil {
 		return
 	}
+	s.ledgerMu.Lock()
 	if s.reviewFeedbackDispatched {
+		s.ledgerMu.Unlock()
 		return
 	}
 	s.reviewFeedbackDispatched = true
-	// 任务级反馈回调在后台运行以免延迟任务交接；终态回调等待它们完成后再
-	// 聚合——防止最后一条任务的反馈与团队级演进竞速。
-	for _, task := range s.reviewFeedbackTasks {
-		_ = task(ctx)
-	}
+	s.ledgerMu.Unlock()
+	// 任务级反馈回调在派发点已后台运行（asyncio.create_task 同形）；终态回调
+	// 等待它们完成后再聚合——防止最后一条任务的反馈与团队级演进竞速。
+	// 「无在途新派发」由 DB 状态机保证（见 reviewFeedbackWG 字段注记）。
+	s.reviewFeedbackWG.Wait()
 	if _, err := s.reviewFeedbackFinalizer(ctx); err != nil {
 		logger.Error(logComponent).Err(err).
 			Msg("[scheduler] team review feedback rail failed")

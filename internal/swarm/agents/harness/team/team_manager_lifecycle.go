@@ -141,7 +141,7 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 			continue
 		}
 		seen[sid] = true
-		m.StopSessionRuntime(ctx, sid, reason) //nolint:errcheck // 清理操作，错误不可操作
+		m.StopSessionRuntime(ctx, sid, reason, true, nil) //nolint:errcheck // 清理操作，错误不可操作
 	}
 	return nil
 }
@@ -407,8 +407,14 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 //     Python: 6. if team_name: runner_stopped = await Runner.stop_agent_team(...)
 //     Python: 7. if not has_local: release a2x + stop runner transport
 //     Python: 8. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
-func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
+func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string, stopRunner bool, generation *int) (bool, error) {
 	m.mu.Lock()
+	// Python: 首行 `if not self.generation_matches(session_id, generation): return False`
+	// （team_manager.py:3613-3615；generation None/nil 恒匹配）
+	if !m.generationMatchesLocked(sessionID, derefGeneration(generation)) {
+		m.mu.Unlock()
+		return false, nil
+	}
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasRunnerTeamAgent(sessionID) || m.hasMonitor(sessionID) ||
@@ -437,7 +443,9 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	}
 
 	teamName := m.resolveSessionTeamName(sessionID)
-	if teamName != "" {
+
+	// Python: team_manager.py:3666 `if team_name and stop_runner` —— stopRunner=false 保留 Runner 运行时
+	if teamName != "" && stopRunner {
 		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
 		if _, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
@@ -470,8 +478,14 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 //     Python: 3. if team_name: runner_paused = await Runner.pause_agent_team(...)
 //     Python: 4. await self._cleanup_runtime_locals(session_id)
 //     Python: 5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
-func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
+func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string, reason string, generation *int) (bool, error) {
 	m.mu.Lock()
+	// Python: 首行 `if not self.generation_matches(session_id, generation): return False`
+	// （team_manager.py:3905-3907；generation None/nil 恒匹配）
+	if !m.generationMatchesLocked(sessionID, derefGeneration(generation)) {
+		m.mu.Unlock()
+		return false, nil
+	}
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
@@ -523,7 +537,8 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 
 	// Python: stop 在 try 块外——异常直接传播给调用方（外层 except → deleted=False）。
 	// 原实现吞错恒 (true,nil)，清理失败用户仍收到"已解散"成功文案（错误契约失真）。
-	if _, stopErr := m.StopSessionRuntime(ctx, sessionID, reason); stopErr != nil {
+	// Python: delete 路径 stop_runner=False 语义——Runner 运行时由后续 delete_agent_team(force=True) 处置
+	if _, stopErr := m.StopSessionRuntime(ctx, sessionID, reason, false, nil); stopErr != nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).
 			Err(stopErr).Msg("failed to stop team session runtime")
 		return false, stopErr

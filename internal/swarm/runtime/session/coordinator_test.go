@@ -1598,3 +1598,104 @@ func TestStreamSessionInput_跳过输入类父执行(t *testing.T) {
 		t.Error("只有 session_input 类执行时应走 idle 分支")
 	}
 }
+
+// TestCoordinator_MarkWaitingForInput_持久owner停泊 单执行停泊：仅持久团队 owner 可置等待输入。
+// Python: RuntimeSessionCoordinator.mark_waiting_for_input（coordinator.py:947-960）
+func TestCoordinator_MarkWaitingForInput_持久owner停泊(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	owner, err := c.NewExecutionForTest("s1", "r-owner", SessionWorkKindTeamRequest,
+		ChildOptions{Team: &TeamExecutionDetails{WaiterKind: TeamWaiterKindPersistent}})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(owner)
+	if !c.MarkWaitingForInput(owner.ExecutionID) {
+		t.Fatal("持久 owner 应可停泊")
+	}
+	if got := c.registry.StateOf(owner.ExecutionID); got != SessionExecutionStateWaitingForInput {
+		t.Fatalf("应为 WAITING_FOR_INPUT，实际 %s", got)
+	}
+
+	// 非持久团队执行不可停泊
+	req, err := c.NewExecutionForTest("s1", "r-req", SessionWorkKindTeamRequest,
+		ChildOptions{Team: &TeamExecutionDetails{WaiterKind: TeamWaiterKindRequest}})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(req)
+	if c.MarkWaitingForInput(req.ExecutionID) {
+		t.Fatal("非持久等待者不可停泊")
+	}
+	if got := c.registry.StateOf(req.ExecutionID); got != SessionExecutionStateRunning {
+		t.Fatalf("非持久执行状态不应变化，实际 %s", got)
+	}
+}
+
+// TestCoordinator_MarkSessionWaitingForInput_全量停泊 会话级停泊：仅同代次 RUNNING 的持久 owner 被停泊。
+// Python: RuntimeSessionCoordinator.mark_session_waiting_for_input（coordinator.py:961-979）
+func TestCoordinator_MarkSessionWaitingForInput_全量停泊(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	owner, err := c.NewExecutionForTest("s1", "r-owner", SessionWorkKindTeamRequest,
+		ChildOptions{Team: &TeamExecutionDetails{WaiterKind: TeamWaiterKindPersistent}})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(owner)
+	// 非持久执行：不应被停泊
+	plain, err := c.NewExecutionForTest("s1", "r-plain", SessionWorkKindChatStream, ChildOptions{})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(plain)
+
+	c.MarkSessionWaitingForInput("s1", 1)
+	if got := c.registry.StateOf(owner.ExecutionID); got != SessionExecutionStateWaitingForInput {
+		t.Fatalf("持久 owner 应停泊，实际 %s", got)
+	}
+	if got := c.registry.StateOf(plain.ExecutionID); got != SessionExecutionStateRunning {
+		t.Fatalf("非持久执行不应停泊，实际 %s", got)
+	}
+
+	// 代次不匹配：不动作
+	owner2, err := c.NewExecutionForTest("s1", "r-owner2", SessionWorkKindTeamRequest,
+		ChildOptions{Team: &TeamExecutionDetails{WaiterKind: TeamWaiterKindPersistent}})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(owner2)
+	c.MarkSessionWaitingForInput("s1", 99)
+	if got := c.registry.StateOf(owner2.ExecutionID); got != SessionExecutionStateRunning {
+		t.Fatalf("代次不匹配不应停泊，实际 %s", got)
+	}
+}
+
+// TestCoordinator_ResumeWaitingForInput_等待owner恢复 新输入代次的等待持久 owner 置回运行。
+// Python: RuntimeSessionCoordinator.resume_waiting_for_input（coordinator.py:982-991）
+func TestCoordinator_ResumeWaitingForInput_等待owner恢复(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	owner, err := c.NewExecutionForTest("s1", "r-owner", SessionWorkKindTeamRequest,
+		ChildOptions{Team: &TeamExecutionDetails{WaiterKind: TeamWaiterKindPersistent}})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(owner)
+	c.MarkSessionWaitingForInput("s1", 1)
+
+	c.ResumeWaitingForInput("s1", 1)
+	if got := c.registry.StateOf(owner.ExecutionID); got != SessionExecutionStateRunning {
+		t.Fatalf("等待 owner 应恢复 RUNNING，实际 %s", got)
+	}
+
+	// 代次不匹配：不动作
+	c.MarkSessionWaitingForInput("s1", 1)
+	c.ResumeWaitingForInput("s1", 99)
+	if got := c.registry.StateOf(owner.ExecutionID); got != SessionExecutionStateWaitingForInput {
+		t.Fatalf("代次不匹配不应恢复，实际 %s", got)
+	}
+}

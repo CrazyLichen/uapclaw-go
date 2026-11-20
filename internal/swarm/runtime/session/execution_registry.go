@@ -436,6 +436,56 @@ func resumeWaitingLocked(h *SessionExecutionHandle) {
 	}
 }
 
+// MarkWaitingForInput 停泊单个持久团队响应 owner。
+// Python: RuntimeSessionCoordinator.mark_waiting_for_input（coordinator.py:947-960）
+// 返回是否成功停泊：非终态 + 持久 waiter 才生效。
+func (r *SessionExecutionRegistry) MarkWaitingForInput(h *SessionExecutionHandle) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return markWaitingForInputLocked(h)
+}
+
+// ParkSessionWaitingForInput 停泊同代次全部 RUNNING 的持久 owner。
+// Python: RuntimeSessionCoordinator.mark_session_waiting_for_input（coordinator.py:961-979）
+func (r *SessionExecutionRegistry) ParkSessionWaitingForInput(sessionID string, generation int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, h := range r.selectLocked(SelectOptions{
+		SessionID: sessionID, Generation: &generation, ActiveOnly: true,
+	}) {
+		if h.Team != nil && h.Team.WaiterKind == TeamWaiterKindPersistent &&
+			h.State == SessionExecutionStateRunning {
+			h.State = SessionExecutionStateWaitingForInput
+		}
+	}
+}
+
+// ResumeSessionWaitingForInput 把同代次等待输入的执行恢复运行。
+// Python: RuntimeSessionCoordinator.resume_waiting_for_input（coordinator.py:982-991）
+func (r *SessionExecutionRegistry) ResumeSessionWaitingForInput(sessionID string, generation int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, h := range r.selectLocked(SelectOptions{
+		SessionID: sessionID, Generation: &generation, ActiveOnly: true,
+	}) {
+		if h.State == SessionExecutionStateWaitingForInput {
+			h.State = SessionExecutionStateRunning
+		}
+	}
+}
+
+// markWaitingForInputLocked 加锁版 MarkWaitingForInput 逻辑。
+func markWaitingForInputLocked(h *SessionExecutionHandle) bool {
+	if h.State.Terminal() {
+		return false
+	}
+	if h.Team == nil || h.Team.WaiterKind != TeamWaiterKindPersistent {
+		return false
+	}
+	h.State = SessionExecutionStateWaitingForInput
+	return true
+}
+
 // markTerminalLocked 加锁版 MarkTerminal 逻辑。
 // 幂等语义：已终态时只确保 Terminal 已发出，不改写其余字段。
 // 不清 h.Done（Go 侧 Done 由执行方 defer 关闭，置 nil 会让 <-h.Done 永久阻塞）。

@@ -230,10 +230,105 @@ func injectFakePoolAccessor(t *testing.T, fake *fakeDeletePoolAccessor) {
 	t.Cleanup(func() { runner.SetTeamRuntimeManager(orig) })
 }
 
+// injectFakePoolAccessorAny 注入任意 PoolAccessor 实现，测试结束恢复原值。
+func injectFakePoolAccessorAny(t *testing.T, fake registry.PoolAccessor) {
+	t.Helper()
+	orig := runner.GetTeamRuntimeManager()
+	runner.SetTeamRuntimeManager(fake)
+	t.Cleanup(func() { runner.SetTeamRuntimeManager(orig) })
+}
+
 // injectCheckpointer 注入全局默认 checkpointer，测试结束恢复原值。
 func injectCheckpointer(t *testing.T, cp interfaces.Checkpointer) {
 	t.Helper()
 	orig := checkpointer.GetCheckpointer()
 	checkpointer.SetDefaultCheckpointer(cp)
 	t.Cleanup(func() { checkpointer.SetDefaultCheckpointer(orig) })
+}
+
+// fakeStopPoolAccessor 模拟 PoolAccessor 并记录 Stop/Pause 调用（验证 stopRunner 语义）。
+type fakeStopPoolAccessor struct {
+	fakeDeletePoolAccessor
+	// stopCalls 记录 StopTeam 收到的 (teamName, sessionID)
+	stopCalls [][2]string
+	// pauseCalls 记录 Pause 收到的 (teamName, sessionID)
+	pauseCalls [][2]string
+}
+
+// StopTeam 实现 stopper 接口（runner.StopAgentTeam 探测）。
+func (f *fakeStopPoolAccessor) StopTeam(_ context.Context, teamName, sessionID string) (bool, error) {
+	f.stopCalls = append(f.stopCalls, [2]string{teamName, sessionID})
+	return true, nil
+}
+
+// Pause 实现 pauser 接口（runner.PauseAgentTeam 探测）。
+func (f *fakeStopPoolAccessor) Pause(_ context.Context, teamName, sessionID string) (bool, error) {
+	f.pauseCalls = append(f.pauseCalls, [2]string{teamName, sessionID})
+	return true, nil
+}
+
+// intPtrTest 取 int 指针。
+func intPtrTest(v int) *int { return &v }
+
+// TestStopSessionRuntime_代次不匹配不动作 generation 不匹配时返回 false 且无任何副作用。
+// Python: TeamManager.stop_session_runtime 首行 generation_matches 守卫（team_manager.py:3613-3615）。
+func TestStopSessionRuntime_代次不匹配不动作(t *testing.T) {
+	mgr := NewTeamManager()
+	mgr.SetSessionGeneration("s1", 1)
+	fake := &fakeStopPoolAccessor{}
+	injectFakePoolAccessorAny(t, fake)
+
+	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", true, intPtrTest(2))
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if stopped {
+		t.Fatal("代次不匹配应返回 false")
+	}
+	if len(fake.stopCalls) != 0 {
+		t.Fatalf("代次不匹配不应触达 Runner.stop，实际 %v", fake.stopCalls)
+	}
+}
+
+// TestStopSessionRuntime_stopRunnerFalse_跳过Runner停止 stopRunner=false 时不停止 Runner 运行时与 transport。
+// Python: team_manager.py:3666 `if team_name and stop_runner` + :3687 `if stop_runner`。
+func TestStopSessionRuntime_stopRunnerFalse_跳过Runner停止(t *testing.T) {
+	mgr := NewTeamManager()
+	fake := &fakeStopPoolAccessor{}
+	injectFakePoolAccessorAny(t, fake)
+
+	// 注入活跃团队归属（resolveSessionTeamName 第一步：activeSessionID/activeTeamName）
+	mgr.activeSessionID = "s1"
+	mgr.activeTeamName = "team-a"
+
+	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", false, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if !stopped {
+		t.Fatal("有运行时应返回 true")
+	}
+	if len(fake.stopCalls) != 0 {
+		t.Fatalf("stopRunner=false 不应触达 Runner.stop，实际 %v", fake.stopCalls)
+	}
+}
+
+// TestPauseSessionRuntime_代次不匹配不动作 generation 不匹配时返回 false。
+// Python: TeamManager.pause_session_runtime 守卫（team_manager.py:3905-3907）。
+func TestPauseSessionRuntime_代次不匹配不动作(t *testing.T) {
+	mgr := NewTeamManager()
+	mgr.SetSessionGeneration("s1", 1)
+	fake := &fakeStopPoolAccessor{}
+	injectFakePoolAccessorAny(t, fake)
+
+	paused, err := mgr.PauseSessionRuntime(context.Background(), "s1", "test", intPtrTest(2))
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if paused {
+		t.Fatal("代次不匹配应返回 false")
+	}
+	if len(fake.pauseCalls) != 0 {
+		t.Fatalf("代次不匹配不应触达 Runner.pause，实际 %v", fake.pauseCalls)
+	}
 }

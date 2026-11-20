@@ -426,6 +426,49 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
+// MarkWaitingForInput 停泊单个持久团队响应 owner。
+// Python: RuntimeSessionCoordinator.mark_waiting_for_input（coordinator.py:947-960）
+func (c *RuntimeSessionCoordinator) MarkWaitingForInput(executionID string) bool {
+	handle := c.registry.Get(executionID)
+	if handle == nil {
+		return false
+	}
+	if !c.registry.MarkWaitingForInput(handle) {
+		return false
+	}
+	c.mu.Lock()
+	record := c.sessions[handle.SessionID]
+	if record != nil && record.generation == handle.Generation {
+		c.refreshSessionStateLocked(record)
+	}
+	c.mu.Unlock()
+	return true
+}
+
+// MarkSessionWaitingForInput 停泊空闲团队代次的全部持久响应 owner。
+// Python: RuntimeSessionCoordinator.mark_session_waiting_for_input（coordinator.py:961-979）
+func (c *RuntimeSessionCoordinator) MarkSessionWaitingForInput(sessionID string, generation int) {
+	c.registry.ParkSessionWaitingForInput(sessionID, generation)
+	c.mu.Lock()
+	record := c.sessions[sessionID]
+	if record != nil && record.generation == generation {
+		c.refreshSessionStateLocked(record)
+	}
+	c.mu.Unlock()
+}
+
+// ResumeWaitingForInput 把新输入代次的等待持久 owner 置回运行。
+// Python: RuntimeSessionCoordinator.resume_waiting_for_input（coordinator.py:982-991）
+func (c *RuntimeSessionCoordinator) ResumeWaitingForInput(sessionID string, generation int) {
+	c.registry.ResumeSessionWaitingForInput(sessionID, generation)
+	c.mu.Lock()
+	record := c.sessions[sessionID]
+	if record != nil && record.generation == generation {
+		c.refreshSessionStateLocked(record)
+	}
+	c.mu.Unlock()
+}
+
 // requireOpenSession 校验会话已注册且可接受工作。
 // Python: RuntimeSessionCoordinator._require_open_session
 func (c *RuntimeSessionCoordinator) requireOpenSession(sessionID string) (*sessionRecord, error) {

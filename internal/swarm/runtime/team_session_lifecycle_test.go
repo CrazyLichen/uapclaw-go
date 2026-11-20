@@ -53,10 +53,11 @@ func (f *fakeTeamLifecycleManager) StopSessionRuntime(_ context.Context, session
 }
 
 // BroadcastEvent 记录事件类型与载荷。
-func (f *fakeTeamLifecycleManager) BroadcastEvent(sessionID, event string, payload map[string]any) {
+func (f *fakeTeamLifecycleManager) BroadcastEvent(sessionID, event string, payload map[string]any) bool {
 	f.events = append(f.events, "broadcast")
 	f.lastEventType = event
 	f.lastPayload = payload
+	return true
 }
 
 // IsGenerationRunning 桩。

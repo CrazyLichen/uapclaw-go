@@ -89,14 +89,27 @@ func (f *fakeReviewBackend) TaskVerificationEnabled(_ context.Context) (bool, er
 	return f.enabled, nil
 }
 
-// fakeReviewHost host 替身（升级注入面）。
-type fakeReviewHost struct{ escalated []string }
+// fakeReviewHost host 替身（升级注入面）。DeliverInput 会被 reviewer
+// follow-up goroutine 并发调用（escalate），读写须持锁。
+type fakeReviewHost struct {
+	mu        sync.Mutex
+	escalated []string
+}
 
 func (f *fakeReviewHost) DeliverInput(_ context.Context, content string, _ bool, _ *agentinterfaces.RunContext) error {
+	f.mu.Lock()
 	f.escalated = append(f.escalated, content)
+	f.mu.Unlock()
 	return nil
 }
 func (f *fakeReviewHost) AutoStartMember(_ context.Context, _ string) bool { return true }
+
+// escalatedCount 持锁读取升级条数。
+func (f *fakeReviewHost) escalatedCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.escalated)
+}
 
 // fakeReviewSender 消息发送替身。
 type fakeReviewSender struct{ sent []string }
@@ -149,7 +162,11 @@ func TestReconcileReviews_派发不重派(t *testing.T) {
 	// followUp 释放标记后重扫；runner 注入 fake 无票 → runs 递增但不超过
 	// maxReviewRunsPerRound-1 次重派（首次 1 + 重派至多 1 = 2 后升级 no_vote）。
 	time.Sleep(200 * time.Millisecond)
-	if runs == 0 {
+	// runner 在 dispatchToReviewer goroutine 内递增，读取必须持同一把锁（-race）。
+	mu.Lock()
+	dispatched := runs
+	mu.Unlock()
+	if dispatched == 0 {
 		t.Fatal("reviewer must be dispatched at least once")
 	}
 }
@@ -211,8 +228,8 @@ func TestReconcileReviews_超限升级(t *testing.T) {
 	if len(mgr.settleCalls) != 0 {
 		t.Fatalf("round ceiling must not settle: %v", mgr.settleCalls)
 	}
-	if len(host.escalated) != 1 {
-		t.Fatalf("escalations = %d", len(host.escalated))
+	if host.escalatedCount() != 1 {
+		t.Fatalf("escalations = %d", host.escalatedCount())
 	}
 	// rework_summary 一次发给作者。
 	if len(s.summaryRequested) != 1 {
@@ -230,7 +247,7 @@ func TestReconcileReviews_验证开关关闭(t *testing.T) {
 	if err != nil || acted {
 		t.Fatalf("disabled: acted=%v err=%v", acted, err)
 	}
-	if len(mgr.settleCalls) != 0 || len(host.escalated) != 0 {
+	if len(mgr.settleCalls) != 0 || host.escalatedCount() != 0 {
 		t.Fatal("disabled verification must be a no-op")
 	}
 }
@@ -247,7 +264,7 @@ func TestReconcileReviews_停滞升级(t *testing.T) {
 
 	_, _ = s.reconcileReviews(context.Background())
 	time.Sleep(150 * time.Millisecond)
-	if len(host.escalated) == 0 {
+	if host.escalatedCount() == 0 {
 		t.Fatal("stalled round must escalate")
 	}
 }
@@ -261,8 +278,8 @@ func TestFollowUp_重派后升级(t *testing.T) {
 	runKey := [3]string{"task-s1", "1", "reviewer1"}
 	s.reviewRuns[runKey] = maxReviewRunsPerRound // 已达上限
 	s.followUpUnvotedReviewer(context.Background(), "reviewer1", task, false)
-	if len(host.escalated) != 1 {
-		t.Fatalf("escalations = %d", len(host.escalated))
+	if host.escalatedCount() != 1 {
+		t.Fatalf("escalations = %d", host.escalatedCount())
 	}
 }
 
