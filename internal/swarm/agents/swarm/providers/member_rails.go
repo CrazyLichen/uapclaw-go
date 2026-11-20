@@ -33,11 +33,11 @@ import (
 	"os"
 	"path/filepath"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	atrails "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
@@ -64,6 +64,8 @@ type SwarmContextView interface {
 	ViewMode() string
 	// ViewUserID 请求属主。Python: context.user_id
 	ViewUserID() string
+	// ViewRequestID 发起请求 id。Python: context.request_id
+	ViewRequestID() string
 	// ViewMemberCardID 成员卡片 id。Python: context.member_card_id
 	ViewMemberCardID() string
 	// ViewMemberName 成员名。Python: context.member_name

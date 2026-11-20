@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	agenttoolkits "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -28,17 +28,17 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	constSkillToolkit          = "swarm.skill_toolkit"
-	constSkillRetrieval        = "swarm.skill_retrieval"
-	constUserTodos             = "swarm.user_todos"
-	constVideo                 = "swarm.video"
-	constImageGen              = "swarm.image_gen"
-	constVideoGen              = "swarm.video_gen"
-	constVisualGen             = "swarm.visual_gen"
-	constXiaoyiPhone           = "swarm.xiaoyi_phone"
-	constSymphonyToolkit       = "swarm.symphony_toolkit"
+	constSkillToolkit           = "swarm.skill_toolkit"
+	constSkillRetrieval         = "swarm.skill_retrieval"
+	constUserTodos              = "swarm.user_todos"
+	constVideo                  = "swarm.video"
+	constImageGen               = "swarm.image_gen"
+	constVideoGen               = "swarm.video_gen"
+	constVisualGen              = "swarm.visual_gen"
+	constXiaoyiPhone            = "swarm.xiaoyi_phone"
+	constSymphonyToolkit        = "swarm.symphony_toolkit"
 	constA4PIntentAuthorization = "swarm.a4p_intent_authorization"
-	constCodeExtraTools        = "swarm.code_extra_tools"
+	constCodeExtraTools         = "swarm.code_extra_tools"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

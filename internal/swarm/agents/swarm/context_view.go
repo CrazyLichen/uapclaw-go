@@ -87,3 +87,6 @@ func (c *SwarmBuildContext) ViewTeamSkillVisibilityPath() string { return c.Team
 func (c *SwarmBuildContext) ViewResolveMemberSkillVisibilityPath() string {
 	return c.ResolveMemberSkillVisibilityPath()
 }
+
+// ViewRequestID 返回发起请求 id。
+func (c *SwarmBuildContext) ViewRequestID() string { return c.RequestID }

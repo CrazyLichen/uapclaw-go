@@ -3,9 +3,9 @@ package providers
 import (
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	"github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
+	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

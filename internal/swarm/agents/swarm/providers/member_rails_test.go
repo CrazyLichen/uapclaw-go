@@ -294,3 +294,87 @@ func TestBuildContextNonPlatform_返回nil(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, out, "非平台上下文应跳过")
 }
+
+// TestRegisteredSubagentAndToolProviders_可查 code_subagents/runtime_tools/
+// tools/design 注册名可查（Task 6 覆盖面回归）。
+func TestRegisteredSubagentAndToolProviders_可查(t *testing.T) {
+	providers.RegisterSubagentProviders()
+	providers.RegisterToolProviders()
+	providers.RegisterRuntimeToolProviders()
+	providers.RegisterSkillProviders()
+	providers.RegisterDesignProviders()
+
+	for _, name := range []string{
+		"swarm.code_agent", "swarm.statusline_setup_agent",
+		"swarm.browser_agent", "swarm.cua_agent",
+	} {
+		_, ok := hschema.LookupSubagentProvider(name)
+		require.True(t, ok, "subagent provider 未注册: %s", name)
+	}
+	for _, name := range []string{
+		"swarm.skill_toolkit", "swarm.skill_retrieval", "swarm.user_todos",
+		"swarm.video", "swarm.image_gen", "swarm.video_gen", "swarm.visual_gen",
+		"swarm.xiaoyi_phone", "swarm.symphony_toolkit",
+		"swarm.a4p_intent_authorization", "swarm.code_extra_tools",
+		"swarm.organization_owner_inbox_tools", "swarm.organization_model_tools",
+		"swarm.session_messaging_tools", "swarm.cron_tools", "swarm.send_file",
+		"swarm.designer_graph_tools",
+	} {
+		_, ok := hschema.LookupToolProvider(name)
+		require.True(t, ok, "tool provider 未注册: %s", name)
+	}
+	for _, name := range []string{
+		"swarm.member_skill_toolkit",
+		"swarm.designer_authoring", "swarm.designer_execution",
+		"swarm.designer_surface_sanitizer",
+	} {
+		_, ok := hschema.LookupRailProvider(name)
+		require.True(t, ok, "rail provider 未注册: %s", name)
+	}
+}
+
+// TestBuildCronTools_cron会话跳过 cron 执行会话不挂 cron 工具。
+func TestBuildCronTools_cron会话跳过(t *testing.T) {
+	providers.RegisterRuntimeToolProviders()
+	provider, ok := hschema.LookupToolProvider("swarm.cron_tools")
+	require.True(t, ok)
+
+	view := newTestView()
+	view.MemberCardID = "card-1"
+	view.ChannelID = "web"
+	view.RequestMetadata = map[string]any{"cron": true}
+	tools, err := provider(nil, view)
+	require.NoError(t, err)
+	assert.Empty(t, tools, "cron 执行会话应跳过")
+}
+
+// TestBuildSendFileTools_门控矩阵 request/channel 缺失与 send_file_allowed 门控。
+func TestBuildSendFileTools_门控矩阵(t *testing.T) {
+	providers.RegisterRuntimeToolProviders()
+	provider, ok := hschema.LookupToolProvider("swarm.send_file")
+	require.True(t, ok)
+
+	// 缺 request_id → nil
+	view := newTestView()
+	view.ChannelID = "web"
+	tools, err := provider(nil, view)
+	require.NoError(t, err)
+	assert.Empty(t, tools)
+
+	// 渠道禁用 → nil
+	view2 := newTestView()
+	view2.RequestID = "req-1"
+	view2.ChannelID = "web"
+	tools2, err2 := provider(map[string]any{
+		"channels_config": map[string]any{"web": map[string]any{"send_file_allowed": false}},
+	}, view2)
+	require.NoError(t, err2)
+	assert.Empty(t, tools2)
+}
+
+// TestBrowserKeyOf 每成员浏览器键派生（member_name 优先、session 折入）。
+func TestBrowserKeyOf(t *testing.T) {
+	assert.Empty(t, providers.BrowserKeyOf("", "", ""))
+	assert.Equal(t, "leader", providers.BrowserKeyOf("", "", "leader"))
+	assert.Equal(t, "sess-1-browser-x", providers.BrowserKeyOf("sess-1", "browser-x", "teammate"))
+}

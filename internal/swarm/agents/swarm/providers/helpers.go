@@ -5,12 +5,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	workspacepkg "github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -222,4 +226,50 @@ func readSkillVisibilityFile(path string, enabled, disabled map[string]struct{})
 	for _, name := range doc.Disabled {
 		disabled[name] = struct{}{}
 	}
+}
+
+// intParamOr 整数参数，缺失/非法取默认。
+func intParamOr(params map[string]any, key string, fallback int) int {
+	switch typed := params[key].(type) {
+	case int:
+		return typed
+	case float64:
+		return int(typed)
+	default:
+		return fallback
+	}
+}
+
+// workspaceFromString 从 factory_kwargs["workspace_root"] 或上下文取工作区串。
+func workspaceFromString(factoryKwargs map[string]any, view SwarmContextView) *workspace.Workspace {
+	root := ""
+	if v, ok := factoryKwargs["workspace_root"].(string); ok {
+		root = v
+	}
+	if root == "" {
+		root = orEmpty(view.ViewMemberWorkspaceRoot(), "./")
+	}
+	if root == "" {
+		return nil
+	}
+	return &workspace.Workspace{RootPath: root}
+}
+
+// parentSysOperation 父系统操作实例（extras 透传）。
+// Python: parent_sys_operation(ctx)（harness/schema/build_context.py）。
+func parentSysOperation(view SwarmContextView) sysop.SysOperation {
+	if v, ok := view.GetExtras()[hschema.ParentSysOperationExtrasKey].(sysop.SysOperation); ok {
+		return v
+	}
+	return nil
+}
+
+// cuaModelRejectsImages 父模型是否拒绝图像输入（探测）。
+// Python: cua_model_rejects_images (code_subagents.py:310-313 附近)——
+// 调用 image_modality_probe；Go 基座探针段 ⤴️15.20，缺省 false（不拒绝）
+// 会让无视觉模型误建 cua 代理，故此处保守返回 true? 不——对齐 Python 语义
+// 需真实探针；15.20 回收前按「不拒绝」放行并登记偏差。
+func cuaModelRejectsImages(model *llm.Model) bool {
+	_ = model
+	return false
 }
