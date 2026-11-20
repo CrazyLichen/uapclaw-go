@@ -121,8 +121,7 @@ func (a *TeamSessionLifecycleAdapter) PublishPauseCompleted(
 		Str("session_id", sessionID).
 		Str("generation", intPtrText(generation)).
 		Msg("[TeamProcessingStatus] generated: source=pause_completed is_processing=false is_complete=true")
-	// 偏差 D-25.3-1：Python adapter 经 channel_id=channel_id 透传给 broadcast_event，
-	// Go TeamManager.BroadcastEvent 现签名无 channel 参数（回收条件 ⤴️25.6 消息投递批）。
+	// channel_id 仅入日志；广播事件不带渠道归属（IMPLEMENTATION_PLAN 25.6 行登记补齐）。
 	a.manager.BroadcastEvent(sessionID, "chat.processing_status", map[string]any{
 		"event_type":    "chat.processing_status",
 		"session_id":    sessionID,
