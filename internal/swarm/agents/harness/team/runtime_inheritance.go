@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	swarmSchema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -103,22 +104,10 @@ var railWhitelist = map[string]bool{
 
 // toolWhitelist 可继承工具白名单。
 // 对齐 Python: TOOL_WHITELIST (L81-126)
-var toolWhitelist = map[string]bool{
-	"free_search": true, "fetch_webpage": true, "paid_search": true, "vision": true,
-	"audio": true, "image_ocr": true, "visual_question_answering": true,
-	"generate_image": true, "audio_transcription": true, "audio_question_answering": true,
-	"audio_metadata": true, "video_understanding": true, "search_skill": true,
-	"install_skill": true, "uninstall_skill": true, "user_todos": true,
-	"get_user_location": true, "create_note": true, "search_notes": true,
-	"modify_note": true, "create_calendar_event": true, "search_calendar_event": true,
-	"search_contact": true, "search_photo_gallery": true, "upload_photo": true,
-	"search_file": true, "upload_file": true, "call_phone": true, "send_message": true,
-	"search_message": true, "create_alarm": true, "search_alarms": true,
-	"modify_alarm": true, "delete_alarm": true, "xiaoyi_collection": true,
-	"image_reading": true, "xiaoyi_gui_agent": true, "web_free_search": true,
-	"web_fetch_webpage": true, "web_paid_search": true, "skill_toolkit": true,
-	"enter_worktree": true, "exit_worktree": true, "acp_chat": true,
-}
+// toolWhitelist 可继承工具白名单——15.16f 收编为 schema.ToolWhitelist 单源
+// （providers 包经 swarm/schema 访问，本包保留别名引用）。
+// Python: TOOL_WHITELIST (L81-126)
+var toolWhitelist = swarmSchema.ToolWhitelist
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

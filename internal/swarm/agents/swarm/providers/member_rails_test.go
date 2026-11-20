@@ -194,11 +194,24 @@ func TestBuildContextProcessorRail_开关门控(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, out)
 
-	// 默认开（context_engine_enabled 缺省 true）→ 走基座构造
+	// 默认开（context_engine_enabled 缺省 true）→ 基座 builder 未注入时 nil
+	//（D-15.16f-view 配套缝：注册段注入后通电，见注入回环用例）
 	out2, err2 := provider(map[string]any{}, newTestView())
 	require.NoError(t, err2)
-	assert.NotNil(t, out2, "默认开启时应产出 ContextProcessorRail")
+	assert.Nil(t, out2, "builder 未注入（team 基座经注册段注入）应跳过")
+
+	// 注入回环：注入后产出 rail
+	providers.SetContextProcessorRailBuilder(func(config map[string]any) any {
+		return fakeContextProcessorRail{}
+	})
+	defer providers.SetContextProcessorRailBuilder(nil)
+	out3, err3 := provider(map[string]any{}, newTestView())
+	require.NoError(t, err3)
+	assert.NotNil(t, out3, "注入后应产出 rail")
 }
+
+// fakeContextProcessorRail 注入回环用例的 rail 占位。
+type fakeContextProcessorRail struct{}
 
 // TestBuildModelAnomalyDetection_开关门控 execution_guard 门控（params 入口）。
 func TestBuildModelAnomalyDetection_开关门控(t *testing.T) {

@@ -39,7 +39,6 @@ import (
 	atrails "github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	teamrt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -67,6 +66,11 @@ type SwarmContextView interface {
 	ViewUserID() string
 	// ViewMemberCardID 成员卡片 id。Python: context.member_card_id
 	ViewMemberCardID() string
+	// ViewMemberName 成员名。Python: context.member_name
+	ViewMemberName() string
+	// ViewTeamSkillVisibilityPath 团队技能可见性文件路径。
+	// Python: context.team_skill_visibility_path
+	ViewTeamSkillVisibilityPath() string
 	// ViewRequestMetadata 请求元数据。Python: context.request_metadata
 	ViewRequestMetadata() map[string]any
 	// ViewHeartbeatJobService 心跳作业服务句柄（any 别名，D-15.16-c2③）。
@@ -94,6 +98,9 @@ type SwarmContextView interface {
 	// ViewResolveMemberWorkDir 解析成员工作目录。
 	// Python: context.resolve_member_work_dir()
 	ViewResolveMemberWorkDir() (string, error)
+	// ViewResolveMemberSkillVisibilityPath 解析成员技能可见性文件路径。
+	// Python: context.resolve_member_skill_visibility_path()
+	ViewResolveMemberSkillVisibilityPath() string
 }
 
 // SwarmContextOf 从构建上下文取出平台视图；非平台上下文返回 nil。
@@ -355,7 +362,11 @@ func buildTeamWorkspaceReportPathRail(params map[string]any, view SwarmContextVi
 	// Python 构造：root_dir/project_dir/outputs_dir/team_id/language（:556-563）
 	// Go 基座构造签名（rootDir, teamID, language）；project_dir/outputs_dir
 	// 注入段 ⤴️15.20（基座扩展形参）。
-	rail := teamrt.NewTeamWorkspaceReportPathRail(view.ViewTeamWsRoot(), view.ViewTeamID(), stringFieldOrEmpty(view.ViewLanguage(), "cn"))
+	// 基座 NewTeamWorkspaceReportPathRail 在 team 包（同环），注册段注入。
+	if workspaceReportPathCtor == nil {
+		return nil, nil
+	}
+	rail := workspaceReportPathCtor(view.ViewTeamWsRoot(), view.ViewTeamID(), stringFieldOrEmpty(view.ViewLanguage(), "cn"))
 	// Python: rail.bind_swarm_context(context)——基座缺 ⤴️15.20
 	_ = rail
 	return rail, nil
@@ -372,7 +383,12 @@ func buildContextProcessorRail(params map[string]any, view SwarmContextView) (an
 		return nil, nil
 	}
 	ctxCfg, _ := params["context_engine_config"].(map[string]any)
-	rail := teamrt.BuildContextProcessorRail(map[string]any{"context_engine_config": ctxCfg})
+	// 基座 BuildContextProcessorRail 在 team 包（team→swarm 成环），经
+	// SetContextProcessorRailBuilder 注册段注入（偏差 D-15.16f-view 的配套缝）。
+	if contextProcessorRailBuilder == nil {
+		return nil, nil
+	}
+	rail := contextProcessorRailBuilder(map[string]any{"context_engine_config": ctxCfg})
 	if rail == nil {
 		return nil, nil
 	}
@@ -458,6 +474,26 @@ func buildTeamPermissionRail(params map[string]any, view SwarmContextView) (any,
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// contextProcessorRailBuilder 上下文压缩 rail 构造（team 包基座，注册段注入）。
+	contextProcessorRailBuilder func(config map[string]any) any
+	// workspaceReportPathCtor 团队工作区报告路径 rail 构造（同上）。
+	workspaceReportPathCtor func(rootDir, teamID, language string) any
+)
+
+// SetContextProcessorRailBuilder 注入上下文压缩 rail 构造（父包注册段调用；
+// 偏差 D-15.16f-view 配套缝——team 基座经父包注入规避 providers↔team 成环）。
+func SetContextProcessorRailBuilder(fn func(config map[string]any) any) {
+	contextProcessorRailBuilder = fn
+}
+
+// SetWorkspaceReportPathCtor 注入团队工作区报告路径 rail 构造。
+func SetWorkspaceReportPathCtor(fn func(rootDir, teamID, language string) any) {
+	workspaceReportPathCtor = fn
+}
 
 // RegisterMemberRailProviders 注册 member_rails 全部 provider。
 // 清单顺序按 member_rails.py 声明序（registry.py:50 import 序）。

@@ -1,9 +1,17 @@
 package providers
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	workspacepkg "github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -139,4 +147,79 @@ func logPersonalContextSkip(err error) {
 	logger.Warn(logger.ComponentAgentServer).
 		Err(err).
 		Msg("[swarm.personal_context] optional Rail construction failed")
+}
+
+// ──────────────────────────── 导出函数（追加段） ────────────────────────────
+
+// toolProviderAdapter 把具体工具工厂适配成 schema.ToolProvider 签名，
+// 并在上下文非平台形态时返回空表。
+func toolProviderAdapter(
+	build func(params map[string]any, view SwarmContextView) []tool.Tool,
+) hschema.ToolProvider {
+	return func(params map[string]any, ctx hschema.BuildContextInterface) ([]any, error) {
+		view := SwarmContextOf(ctx)
+		if view == nil {
+			return nil, nil
+		}
+		tools := build(params, view)
+		out := make([]any, 0, len(tools))
+		for _, t := range tools {
+			out = append(out, t)
+		}
+		return out, nil
+	}
+}
+
+// toolWhitelistNames swarm 可继承工具白名单（单源：schema.ToolWhitelist，
+// 对齐 Python TOOL_WHITELIST；15.16f 自 team 包 toolWhitelist 收编）。
+func toolWhitelistNames() map[string]bool {
+	return schema.ToolWhitelist
+}
+
+// agentpathsGlobalSkillsDir 全局 Skill 库目录缺省值。
+// Python: get_agent_skills_dir()（common/utils）——转调 paths.go（15.16c）。
+func agentpathsGlobalSkillsDir() string {
+	return agentteams.GlobalSkillsDir()
+}
+
+// agentWorkspaceDir 共享 agent 工作区目录。
+// Python: get_agent_workspace_dir()（common/utils）——转调 projectless 基座。
+func agentWorkspaceDir() string {
+	return workspacepkg.AgentWorkspaceDir()
+}
+
+// getDecoratedTools 用户 todo 工具装饰集。
+// Python: get_decorated_tools()——转调 user_todo_tool 基座。
+func getDecoratedTools() []tool.Tool {
+	return teamtools.GetDecoratedTools()
+}
+
+// newGenerateImageToolPtr 图片生成工具实例。
+// Python: generate_image 单例——转调 image_gen 基座构造。
+func newGenerateImageToolPtr() tool.Tool {
+	// Python: generate_image 模块级 @tool 单例；Go 基座为包内私有
+	// newGenerateImageTool()，15.16f 补导出（偏差 D-15.16f-imagegen-export）。
+	return teamtools.NewGenerateImageToolPublic()
+}
+
+// readSkillVisibilityFile 读 skills-visibility.json 填充 enabled/disabled。
+// Python: skills 可见性 JSON 读取段（skills.py:93-118 区段）。
+func readSkillVisibilityFile(path string, enabled, disabled map[string]struct{}) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var doc struct {
+		Enabled  []string `json:"enabled"`
+		Disabled []string `json:"disabled"`
+	}
+	if jsonErr := json.Unmarshal(data, &doc); jsonErr != nil {
+		return
+	}
+	for _, name := range doc.Enabled {
+		enabled[name] = struct{}{}
+	}
+	for _, name := range doc.Disabled {
+		disabled[name] = struct{}{}
+	}
 }

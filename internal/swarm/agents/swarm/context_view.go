@@ -75,3 +75,15 @@ func (c *SwarmBuildContext) ViewMemberWorkspaceRoot() string {
 func (c *SwarmBuildContext) ViewResolveMemberWorkDir() (string, error) {
 	return c.ResolveMemberWorkDir()
 }
+
+// ViewMemberName 返回成员名（基类字段）。
+func (c *SwarmBuildContext) ViewMemberName() string { return c.MemberName }
+
+// ViewTeamSkillVisibilityPath 返回团队技能可见性文件路径。
+func (c *SwarmBuildContext) ViewTeamSkillVisibilityPath() string { return c.TeamSkillVisibilityPath }
+
+// ViewResolveMemberSkillVisibilityPath 解析成员技能可见性文件路径。
+// Python: context.resolve_member_skill_visibility_path()
+func (c *SwarmBuildContext) ViewResolveMemberSkillVisibilityPath() string {
+	return c.ResolveMemberSkillVisibilityPath()
+}

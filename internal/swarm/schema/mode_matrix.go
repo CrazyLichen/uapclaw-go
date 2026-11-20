@@ -498,3 +498,26 @@ func containsModeText(items []string, target string) bool {
 	}
 	return false
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ToolWhitelist swarm 可继承工具白名单。
+// 15.16f 自 team 包 toolWhitelist 收编为单源（providers 包经 swarm/schema
+// 访问，team↔providers 无环）。
+// Python: TOOL_WHITELIST (team_runtime_inheritance.py L81-126)
+var ToolWhitelist = map[string]bool{
+	"free_search": true, "fetch_webpage": true, "paid_search": true, "vision": true,
+	"audio": true, "image_ocr": true, "visual_question_answering": true,
+	"generate_image": true, "audio_transcription": true, "audio_question_answering": true,
+	"audio_metadata": true, "video_understanding": true, "search_skill": true,
+	"install_skill": true, "uninstall_skill": true, "user_todos": true,
+	"get_user_location": true, "create_note": true, "search_notes": true,
+	"modify_note": true, "create_calendar_event": true, "search_calendar_event": true,
+	"search_contact": true, "search_photo_gallery": true, "upload_photo": true,
+	"search_file": true, "upload_file": true, "call_phone": true, "send_message": true,
+	"search_message": true, "create_alarm": true, "search_alarms": true,
+	"modify_alarm": true, "delete_alarm": true, "xiaoyi_collection": true,
+	"image_reading": true, "xiaoyi_gui_agent": true, "web_free_search": true,
+	"web_fetch_webpage": true, "web_paid_search": true, "skill_toolkit": true,
+	"enter_worktree": true, "exit_worktree": true, "acp_chat": true,
+}
