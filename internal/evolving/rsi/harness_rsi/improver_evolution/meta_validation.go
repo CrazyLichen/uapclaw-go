@@ -4,7 +4,10 @@
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/improver_evolution/meta_validation.py
 package improver_evolution
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -166,3 +169,229 @@ var _LIVE_METRICS = []string{
 
 // _RATE_METRICS 越低越好的比率指标集合
 var _RATE_METRICS = map[string]bool{"regression_failure_rate": true, "infrastructure_failure_rate": true}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// indexResults 按 checkpoint_id 建索引并收集问题（对应 Python _index_results L258-278）
+func indexResults(results []map[string]any, side string) (map[string]map[string]any, []map[string]any) {
+	indexed := map[string]map[string]any{}
+	issues := make([]map[string]any, 0)
+	for position, record := range results {
+		if record == nil {
+			issues = append(issues, map[string]any{
+				"code": "invalid_checkpoint_record", "side": side, "position": position,
+			})
+			continue
+		}
+		checkpointID := record["checkpoint_id"]
+		text, ok := checkpointID.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			issues = append(issues, map[string]any{
+				"code": "missing_checkpoint_id", "side": side, "position": position,
+			})
+			continue
+		}
+		checkpointID = strings.TrimSpace(text)
+		if _, present := indexed[checkpointID.(string)]; present {
+			issues = append(issues, map[string]any{
+				"code": "duplicate_checkpoint_id", "side": side, "checkpoint_id": checkpointID,
+			})
+			continue
+		}
+		indexed[checkpointID.(string)] = record
+	}
+	return indexed, issues
+}
+
+// improverIdentity 提取同侧 Improver 身份并校验一致性（对应 Python _improver_identity L281-335）
+func improverIdentity(results []map[string]any, side string) (map[string]string, []map[string]any) {
+	fields := []string{"improver_version_id", "improver_policy_digest"}
+	valuesByField := map[string]map[string]bool{}
+	for _, field := range fields {
+		valuesByField[field] = map[string]bool{}
+	}
+	issues := make([]map[string]any, 0)
+	for position, record := range results {
+		if record == nil {
+			continue
+		}
+		checkpointID := record["checkpoint_id"]
+		checkpointDetail := ""
+		if text, ok := checkpointID.(string); ok {
+			checkpointDetail = text
+		}
+		for _, field := range fields {
+			value, present := record[field]
+			if !present || value == nil || value == "" {
+				issues = append(issues, map[string]any{
+					"code":          "missing_improver_identity_field",
+					"side":          side,
+					"position":      position,
+					"checkpoint_id": checkpointDetail,
+					"field":         field,
+				})
+				continue
+			}
+			text, ok := value.(string)
+			if !ok || strings.TrimSpace(text) == "" {
+				issues = append(issues, map[string]any{
+					"code":          "invalid_improver_identity_field",
+					"side":          side,
+					"position":      position,
+					"checkpoint_id": checkpointDetail,
+					"field":         field,
+				})
+				continue
+			}
+			valuesByField[field][strings.TrimSpace(text)] = true
+		}
+	}
+	for _, field := range fields {
+		if len(valuesByField[field]) > 1 {
+			issues = append(issues, map[string]any{
+				"code":  "inconsistent_improver_identity",
+				"side":  side,
+				"field": field,
+			})
+		}
+	}
+	// 对应 Python next(iter(version_ids)) if len == 1 else ""
+	identity := map[string]string{}
+	for _, field := range fields {
+		value := ""
+		if len(valuesByField[field]) == 1 {
+			for key := range valuesByField[field] {
+				value = key
+			}
+		}
+		identity[field] = value
+	}
+	return map[string]string{
+		"version_id":    identity["improver_version_id"],
+		"policy_digest": identity["improver_policy_digest"],
+	}, issues
+}
+
+// pairIssues 校验单个 checkpoint 的配对合法性（对应 Python _pair_issues L338-380，分支顺序照抄）
+func pairIssues(checkpointID string, baseline, candidate map[string]any, trainIDs map[string]bool) []map[string]any {
+	issues := make([]map[string]any, 0)
+	if trainIDs[checkpointID] {
+		issues = append(issues, map[string]any{
+			"code": "meta_train_contamination", "checkpoint_id": checkpointID,
+		})
+	}
+	for _, sideRecord := range []struct {
+		side   string
+		record map[string]any
+	}{{"baseline", baseline}, {"candidate", candidate}} {
+		split := sideRecord.record["split"]
+		if !pyEqual(split, "meta_test") {
+			issues = append(issues, map[string]any{
+				"code":          "non_meta_test_checkpoint",
+				"checkpoint_id": checkpointID,
+				"side":          sideRecord.side,
+			})
+		}
+		for _, field := range _FROZEN_FIELDS {
+			value, present := sideRecord.record[field]
+			if !present || value == nil || value == "" {
+				issues = append(issues, map[string]any{
+					"code":          "missing_frozen_field",
+					"checkpoint_id": checkpointID,
+					"side":          sideRecord.side,
+					"field":         field,
+				})
+			}
+		}
+		issues = append(issues, frozenValueIssues(checkpointID, sideRecord.record, sideRecord.side)...)
+	}
+	for _, field := range _FROZEN_FIELDS {
+		baseValue, hasBase := baseline[field]
+		candValue, hasCand := candidate[field]
+		if hasBase && hasCand && !pyEqual(baseValue, candValue) {
+			issues = append(issues, map[string]any{
+				"code":          "frozen_field_mismatch",
+				"checkpoint_id": checkpointID,
+				"field":         field,
+			})
+		}
+	}
+	if pyEqual(baseline["k"], 1) && pyEqual(candidate["k"], 1) {
+		issues = append(issues, map[string]any{
+			"code": "search_metrics_require_k_at_least_two", "checkpoint_id": checkpointID,
+		})
+	}
+	return issues
+}
+
+// frozenValueIssues 校验冻结字段取值合法性（对应 Python _frozen_value_issues L383-434）
+func frozenValueIssues(checkpointID string, record map[string]any, side string) []map[string]any {
+	issues := make([]map[string]any, 0)
+	for _, field := range []string{"base_harness_id", "failure_evidence_id", "base_model_id", "verifier_id", "protocol_id"} {
+		value, present := record[field]
+		if !present {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			issues = append(issues, map[string]any{
+				"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
+				"side": side, "field": field,
+			})
+		}
+	}
+	for _, field := range []string{"k", "top_m"} {
+		value := record[field]
+		if value != nil && !isPositiveInt(value) {
+			issues = append(issues, map[string]any{
+				"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
+				"side": side, "field": field,
+			})
+		}
+	}
+	k := record["k"]
+	topM := record["top_m"]
+	if isPositiveInt(k) && isPositiveInt(topM) && pyInt(topM) > pyInt(k) {
+		issues = append(issues, map[string]any{
+			"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
+			"field": "top_m", "reason": "top_m_exceeds_k",
+		})
+	}
+	for _, field := range []string{"token_budget", "tool_budget", "runtime_budget"} {
+		value := record[field]
+		if value != nil && (!isFiniteNumber(value) || pyFloat(value) < 0) {
+			issues = append(issues, map[string]any{
+				"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
+				"side": side, "field": field,
+			})
+		}
+	}
+	return issues
+}
+
+// isPositiveInt 正整数判定（对应 Python _is_positive_int L577-578）
+func isPositiveInt(value any) bool {
+	return !isBool(value) && isInt(value) && pyInt(value) > 0
+}
+
+// isFiniteNumber 有限数判定且非布尔（对应 Python _is_finite_number L573-574）
+func isFiniteNumber(value any) bool {
+	if isBool(value) {
+		return false
+	}
+	return isNumber(value)
+}
+
+// reasonCodes 从 issues 提取去重保序的 code 列表（对应 Python _reason_codes L569-570）
+func reasonCodes(issues []map[string]any) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0)
+	for _, issue := range issues {
+		code := pyStr(issue["code"])
+		if !seen[code] {
+			seen[code] = true
+			out = append(out, code)
+		}
+	}
+	return out
+}
