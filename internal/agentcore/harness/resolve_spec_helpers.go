@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -123,4 +124,92 @@ func flattenBuiltRails(built any) []agentinterfaces.AgentRail {
 			Msg("resolve parts: rail provider returned unexpected type, skipping")
 		return nil
 	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolvedSpecTools 工具声明的解析产物：实例进 ToolInstances（注册
+// resource_mgr），透传卡片进 ToolCards（AbilityManager schema 注册）。
+type resolvedSpecTools struct {
+	// instances 工具实例列表
+	instances []tool.Tool
+	// cards provider 产出的工具卡片（非实例形态）
+	cards []*tool.ToolCard
+}
+
+// resolveBuiltinToolsFromSpecs 逐项解析 BuiltinToolSpec 声明。
+//
+// Python: DeepAgentSpec._resolve_tools (deep_agent_spec.py:506-522)：
+// `tid = f"{tool_id_prefix}.{item.type}" if tool_id_prefix else None`，
+// `resolved.extend(_as_built_list(item.build(language=..., tool_id=tid, ...)))`。
+// 空列表返回零值（对齐 `if not self.tools: return None`）。
+//
+// toolIDPrefix：DeepAgentSpec 侧传 card.id（:602），SubAgentSpec 侧传
+// card.id 或 card.name 兜底（agent_specs.go 已同款处理）。
+func resolveBuiltinToolsFromSpecs(
+	specs []hschema.BuiltinToolSpec, language string, toolIDPrefix string, ctx hschema.BuildContextInterface,
+) (*resolvedSpecTools, error) {
+	if len(specs) == 0 {
+		return &resolvedSpecTools{}, nil
+	}
+	out := &resolvedSpecTools{}
+	for i := range specs {
+		item := &specs[i]
+		tid := ""
+		if toolIDPrefix != "" {
+			tid = toolIDPrefix + "." + item.Type
+		}
+		built, err := item.Build(language, tid, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve parts: tool %q: %w", item.Type, err)
+		}
+		// _as_built_list 摊平：provider 可能返回单个工具、工具列表或 nil
+		switch v := built.(type) {
+		case nil:
+		case tool.Tool:
+			out.instances = append(out.instances, v)
+		case []any:
+			for _, item2 := range v {
+				switch t2 := item2.(type) {
+				case nil:
+				case tool.Tool:
+					out.instances = append(out.instances, t2)
+				case *tool.ToolCard:
+					out.cards = append(out.cards, t2)
+				default:
+					return nil, fmt.Errorf("builtin tool spec %q built unexpected element type %T", item.Type, item2)
+				}
+			}
+		case *tool.ToolCard:
+			out.cards = append(out.cards, v)
+		default:
+			return nil, fmt.Errorf("builtin tool spec %q built unexpected type %T", item.Type, built)
+		}
+	}
+	return out, nil
+}
+
+// buildSubagentsFromSpecs 逐项物化子代理声明。
+//
+// Python: :588-596 的
+// `subagents.extend(_as_built_list(subagent_spec.build(parent_model=..., language=..., context=...)))`。
+// factory_name 命中注册表时由 provider 直接产出（SubAgentSpec.Build 内部
+// 分派），未命中走正常路径；nil 产物跳过（_as_built_list None 语义）。
+func buildSubagentsFromSpecs(
+	specs []hschema.SubAgentSpec, parentModel *llm.Model, language string, ctx hschema.BuildContextInterface,
+) ([]hschema.SubagentSpec, error) {
+	if len(specs) == 0 {
+		return nil, nil
+	}
+	out := make([]hschema.SubagentSpec, 0, len(specs))
+	for i := range specs {
+		built, err := specs[i].Build(parentModel, language, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve parts: subagent %q: %w", specs[i].FactoryName, err)
+		}
+		if built != nil {
+			out = append(out, built)
+		}
+	}
+	return out, nil
 }

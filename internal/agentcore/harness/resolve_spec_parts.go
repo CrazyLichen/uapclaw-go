@@ -76,14 +76,31 @@ func ResolveDeepAgentSpecParts(spec *hschema.DeepAgentSpec, ctx hschema.BuildCon
 		return nil, err
 	}
 
-	// 步骤 6：subagents
-	// ⤵️ 领域十五：SubAgentSpec provider 未落地，本版只做字段搬运。
-	subagents := convertToConfigSubagents(spec.Subagents)
+	// 步骤 5.5：tools 解析——BuiltinToolSpec → 工具实例（经 provider 注册表），
+	// ToolCard 透传（specToParams 直接带入 spec.ToolCards）。
+	// Python: tools=self._resolve_tools(language, self.card.id if self.card
+	// else None, context=build_ctx)（:602，_resolve_tools :506-522）
+	resolvedTools, err := resolveBuiltinToolsFromSpecs(spec.BuiltinTools, language, memberCardID, buildCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 步骤 6：subagents 经 SubAgentSpec.Build（factory_name 命中注册表时
+	// 由 provider 直接产出，未命中走正常路径）。
+	// Python: :588-596
+	subagents, err := buildSubagentsFromSpecs(spec.Subagents, llmModel, language, buildCtx)
+	if err != nil {
+		return nil, err
+	}
 
 	// 步骤 7：摊成 CreateDeepAgentParams，转调共用的 ResolveDeepAgentParts。
 	// 上游 :598-634 就是把 self 的字段逐项当关键字参数传进去。
 	params := specToParams(spec, llmModel, language, workspaceObj, sysOperation,
 		resolvedRails, subagents, buildCtx)
+	params.ToolInstances = resolvedTools.instances
+	if len(resolvedTools.cards) > 0 {
+		params.ToolCards = append(params.ToolCards, resolvedTools.cards...)
+	}
 
 	parts, err := ResolveDeepAgentParts(params)
 	if err != nil {

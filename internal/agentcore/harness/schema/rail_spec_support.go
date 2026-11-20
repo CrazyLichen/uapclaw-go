@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -67,4 +68,14 @@ func logRailTypeUnknown(railType string) {
 // (deep_agent_spec.py:292)
 func newMinimalBuildContext(language string, ws *workspace.Workspace) BuildContextInterface {
 	return &BuildContext{Language: language, Workspace: ws}
+}
+
+// sortedToolTypeNames 返回排序稳定的已注册 tool type 名单。
+//
+// Python 的 f"{list(_TOOL_PROVIDER_REGISTRY)}"（:334）按 dict 插入序输出；
+// Go map 遍历无序，排序保证报错信息确定（测试可断言）。
+func sortedToolTypeNames() []string {
+	names := RegisteredToolNames()
+	sort.Strings(names)
+	return names
 }
