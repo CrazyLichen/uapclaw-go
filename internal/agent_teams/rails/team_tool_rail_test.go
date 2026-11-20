@@ -329,7 +329,7 @@ func TestTeamToolRail_RegisteredTools(t *testing.T) {
 
 // TestWithModelConfigAllocator 验证 WithModelConfigAllocator 选项。
 func TestWithModelConfigAllocator(t *testing.T) {
-	alloc := func(_ string) *models.Allocation { return nil }
+	alloc := func(_ string, _ ...models.AllocateOption) *models.Allocation { return nil }
 	r := &TeamToolRail{}
 	WithModelConfigAllocator(alloc)(r)
 	assert.NotNil(t, r.modelConfigAlloc)

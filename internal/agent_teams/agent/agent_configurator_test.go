@@ -544,7 +544,7 @@ type mockModelAllocator struct {
 	loadedState map[string]any
 }
 
-func (m *mockModelAllocator) Allocate(modelName string) *models.Allocation {
+func (m *mockModelAllocator) Allocate(modelName string, opts ...models.AllocateOption) *models.Allocation {
 	return nil
 }
 
