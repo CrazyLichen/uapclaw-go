@@ -119,9 +119,10 @@ func (w *Workflow) SetEndComp(endCompID string, component components.ComponentCo
 	return w
 }
 
-// AddConnection 常规边（workflow.py:279-293）。
-func (w *Workflow) AddConnection(srcCompID any, targetCompID string) *Workflow {
-	_ = w.internal.AddConnection(srcCompID, targetCompID)
+// AddConnection 常规边（workflow.py:279-293 add_connection）。
+// 偏差 D-14-6：Python src_comp_id: str|list[str] → Go []string（单源包一元素）。
+func (w *Workflow) AddConnection(srcCompIDs []string, targetCompID string) *Workflow {
+	_ = w.internal.AddConnection(srcCompIDs, targetCompID)
 	return w
 }
 
@@ -131,7 +132,7 @@ func (w *Workflow) AddStreamConnection(srcCompID, targetCompID string) *Workflow
 	return w
 }
 
-// AddConditionalConnection 条件边（workflow.py:311-326）。
+// AddConditionalConnection 条件边（workflow.py:311-326；src: str、router: Router 标注类型直传）。
 func (w *Workflow) AddConditionalConnection(srcCompID string, router graph.Router) *Workflow {
 	_ = w.internal.AddConditionalConnection(srcCompID, router)
 	return w

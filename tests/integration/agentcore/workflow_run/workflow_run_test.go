@@ -44,7 +44,7 @@ func (s *WorkflowRunSuite) buildHelloWorkflow() *workflow.Workflow {
 	w := workflow.NewWorkflow(nil)
 	w.SetStartComp("start", flow.NewStart(), nil, nil, nil)
 	w.SetEndComp("end", s.newEnd("hello {{name}}"), nil, nil, nil, nil, "streaming", nil)
-	w.AddConnection("start", "end")
+	w.AddConnection([]string{"start"}, "end")
 	return w
 }
 
@@ -79,7 +79,7 @@ func (s *WorkflowRunSuite) TestInvoke_非流式真实链() {
 	w := workflow.NewWorkflow(nil)
 	w.SetStartComp("start", flow.NewStart(), nil, nil, nil)
 	w.SetEndComp("end", s.newEnd("hi {{name}}"), nil, nil, nil, nil, "batch", nil)
-	w.AddConnection("start", "end")
+	w.AddConnection([]string{"start"}, "end")
 	sess := sessionpkg.NewSession(sessionpkg.WithEnvs(map[string]any{}))
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"name": "u2"}, sess, nil, nil)
