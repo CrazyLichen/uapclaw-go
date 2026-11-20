@@ -737,3 +737,138 @@ func TestCollectHighValueOutsideTopM_全分支(t *testing.T) {
 	err = collectHighValueOutsideTopM(c, 0.0, &opp, &sup)
 	assertErrMsg(t, err, "cohort 'cc1' top_m_gain.effective_m must be a positive integer")
 }
+
+// ─────────────── Task 3：稳定模式枚举 ───────────────
+
+func TestAppendPattern_低于支持门槛不入列(t *testing.T) {
+	patterns := []map[string]any{}
+	appendPattern(&patterns, 2, "pid", "ptype", nil, []string{"c1"}, []string{"c1", "c2"},
+		map[string]any{"field": "f", "operation": "set", "value": true, "rationale": "r"})
+	if len(patterns) != 0 {
+		t.Fatalf("support=1 < min=2 应过滤")
+	}
+	appendPattern(&patterns, 1, "pid", "ptype", nil, []string{"c2", "c1", "c1"}, []string{"c3", "c1"},
+		map[string]any{"field": "f", "operation": "set", "value": true, "rationale": "r"})
+	if len(patterns) != 1 {
+		t.Fatalf("support=2 >= min=1 应入列")
+	}
+	p := patterns[0]
+	if p["pattern_id"] != "pid" || p["support_cohorts"] != 2 || p["opportunity_cohorts"] != 2 {
+		t.Fatalf("unexpected: %v", p)
+	}
+	if p["rate"] != 1.0 {
+		t.Fatalf("rate: %v", p["rate"])
+	}
+	ids := p["evidence_cohort_ids"].([]string)
+	if len(ids) != 2 || ids[0] != "c1" || ids[1] != "c2" {
+		t.Fatalf("去重排序: %v", ids)
+	}
+}
+
+func TestStablePatterns_固定四模式与surface模式(t *testing.T) {
+	trigger := newSurfaceEvidence()
+	trigger.triggerFailureCohorts["c1"] = true
+	trigger.triggerOpportunityCohorts["c1"] = true
+	regression := newSurfaceEvidence()
+	regression.regressionFailureCohorts["c2"] = true
+	regression.regressionOpportunityCohorts["c2"] = true
+
+	patterns := stablePatterns(
+		1,
+		[]string{"c1"}, []string{"c1"}, []string{"c1"}, []string{"c1"},
+		[]string{"c1"}, []string{"c1"},
+		map[string]*surfaceEvidence{"s1": trigger},
+		map[string]*surfaceEvidence{"s1": regression},
+		map[string]*featureEvidence{},
+		[]string{}, []string{"c1"}, []string{"c1"},
+	)
+	ids := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		ids = append(ids, p["pattern_id"].(string))
+	}
+	want := []string{
+		"all_candidates_nonpositive",
+		"partial_candidate_has_residual_requirements",
+		"high_value_candidate_outside_top_m",
+		"duplicate_candidates",
+		"trigger_observed_failure:s1",
+		"target_regression:s1",
+	}
+	if strings.Join(ids, ",") != strings.Join(want, ",") {
+		t.Fatalf("顺序应照抄 Python:\n want: %v\n  got: %v", want, ids)
+	}
+	// 固定模式 policy_change 抽查
+	p0 := patterns[0]
+	pc := p0["recommended_policy_change"].(map[string]any)
+	if pc["field"] != "generation_directives.require_distinct_intervention_surfaces" ||
+		pc["operation"] != "set" || pc["value"] != true {
+		t.Fatalf("unexpected: %v", pc)
+	}
+	// surface 模式字段名拼接与 surface 值
+	p4 := patterns[4]
+	if p4["surface"] != "s1" {
+		t.Fatalf("unexpected surface: %v", p4)
+	}
+	pc4 := p4["recommended_policy_change"].(map[string]any)
+	if pc4["field"] != "generation_directives.require_activation_evidence.s1" {
+		t.Fatalf("unexpected: %v", pc4)
+	}
+}
+
+func TestStablePatterns_排序错位方向判定(t *testing.T) {
+	fe := newFeatureEvidence()
+	fe.comparableCohorts["c1"] = true
+	fe.comparableCohorts["c2"] = true
+	fe.comparableCohorts["c3"] = true
+	fe.increaseCohorts["c1"] = true
+	fe.increaseCohorts["c3"] = true
+	fe.decreaseCohorts["c2"] = true
+	patterns := stablePatterns(
+		1, []string{"c1", "c2"}, []string{}, []string{}, []string{},
+		[]string{}, []string{},
+		map[string]*surfaceEvidence{}, map[string]*surfaceEvidence{},
+		map[string]*featureEvidence{"w": fe},
+		[]string{"c1", "c2"}, []string{}, []string{},
+	)
+	if len(patterns) != 1 {
+		t.Fatalf("increase/decrease 支持数不等应产出 1 条: %v", patterns)
+	}
+	p := patterns[0]
+	if p["pattern_id"] != "ranking_misalignment:w:increase" {
+		t.Fatalf("支持数相等时 increase 侧胜出: %v", p)
+	}
+	pc := p["recommended_policy_change"].(map[string]any)
+	if pc["field"] != "ranking_weights.w" || pc["operation"] != "increase" || pc["value"] != 0.1 {
+		t.Fatalf("unexpected: %v", pc)
+	}
+}
+
+func TestStablePatterns_支持数相等跳过(t *testing.T) {
+	fe := newFeatureEvidence()
+	fe.increaseCohorts["c1"] = true
+	fe.decreaseCohorts["c2"] = true
+	patterns := stablePatterns(
+		1, []string{"c1", "c2"}, []string{}, []string{}, []string{},
+		[]string{}, []string{},
+		map[string]*surfaceEvidence{}, map[string]*surfaceEvidence{},
+		map[string]*featureEvidence{"w": fe},
+		[]string{"c1", "c2"}, []string{}, []string{},
+	)
+	if len(patterns) != 0 {
+		t.Fatalf("支持数相等应跳过: %v", patterns)
+	}
+}
+
+func TestCohortRate_结构与排序(t *testing.T) {
+	got := cohortRate([]string{"b", "a", "b"}, []string{"x", "a"})
+	if got["support_cohort_count"] != 2 || got["opportunity_cohort_count"] != 2 || got["rate"] != 1.0 {
+		t.Fatalf("unexpected: %v", got)
+	}
+	ids := got["evidence_cohort_ids"].([]string)
+	if ids[0] != "a" || ids[1] != "b" {
+		t.Fatalf("排序: %v", ids)
+	}
+	if cohortRate([]string{}, []string{})["rate"] != nil {
+		t.Fatal("分母 0 应为 nil")
+	}
+}

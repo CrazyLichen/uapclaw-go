@@ -934,3 +934,162 @@ func counterDict(counter map[string]int) map[string]int {
 	}
 	return out
 }
+
+// stablePatterns 枚举稳定模式清单（对应 Python _stable_patterns L573-714，模式顺序照抄）
+func stablePatterns(
+	minSupportCohorts int,
+	comparableIDs, nonpositiveIDs, highValueOpportunityIDs, highValueOutsideIDs []string,
+	duplicateOpportunityCohorts, duplicateCohortIDs []string,
+	triggerBySurface, regressionBySurface map[string]*surfaceEvidence,
+	featureEvidence map[string]*featureEvidence,
+	positiveSelectionRegretIDs, partialRepairOpportunityIDs, partialRepairSupportIDs []string,
+) []map[string]any {
+	patterns := make([]map[string]any, 0)
+	appendPattern(&patterns, minSupportCohorts,
+		"all_candidates_nonpositive", "all_candidates_nonpositive", nil,
+		nonpositiveIDs, comparableIDs,
+		map[string]any{
+			"field":     "generation_directives.require_distinct_intervention_surfaces",
+			"operation": "set",
+			"value":     true,
+			"rationale": "Comparable cohorts repeatedly produced no positive-gain candidate.",
+		})
+	appendPattern(&patterns, minSupportCohorts,
+		"partial_candidate_has_residual_requirements", "partial_candidate_has_residual_requirements", nil,
+		partialRepairSupportIDs, partialRepairOpportunityIDs,
+		map[string]any{
+			"field":     "generation_directives.preserve_partial_progress_and_target_residual",
+			"operation": "set",
+			"value":     true,
+			"rationale": ("Candidates repeatedly improved some requirements without regression while residual " +
+				"requirements remained; repair should preserve verified gains and target only the residue."),
+		})
+	appendPattern(&patterns, minSupportCohorts,
+		"high_value_candidate_outside_top_m", "high_value_candidate_outside_top_m", nil,
+		highValueOutsideIDs, highValueOpportunityIDs,
+		map[string]any{
+			"field":     "budget_policy.top_m",
+			"operation": "increase",
+			"value":     1,
+			"rationale": ("The realized best positive-gain candidate repeatedly ranked outside the current Top-m budget."),
+		})
+	appendPattern(&patterns, minSupportCohorts,
+		"duplicate_candidates", "duplicate_candidates", nil,
+		duplicateCohortIDs, duplicateOpportunityCohorts,
+		map[string]any{
+			"field":     "generation_directives.require_unique_candidate_fingerprint",
+			"operation": "set",
+			"value":     true,
+			"rationale": "Multiple cohorts spent evaluation budget on semantically duplicate candidates.",
+		})
+	// 对应 Python for surface, evidence in sorted(trigger_by_surface.items())
+	surfaces := make([]string, 0, len(triggerBySurface))
+	for surface := range triggerBySurface {
+		surfaces = append(surfaces, surface)
+	}
+	sort.Strings(surfaces)
+	for _, surface := range surfaces {
+		evidence := triggerBySurface[surface]
+		appendPattern(&patterns, minSupportCohorts,
+			fmt.Sprintf("trigger_observed_failure:%s", surface), "trigger_observed_failure", surface,
+			sortedSetKeys(evidence.triggerFailureCohorts), sortedSetKeys(evidence.triggerOpportunityCohorts),
+			map[string]any{
+				"field":     fmt.Sprintf("generation_directives.require_activation_evidence.%s", surface),
+				"operation": "set",
+				"value":     true,
+				"rationale": fmt.Sprintf("Observed %s candidates repeatedly failed to trigger on all expected case pairs.", surface),
+			})
+		regression := regressionBySurface[surface]
+		appendPattern(&patterns, minSupportCohorts,
+			fmt.Sprintf("target_regression:%s", surface), "target_regression", surface,
+			sortedSetKeys(regression.regressionFailureCohorts), sortedSetKeys(regression.regressionOpportunityCohorts),
+			map[string]any{
+				"field":     fmt.Sprintf("generation_directives.avoid_target_regression.%s", surface),
+				"operation": "set",
+				"value":     true,
+				"rationale": fmt.Sprintf("Observed %s candidates repeatedly regressed at least one target case.", surface),
+			})
+	}
+	// 对应 Python ranking_misalignment：increase/decrease 支持集与正向 regret 交集数量比较
+	positiveRegret := setOf(positiveSelectionRegretIDs)
+	features := make([]string, 0, len(featureEvidence))
+	for feature := range featureEvidence {
+		features = append(features, feature)
+	}
+	sort.Strings(features)
+	for _, feature := range features {
+		evidence := featureEvidence[feature]
+		increaseSupport := sortedSetKeys(intersect(evidence.increaseCohorts, positiveRegret))
+		decreaseSupport := sortedSetKeys(intersect(evidence.decreaseCohorts, positiveRegret))
+		if len(increaseSupport) == len(decreaseSupport) {
+			continue
+		}
+		operation := "decrease"
+		support := decreaseSupport
+		if len(increaseSupport) > len(decreaseSupport) {
+			operation = "increase"
+			support = increaseSupport
+		}
+		opportunities := sortedSetKeys(intersect(evidence.comparableCohorts, positiveRegret))
+		appendPattern(&patterns, minSupportCohorts,
+			fmt.Sprintf("ranking_misalignment:%s:%s", feature, operation), "ranking_misalignment", nil,
+			support, opportunities,
+			map[string]any{
+				"field":     fmt.Sprintf("ranking_weights.%s", feature),
+				"operation": operation,
+				"value":     0.1,
+				"rationale": (fmt.Sprintf("Isolated %s pairs repeatedly opposed realized ordering in cohorts with positive "+
+					"selection regret.", feature)),
+			})
+	}
+	return patterns
+}
+
+// appendPattern 按支持门槛追加模式条目（对应 Python _append_pattern L717-743）
+func appendPattern(
+	patterns *[]map[string]any,
+	minSupportCohorts int,
+	patternID, patternType string,
+	surface any,
+	supportIDs, opportunityIDs []string,
+	policyChange map[string]any,
+) {
+	support := sortedSetKeys(setOf(supportIDs))
+	opportunity := sortedSetKeys(setOf(opportunityIDs))
+	if len(support) < minSupportCohorts {
+		return
+	}
+	*patterns = append(*patterns, map[string]any{
+		"pattern_id":                patternID,
+		"pattern_type":              patternType,
+		"surface":                   surface,
+		"support_cohorts":           len(support),
+		"opportunity_cohorts":       len(opportunity),
+		"rate":                      rate(len(support), len(opportunity)),
+		"evidence_cohort_ids":       support,
+		"recommended_policy_change": policyChange,
+	})
+}
+
+// cohortRate 速率汇总结构（对应 Python _cohort_rate L746-754）
+func cohortRate(supportIDs, opportunityIDs []string) map[string]any {
+	support := sortedSetKeys(setOf(supportIDs))
+	opportunity := sortedSetKeys(setOf(opportunityIDs))
+	return map[string]any{
+		"support_cohort_count":     len(support),
+		"opportunity_cohort_count": len(opportunity),
+		"rate":                     rate(len(support), len(opportunity)),
+		"evidence_cohort_ids":      support,
+	}
+}
+
+// intersect 集合交集（对应 Python set & set）
+func intersect(left, right map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	for key := range left {
+		if right[key] {
+			out[key] = true
+		}
+	}
+	return out
+}
