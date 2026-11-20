@@ -3,10 +3,12 @@ package flow
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionStream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
@@ -339,5 +341,66 @@ func TestGetStreamOutput_两态(t *testing.T) {
 	compOff.streamState.Accumulate(map[string]any{"output": map[string]any{"out": "v"}})
 	if m := compOff.GetStreamOutput(); m != nil {
 		t.Fatalf("关闭时期望 nil, got %v", m)
+	}
+}
+
+// TestSubWorkflowComponent_元类装饰四事件对断言 8.14 回填①：
+// __init_subclass__ 装饰序（D-17-5 等价承载）在本组件经 OnInvoke/OnStream 时
+// ComponentBatchInput/ComponentBatchOutput 成对、ComponentStreamOutput 逐帧触发。
+func TestSubWorkflowComponent_元类装饰四事件对断言(t *testing.T) {
+	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+		&sessionStream.OutputSchema{Type: "message", Index: 0, Payload: "f0"},
+		&sessionStream.OutputSchema{Type: "message", Index: 1, Payload: "f1"},
+	}}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	inner := newFakeVertexSession(t, "n_sub", "SubWorkflow")
+	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
+
+	fwCb := callback.GetCallbackFramework()
+	var seq []callback.WorkflowEventType
+	var mu sync.Mutex
+	collect := func(ev callback.WorkflowEventType) {
+		fwCb.OnWorkflow(ev, func(ctx context.Context, data *callback.WorkflowEventData) any {
+			mu.Lock()
+			defer mu.Unlock()
+			seq = append(seq, data.Event)
+			return nil
+		})
+	}
+	collect(callback.ComponentBatchInput)
+	collect(callback.ComponentBatchOutput)
+	collect(callback.ComponentStreamOutput)
+
+	// 批入轨：Input → Output 成对
+	if _, err := comp.OnInvoke(context.Background(), env, inner, nil); err != nil {
+		t.Fatalf("OnInvoke 失败: %v", err)
+	}
+	mu.Lock()
+	invokeSeq := append([]callback.WorkflowEventType(nil), seq...)
+	seq = seq[:0]
+	mu.Unlock()
+	if len(invokeSeq) != 2 || invokeSeq[0] != callback.ComponentBatchInput || invokeSeq[1] != callback.ComponentBatchOutput {
+		t.Fatalf("invoke 轨四事件未成对: %v", invokeSeq)
+	}
+
+	// 流轨：Input → 逐帧 StreamOutput(×2) → Output
+	ch, err := comp.OnStream(context.Background(), env, inner, nil)
+	if err != nil {
+		t.Fatalf("OnStream 失败: %v", err)
+	}
+	for range ch {
+	}
+	// 流轨（Python on_stream 装饰序，component.py:52-58）：
+	// emit_before(BATCH_INPUT) → emit_after(STREAM_OUTPUT, per_item 逐帧触发)。
+	// transform_io 只触发 transform 订阅者，不进 OnWorkflow 序列；
+	// 流轨对常规订阅者无末尾 BATCH_OUTPUT。
+	mu.Lock()
+	streamSeq := append([]callback.WorkflowEventType(nil), seq...)
+	mu.Unlock()
+	if len(streamSeq) != 3 ||
+		streamSeq[0] != callback.ComponentBatchInput ||
+		streamSeq[1] != callback.ComponentStreamOutput ||
+		streamSeq[2] != callback.ComponentStreamOutput {
+		t.Fatalf("stream 轨序列不符（Input→逐帧 StreamOutput×2，无末尾 Output）: %v", streamSeq)
 	}
 }
