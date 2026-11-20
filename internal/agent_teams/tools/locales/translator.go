@@ -27,7 +27,7 @@ const descKey = "_desc"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-//go:embed descs/**/*.md
+//go:embed descs
 var descFS embed.FS
 
 // descCache 工具描述缓存（lang+"/"+tool → content）。
@@ -74,19 +74,17 @@ func loadToolDesc(tool, lang string) string {
 	if cached, ok := descCache.Load(cacheKey); ok {
 		return cached.(string)
 	}
-	// 尝试读取 descs/{lang}/{tool}.md
-	path := "descs/" + lang + "/" + tool + ".md"
-	data, err := descFS.ReadFile(path)
+	// 递归索引（Python _desc_index：desc_key 平铺、fragments 排除）——
+	// desc 文件按领域子目录归档（member/expert/...），单层路径读不到。
+	p, ok := descIndexOf(lang)[tool]
+	if !ok {
+		descCache.Store(cacheKey, "")
+		return ""
+	}
+	data, err := descFS.ReadFile(p)
 	if err != nil {
-		// 回退到中文
-		if lang != string(atschema.LanguageCN) {
-			path = "descs/" + string(atschema.LanguageCN) + "/" + tool + ".md"
-			data, err = descFS.ReadFile(path)
-		}
-		if err != nil {
-			descCache.Store(cacheKey, "")
-			return ""
-		}
+		descCache.Store(cacheKey, "")
+		return ""
 	}
 	content := strings.TrimSpace(string(data))
 	descCache.Store(cacheKey, content)

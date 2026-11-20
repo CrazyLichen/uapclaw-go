@@ -14,6 +14,7 @@ const (
 	// 成员生命周期事件
 	TeamEventMemberSpawned          = "member_spawned"
 	TeamEventMemberRestarted        = "member_restarted"
+	TeamEventCheckpointCreated      = "checkpoint_created"
 	TeamEventMemberStatusChanged    = "member_status_changed"
 	TeamEventMemberExecutionChanged = "member_execution_changed"
 	TeamEventMemberShutdown         = "member_shutdown"

@@ -606,7 +606,7 @@ var (
 	builtinModelSlots = []string{"builtin_model_param_rows", "builtin_model_usage"}
 )
 
-func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
+func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, language atschema.Language, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
 	externalCLIEnabled := len(team.DeclaredCLIKinds()) > 0
 	builtinModelsEnabled := externalCLIEnabled && team.BuiltinModelsEnabled()
 	st := &spawnTeammateTool{
@@ -639,7 +639,13 @@ func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAl
 		omitList = append(omitList, name)
 	}
 	sort.Strings(omitList)
-	description := t("spawn_teammate", omitList...)
+	// omit 门控经 RenderDesc（Python make_translator 的 omit= 形参；
+	// e15 审查发现 Go 原Translator 调用把 omit 列表当 STRINGS key——门控失效）。
+	omitSet := map[string]bool{}
+	for _, name := range omitList {
+		omitSet[name] = true
+	}
+	description := locales.RenderDesc("spawn_teammate", language, omitSet)
 	// 卡片：id=team.spawn_teammate，描述经 omit_slots 门控（Python :574-580）。
 	card := tool.ToolCard{BaseCard: schema.BaseCard{ID: "team.spawn_teammate", Name: "spawn_teammate", Description: description}}
 	st.TeamTool = NewTeamTool(&card)
@@ -936,5 +942,149 @@ func (s *spawnTeammateTool) Stream(_ context.Context, _ map[string]any, _ ...too
 
 // Stream 实现 Tool 接口（不支持流式调用）。
 func (s *spawnHumanAgentTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// ──────────────────────────── fork 半区工具（tool_member.py:917-1038） ────────────────────────────
+
+// checkpointTool checkpoint：保存当前会话上下文的命名快照（fork 能力的半区）。
+// 门控 TeamAgentSpec.enable_fork——关闭时工具不装配（create_team_tools），
+// invoke 内的检查是对直调 MCP 客户端的兜底。
+// Python: CheckpointTool (tool_member.py:917-990)
+type checkpointTool struct {
+	TeamTool
+	// team 团队后端实例
+	team *TeamBackend
+	// t 翻译器闭包（duplicate 错误文案）
+	t locales.Translator
+}
+
+// newCheckpointTool 构造 checkpoint。
+// Python: __init__ (:925-941)
+func newCheckpointTool(team *TeamBackend, t locales.Translator, language atschema.Language) *checkpointTool {
+	description := locales.RenderDesc("checkpoint", language, nil)
+	return &checkpointTool{
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.checkpoint", "checkpoint", description,
+			[]*schema.Param{
+				schema.NewStringParam("name", t("checkpoint", "name"), true),
+				schema.NewStringParam("description", t("checkpoint", "description"), false),
+			}, nil)),
+		team: team,
+		t:    t,
+	}
+}
+
+// Invoke 执行 checkpoint。
+// Python: invoke (:943-968)
+func (c *checkpointTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	// fork 关闭的兜底（enable_fork=False）：快照存在的唯一意义就是被 fork。
+	if !c.team.ForkEnabled() {
+		return toolError("Cannot save a checkpoint: context inheritance (fork) is " +
+			"disabled (enable_fork=False on TeamAgentSpec). Checkpoints " +
+			"exist only to be forked from.")
+	}
+	name, _ := inputs["name"].(string)
+	count := c.team.SnapshotContextLength()
+	description, _ := inputs["description"].(string)
+	conflict := c.team.StoreCheckpoint(name, count, description, c.team.memberName)
+	if conflict != nil {
+		createdBy, _ := conflict["created_by"].(string)
+		if createdBy == "" {
+			createdBy = "?"
+		}
+		desc, _ := conflict["description"].(string)
+		// Python: t("checkpoint", "duplicate", name=..., created_by=..., description=...)——
+		// STRINGS 插值形态；Go STRINGS 表无 kwargs 插值签名，直格式化同源文案。
+		return toolError(fmt.Sprintf("快照名 %s 已存在（创建者 %s，描述 %s）；换一个名字，或用 list_checkpoints 查看既有快照", name, createdBy, desc))
+	}
+	// leader 侧框架事件通知（非成员消息）：快照名以 announcement-only 注记
+	// 进入 leader 上下文，不提示回复。leader 自身快照无需自通知。
+	if !c.team.isLeader {
+		c.team.PublishCheckpointCreated(ctx, name, count, description)
+	}
+	return toolSuccess(map[string]any{"name": name, "message_count": count})
+}
+
+// MapResult 模型面渲染。Python: render_for_llm (:970-975)
+func (c *checkpointTool) MapResult(output map[string]any) string {
+	if success, ok := output["success"].(bool); !ok || !success {
+		if err, ok := output["error"].(string); ok && err != "" {
+			return err
+		}
+		return "Failed to save checkpoint"
+	}
+	data := output["data"].(map[string]any)
+	return fmt.Sprintf("Checkpoint '%v' saved at message %v", data["name"], data["message_count"])
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (c *checkpointTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// listCheckpointsTool list_checkpoints：列出全部可 fork 继承的命名快照。
+// Python: ListCheckpointsTool (tool_member.py:992-1038)
+type listCheckpointsTool struct {
+	TeamTool
+	// team 团队后端实例
+	team *TeamBackend
+}
+
+// newListCheckpointsTool 构造 list_checkpoints。Python: __init__ (:997-1005)
+func newListCheckpointsTool(team *TeamBackend, t locales.Translator, language atschema.Language) *listCheckpointsTool {
+	return &listCheckpointsTool{
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.list_checkpoints", "list_checkpoints",
+			locales.RenderDesc("list_checkpoints", language, nil), []*schema.Param{}, map[string]any{})),
+		team: team,
+	}
+}
+
+// Invoke 执行 list_checkpoints。Python: invoke (:1008-1019)
+func (l *listCheckpointsTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	checkpoints := l.team.ListCheckpoints()
+	names := make([]string, 0, len(checkpoints))
+	for name := range checkpoints {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	items := []map[string]any{}
+	for _, name := range names {
+		record := checkpoints[name]
+		items = append(items, map[string]any{
+			"name":          name,
+			"message_count": record["count"],
+			"description":   record["description"],
+			"created_by":    record["created_by"],
+		})
+	}
+	return toolSuccess(map[string]any{"checkpoints": items, "count": len(items)})
+}
+
+// MapResult 模型面渲染。Python: render_for_llm (:1021-1038)
+func (l *listCheckpointsTool) MapResult(output map[string]any) string {
+	if success, ok := output["success"].(bool); !ok || !success {
+		if err, ok := output["error"].(string); ok && err != "" {
+			return err
+		}
+		return "Failed to list checkpoints"
+	}
+	data := output["data"].(map[string]any)
+	items, _ := data["checkpoints"].([]map[string]any)
+	if len(items) == 0 {
+		return "No checkpoints"
+	}
+	lines := []string{}
+	for _, item := range items {
+		line := fmt.Sprintf("name=%v message_count=%v created_by=%v", item["name"], item["message_count"], item["created_by"])
+		if desc, _ := item["description"].(string); desc != "" {
+			line += fmt.Sprintf(" description=%q", desc)
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
+func (l *listCheckpointsTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }

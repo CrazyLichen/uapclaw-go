@@ -18,6 +18,20 @@ type MemberRestartedEvent struct {
 	RestartCount int
 }
 
+// CheckpointCreatedEvent 成员打了命名快照（fork 半区）。leader 侧渲染为
+// <team-event kind="checkpoint"> 的 announcement-only 注记——替代
+// send_message 通知，不触发回复。Base 的 member_name 即创建者。
+// Python: CheckpointCreatedEvent (schema/events.py:287-299)
+type CheckpointCreatedEvent struct {
+	BaseEventMessage
+	// Name 快照名（团队全局唯一）
+	Name string
+	// MessageCount 快照处的消息数
+	MessageCount int
+	// Description 快照描述
+	Description string
+}
+
 // MemberStatusChangedEvent 成员状态变更事件。
 // Python: MemberStatusChangedEvent
 type MemberStatusChangedEvent struct {
@@ -100,4 +114,12 @@ func (e MemberCanceledEvent) EventTypeName() string { return TeamEventMemberCanc
 // ToPayload 转换为事件载荷。
 func (e MemberCanceledEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
+}
+
+// EventTypeName 事件类型名。Python: TeamEvent.CHECKPOINT_CREATED (events.py:143)
+func (e CheckpointCreatedEvent) EventTypeName() string { return TeamEventCheckpointCreated }
+
+// ToPayload 转换为事件载荷。Python: CheckpointCreatedEvent 字段（events.py:287-299）。
+func (e CheckpointCreatedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "name": e.Name, "message_count": e.MessageCount, "description": e.Description}
 }
