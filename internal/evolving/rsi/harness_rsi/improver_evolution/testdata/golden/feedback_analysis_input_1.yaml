@@ -1,0 +1,182 @@
+schema_version: 1
+ledger_type: single_harness_sibling_candidate_feedback
+cohorts:
+  - schema_version: 1
+    record_type: candidate_feedback_cohort
+    cohort:
+      cohort_id: cohort_001
+      candidate_count: 3
+      parent_harness_ref: harness_v7
+      source_eval_ref: eval_20261201
+      evaluation_protocol: proto_a
+      target_case_ids: [case_1, case_2]
+      rank_frozen: true
+      ranking_policy: score_desc
+    candidates:
+      - candidate_id: cand_A
+        candidate_fingerprint: fp_aaa
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_1, case_2]
+        proposal_rank:
+          predicted_rank: 1
+          predicted_score: 0.9
+          rank_frozen: true
+          ranking_policy: score_desc
+          ranking_features: { size: 2.0 }
+        outcome: { target_gain: 0.15 }
+        activation: { availability: observed, state: triggered, surfaces: [skill_search] }
+        regression:
+          target: { availability: observed, regressed_case_count: 0 }
+      - candidate_id: cand_B
+        candidate_fingerprint: fp_aaa
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_1, case_2]
+        proposal_rank:
+          predicted_rank: 2
+          predicted_score: 0.8
+          rank_frozen: true
+          ranking_policy: score_desc
+        outcome: { target_gain: 0.1 }
+        activation: { availability: observed, state: not_triggered, surfaces: [skill_search] }
+        regression:
+          target: { availability: observed, regressed_case_count: 1 }
+      - candidate_id: cand_C
+        candidate_fingerprint: fp_ccc
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_1, case_2]
+        proposal_rank:
+          predicted_rank: 3
+          predicted_score: 0.7
+          rank_frozen: true
+          ranking_policy: score_desc
+          ranking_features: { size: 1.0 }
+        outcome: { target_gain: 0.2 }
+        activation: { availability: observed, state: triggered, surfaces: [skill_search] }
+        regression:
+          target: { availability: observed, regressed_case_count: 0 }
+        verifier_summary:
+          availability: observed
+          remaining_failed_requirements_count: 2
+          newly_passed_requirements_count: 1
+          regressed_requirements_count: 0
+          partial_progress_case_count: 1
+    metrics:
+      best_of_k_gain:
+        status: available
+        value: 0.2
+        candidate_id: cand_C
+      top_m_gain:
+        status: available
+        value: 0.15
+        candidate_id: cand_A
+        requested_m: 2
+        effective_m: 2
+      selection_regret:
+        status: available
+        value: 0.05
+  - schema_version: 1
+    record_type: candidate_feedback_cohort
+    cohort:
+      cohort_id: cohort_002
+      candidate_count: 2
+      parent_harness_ref: harness_v7
+      source_eval_ref: eval_20261201
+      evaluation_protocol: proto_a
+      target_case_ids: [case_3, case_4]
+      rank_frozen: true
+      ranking_policy: score_desc
+    candidates:
+      - candidate_id: cand_D
+        candidate_fingerprint: fp_ddd
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_3, case_4]
+        proposal_rank:
+          predicted_rank: 1
+          rank_frozen: true
+          ranking_policy: score_desc
+        outcome: { target_gain: -0.05 }
+        activation: { availability: observed, state: not_triggered, surfaces: [skill_search] }
+        regression:
+          target: { availability: observed, regressed_case_count: 0 }
+      - candidate_id: cand_E
+        candidate_fingerprint: fp_ddd
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_3, case_4]
+        proposal_rank:
+          predicted_rank: 2
+          rank_frozen: true
+          ranking_policy: score_desc
+        outcome: { target_gain: -0.1 }
+        activation: { availability: observed, state: triggered, surfaces: [skill_search] }
+        regression:
+          target: { availability: not_evaluated }
+    metrics:
+      best_of_k_gain:
+        status: available
+        value: -0.05
+        candidate_id: cand_D
+      top_m_gain:
+        status: available
+        value: -0.05
+        candidate_id: cand_D
+        requested_m: 2
+        effective_m: 2
+      selection_regret:
+        status: unavailable
+        value: null
+        reason: ranking_unavailable
+  - schema_version: 1
+    record_type: candidate_feedback_cohort
+    cohort:
+      cohort_id: cohort_003
+      candidate_count: 1
+      parent_harness_ref: harness_v7
+      source_eval_ref: eval_20261201
+      evaluation_protocol: proto_a
+      target_case_ids: [case_5]
+      rank_frozen: true
+      ranking_policy: score_desc
+    candidates:
+      - candidate_id: cand_F
+        candidate_fingerprint: fp_fff
+        identity:
+          parent_harness_ref: harness_v7
+          source_eval_ref: eval_20261201
+          evaluation_protocol: proto_a
+          target_case_ids: [case_5]
+        proposal_rank:
+          predicted_rank: 1
+          rank_frozen: true
+          ranking_policy: score_desc
+        outcome: { target_gain: null }
+        activation: { availability: not_instrumented, state: not_instrumented, surfaces: [] }
+        regression:
+          target: { availability: not_instrumented }
+    metrics:
+      best_of_k_gain:
+        status: unavailable
+        value: null
+        reason: no_candidates_evaluated
+      top_m_gain:
+        status: unavailable
+        value: null
+        reason: no_candidates_evaluated
+      selection_regret:
+        status: unavailable
+        value: null
+        reason: no_candidates_evaluated

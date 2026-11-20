@@ -1,0 +1,198 @@
+{
+  "analysis_type": "candidate_feedback_analysis",
+  "comparability": {
+    "comparable_cohort_count": 2,
+    "comparable_cohort_ids": [
+      "cohort_001",
+      "cohort_002"
+    ],
+    "non_comparable_cohort_count": 1,
+    "non_comparable_cohort_ids_by_reason": {
+      "requires_at_least_two_comparable_candidates": [
+        "cohort_003"
+      ]
+    },
+    "non_comparable_reasons": {
+      "requires_at_least_two_comparable_candidates": 1
+    }
+  },
+  "duplicates": {
+    "availability": "observed",
+    "duplicate_candidate_count": 2,
+    "evidence_cohort_ids": [
+      "cohort_001",
+      "cohort_002"
+    ],
+    "opportunity_candidate_count": 6,
+    "rate": 0.3333333333333333,
+    "support_cohort_count": 2
+  },
+  "feature_outcome_alignment": {
+    "size": {
+      "aligned_cohort_count": 0,
+      "aligned_cohort_ids": [],
+      "aligned_pair_count": 0,
+      "comparable_cohort_count": 1,
+      "comparable_cohort_ids": [
+        "cohort_001"
+      ],
+      "comparable_pair_count": 1,
+      "decrease_weight_evidence": {
+        "cohort_count": 1,
+        "cohort_ids": [
+          "cohort_001"
+        ],
+        "pair_count": 1
+      },
+      "increase_weight_evidence": {
+        "cohort_count": 0,
+        "cohort_ids": [],
+        "pair_count": 0
+      },
+      "opposite_cohort_count": 1,
+      "opposite_cohort_ids": [
+        "cohort_001"
+      ],
+      "opposite_pair_count": 1
+    }
+  },
+  "input_summary": {
+    "candidate_count": 6,
+    "cohort_count": 3,
+    "ledger_count": 1
+  },
+  "metric_availability": {
+    "best_of_k_gain": {
+      "available_count": 2,
+      "unavailable_count": 1,
+      "unavailable_reasons": {
+        "no_candidates_evaluated": 1
+      }
+    },
+    "selection_regret": {
+      "available_count": 1,
+      "unavailable_count": 2,
+      "unavailable_reasons": {
+        "no_candidates_evaluated": 1,
+        "ranking_unavailable": 1
+      }
+    },
+    "top_m_gain": {
+      "available_count": 2,
+      "unavailable_count": 1,
+      "unavailable_reasons": {
+        "no_candidates_evaluated": 1
+      }
+    }
+  },
+  "outcomes": {
+    "all_candidates_nonpositive": {
+      "evidence_cohort_ids": [
+        "cohort_002"
+      ],
+      "opportunity_cohort_count": 2,
+      "rate": 0.5,
+      "support_cohort_count": 1
+    },
+    "high_value_candidate_outside_top_m": {
+      "evidence_cohort_ids": [
+        "cohort_001"
+      ],
+      "opportunity_cohort_count": 1,
+      "rate": 1.0,
+      "support_cohort_count": 1
+    },
+    "partial_candidate_residual_repair": {
+      "evidence_cohort_ids": [
+        "cohort_001"
+      ],
+      "opportunity_cohort_count": 1,
+      "rate": 1.0,
+      "support_cohort_count": 1
+    },
+    "positive_selection_regret": {
+      "evidence_cohort_ids": [
+        "cohort_001"
+      ],
+      "opportunity_cohort_count": 1,
+      "rate": 1.0,
+      "support_cohort_count": 1
+    }
+  },
+  "parameters": {
+    "high_value_gain_threshold": 0.1,
+    "min_support_cohorts": 2
+  },
+  "schema_version": 1,
+  "stable_patterns": [
+    {
+      "evidence_cohort_ids": [
+        "cohort_001",
+        "cohort_002"
+      ],
+      "opportunity_cohorts": 3,
+      "pattern_id": "duplicate_candidates",
+      "pattern_type": "duplicate_candidates",
+      "rate": 0.6666666666666666,
+      "recommended_policy_change": {
+        "field": "generation_directives.require_unique_candidate_fingerprint",
+        "operation": "set",
+        "rationale": "Multiple cohorts spent evaluation budget on semantically duplicate candidates.",
+        "value": true
+      },
+      "support_cohorts": 2,
+      "surface": null
+    },
+    {
+      "evidence_cohort_ids": [
+        "cohort_001",
+        "cohort_002"
+      ],
+      "opportunity_cohorts": 2,
+      "pattern_id": "trigger_observed_failure:skill_search",
+      "pattern_type": "trigger_observed_failure",
+      "rate": 1.0,
+      "recommended_policy_change": {
+        "field": "generation_directives.require_activation_evidence.skill_search",
+        "operation": "set",
+        "rationale": "Observed skill_search candidates repeatedly failed to trigger on all expected case pairs.",
+        "value": true
+      },
+      "support_cohorts": 2,
+      "surface": "skill_search"
+    }
+  ],
+  "surfaces": {
+    "skill_search": {
+      "target_regression": {
+        "availability_counts": {
+          "not_evaluated": 1,
+          "observed": 4
+        },
+        "evidence_cohort_ids": [
+          "cohort_001"
+        ],
+        "observed_opportunity_candidate_count": 4,
+        "opportunity_cohort_count": 2,
+        "rate": 0.25,
+        "regression_candidate_count": 1,
+        "support_cohort_count": 1
+      },
+      "trigger_observed_failure": {
+        "availability_counts": {
+          "observed": 5
+        },
+        "evidence_cohort_ids": [
+          "cohort_001",
+          "cohort_002"
+        ],
+        "failure_candidate_count": 2,
+        "observed_opportunity_candidate_count": 5,
+        "opportunity_cohort_count": 2,
+        "rate": 0.4,
+        "support_cohort_count": 2
+      }
+    }
+  },
+  "training_ledger_digest": "sha256:b17c12ae03837e91f1d633eaff3ae4c6394b28ec6a9a0bbb0c257f8fff7a26d9"
+}
