@@ -8,8 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -44,11 +42,6 @@ func TestNewTeamSkillEvolutionRail(t *testing.T) {
 
 // TestTeamSkillEvolutionRail_Setters 验证各 setter 的赋值效果。
 func TestTeamSkillEvolutionRail_Setters(t *testing.T) {
-	t.Run("SetTrajectorySource 后字段非 nil", func(t *testing.T) {
-		r := newTeamRail(t)
-		r.SetTrajectorySource(nil)
-		assert.Nil(t, r.trajectorySource)
-	})
 
 	t.Run("HasPendingApprovalSnapshot 对未知 ID 返回 false", func(t *testing.T) {
 		r := newTeamRail(t)
@@ -155,7 +148,7 @@ func TestTeamRail_IsActiveRequestSubject(t *testing.T) {
 // 注意：该实现末尾直接读 traj.SessionID，traj 为 nil 会 panic，故传非 nil 轨迹。
 func TestTeamRail_SnapshotForEvolution_autoScan开(t *testing.T) {
 	r := newTeamRail(t)
-	traj := &trajectory.Trajectory{SessionID: "sess-snap"}
+	traj := testTrajectoryFromSteps("sess-snap", nil)
 	snap := r.SnapshotForEvolution(context.Background(), traj, nil)
 	require.NotNil(t, snap, "auto_scan 开启时应返回快照")
 	require.NotNil(t, snap.SkillName, "SkillName 不应为 nil")

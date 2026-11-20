@@ -151,6 +151,18 @@ func (k *CoordinationKernel) Setup(role schema.TeamRole, opts ...KernelOption) {
 			int64(spec.DefaultMaxReviewRounds), int64(spec.ReviewStallTimeout),
 			spec.TeamName, spec.Language,
 		)
+		// 25.2b F_62：注入临时 reviewer 生产运行体（派发/重派链的真实执行体）。
+		var runnerDB database.TeamDatabase
+		if tb := inf.TeamBackend(); tb != nil {
+			runnerDB = tb.DB()
+		}
+		k.scheduler.SetReviewerRunner(scheduling.BuildTempReviewerRunner(scheduling.TempReviewerDeps{
+			DB:               runnerDB,
+			Blueprint:        spec,
+			TeamName:         spec.TeamName,
+			Language:         spec.Language,
+			LeaderMemberName: string(schema.TeamRoleLeader),
+		}))
 	}
 
 	logger.Info(logComponent).

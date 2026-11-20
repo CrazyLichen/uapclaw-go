@@ -529,6 +529,117 @@ func (d *SQLTaskDao) GetOtherActiveTaskID(ctx context.Context, teamName, memberN
 	return &id, nil
 }
 
+// SubmitForReview 原子地把 IN_PROGRESS 任务推进到 IN_REVIEW（verify-gate 入口）。
+// 纯状态翻转——依赖不在此处解除（任务要评审通过才算完成）。WHERE
+// status='in_progress' 使 IN_PROGRESS 为唯一前驱。review_round 同语句自增
+// （F_62）：开新轮与状态翻转原子，对被超越轮记的票永远不会与当前轮混淆。
+// summary/note 仅在非 nil 时覆写存储的完成文本（F_119）。
+//
+// Python: submit_for_review (task_dao.py L1085-1127)。
+func (d *SQLTaskDao) SubmitForReview(ctx context.Context, taskID, summary, note string) (bool, error) {
+	table := d.taskTableName(ctx)
+	updates := map[string]any{
+		"status":       fsm.TaskStatusInReview,
+		"review_round": gorm.Expr("review_round + 1"),
+		"updated_at":   GetCurrentTime(),
+	}
+	if summary != "" {
+		updates["summary"] = summary
+	}
+	if note != "" {
+		updates["note"] = note
+	}
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND status = ?", taskID, fsm.TaskStatusInProgress).
+		Updates(updates)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	submitted := result.RowsAffected == 1
+	if submitted {
+		logger.Info(logComponent).Str("task_id", taskID).Msg("Task submitted for review")
+	} else {
+		logger.Debug(logComponent).Str("task_id", taskID).
+			Int64("rowcount", result.RowsAffected).
+			Msg("CAS submit-for-review did not apply: missing / not in_progress")
+	}
+	return submitted, nil
+}
+
+// ReviseTask 原子地把 IN_REVIEW 任务退回 IN_PROGRESS（verify fail 返工边）。
+// 纯状态翻转；WHERE status='in_review' 使 IN_REVIEW 为唯一前驱。
+//
+// Python: revise_task (task_dao.py L1130-1160)。
+func (d *SQLTaskDao) ReviseTask(ctx context.Context, taskID string) (bool, error) {
+	table := d.taskTableName(ctx)
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND status = ?", taskID, fsm.TaskStatusInReview).
+		Update("status", fsm.TaskStatusInProgress)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	revised := result.RowsAffected == 1
+	if revised {
+		logger.Info(logComponent).Str("task_id", taskID).
+			Msg("Task sent back for revision (IN_REVIEW -> IN_PROGRESS)")
+	} else {
+		logger.Debug(logComponent).Str("task_id", taskID).
+			Int64("rowcount", result.RowsAffected).
+			Msg("CAS revise did not apply: missing / not in_review")
+	}
+	return revised, nil
+}
+
+// InsertReviewVote 追加一条评审票事实行（F_62）。
+// 追加式设计：改票 = INSERT 新行，计票取每 reviewer 的最新行——不同 reviewer
+// 的并发投票从不争用共享行，投票历史全程可审计。此处不做状态校验——调用方
+// （TeamTaskManager.verify_task）在写锁外守卫状态/验收人成员资格。
+//
+// Python: insert_review_vote (task_dao.py L1196-1246)。
+func (d *SQLTaskDao) InsertReviewVote(ctx context.Context, teamName, taskID string, reviewRound int64, reviewer, decision string, feedback *string) error {
+	voteTable := "team_review_vote_" + d.reviewVoteTableName(ctx)
+	row := TeamTaskReviewVoteBase{
+		TeamName:    teamName,
+		TaskID:      taskID,
+		ReviewRound: reviewRound,
+		Reviewer:    reviewer,
+		Decision:    decision,
+		Feedback:    feedback,
+		CreatedAt:   GetCurrentTime(),
+	}
+	if err := d.db.WithContext(ctx).Table(voteTable).Create(&row).Error; err != nil {
+		return err
+	}
+	logger.Info(logComponent).Str("task_id", taskID).Int64("round", reviewRound).
+		Str("reviewer", reviewer).Str("decision", decision).
+		Msg("Review vote recorded")
+	return nil
+}
+
+// GetReviewVotes 返回一条任务某轮的全部票行，按 id 升序（最早在前）。
+// 升序 id 让调用方用简单的字典覆盖得到「每 reviewer 最新票」。被超越轮的
+// 行永远不会被读取——round 列把它们分区隔离。
+//
+// Python: get_review_votes (task_dao.py L1247-1264)。
+func (d *SQLTaskDao) GetReviewVotes(ctx context.Context, taskID string, reviewRound int64) ([]*TeamTaskReviewVoteBase, error) {
+	voteTable := "team_review_vote_" + d.reviewVoteTableName(ctx)
+	var votes []*TeamTaskReviewVoteBase
+	if err := d.db.WithContext(ctx).Table(voteTable).
+		Where("task_id = ? AND review_round = ?", taskID, reviewRound).
+		Order("id ASC").
+		Find(&votes).Error; err != nil {
+		return nil, err
+	}
+	return votes, nil
+}
+
+// reviewVoteTableName 获取当前 session 的评审票表名。
+func (d *SQLTaskDao) reviewVoteTableName(ctx context.Context) string {
+	sessionID := sessionctx.GetSessionID(ctx)
+	suffix := SanitizeSessionIDForTable(sessionID)
+	return "team_review_vote_" + suffix
+}
+
 // StartTaskCAS 原子地把已归属 PENDING 任务推进到 toStatus（调度器侧 CAS）。
 // 谓词 WHERE assignee=member AND status=pending 使 PENDING 成为唯一合法前驱，
 // 且要求任务已归属 member_name——调度器代表记录的 owner 启动任务，不（重）指派。

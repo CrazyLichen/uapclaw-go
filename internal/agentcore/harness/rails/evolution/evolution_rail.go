@@ -2,10 +2,13 @@ package evolution
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -33,6 +36,15 @@ type EvolutionRail struct {
 	ext EvolutionExtension
 	// trajectoryStore 轨迹存储
 	trajectoryStore trajectory.TrajectoryStore
+	// scopeMu 窗口/订阅锁（Python: _window_lock + _subscription_lock 合一）
+	scopeMu sync.Mutex
+	// scopeWindows scope 键 → 窗口状态（Python: _scope_windows）
+	scopeWindows map[string]*scopeWindowState
+	// activeCaptures 活跃采集集（Python: _active_captures）
+	activeCaptures map[*invokeCapture]struct{}
+	// currentCapture 当前 invoke 采集（Python: _invoke_capture ContextVar 的
+	// 显式化，D-25.2b-4）
+	currentCapture *invokeCapture
 	// builder 轨迹构造器（跨 invoke 复用）
 	builder *trajectory.TrajectoryBuilder
 	// maxTrajectorySteps 最大轨迹步骤数
@@ -45,8 +57,6 @@ type EvolutionRail struct {
 	evolutionSem chan struct{}
 	// disabledSkills 禁用的技能名称集合
 	disabledSkills map[string]bool
-	// trajectorySink 轨迹快照写入端点
-	trajectorySink trajectory.TrajectorySink
 	// teamID 团队标识
 	teamID string
 	// memberRole 成员角色
@@ -155,29 +165,10 @@ func (r *EvolutionRail) Builder() *trajectory.TrajectoryBuilder {
 	return r.builder
 }
 
-// SetTrajectorySink 绑定轨迹写入端点。
-// Python: EvolutionRail.set_trajectory_sink(sink, *, team_id, member_role)
-// Python 在 sink 非 nil 且 team_id 为空时抛出 ValueError。
-// Python 在 member_role=None 时回退：role = self._DEFAULT_MEMBER_ROLE if member_role is None else member_role
-func (r *EvolutionRail) SetTrajectorySink(sink trajectory.TrajectorySink, teamID string, memberRole ...string) error {
-	if sink != nil && teamID == "" {
-		return fmt.Errorf("team_id is required when binding a trajectory sink")
-	}
-	r.trajectorySink = sink
-	r.teamID = teamID
-	// Python: role = self._DEFAULT_MEMBER_ROLE if member_role is None else member_role
-	var role string
-	if len(memberRole) > 0 && memberRole[0] != "" {
-		role = memberRole[0]
-	} else {
-		role = r.defaultMemberRole
-	}
-	normalized := normalizeMemberRole(role)
-	if normalized != nil {
-		r.memberRole = *normalized
-	}
-	return nil
-}
+// 【12-04 迁移注记】SetTrajectorySink / publishTrajectorySnapshot /
+// MemberTrajectorySnapshot 已删除：上游 HEAD 无 set_trajectory_sink /
+// publish_member_trajectory（registry 链为 Go 侧旧模型遗产，规则 8）。
+// 跨成员轨迹可见性改由 TrajectorySpanProcessor 订阅窗口承载（25.2b）。
 
 // EmitHostEvent 缓存一个主机事件。
 // Python: EvolutionRail.emit_host_event(event)
@@ -313,9 +304,15 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 	}
 
 	sessionID := r.resolveSessionID(cbc, inputs)
+	if sessionID == "" {
+		// 偏差 D-25.2b-9：Go harness 在 BeforeInvoke 时会话 ID 可为空（旧实现
+		// 容忍空串）；上游 offline/builder.py 校验 session_id 必填。此处回退
+		// "unknown" 保持收集不中断，回收条件=无。
+		sessionID = "unknown"
+	}
 
 	// Python: 复用同 session 的 builder
-	if r.builder != nil && r.builder.SessionID() == sessionID {
+	if r.builder != nil && r.BuilderSessionID() == sessionID {
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
 			Msg("reusing existing trajectory builder")
@@ -336,15 +333,23 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 		meta["member_role"] = r.memberRole
 	}
 
-	opts := []trajectory.TrajectoryBuilderOption{
-		trajectory.WithMemberID(memberID),
-		trajectory.WithMeta(meta),
-	}
+	maxSpans := 0 // 0 = 无上限（对齐 Python max_trajectory_spans 默认 None）
 	if r.maxTrajectorySteps > 0 {
-		opts = append(opts, trajectory.WithMaxSteps(r.maxTrajectorySteps))
+		maxSpans = r.maxTrajectorySteps
 	}
-
-	r.builder = trajectory.NewTrajectoryBuilder(sessionID, "online", opts...)
+	var memberIDPtr *string
+	if memberID != "" {
+		memberIDPtr = &memberID
+	}
+	builder, buildErr := trajectory.NewTrajectoryBuilder(sessionID, "online",
+		nil, memberIDPtr, nil, meta, maxSpans, nil, nil)
+	if buildErr != nil {
+		logger.Error(logComponent).Str("session_id", sessionID).Err(buildErr).
+			Msg("trajectory builder construction failed")
+		return buildErr
+	}
+	r.builder = builder
+	r.beginScopeCapture(sessionID, memberID, r.teamID)
 
 	logger.Debug(logComponent).
 		Str("session_id", sessionID).
@@ -368,14 +373,10 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 		return nil
 	}
 
-	// Python: 构建 LLMCallDetail
-	var detail *trajectory.LLMCallDetail
-	var promptTokenIDs []int
-	var completionTokenIDs []int
-	var logprobs []map[string]any
-
+	// 12-04 span 模型迁移：LLM 步骤构造为规范 GenAI span（WriteLLMExchange 属性），
+	// 经 builder.RecordSpan 累积（等价 Python 的 span 采集面）。
+	// Python: evolution_rail.py after_model_call 的 window 增量收集语义。
 	if len(inputs.Messages) > 0 || inputs.Response != nil {
-		// 获取模型名称
 		modelName := "unknown"
 		if cbc.Agent() != nil {
 			if config := cbc.Agent().Config(); config != nil {
@@ -385,52 +386,66 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 			}
 		}
 
-		// 分离 token 级字段
-		var responseDict map[string]any
-		if inputs.Response != nil {
-			responseDict, promptTokenIDs, completionTokenIDs, logprobs = splitResponseTokenFields(inputs.Response)
+		responseDict, promptTokenIDs, completionTokenIDs, logprobs := splitResponseTokenFields(inputs.Response)
+		if responseDict == nil {
+			responseDict = map[string]any{}
 		}
 
-		// 直接存储原始 BaseMessage 对象，与 Python List[Any] 对齐
-		messages := inputs.Messages
+		prompts := make([]map[string]any, 0, len(inputs.Messages))
+		for _, msg := range inputs.Messages {
+			if msgMap := llmschema.BaseMessageToMap(msg); msgMap != nil {
+				prompts = append(prompts, msgMap)
+			}
+		}
+		// completion：响应消息（response dict 或首条回复文本）。
+		completions := []map[string]any{{"role": "assistant", "content": responseToTextAttr(responseDict)}}
 
-		// 构建 tools
-		var tools []map[string]any
+		attrs := map[string]any{
+			"gen_ai.operation.name": "chat",
+			"gen_ai.request.model":  modelName,
+		}
+		for key, value := range trajectory.WriteLLMExchange(prompts, completions) {
+			attrs[key] = value
+		}
+		if usage, ok := responseDict["usage"].(map[string]any); ok {
+			for _, pair := range []struct{ key, attr string }{
+				{"prompt_tokens", "gen_ai.usage.input_tokens"},
+				{"completion_tokens", "gen_ai.usage.output_tokens"},
+			} {
+				if v, exists := usage[pair.key]; exists {
+					attrs[pair.attr] = v
+				}
+			}
+		}
+		if len(promptTokenIDs) > 0 {
+			attrs[trajectory.RLPromptTokenIDs] = promptTokenIDs
+		}
+		if len(completionTokenIDs) > 0 {
+			attrs[trajectory.RLCompletionTokenIDs] = completionTokenIDs
+		}
+		if len(logprobs) > 0 {
+			attrs[trajectory.RLLogprobs] = logprobs
+		}
 		if len(inputs.Tools) > 0 {
-			tools = make([]map[string]any, 0, len(inputs.Tools))
+			tools := make([]any, 0, len(inputs.Tools))
 			for _, tool := range inputs.Tools {
 				tools = append(tools, toolInfoToMap(tool))
 			}
+			attrs["gen_ai.tool.definitions"] = tools
 		}
 
-		detail = &trajectory.LLMCallDetail{
-			Model:    modelName,
-			Messages: messages,
-			Response: ensureNonNilMap(responseDict),
-			Tools:    tools,
-		}
-	}
-
-	// 获取 agent_id
-	agentIDStr := "unknown"
-	if cbc.Agent() != nil {
-		if card := cbc.Agent().Card(); card != nil {
-			agentIDStr = card.GetID()
+		if err := r.builder.RecordSpan(map[string]any{
+			"name":       fmt.Sprintf("chat %s", modelName),
+			"attributes": attrs,
+		}); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("llm span record failed")
 		}
 	}
 
-	step := &trajectory.TrajectoryStep{
-		Kind:               trajectory.StepKindLLM,
-		Detail:             detail,
-		PromptTokenIDs:     promptTokenIDs,
-		CompletionTokenIDs: completionTokenIDs,
-		Logprobs:           logprobs,
-		Meta: map[string]any{
-			"operator_id": agentIDStr + "/llm_main",
-			"agent_id":    agentIDStr,
-		},
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
 	}
-	r.builder.RecordStep(step)
 
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterModelCall(ctx, cbc); err != nil {
@@ -463,44 +478,27 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 		return nil
 	}
 
-	// Python: 构建 ToolCallDetail
-	var detail *trajectory.ToolCallDetail
+	// 12-04 span 模型迁移：工具步骤构造为规范 GenAI 工具 span。
 	if inputs.ToolName != "" {
-		// 构建 callArgs（Go 中 ToolArgs 已是 map[string]any）
-		callArgs := inputs.ToolArgs
-		if callArgs == nil {
-			callArgs = map[string]any{}
+		attrs := map[string]any{
+			"gen_ai.operation.name":      "execute_tool",
+			"gen_ai.tool.name":           inputs.ToolName,
+			"gen_ai.tool.call.arguments": argsToJSONAttr(inputs.ToolArgs),
+			"gen_ai.tool.call.result":    argsToJSONAttr(inputs.ToolResult),
+			"gen_ai.tool.call.id":        "",
 		}
-
-		// 构建 callResult
-		callResult := map[string]any{}
-		if inputs.ToolResult != nil {
-			if m, ok := inputs.ToolResult.(map[string]any); ok {
-				callResult = m
-			} else {
-				callResult = map[string]any{"raw": inputs.ToolResult}
-			}
-		}
-
-		// Python: tool_call_id=None → Go 中为空字符串
-		toolCallID := ""
-
-		detail = &trajectory.ToolCallDetail{
-			ToolName:   inputs.ToolName,
-			CallArgs:   callArgs,
-			CallResult: callResult,
-			ToolCallID: toolCallID,
+		if err := r.builder.RecordSpan(map[string]any{
+			"name":       fmt.Sprintf("execute_tool %s", inputs.ToolName),
+			"attributes": attrs,
+		}); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("tool span record failed")
 		}
 	}
 
-	step := &trajectory.TrajectoryStep{
-		Kind:   trajectory.StepKindTool,
-		Detail: detail,
-		Meta: map[string]any{
-			"operator_id": inputs.ToolName,
-		},
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
 	}
-	r.builder.RecordStep(step)
 
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterToolCall(ctx, cbc); err != nil {
@@ -546,20 +544,21 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	if r.builder == nil {
 		return nil
 	}
+	// 12-04：最终窗口合并；收口释放订阅但窗口保留（上游同语义）。
+	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
+		logger.Warn(logComponent).Err(werr).Msg("scope window final merge failed")
+	}
+	defer r.endScopeCapture(r.currentCapture)
 
 	// Python: trajectory = self._build_trajectory()
 	traj := r.buildTrajectory()
 	if traj == nil {
 		return nil
 	}
-
-	// Python: self._trajectory_store.save(trajectory)
 	if err := r.saveTrajectory(ctx, traj); err != nil {
 		return err
 	}
-
-	// Python: self._publish_trajectory_snapshot(trajectory)
-	r.publishTrajectorySnapshot(traj)
+	// 【12-04】sink 发布段已删除（上游无对应物）。
 
 	// Python: await self._on_after_invoke(ctx)
 	if err := r.ext.OnAfterInvoke(ctx, cbc); err != nil {
@@ -605,15 +604,20 @@ func (r *EvolutionRail) buildTrajectory() *trajectory.Trajectory {
 	if r.builder == nil {
 		return nil
 	}
-	traj := r.builder.Build()
-	if traj == nil {
+	traj, err := r.builder.Build()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("trajectory build failed")
 		return nil
 	}
-	// Python: snapshot steps 避免共享引用变异
-	steps := make([]*trajectory.TrajectoryStep, len(traj.Steps))
-	copy(steps, traj.Steps)
-	traj.Steps = steps
 	return traj
+}
+
+// BuilderSessionID 返回当前 builder 的会话标识（无 builder 返回空）。
+func (r *EvolutionRail) BuilderSessionID() string {
+	if r.builder == nil {
+		return ""
+	}
+	return r.builder.SessionID()
 }
 
 // saveTrajectory 保存轨迹到存储。
@@ -624,45 +628,6 @@ func (r *EvolutionRail) saveTrajectory(_ context.Context, traj *trajectory.Traje
 	}
 	r.trajectoryStore.Save(traj, "")
 	return nil
-}
-
-// publishTrajectorySnapshot 通过 Sink 发布成员轨迹快照。
-// Python: _publish_trajectory_snapshot(trajectory)
-// Python 实现：if sink and team_id → sink.publish_member_trajectory(snapshot)
-func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
-	if r.trajectorySink == nil || r.teamID == "" {
-		return
-	}
-	// 从 trajectory meta 中获取 member_id
-	memberID := ""
-	if traj.Meta != nil {
-		if id, ok := traj.Meta["member_id"].(string); ok {
-			memberID = id
-		}
-	}
-	if memberID == "" {
-		return
-	}
-
-	// Python: member_role = _normalize_member_role(trajectory.meta.get("member_role")) or self._member_role
-	memberRole := ""
-	if traj.Meta != nil {
-		if role, ok := traj.Meta["member_role"].(string); ok && role != "" {
-			memberRole = role
-		}
-	}
-	if memberRole == "" {
-		memberRole = r.memberRole
-	}
-
-	snapshot := &trajectory.MemberTrajectorySnapshot{
-		TeamID:     r.teamID,
-		SessionID:  traj.SessionID,
-		MemberID:   memberID,
-		MemberRole: memberRole,
-		Trajectory: traj,
-	}
-	r.trajectorySink.PublishMemberTrajectory(snapshot)
 }
 
 // triggerEvolution 根据配置异步或同步触发演化。
@@ -849,3 +814,44 @@ func formatTimeoutSecs(secs float64) string {
 	s = strings.TrimRight(s, ".")
 	return s
 }
+
+// responseToTextAttr 从响应字典提取回复文本（LLM span completion 属性）。
+// 12-04 注记：Python 侧 window 增量收集由观测链完成；Go 在 rail 内手工
+// 构造 span（collector 风格，与 Python offline/builder.py 的 write_llm_exchange
+// 路径同一套属性 schema）。
+func responseToTextAttr(response map[string]any) string {
+	if response == nil {
+		return ""
+	}
+	if choices, ok := response["choices"].([]any); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]any); ok {
+			if message, ok := choice["message"].(map[string]any); ok {
+				if content, ok := message["content"].(string); ok {
+					return content
+				}
+			}
+		}
+	}
+	if content, ok := response["content"].(string); ok {
+		return content
+	}
+	return ""
+}
+
+// argsToJSONAttr 参数/结果 → JSON 字符串属性（工具 span 约定）。
+func argsToJSONAttr(value any) string {
+	if value == nil {
+		return ""
+	}
+	if m, ok := value.(map[string]any); ok && len(m) == 0 {
+		return "{}"
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprintf("%v", value)
+	}
+	return string(data)
+}
+
+// DefaultMemberRole 返回默认成员角色（测试观测面）。
+func (r *EvolutionRail) DefaultMemberRole() string { return r.defaultMemberRole }

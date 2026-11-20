@@ -148,7 +148,7 @@ func TestMemoryOptimizerBase_Step_清空轨迹(t *testing.T) {
 	operators := map[string]operator.Operator{"memory_call": memOp}
 	base.Bind(operators, nil, nil)
 
-	base.AddTrajectory(&trajectory.Trajectory{ExecutionID: "test"})
+	base.AddTrajectory(trajectory.NewTestTrajectoryWithID("test"))
 	assert.Equal(t, 1, len(base.GetTrajectories()))
 
 	base.Step()
@@ -164,16 +164,11 @@ func TestMemoryOptimizerBase_AddTrajectoryAndGet(t *testing.T) {
 	assert.Equal(t, 0, len(trajs))
 
 	// 添加一条轨迹
-	traj := &trajectory.Trajectory{
-		ExecutionID: "test-exec",
-		SessionID:   "test-session",
-		Source:      "test",
-		Steps:       nil,
-	}
+	traj := trajectory.NewTestTrajectoryWithID("test-exec")
 	base.AddTrajectory(traj)
 	trajs = base.GetTrajectories()
 	assert.Equal(t, 1, len(trajs))
-	assert.Equal(t, "test-exec", trajs[0].ExecutionID)
+	assert.Equal(t, "test-exec", trajs[0].TrajectoryID())
 
 	// 清空
 	base.ClearTrajectories()

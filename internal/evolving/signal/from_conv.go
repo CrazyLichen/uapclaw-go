@@ -235,20 +235,14 @@ func (d *ConversationSignalDetector) DetectTrajectorySignals(
 	messages []map[string]any,
 ) []*EvolutionSignal {
 	if messages != nil {
-		signals := d.detectFromMessages(messages)
-		if traj != nil {
-			signals = append(signals, d.detectCollaborationSignals(traj)...)
-		}
-		return d.deduplicate(signals)
+		return d.deduplicate(d.detectFromMessages(messages))
 	}
 	if traj == nil {
 		return nil
 	}
-	// 无消息时，从轨迹转换
+	// 无消息时，从轨迹投影后检测（上游同款一行委托）。
 	converted := d.ConvertTrajectoryToMessages(traj)
-	signals := d.detectFromMessages(converted)
-	signals = append(signals, d.detectCollaborationSignals(traj)...)
-	return d.deduplicate(signals)
+	return d.deduplicate(d.detectFromMessages(converted))
 }
 
 // DetectUserMessageFeedback 使用 LLM 判断用户消息是否为被动纠正，返回 user_correction 信号。
@@ -356,72 +350,15 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 	return []*EvolutionSignal{d.makeUserFeedbackSignal(excerpt, skillName)}, nil
 }
 
-// ConvertTrajectoryToMessages 将 Trajectory.steps 转换为消息列表格式。
-// 消息格式与 Detect() 期望的格式匹配：
-//   - LLM 步骤：从 LLMCallDetail 提取 messages（含 tool_calls）
-//   - Tool 步骤：从 ToolCallDetail.call_result 提取工具结果
-//
+// ConvertTrajectoryToMessages 把轨迹投影为消息列表格式（TTSE/调用方兼容包装）。
 // Python: ConversationSignalDetector.convert_trajectory_to_messages(trajectory)
+// —— 上游实现即 trajectory_to_messages(trajectory) 一行委托（messages.py 投影）。
 func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajectory.Trajectory) []map[string]any {
-	var messages []map[string]any
-	toolCallIDToName := map[string]string{}
-
-	for _, step := range traj.Steps {
-		if step.Kind == trajectory.StepKindLLM {
-			llmDetail, ok := step.Detail.(*trajectory.LLMCallDetail)
-			if !ok {
-				continue
-			}
-			for _, msg := range llmDetail.Messages {
-				msgMap := llmschema.BaseMessageToMap(msg)
-				messages = append(messages, msgMap)
-				if tcSlice := getToolCalls(msgMap); len(tcSlice) > 0 {
-					for _, tc := range tcSlice {
-						tcID := getField[string](tc, "id", "")
-						tcName := getField[string](tc, "name", "")
-						if tcID != "" && tcName != "" {
-							toolCallIDToName[tcID] = tcName
-						}
-					}
-				}
-			}
-		} else if step.Kind == trajectory.StepKindTool {
-			toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail)
-			if !ok {
-				continue
-			}
-			toolName := toolDetail.ToolName
-			toolCallID := toolDetail.ToolCallID
-			if toolCallID == "" && step.Meta != nil {
-				if v, ok := step.Meta["tool_call_id"]; ok {
-					toolCallID = fmt.Sprintf("%v", v)
-				}
-			}
-
-			if toolName == "" && toolCallID != "" {
-				toolName = toolCallIDToName[toolCallID]
-			}
-
-			resultContent := ""
-			if toolDetail.CallResult != nil {
-				resultContent = fmt.Sprintf("%v", toolDetail.CallResult)
-			}
-
-			toolMsg := map[string]any{
-				"role":    "tool",
-				"content": resultContent,
-			}
-			if toolCallID != "" {
-				toolMsg["tool_call_id"] = toolCallID
-			}
-			if toolName != "" {
-				toolMsg["name"] = toolName
-			}
-
-			messages = append(messages, toolMsg)
-		}
+	messages, err := trajectory.TrajectoryToMessages(traj, nil, false)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[ConversationSignalDetector] trajectory message projection failed")
+		return nil
 	}
-
 	return messages
 }
 
@@ -659,8 +596,11 @@ func (d *ConversationSignalDetector) resolveActiveSkill(msgIdx int, history []sk
 // Python: ConversationSignalDetector._detect_skill_from_tool_calls(tool_calls)
 func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[string]any) string {
 	for _, tc := range toolCalls {
-		name := strings.ToLower(getField[string](tc, "name", ""))
-		arguments := getField[string](tc, "arguments", "")
+		// 12-04：name/arguments 兼容 OpenAI 嵌套 function 形态（对齐 upstream
+		// tool_call_name(tc)/tool_call_arguments(tc) —— trajectory/messages.py 投影
+		// 输出 normalize 后即嵌套形态）。
+		name := strings.ToLower(toolCallNameOf(tc))
+		arguments := toolCallArgumentsOf(tc)
 
 		var skillName string
 
@@ -668,8 +608,8 @@ func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[st
 		if len(matched) >= 2 && d.isSkillMDReadTool(name) {
 			skillName = matched[1]
 		} else if name == "skill_tool" {
-			// 尝试解析 arguments
-			rawArgs := tc["arguments"]
+			// 尝试解析 arguments（12-04：经 toolCallArgumentsOf 兼容嵌套形态）
+			rawArgs := any(arguments)
 			if rawArgs != nil {
 				var argsDict map[string]any
 				if argsStr, ok := rawArgs.(string); ok {
@@ -786,225 +726,12 @@ func (d *ConversationSignalDetector) makeUserFeedbackSignal(excerpt, skillName s
 	)
 }
 
-// detectCollaborationSignals 检测团队协作信号。
-// 仅在 TeamSkill 成员执行上下文中触发。
-// Python: ConversationSignalDetector._detect_collaboration_signals(trajectory)
-func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory.Trajectory) []*EvolutionSignal {
-	if !d.isTeamMemberContext(traj) {
-		return nil
-	}
-
-	var signals []*EvolutionSignal
-	meta := traj.Meta
-	if meta == nil {
-		meta = map[string]any{}
-	}
-	memberID := fmt.Sprintf("%v", meta["member_id"])
-	if memberID == "" || memberID == "<nil>" {
-		memberID = "unknown"
-	}
-
-	// 从轨迹步骤构建技能读取历史
-	var skillReadHistory []skillReadEntry
-	for idx, step := range traj.Steps {
-		if step.Kind == trajectory.StepKindLLM {
-			llmDetail, ok := step.Detail.(*trajectory.LLMCallDetail)
-			if !ok {
-				continue
-			}
-			for _, msg := range llmDetail.Messages {
-				msgMap := llmschema.BaseMessageToMap(msg)
-				if tcSlice := getToolCalls(msgMap); len(tcSlice) > 0 {
-					if detected := d.detectSkillFromToolCalls(tcSlice); detected != "" {
-						skillReadHistory = append(skillReadHistory, skillReadEntry{idx, detected})
-					}
-				}
-			}
-		}
-	}
-
-	for _, step := range traj.Steps {
-		if step.Kind != trajectory.StepKindTool {
-			continue
-		}
-		toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail)
-		if !ok {
-			continue
-		}
-
-		toolName := strings.ToLower(toolDetail.ToolName)
-		stepMeta := step.Meta
-		if stepMeta == nil {
-			stepMeta = map[string]any{}
-		}
-
-		activeSkill := d.resolveActiveSkillForStep(step, traj.Steps, skillReadHistory)
-
-		// 1. send_message（发送消息）
-		if toolName == "send_message" {
-			callArgs := argsToJSON(toolDetail.CallArgs)
-			toMember := d.extractToMember(callArgs)
-			if toMember != "" && toMember != memberID {
-				signals = append(signals, MakeEvolutionSignal(
-					"collaboration_send", "Collaboration",
-					fmt.Sprintf("发送消息给成员 %s", toMember),
-					WithToolName(toolName),
-					WithSkillName(activeSkill),
-					WithSource("passive_collaboration"),
-					WithContext(map[string]any{"from_member": memberID, "to_member": toMember}),
-				))
-			}
-		}
-
-		// 2. claim_task（认领任务）
-		if toolName == "claim_task" {
-			callArgs := argsToJSON(toolDetail.CallArgs)
-			taskID := d.extractTaskID(callArgs)
-			if taskID != "" {
-				signals = append(signals, MakeEvolutionSignal(
-					"collaboration_claim", "Collaboration",
-					fmt.Sprintf("认领任务 %s", taskID),
-					WithToolName(toolName),
-					WithSkillName(activeSkill),
-					WithSource("passive_collaboration"),
-					WithContext(map[string]any{"member_id": memberID, "task_id": taskID}),
-				))
-			}
-		}
-
-		// 3. view_task（查看任务）
-		if toolName == "view_task" {
-			signals = append(signals, MakeEvolutionSignal(
-				"collaboration_view", "Collaboration",
-				"查看团队任务状态",
-				WithToolName(toolName),
-				WithSkillName(activeSkill),
-				WithSource("passive_collaboration"),
-				WithContext(map[string]any{"member_id": memberID}),
-			))
-		}
-
-		// 4. parent_invoke_id（接收上下文）
-		if _, exists := stepMeta["parent_invoke_id"]; exists {
-			parentID := fmt.Sprintf("%v", stepMeta["parent_invoke_id"])
-			opts := []SignalOption{
-				WithSkillName(activeSkill),
-				WithSource("passive_collaboration"),
-				WithContext(map[string]any{"member_id": memberID, "parent_invoke_id": parentID}),
-			}
-			if toolName != "" {
-				opts = append(opts, WithToolName(toolName))
-			}
-			signals = append(signals, MakeEvolutionSignal(
-				"collaboration_receive", "Collaboration",
-				fmt.Sprintf("接收来自 %s 的上下文/结果", parentID),
-				opts...,
-			))
-		}
-
-		// 5. 协作失败
-		content := fmt.Sprintf("%v", toolDetail.CallResult)
-		if match := collaborationFailurePattern.FindStringIndex(content); match != nil {
-			excerpt := extractAroundMatch(content, match[0], match[1], 300, 300)
-			signals = append(signals, MakeEvolutionSignal(
-				"collaboration_failure", "Collaboration", excerpt,
-				WithToolName(toolName),
-				WithSkillName(activeSkill),
-				WithSource("passive_collaboration"),
-				WithContext(map[string]any{"member_id": memberID}),
-			))
-		}
-	}
-
-	return signals
-}
-
-// isTeamMemberContext 判断轨迹是否处于团队协作成员上下文。
-// Python: ConversationSignalDetector._is_team_member_context(trajectory)
-func (d *ConversationSignalDetector) isTeamMemberContext(traj *trajectory.Trajectory) bool {
-	meta := traj.Meta
-	if meta == nil {
-		return false
-	}
-	if _, exists := meta["member_id"]; exists {
-		if source, ok := meta["source"]; !ok || fmt.Sprintf("%v", source) != "standalone" {
-			return true
-		}
-	}
-	for key := range trajectory.CrossMemberMetaKeys {
-		if _, exists := meta[key]; exists {
-			return true
-		}
-	}
-	return false
-}
-
-// resolveActiveSkillForStep 为轨迹步骤解析活跃技能。
-// Python: ConversationSignalDetector._resolve_active_skill_for_step(step, all_steps, skill_read_history)
-func (d *ConversationSignalDetector) resolveActiveSkillForStep(
-	step *trajectory.TrajectoryStep,
-	allSteps []*trajectory.TrajectoryStep,
-	skillReadHistory []skillReadEntry,
-) string {
-	stepIdx := -1
-	for i, s := range allSteps {
-		if s == step {
-			stepIdx = i
-			break
-		}
-	}
-	if stepIdx < 0 {
-		return ""
-	}
-	for i := len(skillReadHistory) - 1; i >= 0; i-- {
-		if skillReadHistory[i].msgIdx <= stepIdx {
-			return skillReadHistory[i].skillName
-		}
-	}
-	return ""
-}
-
-// extractToMember 从 send_message 参数中提取目标成员。
-// Python: ConversationSignalDetector._extract_to_member(call_args)
-func (d *ConversationSignalDetector) extractToMember(callArgs string) string {
-	var argsDict map[string]any
-	if err := json.Unmarshal([]byte(callArgs), &argsDict); err == nil {
-		if v := argsDict["to_member_name"]; v != nil && fmt.Sprintf("%v", v) != "" {
-			return fmt.Sprintf("%v", v)
-		}
-		if v := argsDict["to"]; v != nil && fmt.Sprintf("%v", v) != "" {
-			return fmt.Sprintf("%v", v)
-		}
-	}
-	// 正则回退
-	patterns := []string{
-		`to_member_name["']?\s*[:=]\s*["']([^"']+)["']`,
-		`to["']?\s*[:=]\s*["']([^"']+)["']`,
-	}
-	for _, p := range patterns {
-		re := regexp.MustCompile(p)
-		if m := re.FindStringSubmatch(callArgs); len(m) >= 2 {
-			return m[1]
-		}
-	}
-	return ""
-}
-
-// extractTaskID 从 claim_task 参数中提取任务 ID。
-// Python: ConversationSignalDetector._extract_task_id(call_args)
-func (d *ConversationSignalDetector) extractTaskID(callArgs string) string {
-	var argsDict map[string]any
-	if err := json.Unmarshal([]byte(callArgs), &argsDict); err == nil {
-		if v := argsDict["task_id"]; v != nil && fmt.Sprintf("%v", v) != "" {
-			return fmt.Sprintf("%v", v)
-		}
-	}
-	re := regexp.MustCompile(`task_id["']?\s*[:=]\s*["']([^"']+)["']`)
-	if m := re.FindStringSubmatch(callArgs); len(m) >= 2 {
-		return m[1]
-	}
-	return ""
-}
+// 【12-04 迁移注记】Python: ConversationSignalDetector._detect_collaboration_signals /
+// _is_team_member_context / _resolve_active_skill_for_step / _extract_to_member /
+// _extract_task_id 已在上游 HEAD（5a35c39f，bd05f826 同期重构）删除——上游当前
+// 信号面只有消息驱动检测（detect/detect_trajectory_signals/detect_user_intent），
+// 协作信号无任何生产消费方。Go 侧同批删除（规则 8；grep collaboration_send/
+// passive_collaboration 归零）。
 
 // deduplicate 基于 fingerprint 去重信号列表。
 // Python: ConversationSignalDetector._deduplicate(signals)
@@ -1021,3 +748,37 @@ func (d *ConversationSignalDetector) deduplicate(signals []*EvolutionSignal) []*
 	}
 	return deduped
 }
+
+// toolCallNameOf 兼容扁平/OpenAI 嵌套形态读取工具名。
+// Python: trajectory/messages.py tool_call_name。
+func toolCallNameOf(tc map[string]any) string {
+	if v, ok := tc["name"].(string); ok && v != "" {
+		return v
+	}
+	if fn, ok := tc["function"].(map[string]any); ok {
+		if v, ok := fn["name"].(string); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// toolCallArgumentsOf 兼容扁平/OpenAI 嵌套形态读取工具参数。
+// Python: trajectory/messages.py tool_call_arguments。
+func toolCallArgumentsOf(tc map[string]any) string {
+	if v, ok := tc["arguments"].(string); ok && v != "" {
+		return v
+	}
+	if fn, ok := tc["function"].(map[string]any); ok {
+		if v, ok := fn["arguments"].(string); ok {
+			return v
+		}
+	}
+	if v := tc["arguments"]; v != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return ""
+}
+
+// GetToolCallsOf 导出消息 tool_calls 读取（rails 调试/消费面）。
+func GetToolCallsOf(m map[string]any) []map[string]any { return getToolCalls(m) }

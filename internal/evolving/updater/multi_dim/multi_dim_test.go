@@ -262,7 +262,7 @@ func TestMultiDimUpdater_DomainOptimizers副本(t *testing.T) {
 // 验证 Process 接受 trajectory 参数
 func TestMultiDimUpdater_Process接受Trajectory(t *testing.T) {
 	u := NewMultiDimUpdater()
-	traj := &trajectory.Trajectory{ExecutionID: "exec1"}
+	traj := trajectory.NewTestTrajectoryWithID("exec1")
 
 	result, err := u.Process(context.Background(), []*trajectory.Trajectory{traj}, nil, nil)
 	if err != nil {

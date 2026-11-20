@@ -60,6 +60,11 @@ type EvolutionExtension interface {
 
 // noOpExtension EvolutionExtension 的默认空实现。
 // TrajectoryRail 直接使用此实例；子类可嵌入后只覆写需要的方法。
+// NoOpExtension 空扩展导出别名（集成装配与外部消费的最小桩；对齐 Python
+// NoOpExtension）。内部实现与 noOpExtension 共享。
+type NoOpExtension = noOpExtension
+
+// noOpExtension 空扩展实现。
 type noOpExtension struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────

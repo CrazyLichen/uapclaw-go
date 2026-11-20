@@ -217,6 +217,19 @@ type TaskDao interface {
 	// CountTasksTerminality 一条聚合查询返回 (total, non_terminal)（B_09）。
 	// Python: count_tasks_terminality（task_manager.py L1556 消费）
 	CountTasksTerminality(ctx context.Context, teamName string) (int64, int64, error)
+	// SubmitForReview 原子地把 IN_PROGRESS 任务推进到 IN_REVIEW，review_round
+	// 同语句自增（F_62）。summary/note 仅非空时覆写（F_119）。
+	// Python: submit_for_review (task_dao.py L1085-1127)
+	SubmitForReview(ctx context.Context, taskID, summary, note string) (bool, error)
+	// ReviseTask 原子地把 IN_REVIEW 任务退回 IN_PROGRESS（verify fail 返工边）。
+	// Python: revise_task (task_dao.py L1130-1160)
+	ReviseTask(ctx context.Context, taskID string) (bool, error)
+	// InsertReviewVote 追加一条评审票事实行（F_62，追加式，改票即插新行）。
+	// Python: insert_review_vote (task_dao.py L1196-1246)
+	InsertReviewVote(ctx context.Context, teamName, taskID string, reviewRound int64, reviewer, decision string, feedback *string) error
+	// GetReviewVotes 返回某任务某轮的全部票行（id 升序，调用方覆盖取最新）。
+	// Python: get_review_votes (task_dao.py L1247-1264)
+	GetReviewVotes(ctx context.Context, taskID string, reviewRound int64) ([]*TeamTaskReviewVoteBase, error)
 	// GetTaskDependencies 查询任务依赖。
 	GetTaskDependencies(ctx context.Context, taskID string) ([]*TeamTaskDependencyBase, error)
 	// GetUnresolvedDependenciesCount 未解决依赖计数。

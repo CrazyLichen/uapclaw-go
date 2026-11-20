@@ -98,23 +98,19 @@ func (o *TeamSkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoC
 
 	traj := evoCtx.Trajectory
 	if traj == nil {
-		traj = &trajectory.Trajectory{
-			ExecutionID: "team-skill-evolution",
-			SessionID:   "team-skill-evolution",
-			Source:      "online",
+		// 空轨迹兜底：span 模型下经离线组装器构造合法空载荷。
+		// 12-04 注记：Python _generate_team_records 无逐信号双路径（上游仅聚合路径）；
+		// Go 双路径为旧 step 模型遗产，随模型迁移收敛为「无 span → 逐信号 patch」，
+		// 生成器本体保留（25 条测试覆盖），待 rails 迁移批按规则 8 处置。
+		empty, buildErr := emptySpanTrajectory("team-skill-evolution", "online")
+		if buildErr != nil {
+			return nil, buildErr
 		}
+		traj = empty
 	}
 
-	// Python: if any(not hasattr(step, "kind") for step in getattr(trajectory, "steps", [])):
-	// 双路径：逐信号 patch
-	hasKindOnAll := true
-	for _, step := range traj.Steps {
-		if step.Kind == "" {
-			hasKindOnAll = false
-			break
-		}
-	}
-	if !hasKindOnAll || len(traj.Steps) == 0 {
+	// span 模型：轨迹无工作 span 时退化为逐信号 patch（聚合路径依赖轨迹摘要）。
+	if len(trajectory.IterSpans(traj)) == 0 {
 		var generated []checkpointing.EvolutionRecord
 		for _, sig := range evoCtx.Signals {
 			var record *checkpointing.EvolutionRecord
@@ -617,10 +613,9 @@ func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*
 	selected := o.SelectedSignals()
 
 	trajectories := o.GetTrajectories()
-	defaultTrajectory := &trajectory.Trajectory{
-		ExecutionID: "team-skill-evolution",
-		SessionID:   "team-skill-evolution",
-		Source:      "online",
+	defaultTrajectory, buildErr := emptySpanTrajectory("team-skill-evolution", "online")
+	if buildErr != nil {
+		return buildErr
 	}
 	if len(trajectories) > 0 {
 		defaultTrajectory = trajectories[len(trajectories)-1]
@@ -1010,4 +1005,14 @@ func getStrFromAny(v any, defaultVal string) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// emptySpanTrajectory 构造合法的空 span 轨迹（离线组装器路径）。
+// 12-04 注记：step 模型的字面量构造已随模型迁移删除，Python 侧无对应实现。
+func emptySpanTrajectory(sessionID, source string) (*trajectory.Trajectory, error) {
+	builder, err := trajectory.NewTrajectoryBuilder(sessionID, source, nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return builder.Build()
 }

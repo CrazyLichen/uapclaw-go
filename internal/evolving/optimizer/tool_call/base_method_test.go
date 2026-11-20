@@ -198,7 +198,7 @@ func TestToolOptimizerBase_Step_清空轨迹(t *testing.T) {
 	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
 	base.Bind(ops, []string{"tool_description"}, map[string]any{})
 
-	base.AddTrajectory(&trajectory.Trajectory{ExecutionID: "test"})
+	base.AddTrajectory(trajectory.NewTestTrajectoryWithID("test"))
 	if len(base.GetTrajectories()) != 1 {
 		t.Errorf("添加轨迹后期望 1 条, 实际=%d", len(base.GetTrajectories()))
 	}

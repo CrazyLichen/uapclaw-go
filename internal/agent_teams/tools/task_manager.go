@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -156,6 +158,9 @@ type TaskPlanIndex struct {
 type TeamTaskManager struct {
 	// db 团队数据库实例（内含 TaskDao）
 	db database.TeamDatabase
+	// dispatchMode 团队任务下发模式（autonomous/scheduled）。
+	// Python: self._dispatch_mode（verify_task 判定策略开关）。
+	dispatchMode string
 	// teamName 团队标识
 	teamName string
 	// memberName 当前成员标识
@@ -236,7 +241,7 @@ func (tm *TeamTaskManager) MemberName() string { return tm.memberName }
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
 // Python: TeamTaskManager.__init__(db, team_name, member_name, messager, message_manager, plans_dir, team_plan_id, leader_member_name)
 func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, msg messager.Messager, messageManager *TeamMessageManager, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
-	return &TeamTaskManager{
+	tm := &TeamTaskManager{
 		db:               db,
 		teamName:         teamName,
 		memberName:       memberName,
@@ -246,6 +251,11 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 		teamPlanID:       teamPlanID,
 		leaderMemberName: leaderMemberName,
 	}
+	// 25.2b F_62：从团队行读 dispatch mode（Python 构造参数传入；
+	// Go 团队行已持久化该值，读库等价）。读不到（测试替身的 nil DAO、
+	// 读库报错）即 autonomous 缺省。
+	tm.dispatchMode = readDispatchMode(db, teamName)
+	return tm
 }
 
 // Add 创建单条任务。对齐 Python: TeamTaskManager.add()
@@ -647,6 +657,32 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) (schema.
 		// 从 planning 推进到 in_progress；完成统一只从 in_progress 出发）
 		if preCompleteTask.Status != fsm.TaskStatusInProgress {
 			return schema.TaskOpResult{}.Fail(fmt.Sprintf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 in_progress 任务）", preCompleteTask.Status, taskID)), nil
+		}
+	}
+
+	// 2.5 verify-gate 入口（F_62）：完成的任务带验收人 → 进 IN_REVIEW 而非完成。
+	// Python: complete_task 在任务带 reviewers 时走 submit_for_review 边并发布
+	// TaskSubmittedForReviewEvent (events.py L403-411)。
+	{
+		gateTask, gateErr := tm.db.Task().GetTask(ctx, taskID)
+		if gateErr == nil && gateTask != nil && gateTask.HasReviewers() {
+			summary := ""
+			note := ""
+			submitted, submitErr := tm.db.Task().SubmitForReview(ctx, taskID, summary, note)
+			if submitErr != nil {
+				return schema.TaskOpResult{}, submitErr
+			}
+			if !submitted {
+				return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 提交评审失败（状态不允许）", taskID)), nil
+			}
+			logger.Info(logComponent).Str("task_id", taskID).
+				Msg("Task submitted for review (has reviewers)")
+			tm.publishTaskEvent(ctx, events.TaskSubmittedForReviewEvent{
+				BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
+				TaskID:           taskID,
+				Reviewer:         gateTask.Reviewers(),
+			})
+			return schema.TaskOpResult{}.Success(), nil
 		}
 	}
 
@@ -1508,3 +1544,393 @@ func generateTaskID(teamName string, suffixes ...string) string {
 	}
 	return base
 }
+
+// ──────────────────────────── review 面（25.2b F_62） ────────────────────────────
+
+// ResolveReviewerType 从任务的结构化验收人列表查一人的类型。
+// Python: TeamTaskManager._resolve_reviewer_type（task_manager.py L872-879）。
+func ResolveReviewerType(task *database.TeamTaskBase, reviewerName string) string {
+	for _, detail := range task.ReviewerDetails() {
+		if detail["reviewer_id"] == reviewerName {
+			if typ := detail["type"]; typ != "" {
+				return typ
+			}
+			return "verifier"
+		}
+	}
+	return "verifier"
+}
+
+// VerifyTask 验收门任务的评审人判定（reviewer only）。
+// 判定策略取决于团队生效的 dispatch mode：
+//   - autonomous：首个判定生效——pass 完成任务（IN_REVIEW→COMPLETED，解除
+//     下游阻塞），fail 退回作者（IN_REVIEW→IN_PROGRESS 返工回路）——没有
+//     judge 组件计票。
+//   - scheduled（F_62）：只记录票事实（追加行）并发布 TASK_REVIEW_VOTE；
+//     任务保持 IN_REVIEW，leader 侧调度器计票并用 settle_review 结算。
+//     同一 reviewer 重复调用替换其前票（最新行胜出）。
+//
+// 两种模式守卫相同：任务 IN_REVIEW 且调用者在其验收人列表（非作者）。
+//
+// Python: TeamTaskManager.verify_task (task_manager.py L769-857)。
+func (tm *TeamTaskManager) VerifyTask(ctx context.Context, taskID, decision, feedback string) (schema.TaskOpResult, error) {
+	normalized := strings.TrimSpace(strings.ToLower(decision))
+
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if task == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s not found", taskID)), nil
+	}
+	if task.Status != fsm.TaskStatusInReview {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s is not under review (status '%s'); nothing to verify", taskID, task.Status)), nil
+	}
+	reviewers := task.Reviewers()
+	isReviewer := false
+	for _, name := range reviewers {
+		if name == tm.memberName {
+			isReviewer = true
+			break
+		}
+	}
+	if !isReviewer {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("%s is not a reviewer of task %s; cannot verify it", tm.memberName, taskID)), nil
+	}
+	if tm.memberName == derefString(task.Assignee) {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("%s cannot verify their own task %s", tm.memberName, taskID)), nil
+	}
+
+	// 从任务的结构化验收人列表解析调用者类型：inspector 票必须校验为浮点分。
+	rt := ResolveReviewerType(task, tm.memberName)
+	if rt == "inspector" {
+		score, convErr := strconv.ParseFloat(normalized, 64)
+		if convErr != nil {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("verify_task decision must be a number for inspector reviewer, got '%s'", decision)), nil
+		}
+		if score < 0.0 || score > 1.0 {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("verify_task decision must be a number in [0.0, 1.0], got '%s'", decision)), nil
+		}
+		normalized = fmt.Sprintf("%.2f", score)
+	} else if normalized != "pass" && normalized != "fail" {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("verify_task decision must be 'pass' or 'fail', got '%s'", decision)), nil
+	}
+
+	logger.Info(logComponent).Str("reviewer", tm.memberName).Str("task", taskID).
+		Str("decision", normalized).Msg("[verify_task]")
+
+	if tm.dispatchMode == "scheduled" {
+		return tm.recordReviewVote(ctx, task, normalized, feedback)
+	}
+	if normalized == "pass" {
+		return tm.verifyPass(ctx, task)
+	}
+	return tm.verifyFail(ctx, task, feedback)
+}
+
+// recordReviewVote 持久化一条票并发布计票快照（scheduled dispatch）。
+// 票事实按任务当前 review_round 追加；计票取每 reviewer 最新行——并发 reviewer
+// 从不争用，改票即普通插入。此处不做状态迁移——计票决出后由调度器结算。
+//
+// Python: _record_review_vote (task_manager.py L859-884)。
+func (tm *TeamTaskManager) recordReviewVote(ctx context.Context, task *database.TeamTaskBase, decision, feedback string) (schema.TaskOpResult, error) {
+	var feedbackPtr *string
+	if feedback != "" {
+		feedbackPtr = &feedback
+	}
+	if err := tm.db.Task().InsertReviewVote(ctx, tm.teamName, task.TaskID, task.ReviewRound, tm.memberName, decision, feedbackPtr); err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	tally := tm.GetReviewTally(task)
+	assignee := derefString(task.Assignee)
+	tm.publishTaskEvent(ctx, events.TaskReviewVoteEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: assignee},
+		TaskID:           task.TaskID,
+		Reviewer:         tm.memberName,
+		Decision:         decision,
+		ReviewRound:      task.ReviewRound,
+		PassCount:        tally["pass_count"].(int),
+		FailCount:        tally["fail_count"].(int),
+		ReviewerCount:    tally["reviewer_count"].(int),
+	})
+	logger.Info(logComponent).Str("reviewer", tm.memberName).Str("task", task.TaskID).
+		Str("decision", decision).Int64("round", task.ReviewRound).
+		Int("pass", tally["pass_count"].(int)).Int("fail", tally["fail_count"].(int)).
+		Int("of", tally["reviewer_count"].(int)).
+		Msg("[verify_vote]")
+	return schema.TaskOpResult{}.SuccessWithData(map[string]any(tally)), nil
+}
+
+// GetReviewTally 一条 IN_REVIEW 任务当前轮的票计快照。
+// 按类型分组：verifier 和 challenger 构成二元（pass/fail）池；inspector 票是
+// 0~1 分数。每 reviewer 最新票胜出；不在验收人列表内的票被忽略。
+//
+// Python: get_review_tally (task_manager.py L908-993)。
+func (tm *TeamTaskManager) GetReviewTally(task *database.TeamTaskBase) map[string]any {
+	votes, err := tm.db.Task().GetReviewVotes(context.Background(), task.TaskID, task.ReviewRound)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("task_id", task.TaskID).Msg("review votes query failed")
+		votes = nil
+	}
+	reviewers := task.Reviewers()
+	// 结构化验收人列表 → reviewer_id→type 映射。
+	typeMap := map[string]string{}
+	for _, detail := range task.ReviewerDetails() {
+		rid := detail["reviewer_id"]
+		if rid != "" {
+			typ := detail["type"]
+			if typ == "" {
+				typ = "verifier"
+			}
+			typeMap[rid] = typ
+		}
+	}
+
+	latestDecision := map[string]string{}
+	latestFeedback := map[string]string{}
+	for _, vote := range votes {
+		inList := false
+		for _, name := range reviewers {
+			if name == vote.Reviewer {
+				inList = true
+				break
+			}
+		}
+		if !inList {
+			continue
+		}
+		// 升序遍历 + 覆盖 = 每 reviewer 最新票。
+		latestDecision[vote.Reviewer] = vote.Decision
+		if vote.Feedback != nil {
+			latestFeedback[vote.Reviewer] = *vote.Feedback
+		} else {
+			latestFeedback[vote.Reviewer] = ""
+		}
+	}
+
+	// 二元池：verifier + challenger（pass/fail 票）。
+	verdictPass, verdictFail, verdictTotal, verdictVoted := 0, 0, 0, 0
+	failFeedback := map[string]string{}
+	// inspector 池：分数票。
+	inspectorScores := map[string]float64{}
+	inspectorCount, inspectorVoted := 0, 0
+
+	for _, name := range reviewers {
+		rt := typeMap[name]
+		if rt == "" {
+			rt = "verifier"
+		}
+		if rt == "inspector" {
+			inspectorCount++
+			if decision, voted := latestDecision[name]; voted {
+				inspectorVoted++
+				if score, convErr := strconv.ParseFloat(decision, 64); convErr == nil {
+					inspectorScores[name] = score
+				}
+			}
+		} else {
+			verdictTotal++
+			if decision, voted := latestDecision[name]; voted {
+				verdictVoted++
+				if decision == "pass" {
+					verdictPass++
+				} else if decision == "fail" {
+					verdictFail++
+					if feedback := latestFeedback[name]; feedback != "" {
+						failFeedback[name] = feedback
+					}
+				}
+			}
+		}
+	}
+
+	var inspectorAvg any
+	if len(inspectorScores) > 0 {
+		sum := 0.0
+		for _, score := range inspectorScores {
+			sum += score
+		}
+		inspectorAvg = sum / float64(len(inspectorScores))
+	}
+
+	return map[string]any{
+		"task_id":            task.TaskID,
+		"review_round":       task.ReviewRound,
+		"pass_count":         verdictPass,
+		"fail_count":         verdictFail,
+		"reviewer_count":     len(reviewers),
+		"voted":              sortedKeysOf(latestDecision),
+		"fail_feedback":      failFeedback,
+		"verdict_pass_count": verdictPass,
+		"verdict_fail_count": verdictFail,
+		"verdict_total":      verdictTotal,
+		"verdict_voted":      verdictVoted,
+		"inspector_count":    inspectorCount,
+		"inspector_voted":    inspectorVoted,
+		"inspector_scores":   inspectorScores,
+		"inspector_avg":      inspectorAvg,
+	}
+}
+
+// SettleReview 框架侧结算一评委轮（F_62）。
+// 由 leader 侧调度器在票计决出后调用：pass 完成任务（IN_REVIEW→COMPLETED，
+// 解除依赖、发布 TASK_VERIFIED），fail 退回返工（IN_REVIEW→IN_PROGRESS，
+// 发布带汇总反馈的 TASK_REVISION_REQUESTED）。与 verify_task 不同——没有
+// 验收人成员守卫：调用方是调度运行时，不是成员。DAO 状态 CAS 防止重复结算。
+//
+// Python: settle_review (task_manager.py L995-1080)。
+func (tm *TeamTaskManager) SettleReview(ctx context.Context, taskID, decision, feedback string) (schema.TaskOpResult, error) {
+	normalized := strings.TrimSpace(strings.ToLower(decision))
+	if normalized != "pass" && normalized != "fail" {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("settle_review decision must be 'pass' or 'fail', got '%s'", decision)), nil
+	}
+
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if task == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s not found", taskID)), nil
+	}
+	if task.Status != fsm.TaskStatusInReview {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s is not under review (status '%s'); nothing to settle", taskID, task.Status)), nil
+	}
+
+	if normalized == "pass" {
+		return tm.verifyPass(ctx, task)
+	}
+	return tm.verifyFail(ctx, task, feedback)
+}
+
+// verifyPass 判定通过：IN_REVIEW → COMPLETED，解除下游阻塞。
+// 复用 CompleteTask（含依赖解除 + 级联）——IN_REVIEW→COMPLETED 是合法终态边，
+// 源状态已由 verify_task/settle_review 守卫为 IN_REVIEW。
+//
+// Python: _verify_pass (task_manager.py L1021-1048)。
+func (tm *TeamTaskManager) verifyPass(ctx context.Context, task *database.TeamTaskBase) (schema.TaskOpResult, error) {
+	completedTask, unblockedTasks, err := tm.db.Task().CompleteTask(ctx, task.TaskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if completedTask == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s could not be completed from review", task.TaskID)), nil
+	}
+	logger.Info(logComponent).Str("task_id", task.TaskID).Msg("Task verified (passed) and completed")
+	assignee := derefString(completedTask.Assignee)
+	tm.publishTaskEvent(ctx, events.TaskVerifiedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: assignee},
+		TaskID:           task.TaskID,
+	})
+	tm.publishUnblockedEvents(ctx, unblockedTasks)
+	tm.maybePublishTaskListDrained(ctx)
+	return schema.TaskOpResult{}.Success(), nil
+}
+
+// verifyFail 判定不通过：IN_REVIEW → IN_PROGRESS，返工回路到作者。
+//
+// Python: _verify_fail (task_manager.py L1050-1071)。
+func (tm *TeamTaskManager) verifyFail(ctx context.Context, task *database.TeamTaskBase, feedback string) (schema.TaskOpResult, error) {
+	revised, err := tm.db.Task().ReviseTask(ctx, task.TaskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !revised {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s could not be sent back for revision", task.TaskID)), nil
+	}
+	logger.Info(logComponent).Str("task_id", task.TaskID).Str("assignee", derefString(task.Assignee)).
+		Msg("Task verification failed; sent back for revision")
+	tm.publishTaskEvent(ctx, events.TaskRevisionRequestedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: derefString(task.Assignee)},
+		TaskID:           task.TaskID,
+		Feedback:         feedback,
+	})
+	return schema.TaskOpResult{}.Success(), nil
+}
+
+// GetPreviousRoundVote 返回某 reviewer 在当前轮之前一轮的最新票。
+// 临时 reviewer 每轮都以全新上下文运行——这张票是它对上一轮要求返工内容的
+// 唯一记忆。首轮或该 reviewer 未投时返回 nil。
+//
+// Python: get_previous_round_vote (task_manager.py L885-906)。
+func (tm *TeamTaskManager) GetPreviousRoundVote(ctx context.Context, task *database.TeamTaskBase, reviewer string) (*database.TeamTaskReviewVoteBase, error) {
+	if task.ReviewRound <= 1 {
+		return nil, nil
+	}
+	votes, err := tm.db.Task().GetReviewVotes(ctx, task.TaskID, task.ReviewRound-1)
+	if err != nil {
+		return nil, err
+	}
+	var latest *database.TeamTaskReviewVoteBase
+	for _, vote := range votes {
+		if vote.Reviewer == reviewer {
+			latest = vote
+		}
+	}
+	return latest, nil
+}
+
+// GetReviewTasks 返回验收人列表包含 reviewer_name 的 IN_REVIEW 任务。
+// 取状态索引的 IN_REVIEW 行再在内存过滤验收人成员资格（v1 验收是团队级，
+// 规范化的 reviewer 连接表为时过早，见 F_59）。任务作者不会把任务返给自己审。
+//
+// Python: get_review_tasks (task_manager.py L1073-1080)。
+func (tm *TeamTaskManager) GetReviewTasks(ctx context.Context, reviewerName string) ([]*database.TeamTaskBase, error) {
+	inReview, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, fsm.TaskStatusInReview)
+	if err != nil {
+		return nil, err
+	}
+	var result []*database.TeamTaskBase
+	for _, task := range inReview {
+		for _, name := range task.Reviewers() {
+			if name == reviewerName && derefString(task.Assignee) != reviewerName {
+				result = append(result, task)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+// readDispatchMode 从团队行读 dispatch mode；任何失败（测试替身 nil DAO、
+// 读库报错）静默回落空串 = autonomous。
+func readDispatchMode(db database.TeamDatabase, teamName string) string {
+	defer func() {
+		if r := recover(); r != nil {
+			// 测试替身的嵌入 nil 接口调用会 panic——按缺省处理。
+			_ = r
+		}
+	}()
+	if db == nil {
+		return ""
+	}
+	teamDao := db.Team()
+	if teamDao == nil {
+		return ""
+	}
+	team, err := teamDao.GetTeam(context.Background(), teamName)
+	if err != nil || team == nil {
+		return ""
+	}
+	return team.DispatchMode
+}
+
+// sortedKeysOf 键排序助手（voted 列表确定性输出）。
+func sortedKeysOf(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// derefString 字符串指针解引用（nil → ""）。
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// TaskDB 返回任务 DAO（scheduling 半区读取 task_links / upstream 简报）。
+func (tm *TeamTaskManager) TaskDB() database.TaskDao { return tm.db.Task() }

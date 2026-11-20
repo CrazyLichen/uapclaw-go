@@ -14,6 +14,7 @@
 package scheduling
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -164,4 +165,229 @@ func tKw(key string, kwargs map[string]any) string {
 		return "[" + key + "] " + strconv.Quote(err.Error())
 	}
 	return v
+}
+
+// ──────────────────────────── 25.2b b 半区 ────────────────────────────
+
+// MetaReviewRequest 新开一轮时某位验收人的投递载荷。
+// Python: meta_review_request（render.py L96-98）。
+func MetaReviewRequest(task *database.TeamTaskBase) map[string]any {
+	return buildMetaRefsTask(templateReviewRequest, task.TaskID)
+}
+
+// MetaRework 该轮结算失败后作者侧的投递载荷。
+// max_rounds 与 feedback 是 params 而非 refs：上限是**已解析**值（任务列可为
+// NULL 回落 spec 默认值），feedback 汇总的是刚关闭那一轮的票行——任务行两者
+// 在投递时都答不了。Python: meta_rework（render.py L101-114）。
+func MetaRework(task *database.TeamTaskBase, maxRounds int64, feedback string) map[string]any {
+	none, _ := schema.T("scheduler.none")
+	if feedback == "" {
+		feedback = none
+	}
+	return ateamprompts.BuildMeta(templateRework, map[string]string{"task": task.TaskID}, map[string]string{
+		"max_rounds": fmt.Sprintf("%d", maxRounds),
+		"feedback":   feedback,
+	})
+}
+
+// MetaReworkSummary 要求承担者向 leader 发送返工总结的投递载荷。
+// 与升级信一起发送（轮上限耗尽时），leader 在同一决策窗口内同时收到验收人
+// 反馈与承担者的自我评估。Python: meta_rework_summary（render.py L116-127）。
+func MetaReworkSummary(task *database.TeamTaskBase, maxRounds int64) map[string]any {
+	return ateamprompts.BuildMeta(templateReworkSummary, map[string]string{"task": task.TaskID}, map[string]string{
+		"max_rounds": fmt.Sprintf("%d", maxRounds),
+	})
+}
+
+// RenderLeaderEscalationRounds 轮上限耗尽时注入 leader 的升级。
+// Python: render_leader_escalation_rounds（render.py L152-161）。
+func RenderLeaderEscalationRounds(task *database.TeamTaskBase, feedback string) string {
+	none, _ := schema.T("scheduler.none")
+	if feedback == "" {
+		feedback = none
+	}
+	return tKw("scheduler.leader_escalation_rounds", map[string]any{
+		"task_id": task.TaskID, "title": task.Title,
+		"rounds": task.ReviewRound, "feedback": feedback,
+	})
+}
+
+// RenderLeaderEscalationStall 评审轮无票停摆时注入 leader 的升级。
+// Python: render_leader_escalation_stall（render.py L163-174）。
+func RenderLeaderEscalationStall(task *database.TeamTaskBase, minutes int64, voted, pending []string) string {
+	none, _ := schema.T("scheduler.none")
+	votedText := strings.Join(voted, ", ")
+	if len(voted) == 0 {
+		votedText = none
+	}
+	pendingText := strings.Join(pending, ", ")
+	if len(pending) == 0 {
+		pendingText = none
+	}
+	return tKw("scheduler.leader_escalation_stall", map[string]any{
+		"task_id": task.TaskID, "title": task.Title,
+		"round": task.ReviewRound, "minutes": minutes,
+		"voted": votedText, "pending": pendingText,
+	})
+}
+
+// RenderLeaderEscalationNoVote reviewer 连续结束运行仍无票时注入 leader 的升级。
+// Python: render_leader_escalation_no_vote（render.py L176-186）。
+func RenderLeaderEscalationNoVote(task *database.TeamTaskBase, reviewer string, runs int64) string {
+	return tKw("scheduler.leader_escalation_no_vote", map[string]any{
+		"task_id": task.TaskID, "title": task.Title,
+		"round": task.ReviewRound, "reviewer": reviewer, "runs": runs,
+	})
+}
+
+// FormatFailFeedback 把各验收人的 fail 反馈拼成带署名的块。
+// Python: format_fail_feedback（render.py L209-219）。
+func FormatFailFeedback(failFeedback map[string]string) string {
+	lines := make([]string, 0, len(failFeedback))
+	for reviewer, feedback := range failFeedback {
+		lines = append(lines, "- "+reviewer+": "+feedback)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// submissionLabels 提交正文的两段标签。
+// Python: _SUBMISSION_LABELS（render.py L222-225）。
+var submissionLabels = map[string][2]string{
+	"cn": {"摘要", "详情"},
+	"en": {"Summary", "Detail"},
+}
+
+// SubmissionBody 验收人要看的承担者 summary 与完整 note，逐字（不截断）。
+// reviewer 必须看到完整提交内容，所以这里一律不截断。每段带标签，缺失则省略。
+// Python: _submission_body（render.py L227-235）。
+func SubmissionBody(task *database.TeamTaskBase, language string) string {
+	labels, exists := submissionLabels[language]
+	if !exists {
+		labels = submissionLabels["en"]
+	}
+	summaryLabel, noteLabel := labels[0], labels[1]
+	var parts []string
+	summary := ""
+	if task.Summary != nil {
+		summary = strings.TrimSpace(*task.Summary)
+	}
+	if summary != "" {
+		parts = append(parts, summaryLabel+": "+summary)
+	}
+	note := ""
+	if task.Note != nil {
+		note = strings.TrimSpace(*task.Note)
+	}
+	if note != "" {
+		parts = append(parts, noteLabel+":\n"+note)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// renderReviewRequestForHarness 把评审请求渲染为临时 reviewer harness 的
+// 纯用户提示词。临时 reviewer 每轮全新上下文，因此把上一轮自己的票
+// （previousVote）渲染进请求：reviewer 可据此核对它要求的返工是否完成。
+// 无上一票（首轮或上轮未投）则省略该段。承担者的完成 summary 与完整 note
+// 逐字渲染，reviewer 无需 view_task 往返即可定位交付物；无则省略该段。
+// upstream 任务行带完成摘要列出——评审依赖其他任务产物的 reviewer 知道
+// 输入从哪来；无 upstream 任务省略该段。可选段省略后留下的空分隔行会被
+// 折叠（\\n{3,} → \\n\\n）。
+//
+// Python: render_review_request_for_harness（render.py L238-308）。
+func renderReviewRequestForHarness(
+	task *database.TeamTaskBase,
+	language, reviewer string,
+	previousVote *database.TeamTaskReviewVoteBase,
+	upstream []*database.TeamTaskBase,
+) string {
+	return assembleReviewRequestBody(task, language, reviewer, previousVote, upstream, frameworkTemplateLoader(language))
+}
+
+// frameworkTemplateLoader 框架只读加载器（A 类 per-team 加载器为 nil 时的缺省）。
+func frameworkTemplateLoader(language string) func(string) string {
+	return func(name string) string {
+		tpl, err := ateamprompts.LoadTemplate(name, language)
+		if err != nil || tpl == nil {
+			return ""
+		}
+		return tpl.Content()
+	}
+}
+
+// assembleReviewRequestBody 评审请求正文组装（加载面参数化：框架只读或
+// per-team A 类加载器）。
+// Python: render_review_request_for_harness 主体（render.py L258-308）。
+func assembleReviewRequestBody(
+	task *database.TeamTaskBase,
+	language, reviewer string,
+	previousVote *database.TeamTaskReviewVoteBase,
+	upstream []*database.TeamTaskBase,
+	load func(string) string,
+) string {
+	body := load(templateReviewRequest)
+	body = strings.ReplaceAll(body, "{{task.task_id}}", task.TaskID)
+	body = strings.ReplaceAll(body, "{{task.title}}", task.Title)
+	body = strings.ReplaceAll(body, "{{task.content}}", task.Content)
+	body = strings.ReplaceAll(body, "{{task.status}}", task.Status)
+	assignee := ""
+	if task.Assignee != nil {
+		assignee = *task.Assignee
+	}
+	body = strings.ReplaceAll(body, "{{task.assignee}}", assignee)
+	body = strings.ReplaceAll(body, "{{task.review_round}}", fmt.Sprintf("%d", task.ReviewRound))
+	maxRounds := ""
+	if task.MaxReviewRounds != nil {
+		maxRounds = fmt.Sprintf("%d", *task.MaxReviewRounds)
+	}
+	body = strings.ReplaceAll(body, "{{task.max_review_rounds}}", maxRounds)
+	reviewerNames := task.Reviewers()
+	body = strings.ReplaceAll(body, "{{task.reviewer}}", strings.Join(reviewerNames, ", "))
+	// 从结构化验收人列表注入该 reviewer 的专属指令。
+	instruction := ""
+	if reviewer != "" {
+		for _, detail := range task.ReviewerDetails() {
+			if detail["reviewer_id"] == reviewer {
+				instruction = detail["instruction"]
+				break
+			}
+		}
+	}
+	body = strings.ReplaceAll(body, "{{task.reviewer_instruction}}", instruction)
+	previous := ""
+	if previousVote != nil {
+		previous = strings.TrimSpace(load(templateReviewPrevFB))
+		none, _ := schema.T("scheduler.none")
+		feedback := none
+		if previousVote.Feedback != nil {
+			feedback = *previousVote.Feedback
+		}
+		previous = strings.ReplaceAll(previous, "{{vote.review_round}}", fmt.Sprintf("%d", previousVote.ReviewRound))
+		previous = strings.ReplaceAll(previous, "{{vote.decision}}", previousVote.Decision)
+		previous = strings.ReplaceAll(previous, "{{vote.feedback}}", feedback)
+	}
+	body = strings.ReplaceAll(body, "{{task.previous_feedback}}", previous)
+	submissionNote := ""
+	submissionBody := SubmissionBody(task, language)
+	if submissionBody != "" {
+		submissionNote = strings.TrimSpace(load(templateReviewSubNote))
+		submissionNote = strings.ReplaceAll(submissionNote, "{{task.submission_body}}", submissionBody)
+	}
+	body = strings.ReplaceAll(body, "{{task.submission_note}}", submissionNote)
+	upstreamSection := ""
+	if len(upstream) > 0 {
+		upstreamSection = strings.TrimSpace(load(templateReviewUpstream))
+		upstreamSection = strings.ReplaceAll(upstreamSection, "{{task.upstream_brief}}", ateamprompts.UpstreamBrief(upstream, language))
+	}
+	body = strings.ReplaceAll(body, "{{task.upstream_section}}", upstreamSection)
+	// 上方省略的可选段会留下空分隔行——折叠连续 3 个以上换行。
+	return collapseBlankLines(body)
+}
+
+// collapseBlankLines 折叠连续空行（\\n{3,} → \\n\\n）。
+// Python: re.sub(r"\\n{3,}", "\\n\\n", body)。
+func collapseBlankLines(body string) string {
+	for strings.Contains(body, "\n\n\n") {
+		body = strings.ReplaceAll(body, "\n\n\n", "\n\n")
+	}
+	return body
 }

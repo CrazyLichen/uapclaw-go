@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	ateamprompts "github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -434,3 +435,29 @@ func TestDeactivate_StopsDriving(t *testing.T) {
 		t.Errorf("停用后不得发信: %d", len(f.sender.rows["bob"]))
 	}
 }
+
+// ──────────────────────────── 25.2b 接口扩展补齐 ────────────────────────────
+
+// GetReviewTally 评审半区替身：空计票。
+func (f *fakeTaskManager) GetReviewTally(task *database.TeamTaskBase) map[string]any {
+	return map[string]any{
+		"task_id": task.TaskID, "review_round": task.ReviewRound,
+		"pass_count": 0, "fail_count": 0, "reviewer_count": 0,
+		"voted": []string{}, "fail_feedback": map[string]string{},
+		"verdict_total": 0, "verdict_voted": 0,
+		"inspector_count": 0, "inspector_voted": 0, "inspector_avg": nil,
+	}
+}
+
+// SettleReview 评审半区替身：成功。
+func (f *fakeTaskManager) SettleReview(_ context.Context, _, _, _ string) (atschema.TaskOpResult, error) {
+	return atschema.TaskOpResult{}.Success(), nil
+}
+
+// GetPreviousRoundVote 评审半区替身：无上一票。
+func (f *fakeTaskManager) GetPreviousRoundVote(_ context.Context, _ *database.TeamTaskBase, _ string) (*database.TeamTaskReviewVoteBase, error) {
+	return nil, nil
+}
+
+// TaskDB 评审半区替身：nil DAO。
+func (f *fakeTaskManager) TaskDB() database.TaskDao { return nil }

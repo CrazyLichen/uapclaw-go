@@ -113,21 +113,24 @@ func (s *EvolutionRailSuite) TestEvolutionRail_轨迹收集生命周期() {
 	err = rail.AfterInvoke(s.Ctx, cbc)
 	s.Require().NoError(err)
 
-	// 验证轨迹保存（Query 需要两个参数：version, filters）
-	trajs := store.Query("", map[string]any{"session_id": "conv_123"})
+	// 验证轨迹保存（span 模型读面）
+	trajs, queryErr := store.Query("", "", "", "", "", "online")
+	s.Require().NoError(queryErr)
 	s.Len(trajs, 1)
 	traj := trajs[0]
-	s.Equal("conv_123", traj.SessionID)
-	s.Equal("online", traj.Source)
-	s.Len(traj.Steps, 2)
+	if traj.SessionID() != nil {
+		s.Equal("conv_123", *traj.SessionID())
+	}
+	spans := trajectory.IterSpans(traj)
+	s.Len(spans, 2)
 
-	// 检查 LLM 步骤
-	s.Equal(trajectory.StepKindLLM, traj.Steps[0].Kind)
-	s.NotNil(traj.Steps[0].Detail)
-
-	// 检查 Tool 步骤
-	s.Equal(trajectory.StepKindTool, traj.Steps[1].Kind)
-	s.NotNil(traj.Steps[1].Detail)
+	// 检查 LLM span（按时间序：模型调用在前）
+	categories := make([]string, 0, len(spans))
+	for _, span := range spans {
+		categories = append(categories, trajectory.SpanCategory(span))
+	}
+	s.Contains(categories, "llm")
+	s.Contains(categories, "tool")
 }
 
 // TestEvolutionRail_无Builder时AfterModelCall空操作 测试未初始化 builder 时不崩溃。
@@ -149,7 +152,8 @@ func (s *EvolutionRailSuite) TestEvolutionRail_无Builder时AfterModelCall空操
 	err := rail.AfterModelCall(s.Ctx, cbc)
 	s.Require().NoError(err)
 
-	trajs := store.Query("", nil)
+	trajs, queryErr := store.Query("", "", "", "", "", "")
+	s.Require().NoError(queryErr)
 	s.Len(trajs, 0)
 }
 
@@ -180,7 +184,9 @@ func (s *EvolutionRailSuite) TestEvolutionRail_同Session复用Builder() {
 
 	// builder 不应为 nil（同 session 复用）
 	s.NotNil(rail.Builder())
-	s.Len(store.Query("", map[string]any{"session_id": "conv_multi"}), 1)
+	trajsMulti, qErr := store.Query("", "conv_multi", "", "", "", "")
+	s.Require().NoError(qErr)
+	s.Len(trajsMulti, 1)
 }
 
 // TestEvolutionRail_新Session替换Builder 测试不同 session 创建新 builder。
@@ -253,18 +259,6 @@ func (s *EvolutionRailSuite) TestEvolutionRail_DrainPendingApprovalEvents别名(
 	s.Len(events, 0)
 }
 
-// TestEvolutionRail_SetTrajectorySink要求TeamID 测试绑定 Sink 时要求 teamID。
-func (s *EvolutionRailSuite) TestEvolutionRail_SetTrajectorySink要求TeamID() {
-	rail := evolution.NewEvolutionRail(testExtension{})
-
-	err := rail.SetTrajectorySink(&fakeTrajectorySink{}, "")
-	s.Require().Error(err)
-	s.Contains(err.Error(), "team_id is required")
-
-	err = rail.SetTrajectorySink(&fakeTrajectorySink{}, "team_1")
-	s.Require().NoError(err)
-}
-
 // TestEvolutionRail_WithDisabledSkills 测试禁用技能配置。
 func (s *EvolutionRailSuite) TestEvolutionRail_WithDisabledSkills() {
 	rail := evolution.NewEvolutionRail(testExtension{},
@@ -288,12 +282,12 @@ func (s *EvolutionRailSuite) TestEvolutionRail_WithMaxTrajectorySteps() {
 }
 
 // TestEvolutionRail_WithDefaultMemberRole 测试默认成员角色配置。
+// 12-04：原经 SetTrajectorySink 验证，sink 链删除（规则 8）；改为直接断言字段。
 func (s *EvolutionRailSuite) TestEvolutionRail_WithDefaultMemberRole() {
 	rail := evolution.NewEvolutionRail(testExtension{},
 		evolution.WithDefaultMemberRole("researcher"),
 	)
-	err := rail.SetTrajectorySink(&fakeTrajectorySink{}, "team_1")
-	s.Require().NoError(err)
+	s.Equal("researcher", rail.DefaultMemberRole())
 }
 
 // TestEvolutionRail_WithEvolutionTriggerNone 测试触发点设为 NONE。
@@ -341,9 +335,12 @@ func (s *EvolutionRailSuite) TestTrajectoryRail_只收集不演化() {
 	cbc = newCBC(nil, &agentinterfaces.InvokeInputs{ConversationID: "conv_789"}, nil)
 	s.Require().NoError(rail.AfterInvoke(s.Ctx, cbc))
 
-	trajs := store.Query("", map[string]any{"session_id": "conv_789"})
+	trajs, queryErr := store.Query("", "conv_789", "", "", "", "")
+	s.Require().NoError(queryErr)
 	s.Len(trajs, 1)
-	s.Equal("conv_789", trajs[0].SessionID)
+	if trajs[0].SessionID() != nil {
+		s.Equal("conv_789", *trajs[0].SessionID())
+	}
 }
 
 // TestTrajectoryRail_GetCallbacks 测试 TrajectoryRail 注册回调事件。
@@ -365,7 +362,4 @@ func newCBC(
 	return agentinterfaces.NewAgentCallbackContext(agent, inputs, sess)
 }
 
-// fakeTrajectorySink 用于测试的轨迹 Sink 桩。
-type fakeTrajectorySink struct{}
-
-func (f *fakeTrajectorySink) PublishMemberTrajectory(_ *trajectory.MemberTrajectorySnapshot) {}
+// 【12-04】fakeTrajectorySink 已删除（sink 链规则 8）。

@@ -28,17 +28,7 @@ func TestNoOpExtension_AllMethods(t *testing.T) {
 
 func TestNoOpExtension_SnapshotForEvolution(t *testing.T) {
 	ext := noOpExtension{}
-	traj := &trajectory.Trajectory{
-		SessionID: "test",
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
-				},
-			},
-		},
-	}
+	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{llmStep(llmschema.NewUserMessage("hi"))})
 	snapshot := ext.SnapshotForEvolution(context.Background(), traj, nil)
 	assert.NotNil(t, snapshot)
 	assert.Equal(t, traj, snapshot.Trajectory)

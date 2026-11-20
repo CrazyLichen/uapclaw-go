@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -103,12 +105,9 @@ func thresholdToolNames() []string {
 func newSkillCreateRailForTest(t *testing.T, toolNames []string) (*SkillCreateRail, *agentinterfaces.AgentCallbackContext, *fakeController) {
 	t.Helper()
 	rail := NewSkillCreateRail(t.TempDir())
-	builder := trajectory.NewTrajectoryBuilder("sess-1", "test")
+	builder := mustNewTestBuilder("sess-1", "test")
 	for _, name := range toolNames {
-		builder.RecordStep(&trajectory.TrajectoryStep{
-			Kind:   trajectory.StepKindTool,
-			Detail: &trajectory.ToolCallDetail{ToolName: name},
-		})
+		require.NoError(t, builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: name}))
 	}
 	rail.builder = builder
 

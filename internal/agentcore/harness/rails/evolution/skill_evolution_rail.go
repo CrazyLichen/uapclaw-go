@@ -724,7 +724,7 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 	var messages []map[string]any
 	var signals []*signal.EvolutionSignal
 
-	if traj != nil && len(traj.Steps) > 0 {
+	if traj != nil && len(trajectory.IterSpans(traj)) > 0 {
 		messages = collectMessagesFromTrajectory(traj)
 		detected := r.detectActiveRequestSignals(ctx, skillName, traj, messages)
 		signals = append(signals, detected...)

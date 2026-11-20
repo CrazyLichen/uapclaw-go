@@ -863,7 +863,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
 	s.False(rail.AutoScan())
 
-	snapshot := rail.SnapshotForEvolution(s.Ctx, &trajectory.Trajectory{}, nil)
+	snapshot := rail.SnapshotForEvolution(s.Ctx, trajectory.NewTestTrajectoryWithID("empty"), nil)
 	s.Nil(snapshot)
 }
 
@@ -875,7 +875,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 	rail := s.newTestRail()
 	s.True(rail.AutoScan())
 
-	emptyTraj := &trajectory.Trajectory{SessionID: "test"}
+	emptyTraj := trajectory.NewTestTrajectoryWithIDWithSession("test")
 	snapshot := rail.SnapshotForEvolution(s.Ctx, emptyTraj, nil)
 	// TeamSkillEvolutionRail 不检查 messages 为空，返回空消息快照
 	s.Require().NotNil(snapshot)
@@ -890,15 +890,11 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvolution_skillName为teamSkill() {
 	rail := s.newTestRail()
 
-	builder := trajectory.NewTrajectoryBuilder("session_team", "online")
-	builder.RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindLLM,
-		Detail: &trajectory.LLMCallDetail{
-			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("test query")},
-			Response: map[string]any{"content": "test response"},
-		},
-	})
-	traj := builder.Build()
+	builder := mustIntegrationTestBuilder("session_team")
+		traj, buildErr := builder.Build()
+	if buildErr != nil {
+		panic(buildErr)
+	}
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{ConversationID: "session_team"}, nil)
 	snapshot := rail.SnapshotForEvolution(s.Ctx, traj, cbc)
@@ -938,7 +934,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RunEvolution_�
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RunEvolution_空消息snapshot() {
 	rail := s.newTestRail()
 	snapshot := &evolution.EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{SessionID: "test"},
+		Trajectory: trajectory.NewTestTrajectoryWithIDWithSession("test"),
 		Messages:   []map[string]any{},
 	}
 	err := rail.RunEvolution(s.Ctx, nil, snapshot)
@@ -1140,17 +1136,6 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_EvolutionReques
 	s.False(result3.HasChanges())
 }
 
-// ─── SetTrajectorySource 轨迹源设置 ───
-
-// TestTeamSkillEvolutionRail_SetTrajectorySource 测试设置团队轨迹聚合源。
-//
-// 对齐 Python: TeamSkillEvolutionRail.set_trajectory_source(source)
-func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SetTrajectorySource() {
-	rail := s.newTestRail()
-	// 设置 nil 不崩溃
-	rail.SetTrajectorySource(nil)
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTestRail 创建测试用 TeamSkillEvolutionRail。
@@ -1209,4 +1194,20 @@ func (m *mockTeamSkillClient) SupportsKVCacheAffinity() bool { return false }
 // BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
 func (m *mockTeamSkillClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
 	return map[string]any{}
+}
+
+// mustIntegrationTestBuilder 构造预置一个 LLM span 的测试组装器（模型迁移期助手）。
+func mustIntegrationTestBuilder(sessionID string) *trajectory.TrajectoryBuilder {
+	builder, err := trajectory.NewTrajectoryBuilder(sessionID, "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	if err := builder.RecordTestStep(trajectory.TestStep{
+		Kind:     "llm",
+		Messages: []map[string]any{{"role": "user", "content": "test query"}},
+		Response: map[string]any{"content": "test response"},
+	}); err != nil {
+		panic(err)
+	}
+	return builder
 }

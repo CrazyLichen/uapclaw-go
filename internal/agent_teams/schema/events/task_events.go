@@ -187,3 +187,99 @@ func (e TaskListDrainedEvent) EventTypeName() string { return TeamEventTaskListD
 func (e TaskListDrainedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_count": e.TaskCount}
 }
+
+// TaskVerifiedEvent 评审通过事件（IN_REVIEW → COMPLETED）。
+// member_name 是作者（任务 assignee）——完成解除下游阻塞与直接完成一致。
+// Python: TaskVerifiedEvent (events.py L414-421)
+type TaskVerifiedEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+}
+
+// TaskRevisionRequestedEvent 评审不通过事件（IN_REVIEW → IN_PROGRESS）。
+// 返工回路：member_name 是作者（仍持有该任务）；feedback 为汇总后的返工指引。
+// Python: TaskRevisionRequestedEvent (events.py L423-431)
+type TaskRevisionRequestedEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+	// Feedback 返工反馈
+	Feedback string
+}
+
+// TaskReviewVoteEvent 评审投票事件（scheduled dispatch，F_62）。
+// scheduled 模式下 verify_task 只持久化票——任务保持 IN_REVIEW，leader 侧
+// 调度器计票并用 settle_review 结算。member_name 是作者（与其他 verify-gate
+// 事件一致）；reviewer 是投票人。计数字段是投票后的计票快照。
+// Python: TaskReviewVoteEvent (events.py L433-448)
+type TaskReviewVoteEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+	// Reviewer 投票成员
+	Reviewer string
+	// Decision 票值：pass / fail（inspector 为 0~1 分数）
+	Decision string
+	// ReviewRound 票所属评审轮
+	ReviewRound int64
+	// PassCount 本轮投 pass 的独立 reviewer 数
+	PassCount int
+	// FailCount 本轮投 fail 的独立 reviewer 数
+	FailCount int
+	// ReviewerCount 验收人总数
+	ReviewerCount int
+}
+
+// EventTypeName 返回评审通过事件类型名。
+func (e TaskVerifiedEvent) EventTypeName() string { return TeamEventTaskVerified }
+
+// EventTypeName 返回返工请求事件类型名。
+func (e TaskRevisionRequestedEvent) EventTypeName() string { return TeamEventTaskRevisionRequested }
+
+// EventTypeName 返回评审投票事件类型名。
+func (e TaskReviewVoteEvent) EventTypeName() string { return TeamEventTaskReviewVote }
+
+// ToPayload 转换为评审通过事件载荷。
+// Python: TaskVerifiedEvent.to_payload（task_id + member_name 基线字段）。
+func (e TaskVerifiedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "task_id": e.TaskID}
+}
+
+// ToPayload 转换为返工请求事件载荷。
+// Python: TaskRevisionRequestedEvent.to_payload。
+func (e TaskRevisionRequestedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "task_id": e.TaskID, "feedback": e.Feedback}
+}
+
+// ToPayload 转换为评审投票事件载荷。
+// Python: TaskReviewVoteEvent.to_payload。
+func (e TaskReviewVoteEvent) ToPayload() map[string]any {
+	return map[string]any{
+		"team_name": e.TeamName, "member_name": e.MemberName,
+		"task_id": e.TaskID, "reviewer": e.Reviewer, "decision": e.Decision,
+		"review_round": e.ReviewRound, "pass_count": e.PassCount,
+		"fail_count": e.FailCount, "reviewer_count": e.ReviewerCount,
+	}
+}
+
+// TaskSubmittedForReviewEvent 作者提交任务待验收事件。
+// 由 TeamTaskManager.complete 在完成的任务带验收人时发布
+// （IN_PROGRESS → IN_REVIEW）。member_name 是作者。框架按 reviewer 通知验收人。
+// Python: TaskSubmittedForReviewEvent (events.py L403-411)
+type TaskSubmittedForReviewEvent struct {
+	BaseEventMessage
+	// TaskID 任务唯一标识
+	TaskID string
+	// Reviewer 待通知的验收人成员名列表
+	Reviewer []string
+}
+
+// EventTypeName 返回提交评审事件类型名。
+func (e TaskSubmittedForReviewEvent) EventTypeName() string { return TeamEventTaskSubmittedForReview }
+
+// ToPayload 转换为提交评审事件载荷。
+// Python: TaskSubmittedForReviewEvent.to_payload。
+func (e TaskSubmittedForReviewEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "task_id": e.TaskID, "reviewer": e.Reviewer}
+}

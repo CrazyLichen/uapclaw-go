@@ -18,7 +18,6 @@ import (
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -57,9 +56,10 @@ type TeamWorkspaceInfo struct {
 	TeamID *string
 	// Config 配置字典
 	Config map[string]any
-	// TrajectoryRegistry 轨迹注册表（同时实现 TrajectorySource + TrajectorySink）
-	// 对齐 Python: TeamWorkspaceInfo.trajectory_registry（实际为 InMemoryTrajectoryRegistry）
-	TrajectoryRegistry trajectory.TrajectorySource
+	// 【12-04 迁移注记】TrajectoryRegistry 字段已删除：上游生产恒 None
+	//（TeamWorkspaceInfo.trajectory_registry 两处构造均未传），Go 侧注入逻辑
+	// 无生产调用方，规则 8 删除。跨成员轨迹可见性改由 TrajectorySpanProcessor
+	// 订阅窗口承载（25.2b，spec §5）。
 }
 
 // TeamRailMountContext 重建 team rails 所需的上下文。
@@ -359,9 +359,8 @@ func BuildContextProcessorRail(config map[string]any) *ce.ContextProcessorRail {
 // 对齐 Python: build_skill_evolution_rail (L479-522)
 //
 // auto_save=true（成员自演化跳过审批）；LLM 构造失败返回 nil（对齐 Python
-// except 返回 None）。teamTrajectorySink 非 nil 且 teamID 非空时调用
-// SetTrajectorySink 绑定（参数依次为 sink、teamID、"teammate"）。
-func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajectorySink trajectory.TrajectorySink, teamID string) *evolution.SkillEvolutionRail {
+// except 返回 None）。【12-04】sink 绑定参数随 registry 链删除（规则 8）。
+func BuildSkillEvolutionRail(skillsDir string, config map[string]any) *evolution.SkillEvolutionRail {
 	llmModel, modelName := BuildEvolutionLLM(config)
 	if llmModel == nil {
 		return nil
@@ -379,17 +378,9 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajec
 		evolution.WithDisabledSkillsSet(skillruntime.LoadExecutionDisabledSkills()),
 	)
 
-	if teamTrajectorySink != nil && teamID != "" {
-		if err := rail.SetTrajectorySink(teamTrajectorySink, teamID, "teammate"); err != nil {
-			logger.Warn(logComponent).Err(err).Str("team_id", teamID).
-				Msg("[TeamRuntime] SkillEvolutionRail set_trajectory_sink failed")
-		}
-	}
-
 	logger.Info(logComponent).
 		Str("model", modelName).
 		Bool("auto_scan", evolutionAutoScan).
-		Bool("team_trajectory_sink", teamTrajectorySink != nil && teamID != "").
 		Msg("[TeamRuntime] SkillEvolutionRail created")
 	return rail
 }
@@ -423,7 +414,6 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	teamWsSkillsDir := strPtrValue(teamWorkspace.SkillsDir)
 	teamID := strPtrValue(teamWorkspace.TeamID)
 	config := teamWorkspace.Config
-	teamTrajectoryRegistry := teamWorkspace.TrajectoryRegistry
 
 	railsList := make([]agentinterfaces.AgentRail, 0, 13)
 
@@ -523,20 +513,13 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 				return nil, fmt.Errorf("evolution LLM 构建失败（config 无有效模型）")
 			}
 			evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
-			// team_id 为空时不绑定 registry（对齐 Python bound_team_trajectory_registry = ... if team_id else None）
-			var boundRegistry trajectory.TrajectorySource
+			// 【12-04】registry 绑定段删除（死字段，规则 8）；跨成员可见性由
+			// 订阅窗口承载。
 			var opts []evolution.TeamSkillEvolutionRailOption
-			if teamID != "" && teamTrajectoryRegistry != nil {
-				boundRegistry = teamTrajectoryRegistry
+			if teamID != "" {
 				opts = append(opts,
-					evolution.WithTeamSkillTrajectorySource(boundRegistry),
 					evolution.WithTeamSkillTeamID(teamID),
 				)
-				if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
-					// M-03: 对齐 Python member_role=role 传实际变量（原硬编码 "leader"，
-					// 当前守卫已限定 leader 行为等价，但语义上应传 role 防 teammate 复用时静默传错）
-					opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, roleStr(memberInfo.Role)))
-				}
 			}
 			opts = append(opts,
 				evolution.WithTeamSkillAutoScan(evolutionAutoScan),
@@ -550,7 +533,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 				Str("skills_dir", teamWsSkillsDir).
 				Str("model", actualModelName).
 				Bool("auto_scan", evolutionAutoScan).
-				Bool("team_trajectory_registry", boundRegistry != nil).
+				Bool("team_trajectory_registry", false).
 				Msg("[TeamRuntime] TeamSkillEvolutionRail created")
 			return rail, nil
 		}, "TeamSkillEvolutionRail")
@@ -573,13 +556,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	// 13. Non-leader: SkillEvolutionRail（成员技能自演化）
 	if roleStr(memberInfo.Role) != "leader" && teamWsSkillsDir != "" {
 		// Python 直接调 build_skill_evolution_rail（内部自带 try/except 返回 None）
-		var teamSink trajectory.TrajectorySink
-		if teamTrajectoryRegistry != nil {
-			if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
-				teamSink = sink
-			}
-		}
-		if rail := BuildSkillEvolutionRail(teamWsSkillsDir, config, teamSink, teamID); rail != nil {
+		if rail := BuildSkillEvolutionRail(teamWsSkillsDir, config); rail != nil {
 			railsList = append(railsList, rail)
 		}
 	}

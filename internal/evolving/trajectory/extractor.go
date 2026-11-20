@@ -1,50 +1,52 @@
 package trajectory
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"strings"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+
+	obs "github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 )
+
+// extractor.go 会话 tracer 记录到规范 OTLP 的直接抽取器。
+// 对齐 Python: agent_evolving/trajectory/offline/extractor.py（全文，2026-12-04 快照）。
+// Python 侧 span 为鸭子类型（getattr）；Go 侧输入是 tracer.TraceAgentSpan，
+// 属性访问映射到结构体字段（_get(span, name) 等价面）。
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrajectoryExtractor 轨迹提取器接口。
-// 从 Agent 执行 Session 中提取完整 Trajectory。
-// TracerTrajectoryExtractor 是默认实现。
-// Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
-//
-//	class TrajectoryExtractor:
-//	    def extract(self, session: Any, case_id: Optional[str] = None) -> Trajectory: ...
-//	    从会话中提取轨迹
+// Python: offline/extractor.py TrajectoryExtractor。
 type TrajectoryExtractor interface {
-	// Extract 从 Session 提取 Trajectory。
-	// Python: TrajectoryExtractor.extract(session, case_id)
-	Extract(sess *session.Session, caseID string) *Trajectory
+	// Extract 从 Session 提取轨迹。
+	// Python: TrajectoryExtractor.extract(session, case_id)。
+	Extract(sess *session.Session, caseID string) (*Trajectory, error)
 }
 
 // TracerTrajectoryExtractor 基于 Tracer Span 的轨迹提取器。
-// 从 Session.tracer() 的 AgentSpanManager 中提取所有 Span，
-// 逐个转换为 TrajectoryStep，通过 TrajectoryBuilder 组装完整 Trajectory。
-// Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
+// Python: offline/extractor.py TrajectoryExtractor(resource_manager)。
 type TracerTrajectoryExtractor struct {
-	// resourceManager 用于查询 Tool 元数据（可选）
-	// Python: self._resource_manager
+	// resourceManager 用于查询 Tool 元数据（可选）。
+	// Python: self._resource_manager。
 	resourceManager *resources_manager.ResourceMgr
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent 日志组件常量
+// logComponent 日志组件常量。
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTracerTrajectoryExtractor 创建基于 Tracer 的轨迹提取器。
-// Python: TrajectoryExtractor(resource_manager=resource_manager)
+// Python: TrajectoryExtractor(resource_manager=resource_manager)。
 func NewTracerTrajectoryExtractor(resourceManager ...*resources_manager.ResourceMgr) *TracerTrajectoryExtractor {
 	e := &TracerTrajectoryExtractor{}
 	if len(resourceManager) > 0 {
@@ -53,53 +55,480 @@ func NewTracerTrajectoryExtractor(resourceManager ...*resources_manager.Resource
 	return e
 }
 
-// Extract 从 Session 提取 Trajectory。
-// Python: TrajectoryExtractor.extract(session, case_id)
-func (e *TracerTrajectoryExtractor) Extract(sess *session.Session, caseID string) *Trajectory {
-	// Python: tracer = self._get_tracer(session)
-	agentSpans := e.getAgentSpans(sess)
-
+// Extract 从 Session 提取轨迹。
+// Python: offline/extractor.py TrajectoryExtractor.extract。
+func (e *TracerTrajectoryExtractor) Extract(sess *session.Session, caseID string) (*Trajectory, error) {
+	spans := e.getAgentSpans(sess)
 	effectiveCaseID := caseID
 	if effectiveCaseID == "" {
 		effectiveCaseID = "unknown"
 	}
-
-	// Python: builder = TrajectoryBuilder(session_id=effective_case_id, source="offline", case_id=effective_case_id)
-	builder := NewTrajectoryBuilder(effectiveCaseID, "offline",
-		WithCaseID(effectiveCaseID),
-	)
-
-	// Python: for span in spans: step = self._build_step(span); builder.record_step(step)
-	for _, span := range agentSpans {
-		step := e.buildStep(span)
-		builder.RecordStep(step)
+	builder, err := NewTrajectoryBuilder(effectiveCaseID, "offline", &effectiveCaseID, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		return nil, err
 	}
-
+	digest := sha256.Sum256([]byte(effectiveCaseID))
+	traceID := hex.EncodeToString(digest[:])[:32]
+	for index, span := range spans {
+		built, buildErr := e.buildSpan(span, traceID, index)
+		if buildErr != nil {
+			// Python: logger.exception(...) 后继续。
+			logger.Error(logComponent).Int("index", index).Err(buildErr).
+				Msg("[TrajectoryExtractor] failed to normalize offline span")
+			continue
+		}
+		if recordErr := builder.RecordSpan(built); recordErr != nil {
+			logger.Error(logComponent).Int("index", index).Err(recordErr).
+				Msg("[TrajectoryExtractor] failed to record offline span")
+		}
+	}
 	return builder.Build()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// parseRoleType 将字符串角色名转换为 RoleType。
-func parseRoleType(s string) llmschema.RoleType {
-	switch s {
-	case "system":
-		return llmschema.RoleTypeSystem
-	case "user":
-		return llmschema.RoleTypeUser
-	case "assistant":
-		return llmschema.RoleTypeAssistant
-	case "tool":
-		return llmschema.RoleTypeTool
-	default:
-		return llmschema.RoleTypeUser
+// spanGet 鸭子类型 _get(span, name) 等价面：按名字访问 tracer span 的
+// Python 可见属性（MetaData 键优先于结构体字段，与 Python getattr 的
+// 实例属性优先一致；两者皆缺返回 nil）。
+func spanGet(span *tracer.TraceAgentSpan, name string) any {
+	if span == nil {
+		return nil
+	}
+	if v, ok := span.MetaData[name]; ok && v != nil {
+		return v
+	}
+	switch name {
+	case "name":
+		if span.Name != "" {
+			return span.Name
+		}
+	case "invoke_type":
+		if span.InvokeType != "" {
+			return span.InvokeType
+		}
+	case "inputs":
+		return span.Inputs
+	case "outputs":
+		return span.Outputs
+	case "error":
+		return span.Error
+	case "invoke_id":
+		if span.InvokeID != "" {
+			return span.InvokeID
+		}
+	case "parent_span_id", "parentInvokeId":
+		if span.ParentInvokeID != "" {
+			return span.ParentInvokeID
+		}
+	case "start_time":
+		return span.StartTime
+	case "end_time":
+		return span.EndTime
+	case "on_invoke_data":
+		return span.OnInvokeData
+	}
+	return nil
+}
+
+// unwrap 单键映射展开。
+// Python: offline/extractor.py _unwrap。
+func unwrap(value any, key string) any {
+	if m, isMap := value.(map[string]any); isMap && len(m) == 1 {
+		if v, exists := m[key]; exists {
+			return v
+		}
+	}
+	return value
+}
+
+// dtToNanos 归一化 Session tracer 时间戳（datetime/毫秒/纳秒）。
+// 数值小于 10^14 视为 Unix 毫秒，更大视为 Unix 纳秒；微秒时间戳不在
+// 本适配器的输入契约内。
+// Python: offline/extractor.py _dt_to_nanos。
+func dtToNanos(value any) int64 {
+	switch v := value.(type) {
+	case *time.Time:
+		if v == nil {
+			return 0
+		}
+		return v.UnixNano()
+	case time.Time:
+		return v.UnixNano()
+	case int:
+		if abs64(int64(v)) >= 1e14 {
+			return int64(v)
+		}
+		return int64(v) * 1_000_000
+	case int64:
+		if abs64(v) >= 1e14 {
+			return v
+		}
+		return v * 1_000_000
+	case float64:
+		n := int64(v)
+		if abs64(n) >= 1e14 {
+			return n
+		}
+		return n * 1_000_000
+	case string:
+		var parsed int64
+		if _, err := fmt.Sscanf(v, "%d", &parsed); err == nil {
+			if abs64(parsed) >= 1e14 {
+				return parsed
+			}
+			return parsed * 1_000_000
+		}
+	}
+	return 0
+}
+
+// abs64 绝对值。
+func abs64(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// nativeID 读取原生 trace/span ID（int 补零/字符串修剪）。
+// Python: offline/extractor.py _native_id。
+func nativeID(span *tracer.TraceAgentSpan, names ...string) string {
+	for _, name := range names {
+		value := spanGet(span, name)
+		if value == nil {
+			continue
+		}
+		switch v := value.(type) {
+		case int:
+			width := 16
+			if strings.Contains(strings.ToLower(name), "trace") {
+				width = 32
+			}
+			return fmt.Sprintf("%0*x", width, v)
+		case int64:
+			width := 16
+			if strings.Contains(strings.ToLower(name), "trace") {
+				width = 32
+			}
+			return fmt.Sprintf("%0*x", width, v)
+		case string:
+			if strings.TrimSpace(v) != "" {
+				return strings.TrimSpace(v)
+			}
+		default:
+			text := strings.TrimSpace(fmt.Sprint(v))
+			if text != "" && text != "<nil>" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+// derivedID 派生 (trace, span) 身份（原生 ID 不足长时哈希补齐）。
+// Python: offline/extractor.py _derived_id。
+func derivedID(traceID string, span *tracer.TraceAgentSpan, index int) (string, string) {
+	nativeTrace := nativeID(span, "trace_id", "traceId", "traceid")
+	if nativeTrace == "" {
+		nativeTrace = traceID
+	}
+	if len(nativeTrace) != 32 {
+		digest := sha256.Sum256([]byte(nativeTrace))
+		nativeTrace = hex.EncodeToString(digest[:])[:32]
+	}
+	nativeSpan := nativeID(span, "span_id", "spanId", "spanid")
+	if nativeSpan == "" {
+		digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%d", nativeTrace, fmt.Sprint(spanGet(span, "invoke_id")), index)))
+		nativeSpan = hex.EncodeToString(digest[:])[:16]
+	} else if len(nativeSpan) != 16 {
+		digest := sha256.Sum256([]byte(nativeSpan))
+		nativeSpan = hex.EncodeToString(digest[:])[:16]
+	}
+	return nativeTrace, nativeSpan
+}
+
+// extractInputs 读 span 输入（unwrap 单键包装）。
+// Python: offline/extractor.py _extract_inputs。
+func extractInputs(span *tracer.TraceAgentSpan) any {
+	return unwrap(toJsonCompatible(spanGet(span, "inputs")), "inputs")
+}
+
+// extractOutputs 读 span 输出。
+// Python: offline/extractor.py _extract_outputs。
+func extractOutputs(span *tracer.TraceAgentSpan) any {
+	return unwrap(toJsonCompatible(spanGet(span, "outputs")), "outputs")
+}
+
+// llmParams 读 span 的 llm_params（on_invoke_data 首个携带者）。
+// Python: offline/extractor.py _llm_params。
+func llmParams(span *tracer.TraceAgentSpan) map[string]any {
+	raw := spanGet(span, "on_invoke_data")
+	var records []any
+	if list, isList := raw.([]any); isList {
+		records = list
+	} else if m, isMap := raw.(map[string]any); isMap {
+		records = []any{m}
+	}
+	for _, item := range records {
+		record, isMap := item.(map[string]any)
+		if !isMap {
+			continue
+		}
+		if params, ok := record["llm_params"].(map[string]any); ok {
+			return params
+		}
+	}
+	return map[string]any{}
+}
+
+// extractorMessage 归一化消息（message 包装/choices/response 回退）。
+// Python: offline/extractor.py _message。
+func extractorMessage(value any, defaultRole string) map[string]any {
+	compatible := toJsonCompatible(value)
+	m, isMap := compatible.(map[string]any)
+	if isMap {
+		if inner, hasMessage := m["message"].(map[string]any); hasMessage {
+			return extractorMessage(inner, defaultRole)
+		}
+		role := m["role"]
+		if role == nil {
+			role = defaultRole
+		}
+		content := m["content"]
+		if role != nil || content != nil {
+			item := map[string]any{"role": fmt.Sprint(role), "content": content}
+			if content == nil {
+				item["content"] = ""
+			}
+			for _, key := range []string{"name", "tool_calls"} {
+				if v, exists := m[key]; exists {
+					item[key] = copyJSON(v)
+				}
+			}
+			return item
+		}
+		choices, choicesIsList := m["choices"].([]any)
+		if choicesIsList && len(choices) > 0 {
+			return extractorMessage(choices[0], defaultRole)
+		}
+		if _, hasResponse := m["response"]; hasResponse {
+			return extractorMessage(m["response"], defaultRole)
+		}
+	}
+	if compatible != nil {
+		role := defaultRole
+		if role == "" {
+			role = "assistant"
+		}
+		return map[string]any{"role": role, "content": compatible}
+	}
+	return nil
+}
+
+// usageOf 读响应/参数里的 usage 映射。
+// Python: offline/extractor.py _usage。
+func usageOf(response any, params map[string]any) map[string]any {
+	responseMap, _ := response.(map[string]any)
+	if responseMap == nil {
+		responseMap = map[string]any{}
+	}
+	usage, ok := responseMap["usage"].(map[string]any)
+	if !ok {
+		usage, ok = params["usage"].(map[string]any)
+	}
+	if !ok {
+		return map[string]any{}
+	}
+	return usage
+}
+
+// statusAndEvents 由错误构造 status 与 exception 事件。
+// Python: offline/extractor.py _status_and_events。
+func statusAndEvents(errValue any) (map[string]any, []any) {
+	if errValue == nil {
+		return map[string]any{"code": "STATUS_CODE_OK"}, []any{}
+	}
+	message := fmt.Sprint(errValue)
+	eventAttrs := map[string]any{
+		"exception.type":    "error",
+		"exception.message": message,
+	}
+	return map[string]any{"code": "STATUS_CODE_ERROR", "message": message}, []any{
+		map[string]any{"name": "exception", "attributes": AttributesFromMap(eventAttrs)},
 	}
 }
 
-// getAgentSpans 从 Session 的 Tracer 中获取 Agent Span 列表。
-// Python: TrajectoryExtractor._get_agent_spans(tracer)
+// classifyKind 按调用类型归类 span。
+// Python: offline/extractor.py TrajectoryExtractor._classify_kind。
+func classifyKind(span *tracer.TraceAgentSpan) string {
+	invokeType := strings.ToLower(fmt.Sprint(spanGet(span, "invoke_type")))
+	if invokeType == "plugin" || invokeType == "tool" {
+		return "tool"
+	}
+	if invokeType == "llm" {
+		return "llm"
+	}
+	if invokeType != "" && invokeType != "<nil>" {
+		return invokeType
+	}
+	return "agent"
+}
+
+// buildSpan 把一个 tracer span 转为规范 OTLP span。
+// Python: offline/extractor.py TrajectoryExtractor._build_span。
+func (e *TracerTrajectoryExtractor) buildSpan(span *tracer.TraceAgentSpan, traceID string, index int) (map[string]any, error) {
+	kind := classifyKind(span)
+	nativeTrace, nativeSpan := derivedID(traceID, span, index)
+	name := fmt.Sprint(spanGet(span, "name"))
+	if name == "<nil>" {
+		name = ""
+	}
+	attrs := map[string]any{}
+	var spanName string
+	if kind == "llm" {
+		params := llmParams(span)
+		model := fmt.Sprint(firstValue(params, "model"))
+		if model == "" || model == "<nil>" {
+			model = fmt.Sprint(spanGet(span, "model"))
+		}
+		model = strings.TrimSpace(strings.TrimSuffix(model, "<nil>"))
+		if model != "" {
+			spanName = fmt.Sprintf("chat %s", model)
+		} else {
+			spanName = "chat"
+		}
+		attrs[obs.GenAIOperationName] = "chat"
+		if model != "" {
+			attrs[obs.GenAIRequestModel] = model
+		}
+		messages, _ := params["messages"].([]any)
+		if messages == nil {
+			if m, isMap := params["messages"].(map[string]any); isMap {
+				messages = []any{m}
+			}
+		}
+		var prompts []map[string]any
+		for _, value := range messages {
+			if message := extractorMessage(value, "user"); message != nil {
+				prompts = append(prompts, message)
+			}
+		}
+		response := extractOutputs(span)
+		responseMessage := extractorMessage(response, "")
+		var completions []map[string]any
+		if responseMessage != nil {
+			completions = append(completions, responseMessage)
+		}
+		for key, value := range WriteLLMExchange(prompts, completions) {
+			attrs[key] = value
+		}
+		if tools, exists := params["tools"]; exists && tools != nil {
+			attrs[obs.GenAIToolDefinitions] = toJsonCompatible(tools)
+		}
+		usage := usageOf(response, params)
+		for _, pair := range []struct {
+			keys   []string
+			target string
+		}{
+			{[]string{"prompt_tokens", "input_tokens"}, obs.GenAIUsageInputTokens},
+			{[]string{"completion_tokens", "output_tokens"}, obs.GenAIUsageOutputTokens},
+		} {
+			for _, key := range pair.keys {
+				if value, exists := usage[key]; exists {
+					attrs[pair.target] = value
+					break
+				}
+			}
+		}
+		responseMap, _ := response.(map[string]any)
+		if responseMap != nil {
+			for _, pair := range []struct{ source, target string }{
+				{"prompt_token_ids", RLPromptTokenIDs},
+				{"completion_token_ids", RLCompletionTokenIDs},
+				{"logprobs", RLLogprobs},
+			} {
+				if value, exists := responseMap[pair.source]; exists {
+					attrs[pair.target] = toJsonCompatible(value)
+				}
+			}
+		}
+	} else if kind == "tool" {
+		toolName := strings.TrimPrefix(name, "tool.")
+		if toolName == "" || toolName == name {
+			toolName = fmt.Sprint(firstValue(span.MetaData, "tool_name"))
+		}
+		if toolName == "" || toolName == "<nil>" {
+			toolName = "unknown"
+		}
+		spanName = fmt.Sprintf("execute_tool %s", toolName)
+		attrs[obs.GenAIOperationName] = "execute_tool"
+		attrs[obs.GenAIToolName] = toolName
+		attrs[obs.GenAIToolCallArguments] = extractInputs(span)
+		attrs[obs.GenAIToolCallResult] = extractOutputs(span)
+		toolID := firstValue(span.MetaData, "tool_call_id", "call_id")
+		if toolID != nil {
+			attrs[obs.GenAIToolCallID] = fmt.Sprint(toolID)
+		}
+		if toolInfo := e.toolInfo(toolName); toolInfo != nil {
+			attrs[obs.GenAIToolDefinitions] = toolInfo
+		}
+	} else {
+		if name != "" {
+			spanName = name
+		} else {
+			spanName = kind
+		}
+		attrs[obs.OJSpanInput] = extractInputs(span)
+		attrs[obs.OJSpanOutput] = extractOutputs(span)
+		if agentID := firstValue(span.MetaData, "agent_id"); agentID != nil {
+			attrs[obs.ATAgentID] = fmt.Sprint(agentID)
+		}
+	}
+	status, events := statusAndEvents(span.Error)
+	parentSpan := nativeID(span, "parent_span_id", "parentSpanId")
+	result := map[string]any{
+		"traceId":    nativeTrace,
+		"spanId":     nativeSpan,
+		"name":       spanName,
+		"attributes": AttributesFromMap(attrs),
+		"status":     status,
+		"events":     events,
+	}
+	if parentSpan != "" {
+		result["parentSpanId"] = parentSpan
+	}
+	startNanos := dtToNanos(spanGet(span, "start_time"))
+	endNanos := dtToNanos(spanGet(span, "end_time"))
+	if startNanos != 0 {
+		result["startTimeUnixNano"] = fmt.Sprint(startNanos)
+	}
+	if endNanos != 0 {
+		result["endTimeUnixNano"] = fmt.Sprint(endNanos)
+	}
+	return NormalizeSpan(result)
+}
+
+// toolInfo 查询工具元数据（resourceManager 可用时）。
+// Python: offline/extractor.py TrajectoryExtractor._tool_info。
+func (e *TracerTrajectoryExtractor) toolInfo(toolName string) any {
+	if e.resourceManager == nil || toolName == "" {
+		return nil
+	}
+	toolInfos, err := e.resourceManager.GetToolInfos([]string{toolName}, nil)
+	if err != nil || len(toolInfos) == 0 {
+		return nil
+	}
+	info := toolInfos[0]
+	return map[string]any{
+		"name":        toolName,
+		"description": info.GetDescription(),
+		"parameters":  toJsonCompatible(info.GetParameters()),
+	}
+}
+
+// getAgentSpans 从 Session 的 Tracer 获取 Agent Span 列表。
+// Python: offline/extractor.py TrajectoryExtractor._get_agent_spans。
 func (e *TracerTrajectoryExtractor) getAgentSpans(sess *session.Session) []*tracer.TraceAgentSpan {
-	// Python: tracer = getattr(session, "tracer", None); return tracer() if callable(tracer) else tracer
 	if sess == nil {
 		return nil
 	}
@@ -107,323 +536,5 @@ func (e *TracerTrajectoryExtractor) getAgentSpans(sess *session.Session) []*trac
 	if t == nil {
 		return nil
 	}
-
-	// Python: agent_sm = getattr(tracer, "tracer_agent_span_manager", None)
-	agentSM := t.AgentSpanManager
-	if agentSM == nil {
-		return nil
-	}
-
-	// Python: result = get_spans(); return result if isinstance(result, list) else []
-	return agentSM.GetAllAgentSpans()
-}
-
-// buildStep 将 TraceAgentSpan 转换为 TrajectoryStep。
-// Python: TrajectoryExtractor._build_step(span)
-func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *TrajectoryStep {
-	kind := e.classifyKind(span)
-	baseMeta := map[string]any{}
-	if span.MetaData != nil {
-		baseMeta = span.MetaData
-	}
-	detail := e.buildDetail(span, kind)
-	fullMeta := e.buildMeta(span, baseMeta, kind, detail)
-
-	// Python: 从 LLMCallDetail.response 中提取 prompt_token_ids/completion_token_ids/logprobs
-	var promptTokenIDs []int
-	var completionTokenIDs []int
-	var logprobs []map[string]any
-	if llmDetail, ok := detail.(*LLMCallDetail); ok && llmDetail != nil && llmDetail.Response != nil {
-		if ptids, ok := llmDetail.Response["prompt_token_ids"]; ok {
-			if ids, ok := ptids.([]int); ok {
-				promptTokenIDs = ids
-				delete(llmDetail.Response, "prompt_token_ids")
-			}
-		}
-		if ctids, ok := llmDetail.Response["completion_token_ids"]; ok {
-			if ids, ok := ctids.([]int); ok {
-				completionTokenIDs = ids
-				delete(llmDetail.Response, "completion_token_ids")
-			}
-		}
-		if lp, ok := llmDetail.Response["logprobs"]; ok {
-			if lps, ok := lp.([]map[string]any); ok {
-				logprobs = lps
-			}
-			delete(llmDetail.Response, "logprobs")
-		}
-	}
-
-	var errorMap map[string]any
-	if span.Error != nil {
-		errorMap = span.Error
-	}
-
-	return &TrajectoryStep{
-		Kind:               kind,
-		Error:              errorMap,
-		StartTimeMs:        dtToMs(span.StartTime),
-		EndTimeMs:          dtToMs(span.EndTime),
-		Detail:             detail,
-		PromptTokenIDs:     promptTokenIDs,
-		CompletionTokenIDs: completionTokenIDs,
-		Logprobs:           logprobs,
-		Meta:               fullMeta,
-	}
-}
-
-// buildDetail 根据 kind 构建 StepDetail。
-// Python: TrajectoryExtractor._build_detail(span, kind)
-func (e *TracerTrajectoryExtractor) buildDetail(span *tracer.TraceAgentSpan, kind StepKind) StepDetail {
-	switch kind {
-	case StepKindLLM:
-		return e.buildLLMDetail(&span.Span)
-	case StepKindTool:
-		return e.buildToolDetail(span)
-	default:
-		return nil
-	}
-}
-
-// buildLLMDetail 从 Span 构建LLMCallDetail。
-// Python: TrajectoryExtractor._build_llm_detail(span)
-func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDetail {
-	// Python: on_invoke = getattr(span, "on_invoke_data", None) or []
-	onInvoke := span.OnInvokeData
-	if len(onInvoke) == 0 {
-		return nil
-	}
-
-	// Python: for record in on_invoke: if isinstance(record, dict) and "llm_params" in record
-	var llmParams map[string]any
-	for _, record := range onInvoke {
-		if lp, ok := record["llm_params"]; ok {
-			if m, ok := lp.(map[string]any); ok {
-				llmParams = m
-				break
-			}
-		}
-	}
-	if llmParams == nil {
-		return nil
-	}
-
-	// Python: outputs = self._extract_outputs(span); response = self._parse_llm_response(outputs)
-	response := extractOutputsAsMap(span)
-
-	// Python: usage = response.get("usage") if response else None
-	var usage map[string]any
-	if response != nil {
-		if u, ok := response["usage"]; ok {
-			if m, ok := u.(map[string]any); ok {
-				usage = m
-			}
-		}
-	}
-	// Python: if not usage and isinstance(llm_params, dict): usage = llm_params.get("usage")
-	if usage == nil {
-		if u, ok := llmParams["usage"]; ok {
-			if m, ok := u.(map[string]any); ok {
-				usage = m
-			}
-		}
-	}
-
-	// Python: messages=llm_params.get("messages", [])
-	var baseMessages []llmschema.BaseMessage
-	if m, ok := llmParams["messages"]; ok {
-		if ms, ok := m.([]map[string]any); ok {
-			for _, msg := range ms {
-				role, _ := msg["role"].(string)
-				content, _ := msg["content"].(string)
-				// metadata 必须保留：附件消息身份（_openjiuwen_prompt_attachment_history）
-				// 与交付账本都靠它识别，丢了只能退化为内容嗅探
-				var opts []llmschema.MessageOption
-				if meta, ok := msg["metadata"].(map[string]any); ok && len(meta) > 0 {
-					opts = append(opts, llmschema.WithMetadata(meta))
-				}
-				baseMessages = append(baseMessages, llmschema.NewDefaultMessage(
-					parseRoleType(role), content, opts...,
-				))
-			}
-		}
-	}
-
-	// Python: tools=llm_params.get("tools")
-	var tools []map[string]any
-	if t, ok := llmParams["tools"]; ok {
-		if ts, ok := t.([]map[string]any); ok {
-			tools = ts
-		}
-	}
-
-	modelName, _ := llmParams["model"].(string)
-
-	return &LLMCallDetail{
-		Model:    modelName,
-		Messages: baseMessages,
-		Tools:    tools,
-		Response: response,
-		Usage:    usage,
-	}
-}
-
-// buildToolDetail 从 Span 构建 ToolCallDetail。
-// Python: TrajectoryExtractor._build_tool_detail(span)
-func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan) *ToolCallDetail {
-	// Python: tool_name = getattr(span, "name", "") or ""
-	toolName := span.Name
-
-	var toolDescription string
-	var toolSchema map[string]any
-
-	// Python: if self._resource_manager is not None and tool_name
-	//     对应 Python: tool_info = self._resource_manager.get_tool_infos(tool_name)
-	if e.resourceManager != nil && toolName != "" {
-		toolInfos, err := e.resourceManager.GetToolInfos([]string{toolName}, nil)
-		if err == nil && len(toolInfos) > 0 {
-			info := toolInfos[0]
-			toolDescription = info.GetDescription()
-			toolSchema = info.GetParameters()
-		}
-	}
-
-	return &ToolCallDetail{
-		ToolName:        toolName,
-		CallArgs:        extractInputsAsMap(&span.Span),
-		CallResult:      extractOutputsAsMap(&span.Span),
-		ToolDescription: toolDescription,
-		ToolSchema:      toolSchema,
-	}
-}
-
-// buildMeta 构建步骤元数据。
-// Python: TrajectoryExtractor._build_meta(span, base_meta, kind, detail)
-func (e *TracerTrajectoryExtractor) buildMeta(span *tracer.TraceAgentSpan, baseMeta map[string]any, kind StepKind, detail StepDetail) map[string]any {
-	// Python: meta = copy.deepcopy(base_meta)
-	meta := make(map[string]any, len(baseMeta)+5)
-	for k, v := range baseMeta {
-		meta[k] = v
-	}
-
-	// Python: meta["operator_id"] = self._get_operator_id(span, base_meta)
-	meta["operator_id"] = e.getOperatorID(span, baseMeta)
-
-	// Python: meta["span_name"] = getattr(span, "name", None)
-	meta["span_name"] = span.Name
-
-	// Python: agent_id = getattr(span, "agent_id", None) or base_meta.get("agent_id")
-	// Go 中 TraceAgentSpan 没有 AgentID 字段，从 baseMeta 回退
-	if aid, ok := baseMeta["agent_id"]; ok && aid != nil {
-		meta["agent_id"] = aid
-	}
-
-	// Python: if kind not in ("llm", "tool"): meta["inputs"] = ...; meta["outputs"] = ...
-	if kind != StepKindLLM && kind != StepKindTool {
-		meta["inputs"] = extractInputsAsMap(&span.Span)
-		meta["outputs"] = extractOutputsAsMap(&span.Span)
-	}
-
-	// Python: meta["invoke_id"] = getattr(span, "invoke_id", None)
-	// Python: meta["parent_invoke_id"] = getattr(span, "parent_invoke_id", None)
-	// Python: meta["child_invokes"] = getattr(span, "child_invokes_id", None)
-	meta["invoke_id"] = span.InvokeID
-	meta["parent_invoke_id"] = span.ParentInvokeID
-	if len(span.ChildInvokesID) > 0 {
-		meta["child_invokes"] = span.ChildInvokesID
-	}
-
-	_ = detail // 避免 unused 警告
-	return meta
-}
-
-// classifyKind 根据 invoke_type 判断步骤类型。
-// Python: TrajectoryExtractor._classify_kind(span)
-func (e *TracerTrajectoryExtractor) classifyKind(span *tracer.TraceAgentSpan) StepKind {
-	// Python: invoke_type = getattr(span, "invoke_type", None); invoke_str = str(invoke_type) if invoke_type else ""
-	switch span.InvokeType {
-	case "plugin":
-		return StepKindTool
-	case "llm":
-		return StepKindLLM
-	case "workflow":
-		return StepKindWorkflow
-	case "memory":
-		return StepKindMemory
-	default:
-		return StepKindAgent
-	}
-}
-
-// getOperatorID 从 Span 属性中提取 operator ID。
-// Python: TrajectoryExtractor._get_operator_id(span, meta)
-// 优先级：operator_id > llm_call_id > meta.operator_id > name
-func (e *TracerTrajectoryExtractor) getOperatorID(span *tracer.TraceAgentSpan, meta map[string]any) string {
-	// Python: getattr(span, "operator_id", None)
-	if v, ok := span.MetaData["operator_id"]; ok && v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-
-	// Python: getattr(span, "llm_call_id", None)
-	if v, ok := meta["llm_call_id"]; ok && v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-
-	// Python: meta.get("operator_id")
-	if v, ok := meta["operator_id"]; ok && v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-
-	// Python: getattr(span, "name", None)
-	if span.Name != "" {
-		return span.Name
-	}
-
-	return ""
-}
-
-// dtToMs 将 time.Time 转换为毫秒时间戳。
-// Python: _dt_to_ms(dt) -> int(dt.timestamp() * 1000) if dt else None
-func dtToMs(t *time.Time) int {
-	if t == nil {
-		return 0
-	}
-	return int(t.UnixMilli())
-}
-
-// extractInputsAsMap 从 Span 提取输入数据为 map[string]any。
-// Python: TrajectoryExtractor._extract_inputs(span)
-// Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
-func extractInputsAsMap(span *tracer.Span) map[string]any {
-	raw := span.Inputs
-	if m, ok := raw.(map[string]any); ok {
-		if inner, ok := m["inputs"]; ok {
-			if innerMap, ok := inner.(map[string]any); ok {
-				return innerMap
-			}
-		}
-		return m
-	}
-	return nil
-}
-
-// extractOutputsAsMap 从 Span 提取输出数据为 map[string]any。
-// Python: TrajectoryExtractor._extract_outputs(span)
-func extractOutputsAsMap(span *tracer.Span) map[string]any {
-	raw := span.Outputs
-	if m, ok := raw.(map[string]any); ok {
-		if inner, ok := m["outputs"]; ok {
-			if innerMap, ok := inner.(map[string]any); ok {
-				return innerMap
-			}
-		}
-		return m
-	}
-	return nil
+	return t.AgentSpanManager.GetAllAgentSpans()
 }

@@ -99,6 +99,18 @@ const (
     read_at     INTEGER DEFAULT NULL,
     PRIMARY KEY (member_name, team_name)
 )`
+	// Python: TeamTaskReviewVoteBase (team_review_vote_{suffix})（F_62）
+	// 追加式票事实表：改票 = INSERT 新行，计票取每 reviewer 的最新行。
+	createReviewVoteTableDDL = `CREATE TABLE IF NOT EXISTS team_review_vote_%s (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_name    TEXT NOT NULL DEFAULT '',
+    task_id      TEXT NOT NULL DEFAULT '',
+    review_round INTEGER NOT NULL DEFAULT 0,
+    reviewer     TEXT NOT NULL DEFAULT '',
+    decision     TEXT NOT NULL DEFAULT '',
+    feedback     TEXT,
+    created_at   INTEGER NOT NULL DEFAULT 0
+)`
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -552,6 +564,7 @@ func createSessionTablesDDL(db *gorm.DB, suffix string) error {
 		fmt.Sprintf(createDepTableDDL, suffix),
 		fmt.Sprintf(createMessageTableDDL, suffix),
 		fmt.Sprintf(createReadStatusTableDDL, suffix),
+		fmt.Sprintf(createReviewVoteTableDDL, suffix),
 	}
 	for _, stmt := range tableStmts {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -585,6 +598,7 @@ func dropSessionTablesDDL(db *gorm.DB, suffix string) {
 		"team_task_" + suffix,
 		"team_message_" + suffix,
 		"message_read_status_" + suffix,
+		"team_review_vote_" + suffix,
 	}
 	for _, t := range tables {
 		if dbErr := db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(t))).Error; dbErr != nil {

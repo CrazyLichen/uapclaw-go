@@ -40,7 +40,16 @@ const (
 	TeamEventTaskCompleted = "task_completed"
 	// TeamEventTaskVerified 验收通过事件（verify gate pass，F_62）。
 	// Python: TeamEvent.TASK_VERIFIED = "task_verified" (schema/events.py L170)
-	TeamEventTaskVerified    = "task_verified"
+	TeamEventTaskVerified = "task_verified"
+	// TeamEventTaskRevisionRequested 返工请求事件（verify gate fail，F_62）。
+	// Python: TeamEvent.TASK_REVISION_REQUESTED = "task_revision_requested" (events.py L171)
+	TeamEventTaskRevisionRequested = "task_revision_requested"
+	// TeamEventTaskSubmittedForReview 提交评审事件（verify-gate 入口，F_62）。
+	// Python: TeamEvent.TASK_SUBMITTED_FOR_REVIEW = "task_submitted_for_review" (events.py L169)
+	TeamEventTaskSubmittedForReview = "task_submitted_for_review"
+	// TeamEventTaskReviewVote 评审投票事件（scheduled dispatch，F_62）。
+	// Python: TeamEvent.TASK_REVIEW_VOTE = "task_review_vote" (events.py L173)
+	TeamEventTaskReviewVote  = "task_review_vote"
 	TeamEventTaskCancelled   = "task_cancelled"
 	TeamEventTaskUnblocked   = "task_unblocked"
 	TeamEventTaskListDrained = "task_list_drained"

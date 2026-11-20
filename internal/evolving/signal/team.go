@@ -232,44 +232,53 @@ func ParseTeamModelJSON(raw string) any {
 	return nil
 }
 
-// BuildTeamTrajectorySummary 将轨迹步骤摘要为文本，对关键协作工具保留更多细节。
-// Python: build_team_trajectory_summary(trajectory)
+// BuildTeamTrajectorySummary 轨迹摘要为文本，对关键协作工具保留更多细节。
+// Python: signal/team.py build_team_trajectory_summary（span 读面）。
 func BuildTeamTrajectorySummary(traj *trajectory.Trajectory) string {
 	toolBudget := 20000
 	llmBudget := 10000
+	keyTools := map[string]bool{"spawn_member": true, "create_task": true, "build_team": true, "view_task": true, "send_message": true}
 	var toolLines []string
 	var llmLines []string
 	llmCount := 0
 	toolCount := 0
 
-	for _, step := range traj.Steps {
-		if step.Kind == trajectory.StepKindTool && step.Detail != nil {
-			toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail)
-			if !ok {
-				continue
-			}
+	for _, span := range trajectory.IterSpans(traj) {
+		switch trajectory.SpanCategory(span) {
+		case "tool":
 			toolCount++
-			toolName := toolDetail.ToolName
-			isKey := keyTools[toolName]
-			argsLimit := 150
-			if isKey {
-				argsLimit = 500
+			toolCall := trajectory.ReadToolCall(span)
+			toolName := fmt.Sprintf("%v", nilIfEmpty(toolCall["name"]))
+			if toolName == "" || toolName == "<nil>" {
+				toolName = fmt.Sprintf("%v", span["name"])
 			}
-			resultLimit := 200
-			if isKey {
-				resultLimit = 500
+			if toolName == "" || toolName == "<nil>" {
+				toolName = "unknown"
 			}
-			args := truncateString(fmt.Sprintf("%v", toolDetail.CallArgs), argsLimit)
-			result := truncateString(fmt.Sprintf("%v", toolDetail.CallResult), resultLimit)
+			_, isKey := keyTools[toolName]
+			argsLimit, resultLimit := 150, 200
+			if isKey {
+				argsLimit, resultLimit = 500, 500
+			}
+			args := truncateString(fmt.Sprintf("%v", toolCall["input"]), argsLimit)
+			output := toolCall["output"]
+			if output == nil {
+				if errMap, isMap := toolCall["error"].(map[string]any); isMap {
+					output = errMap["message"]
+				}
+			}
+			result := truncateString(fmt.Sprintf("%v", output), resultLimit)
 			toolLines = append(toolLines, fmt.Sprintf("[Tool:%s] args=%s result=%s", toolName, args, result))
-		} else if step.Kind == trajectory.StepKindLLM && step.Detail != nil {
-			llmDetail, ok := step.Detail.(*trajectory.LLMCallDetail)
-			if !ok {
-				continue
-			}
+		case "llm":
 			llmCount++
-			if llmDetail.Response != nil {
-				llmLines = append(llmLines, fmt.Sprintf("[LLM] %s", truncateString(fmt.Sprintf("%v", llmDetail.Response), 300)))
+			messages := trajectory.ReadLLMMessages(span, false)
+			if len(messages) > 0 {
+				response := messages[len(messages)-1]
+				responseText := response["content"]
+				if responseText == nil || responseText == "" {
+					responseText = firstNonNil(response["tool_calls"], response)
+				}
+				llmLines = append(llmLines, fmt.Sprintf("[LLM] %s", truncateString(fmt.Sprintf("%v", responseText), 300)))
 			}
 		}
 	}
@@ -290,11 +299,31 @@ func BuildTeamTrajectorySummary(traj *trajectory.Trajectory) string {
 		Int("llm_count", llmCount).
 		Int("tool_count", toolCount).
 		Int("tool_section_len", len(toolSection)).
-		Int("llm_section_len", len(llmSection)).
 		Int("total_len", len(summary)).
 		Msg("[TeamSignal] trajectory summary")
 
 	return summary
+}
+
+// nilIfEmpty 空值归一（"<nil>"/空串 → nil）。
+func nilIfEmpty(value any) any {
+	if value == nil {
+		return nil
+	}
+	if text := fmt.Sprintf("%v", value); text == "" || text == "<nil>" {
+		return nil
+	}
+	return value
+}
+
+// firstNonNil 返回第一个非 nil 值。
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }
 
 // MakeTeamUserIntentSignal 构建团队用户意图信号。

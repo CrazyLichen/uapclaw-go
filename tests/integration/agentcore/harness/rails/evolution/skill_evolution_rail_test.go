@@ -83,11 +83,6 @@ func (m *mockSkillClient) Release(_ context.Context, _ ...model_clients.ReleaseO
 }
 func (m *mockSkillClient) SupportsKVCacheRelease() bool { return false }
 
-// testTrajectorySink 用于测试的轨迹 Sink 桩。
-type testTrajectorySink struct{}
-
-func (t *testTrajectorySink) PublishMemberTrajectory(_ *trajectory.MemberTrajectorySnapshot) {}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestSkillEvolutionRailSuite 运行 SkillEvolutionRail 集成测试套件。
@@ -410,14 +405,10 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_ExperienceSharer默认n
 //
 // 对齐 Python: SkillEvolutionRail.__init__(default_member_role="teammate")
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_DefaultMemberRole() {
-	rail := s.newTestRail()
+	_ = s.newTestRail()
 
 	// SkillEvolutionRail 构造时传入 WithDefaultMemberRole("teammate")
-	// 通过 SetTrajectorySink 验证 defaultMemberRole 生效
-	sink := &testTrajectorySink{}
-	err := rail.EvolutionRail.SetTrajectorySink(sink, "team_1")
-	s.Require().NoError(err)
-	// 不崩溃即验证 defaultMemberRole 已正确设置
+	// 12-04：sink 链删除（规则 8）；defaultMemberRole 已在构造期断言。
 }
 
 // ─── 信号去重 ───
@@ -627,7 +618,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_au
 	s.False(rail.AutoScan())
 
 	// autoScan=false → SnapshotForEvolution 返回 nil
-	snapshot := rail.SnapshotForEvolution(s.Ctx, &trajectory.Trajectory{}, nil)
+	snapshot := rail.SnapshotForEvolution(s.Ctx, trajectory.NewTestTrajectoryWithID("empty"), nil)
 	s.Nil(snapshot)
 }
 
@@ -639,7 +630,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_�
 	s.True(rail.AutoScan())
 
 	// 空轨迹（无 steps）→ collectMessagesFromTrajectory 返回空 → snapshot nil
-	emptyTraj := &trajectory.Trajectory{SessionID: "test"}
+	emptyTraj := trajectory.NewTestTrajectoryWithIDWithSession("test")
 	snapshot := rail.SnapshotForEvolution(s.Ctx, emptyTraj, nil)
 	s.Nil(snapshot)
 }
@@ -651,15 +642,11 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_�
 	rail := s.newTestRail()
 
 	// 构造有内容的轨迹
-	builder := trajectory.NewTrajectoryBuilder("session_123", "online")
-	builder.RecordStep(&trajectory.TrajectoryStep{
-		Kind: trajectory.StepKindLLM,
-		Detail: &trajectory.LLMCallDetail{
-			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("test query")},
-			Response: map[string]any{"content": "test response"},
-		},
-	})
-	traj := builder.Build()
+	builder := mustIntegrationTestBuilder("session_123")
+		traj, buildErr := builder.Build()
+	if buildErr != nil {
+		panic(buildErr)
+	}
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{ConversationID: "session_123"}, nil)
 	snapshot := rail.SnapshotForEvolution(s.Ctx, traj, cbc)
@@ -975,7 +962,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RunEvolution_空消息s
 
 	// snapshot 的 Messages 为空
 	snapshot := &evolution.EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{SessionID: "test"},
+		Trajectory: trajectory.NewTestTrajectoryWithIDWithSession("test"),
 		Messages:   []map[string]any{},
 	}
 	err := rail.RunEvolution(s.Ctx, nil, snapshot)
@@ -1034,7 +1021,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SimplifyRequestResult_H
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionSnapshot_ToLegacyDict() {
 	skillName := "test-skill"
 	snapshot := evolution.EvolutionSnapshot{
-		Trajectory:          &trajectory.Trajectory{SessionID: "session-123"},
+		Trajectory:          trajectory.NewTestTrajectoryWithIDWithSession("session-123"),
 		Messages:            []map[string]any{{"role": "user", "content": "hello"}},
 		SkillName:           &skillName,
 		SessionID:           "session-123",
@@ -1055,7 +1042,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionSnapshot_ToLeg
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionSnapshot_FromLegacyDict() {
 	skillName := "test-skill"
 	snapshot := evolution.EvolutionSnapshot{
-		Trajectory: &trajectory.Trajectory{SessionID: "session-456"},
+		Trajectory: trajectory.NewTestTrajectoryWithIDWithSession("session-456"),
 		Messages:   []map[string]any{{"role": "user", "content": "test"}},
 		SkillName:  &skillName,
 		SessionID:  "session-456",

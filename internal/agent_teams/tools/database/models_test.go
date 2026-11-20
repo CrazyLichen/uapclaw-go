@@ -185,13 +185,15 @@ func TestTeamMember_omitempty零值(t *testing.T) {
 	}
 }
 
-// TestTeamDynamicTablePrefixes_完整性 动态表前缀常量应包含所有 4 个前缀。
+// TestTeamDynamicTablePrefixes_完整性 动态表前缀常量应包含全部前缀（25.2b
+// F_62 新增 team_review_vote_，共 5 个）。
 func TestTeamDynamicTablePrefixes_完整性(t *testing.T) {
 	expected := []string{
 		"team_task_dependency_",
 		"team_task_",
 		"team_message_",
 		"message_read_status_",
+		"team_review_vote_",
 	}
 	if len(TeamDynamicTablePrefixes) != len(expected) {
 		t.Fatalf("TeamDynamicTablePrefixes 长度: got %d, want %d", len(TeamDynamicTablePrefixes), len(expected))

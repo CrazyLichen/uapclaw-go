@@ -113,8 +113,8 @@ func TestSingleDimUpdater_Update调用优化器链路(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := &trajectory.Trajectory{ExecutionID: "exec1"}
-	traj2 := &trajectory.Trajectory{ExecutionID: "exec2"}
+	traj1 := trajectory.NewTestTrajectoryWithID("exec1")
+	traj2 := trajectory.NewTestTrajectoryWithID("exec2")
 
 	result, err := u.Update(context.Background(), []*trajectory.Trajectory{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
 	if err != nil {
@@ -181,8 +181,8 @@ func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := &trajectory.Trajectory{ExecutionID: "traj_1"}
-	traj2 := &trajectory.Trajectory{ExecutionID: "traj_2"}
+	traj1 := trajectory.NewTestTrajectoryWithID("traj_1")
+	traj2 := trajectory.NewTestTrajectoryWithID("traj_2")
 	_, err := u.Update(context.Background(), []*trajectory.Trajectory{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
 	if err != nil {
 		t.Fatalf("Update returned error: %v", err)
@@ -191,11 +191,11 @@ func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	if len(opt.addTrajectoryOrder) != 2 {
 		t.Fatalf("add_trajectory called %d times, want 2", len(opt.addTrajectoryOrder))
 	}
-	if opt.addTrajectoryOrder[0].ExecutionID != "traj_1" {
-		t.Errorf("first trajectory ExecutionID = %v, want traj_1", opt.addTrajectoryOrder[0].ExecutionID)
+	if opt.addTrajectoryOrder[0].TrajectoryID() != "traj_1" {
+		t.Errorf("first trajectory ExecutionID = %v, want traj_1", opt.addTrajectoryOrder[0].TrajectoryID())
 	}
-	if opt.addTrajectoryOrder[1].ExecutionID != "traj_2" {
-		t.Errorf("second trajectory ExecutionID = %v, want traj_2", opt.addTrajectoryOrder[1].ExecutionID)
+	if opt.addTrajectoryOrder[1].TrajectoryID() != "traj_2" {
+		t.Errorf("second trajectory ExecutionID = %v, want traj_2", opt.addTrajectoryOrder[1].TrajectoryID())
 	}
 }
 
@@ -228,8 +228,8 @@ func TestSingleDimUpdater_Process使用信号优先流程(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := &trajectory.Trajectory{ExecutionID: "traj1"}
-	traj2 := &trajectory.Trajectory{ExecutionID: "traj2"}
+	traj1 := trajectory.NewTestTrajectoryWithID("traj1")
+	traj2 := trajectory.NewTestTrajectoryWithID("traj2")
 	signals := []*signal.EvolutionSignal{
 		{SignalType: "low_score", Section: "Troubleshooting", Excerpt: "score=0.00"},
 	}

@@ -134,8 +134,8 @@ func TestBaseOptimizerMixin_Bind创建TextualParameter(t *testing.T) {
 // BaseOptimizerMixin.AddTrajectory/GetTrajectories/ClearTrajectories 测试
 func TestBaseOptimizerMixin_轨迹缓存(t *testing.T) {
 	m := &BaseOptimizerMixin{}
-	traj1 := &trajectory.Trajectory{ExecutionID: "exec1", Source: "offline"}
-	traj2 := &trajectory.Trajectory{ExecutionID: "exec2", Source: "offline"}
+	traj1 := trajectory.NewTestTrajectoryWithID("exec1")
+	traj2 := trajectory.NewTestTrajectoryWithID("exec2")
 
 	m.AddTrajectory(traj1)
 	m.AddTrajectory(traj2)
@@ -144,8 +144,8 @@ func TestBaseOptimizerMixin_轨迹缓存(t *testing.T) {
 	if len(trajs) != 2 {
 		t.Fatalf("GetTrajectories returned %d, want 2", len(trajs))
 	}
-	if trajs[0].ExecutionID != "exec1" {
-		t.Errorf("trajs[0].ExecutionID = %q, want exec1", trajs[0].ExecutionID)
+	if trajs[0].TrajectoryID() != "exec1" {
+		t.Errorf("trajs[0].TrajectoryID() = %q, want exec1", trajs[0].TrajectoryID())
 	}
 
 	m.ClearTrajectories()
@@ -157,14 +157,14 @@ func TestBaseOptimizerMixin_轨迹缓存(t *testing.T) {
 // GetTrajectories 返回副本
 func TestBaseOptimizerMixin_GetTrajectories副本(t *testing.T) {
 	m := &BaseOptimizerMixin{}
-	traj1 := &trajectory.Trajectory{ExecutionID: "exec1"}
+	traj1 := trajectory.NewTestTrajectoryWithID("exec1")
 	m.AddTrajectory(traj1)
 
 	trajs := m.GetTrajectories()
 	// 修改返回的切片不应影响内部状态
-	trajs[0] = &trajectory.Trajectory{ExecutionID: "modified"}
+	trajs[0] = trajectory.NewTestTrajectoryWithID("modified")
 	inner := m.GetTrajectories()
-	if inner[0].ExecutionID != "exec1" {
+	if inner[0].TrajectoryID() != "exec1" {
 		t.Error("modifying GetTrajectories() result should not affect internal state")
 	}
 }
