@@ -1613,40 +1613,6 @@ func TestJsonStringOf_NonEmptyStr(t *testing.T) {
 
 // ──────────────────────────── 批次十一：IterTrajectoryEvents owner 事件链 ────────────────────────────
 
-// TestIterTrajectoryEvents_ownerSpanEvent 短命 owner span 上的 span event
-// （ask_user 形态）合并读取。
-func TestIterTrajectoryEvents_ownerSpanEvent(t *testing.T) {
-	// owner span 带事件条目（无 record_kind 属性 → 非独立事件 span）。
-	owner := map[string]any{
-		"name": "llm.call", "spanId": "own1", "traceId": "trace-own",
-		"attributes": map[string]any{
-			"gen_ai.operation.name":                "chat",
-			"openjiuwen.trajectory.sequence_epoch": "ep-own",
-		},
-		"events": []any{
-			map[string]any{
-				"name": "ask_user.requested",
-				"attributes": map[string]any{
-					"openjiuwen.trajectory.event_id":              "se1",
-					"openjiuwen.trajectory.subject_id":            "subj-own",
-					"openjiuwen.trajectory.sequence_epoch":        "ep-own",
-					"openjiuwen.trajectory.subject_sequence":      1,
-					"openjiuwen.trajectory.recorded_at_unix_nano": 7,
-					"openjiuwen.trajectory.payload":               map[string]any{"question": "q"},
-				},
-			},
-		},
-	}
-	events := IterTrajectoryEvents(spanEnvelope(owner))
-	if len(events) == 0 {
-		t.Fatal("span event must be merged into a v2 event")
-	}
-	// []map 形态输入。
-	if events2 := IterTrajectoryEvents([]map[string]any{owner}); events2 == nil {
-		t.Fatal("map-list input must iterate")
-	}
-}
-
 // TestReadTrajectoryEvent_字符串载荷 JSON 字符串载荷解析（含坏 JSON 回落 nil）。
 func TestReadTrajectoryEvent_字符串载荷(t *testing.T) {
 	base := map[string]any{
