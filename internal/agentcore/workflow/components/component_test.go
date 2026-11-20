@@ -112,9 +112,9 @@ func TestWorkflowComponent_OnStream_流输出转换触发(t *testing.T) {
 		})
 	defer fw.RegisterWorkflowTransformIO(callback.ComponentBatchInput, callback.ComponentStreamOutput, nil, nil)
 
-	comp := &WorkflowComponent{StreamFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
-		ch := make(chan graphexe.StreamChunk[map[string]any], 1)
-		ch <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"raw": 1}}
+	comp := &WorkflowComponent{StreamFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+		ch := make(chan graphexe.StreamChunk[any], 1)
+		ch <- graphexe.StreamChunk[any]{Val: map[string]any{"raw": 1}}
 		close(ch)
 		return ch, nil
 	}}
@@ -127,7 +127,7 @@ func TestWorkflowComponent_OnStream_流输出转换触发(t *testing.T) {
 	if got.Err != nil {
 		t.Fatal(got.Err)
 	}
-	if got.Val["wrapped"] != true {
+	if got.Val.(map[string]any)["wrapped"] != true {
 		t.Fatalf("流输出应经转换包装: %v", got.Val)
 	}
 }

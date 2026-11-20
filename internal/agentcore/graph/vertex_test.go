@@ -117,7 +117,7 @@ func TestVertex_Reset(t *testing.T) {
 type fakeVertexExecutable struct {
 	BaseExecutable[map[string]any, map[string]any]
 	invokeFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
-	streamFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[map[string]any], error)
+	streamFn  func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[any], error)
 	collectFn func(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession, kw map[string]any) (map[string]any, error)
 }
 
@@ -130,11 +130,11 @@ func (f *fakeVertexExecutable) OnInvoke(ctx context.Context, inputs map[string]a
 }
 
 func (f *fakeVertexExecutable) OnStream(ctx context.Context, inputs map[string]any,
-	sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[map[string]any], error) {
+	sess session.BaseSession, kw map[string]any) (<-chan StreamChunk[any], error) {
 	if f.streamFn != nil {
 		return f.streamFn(ctx, inputs, sess, kw)
 	}
-	ch := make(chan StreamChunk[map[string]any])
+	ch := make(chan StreamChunk[any])
 	close(ch)
 	return ch, nil
 }
@@ -635,8 +635,8 @@ func TestPostStream_收口分流(t *testing.T) {
 	// 普通节点：数据帧 + 收口 END_ 哨兵帧（Python 行为对齐：task 未拉起时
 	// first_frame=False 的 END 帧同样被 Send 丢弃分支拦截，故此路径需先有数据帧）
 	v, am := newVertexAsProducer(t)
-	ch := make(chan StreamChunk[map[string]any], 1)
-	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
+	ch := make(chan StreamChunk[any], 1)
+	ch <- StreamChunk[any]{Val: map[string]any{"n1": "hello"}}
 	close(ch)
 	v.postStream(context.Background(), ch, ability.ComponentAbilityStream)
 	// 断言累计投递帧数（单调计数）：Run 会异步排空主队列，MainQueueLen 受消费
@@ -646,8 +646,8 @@ func TestPostStream_收口分流(t *testing.T) {
 	}
 	// 逐 chunk 转发：默认 transformer 无 schema → 原样透传
 	v2, am2 := newVertexAsProducer(t)
-	ch2 := make(chan StreamChunk[map[string]any], 1)
-	ch2 <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "hello"}}
+	ch2 := make(chan StreamChunk[any], 1)
+	ch2 <- StreamChunk[any]{Val: map[string]any{"n1": "hello"}}
 	close(ch2)
 	v2.postStream(context.Background(), ch2, ability.ComponentAbilityStream)
 	p := am2.StreamActor("n2").Processor(ability.ComponentAbilityCollect)
@@ -1312,8 +1312,8 @@ func TestPostStream_Transformer轨与StreamOutput(t *testing.T) {
 	}
 	// get_stream_output 钩子
 	v.executable = &streamOutExe{}
-	ch := make(chan StreamChunk[map[string]any], 1)
-	ch <- StreamChunk[map[string]any]{Val: map[string]any{"n1": "raw"}}
+	ch := make(chan StreamChunk[any], 1)
+	ch <- StreamChunk[any]{Val: map[string]any{"n1": "raw"}}
 	close(ch)
 	v.postStream(context.Background(), ch, ability.ComponentAbilityStream)
 	// transformer 轨产出的 message "x"（map）入下游 + END 帧
