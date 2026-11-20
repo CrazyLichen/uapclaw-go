@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sessionStream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 )
 
@@ -17,6 +19,7 @@ type fakeWorkflow struct {
 	invokeKwargs map[string]any
 	invokeOut    *workflow.WorkflowOutput
 	invokeErr    error
+	streamFrames []workflow.WorkflowChunk
 }
 
 func (f *fakeWorkflow) Invoke(ctx context.Context, inputs any,
@@ -52,6 +55,7 @@ func newSubWorkflowComponentForTest(fw *fakeWorkflow, cacheStream bool) (*SubWor
 		return nil, err
 	}
 	comp.subWorkflowInvokeFn = fw.Invoke
+	comp.subWorkflowStreamFn = fw.Stream
 	return comp, nil
 }
 
@@ -237,5 +241,103 @@ func TestSubWorkflowComponent_Invoke_关缓存恒转调(t *testing.T) {
 	}
 	if fw.invokeCalled != 1 {
 		t.Fatalf("cache_stream=false 恒转调, invokeCalled=%d", fw.invokeCalled)
+	}
+}
+
+// fakeWorkflow.Stream 流式替身（返回预置帧序列）
+func (f *fakeWorkflow) Stream(ctx context.Context, inputs any,
+	sess sessioninterfaces.SessionFacade, modelContext any, streamModes []sessionStream.StreamMode,
+	kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
+	out := make(chan workflow.WorkflowChunk)
+	go func() {
+		defer close(out)
+		for _, fr := range f.streamFrames {
+			out <- fr
+		}
+	}()
+	return out, nil
+}
+
+// TestSubWorkflowComponent_Stream_逐帧累积并转发 cache_stream=true（Python stream :76-81）
+func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
+	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+		&sessionStream.OutputSchema{Type: "message", Index: 0, Payload: map[string]any{"out": "a"}},
+		&sessionStream.OutputSchema{Type: "message", Index: 1, Payload: map[string]any{"out": "b"}},
+	}}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
+	ch, err := comp.StreamFn(context.Background(), env, nil)
+	if err != nil {
+		t.Fatalf("流启动失败: %v", err)
+	}
+	var got []graphexe.StreamChunk[map[string]any]
+	for c := range ch {
+		got = append(got, c)
+	}
+	if len(got) != 2 || got[0].Err != nil {
+		t.Fatalf("期望两帧无错误, got %v", got)
+	}
+	// 转发形态：{"frame": <stream.Schema>} 信封（End Go 同款）
+	f0, ok := got[0].Val["frame"].(*sessionStream.OutputSchema)
+	if !ok || f0.Payload.(map[string]any)["out"] != "a" {
+		t.Fatalf("期望帧信封承载原 Schema, got %v", got[0].Val)
+	}
+	// 累积的是原始帧值：Schema 帧 BuildFinalResult 跳过（对齐 Python isinstance dict）
+	merged, _ := comp.streamState.BuildFinalResult()
+	if len(merged) != 0 {
+		t.Fatalf("Schema 帧应被合并过滤, got %v", merged)
+	}
+}
+
+// TestSubWorkflowComponent_Stream_关缓存不累积 cache_stream=false
+func TestSubWorkflowComponent_Stream_关缓存不累积(t *testing.T) {
+	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+		&sessionStream.CustomSchema{Type: "out", Data: map[string]any{"output": map[string]any{"out": "x"}}},
+	}}
+	comp, _ := newSubWorkflowComponentForTest(fw, false)
+	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
+	ch, _ := comp.StreamFn(context.Background(), env, nil)
+	for range ch {
+	}
+	merged, _ := comp.streamState.BuildFinalResult()
+	if len(merged) != 0 {
+		t.Fatalf("cache_stream=false 不应累积, got %v", merged)
+	}
+}
+
+// TestSubWorkflowComponent_Stream_流后批式空缓存转调 Schema 帧过滤 + 流后批式联动
+func TestSubWorkflowComponent_Stream_dict帧累积命中短路(t *testing.T) {
+	// Schema 帧经累积后被合并过滤（对齐 Python isinstance dict），缓存为空；
+	// 短路命中路径由 TestSubWorkflowComponent_Invoke_非空短路 以 dict 帧直接累积锁定。
+	// 此处锁定流后批式 invoke 在空缓存下真实转调（D-14b-1 流式联动形态）。
+	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+		&sessionStream.CustomSchema{Type: "out", Data: map[string]any{"output": map[string]any{"out": "x"}}},
+	}}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
+	ch, _ := comp.StreamFn(context.Background(), env, nil)
+	for range ch {
+	}
+	// 流后批式 invoke：空缓存（Schema 帧被过滤）真实转调
+	if _, err := comp.invokeSubWorkflow(context.Background(), env, newFakeNodeSession(t)); err != nil {
+		t.Fatalf("转调路径不应报错: %v", err)
+	}
+	if fw.invokeCalled != 1 {
+		t.Fatalf("Schema 帧过滤后空缓存应真实转调（D-14b-1）, invokeCalled=%d", fw.invokeCalled)
+	}
+}
+
+// TestGetStreamOutput_两态 开=合并结果 关=nil（Python get_stream_output :81-85）
+func TestGetStreamOutput_两态(t *testing.T) {
+	fw := &fakeWorkflow{}
+	compOn, _ := newSubWorkflowComponentForTest(fw, true)
+	compOn.streamState.Accumulate(map[string]any{"output": map[string]any{"out": "v"}})
+	if m := compOn.GetStreamOutput(); m == nil || m["out"] != "v" {
+		t.Fatalf("开启时期望合并结果, got %v", m)
+	}
+	compOff, _ := newSubWorkflowComponentForTest(fw, false)
+	compOff.streamState.Accumulate(map[string]any{"output": map[string]any{"out": "v"}})
+	if m := compOff.GetStreamOutput(); m != nil {
+		t.Fatalf("关闭时期望 nil, got %v", m)
 	}
 }
