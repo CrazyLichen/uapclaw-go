@@ -19,13 +19,13 @@ type fakeWorkflow struct {
 	invokeCalled int
 	invokeInputs any
 	invokeKwargs map[string]any
-	invokeOut    *workflow.WorkflowOutput
+	invokeOut    any
 	invokeErr    error
 	streamFrames []workflow.WorkflowChunk
 }
 
 func (f *fakeWorkflow) Invoke(ctx context.Context, inputs any,
-	sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error) {
+	sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (any, error) {
 	f.invokeCalled++
 	f.invokeInputs = inputs
 	f.invokeKwargs = kwargs
@@ -33,7 +33,7 @@ func (f *fakeWorkflow) Invoke(ctx context.Context, inputs any,
 		return nil, f.invokeErr
 	}
 	if f.invokeOut == nil {
-		return &workflow.WorkflowOutput{Result: map[string]any{"done": true}, State: workflow.WorkflowExecutionStateCompleted}, nil
+		return map[string]any{"response": map[string]any{"done": true}}, nil
 	}
 	return f.invokeOut, nil
 }

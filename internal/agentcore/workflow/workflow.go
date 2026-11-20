@@ -142,17 +142,18 @@ func (w *Workflow) AddConditionalConnection(srcCompID string, router graph.Route
 // inputs 运行时闭集（D-17-1 收窄注记）：map[string]any（常规）|
 // *interaction.InteractiveInput（交互恢复，workflow.py:747 isinstance 探测同形）；
 // 两形态均在 validateInputs/图执行内显式分发，any 仅作闭集外层承载。
+// Invoke 批式执行（workflow.py:328-408 一比一；kwargs 携带 is_sub/skip_inputs_validate）。
+// inputs 运行时闭集（D-17-1 收窄注记）：map[string]any（常规）|
+// *interaction.InteractiveInput（交互恢复，workflow.py:747 isinstance 探测同形）；
+// 两形态均在 validateInputs/图执行内显式分发，any 仅作闭集外层承载。
+// 返回值：顶层 = *WorkflowOutput（Python invoke 返回 WorkflowOutput）；
+// is_sub = 裸 dict（Python _sub_invoke 返回 get_outputs 原始输出，workflow.py:626）。
+// 修复 R-14b-2：原 is_sub 分支把裸 dict 强转 *WorkflowOutput 失败后返回 nil——
+// SubWorkflowComponent（8.14b）为首个真实消费者，父侧 sub 节点输出恒空。
 func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
-	modelContext any, kwargs map[string]any) (*WorkflowOutput, error) {
+	modelContext any, kwargs map[string]any) (any, error) {
 	if kwBool(kwargs, "is_sub") {
-		out, err := w.subInvoke(ctx, inputs, sess, modelContext, kwargs)
-		if err != nil {
-			return nil, err
-		}
-		if o, ok := out.(*WorkflowOutput); ok {
-			return o, nil
-		}
-		return nil, nil
+		return w.subInvoke(ctx, inputs, sess, modelContext, kwargs)
 	}
 	if err := w.validateSession(sess); err != nil {
 		return nil, err

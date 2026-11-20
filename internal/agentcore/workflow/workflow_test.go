@@ -12,7 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
-	flow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/flow"
 )
 
 // ──────────────────────────── 门面构造 ────────────────────────────
@@ -164,7 +163,7 @@ func TestTaskDone_完成态(t *testing.T) {
 // TestCreateWorkflowSession_主分支 对齐 workflow.py:708-731 装配序。
 func TestCreateWorkflowSession_主分支(t *testing.T) {
 	w := NewWorkflow(nil)
-	_ = w.AddWorkflowComp("a", flow.NewStart(), boolPtr(false), nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
+	_ = w.AddWorkflowComp("a", newFakeStartComp(), boolPtr(false), nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	_ = w.internal.StartComp("a")
 	sess := session.NewSession()
 	ws := w.createWorkflowSession(sess, []stream.StreamMode{stream.StreamModeOutput}, false)
@@ -185,14 +184,11 @@ func TestCreateWorkflowSession_主分支(t *testing.T) {
 	}
 }
 
-// mustEnd 构造 End 组件（NewEnd 双返回值收敛）。
-func mustEnd(t *testing.T) *flow.End {
+// mustEnd 构造 End 组件替身（flow→workflow 测试期 import cycle，
+// 根包测试内联组合件桩；SetEndComp 仅消费组合面做 abilities 推导，不执行）。
+func mustEnd(t *testing.T) components.ComponentComposable {
 	t.Helper()
-	e, err := flow.NewEnd(nil)
-	if err != nil {
-		t.Fatalf("NewEnd：%v", err)
-	}
-	return e
+	return newFakeStartComp()
 }
 
 var _ = session.NewSession

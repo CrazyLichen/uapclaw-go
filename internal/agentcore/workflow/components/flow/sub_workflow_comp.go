@@ -46,7 +46,7 @@ type SubWorkflowComponent struct {
 
 	// subWorkflowInvokeFn 子工作流批式调用缝（生产=闭包转 subWorkflow.Invoke；测试可注入 fake）
 	subWorkflowInvokeFn func(ctx context.Context, inputs any,
-		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error)
+		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (any, error)
 	// subWorkflowStreamFn 子工作流流式调用缝（生产=闭包转 subWorkflow.Stream）
 	subWorkflowStreamFn func(ctx context.Context, inputs any,
 		sess sessioninterfaces.SessionFacade, modelContext any, streamModes []stream.StreamMode,
@@ -111,7 +111,7 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 	}
 	// 生产调用缝（Python invoke :79-83 直接调 self._sub_workflow.invoke 的等价承载）
 	c.subWorkflowInvokeFn = func(ctx context.Context, inputs any,
-		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error) {
+		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (any, error) {
 		return subWorkflow.Invoke(ctx, inputs, sess, modelContext, kwargs)
 	}
 	c.subWorkflowStreamFn = func(ctx context.Context, inputs any,
@@ -168,8 +168,12 @@ func (c *SubWorkflowComponent) invokeSubWorkflow(ctx context.Context, inputs map
 	if err != nil {
 		return nil, err
 	}
-	// *WorkflowOutput → map（D-17-1 延伸：Output TypeVar 具体化承载，
-	// JSON 往返对齐 pydantic 序列化面 {"result":…,"state":…}）
+	// is_sub 路径 Python _sub_invoke 返回裸 dict（workflow.py:626），Go 直传 any
+	// （R-14b-2 修复：原经 *WorkflowOutput JSON 往返丢失原始键形态）
+	if m, ok := out.(map[string]any); ok {
+		return m, nil
+	}
+	// 非 dict 形态（如流式 {"stream": [...]}/其它）经 JSON 往返收敛 map（D-17-1 延伸）
 	raw, _ := json.Marshal(out)
 	var m map[string]any
 	_ = json.Unmarshal(raw, &m)

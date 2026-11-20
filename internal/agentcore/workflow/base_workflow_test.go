@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
-	flow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/flow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -15,7 +16,7 @@ func newTestWorkflow(t *testing.T) *BaseWorkflow {
 	t.Helper()
 	bw := NewBaseWorkflow(nil, nil)
 	for _, id := range []string{"a", "b", "c"} {
-		if err := bw.AddWorkflowComp(id, flow.NewStart(), boolPtr(false),
+		if err := bw.AddWorkflowComp(id, newFakeStartComp(), boolPtr(false),
 			nil, nil, nil, nil, nil, 0, -1.0, nil, nil); err != nil {
 			t.Fatalf("注册组件 %s 失败：%v", id, err)
 		}
@@ -121,7 +122,7 @@ func TestFlattenDict_点路径(t *testing.T) {
 // TestAddWorkflowComp_注册与组合面接线 对齐 _workflow.py:168-202。
 func TestAddWorkflowComp_注册与组合面接线(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
-	if err := bw.AddWorkflowComp("s", flow.NewStart(), boolPtr(false),
+	if err := bw.AddWorkflowComp("s", newFakeStartComp(), boolPtr(false),
 		nil, nil, nil, nil, nil, 0, -1.0, nil, nil); err != nil {
 		t.Fatalf("AddWorkflowComp：%v", err)
 	}
@@ -136,7 +137,7 @@ func TestAddWorkflowComp_注册与组合面接线(t *testing.T) {
 // TestAddWorkflowComp_非法ID拒绝 校验先于注册（Python validate → NodeSpec → add_component）。
 func TestAddWorkflowComp_非法ID拒绝(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
-	if err := bw.AddWorkflowComp("bad id", flow.NewStart(), boolPtr(false),
+	if err := bw.AddWorkflowComp("bad id", newFakeStartComp(), boolPtr(false),
 		nil, nil, nil, nil, nil, 0, -1.0, nil, nil); err == nil {
 		t.Fatal("非法 ID 应拒绝")
 	}
@@ -213,7 +214,7 @@ func TestAutoCompleteAbilities_三段推断(t *testing.T) {
 			}
 		}
 		for id := range ids {
-			if err := bw.AddWorkflowComp(id, flow.NewStart(), boolPtr(false),
+			if err := bw.AddWorkflowComp(id, newFakeStartComp(), boolPtr(false),
 				nil, nil, nil, nil, abilities[id], 0, -1.0, nil, nil); err != nil {
 				t.Fatalf("注册 %s：%v", id, err)
 			}
@@ -278,7 +279,7 @@ func TestAutoCompleteAbilities_三段推断(t *testing.T) {
 // TestValidateEdgeNodes_缺注册节点panic 对齐 _workflow.py:363-376（raise→panic 构造期纪律）。
 func TestValidateEdgeNodes_缺注册节点panic(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
-	_ = bw.AddWorkflowComp("a", flow.NewStart(), boolPtr(false),
+	_ = bw.AddWorkflowComp("a", newFakeStartComp(), boolPtr(false),
 		nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	_ = bw.AddConnection([]string{"a"}, "ghost")
 	defer func() {
@@ -296,9 +297,9 @@ func TestValidateEdgeNodes_缺注册节点panic(t *testing.T) {
 // TestCompleteStreamSourceGroups_键格式 对齐 _workflow.py:449-479。
 func TestCompleteStreamSourceGroups_键格式(t *testing.T) {
 	bw := NewBaseWorkflow(nil, nil)
-	_ = bw.AddWorkflowComp("p", flow.NewStart(), boolPtr(false), nil, nil, nil, nil,
+	_ = bw.AddWorkflowComp("p", newFakeStartComp(), boolPtr(false), nil, nil, nil, nil,
 		[]components.ComponentAbility{components.ComponentAbilityStream}, 0, -1.0, nil, nil)
-	_ = bw.AddWorkflowComp("q", flow.NewStart(), boolPtr(false), nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
+	_ = bw.AddWorkflowComp("q", newFakeStartComp(), boolPtr(false), nil, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	_ = bw.AddStreamConnection("p", "q")
 	bw.AutoCompleteAbilities()
 	groups := bw.workflowSpec.StreamSourceGroups["q"]
@@ -343,3 +344,29 @@ func panicReason(r any) string {
 	}
 	return fmt.Sprint(r)
 }
+
+// newFakeStartComp 测试用最小组合件（替代 flow.NewStart：
+// flow→workflow 与 workflow 测试→flow 会构成测试期 import cycle，
+// 故根包测试内联组合件桩；仅注册面使用，不执行）。
+type fakeStartExec struct {
+	graphexe.BaseExecutable[map[string]any, map[string]any]
+}
+
+func newFakeStartComp() components.ComponentComposable {
+	return &fakeComposable{exec: &fakeStartExec{}}
+}
+
+type fakeComposable struct {
+	exec graphexe.GeneralExecutor
+}
+
+func (f *fakeComposable) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	opts := []graph.AddNodeOption{}
+	if waitForAll {
+		opts = append(opts, graph.WithWaitForAll())
+	}
+	g.AddNode(nodeID, f.exec, opts...)
+	return nil
+}
+
+func (f *fakeComposable) ToExecutable() graphexe.GeneralExecutor { return f.exec }
