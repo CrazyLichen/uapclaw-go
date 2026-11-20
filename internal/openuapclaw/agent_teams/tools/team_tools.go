@@ -1179,12 +1179,11 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 	assignee, _ := inputs["assignee"].(string)
 	addBlockedBy := extractStringSlice(inputs, "add_blocked_by")
 
-	// 批量取消：task_id="*" + status="cancelled"
+	// 批量取消：task_id="*" + status="cancelled"。
+	// 每张被取消的任务发一条携带其 assignee 的定向 TASK_CANCELLED，受影响的
+	// 成员经 on_task_cancelled 被 steer 离开——**无需成员级取消**。
+	// Python: tool_task.py L1692-1696 注释明示（skip= live_human_agent_names）。
 	if taskID == "*" && status == "cancelled" {
-		// 取消所有 claimed 的非 human-agent 成员
-		if err := t.cancelClaimedMembers(ctx); err != nil {
-			return toolError(fmt.Sprintf("Failed to cancel claimed members: %s", err))
-		}
 		skip := t.agentTeam.HumanAgentNames()
 		count, err := t.agentTeam.CancelAllTasks(ctx, skip)
 		if err != nil {
@@ -1203,9 +1202,8 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 		if isHumanAgentLocked(t.agentTeam, task) {
 			return toolError(fmt.Sprintf("Task '%s' is held by a human-agent member and cannot be cancelled by the leader", taskID))
 		}
-		if err := cancelMemberIfClaimed(ctx, t.agentTeam, taskID); err != nil {
-			return toolError(fmt.Sprintf("Failed to cancel member for task %s: %s", taskID, err))
-		}
+		// 定向 TASK_CANCELLED 由 CancelTask 链发出，assignee 经 handler steer
+		// 离开——同批量取消，无成员级取消。（Python: L1755）
 		result := t.agentTeam.CancelTask(ctx, taskID)
 		if !result.OK {
 			return toolError("Failed to cancel task")
@@ -1218,9 +1216,8 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 
 	// 内容更新（title 和/或 content）
 	if title != "" || content != "" {
-		if err := cancelMemberIfClaimed(ctx, t.agentTeam, taskID); err != nil {
-			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed failed")
-		}
+		// 编辑不改 owner、不打断成员轮次；TASK_UPDATED 只让通知器提前说话
+		//（F_129）。Python 无成员级取消。（tool_task.py L1762-1779）
 		if err := t.agentTeam.TaskManager().UpdateTask(ctx, taskID, title, content); err != nil {
 			return toolError(err.Error())
 		}
@@ -1312,54 +1309,6 @@ func isHumanAgentLocked(team *TeamBackend, task *database.TeamTaskBase) bool {
 	return false
 }
 
-// cancelMemberIfClaimed 如果任务处于执行中状态则取消认领者（旧 claimed→in_progress 语义）。
-func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string) error {
-	task, err := team.TaskManager().Get(ctx, taskID)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed: Get failed")
-		return err
-	}
-	if task == nil || task.Status != fsm.TaskStatusInProgress || task.Assignee == nil {
-		return nil
-	}
-	if !team.IsHumanAgent(*task.Assignee) {
-		if result := team.CancelMember(ctx, *task.Assignee); !result.OK {
-			return fmt.Errorf("CancelMember 失败: %s", result.Reason)
-		}
-	}
-	return nil
-}
-
-// cancelClaimedMembers 取消所有执行中状态的非 human-agent 成员（旧 claimed→in_progress 语义）。
-func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) error {
-	claimedTasks, err := t.agentTeam.TaskManager().ListTasks(ctx, fsm.TaskStatusInProgress)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("cancelClaimedMembers: ListTasks failed")
-		return err
-	}
-	cancelled := make(map[string]struct{})
-	var firstErr error
-	for _, task := range claimedTasks {
-		if task.Assignee == nil {
-			continue
-		}
-		assignee := *task.Assignee
-		if _, ok := cancelled[assignee]; ok {
-			continue
-		}
-		if t.agentTeam.IsHumanAgent(assignee) {
-			continue
-		}
-		if result := t.agentTeam.CancelMember(ctx, assignee); !result.OK {
-			logger.Warn(logComponent).Str("member", assignee).Str("reason", result.Reason).Msg("CancelMember failed")
-			if firstErr == nil {
-				firstErr = fmt.Errorf("CancelMember(%s) 失败: %s", assignee, result.Reason)
-			}
-		}
-		cancelled[assignee] = struct{}{}
-	}
-	return firstErr
-}
 
 // Stream 实现 Tool 接口（不支持流式调用）。
 func (t *UpdateTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
