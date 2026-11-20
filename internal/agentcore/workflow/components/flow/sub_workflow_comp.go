@@ -75,6 +75,25 @@ func WithCacheStream(enabled bool) SubWorkflowOption {
 // _workflow.py:109 据此给 Vertex 递 InnerPregelConfig 形成 ns 嵌套）
 func (c *SubWorkflowComponent) GraphInvoker() bool { return true }
 
+// ToExecutable 产出可执行体（Python to_executable 继承默认返回 self）。
+// 必须显式 override：Go 嵌入方法提升为静态解析，基座 WorkflowComponent.ToExecutable
+// 返回的是内层基座自身（GraphInvoker=false、无组件类型标签），不自定义则
+// _workflow.py:109 的 graph_invoker 探测与 Vertex 信封路径全部失效。
+func (c *SubWorkflowComponent) ToExecutable() graphexe.GeneralExecutor { return c }
+
+// AddComponent 将自身注册进图（Python add_component 继承 mixin 默认实现）。
+// 必须显式 override：基座 AddComponent 内部经静态解析调基座 ToExecutable
+// （返回内层），注册产物丢失外层三钩子；此处改为注册外层自身
+// （≙ Python self.to_executable() 动态分派返回 self 的语义）。
+func (c *SubWorkflowComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	opts := []graph.AddNodeOption{}
+	if waitForAll {
+		opts = append(opts, graph.WithWaitForAll())
+	}
+	g.AddNode(nodeID, c.ToExecutable(), opts...)
+	return nil
+}
+
 // ComponentType 组件类型标签（Python :90-91）
 func (c *SubWorkflowComponent) ComponentType() string { return SubWorkflowComponentType }
 

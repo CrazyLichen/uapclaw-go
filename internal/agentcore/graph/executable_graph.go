@@ -66,8 +66,22 @@ func DefaultGraphInvoke[I, O any](g ExecutableGraph[I, O], ctx context.Context, 
 	if raw, ok := envelope[InputsKey].(I); ok {
 		inputs = raw
 	}
-	// config 收窄 *PregelConfig（D-8）：断言失败（含缺失）即 nil，对齐 .get 宽容
-	cfg, _ := envelope[ConfigKey].(*pregel.PregelConfig)
+	// config 判定对齐 Python is_main = config is None：信封 config 可为
+	// *PregelConfig（顶层 Invoke 直调）或 *InnerPregelConfig（子图嵌套——父图
+	// task 层创建的节点级 config 经 SubWorkflowComponent 信封透传，Python
+	// workflow.py:600 CONFIG_KEY 透传使子图 isMain=False 跳过 pre_workflow_execute，
+	// 由引擎自 graph_store 自动恢复快照；原 D-8 单形态断言使嵌套恢复被
+	// checkpointer 拒绝，实测 Python 官方嵌套恢复测试后修正）。
+	var cfg *pregel.PregelConfig
+	switch c := envelope[ConfigKey].(type) {
+	case *pregel.PregelConfig:
+		cfg = c
+	case *pregel.InnerPregelConfig:
+		cfg = &c.PregelConfig
+	case pregel.InnerPregelConfig:
+		// 值形态：task 层 NodeInput.Config 以值注入（task.go:294），经信封原样透传
+		cfg = &c.PregelConfig
+	}
 	return g.Invoke_(ctx, inputs, sess, cfg)
 }
 

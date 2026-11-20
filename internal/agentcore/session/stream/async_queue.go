@@ -96,12 +96,13 @@ func (q *AsyncStreamQueue) Send(ctx context.Context, data any,
 
 // Receive 接收数据（Python receive 一比一）：已关闭报错；timeout<=0 不限时。
 func (q *AsyncStreamQueue) Receive(ctx context.Context, timeout time.Duration) (any, error) {
+	// closed 时不立即报错：先排空缓冲（Python emitter 的 END_FRAME 哨兵是入队元素，
+	// drain 循环按序读完数据帧才遇哨兵——Go 以 close 等价哨兵（D-14-3），缓冲帧
+	// 必须仍可消费，缓冲排空才承载 closed 语义；否则 close 瞬间丢帧）
 	q.mu.Lock()
-	if q.closed {
-		q.mu.Unlock()
-		return nil, fmt.Errorf("StreamQueue is already closed")
-	}
+	closed := q.closed
 	q.mu.Unlock()
+	_ = closed
 	if timeout <= 0 {
 		timeout = 0
 	}
@@ -207,6 +208,11 @@ func (q *AsyncStreamQueue) getWithTimeout(ctx context.Context, timeout time.Dura
 	}
 	for {
 		q.mu.Lock()
+		if q.closed && len(q.items) == 0 {
+			// close 等价 END_FRAME 哨兵：缓冲排空后的 closed 才终止消费
+			q.mu.Unlock()
+			return nil, false
+		}
 		if len(q.items) > 0 {
 			v := q.items[0]
 			q.items = q.items[1:]

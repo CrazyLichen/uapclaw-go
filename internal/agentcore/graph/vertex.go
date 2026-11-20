@@ -1468,7 +1468,15 @@ func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[
 	// ④ 收口分流（vertex.py:613-616）：End+子图 → 子图流发 END_FRAME；否则 end_message
 	if v.isEndNode && isSubGraph {
 		if q, err := am.SubWorkflowStream(); err == nil {
-			q.Close(ctx, 0) // Go close 信号等价 END_FRAME（session/stream D-哨兵决策）
+			// Python vertex.py:614 send(StreamEmitter.END_FRAME)——哨兵入队，队列
+			// 由子会话关闭时收尾；close 等价会在无消费者时 forceClear 丢帧（8.14b 实证）
+			if serr := q.Send(ctx, constants.StreamEmitterEndFrame, 0, 1); serr != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+					Str("node_id", v.nodeID).
+					Err(serr).
+					Msg("Failed to send sub workflow END_FRAME sentinel")
+			}
 		}
 	} else {
 		_ = am.EndMessage(ctx, v.nodeID, ability)

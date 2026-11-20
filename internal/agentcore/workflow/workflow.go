@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -357,7 +358,10 @@ func (w *Workflow) subInvoke(ctx context.Context, inputs any, sess sessioninterf
 	if err != nil {
 		return nil, err
 	}
-	if _, err = compiled.Invoke(ctx, map[string]any{graph.InputsKey: inputs}, subWS); err != nil {
+	// Python workflow.py:600 CONFIG_KEY: kwargs.get(CONFIG_KEY)——父图 InnerPregelConfig
+	// 透传使子图 isMain=False，跳过 pre_workflow_execute 校验，由引擎自 graph_store
+	// 自动恢复快照（恢复链路关键；Go 曾漏传导致子图 pre 拒绝恢复重入）
+	if _, err = compiled.Invoke(ctx, map[string]any{graph.InputsKey: inputs, graph.ConfigKey: kwargs[graph.ConfigKey]}, subWS); err != nil {
 		return nil, err
 	}
 	if w.isStreaming { // workflow.py:602-617 按 end 组件流能力数收 sub_workflow_stream
@@ -366,7 +370,25 @@ func (w *Workflow) subInvoke(ctx context.Context, inputs any, sess sessioninterf
 			return map[string]any{"stream": messages}, nil
 		}
 	}
-	// workflow.py:619-623 NodeSession(sub_session, end_comp_id).state().get_outputs
+	// workflow.py:619-623 NodeSession(sub_session, end_comp_id).state().get_outputs(output_key)
+	// —— Python 以 subWS 为父建节点级视图（parent_id=subWS.executable_id），
+	// get_outputs 据此前缀下钻子树（io_state 点路径键展开后，子图节点输出位于
+	// subWS.executable_id 子树下，如 "composite.end"）；直接按根解引用读不到。
+	if wfs, ok := subWS.State().(state.WorkflowState); ok {
+		parentID := ""
+		if p, ok2 := subWS.(sessioninterfaces.ExecutableIDProvider); ok2 {
+			parentID = p.ExecutableID() // Python create_parent_id(sub_workflow_session)
+		}
+		execID := w.endCompID
+		if parentID != "" {
+			execID = parentID + "." + w.endCompID
+		}
+		ns := wfs.CreateNodeState(execID, parentID)
+		if nws, ok3 := ns.(state.WorkflowState); ok3 {
+			return nws.GetOutputs(w.endCompID), nil
+		}
+		return workflowGetOutputs(subWS, w.endCompID), nil
+	}
 	return workflowGetOutputs(subWS, w.endCompID), nil
 }
 
@@ -382,9 +404,11 @@ func (w *Workflow) subStream(ctx context.Context, inputs any, sess sessioninterf
 		if err != nil {
 			return
 		}
-		if _, err = compiled.Invoke(ctx, map[string]any{graph.InputsKey: inputs}, subWS); err != nil {
+		// 同 subInvoke：CONFIG_KEY 透传（Python :633）
+		if _, err = compiled.Invoke(ctx, map[string]any{graph.InputsKey: inputs, graph.ConfigKey: kwargs[graph.ConfigKey]}, subWS); err != nil {
 			return
 		}
+		println("PROBE-DEBUG subStream child isStreaming=", w.isStreaming)
 		if !w.isStreaming { // Python :634 流式分支才收帧
 			return
 		}
@@ -407,11 +431,28 @@ func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.Inn
 	if err != nil {
 		return nil
 	}
+	// workflow.py:602-606 按 end 组件 STREAM/TRANSFORM 能力数定哨兵计数
+	var streamAbilityCount int
+	if spec := w.internal.Config().Spec; spec != nil {
+		if cc, ok := spec.CompConfigs[w.endCompID]; ok {
+			for _, a := range cc.Abilities {
+				if a == ability.ComponentAbilityStream || a == ability.ComponentAbilityTransform {
+					streamAbilityCount++
+				}
+			}
+		}
+	}
+	// workflow.py:607-617 一比一：frame==None → continue；frame==END_FRAME → 计数减；
+	// 其余入 messages；计数归零退出（哨兵消费语义，撤销 D-14-3 close 等价）
 	var messages []WorkflowChunk
-	for {
+	for streamAbilityCount > 0 {
 		frame, rerr := subStreamQ.Receive(context.Background(), streamTimeout)
-		if rerr != nil || frame == nil {
-			break // 队列关闭 ≙ 全部流源 END（Python streamAbilityCount 归零等价）
+		if rerr != nil {
+			continue // Python frame is None → continue
+		}
+		if s, ok := frame.(string); ok && s == constants.StreamEmitterEndFrame {
+			streamAbilityCount--
+			continue
 		}
 		if sc, ok := frame.(stream.Schema); ok {
 			messages = append(messages, sc)
