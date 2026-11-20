@@ -1,6 +1,9 @@
 package improver_evolution
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -872,4 +875,69 @@ func TestCohortRate_结构与排序(t *testing.T) {
 	if cohortRate([]string{}, []string{})["rate"] != nil {
 		t.Fatal("分母 0 应为 nil")
 	}
+}
+
+// ─────────────── Task 4：digest 与主函数 ───────────────
+
+const goldenDir = "testdata/golden"
+
+func TestTrainingLedgerDigest_跨语言逐字节一致(t *testing.T) {
+	cohorts, err := loadAndValidateSource(goldenDir+"/feedback_analysis_input_1.yaml", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := trainingLedgerDigest(cohorts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record map[string]any
+	raw, _ := os.ReadFile(goldenDir + "/digest_record_1.json")
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatal(err)
+	}
+	if digest != record["digest"].(string) {
+		t.Fatalf("digest 不一致\n want: %s\n  got: %s", record["digest"], digest)
+	}
+}
+
+func TestAnalyzeCandidateFeedbackLedgers_黄金样例双向断言(t *testing.T) {
+	report, err := AnalyzeCandidateFeedbackLedgers(
+		[]LedgerSource{goldenDir + "/feedback_analysis_input_1.yaml"}, 2, 0.1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected map[string]any
+	raw, _ := os.ReadFile(goldenDir + "/feedback_analysis_expected_1.json")
+	if err := json.Unmarshal(raw, &expected); err != nil {
+		t.Fatal(err)
+	}
+	if !pyDeepEqual(report, expected) {
+		t.Fatal("报告与 Python 黄金样例不一致")
+	}
+	// 紧凑序列化 hash 与 Python 记录一致（D-e1-3 实证）
+	canonical, err := marshalCanonical(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(canonical)
+	got := fmt.Sprintf("sha256:%x", sum)
+	var hashes map[string]any
+	raw, _ = os.ReadFile(goldenDir + "/expected_compact_hashes.json")
+	if err := json.Unmarshal(raw, &hashes); err != nil {
+		t.Fatal(err)
+	}
+	if want := hashes["feedback_analysis_expected_1"].(string); got != want {
+		t.Fatalf("compact hash 不一致\n want: %s\n  got: %s", want, got)
+	}
+}
+
+func TestAnalyzeCandidateFeedbackLedgers_参数校验(t *testing.T) {
+	_, err := AnalyzeCandidateFeedbackLedgers(nil, 0, 0.0)
+	assertErrMsg(t, err, "min_support_cohorts must be at least 1")
+}
+
+func TestAnalyzeCandidateFeedbackLedgers_跨输入重复cohortID(t *testing.T) {
+	c := comparableCohortFixture()
+	_, err := AnalyzeCandidateFeedbackLedgers([]LedgerSource{c, comparableCohortFixture()}, 1, 0.0)
+	assertErrMsg(t, err, "duplicate cohort_id across inputs: cc1")
 }

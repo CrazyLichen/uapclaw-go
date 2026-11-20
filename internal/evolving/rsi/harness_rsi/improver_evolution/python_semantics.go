@@ -103,3 +103,64 @@ func pyFloatRepr(f float64) string {
 func mapValue(mapping map[string]any, key string) any {
 	return mapping[key]
 }
+
+// pyDeepEqual 深度相等比较，数值跨类型相等（复刻 Python == 的递归语义），
+// 用于 Go map[string]any 与 Python 黄金样例 JSON 的对齐断言
+func pyDeepEqual(left, right any) bool {
+	if isNumber(left) && isNumber(right) {
+		return pyFloat(left) == pyFloat(right)
+	}
+	if isBool(left) != isBool(right) {
+		return false
+	}
+	switch l := left.(type) {
+	case nil:
+		return right == nil
+	case string:
+		r, ok := right.(string)
+		return ok && l == r
+	case bool:
+		r, ok := right.(bool)
+		return ok && l == r
+	case map[string]any:
+		return deepEqualMap(reflect.ValueOf(l), reflect.ValueOf(right))
+	default:
+	}
+	// 泛化 map 比较（如 map[string]int vs JSON 解出的 map[string]any）
+	lv, rv := reflect.ValueOf(left), reflect.ValueOf(right)
+	if lv.Kind() == reflect.Map && rv.Kind() == reflect.Map {
+		return deepEqualMap(lv, rv)
+	}
+	if lv.Kind() != reflect.Slice && lv.Kind() != reflect.Array {
+		return reflect.DeepEqual(left, right)
+	}
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return false
+	}
+	if lv.Len() != rv.Len() {
+		return false
+	}
+	for i := 0; i < lv.Len(); i++ {
+		if !pyDeepEqual(lv.Index(i).Interface(), rv.Index(i).Interface()) {
+			return false
+		}
+	}
+	return true
+}
+
+// deepEqualMap 泛化 map 深度相等（键为可比较类型，值递归 pyDeepEqual）
+func deepEqualMap(lv, rv reflect.Value) bool {
+	if lv.Len() != rv.Len() {
+		return false
+	}
+	for _, key := range lv.MapKeys() {
+		rvv := rv.MapIndex(key)
+		if !rvv.IsValid() {
+			return false
+		}
+		if !pyDeepEqual(lv.MapIndex(key).Interface(), rvv.Interface()) {
+			return false
+		}
+	}
+	return true
+}

@@ -6,11 +6,13 @@ package improver_evolution
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -254,6 +256,263 @@ var _REGRESSION_AVAILABILITIES = map[string]bool{
 // （AnalyzeCandidateFeedbackLedgers 于 digest 主函数阶段加入）
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+// AnalyzeCandidateFeedbackLedgers 校验并汇总一份或多份 Candidate Feedback Ledger v1 输入
+// （对应 Python analyze_candidate_feedback_ledgers L45-231，步骤逐条对应）。
+// Python 的 bool/非有限数参数守卫在 Go 强类型下不可达（D-e1-6），仅保留 min_support_cohorts 下界检查。
+func AnalyzeCandidateFeedbackLedgers(
+	sources []LedgerSource,
+	minSupportCohorts int,
+	highValueGainThreshold float64,
+) (map[string]any, error) {
+	if minSupportCohorts < 1 {
+		return nil, errNew("min_support_cohorts must be at least 1")
+	}
+	normalizedSources, err := normalizeSources(sources)
+	if err != nil {
+		return nil, err
+	}
+	cohorts := make([]map[string]any, 0)
+	for sourceIndex, source := range normalizedSources {
+		loaded, err := loadAndValidateSource(source, sourceIndex)
+		if err != nil {
+			return nil, err
+		}
+		cohorts = append(cohorts, loaded...)
+	}
+	if err := requireUniqueCohortIDs(cohorts); err != nil {
+		return nil, err
+	}
+
+	comparableIDs := make([]string, 0)
+	nonComparableReasons := map[string]int{}
+	nonComparableIDsByReason := map[string][]string{}
+	metricAvailability := map[string]map[string]any{}
+	for _, name := range _METRIC_NAMES {
+		metricAvailability[name] = map[string]any{
+			"available_count":     0,
+			"unavailable_count":   0,
+			"unavailable_reasons": map[string]int{},
+		}
+	}
+	nonpositiveIDs := make([]string, 0)
+	highValueOpportunityIDs := make([]string, 0)
+	highValueOutsideIDs := make([]string, 0)
+	duplicateCandidateCount := 0
+	duplicateOpportunityCount := 0
+	duplicateCohortIDs := make([]string, 0)
+	triggerBySurface := map[string]*surfaceEvidence{}
+	regressionBySurface := map[string]*surfaceEvidence{}
+	featureEvidence := map[string]*featureEvidence{}
+	positiveSelectionRegretIDs := make([]string, 0)
+	partialRepairOpportunityIDs := map[string]bool{}
+	partialRepairSupportIDs := map[string]bool{}
+
+	for _, cohort := range cohorts {
+		cohortID := cohort["cohort"].(map[string]any)["cohort_id"].(string)
+		reason := comparabilityReason(cohort)
+		if reason != "" {
+			nonComparableReasons[reason]++
+			nonComparableIDsByReason[reason] = append(nonComparableIDsByReason[reason], cohortID)
+		} else {
+			comparableIDs = append(comparableIDs, cohortID)
+			gains := make([]float64, 0, len(cohort["candidates"].([]any)))
+			for _, item := range cohort["candidates"].([]any) {
+				gains = append(gains, pyFloat(item.(map[string]any)["outcome"].(map[string]any)["target_gain"]))
+			}
+			if len(gains) > 0 && maxFloat(gains) <= 0.0 {
+				nonpositiveIDs = append(nonpositiveIDs, cohortID)
+			}
+			if err := collectHighValueOutsideTopM(cohort, highValueGainThreshold,
+				&highValueOpportunityIDs, &highValueOutsideIDs); err != nil {
+				return nil, err
+			}
+			collectFeatureEvidence(cohort, featureEvidence)
+		}
+
+		selectionRegret := cohort["metrics"].(map[string]any)["selection_regret"].(map[string]any)
+		if selectionRegret["status"] == "available" && pyFloat(selectionRegret["value"]) > 0.0 {
+			positiveSelectionRegretIDs = append(positiveSelectionRegretIDs, cohortID)
+		}
+
+		for _, metricName := range _METRIC_NAMES {
+			metric := cohort["metrics"].(map[string]any)[metricName].(map[string]any)
+			if metric["status"] == "available" {
+				metricAvailability[metricName]["available_count"] = metricAvailability[metricName]["available_count"].(int) + 1
+			} else {
+				metricAvailability[metricName]["unavailable_count"] = metricAvailability[metricName]["unavailable_count"].(int) + 1
+				reasons := metricAvailability[metricName]["unavailable_reasons"].(map[string]int)
+				reasons[metric["reason"].(string)]++
+			}
+		}
+
+		candidateCount, cohortDuplicateCount := cohortDuplicateCounts(cohort)
+		duplicateOpportunityCount += candidateCount
+		duplicateCandidateCount += cohortDuplicateCount
+		if cohortDuplicateCount > 0 {
+			duplicateCohortIDs = append(duplicateCohortIDs, cohortID)
+		}
+
+		for _, item := range cohort["candidates"].([]any) {
+			candidate := item.(map[string]any)
+			surfaces := candidate["activation"].(map[string]any)["surfaces"].([]any)
+			for _, surfaceItem := range surfaces {
+				surface := surfaceItem.(string)
+				trigger, present := triggerBySurface[surface]
+				if !present {
+					trigger = newSurfaceEvidence()
+					triggerBySurface[surface] = trigger
+				}
+				trigger.observeTrigger(cohortID, candidate["activation"].(map[string]any))
+				regression, present := regressionBySurface[surface]
+				if !present {
+					regression = newSurfaceEvidence()
+					regressionBySurface[surface] = regression
+				}
+				regression.observeRegression(cohortID, candidate["regression"].(map[string]any)["target"].(map[string]any))
+			}
+			// 对应 Python verifier_summary 判定块 L131-145
+			verifier, ok := candidate["verifier_summary"].(map[string]any)
+			if !ok || verifier["availability"] != "observed" {
+				continue
+			}
+			remaining, hasRemaining := verifier["remaining_failed_requirements_count"]
+			newlyPassed, hasNewly := verifier["newly_passed_requirements_count"]
+			regressed, hasRegressed := verifier["regressed_requirements_count"]
+			partialProgressCases, hasPartial := verifier["partial_progress_case_count"]
+			if !(hasRemaining && isNonnegativeInt(remaining) && pyInt(remaining) > 0) {
+				continue
+			}
+			partialRepairOpportunityIDs[cohortID] = true
+			newlyPassedObserved := hasNewly && isNonnegativeInt(newlyPassed) && pyInt(newlyPassed) > 0
+			noRegression := hasRegressed && isNonnegativeInt(regressed) && pyInt(regressed) == 0
+			partialProgressObserved := hasPartial && isNonnegativeInt(partialProgressCases) && pyInt(partialProgressCases) > 0
+			if newlyPassedObserved && noRegression && partialProgressObserved {
+				partialRepairSupportIDs[cohortID] = true
+			}
+		}
+	}
+
+	// 对应 Python duplicate_opportunity_cohorts=[cohort_id for all cohorts]
+	duplicateOpportunityCohorts := make([]string, 0, len(cohorts))
+	for _, cohort := range cohorts {
+		duplicateOpportunityCohorts = append(duplicateOpportunityCohorts,
+			cohort["cohort"].(map[string]any)["cohort_id"].(string))
+	}
+
+	stablePatternsList := stablePatterns(
+		minSupportCohorts,
+		comparableIDs,
+		nonpositiveIDs,
+		highValueOpportunityIDs,
+		highValueOutsideIDs,
+		duplicateOpportunityCohorts,
+		duplicateCohortIDs,
+		triggerBySurface,
+		regressionBySurface,
+		featureEvidence,
+		positiveSelectionRegretIDs,
+		sortedSetKeys(partialRepairOpportunityIDs),
+		sortedSetKeys(partialRepairSupportIDs),
+	)
+
+	digest, err := trainingLedgerDigest(cohorts)
+	if err != nil {
+		return nil, err
+	}
+
+	candidateCount := 0
+	for _, cohort := range cohorts {
+		candidateCount += len(cohort["candidates"].([]any))
+	}
+	selectionRegretAvailableIDs := make([]string, 0)
+	for _, cohort := range cohorts {
+		metric := cohort["metrics"].(map[string]any)["selection_regret"].(map[string]any)
+		if metric["status"] == "available" {
+			selectionRegretAvailableIDs = append(selectionRegretAvailableIDs,
+				cohort["cohort"].(map[string]any)["cohort_id"].(string))
+		}
+	}
+	nonComparableReasonsDict := counterDict(nonComparableReasons)
+	nonComparableIDsByReasonSorted := map[string][]string{}
+	for reason, ids := range nonComparableIDsByReason {
+		nonComparableIDsByReasonSorted[reason] = sortedSetKeys(setOf(ids))
+	}
+	surfacesOut := map[string]any{}
+	surfaceKeys := make([]string, 0, len(triggerBySurface))
+	for surface := range triggerBySurface {
+		surfaceKeys = append(surfaceKeys, surface)
+	}
+	sort.Strings(surfaceKeys)
+	for _, surface := range surfaceKeys {
+		surfacesOut[surface] = map[string]any{
+			"trigger_observed_failure": triggerBySurface[surface].triggerSummary(),
+			"target_regression":        regressionBySurface[surface].regressionSummary(),
+		}
+	}
+	featureOut := map[string]any{}
+	featureKeys := make([]string, 0, len(featureEvidence))
+	for feature := range featureEvidence {
+		featureKeys = append(featureKeys, feature)
+	}
+	sort.Strings(featureKeys)
+	for _, feature := range featureKeys {
+		featureOut[feature] = featureEvidence[feature].summary()
+	}
+
+	return map[string]any{
+		"schema_version":         1,
+		"analysis_type":          "candidate_feedback_analysis",
+		"training_ledger_digest": digest,
+		"parameters": map[string]any{
+			"min_support_cohorts":       minSupportCohorts,
+			"high_value_gain_threshold": highValueGainThreshold,
+		},
+		"input_summary": map[string]any{
+			"ledger_count":    len(normalizedSources),
+			"cohort_count":    len(cohorts),
+			"candidate_count": candidateCount,
+		},
+		"comparability": map[string]any{
+			"comparable_cohort_count":             len(comparableIDs),
+			"comparable_cohort_ids":               sortedSetKeys(setOf(comparableIDs)),
+			"non_comparable_cohort_count":         len(cohorts) - len(comparableIDs),
+			"non_comparable_reasons":              nonComparableReasonsDict,
+			"non_comparable_cohort_ids_by_reason": nonComparableIDsByReasonSorted,
+		},
+		"metric_availability": metricAvailabilityOut(metricAvailability),
+		"outcomes": map[string]any{
+			"all_candidates_nonpositive":         cohortRate(nonpositiveIDs, comparableIDs),
+			"high_value_candidate_outside_top_m": cohortRate(highValueOutsideIDs, highValueOpportunityIDs),
+			"positive_selection_regret":          cohortRate(positiveSelectionRegretIDs, selectionRegretAvailableIDs),
+			"partial_candidate_residual_repair":  cohortRate(sortedSetKeys(partialRepairSupportIDs), sortedSetKeys(partialRepairOpportunityIDs)),
+		},
+		"duplicates": map[string]any{
+			"availability":                "observed",
+			"duplicate_candidate_count":   duplicateCandidateCount,
+			"opportunity_candidate_count": duplicateOpportunityCount,
+			"rate":                        rate(duplicateCandidateCount, duplicateOpportunityCount),
+			"support_cohort_count":        len(setOf(duplicateCohortIDs)),
+			"evidence_cohort_ids":         sortedSetKeys(setOf(duplicateCohortIDs)),
+		},
+		"surfaces":                  surfacesOut,
+		"feature_outcome_alignment": featureOut,
+		"stable_patterns":           stablePatternsList,
+	}, nil
+}
+
+// metricAvailabilityOut 指标可用性输出结构（对应 Python L185-192 字典推导）
+func metricAvailabilityOut(metricAvailability map[string]map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, name := range _METRIC_NAMES {
+		values := metricAvailability[name]
+		out[name] = map[string]any{
+			"available_count":     values["available_count"],
+			"unavailable_count":   values["unavailable_count"],
+			"unavailable_reasons": counterDict(values["unavailable_reasons"].(map[string]int)),
+		}
+	}
+	return out
+}
 
 // normalizeSources 归一输入源列表（对应 Python _normalize_sources L345-353）。
 // Go 入参已为序列形态，仅校验每个元素是映射或路径字符串。
@@ -1092,4 +1351,170 @@ func intersect(left, right map[string]bool) map[string]bool {
 		}
 	}
 	return out
+}
+
+// requireUniqueCohortIDs 校验跨输入 cohort_id 唯一（对应 Python _require_unique_cohort_ids L776-780）
+func requireUniqueCohortIDs(cohorts []map[string]any) error {
+	counts := map[string]int{}
+	for _, cohort := range cohorts {
+		counts[cohort["cohort"].(map[string]any)["cohort_id"].(string)]++
+	}
+	duplicates := make([]string, 0)
+	for id, count := range counts {
+		if count > 1 {
+			duplicates = append(duplicates, id)
+		}
+	}
+	sort.Strings(duplicates)
+	if len(duplicates) > 0 {
+		return errNew(fmt.Sprintf("duplicate cohort_id across inputs: %s", strings.Join(duplicates, ", ")))
+	}
+	return nil
+}
+
+// maxFloat 取最大浮点值
+func maxFloat(values []float64) float64 {
+	best := values[0]
+	for _, v := range values[1:] {
+		if v > best {
+			best = v
+		}
+	}
+	return best
+}
+
+// trainingLedgerDigest 训练账本摘要：cohort 按 id 排序后做 Python json.dumps(sort_keys=True,
+// separators=(",",":"), ensure_ascii=False) 等价的紧凑序列化再取 sha256
+// （对应 Python _training_ledger_digest L765-773；float 序列化走 pyFloatRepr 复刻 repr 语义，D-e1-3）
+func trainingLedgerDigest(cohorts []map[string]any) (string, error) {
+	ordered := make([]map[string]any, len(cohorts))
+	copy(ordered, cohorts)
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i]["cohort"].(map[string]any)["cohort_id"].(string) <
+			ordered[j]["cohort"].(map[string]any)["cohort_id"].(string)
+	})
+	payload, err := marshalCanonical(ordered)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum), nil
+}
+
+// marshalCanonical 复刻 Python json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False)：
+// 键排序、紧凑分隔符、非 ASCII 原文输出、float 走 repr 语义
+func marshalCanonical(value any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := writeCanonicalJSON(&buf, value); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// writeCanonicalJSON 递归写出 canonical JSON
+func writeCanonicalJSON(buf *bytes.Buffer, value any) error {
+	switch v := value.(type) {
+	case nil:
+		buf.WriteString("null")
+		return nil
+	case bool:
+		if v {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+	case string:
+		return writeJSONString(buf, v)
+	case int:
+		buf.WriteString(strconv.Itoa(v))
+		return nil
+	case int64:
+		buf.WriteString(strconv.FormatInt(v, 10))
+		return nil
+	case float64:
+		buf.WriteString(canonicalFloatRepr(v))
+		return nil
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		buf.WriteByte('{')
+		for i, key := range keys {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			if err := writeJSONString(buf, key); err != nil {
+				return err
+			}
+			buf.WriteByte(':')
+			if err := writeCanonicalJSON(buf, v[key]); err != nil {
+				return err
+			}
+		}
+		buf.WriteByte('}')
+		return nil
+	default:
+		// 切片/数组（含 []string 等具体切片类型）与具体 map 类型
+		rv := reflect.ValueOf(value)
+		switch rv.Kind() {
+		case reflect.Map:
+			keys := make([]string, 0, rv.Len())
+			iter := rv.MapRange()
+			for iter.Next() {
+				keys = append(keys, iter.Key().Interface().(string))
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, key := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				if err := writeJSONString(buf, key); err != nil {
+					return err
+				}
+				buf.WriteByte(':')
+				if err := writeCanonicalJSON(buf, rv.MapIndex(reflect.ValueOf(key)).Interface()); err != nil {
+					return err
+				}
+			}
+			buf.WriteByte('}')
+			return nil
+		case reflect.Slice, reflect.Array:
+			buf.WriteByte('[')
+			for i := 0; i < rv.Len(); i++ {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				if err := writeCanonicalJSON(buf, rv.Index(i).Interface()); err != nil {
+					return err
+				}
+			}
+			buf.WriteByte(']')
+			return nil
+		default:
+			return errNew(fmt.Sprintf("unsupported canonical JSON type %T", value))
+		}
+	}
+}
+
+// canonicalFloatRepr 复刻 Python float repr（json.dumps 对 float 的输出即 repr）
+func canonicalFloatRepr(f float64) string {
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		// 校验链已保证有限数；防御性兜底
+		return "null"
+	}
+	return pyFloatRepr(f)
+}
+
+// writeJSONString 写出 JSON 字符串字面量（非 ASCII 原文，转义仅 JSON 必需字符）
+func writeJSONString(buf *bytes.Buffer, text string) error {
+	encoded, err := json.Marshal(text)
+	if err != nil {
+		return err
+	}
+	buf.Write(encoded)
+	return nil
 }
