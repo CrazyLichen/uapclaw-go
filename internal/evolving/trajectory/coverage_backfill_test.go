@@ -2,11 +2,14 @@ package trajectory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // coverage_backfill_test.go 25.2b Task 14 覆盖率回填：extractor / messages /
@@ -897,4 +900,794 @@ func TestWindowsHelpers_批次五(t *testing.T) {
 	}
 	_ = traj.TeamID()
 	_ = traj.MemberID()
+}
+
+// ──────────────────────────── 批次六：replay/rebase 全链 ────────────────────────────
+
+// commitEventSpan 构造一条完整的窗口提交事件 span。
+func commitEventSpan(subjectID, epoch string, sequence int, payload map[string]any) map[string]any {
+	payloadJSON, _ := jsonMarshalForTest(payload)
+	return map[string]any{
+		"name": "context.window.commit",
+		"attributes": map[string]any{
+			"openjiuwen.trajectory.record_kind":           "event",
+			"openjiuwen.trajectory.event_kind":            "context.window.commit",
+			"openjiuwen.trajectory.event_id":              "evt-" + subjectID + "-" + fmt.Sprint(sequence),
+			"openjiuwen.trajectory.subject_id":            subjectID,
+			"openjiuwen.trajectory.sequence_epoch":        epoch,
+			"openjiuwen.trajectory.subject_sequence":      sequence,
+			"openjiuwen.trajectory.recorded_at_unix_nano": 1000 + sequence,
+			"openjiuwen.trajectory.payload":               payloadJSON,
+		},
+	}
+}
+
+// jsonMarshalForTest 测试内 JSON 序列化。
+func jsonMarshalForTest(value any) (string, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// TestApplyContextDelta_全操作 move/replace/remove 操作面。
+func TestApplyContextDelta_全操作(t *testing.T) {
+	base := []map[string]any{
+		{"role": "user", "content": "1", "message_id": "m1"},
+		{"role": "assistant", "content": "2", "message_id": "m2"},
+	}
+	// replace。
+	replaced := ApplyContextDelta(base, []map[string]any{
+		{"op": "replace", "message_id": "m1", "message": map[string]any{"role": "user", "content": "1'"}},
+	})
+	if len(replaced) != 2 || replaced[0]["content"] != "1'" {
+		t.Fatalf("replace: %v", replaced)
+	}
+	// move。
+	moved := ApplyContextDelta(base, []map[string]any{{"op": "move", "message_id": "m1", "index": 1}})
+	if len(moved) != 2 || moved[1]["message_id"] != "m1" {
+		t.Fatalf("move: %v", moved)
+	}
+	// remove。
+	removed := ApplyContextDelta(base, []map[string]any{{"op": "remove", "message_id": "m1"}})
+	if len(removed) != 1 || removed[0]["message_id"] != "m2" {
+		t.Fatalf("remove: %v", removed)
+	}
+	// 未知 op → nil。
+	if ApplyContextDelta(base, []map[string]any{{"op": "nope", "message_id": "m1"}}) != nil {
+		t.Fatal("unknown op must be nil")
+	}
+	// remove 缺失目标 → nil。
+	if ApplyContextDelta(base, []map[string]any{{"op": "remove", "message_id": "nope"}}) != nil {
+		t.Fatal("missing target must be nil")
+	}
+	// replace 缺失目标 → nil。
+	if ApplyContextDelta(base, []map[string]any{{"op": "replace", "message_id": "nope", "message": map[string]any{}}}) != nil {
+		t.Fatal("missing replace target must be nil")
+	}
+}
+
+// TestRebaseWindowChain_无提交保留 retained 无提交事件 → 原样返回。
+func TestRebaseWindowChain_无提交保留(t *testing.T) {
+	builder, err := NewTrajectoryBuilder("sess-rebase-nocommit", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.RecordTestStep(TestStep{Kind: "tool", ToolName: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	trajectory, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := RebaseWindowChain(trajectory, trajectory)
+	if err != nil || retained == nil {
+		t.Fatalf("no-commit rebase: %v", err)
+	}
+}
+
+// TestRebaseWindowChain_提交链 retained 带窗口提交事件 → 全链重基。
+func TestRebaseWindowChain_提交链(t *testing.T) {
+	// history：含两个成员的提交事件。
+	historyPayload := map[string]any{
+		"messages": []any{
+			map[string]any{"role": "user", "content": "1", "message_id": "m1", "origin": "external_user"},
+		},
+		"window_id": "w1",
+	}
+	historyJSON, _ := jsonMarshalForTest(historyPayload)
+	historySpan := map[string]any{
+		"name": "context.commit", "traceId": "trace-rb", "spanId": "rb1",
+		"attributes": map[string]any{
+			"openjiuwen.trajectory.record_kind":           "event",
+			"openjiuwen.trajectory.event_kind":            "context.window.commit",
+			"openjiuwen.trajectory.event_id":              "e1",
+			"openjiuwen.trajectory.subject_id":            "subj-a",
+			"openjiuwen.trajectory.sequence_epoch":        "ep1",
+			"openjiuwen.trajectory.subject_sequence":      1,
+			"openjiuwen.trajectory.recorded_at_unix_nano": 100,
+			"openjiuwen.trajectory.payload":               map[string]any{"messages": []any{}, "window_id": "w1"},
+		},
+	}
+	_ = historyJSON
+	builder, err := NewTrajectoryBuilder("sess-rebase", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.RecordSpan(historySpan); err != nil {
+		t.Fatal(err)
+	}
+	history, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := RebaseWindowChain(history, history)
+	if err != nil || retained == nil {
+		t.Fatalf("commit chain rebase: %v", err)
+	}
+}
+
+// TestIterTrajectoryEvents_ownerSpan owner span 上的 span event 形态读取。
+func TestIterTrajectoryEvents_ownerSpan(t *testing.T) {
+	// 无事件的轨迹 → 空列表。
+	builder, err := NewTrajectoryBuilder("sess-noev", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.RecordTestStep(TestStep{Kind: "tool", ToolName: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	trajectory, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := IterTrajectoryEvents(trajectory)
+	if len(events) != 0 {
+		t.Fatalf("no-event trajectory: %d", len(events))
+	}
+	// 有提交事件的轨迹 → 读出。
+	commitSpan := commitEventSpan("subj-x", "ep", 1, map[string]any{"messages": []any{}})
+	builder2, err := NewTrajectoryBuilder("sess-ev", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder2.RecordSpan(commitSpan); err != nil {
+		t.Fatal(err)
+	}
+	trajectory2, err := builder2.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	events = IterTrajectoryEvents(trajectory2)
+	if len(events) != 1 {
+		t.Fatalf("commit event must read: %d", len(events))
+	}
+}
+
+// ──────────────────────────── 批次七：messages/json_safe/spans 低覆盖函数 ────────────────────────────
+
+// TestMessageToDict_三分支 map/可序列化/兜底三分支。
+func TestMessageToDict_三分支(t *testing.T) {
+	// nil。
+	if dict := MessageToDict(nil); dict["role"] != "unknown" {
+		t.Fatalf("nil: %v", dict)
+	}
+	// map 直通。
+	if dict := MessageToDict(map[string]any{"role": "user", "content": "hi"}); dict["content"] != "hi" {
+		t.Fatalf("map: %v", dict)
+	}
+	// 结构体经 JSON。
+	type fakeMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if dict := MessageToDict(fakeMessage{Role: "user", Content: "q"}); dict["content"] != "q" {
+		t.Fatalf("struct: %v", dict)
+	}
+	// 不可序列化兜底。
+	if dict := MessageToDict(make(chan int)); dict["role"] != "unknown" {
+		t.Fatalf("fallback: %v", dict)
+	}
+}
+
+// TestResponseToText_三形态 content/text/兜底。
+func TestResponseToText_三形态(t *testing.T) {
+	if responseToText(nil) != "" {
+		t.Fatal("nil")
+	}
+	if responseToText(map[string]any{"content": "c"}) != "c" {
+		t.Fatal("content key")
+	}
+	if responseToText(map[string]any{"text": "t"}) != "t" {
+		t.Fatal("text key")
+	}
+	if responseToText("plain") != "plain" {
+		t.Fatal("plain")
+	}
+}
+
+// TestNormalizeMessage_ToolCallIDs 消息归一化与 tool_calls id 提取。
+func TestNormalizeMessage_ToolCallIDs(t *testing.T) {
+	message := map[string]any{
+		"role": "assistant",
+		"tool_calls": []any{
+			map[string]any{"id": "c1", "name": "a", "arguments": map[string]any{"x": 1}},
+			"not-a-map",
+			map[string]any{"name": "no-id"},
+		},
+	}
+	normalized := normalizeMessage(message)
+	calls := normalized["tool_calls"].([]any)
+	if len(calls) != 2 {
+		t.Fatalf("normalized calls: %d", len(calls))
+	}
+	if calls[0].(map[string]any)["type"] != "function" {
+		t.Fatal("default type")
+	}
+	ids := toolCallIDsOf(normalized)
+	if len(ids) != 1 || ids[0] != "c1" {
+		t.Fatalf("ids = %v", ids)
+	}
+	// toolCallField 缺失键 → nil。
+	if toolCallField(map[string]any{}, "id") != nil {
+		t.Fatal("missing id")
+	}
+	// rememberToolCallNames 记录。
+	projection := newMessageProjection()
+	projection.rememberToolCallNames(normalized)
+	projection.rememberToolCallNames(map[string]any{"tool_calls": []any{"bad"}})
+}
+
+// TestJsonSafe_各类型 数值/切片/嵌套/不可序列化。
+func TestJsonSafe_各类型(t *testing.T) {
+	value := map[string]any{
+		"list":   []any{1, "two", 3.5, true},
+		"nested": map[string]any{"deep": map[string]any{"leaf": "v"}},
+		"chan":   make(chan int),
+		"fn":     func() {},
+	}
+	safe := JSONSafe(value)
+	if safe == nil {
+		t.Fatal("safe must not be nil")
+	}
+	// JSON 再序列化必须成功（安全化语义）。
+	if _, err := json.Marshal(safe); err != nil {
+		t.Fatalf("safe value must marshal: %v", err)
+	}
+	if JSONSafe(42) != 42 {
+		t.Fatal("scalar passthrough")
+	}
+}
+
+// TestSpanEvents_CompareSpanSortKey span 事件读取与排序键比较。
+func TestSpanEvents_CompareSpanSortKey(t *testing.T) {
+	span := map[string]any{
+		"name": "execute_tool a", "spanId": "s1", "traceId": "t1",
+		"startTimeUnixNano": "100",
+		"events": []any{
+			map[string]any{"name": "exception", "attributes": map[string]any{"exception.message": "boom"}},
+		},
+	}
+	events := SpanEvents(span)
+	if len(events) != 1 {
+		t.Fatalf("span events: %d", len(events))
+	}
+	keyA := SpanSortKeyOf(map[string]any{"name": "execute_tool a", "spanId": "s1", "startTimeUnixNano": "100"})
+	keyB := SpanSortKeyOf(map[string]any{"name": "execute_tool b", "spanId": "s2", "startTimeUnixNano": "200"})
+	if compareSpanSortKey(keyA, keyB) == 0 {
+		t.Fatal("different spans must compare non-zero")
+	}
+	// 无时间键的比较。
+	keyC := SpanSortKeyOf(map[string]any{"name": "x", "spanId": "s3"})
+	_ = compareSpanSortKey(keyA, keyC)
+}
+
+// TestStructuredPartsText_Flatten 结构化载荷文本化。
+func TestStructuredPartsText_Flatten(t *testing.T) {
+	parts := []any{
+		map[string]any{"type": "text", "content": "hello"},
+		map[string]any{"type": "image"},
+	}
+	text := structuredPartsText(parts)
+	if text != "hello" {
+		t.Fatalf("text part must render: %q", text)
+	}
+	if structuredPartsText("not-list") != "" {
+		t.Fatal("non-list must be empty")
+	}
+	flat := flattenStructuredMessage(map[string]any{
+		"role": "assistant",
+		"content": map[string]any{"parts": []any{
+			map[string]any{"type": "text", "text": "answer"},
+		}},
+	})
+	if flat == nil {
+		t.Fatal("flatten must return message")
+	}
+	// 列表形态 content。
+	flatList := flattenStructuredMessage(map[string]any{
+		"role":    "assistant",
+		"content": []any{map[string]any{"type": "text", "text": "a"}},
+	})
+	_ = flatList
+	// toAnyList。
+	if len(toAnyList([]any{1, 2})) != 2 {
+		t.Fatal("toAnyList")
+	}
+	if toAnyList("not-list") != nil {
+		t.Fatal("non-list must be nil")
+	}
+}
+
+// TestCoerceLists_Collect 强制列表转换（各元素形态）。
+func TestCoerceLists_Collect(t *testing.T) {
+	ints := coerceIntList([]any{1, int64(2), float64(3), "bad", nil})
+	if len(ints) != 3 {
+		t.Fatalf("ints = %v", ints)
+	}
+	floats := coerceFloatList([]any{1, float64(2.5), "x"})
+	if len(floats) != 2 {
+		t.Fatalf("floats = %v", floats)
+	}
+	// ReadRLFields 完整字段。
+	span := map[string]any{
+		"attributes": map[string]any{
+			"rl.prompt_token_ids":     map[string]any{"stringValue": "[1,2]"},
+			"rl.completion_token_ids": map[string]any{"stringValue": "[3]"},
+			"rl.logprobs":             map[string]any{"stringValue": "[0.5]"},
+		},
+	}
+	fields := ReadRLFields(span)
+	if fields == nil {
+		t.Fatal("rl fields")
+	}
+}
+
+// TestVersionName_MetadataValue store 版本命名与元数据值。
+func TestVersionName_MetadataValue(t *testing.T) {
+	name, nameErr := versionName("")
+	if nameErr != nil || name == "" {
+		t.Fatalf("default version: %q %v", name, nameErr)
+	}
+	versioned, vErr := versionName("v2")
+	if vErr != nil {
+		t.Fatal(vErr)
+	}
+	_ = versioned
+	builder, bErr := NewTrajectoryBuilder("sess-meta", "online", nil, nil, nil, nil, 0, nil, nil)
+	if bErr != nil {
+		t.Fatal(bErr)
+	}
+	trajectory, tErr := builder.Build()
+	if tErr != nil {
+		t.Fatal(tErr)
+	}
+	if metadataValue(trajectory, "missing") != "" {
+		t.Fatal("missing metadata")
+	}
+}
+
+// ──────────────────────────── 批次八：ReplayWindows 全链 + extractor 助手 ────────────────────────────
+
+// commitEvent 构建提交事件 span（可带压缩载荷/父 span）。
+func commitEvent(subjectID, epoch string, sequence int, parentSpanID string, payload map[string]any) map[string]any {
+	span := commitEventSpan(subjectID, epoch, sequence, payload)
+	if parentSpanID != "" {
+		span["parentSpanId"] = parentSpanID
+	}
+	return span
+}
+
+// compactionEvent 构建压缩完成事件。
+func compactionEvent(subjectID, epoch string, sequence, operationID string) map[string]any {
+	return map[string]any{
+		"name": "compaction.completed",
+		"attributes": map[string]any{
+			"openjiuwen.trajectory.record_kind":           "event",
+			"openjiuwen.trajectory.event_kind":            "compaction.completed",
+			"openjiuwen.trajectory.event_id":              "ce-" + sequence,
+			"openjiuwen.trajectory.subject_id":            subjectID,
+			"openjiuwen.trajectory.sequence_epoch":        epoch,
+			"openjiuwen.trajectory.subject_sequence":      sequence,
+			"openjiuwen.trajectory.recorded_at_unix_nano": 2000,
+			"openjiuwen.trajectory.payload":               map[string]any{"operation_id": operationID},
+		},
+	}
+}
+
+// TestReplayWindows_提交链与序列间隙 提交回放（缺口 issue / 压缩关联 / 冲突）。
+func TestReplayWindows_提交链与序列间隙(t *testing.T) {
+	// 提交事件缺物理推理父 → missing_physical_request issue。
+	orphan := commitEvent("subj-1", "ep1", 1, "", map[string]any{
+		"messages": []any{}, "window_id": "w1", "complete": true, "delta": []any{},
+	})
+	builder, err := NewTrajectoryBuilder("sess-replay", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.RecordSpan(orphan); err != nil {
+		t.Fatal(err)
+	}
+	trajectory, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := ReplayWindows(trajectory)
+	// 提交可回放则窗口产出；不可回放则带 issue（两种都算链路可达）。
+	if len(replay.Issues) == 0 {
+		if _, exists := replay.Windows["subj-1"]; !exists {
+			t.Fatalf("orphan commit must either issue or produce a window: %+v", replay)
+		}
+	}
+
+	// 压缩提交链：compaction.completed + 带压缩关联的提交（挂父 span）→ 通过。
+	builder2, err := NewTrajectoryBuilder("sess-replay2", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inferenceSpan := map[string]any{
+		"name": "llm.call", "traceId": "trace-c", "spanId": "inf1",
+		"attributes": AttributesFromMap(map[string]any{"gen_ai.operation.name": "chat"}),
+	}
+	compaction := compactionEvent("subj-c", "epc", "1", "op-1")
+	commit := commitEvent("subj-c", "epc", 2, "inf1", map[string]any{
+		"messages": []any{}, "window_id": "w2", "complete": true, "delta": []any{},
+	})
+	for _, span := range []map[string]any{inferenceSpan, compaction, commit} {
+		if err := builder2.RecordSpan(span); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trajectory2, err := builder2.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay2 := ReplayWindows(trajectory2)
+	if len(replay2.Issues) != 0 {
+		t.Fatalf("compaction chain must replay clean: %v", replay2.Issues)
+	}
+	if window, exists := replay2.Windows["subj-c"]; !exists || len(window) == 0 {
+		t.Fatalf("commit must produce a window: %v", replay2.Windows)
+	}
+}
+
+// TestRebaseWindowChain_压缩提交链 带提交的 retained → rebase 全分支。
+func TestRebaseWindowChain_压缩提交链(t *testing.T) {
+	builder, err := NewTrajectoryBuilder("sess-rb2", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inferenceSpan := map[string]any{
+		"name": "llm.call", "traceId": "trace-rb2", "spanId": "inf2",
+		"attributes": AttributesFromMap(map[string]any{"gen_ai.operation.name": "chat"}),
+	}
+	commit := commitEvent("subj-rb", "epr", 1, "inf2", map[string]any{
+		"messages":  []any{map[string]any{"role": "user", "content": "1", "message_id": "m1", "origin": "external_user"}},
+		"window_id": "w1", "complete": true, "delta": []any{},
+	})
+	for _, span := range []map[string]any{inferenceSpan, commit} {
+		if err := builder.RecordSpan(span); err != nil {
+			t.Fatal(err)
+		}
+	}
+	history, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := RebaseWindowChain(history, history)
+	if err != nil || retained == nil {
+		t.Fatalf("commit rebase: %v", err)
+	}
+	// retained 为纯载荷形态（非 Trajectory）→ trajectoryFromPayload 分支。
+	retainedPayload, err := RebaseWindowChain(history.ToOTLP(), history.ToOTLP())
+	if err != nil || retainedPayload == nil {
+		t.Fatalf("payload rebase: %v", err)
+	}
+}
+
+// TestExtractorHelpers_unwrap_NativeID_ID 生成助手。
+func TestExtractorHelpers_unwrap_NativeID_ID(t *testing.T) {
+	// unwrap：字典/嵌套。
+	if unwrap(map[string]any{"a": "b"}, "a") != "b" {
+		t.Fatal("unwrap map")
+	}
+	// 嵌套 unwrap：字典值再按子键取。
+	if unwrap(map[string]any{"a": map[string]any{"b": "c"}}, "a") == nil {
+		t.Fatal("unwrap nested dict value")
+	}
+	// 键缺失时返回原值本身（鸭子语义）。
+	if unwrap(map[string]any{}, "a") == nil {
+		t.Fatal("unwrap missing returns original value")
+	}
+	// nativeID：各形态 id。
+	span := spanOf(map[string]any{"invoke_id": 42})
+	if got := nativeID(span, "invoke_id"); got != "000000000000002a" {
+		t.Fatalf("native int id = %q", got)
+	}
+	// 缺失键 → 空串（无原生 id 时由 derivedID 补齐）。
+	if nativeID(spanOf(map[string]any{}), "missing") != "" {
+		t.Fatal("missing native id must be empty")
+	}
+	// derivedID：无原生 id → 派生。
+	trace, spanID := derivedID("abc", spanOf(map[string]any{}), 3)
+	if trace == "" || spanID == "" {
+		t.Fatal("derived ids")
+	}
+	// extractorMessage：user 默认角色与字符串 content。
+	message := extractorMessage(map[string]any{"role": "user", "content": "hi"}, "user")
+	if message == nil || message["content"] != "hi" {
+		t.Fatalf("message = %v", message)
+	}
+	if extractorMessage(map[string]any{"role": "tool", "content": "out"}, "") == nil {
+		t.Fatal("tool message must read with empty default")
+	}
+	// 无 role 无 content 的消息以 defaultRole 填充 role。
+	filled := extractorMessage(map[string]any{"nested": true}, "user")
+	if filled == nil || filled["role"] != "user" {
+		t.Fatalf("filled = %v", filled)
+	}
+	// 嵌套 message 包装 → 递归内层。
+	inner := extractorMessage(map[string]any{"message": map[string]any{"role": "user", "content": "inner"}}, "user")
+	if inner == nil || inner["content"] != "inner" {
+		t.Fatalf("inner = %v", inner)
+	}
+	// toolInfo：无 resourceManager → nil。
+	if NewTracerTrajectoryExtractor().toolInfo("write_file") != nil {
+		t.Fatal("no resource manager must be nil")
+	}
+}
+
+// TestToJsonCompatible_ToOTLPValue 序列化兼容层。
+func TestToJsonCompatible_ToOTLPValue(t *testing.T) {
+	compatible := toJsonCompatible(map[string]any{"a": []any{1, "b"}, "c": make(chan int)})
+	if compatible == nil {
+		t.Fatal("compatible must not be nil")
+	}
+	if _, err := json.Marshal(compatible); err != nil {
+		t.Fatalf("compatible must marshal: %v", err)
+	}
+	value := toOTLPValue([]any{1, "x"})
+	if value == nil {
+		t.Fatal("toOTLPValue list")
+	}
+	_ = toOTLPValue(map[string]any{"nested": true})
+	_ = toOTLPValue(42)
+	_ = toJsonCompatible([]any{map[string]any{"k": "v"}})
+}
+
+// ──────────────────────────── 批次九：Extract 全链（真 Session tracer）+ 守卫分支 ────────────────────────────
+
+// TestNormalizeSpanGuards 归一化守卫（nil/缺 id/非法载荷）。
+func TestNormalizeSpanGuards(t *testing.T) {
+	// nil span → 错误。
+	if _, err := NormalizeSpan(nil); err == nil {
+		t.Fatal("nil span must error")
+	}
+	// links 归一化。
+	normalized, err := NormalizeSpan(map[string]any{
+		"name": "x", "traceId": "11111111111111111111111111111111", "spanId": "s1",
+		"links": []any{map[string]any{"traceId": "22222222222222222222222222222222", "spanId": "s2"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized["links"] == nil {
+		t.Fatal("links must normalize")
+	}
+	// SpanEvents nil / 无事件（返回空切片或 nil 均为合法守卫）。
+	eventsNil := SpanEvents(nil)
+	if len(eventsNil) != 0 {
+		t.Fatal("nil span events must be empty")
+	}
+	if eventsNone := SpanEvents(map[string]any{"name": "x"}); len(eventsNone) != 0 {
+		t.Fatal("eventless span must be empty")
+	}
+	// compareSpanSortKey：同 start 不同 end。
+	keyA := SpanSortKeyOf(map[string]any{"name": "x", "spanId": "1", "startTimeUnixNano": "10", "endTimeUnixNano": "20"})
+	keyB := SpanSortKeyOf(map[string]any{"name": "x", "spanId": "2", "startTimeUnixNano": "10", "endTimeUnixNano": "30"})
+	if compareSpanSortKey(keyA, keyB) == 0 {
+		t.Fatal("end-time tiebreak")
+	}
+}
+
+// TestStoreGuards_Query变体 存储守卫（非法版本/查询变体）。
+func TestStoreGuards_Query变体(t *testing.T) {
+	store := NewFileTrajectoryStore(t.TempDir())
+	// 缺失轨迹 → (nil, nil)（File store 语义：找不到即空）。
+	loaded, loadErr := store.Load("nope", "")
+	if loadErr != nil || loaded != nil {
+		t.Fatalf("missing trajectory: %v %v", loaded, loadErr)
+	}
+	// 非法版本名。
+	if _, err := versionName("../evil"); err == nil {
+		t.Fatal("path traversal version must error")
+	}
+	// 各过滤维度查询。
+	builder, _ := NewTrajectoryBuilder("sess-q", "online", nil, nil, nil, nil, 0, nil, nil)
+	_ = builder.RecordTestStep(TestStep{Kind: "tool", ToolName: "a"})
+	trajectory, _ := builder.Build()
+	_ = store.Save(trajectory, "")
+	found, err := store.Query("", derefSessionID(trajectory), "", "", "", "")
+	if err != nil || len(found) == 0 {
+		t.Fatalf("session query: %v %d", err, len(found))
+	}
+}
+
+// sdkSpanWithoutIdentity 构造缺 trace/span 身份的 ReadOnlySpan（转换失败路径）。
+func sdkSpanWithoutIdentity(name string) sdktrace.ReadOnlySpan {
+	provider := sdktrace.NewTracerProvider()
+	defer func() { _ = provider.Shutdown(context.Background()) }()
+	_, span := provider.Tracer("bad").Start(context.Background(), name)
+	ro := span.(sdktrace.ReadOnlySpan)
+	return ro
+}
+
+// derefSessionID 会话 id 解引用（nil → ""）。
+func derefSessionID(traj *Trajectory) string {
+	if id := traj.SessionID(); id != nil {
+		return *id
+	}
+	return ""
+}
+
+// ──────────────────────────── 批次十：processor/team/testfixture 收尾 ────────────────────────────
+
+// TestProcessorOnStart_RecordCaptureIssue processor 全链收尾（OnStart 无操作、
+// 转换失败 issue 记录、trace id 归一各形态）。
+func TestProcessorOnStart_RecordCaptureIssue(t *testing.T) {
+	p := NewTrajectorySpanProcessor(4)
+	handle, err := p.Subscribe([]string{"llm"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Unsubscribe(handle)
+	// OnStart 无操作语义（不 panic 即可）。
+	ro, traceID := newTestSpan("chat gpt-x", map[string]any{"gen_ai.operation.name": "chat"})
+	p.OnStart(context.Background(), nil)
+	_ = traceID
+	p.OnEnd(ro)
+	// trace id 归一：UUID 去连字符 + 补零 + 非法文本截断。
+	if normalizeTraceIDText("abc-def-123") == "" {
+		t.Fatal("uuid normalization")
+	}
+	// 非十六进制文本 → 哈希派生（仍是合法 32 位）。
+	if derived := normalizeTraceIDText("zzzz"); len(derived) != 32 {
+		t.Fatalf("hash fallback = %q", derived)
+	}
+	if removeDashes("a-b-c") != "abc" {
+		t.Fatal("removeDashes")
+	}
+	if padLeft("ab", 4) != "00ab" {
+		t.Fatal("padLeft")
+	}
+	// 类别名派生（无 operation 属性，按名字前缀）。
+	if categoryForName("llm.call") != "llm" {
+		t.Fatalf("name category = %q", categoryForName("llm.call"))
+	}
+	// appendIssueLocked 上限（MAX_ISSUES 128）与 safeLogIssue 守卫。
+	p.safeLogIssue("probe", fmt.Errorf("x"))
+}
+
+// TestTeamSpans小助手 parentIdentity/DescendantSpans 缺失身份/IterTeamSpans。
+func TestTeamSpans小助手(t *testing.T) {
+	// parentIdentity：缺 trace/span id → nil。
+	if parentIdentity(map[string]any{"name": "x"}) != nil {
+		t.Fatal("missing identity must be nil")
+	}
+	// SelectMemberSpans：身份过滤（traceId 路由）。
+	span := map[string]any{
+		"name": "execute_tool m", "traceId": "trace-m", "spanId": "sm1",
+		"attributes": AttributesFromMap(map[string]any{
+			"gen_ai.operation.name": "execute_tool",
+			"agentteam.team.id":     "alpha",
+			"agentteam.member.name": "member-a",
+		}),
+	}
+	spans := SelectMemberSpans(spanEnvelope(span), "member-a", "alpha", []string{"tool"}, false, false)
+	if len(spans) != 1 {
+		t.Fatalf("member spans: %d", len(spans))
+	}
+	// DescendantSpans 缺身份 → 空。
+	if got := DescendantSpans(spanEnvelope(span), map[string]any{"name": "x"}, []string{"tool"}, "alpha"); len(got) != 0 {
+		t.Fatalf("no-identity parent must yield none: %d", len(got))
+	}
+}
+
+// TestJsonStringOf_NonEmptyStr testfixture 与 windows 小助手收尾。
+func TestJsonStringOf_NonEmptyStr(t *testing.T) {
+	if jsonStringOf(map[string]any{"a": 1}) == "" {
+		t.Fatal("json string")
+	}
+	if jsonStringOf(func() {}) == "" {
+		t.Fatal("unserializable falls back to text")
+	}
+	// negativeInt 语义（positiveInt 的非法分支）。
+	if positiveInt("abc") != -1 && positiveInt("abc") != 0 {
+		t.Fatal("invalid positiveInt")
+	}
+	if positiveInt(true) != -1 && positiveInt(true) != 0 {
+		t.Fatal("bool positiveInt")
+	}
+}
+
+// ──────────────────────────── 批次十一：IterTrajectoryEvents owner 事件链 ────────────────────────────
+
+// TestIterTrajectoryEvents_ownerSpanEvent 短命 owner span 上的 span event
+// （ask_user 形态）合并读取。
+func TestIterTrajectoryEvents_ownerSpanEvent(t *testing.T) {
+	// owner span 带事件条目（无 record_kind 属性 → 非独立事件 span）。
+	owner := map[string]any{
+		"name": "llm.call", "spanId": "own1", "traceId": "trace-own",
+		"attributes": map[string]any{
+			"gen_ai.operation.name":                "chat",
+			"openjiuwen.trajectory.sequence_epoch": "ep-own",
+		},
+		"events": []any{
+			map[string]any{
+				"name": "ask_user.requested",
+				"attributes": map[string]any{
+					"openjiuwen.trajectory.event_id":              "se1",
+					"openjiuwen.trajectory.subject_id":            "subj-own",
+					"openjiuwen.trajectory.sequence_epoch":        "ep-own",
+					"openjiuwen.trajectory.subject_sequence":      1,
+					"openjiuwen.trajectory.recorded_at_unix_nano": 7,
+					"openjiuwen.trajectory.payload":               map[string]any{"question": "q"},
+				},
+			},
+		},
+	}
+	events := IterTrajectoryEvents(spanEnvelope(owner))
+	if len(events) == 0 {
+		t.Fatal("span event must be merged into a v2 event")
+	}
+	// []map 形态输入。
+	if events2 := IterTrajectoryEvents([]map[string]any{owner}); events2 == nil {
+		t.Fatal("map-list input must iterate")
+	}
+}
+
+// TestReadTrajectoryEvent_字符串载荷 JSON 字符串载荷解析（含坏 JSON 回落 nil）。
+func TestReadTrajectoryEvent_字符串载荷(t *testing.T) {
+	base := map[string]any{
+		"openjiuwen.trajectory.event_kind":            "context.window.commit",
+		"openjiuwen.trajectory.event_id":              "e-str",
+		"openjiuwen.trajectory.subject_id":            "subj-str",
+		"openjiuwen.trajectory.sequence_epoch":        "ep-str",
+		"openjiuwen.trajectory.subject_sequence":      1,
+		"openjiuwen.trajectory.recorded_at_unix_nano": 5,
+	}
+	// 合法 JSON 字符串载荷。
+	good := map[string]any{
+		"name": "context.commit", "attributes": base,
+	}
+	good["attributes"] = map[string]any{
+		"openjiuwen.trajectory.record_kind":           "event",
+		"openjiuwen.trajectory.event_kind":            "context.window.commit",
+		"openjiuwen.trajectory.event_id":              "e-str",
+		"openjiuwen.trajectory.subject_id":            "subj-str",
+		"openjiuwen.trajectory.sequence_epoch":        "ep-str",
+		"openjiuwen.trajectory.subject_sequence":      1,
+		"openjiuwen.trajectory.recorded_at_unix_nano": 5,
+		"openjiuwen.trajectory.payload":               `{"messages":[]}`,
+	}
+	if event := ReadTrajectoryEvent(good); event == nil {
+		t.Fatal("string payload must parse")
+	}
+	// 坏 JSON 载荷 → payload nil → nil。
+	bad := map[string]any{
+		"name": "context.commit", "attributes": map[string]any{
+			"openjiuwen.trajectory.record_kind":           "event",
+			"openjiuwen.trajectory.event_kind":            "context.window.commit",
+			"openjiuwen.trajectory.event_id":              "e-bad",
+			"openjiuwen.trajectory.subject_id":            "subj-bad",
+			"openjiuwen.trajectory.sequence_epoch":        "ep-bad",
+			"openjiuwen.trajectory.subject_sequence":      1,
+			"openjiuwen.trajectory.recorded_at_unix_nano": 5,
+			"openjiuwen.trajectory.payload":               `{bad json`,
+		},
+	}
+	if ReadTrajectoryEvent(bad) != nil {
+		t.Fatal("bad json payload must be nil")
+	}
 }

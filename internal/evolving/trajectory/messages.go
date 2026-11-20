@@ -169,7 +169,7 @@ func isPromptAttachmentUser(message map[string]any) bool {
 
 // trimPromptToLastUser 保留当前 invoke 入口：最后一条真实 user 消息至末尾。
 // LLM span 可能存完整请求 prompt（含先前会话轮）；invoke_local=True 的调用方
-//（TTSE detect/induce）让缺窗口回退不重导入那段历史。这是切片，不是文本重叠合并。
+// （TTSE detect/induce）让缺窗口回退不重导入那段历史。这是切片，不是文本重叠合并。
 // 选择切点时跳过 prompt-attachment user（<system-reminder>），保住真实任务查询；
 // 真实 user 之后的附件仍留在返回切片。
 // Python: messages.py _trim_prompt_to_last_user。

@@ -726,13 +726,13 @@ func syntheticSpanID(windowID, subjectID string) string {
 func trimBaselineSpan(first *TrajectoryEvent, baseWindowID string, window []map[string]any, sequence int) map[string]any {
 	attributes := SpanAttributes(first.Span)
 	payload := map[string]any{
-		"window_id":        baseWindowID,
-		"base_window_id":   nil,
-		"complete":         true,
-		"delta":            []any{},
-		"messages":         copyJSON(window),
-		"transition_kind":  TrimBaseline,
-		"baseline_reason":  baselineReasons[TrimBaseline],
+		"window_id":       baseWindowID,
+		"base_window_id":  nil,
+		"complete":        true,
+		"delta":           []any{},
+		"messages":        copyJSON(window),
+		"transition_kind": TrimBaseline,
+		"baseline_reason": baselineReasons[TrimBaseline],
 	}
 	attributes[obs.OJTrajectoryEventID] = fmt.Sprintf("trim:%s:%s", first.SubjectID, baseWindowID)
 	attributes[obs.OJTrajectoryEventKind] = ContextWindowCommit

@@ -302,10 +302,10 @@ func TestReadLLMExchange_往返(t *testing.T) {
 // Python: spans.py read_tool_call / read_span_error。
 func TestReadToolCall_结构与错误(t *testing.T) {
 	attrs := map[string]any{
-		"gen_ai.tool.name":          "write_file",
-		"gen_ai.tool.call.id":       "c1",
+		"gen_ai.tool.name":           "write_file",
+		"gen_ai.tool.call.id":        "c1",
 		"gen_ai.tool.call.arguments": `{"path":"a.txt"}`,
-		"gen_ai.tool.call.result":   `{"ok":true}`,
+		"gen_ai.tool.call.result":    `{"ok":true}`,
 	}
 	span := mkSpan("t", "s1", "tool.write_file", attrs)
 	result := ReadToolCall(span)
@@ -376,18 +376,18 @@ func TestReplayWindows_单提交基线(t *testing.T) {
 	}
 	payload := map[string]any{
 		"window_id": "w1", "complete": true, "delta": []any{},
-		"messages": []any{windowMessage},
+		"messages":        []any{windowMessage},
 		"transition_kind": "epoch_baseline", "baseline_reason": "runtime_epoch_start",
 	}
 	attrs := map[string]any{
-		"openjiuwen.trajectory.event_id":            "e1",
-		"openjiuwen.trajectory.event_kind":          "context.window.commit",
-		"openjiuwen.trajectory.subject_id":          "subj-1",
-		"openjiuwen.trajectory.sequence_epoch":      "epoch-1",
-		"openjiuwen.trajectory.subject_sequence":    0,
+		"openjiuwen.trajectory.event_id":              "e1",
+		"openjiuwen.trajectory.event_kind":            "context.window.commit",
+		"openjiuwen.trajectory.subject_id":            "subj-1",
+		"openjiuwen.trajectory.sequence_epoch":        "epoch-1",
+		"openjiuwen.trajectory.subject_sequence":      0,
 		"openjiuwen.trajectory.recorded_at_unix_nano": 1,
-		"openjiuwen.trajectory.payload":             mustJSON(payload),
-		"openjiuwen.trajectory.record.kind":         "event",
+		"openjiuwen.trajectory.payload":               mustJSON(payload),
+		"openjiuwen.trajectory.record.kind":           "event",
 	}
 	span := mkSpan("t", "s1", "context.window.commit", attrs)
 	traj, _ := NewTrajectory(mkPayload(span))

@@ -2,8 +2,8 @@ package trajectory
 
 import (
 	"context"
-	"encoding/hex"
 	cryptorand "crypto/rand"
+	"encoding/hex"
 	"sync"
 	"testing"
 
