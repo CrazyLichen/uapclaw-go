@@ -878,6 +878,32 @@ func (db *InMemoryTeamDatabase) StartTaskCAS(_ context.Context, taskID, memberNa
 	return true, nil
 }
 
+// ReassignTask 内存实现：状态原位保留的原子换手（与 SQL 同语义）。
+// summary/note 清空（F_119）、resume_pending 消费（F_128）、observed_revision
+// 追平 revision（F_129）。
+// Python: reassign_task (task_dao.py L971-1018)
+func (db *InMemoryTeamDatabase) ReassignTask(_ context.Context, taskID, fromAssignee, toAssignee string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists {
+		return false, nil
+	}
+	if task.Assignee == nil || *task.Assignee != fromAssignee {
+		return false, nil
+	}
+	if !fsm.TaskReassignableStatuses[task.Status] {
+		return false, nil
+	}
+	task.Assignee = &toAssignee
+	task.Summary = nil
+	task.Note = nil
+	task.ResumePending = false
+	task.ObservedRevision = task.Revision
+	task.UpdatedAt = GetCurrentTime()
+	return true, nil
+}
+
 // SubmitForReview 内存实现：IN_PROGRESS→IN_REVIEW + round 自增。
 func (db *InMemoryTeamDatabase) SubmitForReview(ctx context.Context, taskID, summary, note string) (bool, error) {
 	db.mu.Lock()
