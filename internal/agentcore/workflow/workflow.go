@@ -165,8 +165,13 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 
 	result, err := w.executeWithTimeout(ctx, func(ctx context.Context) (any, error) {
 		var chunks []WorkflowChunk
-		for chunk := range w.streamInternal(ctx, inputs, ws, kwargs) {
+		ch, chErr := w.streamInternal(ctx, inputs, ws, kwargs)
+		for chunk := range ch {
 			chunks = append(chunks, chunk)
+		}
+		bgErr, ok := <-chErr
+		if ok && bgErr != nil {
+			return nil, bgErr // Python except BaseError: raise（workflow.py:399-408）
 		}
 		// workflow.py:370-377：扫 INTERACTION chunk → INPUT_REQUIRED
 		for _, chunk := range chunks {
@@ -209,7 +214,7 @@ func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterface
 	inputs = fw.TransformWorkflowIOInput(ctx, callback.WorkflowStreamInput, inputs)
 	logWorkflowStart("stream", w.card, inputs)
 	ws := w.createWorkflowSession(sess, streamModes, false)
-	out := w.streamInternal(ctx, inputs, ws, kwargs)
+	out, _ := w.streamInternal(ctx, inputs, ws, kwargs)
 	return out, nil
 }
 
@@ -232,9 +237,11 @@ func (w *Workflow) Draw(title, outputFormat string, expandSubgraph any, enableAn
 // streamInternal 内部流循环（workflow.py:501-592 步骤一比一；
 // 主循环中转禁直透——spec §10：转发层承载 workflow_final 补帧/取消事件/逐帧日志）。
 func (w *Workflow) streamInternal(ctx context.Context, inputs any,
-	ws sessioninterfaces.InnerSession, kwargs map[string]any) <-chan WorkflowChunk {
+	ws sessioninterfaces.InnerSession, kwargs map[string]any) (<-chan WorkflowChunk, <-chan error) {
 	out := make(chan WorkflowChunk)
+	errCh := make(chan error, 1)
 	go func() { // 转发协程（spec §10 注记 3；Python _stream 协程）
+		defer close(errCh) // 成功路径零写入：关闭承载「无错误」语义
 		defer close(out)
 		// workflow.py:506-512 trace start + WORKFLOW_STARTED
 		tracer.TracerWorkflowUtils{}.TraceWorkflowStart(ctx, w.tracerSession(ws), inputs)
@@ -273,6 +280,7 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 		if terr != nil {
 			triggerEvent(ctx, callback.WorkflowError, map[string]any{"error": terr})
 			w.cleanup(ws)
+			errCh <- terr
 			return
 		}
 
@@ -281,7 +289,6 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 			stream.WithFirstFrameTimeout(firstFrameTimeout),
 			stream.WithFrameTimeout(frameTimeout))
 		idx := 0
-		var lastErr error
 	drain:
 		for {
 			select {
@@ -293,6 +300,7 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 					_ = task.Stop(time.Second)
 				}
 				w.cleanup(ws)
+				errCh <- ctx.Err()
 				return
 			case chunk, ok := <-emit:
 				if !ok {
@@ -301,14 +309,6 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 				loggerDebugChunk(idx, w.card)
 				out <- chunk
 				idx++
-			case <-taskDoneChannel(task): // 图执行提前失败：等 task.Wait 分类
-				lastErr = task.Wait()
-				if lastErr != nil && !errors.Is(lastErr, context.Canceled) {
-					triggerEvent(ctx, callback.WorkflowError, map[string]any{
-						"workflow_id": w.card.ID, "workflow_name": w.card.Name, "error": lastErr})
-				}
-				w.cleanup(ws)
-				return
 			}
 		}
 		// workflow.py:550-558 收尾：task.wait → WORKFLOW_FINISHED → 补 workflow_final
@@ -316,11 +316,13 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 			if errors.Is(err, context.Canceled) { // Wait 处取消（workflow.py:559-566）
 				loggerWarn("Workflow stream output be cancelled", w.card)
 				w.cleanup(ws)
+				errCh <- err
 				return
 			}
 			triggerEvent(ctx, callback.WorkflowError, map[string]any{
 				"workflow_id": w.card.ID, "workflow_name": w.card.Name, "error": err})
 			w.cleanup(ws)
+			errCh <- err // BaseError/图执行错误回传（Python except BaseError: raise）
 			return
 		}
 		results := workflowGetOutputs(ws, w.endCompID)
@@ -331,10 +333,9 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 				Type: "workflow_final", Index: 0, Payload: results,
 			}
 		}
-		_ = lastErr
 		w.cleanup(ws) // workflow.py:588-592 finally：cancel 未完任务 + shield close + reset
 	}()
-	return out
+	return out, errCh
 }
 
 // subInvoke 子工作流批式（workflow.py:594-626 一比一）。
