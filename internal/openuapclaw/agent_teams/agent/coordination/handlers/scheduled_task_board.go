@@ -57,11 +57,16 @@ func NewScheduledTaskBoardHandler(
 // steer 会重复投递，且会把挂起父任务的 owner 送回父任务。
 //
 // Python: ScheduledTaskBoardHandler.EVENT_METHOD_MAP（task_board.py L708-722）。
-// ⚠️ 已知偏差：TASK_REVOKED 定向 steer 随 reassign（25.4）落。
 func (h *ScheduledTaskBoardHandler) GetCallbacks() map[string]ateamcoordtypes.EventCallbackFunc {
 	callbacks := map[string]ateamcoordtypes.EventCallbackFunc{
 		// 定向所有权 steer 继承基类（update_task 两模式行为相同）。
-		events.TeamEventTaskClaimed: h.OnTaskClaimed,
+		// Python: EVENT_METHOD_MAP 先 spread 基类映射——CLAIMED/REVOKED/CANCELLED
+		// 三个定向所有权 steer 原样继承，仅 i18n 键换成 scheduled 变体
+		//（_REVOKED_FROM_SELF_KEY / _CANCELLED_TO_SELF_KEY 覆写，task_board.py
+		// L724-726：无池，等下一次指派而非轮询看板）。
+		events.TeamEventTaskClaimed:   h.OnTaskClaimed,
+		events.TeamEventTaskRevoked:   h.OnTaskRevokedScheduled,
+		events.TeamEventTaskCancelled: h.OnTaskCancelledScheduled,
 		// 评审投票只在 scheduled 派发下存在：票是纯板面可观测性——leader 侧
 		// 调度器统计它们（F_62，25.2b）。
 		events.TeamEventTaskReviewVote: h.OnTaskBoardEvent,
@@ -74,7 +79,6 @@ func (h *ScheduledTaskBoardHandler) GetCallbacks() map[string]ateamcoordtypes.Ev
 		// 送回父任务。
 		events.TeamEventTaskUpdated:      h.OnTaskBoardEvent,
 		events.TeamEventTaskCompleted:    h.OnTaskBoardEvent,
-		events.TeamEventTaskCancelled:    h.OnTaskBoardEvent,
 		events.TeamEventTaskUnblocked:    h.OnTaskBoardEvent,
 		events.TeamEventTaskPlanRequest:  h.OnTaskBoardEvent,
 		events.TeamEventTaskPlanResponse: h.OnTaskPlanDecision,
@@ -110,4 +114,20 @@ func (h *ScheduledTaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event 
 		Str("member_name", memberName).
 		Str("event_type", event.Transport.EventType).
 		Msg("scheduled dispatch: board event observed, no nudge")
+}
+
+// OnTaskRevokedScheduled scheduled 变体的撤回 steer：i18n 键换 scheduled 版
+//（无池——指引等下一次指派，不指引回看板轮询）。
+// Python: ScheduledTaskBoardHandler._REVOKED_FROM_SELF_KEY 覆写（L724）
+// + 继承的 on_task_revoked。
+func (h *ScheduledTaskBoardHandler) OnTaskRevokedScheduled(ctx context.Context, event ateamcoordtypes.CoordinationEvent) {
+	h.TaskBoardHandler.deliverOwnershipLoss(ctx, event, scheduledRevokedFromSelfKey, "task-revoked")
+}
+
+// OnTaskCancelledScheduled scheduled 变体的取消 steer：i18n 键换 scheduled 版。
+// Python: ScheduledTaskBoardHandler._CANCELLED_TO_SELF_KEY 覆写（L725）
+// + 继承的 on_task_cancelled。
+func (h *ScheduledTaskBoardHandler) OnTaskCancelledScheduled(ctx context.Context, event ateamcoordtypes.CoordinationEvent) {
+	h.TaskBoardHandler.deliverOwnershipLoss(ctx, event, scheduledCancelledToSelfKey, "task-cancelled",
+		func(*TaskBoardHandler) { h.OnTaskBoardEvent(ctx, event) })
 }
