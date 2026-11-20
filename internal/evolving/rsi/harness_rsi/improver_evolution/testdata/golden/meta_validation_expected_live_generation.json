@@ -1,0 +1,285 @@
+{
+  "baseline_improver": {
+    "policy_digest": "pd_base_1",
+    "version_id": "imp_base_1"
+  },
+  "candidate_improver": {
+    "policy_digest": "pd_cand_1",
+    "version_id": "imp_cand_1"
+  },
+  "checkpoint_ids": [
+    "meta_test_001",
+    "meta_test_002",
+    "meta_test_003",
+    "meta_test_004"
+  ],
+  "checkpoints": [
+    {
+      "baseline_metrics": {
+        "best_of_k_gain": 0.1,
+        "final_harness_gain_per_budget": 0.4,
+        "infrastructure_failure_rate": 0.05,
+        "regression_failure_rate": 0.1,
+        "selection_regret": 0.05,
+        "top_m_gain": 0.08
+      },
+      "candidate_metrics": {
+        "best_of_k_gain": 0.12,
+        "final_harness_gain_per_budget": 0.45,
+        "infrastructure_failure_rate": 0.04,
+        "regression_failure_rate": 0.08,
+        "selection_regret": 0.03,
+        "top_m_gain": 0.11
+      },
+      "checkpoint_id": "meta_test_001",
+      "deltas": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.05,
+        "infrastructure_failure_rate": -0.01,
+        "regression_failure_rate": -0.02,
+        "selection_regret": -0.02,
+        "top_m_gain": 0.03
+      },
+      "directional_improvements": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.05,
+        "infrastructure_failure_rate": 0.01,
+        "regression_failure_rate": 0.02,
+        "selection_regret": 0.02,
+        "top_m_gain": 0.03
+      },
+      "frozen_context": {
+        "base_harness_id": "h_v7",
+        "base_model_id": "m1",
+        "failure_evidence_id": "ev_1",
+        "k": 3,
+        "protocol_id": "proto_a",
+        "runtime_budget": 1800,
+        "token_budget": 100000,
+        "tool_budget": 40,
+        "top_m": 2,
+        "verifier_id": "ver_1"
+      }
+    },
+    {
+      "baseline_metrics": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.1,
+        "infrastructure_failure_rate": 0.1,
+        "regression_failure_rate": 0.2,
+        "selection_regret": 0.08,
+        "top_m_gain": 0.0
+      },
+      "candidate_metrics": {
+        "best_of_k_gain": 0.04,
+        "final_harness_gain_per_budget": 0.12,
+        "infrastructure_failure_rate": 0.09,
+        "regression_failure_rate": 0.15,
+        "selection_regret": 0.05,
+        "top_m_gain": 0.01
+      },
+      "checkpoint_id": "meta_test_002",
+      "deltas": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.02,
+        "infrastructure_failure_rate": -0.01,
+        "regression_failure_rate": -0.05,
+        "selection_regret": -0.03,
+        "top_m_gain": 0.01
+      },
+      "directional_improvements": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.02,
+        "infrastructure_failure_rate": 0.01,
+        "regression_failure_rate": 0.05,
+        "selection_regret": 0.03,
+        "top_m_gain": 0.01
+      },
+      "frozen_context": {
+        "base_harness_id": "h_v7",
+        "base_model_id": "m1",
+        "failure_evidence_id": "ev_2",
+        "k": 3,
+        "protocol_id": "proto_a",
+        "runtime_budget": 1800,
+        "token_budget": 100000,
+        "tool_budget": 40,
+        "top_m": 2,
+        "verifier_id": "ver_1"
+      }
+    },
+    {
+      "baseline_metrics": {
+        "best_of_k_gain": 0.15,
+        "final_harness_gain_per_budget": 0.5,
+        "infrastructure_failure_rate": 0.02,
+        "regression_failure_rate": 0.05,
+        "selection_regret": 0.02,
+        "top_m_gain": 0.12
+      },
+      "candidate_metrics": {
+        "best_of_k_gain": 0.18,
+        "final_harness_gain_per_budget": 0.6,
+        "infrastructure_failure_rate": 0.01,
+        "regression_failure_rate": 0.03,
+        "selection_regret": 0.01,
+        "top_m_gain": 0.15
+      },
+      "checkpoint_id": "meta_test_003",
+      "deltas": {
+        "best_of_k_gain": 0.03,
+        "final_harness_gain_per_budget": 0.1,
+        "infrastructure_failure_rate": -0.01,
+        "regression_failure_rate": -0.02,
+        "selection_regret": -0.01,
+        "top_m_gain": 0.03
+      },
+      "directional_improvements": {
+        "best_of_k_gain": 0.03,
+        "final_harness_gain_per_budget": 0.1,
+        "infrastructure_failure_rate": 0.01,
+        "regression_failure_rate": 0.02,
+        "selection_regret": 0.01,
+        "top_m_gain": 0.03
+      },
+      "frozen_context": {
+        "base_harness_id": "h_v8",
+        "base_model_id": "m1",
+        "failure_evidence_id": "ev_3",
+        "k": 4,
+        "protocol_id": "proto_b",
+        "runtime_budget": 2000,
+        "token_budget": 120000,
+        "tool_budget": 50,
+        "top_m": 2,
+        "verifier_id": "ver_2"
+      }
+    },
+    {
+      "baseline_metrics": {
+        "best_of_k_gain": 0.05,
+        "final_harness_gain_per_budget": 0.25,
+        "infrastructure_failure_rate": 0.08,
+        "regression_failure_rate": 0.15,
+        "selection_regret": 0.03,
+        "top_m_gain": 0.04
+      },
+      "candidate_metrics": {
+        "best_of_k_gain": 0.07,
+        "final_harness_gain_per_budget": 0.3,
+        "infrastructure_failure_rate": 0.05,
+        "regression_failure_rate": 0.1,
+        "selection_regret": 0.02,
+        "top_m_gain": 0.06
+      },
+      "checkpoint_id": "meta_test_004",
+      "deltas": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.05,
+        "infrastructure_failure_rate": -0.03,
+        "regression_failure_rate": -0.05,
+        "selection_regret": -0.01,
+        "top_m_gain": 0.02
+      },
+      "directional_improvements": {
+        "best_of_k_gain": 0.02,
+        "final_harness_gain_per_budget": 0.05,
+        "infrastructure_failure_rate": 0.03,
+        "regression_failure_rate": 0.05,
+        "selection_regret": 0.01,
+        "top_m_gain": 0.02
+      },
+      "frozen_context": {
+        "base_harness_id": "h_v8",
+        "base_model_id": "m1",
+        "failure_evidence_id": "ev_4",
+        "k": 4,
+        "protocol_id": "proto_b",
+        "runtime_budget": 2000,
+        "token_budget": 120000,
+        "tool_budget": 50,
+        "top_m": 2,
+        "verifier_id": "ver_2"
+      }
+    }
+  ],
+  "macro_averages": {
+    "best_of_k_gain": {
+      "baseline": 0.08,
+      "candidate": 0.1025,
+      "delta": 0.0225,
+      "direction": "higher_is_better",
+      "improvement": 0.0225
+    },
+    "final_harness_gain_per_budget": {
+      "baseline": 0.3125,
+      "candidate": 0.3675,
+      "delta": 0.055,
+      "direction": "higher_is_better",
+      "improvement": 0.055
+    },
+    "infrastructure_failure_rate": {
+      "baseline": 0.0625,
+      "candidate": 0.0475,
+      "delta": -0.015,
+      "direction": "lower_is_better",
+      "improvement": 0.015
+    },
+    "regression_failure_rate": {
+      "baseline": 0.125,
+      "candidate": 0.09,
+      "delta": -0.035,
+      "direction": "lower_is_better",
+      "improvement": 0.035
+    },
+    "selection_regret": {
+      "baseline": 0.045,
+      "candidate": 0.0275,
+      "delta": -0.0175,
+      "direction": "lower_is_better",
+      "improvement": 0.0175
+    },
+    "top_m_gain": {
+      "baseline": 0.06,
+      "candidate": 0.0825,
+      "delta": 0.0225,
+      "direction": "higher_is_better",
+      "improvement": 0.0225
+    }
+  },
+  "mode": "live_generation",
+  "promotion": {
+    "reason_codes": [
+      "promotion_thresholds_satisfied"
+    ],
+    "scope": "full_improver",
+    "status": "eligible"
+  },
+  "record_type": "paired_improver_meta_validation",
+  "required_metrics": [
+    "best_of_k_gain",
+    "top_m_gain",
+    "selection_regret",
+    "final_harness_gain_per_budget",
+    "regression_failure_rate",
+    "infrastructure_failure_rate"
+  ],
+  "schema_version": 1,
+  "thresholds": {
+    "best_of_k_gain_non_degradation_tolerance": 0.0,
+    "final_harness_gain_per_budget_non_degradation_tolerance": 0.0,
+    "max_infrastructure_failure_rate_increase": 0.0,
+    "max_regression_failure_rate_increase": 0.0,
+    "min_selection_regret_improvement": 1e-12,
+    "min_unseen_checkpoints": 3,
+    "top_m_gain_non_degradation_tolerance": 0.0
+  },
+  "validation": {
+    "checkpoint_count": 4,
+    "issues": [],
+    "metrics_status": "complete",
+    "reason_codes": [],
+    "status": "accepted",
+    "unseen_checkpoint_count": 4
+  }
+}

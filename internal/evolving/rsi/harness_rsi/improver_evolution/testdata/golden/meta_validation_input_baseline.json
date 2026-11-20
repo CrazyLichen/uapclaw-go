@@ -1,0 +1,42 @@
+[
+  {
+    "checkpoint_id": "meta_test_001", "split": "meta_test",
+    "base_harness_id": "h_v7", "failure_evidence_id": "ev_1", "base_model_id": "m1",
+    "k": 3, "top_m": 2, "token_budget": 100000, "tool_budget": 40, "runtime_budget": 1800,
+    "verifier_id": "ver_1", "protocol_id": "proto_a",
+    "improver_version_id": "imp_base_1", "improver_policy_digest": "pd_base_1",
+    "metrics": {"best_of_k_gain": 0.10, "top_m_gain": 0.08, "selection_regret": 0.05,
+                "final_harness_gain_per_budget": 0.4, "regression_failure_rate": 0.1,
+                "infrastructure_failure_rate": 0.05}
+  },
+  {
+    "checkpoint_id": "meta_test_002", "split": "meta_test",
+    "base_harness_id": "h_v7", "failure_evidence_id": "ev_2", "base_model_id": "m1",
+    "k": 3, "top_m": 2, "token_budget": 100000, "tool_budget": 40, "runtime_budget": 1800,
+    "verifier_id": "ver_1", "protocol_id": "proto_a",
+    "improver_version_id": "imp_base_1", "improver_policy_digest": "pd_base_1",
+    "metrics": {"best_of_k_gain": 0.02, "top_m_gain": 0.0, "selection_regret": 0.08,
+                "final_harness_gain_per_budget": 0.1, "regression_failure_rate": 0.2,
+                "infrastructure_failure_rate": 0.1}
+  },
+  {
+    "checkpoint_id": "meta_test_003", "split": "meta_test",
+    "base_harness_id": "h_v8", "failure_evidence_id": "ev_3", "base_model_id": "m1",
+    "k": 4, "top_m": 2, "token_budget": 120000, "tool_budget": 50, "runtime_budget": 2000,
+    "verifier_id": "ver_2", "protocol_id": "proto_b",
+    "improver_version_id": "imp_base_1", "improver_policy_digest": "pd_base_1",
+    "metrics": {"best_of_k_gain": 0.15, "top_m_gain": 0.12, "selection_regret": 0.02,
+                "final_harness_gain_per_budget": 0.5, "regression_failure_rate": 0.05,
+                "infrastructure_failure_rate": 0.02}
+  },
+  {
+    "checkpoint_id": "meta_test_004", "split": "meta_test",
+    "base_harness_id": "h_v8", "failure_evidence_id": "ev_4", "base_model_id": "m1",
+    "k": 4, "top_m": 2, "token_budget": 120000, "tool_budget": 50, "runtime_budget": 2000,
+    "verifier_id": "ver_2", "protocol_id": "proto_b",
+    "improver_version_id": "imp_base_1", "improver_policy_digest": "pd_base_1",
+    "metrics": {"best_of_k_gain": 0.05, "top_m_gain": 0.04, "selection_regret": 0.03,
+                "final_harness_gain_per_budget": 0.25, "regression_failure_rate": 0.15,
+                "infrastructure_failure_rate": 0.08}
+  }
+]
