@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	lite "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/lite"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 	// 空白导入：触发 GlobalRegistry 中 fs/shell/code 操作的 init 注册
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
+	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

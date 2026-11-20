@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 

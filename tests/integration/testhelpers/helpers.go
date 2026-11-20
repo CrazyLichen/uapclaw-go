@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

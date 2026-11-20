@@ -3,12 +3,12 @@ package swarm
 import (
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/observability/demand"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 

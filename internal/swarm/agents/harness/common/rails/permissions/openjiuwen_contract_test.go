@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	secrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

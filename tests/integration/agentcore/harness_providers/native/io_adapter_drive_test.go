@@ -10,16 +10,16 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	interrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
-	sessionstream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	answpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
+	interrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
+	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
+	sessionstream "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	answpkg "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 

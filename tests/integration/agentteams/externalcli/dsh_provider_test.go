@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/suite"
 	deepseekharness "github.com/theoneLee/deepseek-harness-sdk-go"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/dsh"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/sessionctx"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/dsh"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

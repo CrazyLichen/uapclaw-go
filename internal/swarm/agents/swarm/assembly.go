@@ -3,15 +3,15 @@ package swarm
 import (
 	"errors"
 
-	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
-	externalPkg "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	experts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/experts"
+	externalPkg "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"os"
 	"strings"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/observability/demand"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/common"

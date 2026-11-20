@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
-	taskplanning "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
+	hsections "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
+	taskplanning "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

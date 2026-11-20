@@ -15,12 +15,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	nativeprov "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/native"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	nativeprov "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/native"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

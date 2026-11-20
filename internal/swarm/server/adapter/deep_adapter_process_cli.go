@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/config"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

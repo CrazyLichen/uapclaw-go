@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	experts "github.com/uapclaw/uapclaw-go/internal/agent_teams/experts"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	experts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/experts"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 )
 
 // enrichFixture 最小团队 spec（leader/teammate 基座 + leader 规格）。

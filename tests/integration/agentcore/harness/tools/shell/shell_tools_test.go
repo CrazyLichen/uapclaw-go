@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	shelltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/shell"
+	shelltools "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/shell"
 	// 空导入注册 local 模式的 fs/shell/code 操作到 GlobalRegistry
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

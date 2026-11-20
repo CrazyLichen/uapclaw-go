@@ -3,8 +3,8 @@ package team
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

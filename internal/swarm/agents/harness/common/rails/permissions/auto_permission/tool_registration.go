@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

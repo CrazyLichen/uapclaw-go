@@ -1,7 +1,7 @@
 package team
 
 import (
-	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
+	external "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 

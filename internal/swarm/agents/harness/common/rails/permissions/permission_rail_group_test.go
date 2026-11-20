@@ -3,7 +3,7 @@ package permissions
 import (
 	"testing"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 )
 
 // stubPermissionRail 权限轨替身（实现标识接口）。

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

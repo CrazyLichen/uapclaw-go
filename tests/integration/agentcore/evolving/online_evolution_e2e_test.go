@@ -14,14 +14,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
-	skillcallopt "github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/skill_call"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/optimizer/llm_resilience"
+	skillcallopt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/optimizer/skill_call"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/signal"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

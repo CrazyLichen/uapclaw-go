@@ -16,8 +16,8 @@ import (
 	"sort"
 	"strings"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

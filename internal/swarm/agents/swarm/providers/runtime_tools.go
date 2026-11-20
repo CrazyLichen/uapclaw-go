@@ -3,12 +3,12 @@ package providers
 import (
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
-	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
 

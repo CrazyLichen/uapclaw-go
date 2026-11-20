@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 )
 
 // TestDecodeResponseText_编码候选链 验证 declared→utf-8→apparent→gb18030 候选链。

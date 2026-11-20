@@ -1,0 +1,253 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// DataContainer 会话数据容器：按 key 读取、原子更新、可序列化落盘。
+type DataContainer interface {
+	// Get 获取数据，key 可选过滤，nil 返回全部数据
+	Get(key any) map[string]any
+	// Update 原子更新数据
+	Update(data map[string]any) bool
+	// Dump 序列化为可持久化格式
+	Dump() (any, error)
+}
+
+// StateAccessor 会话状态访问抽象，供 AgentSessionContainer 委托与重建。
+type StateAccessor interface {
+	// UpdateState 更新状态数据
+	UpdateState(data map[string]any)
+	// GetState 根据 key 获取状态值
+	GetState(key state.StateKey) (any, error)
+	// DumpState 导出完整状态快照
+	DumpState() map[string]any
+	// PreRun 预运行（load 时调用）
+	PreRun(ctx context.Context, inputs ...map[string]any) error
+}
+
+// SharingPolicy 会话数据对外共享时的权限与字段白名单。
+type SharingPolicy struct {
+	// Permission 授予的权限级别，当前仅支持只读
+	Permission Permission
+	// FieldScopes 允许访问的字段名集合，nil 表示全部字段可访问
+	FieldScopes map[string]struct{}
+}
+
+// AgentSessionContainer 以委托方式持有真实会话，构造期可为空，由 SetSession/Load 注入。
+type AgentSessionContainer struct {
+	// session 被委托的会话实例，初始为 nil
+	// 通过 SetSession 注入，或通过 Load 创建
+	session StateAccessor
+}
+
+type factoryEntry struct {
+	// constructor 创建新 DataContainer 的函数
+	constructor func(opts ...ContainerOption) DataContainer
+	// loader 从序列化数据重建 DataContainer 的函数
+	loader ContainerLoader
+}
+
+// DataContainerFactory 数据容器工厂：按容器类型注册构造器与反序列化加载器。
+type DataContainerFactory struct {
+	// mu 并发读写锁
+	mu sync.RWMutex
+	// entries 已注册的工厂条目
+	entries map[string]factoryEntry
+}
+
+// ContainerLoader 容器加载函数类型。
+type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
+
+// ContainerOption 容器选项函数类型。
+type ContainerOption func(DataContainer)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Permission 会话数据共享权限级别枚举。
+type Permission int
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// PermissionRead 只读权限
+	PermissionRead Permission = iota + 1
+)
+
+const (
+	// DefaultDataContainerType 默认数据容器类型
+	DefaultDataContainerType = "agent"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	factoryOnce     sync.Once
+	factoryInstance *DataContainerFactory
+
+	// sessionCreator 从序列化数据重建 Session 的函数。
+	// 由 session 包在 init 时通过 RegisterSessionCreator 注册，
+	// 解决 controller → session 的循环依赖问题。
+	// Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+	sessionCreator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetFactory 获取数据容器工厂单例。
+func GetFactory() *DataContainerFactory {
+	factoryOnce.Do(func() {
+		factoryInstance = &DataContainerFactory{
+			entries: make(map[string]factoryEntry),
+		}
+	})
+	return factoryInstance
+}
+
+// RegisterSessionCreator 注册会话创建函数。
+func RegisterSessionCreator(creator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor) {
+	sessionCreator = creator
+}
+
+// NewAgentSessionContainer 创建空的 Agent 会话容器。
+func NewAgentSessionContainer() *AgentSessionContainer {
+	return &AgentSessionContainer{}
+}
+
+// LoadAgentSessionContainer 从序列化数据恢复 Agent 会话容器。
+func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
+	container := NewAgentSessionContainer()
+	if sessionCreator != nil {
+		// Python: create_agent_session(session_id=session_id, card=AgentCard(id=agent_id))
+		// controller 只有 agentID，构建最小 card 传给 sessionCreator
+		card := &agentschema.AgentCard{
+			BaseCard: schema.BaseCard{ID: agentID},
+		}
+		sa := sessionCreator(sessionID, card, nil)
+		container.SetSession(sa)
+		// PreRun 触发 AGENT_SESSION_CREATED 回调，回调中会注入 Session
+		// G-08 修复：PreRun 失败时返回 error，阻止部分初始化的容器被使用
+		if err := sa.PreRun(context.Background()); err != nil {
+			logger.Error(logComponent).
+				Str("action", "load_agent_session_container").
+				Str("session_id", sessionID).
+				Err(err).
+				Msg("PreRun failed")
+			return nil, fmt.Errorf("PreRun 失败: %w", err)
+		}
+	}
+	return container, nil
+}
+
+// Register 登记一种数据容器的创建与载入方式。
+func (f *DataContainerFactory) Register(containerType string, loader ContainerLoader, constructor func(opts ...ContainerOption) DataContainer) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.entries[containerType] = factoryEntry{
+		constructor: constructor,
+		loader:      loader,
+	}
+}
+
+// Create 按类型新建一个空的数据容器。
+func (f *DataContainerFactory) Create(containerType string, opts ...ContainerOption) (DataContainer, error) {
+	f.mu.RLock()
+	entry, ok := f.entries[containerType]
+	f.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("未知 data_container_type: %q，可用类型: %v", containerType, f.listTypesLocked())
+	}
+	return entry.constructor(opts...), nil
+}
+
+// Load 按类型把已保存的数据还原成容器。
+func (f *DataContainerFactory) Load(containerType, agentID, sessionID string, serialized any) (DataContainer, error) {
+	f.mu.RLock()
+	entry, ok := f.entries[containerType]
+	f.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("未知 data_container_type: %q，可用类型: %v", containerType, f.listTypesLocked())
+	}
+	return entry.loader(agentID, sessionID, serialized)
+}
+
+// Has 判断该类型是否已登记。
+func (f *DataContainerFactory) Has(containerType string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	_, ok := f.entries[containerType]
+	return ok
+}
+
+// ListTypes 返回已登记的全部容器类型。
+func (f *DataContainerFactory) ListTypes() []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.listTypesLocked()
+}
+
+// Get 按状态键读取容器里的数据，不传键时返回整份状态快照。
+func (c *AgentSessionContainer) Get(key any) map[string]any {
+	if c.session == nil {
+		return nil
+	}
+	if key == nil {
+		return c.session.DumpState()
+	}
+	if sk, ok := key.(state.StateKey); ok {
+		val, _ := c.session.GetState(sk)
+		if m, ok := val.(map[string]any); ok {
+			return m
+		}
+	}
+	return c.session.DumpState()
+}
+
+// Update 把数据合并写回会话状态。
+func (c *AgentSessionContainer) Update(data map[string]any) bool {
+	if c.session == nil {
+		return false
+	}
+	c.session.UpdateState(data)
+	return true
+}
+
+// Dump 返回容器需要持久化的内容，这里不需要额外保存。
+func (c *AgentSessionContainer) Dump() (any, error) {
+	return map[string]any{}, nil
+}
+
+// SetSession 绑定该容器所属的会话状态访问器。
+func (c *AgentSessionContainer) SetSession(session StateAccessor) {
+	c.session = session
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// listTypesLocked 返回已登记的类型列表，调用方需自行持锁。
+func (f *DataContainerFactory) listTypesLocked() []string {
+	types := make([]string, 0, len(f.entries))
+	for t := range f.entries {
+		types = append(types, t)
+	}
+	return types
+}
+
+func init() {
+	GetFactory().Register(
+		DefaultDataContainerType,
+		LoadAgentSessionContainer,
+		func(opts ...ContainerOption) DataContainer {
+			return NewAgentSessionContainer()
+		},
+	)
+}

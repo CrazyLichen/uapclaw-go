@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

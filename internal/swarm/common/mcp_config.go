@@ -27,7 +27,7 @@ import (
 	"regexp"
 	"strings"
 
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 

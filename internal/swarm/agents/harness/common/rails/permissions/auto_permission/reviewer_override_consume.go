@@ -17,8 +17,8 @@ package auto_permission
 import (
 	"context"
 
-	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sessionstate "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )

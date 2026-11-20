@@ -139,7 +139,7 @@ func requireNumeric(t *testing.T, v any, field string) {
 
 // requireGoalRecord 断言 GoalRecord 的 15 字段形状。
 // Python: openjiuwen/harness/goal/schema.py:210-227 (to_dict)
-// Go: internal/agentcore/harness/goal/schema.go:337-359 (ToDict)
+// Go: internal/openjiuwen/harness/goal/schema.go:337-359 (ToDict)
 // 用白名单 + 类型断言，不用 golden JSON 全等（goal_id 随机、时间戳变化）。
 func requireGoalRecord(t *testing.T, raw any) map[string]any {
 	t.Helper()

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

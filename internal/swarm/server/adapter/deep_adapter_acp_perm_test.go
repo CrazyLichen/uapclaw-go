@@ -2,15 +2,15 @@ package adapter
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
 	"strings"
 	"sync"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

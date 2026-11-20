@@ -17,7 +17,7 @@ import (
 	"reflect"
 	"strings"
 
-	interruptrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

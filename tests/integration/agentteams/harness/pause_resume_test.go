@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

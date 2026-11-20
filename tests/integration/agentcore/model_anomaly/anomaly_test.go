@@ -10,12 +10,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

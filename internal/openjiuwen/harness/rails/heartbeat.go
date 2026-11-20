@@ -1,0 +1,179 @@
+package rails
+
+import (
+	"context"
+
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// HeartbeatRail 心跳护栏，在心跳运行时注入 HEARTBEAT.md 内容到系统提示词。
+// 职责：
+//   - Init:               获取 sysOperation、workspace、heartbeatDir
+//   - BeforeModelCall:    若 run_kind=heartbeat，读取 HEARTBEAT.md 并注入心跳提示词节
+//   - Uninit:             移除心跳提示词节
+//
+// 心跳调度器（11.11）周期性触发 RunKind=HEARTBEAT 的 Agent 调用，
+// HeartbeatRail 在 BeforeModelCall 中将 HEARTBEAT.md 的内容注入系统提示词，
+// 使 LLM 根据内容是否为空决定输出 HEARTBEAT_OK（存活确认）还是执行具体任务指令。
+// systemPromptBuilder 不作为字段存储，而是在使用时从 agent/cbc.Agent() 实时获取，
+// 与 TaskPlanningRail 模式一致。
+// Python: openjiuwen/harness/rails/heartbeat_rail.py HeartbeatRail
+type HeartbeatRail struct {
+	DeepAgentRail
+	// heartbeatDir HEARTBEAT.md 文件路径
+	heartbeatDir string
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// heartbeatRailPriority HeartbeatRail 优先级
+	// Python: HeartbeatRail.priority = 80
+	heartbeatRailPriority = 80
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
+// _ 编译时验证 HeartbeatRail 满足 AgentRail 接口
+var _ agentinterfaces.AgentRail = (*HeartbeatRail)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewHeartbeatRail 创建心跳护栏实例。
+// Python: HeartbeatRail.__init__()
+func NewHeartbeatRail() *HeartbeatRail {
+	r := &HeartbeatRail{
+		DeepAgentRail: *NewDeepAgentRail(),
+	}
+	r.WithPriority(heartbeatRailPriority)
+	return r
+}
+
+// Init 初始化 HeartbeatRail。
+// 获取 sysOperation、workspace、heartbeatDir。
+// Python: HeartbeatRail.init() L25-38
+func (r *HeartbeatRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
+	// Python: L28-29: if not agent.deep_config → log + return
+	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
+	if !ok || deepAgent.DeepConfig() == nil {
+		logger.Info(logComponent).
+			Str("event_type", "heartbeat_no_deep_config").
+			Msg("deepConfig not configured")
+		return nil
+	}
+
+	// Python: L31-32: if not self.sys_operation → set_sys_operation
+	if r.SysOperation() == nil {
+		if deepAgent.DeepConfig().SysOperation != nil {
+			r.SetSysOperation(deepAgent.DeepConfig().SysOperation)
+		}
+	}
+	// Python: L33-34: if not self.workspace → set_workspace
+	if r.Workspace() == nil {
+		if deepAgent.DeepConfig().Workspace != nil {
+			r.SetWorkspace(deepAgent.DeepConfig().Workspace)
+		}
+	}
+
+	// Python: L35: self.heartbeat_dir = str(self.workspace.get_node_path(WorkspaceNode.HEARTBEAT_MD))
+	if r.Workspace() != nil {
+		if path := r.Workspace().GetNodePath(workspace.WorkspaceNodeHEARTBEATMD); path != nil {
+			r.heartbeatDir = *path
+		}
+	}
+
+	return nil
+}
+
+// Uninit 移除心跳提示词节。
+// Python: HeartbeatRail.uninit() L40-42
+func (r *HeartbeatRail) Uninit(agent agentinterfaces.BaseAgent) error {
+	// Python: L41-42: if system_prompt_builder → remove_section("heartbeat")
+	if sb := agent.SystemPromptBuilder(); sb != nil {
+		sb.RemoveSection(sections.SectionHeartbeat)
+	}
+	return nil
+}
+
+// BeforeModelCall 心跳运行时注入心跳提示词节。
+// Python: HeartbeatRail.before_model_call() L44-63
+func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	// Python: L45-46: if system_prompt_builder is None or run_kind != HEARTBEAT → return
+	sb := cbc.Agent().SystemPromptBuilder()
+	if sb == nil {
+		return nil
+	}
+
+	// Python: L46: ctx.extra.get("run_kind") != RunKind.HEARTBEAT
+	runKind := ""
+	if val, ok := cbc.GetExtra("run_kind"); ok {
+		runKind, _ = val.(string)
+	}
+	if runKind != string(agentinterfaces.RunKindHeartbeat) {
+		return nil
+	}
+
+	// Python: L48-50: if not self.sys_operation → warning + return
+	if r.SysOperation() == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "heartbeat_no_sys_operation").
+			Msg("sysOperation not configured")
+		return nil
+	}
+
+	// Python: L52-57: fs.read_file(heartbeat_dir, mode="text")
+	fsOp := r.SysOperation().Fs()
+	if fsOp == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "heartbeat_no_fs_operation").
+			Msg("FsOperation is nil")
+		return nil
+	}
+
+	readRes, err := fsOp.ReadFile(ctx, r.heartbeatDir)
+	content := ""
+	if err == nil && readRes != nil {
+		// Python: L54: content = read_res.data.content
+		if readRes.Data != nil {
+			content = readRes.Data.Content
+		}
+	} else {
+		// Python: L56: logger.warning("HeartbeatRail: failed to read HEARTBEAT.md")
+		logger.Warn(logComponent).
+			Str("event_type", "heartbeat_read_failed").
+			Str("path", r.heartbeatDir).
+			Err(err).
+			Msg("failed to read HEARTBEAT.md")
+	}
+
+	// Python: L58-64: build_heartbeat_section + add_section/remove_section
+	// Go 的 BuildHeartbeatSection 总是返回有效的 PromptSection（与 Python 不同，
+	// Python 在 heartbeat_content 为 None 时可能返回 None）。
+	// 因此始终调用 AddSection。
+	heartbeatSection := sections.BuildHeartbeatSection(content, sb.Language())
+	sb.AddSection(heartbeatSection)
+
+	return nil
+}
+
+// GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
+// Python: HeartbeatRail 隐式覆盖 before_model_call
+func (r *HeartbeatRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
+}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

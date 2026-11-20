@@ -13,12 +13,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
-	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow/components"
+	workflow "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow/workflowconfig"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────

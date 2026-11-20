@@ -6,7 +6,7 @@
 //
 // 本目录只验证"跨子系统契约"（写入方与读取方的键/类型/语义必须一致），
 // 私有状态（activeAgentSession 的回退路径）由
-// internal/agent_teams/harness_interrupt_internal_test.go 覆盖。
+// internal/openjiuwen/agent_teams/harness_interrupt_internal_test.go 覆盖。
 //
 // 文件目录：
 //

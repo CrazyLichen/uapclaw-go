@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

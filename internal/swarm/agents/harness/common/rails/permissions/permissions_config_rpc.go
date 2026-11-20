@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"

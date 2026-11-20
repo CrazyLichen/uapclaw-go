@@ -16,7 +16,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/acp"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

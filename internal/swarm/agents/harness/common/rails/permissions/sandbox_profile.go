@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

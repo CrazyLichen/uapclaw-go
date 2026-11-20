@@ -3,9 +3,9 @@ package memory
 import (
 	"os"
 
-	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
-	ext "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/external"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/memory"
+	ext "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/external"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

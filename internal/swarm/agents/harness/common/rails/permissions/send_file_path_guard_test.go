@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/fileguard"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/fileguard"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

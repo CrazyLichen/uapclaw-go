@@ -8,12 +8,12 @@ import (
 	"strings"
 	"sync"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	codetools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/tools"
 )

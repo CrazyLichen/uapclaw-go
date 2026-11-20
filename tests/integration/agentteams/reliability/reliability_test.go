@@ -9,7 +9,7 @@
 package agentteams_test
 
 import (
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 
 	"context"
 	"sync"
@@ -18,16 +18,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	handlers "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
-	coordtypes "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	handlers "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/handlers"
+	coordtypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails/reliability"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails/reliability/core"
+	schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

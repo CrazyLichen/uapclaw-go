@@ -14,10 +14,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability/demand"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/observability/demand"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/trajectory"
 
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"

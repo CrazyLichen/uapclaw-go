@@ -1,0 +1,75 @@
+package lite
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/retrieval/embedding"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// MemoryIndexManager 记忆索引管理器接口。对齐 Python MemoryIndexManager
+type MemoryIndexManager interface {
+	// Initialize 初始化管理器（打开数据库、建 schema、初始化 provider）
+	Initialize(ctx context.Context) error
+	// Sync 同步索引（增量或全量 reindex）
+	Sync(ctx context.Context, reason string, force bool) error
+	// Search 混合搜索（向量 + FTS5 关键词）
+	Search(ctx context.Context, query string, opts SearchOpts) ([]SearchResult, error)
+	// ReadFile 读取记忆文件内容
+	ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error)
+	// Status 返回系统状态报告
+	Status() *StatusResult
+	// LLM 返回 LLM 实例。对齐 Python ctx.manager.llm
+	LLM() *llm.Model
+	// Close 关闭管理器
+	Close() error
+}
+
+// MemoryManagerParams 记忆管理器构造参数
+type MemoryManagerParams struct {
+	// AgentID Agent 标识
+	AgentID string
+	// Workspace 工作空间
+	Workspace *workspace.Workspace
+	// Settings 记忆配置
+	Settings *MemorySettings
+	// EmbeddingConfig 嵌入配置
+	EmbeddingConfig *embedding.EmbeddingConfig
+	// SysOperation 系统操作接口
+	SysOperation sysop.SysOperation
+	// NodeName 节点名称（"memory" 或 "coding_memory"）
+	NodeName string
+	// LLM LLM 实例。对齐 Python manager.llm
+	LLM *llm.Model
+	// Ctx 初始化用的上下文。
+	// 必须传调用方 ctx：Initialize 会立刻做一次全量索引，文件读取走
+	// sys_operation 的沙箱校验，而沙箱根来自 ctx 里的 CwdState。
+	// 传 Background 会导致「路径在沙箱根目录之外，访问被拒绝」→ 索引永远为空。
+	Ctx context.Context
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
+func GetMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
+	return getMemoryIndexManager(params)
+}
+
+// ClearMemoryManagerCache 清除缓存。对齐 Python clear_memory_manager_cache
+func ClearMemoryManagerCache() {
+	clearMemoryManagerCache()
+}
+
+// CloseMemoryManagersFor 关闭某个 agent 在某个工作空间上打开的全部索引管理器，返回关闭个数。
+//
+// 为什么要定向关闭：管理器带文件监听 goroutine、定时器和 SQLite 连接，只要留在
+// 进程级 indexCache 里就一直占着。成员退役时若只关它自己开的那几个，不能误伤同进程
+// 其他 agent 的管理器（ClearMemoryManagerCache 会全关，不能用于此场景）。
+// 对齐 Python aclose_memory_managers_for（manager.py:1727）。
+func CloseMemoryManagersFor(agentID string, ws *workspace.Workspace) int {
+	return closeMemoryManagersFor(agentID, ws)
+}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	runner "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )

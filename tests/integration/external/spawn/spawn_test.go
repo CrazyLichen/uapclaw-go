@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/spawn"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

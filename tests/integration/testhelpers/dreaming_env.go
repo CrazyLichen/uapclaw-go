@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
 	swarmdreaming "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory/dreaming"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )

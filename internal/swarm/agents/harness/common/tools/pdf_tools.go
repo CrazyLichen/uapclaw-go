@@ -27,8 +27,8 @@ import (
 
 	pdf "github.com/ledongthuc/pdf"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

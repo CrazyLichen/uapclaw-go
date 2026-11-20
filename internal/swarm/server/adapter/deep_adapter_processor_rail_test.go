@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	cerails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 

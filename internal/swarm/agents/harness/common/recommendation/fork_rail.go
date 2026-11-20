@@ -3,12 +3,12 @@ package recommendation
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

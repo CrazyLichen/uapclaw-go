@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 
 	skill "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )

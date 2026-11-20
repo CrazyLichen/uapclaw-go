@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

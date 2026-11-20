@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/subagents"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"

@@ -3,7 +3,7 @@ package tools
 import (
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 

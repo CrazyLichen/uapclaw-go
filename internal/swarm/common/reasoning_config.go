@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/reasoning"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 

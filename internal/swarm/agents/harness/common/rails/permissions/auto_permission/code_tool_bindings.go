@@ -30,9 +30,9 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

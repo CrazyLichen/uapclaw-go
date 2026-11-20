@@ -1,0 +1,228 @@
+package context_engineer
+
+import (
+	"context"
+
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	cb "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ContextAssembleRail 上下文组装护栏，注入工作空间目录结构和上下文文件到系统提示词。
+// 在 Init 中捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
+// 在 BeforeModelCall 中构建并注入 workspace/context/tools 节到系统提示词构建器。
+// Python: ContextAssembleRail (openjiuwen/harness/rails/context_engineer/context_assemble_rail.py)
+type ContextAssembleRail struct {
+	rails.DeepAgentRail
+	// systemPromptBuilder 系统提示词构建器引用
+	systemPromptBuilder saprompt.SystemPromptBuilderInterface
+	// abilityManager 能力管理器引用
+	abilityManager sainterfaces.AbilityManagerInterface
+	// attachmentManager 会话级附件管理器（Init 时取一次）
+	// Python: self.attachment_manager（context_assemble_rail.py:57/64）
+	attachmentManager *hprompts.Manager
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// contextAssembleRailPriority ContextAssembleRail 优先级
+	// Python: ContextAssembleRail.priority = 85
+	contextAssembleRailPriority = 85
+
+	// contextAssembleAttachmentSource 上下文附件来源标识
+	// Python: _ATTACHMENT_SOURCE（context_assemble_rail.py:82）
+	contextAssembleAttachmentSource = "agent_core.context_assemble_rail"
+
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewContextAssembleRail 创建 ContextAssembleRail 实例。
+// Python: ContextAssembleRail()
+func NewContextAssembleRail() *ContextAssembleRail {
+	r := &ContextAssembleRail{}
+	r.WithPriority(contextAssembleRailPriority)
+	return r
+}
+
+// Init Rail 初始化钩子：捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
+// Python: ContextAssembleRail.init(agent)
+func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
+	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	r.abilityManager = agent.AbilityManager()
+	// Python: context_assemble_rail.py:64 self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
+
+	// Python: DeepAgentRail.set_sys_operation / set_workspace
+	// 同 HeartbeatRail 模式：类型断言到 DeepAgentInterface
+	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
+	if ok && deepAgent.DeepConfig() != nil {
+		if r.SysOperation() == nil && deepAgent.DeepConfig().SysOperation != nil {
+			r.SetSysOperation(deepAgent.DeepConfig().SysOperation)
+		}
+		if r.Workspace() == nil && deepAgent.DeepConfig().Workspace != nil {
+			r.SetWorkspace(deepAgent.DeepConfig().Workspace)
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "context_assemble_rail_init").
+		Msg("ContextAssembleRail initialized")
+
+	return nil
+}
+
+// Uninit Rail 注销钩子：移除 workspace、context 节。
+// Python: ContextAssembleRail.uninit(agent)——只移除 workspace/context 两节
+// （context_assemble_rail.py L36-40 实际代码；其 docstring 提及 tools 节是
+// Python 自身文档笔误，以代码实际行为为准）。M-17: 删除多移的 SectionTools。
+func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
+	if r.systemPromptBuilder != nil {
+		r.systemPromptBuilder.RemoveSection(sections.SectionWorkspace)
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "context_assemble_rail_uninit").
+		Msg("ContextAssembleRail unregistered")
+
+	return nil
+}
+
+// BeforeModelCall LLM 调用前：注入工作空间目录结构和上下文文件到系统提示词。
+// Python: ContextAssembleRail.before_model_call(ctx)
+func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
+	if r.systemPromptBuilder == nil {
+		return nil
+	}
+
+	ws := r.Workspace()
+	if ws == nil {
+		r.systemPromptBuilder.RemoveSection(sections.SectionWorkspace)
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+		return nil
+	}
+
+	lang := r.systemPromptBuilder.Language()
+
+	// 构建工作空间节
+	// Python: workspace_section = await _build_workspace(self.sys_operation, workspace, lang)
+	// Go 的 BuildWorkspaceSection 是同步的，需要先获取目录树
+	rootPath := ws.RootPath
+	dirTree := ""
+	if rootPath != "" {
+		nodes := sections.ScanDirectoryStructure(rootPath, 0, 2, lang)
+		dirTree = sections.FormatTree(nodes, lang)
+	}
+	workspaceSection := sections.BuildWorkspaceSection(rootPath, dirTree, lang)
+
+	// 构建工具节
+	// Python: tools_section = build_tools_section(self._ability_manager, lang)
+	// Python 遍历 ability_manager.list() 获取 ToolCard 的 name/description
+	var toolsSection *saprompt.PromptSection
+	if r.abilityManager != nil {
+		toolDescriptions := make(map[string]string)
+		for _, ability := range r.abilityManager.List() {
+			name := ability.AbilityName()
+			// 获取描述：尝试通过 CardInterface 获取
+			type cardInterface interface {
+				GetDescription() string
+			}
+			if ci, ok := ability.(cardInterface); ok && name != "" {
+				desc := ci.GetDescription()
+				if desc != "" {
+					toolDescriptions[name] = desc
+				}
+			}
+		}
+		if len(toolDescriptions) > 0 {
+			toolsSection = sections.BuildToolsSection(toolDescriptions, lang)
+		}
+	}
+
+	// 构建上下文节
+	// Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
+	// Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
+	isHeartbeat := false
+	if cbc != nil {
+		if val, ok := cbc.GetExtra("run_kind"); ok {
+			if runKind, ok := val.(string); ok {
+				isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
+			}
+		}
+	}
+
+	sysOp := r.SysOperation()
+	if sysOp != nil {
+		files := sections.ReadContextFiles(ctx, sysOp.Fs(), ws)
+
+		// 读取每日记忆
+		includeDailyMemory := !isHeartbeat
+		if includeDailyMemory {
+			dailyContent, dateStr := sections.ReadDailyMemory(ctx, sysOp.Fs(), ws, "")
+			if dailyContent != "" {
+				files["daily_memory"] = dailyContent
+				files["daily_memory_date"] = dateStr
+			}
+		}
+
+		// Python: :143 先移除 system 里的 context 节
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+		if isHeartbeat && len(files) > 0 {
+			// Python: :31-33/79-85 heartbeat 上下文只走附件（_ATTACHMENT_CONTEXT_SECTIONS）
+			contextSection := sections.BuildContextSection(files, lang)
+			if r.attachmentManager == nil {
+				// Python: :108-109 manager 缺失只告警，heartbeat 内容不回落 system
+				logger.Warn(logComponent).
+					Str("event_type", "context_assemble_attachment").
+					Msg("prompt attachment manager is unavailable; skip attachment sections")
+			} else if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
+				&contextSection, hprompts.AttachmentFile, contextAssembleAttachmentSource, lang,
+				hprompts.WithAttachmentContentKind("text/markdown"),
+			); err != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "context_assemble_attachment").
+					Err(err).
+					Msg("skip attachment section")
+			}
+		} else if len(files) > 0 {
+			contextSection := sections.BuildContextSection(files, lang)
+			r.systemPromptBuilder.AddSection(contextSection)
+		}
+	} else {
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+	}
+
+	// 注入节到系统提示词构建器
+	// 上游 context.heartbeat 已改走历史附件（见上），workspace 节的 system 注入仍是 Go 侧既有结构。
+	r.systemPromptBuilder.AddSection(workspaceSection)
+
+	if toolsSection != nil {
+		r.systemPromptBuilder.AddSection(*toolsSection)
+	} else {
+		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
+	}
+
+	return nil
+}
+
+// GetCallbacks 返回已覆盖的钩子映射。
+func (r *ContextAssembleRail) GetCallbacks() map[sainterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[sainterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*sainterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
+}

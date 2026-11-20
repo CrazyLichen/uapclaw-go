@@ -8,8 +8,8 @@ import (
 	"errors"
 	"regexp"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

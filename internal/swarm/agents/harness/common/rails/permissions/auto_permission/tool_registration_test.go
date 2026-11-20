@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 )
 
 // TestObservedToolTypes_初始为空 验证未装配时表为空（除测试污染外）。

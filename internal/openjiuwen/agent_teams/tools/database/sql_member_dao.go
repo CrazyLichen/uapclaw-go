@@ -1,0 +1,320 @@
+package database
+
+import (
+	"context"
+
+	"gorm.io/gorm"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/fsm"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SQLMemberDao MemberDao 的 SQL 实现。
+// Python: MemberDao (openjiuwen/agent_teams/tools/database/member_dao.py)
+// 操作静态表 team_member。
+type SQLMemberDao struct {
+	// db GORM 数据库实例
+	db *gorm.DB
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在。
+// Python: create_member() → bool（IntegrityError → False）
+func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool {
+	now := GetCurrentTime()
+	member := &TeamMember{
+		MemberName:      memberName,
+		TeamName:        teamName,
+		DisplayName:     displayName,
+		AgentCard:       agentCard,
+		Status:          status,
+		Role:            role,
+		Desc:            desc,
+		ExecutionStatus: executionStatus,
+		Mode:            mode,
+		Prompt:          prompt,
+		Options:         options,
+		UpdatedAt:       now,
+	}
+	result := d.db.WithContext(ctx).Create(member)
+	if result.Error != nil {
+		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).Err(result.Error).Msg("member already exists")
+		return false
+	}
+	return true
+}
+
+// GetMember 获取成员信息。返回 nil 表示不存在。
+// Python: get_member() → Optional[TeamMember]
+func (d *SQLMemberDao) GetMember(ctx context.Context, memberName, teamName string) (*TeamMember, error) {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return &member, nil
+}
+
+// GetTeamMembers 获取团队成员列表，可选按 status 过滤。
+// Python: get_team_members(team, status=None)
+//
+// 显式 ORDER BY member_name：上游 SQLAlchemy 查询不带 ORDER BY，行序由引擎
+// 决定（SQLite 通常按 rowid，即插入序）。Go 侧要让名册渲染与 delta 比较可复现，
+// 就必须自己定序；定在 DAO 层而不是渲染层，因为这是「数据读取的确定性」，
+// 与渲染逻辑无关（渲染层照上游保持「按输入顺序」不改写）。
+func (d *SQLMemberDao) GetTeamMembers(ctx context.Context, teamName string, status string) ([]*TeamMember, error) {
+	query := d.db.WithContext(ctx).Table("team_member").Where("team_name = ?", teamName)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	var members []*TeamMember
+	result := query.Order("member_name").Find(&members)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return members, nil
+}
+
+// GetMemberStatus 窄投影读取成员状态。
+// Python: get_member_status (member_dao.py)
+func (d *SQLMemberDao) GetMemberStatus(ctx context.Context, teamName, memberName string) (string, bool) {
+	var status string
+	result := d.db.WithContext(ctx).Table("team_member").
+		Select("status").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Scan(&status)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return "", false
+	}
+	return status, true
+}
+
+// ListRetirableMembers 投影携带退役策略且空闲（READY）的成员（F_118）。
+// Python: list_retirable_members（member_dao.py L338-367）
+func (d *SQLMemberDao) ListRetirableMembers(ctx context.Context, teamName string) ([]RetirableMemberRow, error) {
+	var rows []TeamMember
+	err := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND status = ?", teamName, fsm.MemberStatusReady).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RetirableMemberRow, 0, len(rows))
+	for _, row := range rows {
+		lifetime := LoadMemberOptions(row.Options).Lifetime
+		if lifetime != nil && *lifetime != "" {
+			out = append(out, RetirableMemberRow{MemberName: row.MemberName, Status: row.Status, Lifetime: string(*lifetime)})
+		}
+	}
+	return out, nil
+}
+
+// ListShutdownMembers 投影 SHUTDOWN 成员名集合。
+// Python: list_shutdown_members（member_dao.py L369-381）
+func (d *SQLMemberDao) ListShutdownMembers(ctx context.Context, teamName string) (map[string]bool, error) {
+	var names []string
+	err := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND status = ?", teamName, fsm.MemberStatusShutdown).
+		Pluck("member_name", &names).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(names))
+	for _, name := range names {
+		out[name] = true
+	}
+	return out, nil
+}
+
+// DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。
+// Python: delete_unstarted_member (member_dao.py:397-415)
+func (d *SQLMemberDao) DeleteUnstartedMember(ctx context.Context, memberName, teamName string) bool {
+	result := d.db.WithContext(ctx).
+		Where("member_name = ? AND team_name = ? AND status = ?",
+			memberName, teamName, memberStatusUnstarted).
+		Delete(&TeamMember{})
+	if result.Error != nil {
+		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).
+			Err(result.Error).Msg("delete unstarted member failed")
+		return false
+	}
+	return result.RowsAffected == 1
+}
+
+// UpdateMemberStatus 更新成员状态（含 FSM 校验）。
+// Python: update_member_status() → bool
+
+// UpdateMemberStatus SQL 实现：先按主键取出成员，校验状态流转后再写回。
+// 成员不存在或流转非法时返回 false。
+func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool {
+	// Python: 先查再改 + is_valid_transition 校验
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		return false
+	}
+	if !IsValidMemberTransition(member.Status, status) {
+		// Python: team_logger.error("Invalid state transition for member %s: %s -> %s", ...)
+		logger.Error(logComponent).
+			Str("member_name", memberName).
+			Str("from", member.Status).
+			Str("to", status).
+			Msg("invalid member status transition")
+		return false
+	}
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Update("status", status)
+	return true
+}
+
+// UpdateMemberServedModel 记录模型组把成员路由到 servedModel。
+// 仅在 served_models 有变化时写库；新条目会渲染在 leader 名册，属名册变更：
+// bump 名册探针监视的 updated_at 列。
+// Python: update_member_served_model (member_dao.py:807-843)
+func (d *SQLMemberDao) UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		// leader 在 build_team 写入成员行之前就可能完成首次路由
+		logger.Debug(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("member not found for served-model record; will retry on next routing")
+		return false
+	}
+	now := GetCurrentTime()
+	options := AppendMemberServedModel(member.Options, servedModel, now)
+	if options == member.Options {
+		return true
+	}
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Updates(map[string]any{"options": options, "updated_at": now})
+	return true
+}
+
+// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用。
+// 成员行不存在或 options 无变化返回 false。
+// Python: promote_member_fallback_model (member_dao.py:844-868)
+func (d *SQLMemberDao) PromoteMemberFallbackModel(ctx context.Context, memberName, teamName string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		logger.Error(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("member not found for fallback-model promote")
+		return false
+	}
+	promoted := PromoteMemberFallbackModel(member.Options)
+	if promoted == member.Options {
+		return false
+	}
+	now := GetCurrentTime()
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Updates(map[string]any{"options": promoted, "updated_at": now})
+	return true
+}
+
+// TryTransitionMemberStatus CAS 原子状态转换。
+// Python: try_transition_member_status() → bool
+// 仅当当前状态 == fromStatus 时才更新为 toStatus，否则返回 false。
+// 使用单条 UPDATE WHERE status = from_status + rowcount 判断。
+func (d *SQLMemberDao) TryTransitionMemberStatus(ctx context.Context, memberName, teamName, fromStatus, toStatus string) bool {
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ? AND status = ?", memberName, teamName, fromStatus).
+		Update("status", toStatus)
+	return result.RowsAffected == 1
+}
+
+// ListHumanAgentNames 获取 human_agent 角色的成员名列表（HITT 名册重建）。
+// Python: list_human_agent_names() → List[str]
+func (d *SQLMemberDao) ListHumanAgentNames(ctx context.Context, teamName string) ([]string, error) {
+	var names []string
+	result := d.db.WithContext(ctx).Table("team_member").
+		Select("member_name").
+		Where("team_name = ? AND role = ?", teamName, "human_agent").
+		Find(&names)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return names, nil
+}
+
+// GetMembersMaxUpdatedAt 获取 MAX(updated_at)（成员变更检测）。
+// Python: get_members_max_updated_at() → int
+func (d *SQLMemberDao) GetMembersMaxUpdatedAt(ctx context.Context, teamName string) int64 {
+	var maxVal *int64
+	row := d.db.WithContext(ctx).Table("team_member").
+		Select("MAX(updated_at)").
+		Where("team_name = ?", teamName).
+		Row()
+	if err := row.Scan(&maxVal); err != nil {
+		return 0
+	}
+	if maxVal == nil {
+		return 0
+	}
+	return *maxVal
+}
+
+// UpdateMemberExecutionStatus 更新执行状态（含 FSM 校验）。
+// Python: update_member_execution_status() → bool
+func (d *SQLMemberDao) UpdateMemberExecutionStatus(ctx context.Context, memberName, teamName, executionStatus string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		return false
+	}
+	if !IsValidExecutionTransition(member.ExecutionStatus, executionStatus) {
+		logger.Error(logComponent).
+			Str("member_name", memberName).
+			Str("from", member.ExecutionStatus).
+			Str("to", executionStatus).
+			Msg("invalid execution status transition")
+		return false
+	}
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Update("execution_status", executionStatus)
+	return true
+}
+
+// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+func (d *SQLMemberDao) ResetPausedMemberExecutionStatus(ctx context.Context, teamName string, memberNames []string) int {
+	if len(memberNames) == 0 {
+		return 0
+	}
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND member_name IN ? AND status = ? AND (execution_status IS NULL OR execution_status <> ?)",
+			teamName, memberNames, "paused", "idle").
+		Update("execution_status", "idle")
+	if result.Error != nil {
+		logger.Error(logComponent).Err(result.Error).
+			Str("team_name", teamName).
+			Msg("reset paused member execution status failed")
+		return 0
+	}
+	return int(result.RowsAffected)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// withTx 返回绑定指定事务的 DAO 实例。
+func (d *SQLMemberDao) withTx(tx *gorm.DB) *SQLMemberDao {
+	return &SQLMemberDao{db: tx}
+}

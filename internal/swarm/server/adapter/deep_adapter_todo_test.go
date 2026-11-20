@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
 	// （生产路径经 sysop_builder import 链触发；测试直连 sysop 需显式引入）
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
+	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
 )
 
 // TestCancelPendingTodos_无实例返回nil 验证 instance nil 的防御分支。

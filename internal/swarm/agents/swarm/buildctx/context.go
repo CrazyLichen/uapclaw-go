@@ -20,14 +20,14 @@
 package buildctx
 
 import (
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

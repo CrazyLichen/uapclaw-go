@@ -20,7 +20,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/redaction"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"

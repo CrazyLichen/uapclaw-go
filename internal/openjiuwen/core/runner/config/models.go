@@ -1,0 +1,159 @@
+package config
+
+import (
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// PulsarConfig Pulsar 消息队列连接配置。
+// Python: PulsarConfig(BaseModel)
+type PulsarConfig struct {
+	// URL Pulsar 服务地址
+	URL string
+	// MaxWorkers 最大工作协程数，默认 8
+	MaxWorkers int
+}
+
+// MessageQueueConfig 消息队列配置。
+// Python: MessageQueueConfig(BaseModel)
+type MessageQueueConfig struct {
+	// Type 队列类型，默认 PULSAR
+	Type MessageQueueType
+	// PulsarConfig Pulsar 配置，可选
+	PulsarConfig *PulsarConfig
+}
+
+// DistributedConfig 分布式模式配置。
+// Python: DistributedConfig(BaseModel)
+type DistributedConfig struct {
+	// RequestTimeout 请求超时秒数，默认 30.0
+	RequestTimeout float64
+	// MaxRequestConcurrency 最大请求并发数，默认 10000
+	MaxRequestConcurrency int
+	// MessageQueueConfig 消息队列配置
+	MessageQueueConfig MessageQueueConfig
+	// AgentTopicTemplate Agent topic 模板
+	AgentTopicTemplate string
+	// ReplyTopicTemplate Reply topic 模板
+	ReplyTopicTemplate string
+}
+
+// RunnerConfig Runner 全局配置。
+// Python: RunnerConfig(BaseModel)
+type RunnerConfig struct {
+	// DistributedMode 分布式模式开关
+	// Python 字段默认值为 True，DEFAULT_RUNNER_CONFIG 覆盖为 False
+	DistributedMode bool
+	// DistributedConfig 分布式配置
+	DistributedConfig *DistributedConfig
+	// EnvPrefix 环境前缀
+	EnvPrefix string
+	// InstanceID 实例 ID（UUID）
+	InstanceID string
+	// CheckpointerConfig 检查点器配置，可选
+	CheckpointerConfig *checkpointer.CheckpointerFactoryConfig
+	// EnableSessionController Session 控制器开关
+	EnableSessionController bool
+	// EnableA2A A2A 开关
+	EnableA2A bool
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewPulsarConfig 创建 Pulsar 配置，MaxWorkers 默认 8。
+// Python: PulsarConfig(url=None, max_workers=8)
+func NewPulsarConfig(url string) *PulsarConfig {
+	return &PulsarConfig{
+		URL:        url,
+		MaxWorkers: 8,
+	}
+}
+
+// NewMessageQueueConfig 创建消息队列配置，Type 默认 PULSAR。
+// Python: MessageQueueConfig(type=MessageQueueType.PULSAR, pulsar_config=None)
+func NewMessageQueueConfig() *MessageQueueConfig {
+	return &MessageQueueConfig{
+		Type: MessageQueueTypePulsar,
+	}
+}
+
+// NewDistributedConfig 创建分布式配置，各字段默认值对齐 Python DistributedConfig(BaseModel)。
+// Python: DistributedConfig(request_timeout=30.0, max_request_concurrency=10000, ...)
+func NewDistributedConfig() *DistributedConfig {
+	return &DistributedConfig{
+		RequestTimeout:        30.0,
+		MaxRequestConcurrency: 10000,
+		MessageQueueConfig:    *NewMessageQueueConfig(),
+		AgentTopicTemplate:    "openjiuwen.single_agent.{agent_id}.{version}",
+		ReplyTopicTemplate:    "openjiuwen.reply.runner.{instance_id}",
+	}
+}
+
+// NewRunnerConfig 创建 Runner 全局配置，各字段默认值对齐 Python RunnerConfig(BaseModel)。
+// Python: RunnerConfig(distributed_mode=True, instance_id=uuid4(), ...)
+func NewRunnerConfig() *RunnerConfig {
+	return &RunnerConfig{
+		DistributedMode:   true,
+		DistributedConfig: NewDistributedConfig(),
+		InstanceID:        generateInstanceID(),
+	}
+}
+
+// String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
+// Python: PulsarConfig.__repr__() / __str__()
+func (c *PulsarConfig) String() string {
+	url := c.URL
+	if url != "" {
+		url = utils.RedactURLPassword(url)
+	}
+	return fmt.Sprintf("url=%q max_workers=%d", url, c.MaxWorkers)
+}
+
+// GetAgentTopicTemplate 获取 Agent topic 模板，拼接环境前缀。
+// Python: DistributedConfig.get_agent_topic_template(env_prefix)
+func (c *DistributedConfig) GetAgentTopicTemplate(envPrefix string) string {
+	if envPrefix != "" {
+		return envPrefix + "." + c.AgentTopicTemplate
+	}
+	return c.AgentTopicTemplate
+}
+
+// GetReplyTopicTemplate 获取 Reply topic 模板，拼接环境前缀。
+// Python: DistributedConfig.get_reply_topic_template(env_prefix)
+func (c *DistributedConfig) GetReplyTopicTemplate(envPrefix string) string {
+	if envPrefix != "" {
+		return envPrefix + "." + c.ReplyTopicTemplate
+	}
+	return c.ReplyTopicTemplate
+}
+
+// AgentTopicTemplate 获取 Agent topic 模板，使用 RunnerConfig.EnvPrefix 作为前缀。
+// Python: RunnerConfig.agent_topic_template()
+func (c *RunnerConfig) AgentTopicTemplate() string {
+	if c.DistributedConfig == nil {
+		return ""
+	}
+	return c.DistributedConfig.GetAgentTopicTemplate(c.EnvPrefix)
+}
+
+// ReplyTopicTemplate 获取 Reply topic 模板，使用 RunnerConfig.EnvPrefix 作为前缀。
+// Python: RunnerConfig.reply_topic_template()
+func (c *RunnerConfig) ReplyTopicTemplate() string {
+	if c.DistributedConfig == nil {
+		return ""
+	}
+	return c.DistributedConfig.GetReplyTopicTemplate(c.EnvPrefix)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// generateInstanceID 生成实例唯一 ID。
+// Python: instance_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+func generateInstanceID() string {
+	return uuid.New().String()
+}

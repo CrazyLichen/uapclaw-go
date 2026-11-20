@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 

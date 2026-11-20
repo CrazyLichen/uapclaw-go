@@ -10,7 +10,7 @@
 package main
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/mcp"
 )
 
 func main() {

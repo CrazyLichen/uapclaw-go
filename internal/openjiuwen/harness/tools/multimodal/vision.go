@@ -1,0 +1,201 @@
+package multimodal
+
+import (
+	"context"
+	"fmt"
+
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/tools"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ImageOCRInput image_ocr 工具的输入参数
+type ImageOCRInput struct {
+	// ImagePathOrURL 本地图片路径或公网 http(s) 图片 URL
+	ImagePathOrURL string `json:"image_path_or_url"`
+	// Prompt 可选，自定义 OCR 提示词
+	Prompt string `json:"prompt,omitempty"`
+}
+
+// VQAInput visual_question_answering 工具的输入参数
+type VQAInput struct {
+	// ImagePathOrURL 本地图片路径或公网 http(s) 图片 URL
+	ImagePathOrURL string `json:"image_path_or_url"`
+	// Question 要询问图片的问题
+	Question string `json:"question"`
+	// IncludeOCR 是否先执行 OCR 并把结果拼接进问答提示词。
+	// nil 表示默认包含 OCR（对齐 Python include_ocr=True 默认）；
+	// 显式 false 表示跳过 OCR；显式 true 表示包含 OCR。
+	IncludeOCR *bool `json:"include_ocr"`
+	// OCRPrompt 可选，自定义 OCR 提示词
+	OCRPrompt string `json:"ocr_prompt,omitempty"`
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewImageOCRTool 创建图片 OCR 工具。
+// Python: ImageOCRTool.__init__ + ImageOCRTool.invoke
+// 使用 tool.NewTool[ImageOCRInput, map[string]any] 模式
+func NewImageOCRTool(
+	config *hschema.VisionModelConfig,
+	language, agentID string,
+) tool.Tool {
+	card, _ := tools.BuildToolCard("image_ocr", "ImageOCRTool", language, nil, agentID)
+
+	fn := func(ctx context.Context, input ImageOCRInput, opts ...tool.ToolOption) (map[string]any, error) {
+		// Python: ImageOCRTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			// 1. 确定 OCR 提示词（对齐 Python: prompt = inputs.get("prompt") or DEFAULT_OCR_PROMPT）
+			prompt := input.Prompt
+			if prompt == "" {
+				prompt = defaultOCRPrompt
+			}
+
+			// 2. 构建图片内容块
+			imageContent, err := BuildImageContent(input.ImagePathOrURL)
+			if err != nil {
+				return nil, err
+			}
+
+			// 3. 调用视觉模型（Python: _call_vision_model 内部
+			// OpenAI(api_key=config.api_key, base_url=config.base_url)（vision.py:114）
+			// 每调用现建 client——Go 等价在调用期自建）
+			client := clientFromVisionConfig(config)
+			text, model, err := CallVisionModel(ctx, client, imageContent, prompt, config)
+			if err != nil {
+				return nil, err
+			}
+
+			return map[string]any{"text": text, "model": model}, nil
+		}()
+		if err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "image_ocr").
+				Msg("ImageOCRTool call failed")
+			return nil, exception.NewBaseError(
+				exception.StatusToolMultimodalVisionInvokeFailed,
+				exception.WithMsg(err.Error()),
+			)
+		}
+		return result, nil
+	}
+
+	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	return invokeFn
+}
+
+// NewVisualQuestionAnsweringTool 创建图片问答工具。
+// Python: VisualQuestionAnsweringTool.__init__ + VisualQuestionAnsweringTool.invoke
+// 可选先 OCR 再 VQA（对齐 Python: include_ocr=True 默认）
+func NewVisualQuestionAnsweringTool(
+	config *hschema.VisionModelConfig,
+	language, agentID string,
+) tool.Tool {
+	card, _ := tools.BuildToolCard("visual_question_answering", "VisualQuestionAnsweringTool", language, nil, agentID)
+
+	fn := func(ctx context.Context, input VQAInput, opts ...tool.ToolOption) (map[string]any, error) {
+		// Python: VisualQuestionAnsweringTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			// 1. 构建图片内容块
+			imageContent, err := BuildImageContent(input.ImagePathOrURL)
+			if err != nil {
+				return nil, err
+			}
+
+			// 2. OCR 步骤（对齐 Python: if include_ocr → 先 OCR）
+			var ocrText string
+			// Python: 行为：默认 include_ocr=True
+			// *bool: nil → 默认 true；显式 false → 跳过 OCR；显式 true → 包含 OCR
+			includeOCR := true
+			if input.IncludeOCR != nil {
+				includeOCR = *input.IncludeOCR
+			}
+			client := clientFromVisionConfig(config)
+			if includeOCR {
+				ocrPrompt := input.OCRPrompt
+				if ocrPrompt == "" {
+					ocrPrompt = defaultOCRPrompt
+				}
+				ocrText, _, err = CallVisionModel(ctx, client, imageContent, ocrPrompt, config)
+				if err != nil {
+					// OCR 失败不阻止 VQA（对齐 Python: ocr_text 可为空）
+					logger.Warn(logComponent).Err(err).
+						Str("event_type", "OCR_FAILED").
+						Str("tool_name", "visual_question_answering").
+						Msg("OCR step failed, continuing VQA")
+					ocrText = ""
+				}
+			}
+
+			// 3. 构造 VQA 提示词（对齐 Python: DEFAULT_VQA_PROMPT_TEMPLATE.format）
+			vqaPrompt := input.Question
+			if includeOCR {
+				vqaPrompt = fmt.Sprintf(defaultVQAPromptTemplate, ocrTextOrNone(ocrText), input.Question)
+			}
+
+			// 4. 调用视觉模型
+			answer, model, err := CallVisionModel(ctx, client, imageContent, vqaPrompt, config)
+			if err != nil {
+				return nil, err
+			}
+
+			return map[string]any{
+				"answer":   answer,
+				"ocr_text": ocrText,
+				"model":    model,
+			}, nil
+		}()
+		if err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "visual_question_answering").
+				Msg("VQATool call failed")
+			return nil, exception.NewBaseError(
+				exception.StatusToolMultimodalVisionInvokeFailed,
+				exception.WithMsg(err.Error()),
+			)
+		}
+		return result, nil
+	}
+
+	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	return invokeFn
+}
+
+// CreateVisionTools 创建视觉工具集。
+// Python: create_vision_tools(language, vision_model_config, agent_id) -> list[Tool]
+func CreateVisionTools(
+	config *hschema.VisionModelConfig,
+	language, agentID string,
+) []tool.Tool {
+	// Python: create_vision_tools (:297-315)：完整性门控 + 两件直构
+	// （client 在各工具 invoke 期自建，对齐 _call_vision_model :114）
+	return []tool.Tool{
+		NewImageOCRTool(config, language, agentID),
+		NewVisualQuestionAnsweringTool(config, language, agentID),
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ocrTextOrNone 对齐 Python: ocr_text or "No OCR used"
+func ocrTextOrNone(ocrText string) string {
+	if ocrText == "" {
+		return "No OCR used"
+	}
+	return ocrText
+}
+
+// clientFromVisionConfig 视觉模型客户端（invoke 期自建）。
+// Python: _call_vision_model 内 OpenAI(api_key=config.api_key,
+// base_url=config.base_url)（vision.py:114）每调用新建；Go 镜像该语义。
+func clientFromVisionConfig(config *hschema.VisionModelConfig) modelclients.BaseModelClient {
+	if config == nil {
+		return nil
+	}
+	return modelClientFactory(config.APIKey, config.BaseURL, config.Model, config.MaxRetries)
+}

@@ -1,8 +1,8 @@
 package team
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

@@ -21,11 +21,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	anthropic "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/anthropic"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	anthropic "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients/anthropic"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

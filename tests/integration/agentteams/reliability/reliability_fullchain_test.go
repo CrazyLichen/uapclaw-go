@@ -20,21 +20,21 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	mockllm "github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
-	handlers "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
-	coordtypes "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails/reliability/core"
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination"
+	handlers "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/handlers"
+	coordtypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails/reliability"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails/reliability/core"
+	schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

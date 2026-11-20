@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

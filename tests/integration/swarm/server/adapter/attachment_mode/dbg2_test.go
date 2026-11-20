@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )

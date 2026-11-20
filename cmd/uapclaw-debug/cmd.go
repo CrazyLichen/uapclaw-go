@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/ui/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/cli/agent"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/cli/ui/runner"
 )
 
 // Run 执行调试 CLI 并按退出码返回。

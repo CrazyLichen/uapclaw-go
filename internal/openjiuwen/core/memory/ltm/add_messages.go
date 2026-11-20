@@ -1,0 +1,254 @@
+package ltm
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/manage/index"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/manage/mem_model"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/process/extract"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// AddMessages 添加消息并生成记忆。
+// ① emit_before MEMORY_ADDED 回调 → ② addMessagesImpl 执行逻辑
+// 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_ADDED) + add_messages
+func (m *LongTermMemory) AddMessages(
+	ctx context.Context,
+	messages []llmschema.BaseMessage,
+	agentConfig *config.AgentMemoryConfig,
+	opts ...AddMessagesOption,
+) (*AddMemResult, error) {
+	// ① 触发 MEMORY_ADDED 回调
+	p := newAddMessagesParams(messages, agentConfig, opts...)
+	triggerMemoryBefore(ctx, callback.MemoryAdded, &callback.MemoryEventData{
+		Event:      callback.MemoryAdded,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		MemoryType: "all",
+		SessionID:  p.SessionID,
+	})
+
+	// ② 执行核心逻辑
+	return m.addMessagesImpl(ctx, p)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// addMessagesImpl AddMessages 的核心实现。
+// 完整流程对齐 Python add_messages：
+// 1. 校验 scopeID（validateID）
+// 2. 获取作用域 LLM（getScopeLLM）
+// 3. 获取作用域配置（getScopeConfig）
+// 4. 应用作用域嵌入模型（applyScopeEmbedding）
+// 5. 获取用户级分布式锁（DistributedLock）
+// 6. LLM 为空返回错误
+// 7. 获取历史消息（getHistoryMessages）
+// 8. 记录用户-作用域映射（scopeUserMappingManager.Add）
+// 9. timestamp 为 nil 时 time.Now()
+// 10. 遍历 messages 调 messageManager.Add()
+// 11. genMem=false → 返回空 AddMemResult
+// 12. checkMessages → 无 human 消息返回空 AddMemResult
+// 13. 生成全部记忆（GenAllMemory）
+// 14. 写入记忆（AddMemories）
+// 15. 按 MemoryType 分类填充 AddMemResult
+func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesParams) (*AddMemResult, error) {
+	// 步骤 1：validateID
+	if !validateID("MEMORY_STORE", p.ScopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_STORE").
+			Str("scope_id", p.ScopeID).Str("user_id", p.UserID).
+			Msg("Invalid scope_id format.")
+		return nil, exception.BuildError(exception.StatusMemoryAddMemoryExecutionError,
+			exception.WithParam("memory_type", "all"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	// 步骤 2：getScopeLLM
+	llmInstance, err := m.getScopeLLM(ctx, p.ScopeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 步骤 3：getScopeConfig
+	scopeConfig, err := m.getScopeConfig(ctx, p.ScopeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 步骤 4：applyScopeEmbedding
+	m.applyScopeEmbedding(ctx, p.ScopeID)
+
+	// 步骤 5-15：分布式锁内执行
+	var result *AddMemResult
+	lockErr := acquireUserLock(ctx, m.kvStore, p.UserID, func(ctx context.Context) error {
+		// 步骤 6：LLM 未初始化返回错误
+		if llmInstance == nil {
+			logger.Error(logComponent).Str("event_type", "MEMORY_STORE").
+				Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+				Msg("LLM is not initialized.")
+			return exception.BuildError(exception.StatusMemoryAddMemoryExecutionError,
+				exception.WithParam("memory_type", "all"),
+				exception.WithMsg("LLM is not initialized"),
+			)
+		}
+
+		// 步骤 7：getHistoryMessages
+		historyMessages, histErr := m.getHistoryMessages(ctx, p.UserID, p.ScopeID, p.SessionID, p.GenMemWithHistoryMsgNum)
+		if histErr != nil {
+			return histErr
+		}
+
+		// 步骤 8：scopeUserMappingManager.Add
+		if m.scopeUserMappingManager != nil {
+			if addErr := m.scopeUserMappingManager.Add(ctx, p.UserID, p.ScopeID); addErr != nil {
+				return addErr
+			}
+		}
+
+		// 步骤 9：timestamp 为 nil 时取当前时间，并统一归一到 UTC
+		//
+		// 归一化是必须的：消息表按 timestamp 做字符串排序，同一列里若混着 "Z" 与
+		// "+08:00" 两种偏移，字典序就不等于时序（"…T10:00:00Z" 排在 "…T18:00:00+08:00"
+		// 之前，但后者才是更早的时刻），导致历史消息顺序错乱。
+		// 对齐 Python LongTermMemory.add_messages（long_term_memory.py:563-567）。
+		timestamp := p.Timestamp
+		if timestamp == nil {
+			now := time.Now().UTC()
+			timestamp = &now
+		} else {
+			utc := timestamp.UTC()
+			timestamp = &utc
+		}
+		timestampStr := timestamp.Format(mem_model.MessageTimestampLayout)
+
+		// 步骤 10：遍历 messages 调 messageManager.Add()
+		msgID := "-1"
+		for i, msg := range p.Messages {
+			msgTimestamp := timestamp.Add(time.Millisecond * time.Duration(i))
+			addReq := &mem_model.MessageAddRequest{
+				UserID:    p.UserID,
+				ScopeID:   p.ScopeID,
+				Content:   msg.GetContent().Text(),
+				Role:      msg.GetRole().String(),
+				SessionID: p.SessionID,
+				Timestamp: msgTimestamp,
+			}
+			if m.messageManager != nil {
+				id, addErr := m.messageManager.Add(ctx, addReq)
+				if addErr != nil {
+					return addErr
+				}
+				msgID = id
+			}
+		}
+
+		// 步骤 11：genMem=false → 返回空 AddMemResult
+		if !p.GenMem {
+			result = &AddMemResult{}
+			return nil
+		}
+
+		// 步骤 12：checkMessages → 无 human 消息返回空 AddMemResult
+		hasHumanMsg, checkedMessages := m.checkMessages(p.Messages)
+		if !hasHumanMsg {
+			logger.Debug(logComponent).Str("event_type", "MEMORY_STORE").
+				Str("memory_type", "message").Int("memory_count", len(checkedMessages)).
+				Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+				Msg("Memory engine no need to process messages.")
+			result = &AddMemResult{}
+			return nil
+		}
+
+		// 步骤 13：generator.GenAllMemory
+		forbiddenVariables := ""
+		summaryMaxToken := 0
+		if m.sysMemConfig != nil {
+			forbiddenVariables = m.sysMemConfig.ForbiddenVariables
+			summaryMaxToken = m.sysMemConfig.SingleTurnHistorySummaryMaxToken
+		}
+		genParams := &extract.GenAllMemoryParams{
+			Messages:           checkedMessages,
+			HistoryMessages:    historyMessages,
+			BaseModel:          llmInstance,
+			MemoryConfig:       p.AgentConfig,
+			EngineConfig:       m.sysMemConfig,
+			ScopeConfig:        scopeConfig,
+			UserID:             p.UserID,
+			ScopeID:            p.ScopeID,
+			ForbiddenVariables: forbiddenVariables,
+			MessageMemID:       msgID,
+			Timestamp:          timestampStr,
+			SummaryMaxToken:    summaryMaxToken,
+		}
+		allMemory, genErr := m.generator.GenAllMemory(ctx, genParams)
+		if genErr != nil {
+			return genErr
+		}
+
+		// 步骤 14：writeManager.AddMemories（对齐 Python: write_manager.add_memories(memories, llm=llm)）
+		writeResult, writeErr := m.writeManager.AddMemories(ctx, p.UserID, p.ScopeID, allMemory, index.WithLLMModel(llmInstance))
+		if writeErr != nil {
+			logger.Error(logComponent).Err(writeErr).Str("memory_type", "unknown").
+				Str("event_type", "MEMORY_STORE").Str("user_id", p.UserID).
+				Str("scope_id", p.ScopeID).Msg("Failed to add mem.")
+			return exception.BuildError(exception.StatusMemoryAddMemoryExecutionError,
+				exception.WithParam("memory_type", "unknown"),
+				exception.WithMsg(fmt.Sprintf("%v", writeErr)),
+				exception.WithCause(writeErr),
+			)
+		}
+
+		logger.Debug(logComponent).Str("event_type", "MEMORY_STORE").
+			Int("memory_count", len(allMemory)).Str("memory_type", "all type").
+			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+			Msg("Successfully added memory units.")
+
+		// 步骤 15：按 MemoryType 分类填充 AddMemResult
+		result = classifyWriteResult(writeResult)
+		return nil
+	})
+
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	return result, nil
+}
+
+// classifyWriteResult 按 MemoryType 分类写入结果。
+// 对齐 Python: AddMemResult(variables=[...], user_profile=[...], ...)
+func classifyWriteResult(writeResult []mem_model.MemoryUnit) *AddMemResult {
+	r := &AddMemResult{}
+	for _, unit := range writeResult {
+		switch unit.GetMemType() {
+		case mem_model.MemoryTypeVariable:
+			if v, ok := unit.(*mem_model.VariableUnit); ok {
+				r.Variables = append(r.Variables, v)
+			}
+		case mem_model.MemoryTypeUserProfile:
+			if v, ok := unit.(*mem_model.FragmentMemoryUnit); ok {
+				r.UserProfile = append(r.UserProfile, v)
+			}
+		case mem_model.MemoryTypeSemanticMemory:
+			if v, ok := unit.(*mem_model.FragmentMemoryUnit); ok {
+				r.SemanticMemory = append(r.SemanticMemory, v)
+			}
+		case mem_model.MemoryTypeEpisodicMemory:
+			if v, ok := unit.(*mem_model.FragmentMemoryUnit); ok {
+				r.EpisodicMemory = append(r.EpisodicMemory, v)
+			}
+		case mem_model.MemoryTypeSummary:
+			if v, ok := unit.(*mem_model.SummaryUnit); ok {
+				r.Summary = append(r.Summary, v)
+			}
+		}
+	}
+	return r
+}

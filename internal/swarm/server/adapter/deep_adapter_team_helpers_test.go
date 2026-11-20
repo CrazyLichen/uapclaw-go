@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 )
 

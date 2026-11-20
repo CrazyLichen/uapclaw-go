@@ -3,7 +3,7 @@ package adapter
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
 )
 
 // ──────────────────── getToolCards acp_chat 测试（10.6.24d 回填点①）────────────────────

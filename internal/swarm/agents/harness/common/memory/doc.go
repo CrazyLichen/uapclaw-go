@@ -3,7 +3,7 @@
 // 是 agentcore lite 记忆包的产品侧完整 fork：workspace_dir 字符串 API、
 // 配置自查（config.yaml embed/memory 段 + 环境变量链）、Mock 降级、
 // INDEX_CACHE 全局缓存。消费者为 memory_rpc（TUI 通道）。
-// 与 internal/agentcore/memory/lite/ 各自对齐各自 Python 基线；
+// 与 internal/openjiuwen/core/memory/lite/ 各自对齐各自 Python 基线；
 // 唯一共享点：vec0 扩展加载器（lite.ResolveVec0Path/LoadVec0Extension，
 // 对应 Python 两包共用第三方库 sqlite_vec）。
 // 外接记忆（10.6.16）：engine 门禁 + external 段解析 + 四路 provider 分发

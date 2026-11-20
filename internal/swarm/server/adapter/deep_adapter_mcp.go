@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

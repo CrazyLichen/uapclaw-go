@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	swarmmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

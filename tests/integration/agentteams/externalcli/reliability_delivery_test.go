@@ -29,13 +29,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	harness_protocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	atevents "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

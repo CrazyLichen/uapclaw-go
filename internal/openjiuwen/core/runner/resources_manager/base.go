@@ -1,0 +1,109 @@
+package resources_manager
+
+import (
+	"context"
+	workflow "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow/workflowconfig"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/prompt"
+	maschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// PromptEntry 提示模板注册条目
+type PromptEntry struct {
+	// ID 模板标识
+	ID string
+	// Template 提示模板
+	Template *prompt.PromptTemplate
+}
+
+// WorkflowEntry 工作流注册条目
+type WorkflowEntry struct {
+	// ID 工作流标识
+	ID string
+	// Provider 工作流提供者
+	Provider WorkflowProvider
+}
+
+// ModelEntry 模型注册条目
+type ModelEntry struct {
+	// ID 模型标识
+	ID string
+	// Provider 模型提供者
+	Provider ModelProvider
+}
+
+// AgentEntry Agent 注册条目
+type AgentEntry struct {
+	// Card Agent 身份元数据
+	Card *agentschema.AgentCard
+	// Provider Agent 提供者
+	Provider AgentProvider
+}
+
+// AgentTeamEntry 团队注册条目
+type AgentTeamEntry struct {
+	// Card 团队身份元数据
+	Card maschema.TeamCardInterface
+	// Provider 团队提供者
+	Provider maschema.AgentTeamProvider
+}
+
+// AgentProvider Agent 提供者函数类型。
+type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
+
+// WorkflowProvider 工作流提供者函数类型。
+type WorkflowProvider func(ctx context.Context, card *workflow.WorkflowCard) (interfaces.Workflow, error)
+
+// ModelProvider 模型提供者函数类型。
+type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TagMatchStrategy 标签匹配策略：判定资源是否命中给定标签集合。
+type TagMatchStrategy int
+
+// TagUpdateStrategy 标签更新策略：判定新标签如何写入已有标签集合。
+type TagUpdateStrategy int
+
+// Tag 标签类型别名。
+type Tag = string
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// TagMatchAll 全匹配策略：资源必须包含所有指定标签
+	TagMatchAll TagMatchStrategy = iota
+	// TagMatchAny 任一匹配策略：资源包含任一指定标签即可
+	TagMatchAny
+)
+
+const (
+	// TagUpdateMerge 合并策略：新标签与已有标签合并
+	TagUpdateMerge TagUpdateStrategy = iota
+	// TagUpdateReplace 替换策略：新标签完全替换已有标签
+	TagUpdateReplace
+)
+
+const (
+	// TagAll 匹配所有资源的特殊标签
+	//
+	// Python: ALL = "*"
+	TagAll Tag = "*"
+	// TagGlobal 全局标签，未分类资源的默认标签
+	//
+	// Python: GLOBAL = "__global__"
+	TagGlobal Tag = "__global__"
+	// TagActive 活跃状态标签
+	//
+	// Python: ACTIVE = "__active__"
+	TagActive Tag = "__active__"
+	// TagInactive 非活跃状态标签
+	//
+	// Python: INACTIVE = "__inactive__"
+	TagInactive Tag = "__inactive__"
+)

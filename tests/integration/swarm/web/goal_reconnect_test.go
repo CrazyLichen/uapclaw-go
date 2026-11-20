@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/goal"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -118,7 +118,7 @@ func (s *GoalReconnectSuite) TestR4_会话隔离() {
 }
 
 // TestR3_旧Token不摘新流 旧租约 token 不得摘掉当前租约。
-// Go: internal/agentcore/harness/schema/interaction.go:443-456 Detach
+// Go: internal/openjiuwen/harness/schema/interaction.go:443-456 Detach
 // Python: openjiuwen/harness/schema/interaction.py:267-276 OutputLeaseManager.detach
 // 前端: hooks/useWebSocket.ts:1954 刷新后靠新租约 + goal.updated 自愈 GoalBar
 func (s *GoalReconnectSuite) TestR3_旧Token不摘新流() {
@@ -149,7 +149,7 @@ func (s *GoalReconnectSuite) TestR3_旧Token不摘新流() {
 //
 //	ensure_active_goal_work_locked() + _notify_work()
 //
-// Go: internal/agentcore/harness/deep_agent.go:1693-1698 AttachOutput 等价实现
+// Go: internal/openjiuwen/harness/deep_agent.go:1693-1698 AttachOutput 等价实现
 func (s *GoalReattachSuite) TestR1_活跃Goal在重挂流后补排Work() {
 	ctx := s.Ctx
 	sess := s.NewTestSession("web-goal-r1")

@@ -1,0 +1,362 @@
+package reme
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"strings"
+
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openjiuwen/extensions/context_evolver/core/context"
+	op "github.com/uapclaw/uapclaw-go/internal/openjiuwen/extensions/context_evolver/core/op"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/extensions/context_evolver/schema"
+	logger "github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// RecallMemoryOp 向量检索操作。
+// 对齐 Python RecallMemoryOp：
+// 从 RuntimeContext 获取 query + user_id → Embed → Search → 转为 []ReMeRetrievedMemory。
+// Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
+type RecallMemoryOp struct {
+	op.OpBase
+	// topK 初始检索数量
+	topK int
+}
+
+// RerankMemoryOp LLM 重排序操作。
+// 对齐 Python RerankMemoryOp：
+// llmRerank=false 时跳过，否则用 LLM 重排候选项。
+// Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
+type RerankMemoryOp struct {
+	op.OpBase
+	// llmRerank 是否启用 LLM 重排序
+	llmRerank bool
+	// topKRerank 重排序后保留数量
+	topKRerank int
+	// prompts 提示词配置
+	prompts *ReMeRetrievePrompts
+}
+
+// RewriteMemoryOp LLM 改写操作。
+// 对齐 Python RewriteMemoryOp：
+// llmRewrite=false 时用格式化原文，否则用 LLM 改写。
+// Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
+type RewriteMemoryOp struct {
+	op.OpBase
+	// llmRewrite 是否启用 LLM 改写
+	llmRewrite bool
+	// prompts 提示词配置
+	prompts *ReMeRetrievePrompts
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewRecallMemoryOp 创建向量检索操作。
+// 对齐 Python RecallMemoryOp(service_context, top_k)。
+func NewRecallMemoryOp(sc *cecontext.ServiceContext, topK int) *RecallMemoryOp {
+	return &RecallMemoryOp{
+		OpBase: *op.NewOpBase(sc),
+		topK:   topK,
+	}
+}
+
+// NewRerankMemoryOp 创建 LLM 重排序操作。
+// 对齐 Python RerankMemoryOp(service_context, llm_rerank, topk_rerank)。
+func NewRerankMemoryOp(sc *cecontext.ServiceContext, llmRerank bool, topKRerank int) *RerankMemoryOp {
+	return &RerankMemoryOp{
+		OpBase:     *op.NewOpBase(sc),
+		llmRerank:  llmRerank,
+		topKRerank: topKRerank,
+		prompts:    ReMeRetrieveDefaultPrompts,
+	}
+}
+
+// NewRewriteMemoryOp 创建 LLM 改写操作。
+// 对齐 Python RewriteMemoryOp(service_context, llm_rewrite)。
+func NewRewriteMemoryOp(sc *cecontext.ServiceContext, llmRewrite bool) *RewriteMemoryOp {
+	return &RewriteMemoryOp{
+		OpBase:     *op.NewOpBase(sc),
+		llmRewrite: llmRewrite,
+		prompts:    ReMeRetrieveDefaultPrompts,
+	}
+}
+
+// Execute 执行向量检索。
+// 对齐 Python RecallMemoryOp.__call__。
+func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
+	embeddingModel := o.EmbeddingModel()
+	if embeddingModel == nil {
+		return fmt.Errorf("embedding model not configured in ServiceContext")
+	}
+
+	vectorStore := o.VectorStore()
+	if vectorStore == nil {
+		return fmt.Errorf("vector store not configured in ServiceContext")
+	}
+
+	// 从 RuntimeContext 获取 query 和 user_id
+	query, _ := cecontext.GetTyped[string](rc, "query")
+	userID, _ := cecontext.GetTyped[string](rc, "user_id")
+	// S-51: 对齐 Python context.get("user_id", "default")——
+	// user_id 未设置时兜底 "default"，保证 workspace_id 过滤始终存在
+	if userID == "" {
+		userID = "default"
+	}
+
+	// 生成 query 的 embedding
+	embedding, err := embeddingModel.Embed(ctx, query)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("query", query).
+			Msg("Failed to generate query embedding")
+		return fmt.Errorf("embedding query failed: %w", err)
+	}
+
+	// 构建元数据过滤条件，对齐 Python: metadata_filter={"workspace_id": user_id, "type": "reme_memory"}
+	// S-51: userID 兜底后非空，workspace_id 无条件注入（对齐 Python L61）
+	metadataFilter := map[string]any{
+		"workspace_id": userID,
+		"type":         "reme_memory",
+	}
+
+	// 向量相似度搜索
+	nodes, err := vectorStore.Search(ctx, embedding, o.topK, metadataFilter)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("query", query).
+			Msg("Vector search failed")
+		return fmt.Errorf("vector search failed: %w", err)
+	}
+
+	// 转换为 []ceschema.MemoryItem
+	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
+	items := make([]ceschema.MemoryItem, 0, len(nodes))
+	for _, node := range nodes {
+		// S-52: 对齐 Python ReMeMemory.from_vector_node(node) 两步转换——
+		// 先转完整 ReMeMemory，再取 WhenToUse/Content 构建 ReMeRetrievedMemory
+		// （与 ace/run.go、rb/run.go 兄弟任务结构一致）
+		memory := ceschema.NewReMeMemoryFromVectorNode(node)
+		items = append(items, ceschema.ReMeRetrievedMemory{
+			WhenToUse: memory.WhenToUse,
+			Content:   memory.Content,
+		})
+	}
+
+	// 写入 RuntimeContext
+	rc.Set("retrieved_memories", items)
+
+	logger.Info(logComponent).
+		Str("query", query).
+		Int("retrieved_count", len(items)).
+		Msg("Vector retrieval completed")
+
+	return nil
+}
+
+// Execute 执行 LLM 重排序。
+// 对齐 Python RerankMemoryOp.__call__。
+func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
+	// llmRerank=false 时跳过重排序
+	if !o.llmRerank {
+		return nil
+	}
+
+	// 从 RuntimeContext 获取 query 和 retrieved_memories
+	query, _ := cecontext.GetTyped[string](rc, "query")
+	memItems, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
+	if !ok || len(memItems) == 0 {
+		// 无记忆，跳过
+		return nil
+	}
+
+	// 从 MemoryItem 切片中提取 ReMeRetrievedMemory
+	retrieved := extractReMeRetrievedMemories(memItems)
+	if len(retrieved) == 0 {
+		return nil
+	}
+
+	llm := o.LLM()
+	if llm == nil {
+		return fmt.Errorf("LLM not configured in ServiceContext")
+	}
+
+	// 格式化候选项，对齐 Python _format_candidates_for_rerank
+	candidates := formatCandidatesForRerank(retrieved)
+
+	// 构建提示词，使用模板引擎替换占位符
+	var buf bytes.Buffer
+	if err := o.prompts.RerankPrompt.Execute(&buf, map[string]any{
+		"Query":         query,
+		"NumCandidates": len(retrieved),
+		"Candidates":    candidates,
+	}); err != nil {
+		return fmt.Errorf("rerank prompt template execute failed: %w", err)
+	}
+	prompt := buf.String()
+
+	// 调用 LLM
+	response, err := llm.Generate(ctx, prompt)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Msg("LLM rerank call failed")
+		return fmt.Errorf("LLM rerank failed: %w", err)
+	}
+
+	// 解析排序索引
+	indices := ParseJSONListResponse(response, "ranked_indices")
+	if len(indices) == 0 {
+		logger.Warn(logComponent).
+			Msg("LLM rerank parse failed, keeping original order")
+		// 解析失败时保留原顺序
+		return nil
+	}
+
+	// 按索引重排
+	reranked := make([]ceschema.ReMeRetrievedMemory, 0, len(retrieved))
+	for _, idx := range indices {
+		if idx >= 0 && idx < len(retrieved) {
+			reranked = append(reranked, retrieved[idx])
+		}
+	}
+	// 补充未在索引中出现的候选项
+	indexSet := make(map[int]bool, len(indices))
+	for _, idx := range indices {
+		indexSet[idx] = true
+	}
+	for i, mem := range retrieved {
+		if !indexSet[i] {
+			reranked = append(reranked, mem)
+		}
+	}
+
+	// 截断到 topKRerank
+	if o.topKRerank > 0 && len(reranked) > o.topKRerank {
+		reranked = reranked[:o.topKRerank]
+	}
+
+	// 写回 RuntimeContext（转为 []MemoryItem 统一类型）
+	rerankedItems := make([]ceschema.MemoryItem, len(reranked))
+	for i, m := range reranked {
+		rerankedItems[i] = m
+	}
+	rc.Set("retrieved_memories", rerankedItems)
+
+	logger.Info(logComponent).
+		Int("original_count", len(retrieved)).
+		Int("reranked_count", len(reranked)).
+		Msg("LLM rerank completed")
+
+	return nil
+}
+
+// Execute 执行 LLM 改写。
+// 对齐 Python RewriteMemoryOp.__call__。
+func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
+	// 从 RuntimeContext 获取 query 和 retrieved_memories
+	query, _ := cecontext.GetTyped[string](rc, "query")
+	memItems, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
+
+	// 无记忆时设置空字符串
+	if !ok || len(memItems) == 0 {
+		rc.Set("memory_string", "")
+		return nil
+	}
+
+	// 从 MemoryItem 切片中提取 ReMeRetrievedMemory
+	retrieved := extractReMeRetrievedMemories(memItems)
+
+	// llmRewrite=false 时用格式化原文
+	if !o.llmRewrite {
+		rc.Set("memory_string", formatMemoriesForContext(retrieved))
+		return nil
+	}
+
+	llm := o.LLM()
+	if llm == nil {
+		return fmt.Errorf("LLM not configured in ServiceContext")
+	}
+
+	// 格式化记忆原文
+	originalContext := formatMemoriesForContext(retrieved)
+
+	// 构建提示词，使用模板引擎替换占位符
+	var buf bytes.Buffer
+	if err := o.prompts.RewritePrompt.Execute(&buf, map[string]any{
+		"CurrentQuery":    query,
+		"OriginalContext": originalContext,
+	}); err != nil {
+		return fmt.Errorf("rewrite prompt template execute failed: %w", err)
+	}
+	prompt := buf.String()
+
+	// 调用 LLM
+	response, err := llm.Generate(ctx, prompt)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Msg("LLM rewrite call failed")
+		return fmt.Errorf("LLM rewrite failed: %w", err)
+	}
+
+	// 解析改写结果
+	rewritten := ParseJSONField(response, "rewritten_context")
+	if rewritten == "" {
+		logger.Warn(logComponent).
+			Msg("LLM rewrite parse failed, falling back to formatted original")
+		rc.Set("memory_string", originalContext)
+		return nil
+	}
+
+	// 写入 RuntimeContext
+	rc.Set("memory_string", rewritten)
+
+	logger.Info(logComponent).
+		Int("memory_count", len(retrieved)).
+		Msg("LLM rewrite completed")
+
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extractReMeRetrievedMemories 从 []MemoryItem 中提取 ReMeRetrievedMemory。
+// RerankOp/RewriteOp 仅处理 ReMe 类型，通过 type switch 过滤。
+func extractReMeRetrievedMemories(items []ceschema.MemoryItem) []ceschema.ReMeRetrievedMemory {
+	result := make([]ceschema.ReMeRetrievedMemory, 0, len(items))
+	for _, item := range items {
+		if m, ok := item.(ceschema.ReMeRetrievedMemory); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// formatCandidatesForRerank 格式化候选项供重排序提示词使用。
+// 对齐 Python RerankMemoryOp._format_candidates_for_rerank：
+// f"Candidate {i}:\nCondition: {condition}\nExperience: {content}\n"
+// 候选项之间用 "\n---\n" 连接。
+func formatCandidatesForRerank(candidates []ceschema.ReMeRetrievedMemory) string {
+	formatted := make([]string, 0, len(candidates))
+	for i, mem := range candidates {
+		text := fmt.Sprintf("Candidate %d:\nCondition: %s\nExperience: %s\n", i, mem.WhenToUse, mem.Content)
+		formatted = append(formatted, text)
+	}
+	return strings.Join(formatted, "\n---\n")
+}
+
+// formatMemoriesForContext 格式化记忆供上下文使用。
+// 对齐 Python RewriteMemoryOp._format_memories_for_context：
+// f"Memory {i}:\n  When to use: {condition}\n  Content: {memory_content}\n"
+// 记忆之间用 "\n" 连接。
+func formatMemoriesForContext(memories []ceschema.ReMeRetrievedMemory) string {
+	formatted := make([]string, 0, len(memories))
+	for i, mem := range memories {
+		text := fmt.Sprintf("Memory %d:\n  When to use: %s\n  Content: %s\n", i+1, mem.WhenToUse, mem.Content)
+		formatted = append(formatted, text)
+	}
+	return strings.Join(formatted, "\n")
+}

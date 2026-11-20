@@ -92,7 +92,7 @@ func (s *GoalEventOrderSuite) TestO2_终结位区分() {
 
 // TestO3_Updated载荷形状 goal.updated 载荷恒 {event_type, goal}；对象时 15 字段合法。
 // Python: interface_deep.py:17725-17737 _interaction_goal_updated_payload
-// Go: internal/agentcore/harness/schema/interaction.go:292-296 NewGoalUpdatedEvent
+// Go: internal/openjiuwen/harness/schema/interaction.go:292-296 NewGoalUpdatedEvent
 func (s *GoalEventOrderSuite) TestO3_Updated载荷形状() {
 	sid := "web-goal-o3"
 	rid := sendGoal(s.env, sid, map[string]any{

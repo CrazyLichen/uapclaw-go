@@ -1,0 +1,371 @@
+package shell
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/dlclark/regexp2"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/filesystem"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// BashInput BashTool 输入参数。
+// Python: _BashInputs (bash/_tool.py L61-70)
+type BashInput struct {
+	// Command 要执行的命令（必需）
+	Command string `json:"command"`
+	// Timeout 超时秒数，0 表示调用方未传（取默认 300），上限 3600
+	Timeout int `json:"timeout"`
+	// Description 命令描述
+	Description string `json:"description"`
+	// RunInBackground 后台运行
+	RunInBackground bool `json:"run_in_background"`
+	// Workdir 工作目录
+	Workdir string `json:"workdir"`
+	// MaxOutputChars 最大输出字符数；nil 表示未传（取默认 20000），显式 0 表示不限制
+	MaxOutputChars *int `json:"max_output_chars"`
+	// ShellType shell 类型: auto/cmd/powershell/bash/sh
+	ShellType string `json:"shell_type"`
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+const (
+	// bashDefaultTimeout 未传 timeout 时的默认超时秒数。
+	// Python: BashTool._parse_inputs inputs.get("timeout", 300)
+	bashDefaultTimeout = 300
+
+	// bashDefaultMaxOutputChars 未传 max_output_chars 时的默认最大输出字符数。
+	// Python: BashTool._resolve_max_output_chars default=20000
+	//
+	// 上游 b4a5a967：默认从 0（无限制）改为 20000。LLM 从不传该参数，
+	// 单条命令数十万 token 的输出会把上下文撑到无法压缩。
+	bashDefaultMaxOutputChars = 20000
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+
+	// validShellTypes 合法的 shell 类型集合。
+	// Python: _VALID_SHELL_TYPES (bash/_tool.py L57)
+	validShellTypes = map[string]bool{
+		"auto": true, "cmd": true, "powershell": true, "bash": true, "sh": true,
+	}
+
+	// sudoNeedsNRe 匹配需要注入 -n 的 sudo。
+	// Python: _SUDO_NEEDS_N_RE (bash/_tool.py L47-49)
+	// 使用 regexp2 支持 Perl lookahead 语法 (?!...) 和 (?=...)
+	sudoNeedsNRe = regexp2.MustCompile(`\bsudo\b(?!(?:\s+-[a-zA-Z]*n|\s+--non-interactive))(?=\s)`, 0)
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewBashTool 创建 BashTool 实例。
+// Python: BashTool (bash/_tool.py L73-95)
+func NewBashTool(op sys_operation.SysOperation, language, agentID string, permConfig PermissionConfig) tool.Tool {
+	card, _ := tools.BuildToolCard("bash", "BashTool", language, nil, agentID)
+
+	fn := func(ctx context.Context, input BashInput, opts ...tool.ToolOption) (map[string]any, error) {
+		// ── 参数解析 ──
+		// Python: _parse_inputs (bash/_tool.py L129-142)
+		command := makeSudoNoninteractive(strings.TrimSpace(input.Command))
+		timeout := resolveBashTimeout(input.Timeout)
+		workdir := input.Workdir
+		runInBackground := input.RunInBackground
+		maxOutputChars := resolveBashMaxOutputChars(input.MaxOutputChars)
+		shellType := input.ShellType
+		if !validShellTypes[shellType] {
+			shellType = "auto"
+		}
+		description := input.Description
+
+		// ── 空命令检查 ──
+		// Python: L164-165
+		if command == "" {
+			return map[string]any{
+				"success": false,
+				"error":   "command cannot be empty",
+			}, nil
+		}
+
+		// ── 安全守卫 (OPENJIUWEN_BASH_STRICT=1) ──
+		// Python: L167-170
+		if os.Getenv("OPENJIUWEN_BASH_STRICT") == "1" {
+			blocked, reason := CheckBashInjection(command)
+			if blocked {
+				return map[string]any{
+					"success": false,
+					"error":   reason,
+				}, nil
+			}
+			allowed, permReason := CheckPermission(command, permConfig, false)
+			if !allowed {
+				return map[string]any{
+					"success": false,
+					"error":   permReason,
+				}, nil
+			}
+		}
+
+		// ── cwd 解析 ──
+		// Python: L172-176
+		currentCwd, err := cwd.GetCwd(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resolvedCwd := workdir
+		if resolvedCwd == "" {
+			resolvedCwd = currentCwd
+		}
+		if workdir != "" {
+			if info, err := os.Stat(resolvedCwd); err != nil || !info.IsDir() {
+				return map[string]any{
+					"success": false,
+					"error":   fmt.Sprintf("workdir does not exist: %s", resolvedCwd),
+				}, nil
+			}
+		}
+
+		// ── 破坏性命令警告 ──
+		// Python: L178
+		warning := GetBashDestructiveWarning(command)
+
+		// ── description 日志 ──
+		// Python: L180-181
+		if description != "" {
+			logger.Debug(logComponent).
+				Str("description", description).
+				Str("command", command).
+				Msg("BashTool")
+		}
+
+		// ── 后台执行 ──
+		// Python: L184-190
+		if runInBackground {
+			bgRes, err := op.Shell().ExecuteCmdBackground(
+				ctx, command,
+				sys_operation.WithShellCwd(resolvedCwd),
+				sys_operation.WithShellType(sys_operation.ParseShellType(shellType)),
+			)
+			if err != nil {
+				return map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				}, nil
+			}
+			if !bgRes.IsSuccess() {
+				return map[string]any{
+					"success": false,
+					"error":   bgRes.Message,
+				}, nil
+			}
+			pid := 0
+			if bgRes.Data != nil && bgRes.Data.Pid != nil {
+				pid = *bgRes.Data.Pid
+			}
+			return map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"pid":    pid,
+					"status": "started",
+				},
+			}, nil
+		}
+
+		// ── rm 目标记录（执行前）──
+		// Python: L192-199: 执行前记录 rm 目标
+		var historyPath string
+		callOpts := tool.NewToolCallOptions(opts...)
+		session := callOpts.Session
+		if session != nil {
+			historyPath = buildHistoryPathFromOpts(opts, agentID)
+			rmTargets := ParseRmTargets(command)
+			if len(rmTargets) > 0 {
+				recordRmTargetsBeforeDeletion(historyPath, rmTargets, resolvedCwd)
+			}
+		}
+
+		// ── 前台执行 ──
+		// Python: L202-248
+		res, err := op.Shell().ExecuteCmd(
+			ctx, command,
+			sys_operation.WithShellCwd(resolvedCwd),
+			sys_operation.WithShellTimeout(timeout),
+			sys_operation.WithShellType(sys_operation.ParseShellType(shellType)),
+		)
+		if err != nil {
+			return map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			}, nil
+		}
+
+		// 失败路径：部分输出渲染
+		// Python: L205-222
+		if !res.IsSuccess() {
+			var partial string
+			if res.Data != nil {
+				exitCode := -1
+				if res.Data.ExitCode != nil {
+					exitCode = *res.Data.ExitCode
+				}
+				partial = RenderPartialOnFailure(
+					CommandOutput{
+						Stdout:         res.Data.Stdout,
+						Stderr:         res.Data.Stderr,
+						ExitCode:       exitCode,
+						Warning:        warning,
+						MaxOutputChars: maxOutputChars,
+					},
+					res.Message,
+				)
+			}
+			if partial != "" {
+				return map[string]any{
+					"success": false,
+					"data":    map[string]any{"content": partial},
+					"error":   partial,
+				}, nil
+			}
+			return map[string]any{
+				"success": false,
+				"error":   res.Message,
+			}, nil
+		}
+
+		// 成功路径
+		// Python: L224-248
+		exitCode := -1
+		stdout := ""
+		stderr := ""
+		if res.Data != nil {
+			if res.Data.ExitCode != nil {
+				exitCode = *res.Data.ExitCode
+			}
+			stdout = res.Data.Stdout
+			stderr = res.Data.Stderr
+		}
+
+		meaning := InterpretBashExitCode(command, exitCode, stdout, stderr)
+
+		// ── rm 目标记录（执行后）──
+		// Python: L230-232: 执行后检测并记录删除
+		if historyPath != "" && !meaning.IsError {
+			filesystem.DetectAndRecordDeletions(historyPath)
+		}
+
+		content, isError := RenderToolContent(
+			CommandOutput{
+				Stdout:         stdout,
+				Stderr:         stderr,
+				ExitCode:       exitCode,
+				Warning:        warning,
+				MaxOutputChars: maxOutputChars,
+			},
+			meaning.IsError,
+		)
+
+		if isError {
+			return map[string]any{
+				"success": false,
+				"data":    map[string]any{"content": content},
+				"error":   content,
+			}, nil
+		}
+
+		return map[string]any{
+			"success": true,
+			"data":    map[string]any{"content": content},
+		}, nil
+	}
+
+	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams),
+		tool.WithToolCallTimeout(func(inputs map[string]any, defaultTimeout float64) float64 {
+			in := parseBashInputFromMap(inputs)
+			return bashCallTimeout(&in, defaultTimeout)
+		}))
+	return invokeFn
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// makeSudoNoninteractive 注入 sudo -n 标志，让 sudo 非交互失败而非挂起等密码。
+// Python: _make_sudo_noninteractive (bash/_tool.py L52-54)
+func makeSudoNoninteractive(command string) string {
+	result, err := sudoNeedsNRe.Replace(command, "sudo -n", 0, -1)
+	if err != nil {
+		return command
+	}
+	return result
+}
+
+// resolveBashTimeout 解析并钳制超时值。
+// Python: BashTool._resolve_timeout (bash/_tool.py L99-110)
+// 调用方未传 timeout 时该值为 0，按默认 300 秒处理；显式传 0/负值同样视为未传。
+// 与 Python 的差异：Python inputs.get("timeout", 300) 只对「缺 key」取 300，
+// 显式传 0 会被钳成 1 秒——1 秒对任何真实命令都是误杀，故 Go 统一按未传处理。
+func resolveBashTimeout(rawValue int) int {
+	timeout := rawValue
+	if timeout <= 0 {
+		timeout = bashDefaultTimeout
+	}
+	maxTimeout := 3600
+	if v := os.Getenv("BASH_TOOL_MAX_TIMEOUT_SECONDS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxTimeout = parsed
+		}
+	}
+	if maxTimeout < 1 {
+		maxTimeout = 1
+	}
+	if timeout > maxTimeout {
+		timeout = maxTimeout
+	}
+	return timeout
+}
+
+// resolveBashMaxOutputChars 解析并钳制最大输出字符数。0 表示无限制。
+// Python: BashTool._resolve_max_output_chars (bash/_tool.py L113-126)
+//
+// rawValue 为 nil 表示调用方未传该参数，取默认值（默认值同样受环境变量钳制）；
+// 显式传 0 表示不限制（调用方主动 opt-out）；正数取 [200, maxChars]。
+func resolveBashMaxOutputChars(rawValue *int) int {
+	maxChars := bashDefaultMaxOutputChars
+	if v := os.Getenv("BASH_TOOL_MAX_OUTPUT_CHARS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxChars = parsed
+		}
+	}
+	if maxChars < 200 {
+		maxChars = 200
+	}
+
+	value := bashDefaultMaxOutputChars
+	if rawValue != nil {
+		value = *rawValue
+		// 显式 0：调用方主动放弃上限
+		if value == 0 {
+			return 0
+		}
+	}
+	if value < 200 {
+		value = 200
+	}
+	if value > maxChars {
+		value = maxChars
+	}
+	return value
+}

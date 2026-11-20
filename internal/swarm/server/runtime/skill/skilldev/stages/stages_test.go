@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 

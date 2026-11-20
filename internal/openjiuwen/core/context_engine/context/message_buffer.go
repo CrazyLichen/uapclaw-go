@@ -1,0 +1,462 @@
+package context
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ContextMessageBuffer 消息缓冲区，管理历史消息和上下文消息，支持最大容量限制和自动扩缩容。
+// Python: openjiuwen/core/context_engine/context/message_buffer.py (ContextMessageBuffer)
+// Python 依赖 asyncio 单线程安全，Go 使用 mu 保护并发访问（快速路径 AddBack 与持锁路径的 GetBack/SetMessages 等并发）
+type ContextMessageBuffer struct {
+	// mu 互斥锁，保护 contextMessages 和 historyMessagesSize 的并发访问
+	mu sync.Mutex
+	// maxBufferSize 最大缓冲区大小，0 表示无限制
+	maxBufferSize int
+	// contextMessages 所有消息（历史+上下文）
+	contextMessages []llm_schema.BaseMessage
+	// historyMessagesSize 历史消息数量标记位置
+	historyMessagesSize int
+}
+
+// OffloadMessageBuffer 管理被卸载(offload)的消息，支持内存存储和文件系统存储两种方式。
+// Python: openjiuwen/core/context_engine/context/message_buffer.py (OffloadMessageBuffer)
+// Python 依赖 asyncio 单线程安全，Go 使用 mu 保护并发访问
+type OffloadMessageBuffer struct {
+	// mu 互斥锁，保护 inMemoryMessages 的并发访问
+	mu sync.Mutex
+	// inMemoryMessages 内存中的卸载消息字典
+	inMemoryMessages map[string][]llm_schema.BaseMessage
+	// sysOperation 系统操作接口，用于文件系统 reload
+	sysOperation sysop.SysOperation
+	// workspaceDir 工作空间目录路径
+	workspaceDir string
+	// sessionID 会话 ID
+	sessionID string
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// offloadTypeInMemory 内存存储类型标识
+const offloadTypeInMemory = "in_memory"
+
+// offloadTypeFilesystem 文件系统存储类型标识
+const offloadTypeFilesystem = "filesystem"
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewContextMessageBuffer 创建消息缓冲区实例。
+// Python: ContextMessageBuffer.__init__
+func NewContextMessageBuffer(historyMessages []llm_schema.BaseMessage, maxBufferSize int) *ContextMessageBuffer {
+	buf := &ContextMessageBuffer{
+		maxBufferSize: maxBufferSize,
+	}
+	buf.Rebuild(historyMessages)
+	return buf
+}
+
+// Size 返回有效消息数量。
+// maxBufferSize > 0 时返回 min(len, maxBufferSize)，否则返回实际长度。
+// Python: ContextMessageBuffer.size
+func (b *ContextMessageBuffer) Size() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.maxBufferSize > 0 {
+		size := len(b.contextMessages)
+		if size > b.maxBufferSize {
+			return b.maxBufferSize
+		}
+		return size
+	}
+	return len(b.contextMessages)
+}
+
+// SetMaxSize 更新缓冲区消息数上限（热重载刷新配置时使用）。
+// 只改上限、不立即裁剪：缩小时由既有 ifNeedResize 在超过 2 倍上限时收割，
+// 与构造时的行为一致，避免热重载瞬间批量丢消息。
+func (b *ContextMessageBuffer) SetMaxSize(maxBufferSize int) {
+	b.mu.Lock()
+	b.maxBufferSize = maxBufferSize
+	b.mu.Unlock()
+}
+
+// AddBack 追加消息到缓冲区尾部，然后检查是否需要自动裁剪。
+// Python: ContextMessageBuffer.add_back
+func (b *ContextMessageBuffer) AddBack(messages []llm_schema.BaseMessage) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.contextMessages = append(b.contextMessages, messages...)
+	b.ifNeedResize()
+}
+
+// GetBack 获取缓冲区尾部消息。
+// size ≤ 0: withHistory=true 返回全部有效消息，withHistory=false 返回历史之后的部分；
+// size > 0: 根据withHistory计算实际size，返回尾部N条消息。
+// Python: ContextMessageBuffer.get_back
+func (b *ContextMessageBuffer) GetBack(size int, withHistory bool) []llm_schema.BaseMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.getBackInternal(size, withHistory)
+}
+
+// PopBack 弹出缓冲区尾部消息。
+// withHistory=true 且弹出数量超过上下文部分时，减少 historyMessagesSize。
+// size <= 0 时弹出全部消息，对齐 Python pop_back(size=None)。
+// Python: ContextMessageBuffer.pop_back
+func (b *ContextMessageBuffer) PopBack(size int, withHistory bool) []llm_schema.BaseMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// size <= 0 时弹出全部，对齐 Python pop_back(size=None)
+	popped := b.getBackInternal(size, withHistory)
+	poppedCount := len(popped)
+
+	if poppedCount == 0 {
+		return nil
+	}
+
+	if withHistory {
+		// 弹出数量超过上下文部分，需要减少 historyMessagesSize
+		contextLen := len(b.contextMessages) - b.historyMessagesSize
+		if poppedCount > contextLen {
+			overflow := poppedCount - contextLen
+			b.historyMessagesSize -= overflow
+			if b.historyMessagesSize < 0 {
+				b.historyMessagesSize = 0
+			}
+		}
+	}
+
+	// 截断 contextMessages
+	b.contextMessages = b.contextMessages[:len(b.contextMessages)-poppedCount]
+	return popped
+}
+
+// SetMessages 替换缓冲区消息。
+// withHistory=true: 直接替换所有消息，historyMessagesSize 置零；
+// withHistory=false: 保留历史前缀，替换上下文部分。
+// Python: ContextMessageBuffer.set_messages
+func (b *ContextMessageBuffer) SetMessages(messages []llm_schema.BaseMessage, withHistory bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if withHistory {
+		b.contextMessages = messages
+		b.historyMessagesSize = 0
+	} else {
+		// 保留历史前缀，替换上下文部分
+		historyPart := b.contextMessages
+		if len(historyPart) > b.historyMessagesSize {
+			historyPart = historyPart[:b.historyMessagesSize]
+		}
+		b.contextMessages = make([]llm_schema.BaseMessage, 0, len(historyPart)+len(messages))
+		b.contextMessages = append(b.contextMessages, historyPart...)
+		b.contextMessages = append(b.contextMessages, messages...)
+	}
+	b.ifNeedResize()
+}
+
+// Rebuild 从历史消息重建缓冲区。
+// maxBufferSize > 0 时截取尾部 maxBufferSize 条消息作为初始内容，并设置 historyMessagesSize；
+// 否则复制全部历史消息。
+// Python: ContextMessageBuffer.rebulid (Python 拼写为 rebulid)
+func (b *ContextMessageBuffer) Rebuild(historyMessages []llm_schema.BaseMessage) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.maxBufferSize > 0 {
+		if len(historyMessages) > b.maxBufferSize {
+			// 截取尾部 maxBufferSize 条
+			b.contextMessages = make([]llm_schema.BaseMessage, b.maxBufferSize)
+			copy(b.contextMessages, historyMessages[len(historyMessages)-b.maxBufferSize:])
+			b.historyMessagesSize = b.maxBufferSize
+		} else {
+			b.contextMessages = make([]llm_schema.BaseMessage, len(historyMessages))
+			copy(b.contextMessages, historyMessages)
+			b.historyMessagesSize = len(historyMessages)
+		}
+	} else {
+		b.contextMessages = make([]llm_schema.BaseMessage, len(historyMessages))
+		copy(b.contextMessages, historyMessages)
+		b.historyMessagesSize = len(historyMessages)
+	}
+}
+
+// NewOffloadMessageBuffer 创建卸载消息缓冲区实例。
+// Python: OffloadMessageBuffer.__init__
+func NewOffloadMessageBuffer(initMessages map[string][]llm_schema.BaseMessage) *OffloadMessageBuffer {
+	if initMessages == nil {
+		initMessages = make(map[string][]llm_schema.BaseMessage)
+	}
+	return &OffloadMessageBuffer{
+		inMemoryMessages: initMessages,
+	}
+}
+
+// SetSysOperation 设置系统操作接口。
+// Python: OffloadMessageBuffer.set_sys_operation
+func (b *OffloadMessageBuffer) SetSysOperation(op sysop.SysOperation) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.sysOperation = op
+}
+
+// SetWorkspaceInfo 设置工作空间信息。
+// Python: OffloadMessageBuffer.set_workspace_info
+func (b *OffloadMessageBuffer) SetWorkspaceInfo(workspaceDir, sessionID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.workspaceDir = workspaceDir
+	b.sessionID = sessionID
+}
+
+// Offload 卸载消息到指定存储。
+// in_memory 类型存入内存 map；其他类型暂不处理。
+// Python: OffloadMessageBuffer.offload
+func (b *OffloadMessageBuffer) Offload(offloadHandle string, offloadType string, messages []llm_schema.BaseMessage) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if offloadType == offloadTypeInMemory {
+		b.inMemoryMessages[offloadHandle] = messages
+		logger.Info(logComponent).
+			Str("offload_handle", offloadHandle).
+			Str("offload_type", offloadType).
+			Int("message_count", len(messages)).
+			Msg("messages offloaded to memory")
+	} else {
+		logger.Info(logComponent).
+			Str("offload_handle", offloadHandle).
+			Str("offload_type", offloadType).
+			Int("message_count", len(messages)).
+			Msg("non-memory offload type not supported yet")
+	}
+}
+
+// Reload 从指定存储重新加载消息。
+// in_memory 从内存 map 取出；filesystem 从文件系统读取。
+// Python: OffloadMessageBuffer.reload
+func (b *OffloadMessageBuffer) Reload(offloadHandle string, offloadType string) []llm_schema.BaseMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if offloadType == offloadTypeInMemory {
+		messages, ok := b.inMemoryMessages[offloadHandle]
+		if !ok {
+			logger.Warn(logComponent).
+				Str("offload_handle", offloadHandle).
+				Msg("offloaded messages not found in memory")
+			return nil
+		}
+		logger.Info(logComponent).
+			Str("offload_handle", offloadHandle).
+			Int("message_count", len(messages)).
+			Msg("messages reloaded from memory")
+		return messages
+	}
+
+	if offloadType == offloadTypeFilesystem {
+		return b.reloadFromFilesystem(offloadHandle)
+	}
+
+	logger.Warn(logComponent).
+		Str("offload_handle", offloadHandle).
+		Str("offload_type", offloadType).
+		Msg("unsupported offload type")
+	return nil
+}
+
+// Clear 清除指定卸载消息。
+// in_memory 类型从 map 中删除对应条目。
+// Python: OffloadMessageBuffer.clear
+func (b *OffloadMessageBuffer) Clear(offloadHandle string, offloadType string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if offloadType == offloadTypeInMemory {
+		delete(b.inMemoryMessages, offloadHandle)
+		logger.Info(logComponent).
+			Str("offload_handle", offloadHandle).
+			Str("offload_type", offloadType).
+			Msg("offloaded messages cleared")
+	}
+}
+
+// GetAll 返回全部内存卸载消息。
+// Python: OffloadMessageBuffer.get_all
+func (b *OffloadMessageBuffer) GetAll() map[string][]llm_schema.BaseMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.inMemoryMessages
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getBackInternal 获取缓冲区尾部消息（不加锁，调用方需持有 mu）。
+func (b *ContextMessageBuffer) getBackInternal(size int, withHistory bool) []llm_schema.BaseMessage {
+	// 先截取有效窗口
+	messages := b.contextMessages
+	if b.maxBufferSize > 0 && len(messages) > b.maxBufferSize {
+		messages = messages[len(messages)-b.maxBufferSize:]
+	}
+
+	if size <= 0 {
+		if withHistory {
+			return messages
+		}
+		// 返回历史之后的部分
+		contextStart := b.historyMessagesSize
+		if contextStart >= len(messages) {
+			return nil
+		}
+		return messages[contextStart:]
+	}
+
+	// size 大于 0 的分支
+	requestedSize := size
+	if !withHistory {
+		contextStart := b.historyMessagesSize
+		// 计算上下文部分可用的消息数
+		contextLen := len(messages) - contextStart
+		if contextLen <= 0 {
+			return nil
+		}
+		if requestedSize > contextLen {
+			requestedSize = contextLen
+		}
+	} else {
+		if requestedSize > len(messages) {
+			requestedSize = len(messages)
+		}
+	}
+
+	if requestedSize <= 0 {
+		return nil
+	}
+	return messages[len(messages)-requestedSize:]
+}
+
+// ifNeedResize 当缓冲区大小超过 2 倍 maxBufferSize 时，裁剪前 maxBufferSize 条消息。
+// Python: ContextMessageBuffer._if_need_resize
+func (b *ContextMessageBuffer) ifNeedResize() {
+	if b.maxBufferSize <= 0 {
+		return
+	}
+	if len(b.contextMessages) > 2*b.maxBufferSize {
+		// 裁剪前 maxBufferSize 条
+		dropCount := b.maxBufferSize
+		b.contextMessages = b.contextMessages[dropCount:]
+		// 历史消息标记位置相应调整
+		b.historyMessagesSize -= dropCount
+		if b.historyMessagesSize < 0 {
+			b.historyMessagesSize = 0
+		}
+		logger.Info(logComponent).
+			Int("max_buffer_size", b.maxBufferSize).
+			Int("dropped_count", dropCount).
+			Int("remaining_count", len(b.contextMessages)).
+			Msg("buffer auto-trimmed")
+	}
+}
+
+// reloadFromFilesystem 从文件系统读取 JSON 文件并反序列化为消息列表。
+// 当前使用 os.ReadFile 直接读取 JSON 文件。如果文件不存在或解析失败，返回空切片。
+// Python: OffloadMessageBuffer._reload_from_filesystem
+func (b *OffloadMessageBuffer) reloadFromFilesystem(offloadHandle string) []llm_schema.BaseMessage {
+	candidatePaths := b.filesystemReloadPaths(offloadHandle)
+
+	for _, path := range candidatePaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var rawMessages []json.RawMessage
+		if err := json.Unmarshal(data, &rawMessages); err != nil {
+			logger.Warn(logComponent).
+				Str("path", path).
+				Err(err).
+				Msg("failed to parse offloaded messages JSON file")
+			continue
+		}
+
+		messages := make([]llm_schema.BaseMessage, 0, len(rawMessages))
+		for i, raw := range rawMessages {
+			msg, err := llm_schema.UnmarshalMessage(raw)
+			if err != nil {
+				logger.Warn(logComponent).
+					Str("path", path).
+					Int("index", i).
+					Err(err).
+					Msg("failed to deserialize offloaded message")
+				continue
+			}
+			messages = append(messages, msg)
+		}
+
+		if len(messages) > 0 {
+			logger.Info(logComponent).
+				Str("path", path).
+				Int("message_count", len(messages)).
+				Msg("messages reloaded from filesystem")
+			return messages
+		}
+	}
+
+	logger.Warn(logComponent).
+		Str("offload_handle", offloadHandle).
+		Strs("candidate_paths", candidatePaths).
+		Msg("no usable offloaded messages file found")
+	return nil
+}
+
+// filesystemReloadPaths 构建候选文件路径列表。
+// 无 workspaceDir 时返回 [offloadHandle]；
+// 有 workspaceDir 时构建精确路径 + glob 匹配路径。
+// Python: OffloadMessageBuffer._filesystem_reload_paths
+func (b *OffloadMessageBuffer) filesystemReloadPaths(offloadHandle string) []string {
+	if b.workspaceDir == "" {
+		return []string{offloadHandle}
+	}
+
+	// 精确路径：workspaceDir/sessionID/offloadHandle.json
+	precisePath := filepath.Join(b.workspaceDir, b.sessionID, offloadHandle+".json")
+
+	// glob 匹配路径：workspaceDir/sessionID/offloadHandle*.json
+	globPattern := filepath.Join(b.workspaceDir, b.sessionID, offloadHandle+"*.json")
+	matches, err := filepath.Glob(globPattern)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("pattern", globPattern).
+			Err(err).
+			Msg("glob match failed")
+		return []string{precisePath}
+	}
+
+	// 去重并排序，精确路径优先
+	pathSet := make(map[string]struct{})
+	pathSet[precisePath] = struct{}{}
+	for _, m := range matches {
+		pathSet[m] = struct{}{}
+	}
+
+	paths := make([]string, 0, len(pathSet))
+	for p := range pathSet {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	// 确保精确路径排在最前
+	result := make([]string, 0, len(paths))
+	result = append(result, precisePath)
+	for _, p := range paths {
+		if p != precisePath {
+			result = append(result, p)
+		}
+	}
+
+	return result
+}

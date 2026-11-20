@@ -1,0 +1,75 @@
+package agent
+
+import (
+	railsreliabilitycore "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails/reliability/core"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// TeamAgentBlueprint TeamAgent 不可变装配蓝图。
+// 四象限分解的第一象限：构造时确定、生命周期内不可变。
+// Python: TeamAgentBlueprint (openjiuwen/agent_teams/agent/blueprint.py)
+type TeamAgentBlueprint struct {
+	// Card Agent 身份卡片
+	Card *agentschema.AgentCard `json:"card,omitempty"`
+	// Spec 团队 Agent 规格
+	Spec atschema.TeamAgentSpec `json:"spec"`
+	// Ctx 运行时上下文
+	Ctx atschema.TeamRuntimeContext `json:"ctx"`
+	// RolePolicy 角色策略
+	RolePolicy string `json:"role_policy,omitempty"`
+	// Language 语言偏好
+	Language string `json:"language,omitempty"`
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Role 返回团队角色。
+// Python: TeamAgentBlueprint.role property
+func (b *TeamAgentBlueprint) Role() atschema.TeamRole {
+	return b.Ctx.Role
+}
+
+// MemberName 返回成员名，nil 表示未设置。
+// Python: TeamAgentBlueprint.member_name property → Optional[str]
+func (b *TeamAgentBlueprint) MemberName() *string {
+	if b.Ctx.MemberName == "" {
+		return nil
+	}
+	return &b.Ctx.MemberName
+}
+
+// DispatcherMemberName 返回成员名（空串表示未设置）。
+// S-32: 满足 types.DispatcherBlueprint 窄接口（接口要求 MemberName() string，
+// 与既有 *string 方法签名不同，故新增派生方法而非改签名）。
+func (b *TeamAgentBlueprint) DispatcherMemberName() string {
+	return b.Ctx.MemberName
+}
+
+// DispatcherReliability 返回团队可靠性配置（未配置为 nil）。
+// Python: blueprint.spec.reliability（dispatcher.py:264）
+func (b *TeamAgentBlueprint) DispatcherReliability() *railsreliabilitycore.ReliabilityConfig {
+	return b.Spec.Reliability
+}
+
+// DispatcherSpec 返回团队规格（25.2a 调度器装配读 DispatchMode/
+// DefaultMaxReviewRounds/ReviewStallTimeout/TeamName/Language）。
+// Python: kernel.setup() 直接读 blueprint.spec.*（kernel.py L91-104）——
+// Go 侧经 DispatcherBlueprint 窄接口传递。
+func (b *TeamAgentBlueprint) DispatcherSpec() *atschema.TeamAgentSpec {
+	return &b.Spec
+}
+
+// Lifecycle 返回生命周期模式。
+// Python: TeamAgentBlueprint.lifecycle property
+func (b *TeamAgentBlueprint) Lifecycle() atschema.TeamLifecycle {
+	return b.Spec.Lifecycle
+}
+
+// TeamSpec 返回团队规格。
+// Python: TeamAgentBlueprint.team_spec property → Optional[TeamSpec]
+func (b *TeamAgentBlueprint) TeamSpec() *atschema.TeamSpec {
+	return b.Ctx.TeamSpec
+}

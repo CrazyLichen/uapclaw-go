@@ -3,7 +3,7 @@ package rails
 import (
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
 )
 
 func TestBoolishFalse(t *testing.T) {

@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	dshprov "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/dsh"
+	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	dshprov "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/dsh"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

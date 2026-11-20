@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	externalcli "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"

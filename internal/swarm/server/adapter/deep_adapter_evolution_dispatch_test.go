@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

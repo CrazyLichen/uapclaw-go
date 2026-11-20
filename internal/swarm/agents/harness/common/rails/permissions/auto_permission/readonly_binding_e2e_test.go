@@ -6,11 +6,11 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 )
 
 // TestVerify_只读快速路径端到端 验证从 fail-closed 变为 allow 的完整链路。

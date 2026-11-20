@@ -1,0 +1,740 @@
+package trainer
+
+import (
+	"context"
+	"fmt"
+	"math"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/operator"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	evolving "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/dataset"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/evaluator"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/trajectory"
+	updaterpkg "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/updater"
+	"golang.org/x/sync/errgroup"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// Trainer 离线自演化训练编排器。
+// 编排 "evaluate → update → writeback" 自演化循环，
+// 接受 Updater 和 BaseEvaluator，管理检查点保存/恢复和早停。
+// Python: openjiuwen/agent_evolving/trainer/trainer.py Trainer
+type Trainer struct {
+	// updater 更新生成器。
+	// Python: evolving/updater/protocol.py Updater
+	updater updaterpkg.Updater
+	// evaluator 评估器。
+	// Python: evolving/evaluator.BaseEvaluator
+	evaluator evaluator.BaseEvaluator
+	// extractor 轨迹提取器。
+	// Python: evolving/trajectory/extractor.py TrajectoryExtractor
+	extractor trajectory.TrajectoryExtractor
+	// callbacks 训练生命周期回调
+	callbacks *Callbacks
+	// numParallel 并发推理数。
+	// Python: _num_parallel, 默认 TuneConstant.default_parallel_num=1
+	numParallel int
+	// earlyStopScore 早停分数阈值。
+	// Python: _early_stop_score, 默认 TuneConstant.default_early_stop_score=1.0
+	earlyStopScore float64
+	// checkpointDir 检查点目录。非空启用检查点保存。
+	// Python: checkpoint_dir
+	checkpointDir string
+	// checkpointEveryNEpochs 每 N 个 epoch 保存一次检查点。
+	// Python: checkpoint_every_n_epochs, 默认 1
+	checkpointEveryNEpochs int
+	// checkpointOnImprove 验证分数提升时是否保存检查点。
+	// Python: checkpoint_on_improve, 默认 true
+	checkpointOnImprove bool
+	// checkpointStore 检查点存储。
+	// Python: _checkpoint_store, FileCheckpointStore
+	checkpointStore *checkpointing.FileCheckpointStore
+	// resumeFrom 恢复检查点路径
+	resumeFrom string
+	// checkpointManager 检查点管理器。
+	// Python: _checkpoint_manager, DefaultCheckpointManager
+	checkpointManager checkpointing.CheckpointManager
+}
+
+// TrainerOption Trainer 构造选项函数。
+type TrainerOption func(*Trainer)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// 默认并行数，对应 Python TuneConstant.default_parallel_num=1
+	defaultNumParallel = 1
+	// 默认早停分数，对应 Python TuneConstant.default_early_stop_score=1.0
+	defaultEarlyStopScore = 1.0
+	// 默认每 N epoch 保存检查点，对应 Python checkpoint_every_n_epochs=1
+	defaultCheckpointEveryNEpochs = 1
+	// 默认验证提升时保存检查点，对应 Python checkpoint_on_improve=True
+	defaultCheckpointOnImprove = true
+	// logComponent Trainer 包日志组件常量
+	logComponent = logger.ComponentAgentCore
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewTrainer 创建 Trainer 实例。
+// Python: Trainer.__init__(updater, evaluator, extractor, callbacks, ...)
+func NewTrainer(opts ...TrainerOption) *Trainer {
+	t := &Trainer{
+		numParallel:            defaultNumParallel,
+		earlyStopScore:         defaultEarlyStopScore,
+		checkpointEveryNEpochs: defaultCheckpointEveryNEpochs,
+		checkpointOnImprove:    defaultCheckpointOnImprove,
+		callbacks:              NewCallbacks(),
+	}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
+}
+
+// Train 执行离线自演化训练：验证基线评估 → 多轮 "训练前向 → 更新 → 验证评估 → 检查点"。
+// 参数:
+//   - ctx: 上下文
+//   - agent: 待优化的 Agent（必须实现 evolving.TrainableAgent 接口）
+//   - trainCases: 训练用例加载器
+//   - valCases: 验证用例加载器（若为 nil 则使用 trainCases）
+//   - numIterations: 最大训练 epoch 数
+//   - config: 传递给 updater.Update 的配置
+//
+// 返回优化后的 Agent 和 error。
+// Python: Trainer.train(agent, train_cases, val_cases, num_iterations)
+func (t *Trainer) Train(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	trainCases *dataset.CaseLoader,
+	valCases *dataset.CaseLoader,
+	numIterations int,
+	config map[string]any,
+) (evolving.TrainableAgent, error) {
+	progress := NewProgressWithMaxEpoch(numIterations)
+	if valCases == nil {
+		valCases = trainCases
+	}
+
+	operators := GetOperatorRegistry(agent)
+	if t.BindUpdater(operators, config) == 0 {
+		logger.Error(logComponent).Msg("[Trainer] no Operator matches Updater target, soft exit without training")
+		return agent, nil
+	}
+
+	// Python: self._resume_if_needed(agent, progress)
+	_ = t.ResumeIfNeeded(ctx, agent, progress)
+
+	var curEpochEvaluated []*dataset.EvaluatedCase
+	if t.UpdaterRequiresForward() {
+		score, evaluated, err := t.Evaluate(ctx, agent, valCases)
+		if err != nil {
+			return agent, fmt.Errorf("Train 基线评估失败: %w", err)
+		}
+		progress.CurrentEpochScore = score
+		progress.BestScore = math.Max(progress.BestScore, score)
+		curEpochEvaluated = evaluated
+	} else {
+		// 黑盒优化器：跳过初始验证基线（使用内部评估）
+		progress.CurrentEpochScore = 0.0
+		curEpochEvaluated = nil
+	}
+
+	// 触发 OnTrainBegin 回调
+	fireCallback(t.callbacks.OnTrainBegin, agent, progress, curEpochEvaluated)
+
+	if progress.BestScore >= t.earlyStopScore {
+		fireCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
+		return agent, nil
+	}
+
+	for range progress.RunEpoch() {
+		fireEpochBeginCallback(t.callbacks.OnTrainEpochBegin, agent, progress)
+
+		var evaluated []*dataset.EvaluatedCase
+
+		var trajectories []*trajectory.Trajectory
+		if t.UpdaterRequiresForward() {
+			forwardScore, forwardEvaluated, forwardTrajectories, _, err := t.Forward(ctx, agent, trainCases)
+			if err != nil {
+				logger.Warn(logComponent).
+					Int("epoch", progress.CurrentEpoch).
+					Err(err).
+					Msg("Train Forward failed, skipping current epoch")
+				continue
+			}
+			progress.CurrentEpochScore = forwardScore
+			evaluated = forwardEvaluated
+			trajectories = forwardTrajectories
+		} else {
+			// 黑盒优化器：跳过 forward，传递空数据（优化器内部生成）
+			progress.CurrentEpochScore = 0.0
+		}
+
+		// Python: updated = asyncio.run(self._updater.update(trajectories, evaluated, config=kwargs))
+		updated, updateErr := t.updater.Update(ctx, trajectories, evaluated, config)
+		if updateErr != nil {
+			logger.Warn(logComponent).
+				Int("epoch", progress.CurrentEpoch).
+				Err(updateErr).
+				Msg("Train Updater.Update failed")
+			continue
+		}
+
+		var valScore float64
+		var valEvaluated []*dataset.EvaluatedCase
+
+		if len(updated) > 1 {
+			// 多候选集：对每个候选方案在验证集上评估，选择最优
+			// Python: self._select_best_candidate_on_val(...)
+			candidates := make([]map[schema.UpdateKey]schema.UpdateValue, 0, len(updated))
+			for _, cand := range updated {
+				candidates = append(candidates, normalizeUpdates(cand))
+			}
+			valScore, valEvaluated, _ = t.SelectBestCandidateOnVal(
+				ctx, agent, operators, candidates, valCases,
+			)
+		} else if len(updated) == 1 {
+			// 单映射：直接应用更新
+			// Python: self.apply_updates(operators, updates)
+			updates := normalizeUpdates(updated[0])
+			ApplyUpdates(operators, updates)
+			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+		} else {
+			// len(updated)==0: 空更新，仍需评估验证分数（对齐 Python updated or {} 分支）
+			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+		}
+
+		improved := valScore > progress.BestScore
+		if improved {
+			progress.BestScore = valScore
+		}
+
+		fireCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
+
+		// Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
+		_ = t.SaveCheckpointIfNeeded(agent, progress, improved)
+
+		if progress.BestScore >= t.earlyStopScore {
+			break
+		}
+	}
+
+	fireCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
+
+	return agent, nil
+}
+
+// Forward 单次前向推理 + 评估 + 轨迹提取。
+// 返回 (平均分数, 评估结果列表, 轨迹列表, Session列表, error)。
+// Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
+func (t *Trainer) Forward(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	cases *dataset.CaseLoader,
+) (float64, []*dataset.EvaluatedCase, []*trajectory.Trajectory, []*session.Session, error) {
+	if cases == nil || cases.Len() == 0 {
+		return 0, nil, nil, nil, nil
+	}
+
+	predicts, sessions, err := t.Predict(ctx, agent, cases)
+	if err != nil {
+		return 0, nil, nil, nil, fmt.Errorf("Forward Predict 失败: %w", err)
+	}
+
+	caseList := cases.Cases()
+	evaluated, err := t.evaluator.BatchEvaluate(ctx, caseList, predicts, t.numParallel)
+	if err != nil {
+		return 0, nil, nil, nil, fmt.Errorf("Forward BatchEvaluate 失败: %w", err)
+	}
+
+	score := meanScore(evaluated)
+
+	// Python:
+	//    初始化轨迹列表为空
+	//   for case, sess in zip(cases.get_cases(), sessions):
+	//       对应 Python: trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
+	trajectories := make([]*trajectory.Trajectory, len(caseList))
+	if t.extractor != nil {
+		for i, c := range caseList {
+			extracted, extractErr := t.extractor.Extract(sessions[i], c.CaseID)
+			if extractErr != nil {
+				// Python: extract 异常向上抛；Go 侧记录后以该失败终止本轮评估。
+				logger.Warn(logComponent).Str("case_id", c.CaseID).Err(extractErr).
+					Msg("[Trainer] trajectory extraction failed")
+				return 0, nil, nil, nil, extractErr
+			}
+			trajectories[i] = extracted
+		}
+	}
+	_ = predicts
+
+	logger.Info(logComponent).
+		Float64("score", score).
+		Int("evaluated_count", len(evaluated)).
+		Msg("Forward completed")
+
+	return score, evaluated, trajectories, sessions, nil
+}
+
+// Evaluate 在用例集上运行推理和评估，返回平均分数和评估结果。
+// 不提取轨迹（与 Forward 的区别）。
+// Python: Trainer.evaluate(agent, cases) -> (score, evaluated)
+func (t *Trainer) Evaluate(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	cases *dataset.CaseLoader,
+) (float64, []*dataset.EvaluatedCase, error) {
+	if cases == nil || cases.Len() == 0 {
+		return 0, nil, nil
+	}
+
+	predicts, err := t.PredictOnly(ctx, agent, cases)
+	if err != nil {
+		return 0, nil, fmt.Errorf("Evaluate PredictOnly 失败: %w", err)
+	}
+
+	caseList := cases.Cases()
+	evaluated, err := t.evaluator.BatchEvaluate(ctx, caseList, predicts, t.numParallel)
+	if err != nil {
+		return 0, nil, fmt.Errorf("Evaluate BatchEvaluate 失败: %w", err)
+	}
+
+	score := meanScore(evaluated)
+	return score, evaluated, nil
+}
+
+// PredictOnly 仅运行推理，返回每个用例的模型输出（不含 Session）。
+// Python: Trainer.predict_only(agent, cases) -> predicts
+func (t *Trainer) PredictOnly(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	cases *dataset.CaseLoader,
+) ([]map[string]any, error) {
+	if cases == nil {
+		return nil, nil
+	}
+
+	predicts, _, err := t.Predict(ctx, agent, cases)
+	return predicts, err
+}
+
+// Predict 运行 Agent 推理（含 Session），并发度由 numParallel 控制。
+// 返回 (模型输出列表, Session列表, error)。
+// Python: Trainer.predict(agent, cases) -> (predicts, sessions)
+func (t *Trainer) Predict(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	cases *dataset.CaseLoader,
+) ([]map[string]any, []*session.Session, error) {
+	if cases == nil {
+		return nil, nil, nil
+	}
+
+	caseList := cases.Cases()
+	if len(caseList) == 0 {
+		return nil, nil, nil
+	}
+
+	predicts := make([]map[string]any, len(caseList))
+	sessionsList := make([]*session.Session, len(caseList))
+
+	// Python: asyncio.Semaphore(min(self._num_parallel, len(case_list)))
+	limit := t.numParallel
+	if limit > len(caseList) {
+		limit = len(caseList)
+	}
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(limit)
+
+	for i, case_ := range caseList {
+		i, case_ := i, case_
+		g.Go(func() error {
+			// Python: session = create_agent_session()
+			sess := session.CreateAgentSession(case_.CaseID, agent.Card(), nil)
+
+			// Python: res = await agent.invoke({**case.inputs, "conversation_id": case.case_id}, session=session)
+			inputs := make(map[string]any, len(case_.Inputs)+1)
+			for k, v := range case_.Inputs {
+				inputs[k] = v
+			}
+			inputs["conversation_id"] = case_.CaseID
+
+			res, err := agent.Invoke(gCtx, inputs, agentinterfaces.WithSession(sess))
+			if err != nil {
+				// Python: res = dict(error=f"Get wrong result due to {str(e)}")
+				predicts[i] = map[string]any{"error": fmt.Sprintf("因 %s 导致结果错误", err.Error())}
+				sessionsList[i] = sess
+				return nil // 不中断其他 case
+			}
+
+			predicts[i] = res
+			sessionsList[i] = sess
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, nil, fmt.Errorf("Predict 并发推理失败: %w", err)
+	}
+
+	return predicts, sessionsList, nil
+}
+
+// ApplyUpdates 将 Updater 生成的更新应用到 Operator 注册表。
+// Python: Trainer.apply_updates(operators, updates) — 静态方法
+// 遍历 updates 映射，对每个 Operator 直接调用 SetParameter 设置参数值。
+// 注意：此方法与 update_execution.ApplyUpdates 不同——后者走 ApplyUpdate 路径
+// 返回 ApplyResult 列表，而此处直接调用 SetParameter，对齐 Python Trainer 行为。
+func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.UpdateKey]schema.UpdateValue) {
+	for key, update := range updates {
+		op, ok := operators[key.OperatorID()]
+		if !ok || update.Payload == nil {
+			continue
+		}
+		op.SetParameter(key.Target(), update.Payload)
+	}
+}
+
+// SelectBestCandidateOnVal 在验证集上选择最优候选更新。
+// 候选评估与选择（方案 A）：
+// - 在验证集上评估每个候选更新，选择最优
+// - 使用 Operator.GetState/LoadState 快照回滚，避免复制 Agent
+// - 最终恢复 operators 为最优状态（提交最优）
+// 返回 (最优分数, 最优评估结果, error)。
+// Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
+func (t *Trainer) SelectBestCandidateOnVal(
+	ctx context.Context,
+	agent evolving.TrainableAgent,
+	operators map[string]operator.Operator,
+	candidates []map[schema.UpdateKey]schema.UpdateValue,
+	valCases *dataset.CaseLoader,
+) (float64, []*dataset.EvaluatedCase, error) {
+	if len(candidates) == 0 {
+		return t.Evaluate(ctx, agent, valCases)
+	}
+
+	baseState := SnapshotOperatorsState(operators)
+
+	var bestScore = math.Inf(-1)
+	var bestEvaluated []*dataset.EvaluatedCase
+	var bestState map[string]map[string]any
+
+	for idx, candUpdates := range candidates {
+		RestoreOperatorsState(operators, baseState)
+		ApplyUpdates(operators, candUpdates)
+
+		candScore, candEvaluated, err := t.Evaluate(ctx, agent, valCases)
+		if err != nil {
+			logger.Warn(logComponent).
+				Int("candidate_idx", idx).
+				Err(err).
+				Msg("candidate evaluation failed")
+			continue
+		}
+
+		logger.Info(logComponent).
+			Int("candidate_idx", idx).
+			Float64("val_score", candScore).
+			Msg("candidate evaluation completed")
+
+		if candScore > bestScore {
+			bestScore = candScore
+			bestEvaluated = candEvaluated
+			bestState = SnapshotOperatorsState(operators)
+		}
+	}
+
+	if bestState != nil {
+		RestoreOperatorsState(operators, bestState)
+		return bestScore, bestEvaluated, nil
+	}
+
+	// 没有成功评估的候选，恢复基线
+	RestoreOperatorsState(operators, baseState)
+	return t.Evaluate(ctx, agent, valCases)
+}
+
+// SnapshotOperatorsState 快照当前所有 Operator 的状态。
+// 保存 Operator 注册表的状态副本，用于候选评估回滚/提交。
+// 返回 map[operatorID]operatorState。
+// Python: Trainer._snapshot_operators_state(operators) — 静态方法
+func SnapshotOperatorsState(operators map[string]operator.Operator) map[string]map[string]any {
+	out := make(map[string]map[string]any, len(operators))
+	for opID, op := range operators {
+		out[opID] = op.GetState()
+	}
+	return out
+}
+
+// RestoreOperatorsState 从快照恢复 Operator 注册表状态。
+// 遍历快照中的每个 operator 状态，调用 LoadState 恢复。
+// operatorID 在 operators 中不存在时跳过。
+// Python: Trainer._restore_operators_state(operators, state) — 静态方法
+func RestoreOperatorsState(operators map[string]operator.Operator, state map[string]map[string]any) {
+	for opID, st := range state {
+		op, ok := operators[opID]
+		if !ok {
+			continue
+		}
+		op.LoadState(st)
+	}
+}
+
+// GetOperatorRegistry 从 Agent 获取 Operator 注册表。
+// 调用 Agent 的 GetOperators() 方法获取其关联的 Operator 映射。
+// Python: Trainer._get_operator_registry(agent) — 静态方法
+func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Operator {
+	if agent == nil {
+		return nil
+	}
+	return agent.GetOperators()
+}
+
+// BindUpdater 将 Updater 绑定到 Agent 的 Operator 注册表。
+// 在训练开始前调用，使 Updater 能访问和修改 Operator。
+// 返回绑定的 Operator 数量；0 触发软退出。
+// Python: Trainer._bind_updater(updater, operators)
+func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map[string]any) int {
+	if t.updater == nil {
+		return 0
+	}
+	return t.updater.Bind(operators, nil, config)
+}
+
+// UpdaterRequiresForward 判断 Updater 是否需要前向推理结果。
+// 某些 Updater（如基于梯度的）需要前向推理产生的轨迹数据，
+// 而另一些（如基于规则的）则不需要。
+// 当 Updater 为 nil 时默认返回 true（兼容旧行为）。
+// Python: Trainer._updater_requires_forward(updater)
+func (t *Trainer) UpdaterRequiresForward() bool {
+	if t.updater == nil {
+		return true
+	}
+	return t.updater.RequiresForwardData()
+}
+
+// ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
+// 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态和 Updater 状态。
+// Python:
+//
+//	Python: ckpt = self._checkpoint_store.load_checkpoint(self._resume_from) — 加载检查点
+//	Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt) — 恢复状态
+//	Python: progress.start_epoch = int(restored.get("start_epoch", 0)) — 恢复起始轮次
+//	Python: progress.best_score = float(restored.get("best_score", 0.0)) — 恢复最佳分数
+//	Python: load_state = getattr(self._updater, "load_state", None) — 获取更新器加载方法
+//	Python: if callable(load_state):
+//	    对应 Python: load_state(getattr(ckpt, "updater_state", {}) or {}) — 加载更新器状态
+//
+// Python: Trainer._resume_if_needed(agent, progress)
+func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent, progress *Progress) error {
+	if t.checkpointStore == nil || t.checkpointManager == nil || t.resumeFrom == "" {
+		return nil
+	}
+	ckpt, err := t.checkpointStore.LoadCheckpoint(t.resumeFrom)
+	if err != nil {
+		return fmt.Errorf("加载检查点失败: %w", err)
+	}
+	if ckpt == nil {
+		return nil
+	}
+	// Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
+	restored := t.checkpointManager.Restore(agent, ckpt)
+
+	// Python: progress.start_epoch / progress.best_score 从 restored 恢复
+	if progress != nil {
+		if v, ok := restored["start_epoch"]; ok {
+			if f, ok := v.(float64); ok {
+				progress.StartEpoch = int(f)
+			} else if i, ok := v.(int); ok {
+				progress.StartEpoch = i
+			}
+		}
+		if v, ok := restored["best_score"]; ok {
+			if f, ok := v.(float64); ok {
+				progress.BestScore = f
+			}
+		}
+	}
+
+	// Python: load_state = getattr(self._updater, "load_state", None)
+	//             若可调用则: load_state(getattr(ckpt, "updater_state", {}) or {})
+	if t.updater != nil {
+		updaterState := ckpt.UpdaterState
+		if updaterState == nil {
+			updaterState = map[string]any{}
+		}
+		t.updater.LoadState(updaterState)
+	}
+
+	logger.Info(logComponent).
+		Str("run_id", fmt.Sprintf("%v", restored["run_id"])).
+		Int("start_epoch", func() int {
+			if progress != nil {
+				return progress.StartEpoch
+			}
+			return 0
+		}()).
+		Float64("best_score", func() float64 {
+			if progress != nil {
+				return progress.BestScore
+			}
+			return 0
+		}()).
+		Msg("[Trainer] restoring checkpoint")
+	return nil
+}
+
+// SaveCheckpointIfNeeded 根据条件判断是否保存检查点。
+// 当达到 checkpointEveryNEpochs 间隔或验证分数提升（checkpointOnImprove）时保存。
+// Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
+func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress *Progress, improved bool) error {
+	if t.checkpointStore == nil || t.checkpointManager == nil {
+		return nil
+	}
+	// Python: if not self._checkpoint_manager.should_save(epoch=progress.current_epoch, improved=improved)
+	if !t.checkpointManager.ShouldSave(progress.CurrentEpoch, improved) {
+		return nil
+	}
+	// Python: ckpt = self._checkpoint_manager.build_checkpoint(agent=agent, progress=progress, updater_state=self._updater.get_state())
+	var updaterState map[string]any
+	if t.updater != nil {
+		updaterState = t.updater.GetState()
+	}
+	ckpt := t.checkpointManager.BuildCheckpoint(agent, progress, updaterState)
+	// Python: path = self._checkpoint_store.save_checkpoint(ckpt, filename="latest.json")
+	_, err := t.checkpointStore.SaveCheckpoint(ckpt, "latest.json")
+	if err != nil {
+		return fmt.Errorf("保存检查点失败: %w", err)
+	}
+	logger.Info(logComponent).
+		Int("epoch", progress.CurrentEpoch).
+		Bool("improved", improved).
+		Msg("[Trainer] saving checkpoint")
+	return nil
+}
+
+// SetCallbacks 设置训练生命周期回调。
+// Python: Trainer.set_callbacks(callbacks)
+func (t *Trainer) SetCallbacks(callbacks *Callbacks) {
+	t.callbacks = callbacks
+}
+
+// WithUpdater 设置更新生成器。
+func WithUpdater(u updaterpkg.Updater) TrainerOption {
+	return func(t *Trainer) { t.updater = u }
+}
+
+// WithEvaluator 设置评估器。
+func WithEvaluator(e evaluator.BaseEvaluator) TrainerOption {
+	return func(t *Trainer) { t.evaluator = e }
+}
+
+// WithExtractor 设置轨迹提取器。
+// Python: extractor 参数，默认 TracerTrajectoryExtractor()
+func WithExtractor(extractor trajectory.TrajectoryExtractor) TrainerOption {
+	return func(t *Trainer) { t.extractor = extractor }
+}
+
+// WithCallbacks 设置训练生命周期回调。
+func WithCallbacks(callbacks *Callbacks) TrainerOption {
+	return func(t *Trainer) { t.callbacks = callbacks }
+}
+
+// WithNumParallel 设置并发推理数。
+// Python: num_parallel, 范围 [1, 20]（TuneConstant.min/max_parallel_num）。
+func WithNumParallel(n int) TrainerOption {
+	return func(t *Trainer) { t.numParallel = n }
+}
+
+// WithEarlyStopScore 设置早停分数阈值。
+// Python: early_stop_score, 范围 [0.0, 1.0]。
+func WithEarlyStopScore(score float64) TrainerOption {
+	return func(t *Trainer) { t.earlyStopScore = score }
+}
+
+// WithCheckpointDir 设置检查点目录（非空启用检查点保存）。
+// Python: checkpoint_dir, None 表示禁用。
+func WithCheckpointDir(dir string) TrainerOption {
+	return func(t *Trainer) { t.checkpointDir = dir }
+}
+
+// WithCheckpointEveryNEpochs 设置每 N 个 epoch 保存一次检查点。
+// Python: checkpoint_every_n_epochs, 默认 1。
+func WithCheckpointEveryNEpochs(n int) TrainerOption {
+	return func(t *Trainer) { t.checkpointEveryNEpochs = n }
+}
+
+// WithCheckpointOnImprove 设置验证分数提升时是否保存检查点。
+// Python: checkpoint_on_improve, 默认 true。
+func WithCheckpointOnImprove(b bool) TrainerOption {
+	return func(t *Trainer) { t.checkpointOnImprove = b }
+}
+
+// WithResumeFrom 设置恢复检查点路径。
+// Python: resume_from
+func WithResumeFrom(path string) TrainerOption {
+	return func(t *Trainer) { t.resumeFrom = path }
+}
+
+// WithCheckpointManager 设置检查点管理器。
+// Python: checkpoint_manager
+func WithCheckpointManager(manager checkpointing.CheckpointManager) TrainerOption {
+	return func(t *Trainer) { t.checkpointManager = manager }
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// meanScore 计算评估用例的平均分数。
+// Python: Trainer._mean_score(evaluated)
+func meanScore(cases []*dataset.EvaluatedCase) float64 {
+	if len(cases) == 0 {
+		return 0
+	}
+	var total float64
+	for _, c := range cases {
+		total += c.GetScore()
+	}
+	return total / float64(len(cases))
+}
+
+// normalizeUpdates 将 Updater.Update 返回的 map[schema.UpdateKey]any 转为 map[schema.UpdateKey]schema.UpdateValue。
+// Python: updated 是 Updates (Dict[Tuple[str,str], UpdateValue]) 类型
+func normalizeUpdates(updated map[schema.UpdateKey]any) map[schema.UpdateKey]schema.UpdateValue {
+	if updated == nil {
+		return nil
+	}
+	result := make(map[schema.UpdateKey]schema.UpdateValue, len(updated))
+	for key, value := range updated {
+		if uv, ok := value.(schema.UpdateValue); ok {
+			result[key] = uv
+		} else {
+			// 简单值包装为 UpdateValue
+			result[key] = schema.NormalizeUpdateValue(value, key.Target())
+		}
+	}
+	return result
+}
+
+// fireCallback 安全调用 TrainCallbackFunc（含评估信息）。
+// 回调为 nil 时跳过。
+func fireCallback(cb TrainCallbackFunc, agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+	if cb != nil {
+		cb(agent, progress, evalInfo)
+	}
+}
+
+// fireEpochBeginCallback 安全调用 TrainEpochBeginFunc（无评估信息）。
+// 回调为 nil 时跳过。
+func fireEpochBeginCallback(cb TrainEpochBeginFunc, agent evolving.TrainableAgent, progress *Progress) {
+	if cb != nil {
+		cb(agent, progress)
+	}
+}

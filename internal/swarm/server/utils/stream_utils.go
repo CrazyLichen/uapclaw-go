@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
@@ -706,7 +706,7 @@ func SerializeValue(value any) any {
 // 在写独立 `__interaction__` chunk 之后，又把同一个 chunk 放进
 // `WorkflowOutput.result`，随 `ControllerOutputPayload.data=[JsonDataFrame(...)]`
 // 一起作为 task_interaction 事件携带；适配器因此需要从信封里把它挖出来。
-// Go 现状：`application/workflow_agent` 层尚未移植（internal/agentcore/workflow 仅
+// Go 现状：`application/workflow_agent` 层尚未移植（internal/openjiuwen/core/workflow 仅
 // base.go），故当前没有生产者会产出信封形态；本函数保留为移植后的对齐点，
 // 届时无需再改消费端。不要当作死代码删除。
 func FindInteractionPayloads(obj any, opts ...FindOption) []any {

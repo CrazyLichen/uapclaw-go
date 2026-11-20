@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	goskills "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
+	goskills "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/skills"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

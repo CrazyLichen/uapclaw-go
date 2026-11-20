@@ -12,10 +12,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/observability"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
 )
 
 // FullCycleSuite fake provider 全周期套件（每个 _test.go 自带 suite.Run，审计硬要求）。

@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/fileguard"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security/fileguard"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"

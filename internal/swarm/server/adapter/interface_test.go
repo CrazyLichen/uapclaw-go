@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

@@ -5,7 +5,7 @@
 package common
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/reasoning"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────

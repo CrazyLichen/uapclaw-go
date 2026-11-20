@@ -2,9 +2,9 @@ package providers
 
 import (
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"

@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"

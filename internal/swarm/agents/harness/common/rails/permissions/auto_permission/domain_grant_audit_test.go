@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

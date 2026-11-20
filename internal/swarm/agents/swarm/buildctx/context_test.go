@@ -3,8 +3,8 @@ package buildctx
 import (
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
 )
 
 // TestSwarmBuildContextToFromSeedRoundtrip 对齐 context.py:196-260，16 键往返；

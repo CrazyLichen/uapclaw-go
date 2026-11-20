@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 )
 
 // ──────────────────────────── 非导出函数（测试辅助） ────────────────────────────

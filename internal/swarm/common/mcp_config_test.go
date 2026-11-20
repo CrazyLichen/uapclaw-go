@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp/types"
 )
 
 // fakeCredentialStore 测试用的凭据存储桩（mcp_credential 域实现形态）。

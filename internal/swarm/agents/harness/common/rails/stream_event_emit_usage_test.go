@@ -3,8 +3,8 @@ package rails
 import (
 	"testing"
 
-	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/usage"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

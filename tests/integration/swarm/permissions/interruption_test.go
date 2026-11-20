@@ -27,11 +27,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	streamrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"

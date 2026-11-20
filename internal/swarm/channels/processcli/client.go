@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/interfaces"
 
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"

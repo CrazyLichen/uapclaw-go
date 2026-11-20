@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 )
 
 // ──────────────────────────── 非导出函数测试 ────────────────────────────

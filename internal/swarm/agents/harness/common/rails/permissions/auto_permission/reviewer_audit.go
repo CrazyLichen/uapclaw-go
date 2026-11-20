@@ -28,7 +28,7 @@ package auto_permission
 import (
 	"encoding/json"
 
-	hsecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	hsecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

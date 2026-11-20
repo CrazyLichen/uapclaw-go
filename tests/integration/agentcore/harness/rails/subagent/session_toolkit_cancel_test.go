@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/modules"
+	hsubagent "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/subagent"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

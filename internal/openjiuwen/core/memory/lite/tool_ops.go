@@ -1,0 +1,372 @@
+package lite
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/result"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// dailyMemoryPattern 日期文件名正则。对齐 Python: re.match(r"^\d{4}-\d{2}-\d{2}\.md$", basename)
+var dailyMemoryPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\.md$`)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ValidateMemoryPath 验证路径在 memory 目录内。对齐 Python validate_memory_path
+func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
+	if ws == nil {
+		return false, "工作空间未初始化"
+	}
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return false, "路径无效：不允许目录遍历"
+	}
+	basename := filepath.Base(path)
+	memoryDir := ""
+	if nodePath := ws.GetNodePath("memory"); nodePath != nil {
+		memoryDir = *nodePath
+	}
+	var resolvedPath string
+	switch {
+	case basename == "USER.md":
+		if userPath := ws.GetNodePath("USER.md"); userPath != nil {
+			resolvedPath = *userPath
+		}
+	case basename == "MEMORY.md":
+		memoryRel := ws.GetDirectory("MEMORY.md")
+		if memoryDir != "" && memoryRel != "" {
+			resolvedPath = filepath.Join(memoryDir, memoryRel)
+		}
+	case dailyMemoryPattern.MatchString(basename):
+		dailyRel := ws.GetDirectory("daily_memory")
+		if memoryDir != "" && dailyRel != "" {
+			resolvedPath = filepath.Join(memoryDir, dailyRel, basename)
+		}
+	default:
+		if memoryDir != "" {
+			resolvedPath = filepath.Join(memoryDir, basename)
+		}
+	}
+	if resolvedPath == "" {
+		return false, fmt.Sprintf("无法解析路径: %s", path)
+	}
+	return true, resolvedPath
+}
+
+// MemorySearchWithContext 语义搜索记忆。对齐 Python memory_search_with_context
+func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, query string, maxResults *int, minScore *float64, sessionKey string) *MemorySearchResult {
+	if toolCtx == nil {
+		return newDisabledSearchResult("记忆管理器不可用")
+	}
+	if !toolCtx.EnsureManager() {
+		return newDisabledSearchResult("记忆管理器不可用")
+	}
+	if toolCtx.Manager == nil {
+		return newDisabledSearchResult("记忆管理器未初始化")
+	}
+	opts := SearchOpts{}
+	if maxResults != nil {
+		opts.MaxResults = *maxResults
+	}
+	if minScore != nil {
+		opts.MinScore = *minScore
+	}
+	if sessionKey != "" {
+		opts.SessionKey = sessionKey
+	}
+	results, err := toolCtx.Manager.Search(ctx, query, opts)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("memory search failed")
+		return newDisabledSearchResult(err.Error())
+	}
+	// Python 侧 results 恒为 list（无命中是 []）；Go 的 nil 切片会序列化成
+	// "results": null，前端与模型看到的是 null 而不是空数组。
+	if results == nil {
+		results = []SearchResult{}
+	}
+	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
+	for i := range results {
+		r := &results[i]
+		if r.Path != "" {
+			if r.StartLine == r.EndLine {
+				r.Citation = fmt.Sprintf("%s#L%d", r.Path, r.StartLine)
+			} else {
+				r.Citation = fmt.Sprintf("%s#L%d-L%d", r.Path, r.StartLine, r.EndLine)
+			}
+		}
+	}
+	status := toolCtx.Manager.Status()
+	return &MemorySearchResult{
+		Results:  results,
+		Disabled: false,
+		Provider: status.Provider,
+		Model:    status.Model,
+	}
+}
+
+// MemoryGetWithContext 获取记忆文件内容。对齐 Python memory_get_with_context
+func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, fromLine *int, lines *int) *MemoryGetResult {
+	ws := toolCtx.Workspace
+	if ws == nil {
+		return &MemoryGetResult{Path: path, Disabled: true, Error: "工作空间未初始化"}
+	}
+	isValid, result := ValidateMemoryPath(path, ws)
+	if !isValid {
+		return &MemoryGetResult{Path: path, Disabled: true, Error: result}
+	}
+	resolvedPath := result
+	if !toolCtx.EnsureManager() {
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "记忆管理器不可用"}
+	}
+	if toolCtx.Manager == nil {
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "记忆管理器未初始化"}
+	}
+	rf, err := toolCtx.Manager.ReadFile(ctx, resolvedPath, fromLine, lines)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("memory get failed")
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: err.Error()}
+	}
+	return &MemoryGetResult{
+		Path:     rf.Path,
+		Text:     rf.Text,
+		Disabled: false,
+	}
+}
+
+// ReadMemoryWithContext 读取记忆文件。对齐 Python read_memory_with_context
+func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, offset *int, limit *int) *ReadMemoryResult {
+	ws := toolCtx.Workspace
+	if ws == nil {
+		return &ReadMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
+	}
+	isValid, result := ValidateMemoryPath(path, ws)
+	if !isValid {
+		return &ReadMemoryResult{Success: false, Path: path, Error: result}
+	}
+	fullPath := result
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Error(logComponent).Msg("memory read failed, no available sys_operation interface")
+		return &ReadMemoryResult{Success: false, Path: path, Error: "读取失败，无可用的系统操作接口"}
+	}
+	// Python: 使用 line_range 读取
+	fsOpts := []sysop.FsOption{}
+	if offset != nil {
+		if limit != nil {
+			fsOpts = append(fsOpts, sysop.WithFsLineRange(*offset, *offset+*limit-1))
+		} else {
+			fsOpts = append(fsOpts, sysop.WithFsLineRange(*offset, -1))
+		}
+	}
+	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
+	if err != nil {
+		return &ReadMemoryResult{Success: false, Path: path, Error: err.Error()}
+	}
+	if readResult != nil {
+		if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+			return &ReadMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
+	var content string
+	if readResult != nil && readResult.Data != nil {
+		content = readResult.Data.Content
+	}
+	lineList := strings.Split(content, "\n")
+	body, nTotal, startIdx, endIdx, truncated := viewLines(lineList, offset, limit)
+	return &ReadMemoryResult{
+		Success:    true,
+		Path:       fullPath,
+		Content:    body,
+		TotalLines: nTotal,
+		StartLine:  startIdx + 1,
+		EndLine:    endIdx,
+		Truncated:  truncated,
+	}
+}
+
+// WriteMemoryWithContext 写入/追加记忆文件。对齐 Python write_memory_with_context
+func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, content string, appendMode bool) *WriteMemoryResult {
+	ws := toolCtx.Workspace
+	if ws == nil {
+		return &WriteMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
+	}
+	isValid, result := ValidateMemoryPath(path, ws)
+	if !isValid {
+		return &WriteMemoryResult{Success: false, Path: path, Error: result}
+	}
+	resolvedPath := result
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Error(logComponent).Msg("memory write failed, no available sys_operation interface")
+		return &WriteMemoryResult{Success: false, Path: path, Error: "记忆写入失败，无可用的系统操作接口"}
+	}
+	fsOpts := []sysop.FsOption{
+		sysop.WithFsCreateIfNotExist(true),
+		sysop.WithFsAppend(appendMode),
+	}
+	if appendMode {
+		prepend := true
+		fsOpts = append(fsOpts, sysop.WithFsPrependNewline(prepend))
+	}
+	writeResult, err := sysOp.Fs().WriteFile(ctx, resolvedPath, content, fsOpts...)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("write failed")
+		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
+	}
+	if writeResult != nil {
+		if fsErr := fsResultError(writeResult.BaseResult, "写入记忆文件", resolvedPath); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Str("path", resolvedPath).Msg("write failed")
+			return &WriteMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
+	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
+	action := "写入"
+	if appendMode {
+		action = "追加到"
+	}
+	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("memory file written")
+	return &WriteMemoryResult{
+		Success:     true,
+		Path:        resolvedPath,
+		FullPath:    resolvedPath,
+		Appended:    appendMode,
+		FileExisted: fileExisted,
+	}
+}
+
+// EditMemoryWithContext 编辑记忆文件。对齐 Python edit_memory_with_context
+func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, oldText string, newText string) *EditMemoryResult {
+	ws := toolCtx.Workspace
+	if ws == nil {
+		return &EditMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
+	}
+	isValid, result := ValidateMemoryPath(path, ws)
+	if !isValid {
+		return &EditMemoryResult{Success: false, Path: path, Error: result}
+	}
+	resolvedPath := result
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		logger.Error(logComponent).Msg("edit failed, no available sys_operation interface")
+		return &EditMemoryResult{Success: false, Path: path, Error: "编辑失败，无可用的系统操作接口"}
+	}
+	readResult, err := sysOp.Fs().ReadFile(ctx, resolvedPath)
+	if err != nil || readResult == nil || readResult.Data == nil {
+		return &EditMemoryResult{Success: false, Path: path, Error: fmt.Sprintf("读取文件失败: %s", path)}
+	}
+	if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", resolvedPath); fsErr != nil {
+		return &EditMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+	}
+	content := readResult.Data.Content
+	if !strings.Contains(content, oldText) {
+		return &EditMemoryResult{
+			Success: false,
+			Path:    path,
+			Error:   "未在文件中找到 old_text。请使用 read_memory 工具检查确切内容。",
+		}
+	}
+	occurrences := strings.Count(content, oldText)
+	if occurrences > 1 {
+		return &EditMemoryResult{
+			Success: false,
+			Path:    path,
+			Error:   fmt.Sprintf("old_text appears %d times in file. Be more specific.", occurrences),
+		}
+	}
+	newContent := strings.Replace(content, oldText, newText, 1)
+	editWrite, err := sysOp.Fs().WriteFile(ctx, resolvedPath, newContent,
+		sysop.WithFsCreateIfNotExist(true),
+		sysop.WithFsPrependNewline(false),
+		sysop.WithFsAppendNewline(false),
+	)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("edit write failed")
+		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
+	}
+	if editWrite != nil {
+		if fsErr := fsResultError(editWrite.BaseResult, "写入记忆文件", resolvedPath); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Str("path", resolvedPath).Msg("edit write failed")
+			return &EditMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
+	logger.Info(logComponent).Str("path", resolvedPath).Msg("file edited")
+	return &EditMemoryResult{
+		Success:  true,
+		Path:     resolvedPath,
+		Replaced: oldText,
+		NewText:  newText,
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newDisabledSearchResult 构造「记忆检索不可用」结果。
+// Python 对应分支返回 {"results": [], "disabled": True, "error": ...}，
+// 这里显式给空切片，避免 nil 切片被序列化成 null。
+func newDisabledSearchResult(errMsg string) *MemorySearchResult {
+	return &MemorySearchResult{
+		Results:  []SearchResult{},
+		Disabled: true,
+		Error:    errMsg,
+	}
+}
+
+// fsResultError 将 sys_operation 的失败结果转为 error。
+// sys_operation 的失败以 BaseResult.Code != 0 表达、err 恒为 nil（对齐 Python
+// 返回 error result 而非 raise）。Python 的 memory 工具靠解引用 result.data
+// 触发异常走 except 分支，Go 侧判空后会静默成功——必须显式检查 Code，
+// 否则沙箱拒绝（如路径在 sandbox 之外）会以 success=true 返回给模型，
+// 表现为「写入假成功、读取恒为空」。
+func fsResultError(base result.BaseResult, action, path string) error {
+	if base.Code == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s失败(code=%d): %s: %s", action, base.Code, path, base.Message)
+}
+
+// lineRangeToFsRead 映射 offset/limit 到 FsOperation 的 LineRange。对齐 Python _line_range_to_fs_read
+func lineRangeToFsRead(firstLine *int, lineCap *int) *[2]int {
+	if firstLine == nil {
+		return nil
+	}
+	if lineCap != nil {
+		return &[2]int{*firstLine, *firstLine + *lineCap - 1}
+	}
+	return &[2]int{*firstLine, -1}
+}
+
+// viewLines 行视图切片。对齐 Python _view_lines
+// firstLine 是 1-based；返回 (excerpt, total, start_idx, end_idx, truncated)
+func viewLines(allLines []string, firstLine *int, lineCap *int) (string, int, int, int, bool) {
+	total := len(allLines)
+	startIdx := 0
+	if firstLine != nil {
+		startIdx = *firstLine - 1
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	}
+	endIdx := total
+	if lineCap != nil {
+		endIdx = startIdx + *lineCap
+		if endIdx > total {
+			endIdx = total
+		}
+	}
+	if startIdx > total {
+		startIdx = total
+	}
+	if endIdx > total {
+		endIdx = total
+	}
+	text := strings.Join(allLines[startIdx:endIdx], "\n")
+	truncated := lineCap != nil && endIdx < total
+	return text, total, startIdx, endIdx, truncated
+}

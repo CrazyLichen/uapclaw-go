@@ -5,12 +5,12 @@ import (
 	"reflect"
 	"testing"
 
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 

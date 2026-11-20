@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

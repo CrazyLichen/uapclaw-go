@@ -1,0 +1,347 @@
+package config
+
+import (
+	"fmt"
+
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ReActAgentConfig ReAct Agent 配置，聚合模型、上下文、提示词等子配置。
+// Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
+type ReActAgentConfig struct {
+	// MemScopeIDVal 内存作用域标识
+	MemScopeIDVal string `json:"mem_scope_id"`
+	// ModelNameVal 模型名称
+	ModelNameVal string `json:"model_name"`
+	// ModelProvider 模型提供商
+	ModelProvider string `json:"model_provider"`
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// APIBase API 基础 URL
+	APIBase string `json:"api_base"`
+	// CustomHeaders 自定义请求头
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"`
+	// PromptTemplateName 提示词模板名称
+	PromptTemplateName string `json:"prompt_template_name"`
+	// PromptTemplate 提示词模板列表
+	PromptTemplate []map[string]any `json:"prompt_template,omitempty"`
+	// MaxIterations ReAct 循环最大迭代次数
+	MaxIterations int `json:"max_iterations"`
+	// LLMReturnTokenIDs 是否请求 token IDs（RL 用）
+	LLMReturnTokenIDs bool `json:"llm_return_token_ids"`
+	// LLMLogprobs 是否请求 logprobs
+	LLMLogprobs bool `json:"llm_logprobs"`
+	// LLMTopLogprobs top_logprobs 数量 (0-20)
+	LLMTopLogprobs int `json:"llm_top_logprobs"`
+	// ModelClientConfig 模型客户端配置
+	ModelClientConfig *llmschema.ModelClientConfig `json:"model_client_config,omitempty"`
+	// ModelRequestConfig 模型请求配置（对应 Python model_config_obj）
+	ModelRequestConfig *llmschema.ModelRequestConfig `json:"model_config_obj,omitempty"`
+	// SysOperationID 系统操作标识
+	SysOperationID string `json:"sys_operation_id,omitempty"`
+	// ContextEngineConfig 上下文引擎配置
+	ContextEngineConfig ceschema.ContextEngineConfig `json:"context_engine_config,omitempty"`
+	// ContextProcessors 上下文处理器规格列表
+	ContextProcessors []ceiface.ProcessorSpec `json:"context_processors,omitempty"`
+	// Workspace 工作区实例
+	Workspace *hworkspace.Workspace `json:"-"`
+	// ParallelToolCalls 是否并行执行同一批工具调用；nil 表示未配置，按默认 true 处理。
+	// 有状态工具（浏览器动作序列、worktree 切换）被并行调用会打乱动作顺序，
+	// 子代理可通过 SubAgentConfig 单独关闭。
+	// Python: ReActAgentConfig.parallel_tool_calls (react_agent.py:332)
+	ParallelToolCalls *bool `json:"parallel_tool_calls,omitempty"`
+}
+
+// modelClientExtra WithModelClient 复合 Option 的扩展参数容器
+type modelClientExtra struct {
+	// verifySSL 是否验证 SSL 证书
+	verifySSL bool
+	// customHeaders 自定义请求头
+	customHeaders map[string]string
+}
+
+// ReActAgentConfigOption ReActAgentConfig 构造选项函数
+type ReActAgentConfigOption func(*ReActAgentConfig)
+
+// ModelClientExtraOption WithModelClient 复合 Option 的扩展参数函数
+type ModelClientExtraOption func(*modelClientExtra)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期接口检查：ReActAgentConfig 必须实现 AgentConfig 接口
+// _ 编译时验证 ReActAgentConfig 满足 AgentConfig 接口
+var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewReActAgentConfig 创建 ReActAgentConfig 实例，所有字段使用默认值。
+// 默认值：
+//   - ModelProvider: "openai"（模型提供者）
+//   - MaxIterations: 5（最大迭代次数）
+//   - LLMTopLogprobs: 1（LLM 返回 top logprobs 数量）
+//   - ContextEngineConfig: ceschema.NewContextEngineConfig() 并设置 MaxContextMessageNum=200, DefaultWindowRoundNum=10
+//
+// Python: ReActAgentConfig()
+func NewReActAgentConfig(opts ...ReActAgentConfigOption) *ReActAgentConfig {
+	defaultCECfg := ceschema.NewContextEngineConfig()
+	defaultCECfg.MaxContextMessageNum = 200
+	defaultCECfg.DefaultWindowRoundNum = 10
+
+	cfg := &ReActAgentConfig{
+		ModelProvider:       "openai",
+		MaxIterations:       5,
+		LLMTopLogprobs:      1,
+		ContextEngineConfig: defaultCECfg,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
+
+// WithMemScopeID 设置内存作用域标识
+func WithMemScopeID(id string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.MemScopeIDVal = id }
+}
+
+// WithModelName 设置模型名称
+func WithModelName(name string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ModelNameVal = name }
+}
+
+// WithModelProvider 设置模型提供商
+func WithModelProvider(provider string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ModelProvider = provider }
+}
+
+// WithAPIKey 设置 API 密钥
+func WithAPIKey(key string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.APIKey = key }
+}
+
+// WithAPIBase 设置 API 基础 URL
+func WithAPIBase(base string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.APIBase = base }
+}
+
+// WithCustomHeaders 设置自定义请求头
+func WithCustomHeaders(headers map[string]string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.CustomHeaders = headers }
+}
+
+// WithPromptTemplateName 设置提示词模板名称
+func WithPromptTemplateName(name string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.PromptTemplateName = name }
+}
+
+// WithPromptTemplate 设置提示词模板列表
+func WithPromptTemplate(template []map[string]any) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.PromptTemplate = template }
+}
+
+// WithMaxIterations 设置 ReAct 循环最大迭代次数
+func WithMaxIterations(n int) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.MaxIterations = n }
+}
+
+// WithLLMReturnTokenIDs 设置是否请求 token IDs
+func WithLLMReturnTokenIDs(b bool) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.LLMReturnTokenIDs = b }
+}
+
+// WithLLMLogprobs 设置是否请求 logprobs
+func WithLLMLogprobs(b bool) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.LLMLogprobs = b }
+}
+
+// WithLLMTopLogprobs 设置 top_logprobs 数量
+func WithLLMTopLogprobs(n int) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.LLMTopLogprobs = n }
+}
+
+// WithModelClientConfig 设置模型客户端配置
+func WithModelClientConfig(cfg *llmschema.ModelClientConfig) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ModelClientConfig = cfg }
+}
+
+// WithModelRequestConfig 设置模型请求配置
+func WithModelRequestConfig(cfg *llmschema.ModelRequestConfig) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ModelRequestConfig = cfg }
+}
+
+// WithSysOperationID 设置系统操作标识
+func WithSysOperationID(id string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.SysOperationID = id }
+}
+
+// WithContextEngineConfig 设置上下文引擎配置
+func WithContextEngineConfig(cfg ceschema.ContextEngineConfig) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ContextEngineConfig = cfg }
+}
+
+// WithContextProcessors 设置上下文处理器规格列表
+func WithContextProcessors(procs []ceiface.ProcessorSpec) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.ContextProcessors = procs }
+}
+
+// WithWorkspace 设置工作区实例
+func WithWorkspace(ws *hworkspace.Workspace) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) { c.Workspace = ws }
+}
+
+// WithModelClient 设置模型客户端（复合 Option）。
+// 同时设置 ModelProvider/APIKey/APIBase/ModelName，
+// 并创建 ModelClientConfig + ModelRequestConfig。
+// Python: ReActAgentConfig.configure_model_client()
+func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelClientExtraOption) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) {
+		c.ModelProvider = provider
+		c.APIKey = apiKey
+		c.APIBase = apiBase
+		c.ModelNameVal = modelName
+
+		// 构建扩展参数（verifySSL 默认 false，对齐 Python configure_model_client(verify_ssl=False)）
+		extra := &modelClientExtra{verifySSL: false}
+		for _, opt := range opts {
+			opt(extra)
+		}
+
+		// 创建 ModelClientConfig（构造函数自动调用 Validate）
+		clientCfg, cfgErr := llmschema.NewModelClientConfig(
+			provider, apiKey, apiBase,
+			llmschema.WithVerifySSL(extra.verifySSL),
+		)
+		if cfgErr != nil {
+			// 配置无效时不设置 ModelClientConfig，后续使用时应检查 nil
+			c.ModelClientConfig = nil
+			return
+		}
+		c.ModelClientConfig = clientCfg
+		// 优先 extra.customHeaders，回退 c.CustomHeaders（对齐 Python configure_model_client 传递 self.custom_headers）
+		if len(extra.customHeaders) > 0 {
+			c.ModelClientConfig.CustomHeaders = extra.customHeaders
+		} else if len(c.CustomHeaders) > 0 {
+			c.ModelClientConfig.CustomHeaders = c.CustomHeaders
+		}
+
+		// 创建或更新 ModelRequestConfig（对齐 Python configure_model_client 条件创建 model_config_obj）
+		if c.ModelRequestConfig == nil {
+			c.ModelRequestConfig = llmschema.NewModelRequestConfig(
+				llmschema.WithModelName(modelName),
+			)
+		} else {
+			c.ModelRequestConfig.ModelName = modelName
+		}
+	}
+}
+
+// WithModelProviderDetails 设置模型提供商详情（复合 Option）。
+// 同时设置 ModelProvider/APIKey/APIBase，不创建子配置。
+// Python: ReActAgentConfig.configure_model_provider()
+func WithModelProviderDetails(provider, apiKey, apiBase string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) {
+		c.ModelProvider = provider
+		c.APIKey = apiKey
+		c.APIBase = apiBase
+	}
+}
+
+// WithContextEngine 构建并设置上下文引擎配置（复合 Option）。
+// Python: ReActAgentConfig.configure_context_engine()
+func WithContextEngine(maxMsgNum, windowRoundNum int, enableReload, enableKVCacheRelease bool) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) {
+		c.ContextEngineConfig = ceschema.ContextEngineConfig{
+			MaxContextMessageNum:     maxMsgNum,
+			DefaultWindowRoundNum:    windowRoundNum,
+			EnableReload:             enableReload,
+			EnableKVCacheRelease:     enableKVCacheRelease,
+			ModelContextWindowTokens: make(map[string]int),
+		}
+	}
+}
+
+// WithCustomHeadersSync 设置自定义请求头并同步到已有 ModelClientConfig（复合 Option）。
+// Python: ReActAgentConfig.configure_custom_headers()
+func WithCustomHeadersSync(headers map[string]string) ReActAgentConfigOption {
+	return func(c *ReActAgentConfig) {
+		c.CustomHeaders = headers
+		if c.ModelClientConfig != nil {
+			c.ModelClientConfig.CustomHeaders = headers
+		}
+	}
+}
+
+// WithVerifySSL 设置是否验证 SSL 证书（ModelClientExtraOption）
+func WithVerifySSL(verify bool) ModelClientExtraOption {
+	return func(e *modelClientExtra) { e.verifySSL = verify }
+}
+
+// WithExtraCustomHeaders 设置扩展自定义请求头（ModelClientExtraOption）
+func WithExtraCustomHeaders(headers map[string]string) ModelClientExtraOption {
+	return func(e *modelClientExtra) { e.customHeaders = headers }
+}
+
+// ModelName 返回模型名称（实现 AgentConfig 接口）
+func (c *ReActAgentConfig) ModelName() string {
+	return c.ModelNameVal
+}
+
+// MemScopeID 返回内存作用域标识（实现 AgentConfig 接口）
+func (c *ReActAgentConfig) MemScopeID() string {
+	return c.MemScopeIDVal
+}
+
+// GetContextEngineConfig 返回上下文引擎配置（实现 AgentConfig 接口）
+func (c *ReActAgentConfig) GetContextEngineConfig() ceschema.ContextEngineConfig {
+	return c.ContextEngineConfig
+}
+
+// GetModelClientConfig 返回模型客户端配置（实现 AgentConfig 接口，可能为 nil）
+func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
+	return c.ModelClientConfig
+}
+
+// Validate 校验 ReActAgentConfig 的字段合法性。
+// 校验规则：
+//   - ModelNameVal 非空
+//   - MaxIterations > 0（最大迭代次数须大于 0）
+//   - LLMTopLogprobs 范围 [0, 20]
+//   - 子配置非 nil 时递归校验
+func (c *ReActAgentConfig) Validate() error {
+	if c.ModelNameVal == "" {
+		return fmt.Errorf("model_name 不能为空")
+	}
+	if c.MaxIterations <= 0 {
+		return fmt.Errorf("max_iterations 必须 > 0，当前值: %d", c.MaxIterations)
+	}
+	if c.LLMTopLogprobs < 0 || c.LLMTopLogprobs > 20 {
+		return fmt.Errorf("llm_top_logprobs 范围 [0, 20]，当前值: %d", c.LLMTopLogprobs)
+	}
+	if c.ModelClientConfig != nil {
+		if err := c.ModelClientConfig.Validate(); err != nil {
+			return fmt.Errorf("model_client_config 校验失败: %w", err)
+		}
+	}
+	// ContextEngineConfig 递归校验
+	if err := c.ContextEngineConfig.Validate(); err != nil {
+		return fmt.Errorf("context_engine_config 校验失败: %w", err)
+	}
+	return nil
+}
+
+// ParallelToolCallsOrDefault 返回是否并行执行工具调用，未配置时为 true。
+// 用指针而非 bool 是为了区分"未配置"与"显式 false"：
+// bool 零值是 false，直接使用会让未配置的配置项变成串行，与上游默认相反。
+// Python: ReActAgentConfig.parallel_tool_calls default=True
+func (c *ReActAgentConfig) ParallelToolCallsOrDefault() bool {
+	if c == nil || c.ParallelToolCalls == nil {
+		return true
+	}
+	return *c.ParallelToolCalls
+}

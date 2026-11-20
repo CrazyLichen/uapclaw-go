@@ -5,21 +5,21 @@ package context_engine
 import (
 	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/context"
+	iface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/processor/compressor"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/processor/offloader"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/token"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 

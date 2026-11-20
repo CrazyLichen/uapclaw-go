@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/vector"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -165,7 +165,7 @@ func (s *ChromaSuite) TestChromaDoc_包引用验证() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTestSchema 创建测试用的向量集合 schema
-// 原位置：internal/agentcore/foundation/store/vector/milvus_test.go:createTestSchema()
+// 原位置：internal/openjiuwen/core/foundation/store/vector/milvus_test.go:createTestSchema()
 func newTestSchema() *vector.CollectionSchema {
 	pk, _ := vector.NewFieldSchema("id", vector.VectorDataTypeVarchar, vector.WithPrimary())
 	vec, _ := vector.NewFieldSchema("embedding", vector.VectorDataTypeFloatVector, vector.WithDim(3))

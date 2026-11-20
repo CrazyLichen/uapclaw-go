@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/cwd"
 )
 
 // cwdWithWorkspace 构造绑定了 workspace 的 ctx（测试辅助）。

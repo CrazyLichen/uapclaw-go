@@ -1,0 +1,322 @@
+package interaction
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// MemberExistsCheck 成员存在性检查函数类型。
+// Python: MemberExistsCheck = Callable[[str], Awaitable[bool]]
+//
+// 每个调用方决定查询来源——通常是闭包包裹
+// TeamBackend.get_member（或任何将名称映射到花名册行的等价物）。
+// M-27: 加 ctx 首参——Python 侧查询走 async 上下文，Go 侧 ctx 由调用方传播。
+type MemberExistsCheck func(ctx context.Context, name string) (bool, error)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// mentionRe @target body 正则
+	// Python: _MENTION_RE = re.compile(r"^@(\S+)\s+([\s\S]+)$")
+	mentionRe = regexp.MustCompile(`^@(\S+)\s+([\s\S]+)$`)
+	// humanAgentPrefixRe $name 前缀宽松正则
+	// Python: _HUMAN_AGENT_PREFIX_RE = re.compile(r"^\$([^\s@]+)(?:\s+|(?=@))([\s\S]*)$")
+	// Go 正则不支持 lookahead (?=@)，改用宽松正则匹配 $name + 剩余文本，
+	// 然后在 ParseInteractStr 中手动验证剩余文本首字符符合 \s+|(?=@) 语义。
+	// 这样 @ 字符保留在 rest 中，后续 recipientRe 循环能正确提取接收者。
+	humanAgentPrefixRe = regexp.MustCompile(`^\$([^\s@]+)([\s\S]*)$`)
+	// recipientRe @name 后续匹配正则
+	// Python: _RECIPIENT_RE = re.compile(r"^@(\S+)\s+")
+	recipientRe = regexp.MustCompile(`^@(\S+)\s+`)
+	// BroadcastTargets 广播目标集合
+	// Python: BROADCAST_TARGETS = frozenset({"all", "*"})
+	BroadcastTargets = map[string]bool{"all": true, "*": true}
+	// logComponent 日志组件
+	logComponent = logger.ComponentTeam
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ParseInteractStr 将自由文本解析为 InteractPayload 列表。
+// Python: parse_interact_str(body) (openjiuwen/agent_teams/interaction/router.py)
+//
+// 语法规则：
+//
+//	input := channel? recipients? body
+//	channel := "# " | "$" name (" " | "@")    // 默认 "# "
+//	recipients := ("@" name " ")*
+//	body := <remaining text>
+//
+// 产出的载荷列表：
+//   - 空/纯空格输入 → 空列表
+//   - GodViewMessage — `# body`（无 @recipient），或裸文本
+//   - HumanAgentMessage — `$name body`（无 recipient），驱动 avatar
+//   - OperatorMessage(target=nil) — `# @all/@* body`，广播
+//   - HumanAgentMessage(target="*") — `$name @all/@* body`，广播
+//   - []OperatorMessage — `# @m1 @m2 body`，每个 recipient 一个
+//   - []HumanAgentMessage — `$name @m1 @m2 body`，每个 recipient 一个
+func ParseInteractStr(body string) []InteractPayload {
+	// Python: if not body or not body.strip(): return []
+	if body == "" {
+		return nil
+	}
+	allSpace := true
+	for _, r := range body {
+		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+			allSpace = false
+			break
+		}
+	}
+	if allSpace {
+		return nil
+	}
+
+	rest := body
+	sender := agentteams.UserPseudoMemberName
+	isHumanAgent := false
+
+	// ---- 通道前缀 ----
+	// Python: if rest.startswith(_GOD_VIEW_PREFIX):
+	if len(rest) >= 2 && rest[:2] == "# " {
+		rest = rest[2:]
+		rest = trimLeadingSpaces(rest)
+	} else {
+		// Python: match = _HUMAN_AGENT_PREFIX_RE.match(rest)
+		// Go 不支持 lookahead (?=@)，用宽松正则 + 手动验证
+		match := humanAgentPrefixRe.FindStringSubmatch(rest)
+		if match != nil {
+			after := match[2]
+			// Python: (?:\s+|(?=@)) 语义：
+			// after 为空 → $name 无后续，不符合（需 \s+ 或 @）
+			// after[0] 为空白 → 匹配 \s+ 分支
+			// after[0] 为 '@' → 匹配 (?=@) 分支，@ 不消耗，保留在 rest 中
+			if len(after) > 0 && (after[0] == ' ' || after[0] == '\t' || after[0] == '\n' || after[0] == '\r' || after[0] == '@') {
+				sender = match[1]
+				rest = after
+				rest = trimLeadingSpaces(rest)
+				isHumanAgent = true
+			}
+			// else: $name 后无空格也无 @，回退到 god-view，rest 保持完整
+		}
+		// else: 无 $ 前缀 → 视为 "# " 默认；rest 保持完整
+	}
+
+	// ---- 接收者 ----
+	// Python: while True: match = _RECIPIENT_RE.match(rest); if match is None: break
+	var recipients []string
+	for {
+		match := recipientRe.FindStringSubmatch(rest)
+		if match == nil {
+			break
+		}
+		recipients = append(recipients, match[1])
+		rest = rest[len(match[0]):]
+	}
+
+	finalBody := rest
+
+	// ---- 载荷合成 ----
+	// Python: if not recipients:
+	if len(recipients) == 0 {
+		if isHumanAgent {
+			// Python: return [HumanAgentMessage(body=final_body, sender=sender)]
+			return []InteractPayload{NewHumanAgentMessage(finalBody, sender, nil)}
+		}
+		// Python: return [GodViewMessage(body=final_body)]
+		return []InteractPayload{NewGodViewMessage(finalBody)}
+	}
+
+	// Python: has_broadcast = any(r in BROADCAST_TARGETS for r in recipients)
+	hasBroadcast := false
+	for _, r := range recipients {
+		if BroadcastTargets[r] {
+			hasBroadcast = true
+			break
+		}
+	}
+
+	if hasBroadcast {
+		// Python: 广播覆盖所有其他命名接收者
+		if isHumanAgent {
+			// Python: return [HumanAgentMessage(body=final_body, sender=sender, target="*")]
+			broadcastTarget := "*"
+			return []InteractPayload{NewHumanAgentMessage(finalBody, sender, &broadcastTarget)}
+		}
+		// Python: return [OperatorMessage(body=final_body)]
+		return []InteractPayload{NewOperatorMessage(finalBody, nil)}
+	}
+
+	if isHumanAgent {
+		// Python: return [HumanAgentMessage(body=final_body, sender=sender, target=name) for name in recipients]
+		result := make([]InteractPayload, len(recipients))
+		for i, name := range recipients {
+			target := name
+			result[i] = NewHumanAgentMessage(finalBody, sender, &target)
+		}
+		return result
+	}
+	// Python: return [OperatorMessage(body=final_body, target=name) for name in recipients]
+	result := make([]InteractPayload, len(recipients))
+	for i, name := range recipients {
+		target := name
+		result[i] = NewOperatorMessage(finalBody, &target)
+	}
+	return result
+}
+
+// ParseMention 解析单个 @target body。
+// Python: parse_mention(content) (openjiuwen/agent_teams/interaction/router.py)
+// 返回 (target, body, true) 匹配成功；("","",false) 无匹配。
+func ParseMention(content string) (target string, body string, ok bool) {
+	if content == "" {
+		return "", "", false
+	}
+	match := mentionRe.FindStringSubmatch(content)
+	if match == nil {
+		return "", "", false
+	}
+	return match[1], match[2], true
+}
+
+// IsReservedName 检查是否为运行时保留成员名。
+// Python: is_reserved_name(name) (openjiuwen/agent_teams/interaction/router.py)
+func IsReservedName(name string) bool {
+	return agentteams.ReservedMemberNames[name]
+}
+
+// ResolveTargets 校验 @<member> 接收者是否在花名册中。
+// Python: resolve_targets(payloads, *, member_exists) (openjiuwen/agent_teams/interaction/router.py)
+//
+// 已知接收者保留原载荷；未知接收者的 @提及折回到一条无提及消息；
+// God View / Avatar 驱动 / 广播载荷不携带命名目标，直接透传。
+// M-27: 加 ctx 首参透传到 memberExists。
+func ResolveTargets(ctx context.Context, payloads []InteractPayload, memberExists MemberExistsCheck) ([]InteractPayload, error) {
+	var unknown []InteractPayload
+	var kept []InteractPayload
+
+	for _, p := range payloads {
+		name := namedTarget(p)
+		if name == nil {
+			kept = append(kept, p)
+			continue
+		}
+		exists, err := memberExists(ctx, *name)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			kept = append(kept, p)
+		} else {
+			unknown = append(unknown, p)
+		}
+	}
+
+	// Python: if not unknown: return payloads
+	if len(unknown) == 0 {
+		return payloads, nil
+	}
+	// Python: return kept + [_fold_unknown_mentions(unknown)]
+	return append(kept, foldUnknownMentions(unknown)), nil
+}
+
+// DeliverDirect 验证 target 并发送点对点消息。
+// Python: deliver_direct(body, *, sender, target, message_manager, member_exists)
+func DeliverDirect(ctx context.Context, body string, sender string, target string, messageManager *tools.TeamMessageManager, memberExists MemberExistsCheck) (*DeliverResult, error) {
+	// Python: if not await member_exists(target): return DeliverResult.failure(f"unknown_member:{target}")
+	exists, err := memberExists(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		reason := "unknown_member:" + target
+		return NewDeliverResultFailure(reason), nil
+	}
+	// Python: msg_id = await message_manager.send_message(content=body, to_member_name=target, from_member_name=sender)
+	msgID, err := messageManager.SendMessage(ctx, body, target, sender)
+	if err != nil || msgID == "" {
+		reason := "send_failed:" + target
+		if err != nil {
+			reason += ":" + err.Error()
+		}
+		return NewDeliverResultFailure(reason), nil
+	}
+	logger.Debug(logComponent).Str("sender", sender).Str("target", target).
+		Str("body_len", fmt.Sprintf("%d", len(body))).
+		Msg("point-to-point delivery")
+	return NewDeliverResultSuccess(&msgID), nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// namedTarget 提取载荷中的点对点接收者。
+// Python: _named_target(payload)
+// 返回 nil 表示无命名目标（God View / Avatar 驱动 / 广播）。
+func namedTarget(payload InteractPayload) *string {
+	switch p := payload.(type) {
+	case *OperatorMessage:
+		t := p.Target()
+		if t == nil || BroadcastTargets[*t] {
+			return nil
+		}
+		return t
+	case *HumanAgentMessage:
+		t := p.Target()
+		if t == nil || BroadcastTargets[*t] {
+			return nil
+		}
+		return t
+	default:
+		return nil
+	}
+}
+
+// foldUnknownMentions 折叠未知 @提及到一条无提及消息。
+// Python: _fold_unknown_mentions(unknown)
+//
+// 未知 @<member> 不是路由指令——是用户输入的纯文本。
+// 将这些提及重新附加到共享 body，路由到通道默认受众。
+func foldUnknownMentions(unknown []InteractPayload) InteractPayload {
+	// Python: sample = unknown[0]
+	sample := unknown[0]
+	// Python: mentions = " ".join(f"@{p.target}" for p in unknown)
+	mentions := ""
+	for i, p := range unknown {
+		if i > 0 {
+			mentions += " "
+		}
+		nt := namedTarget(p)
+		if nt != nil {
+			mentions += "@" + *nt
+		}
+	}
+	// Python: general_body = f"{mentions} {sample.body}" if sample.body else mentions
+	generalBody := mentions + " " + sample.Body()
+	if sample.Body() == "" {
+		generalBody = mentions
+	}
+
+	// Python: isinstance(sample, HumanAgentMessage) → HumanAgentMessage; else → GodViewMessage
+	switch s := sample.(type) {
+	case *HumanAgentMessage:
+		return NewHumanAgentMessage(generalBody, s.Sender(), nil)
+	default:
+		return NewGodViewMessage(generalBody)
+	}
+}
+
+// trimLeadingSpaces 去除前导空白。
+func trimLeadingSpaces(s string) string {
+	for i, r := range s {
+		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+			return s[i:]
+		}
+	}
+	return ""
+}

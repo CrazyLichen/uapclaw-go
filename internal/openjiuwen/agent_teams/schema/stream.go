@@ -1,0 +1,68 @@
+package schema
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// TeamOutputSchema 带有来源成员身份和角色的输出流数据。
+// Python: TeamOutputSchema (openjiuwen/agent_teams/schema/stream.py)
+//
+// 继承 OutputSchema 并添加 source_member 和 role 字段，
+// 使团队层消费者能够将每个 chunk 归属到产生它的成员（leader 或 teammate）。
+// 非团队生产者（单 Agent、harness 直接流式）继续产出普通 OutputSchema 实例。
+type TeamOutputSchema struct {
+	// OutputSchema 嵌入标准输出流数据
+	stream.OutputSchema
+	// SourceMember 产生此 chunk 的成员名
+	SourceMember *string `json:"source_member,omitempty"`
+	// Role 产生此 chunk 的成员角色
+	Role *TeamRole `json:"role,omitempty"`
+}
+
+// ChunkObserver 分块观察者回调。
+// Python: ChunkObserver = Callable[[OutputSchema], Awaitable[None]]
+// 每个分块标注来源成员后触发，用于 SpawnManager 将 Teammate chunk 转发到 Leader 的 streamQueue。
+type ChunkObserver func(ctx context.Context, chunk stream.Schema) error
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewTeamOutputSchema 从普通 OutputSchema 构建带标签的团队 chunk。
+// Python: TeamOutputSchema.from_output(base, source_member=..., role=...)
+//
+// 返回新实例指针；原始 base 不会被修改，DeepAgent 内部保留其对象标识。
+func NewTeamOutputSchema(base stream.OutputSchema, sourceMember *string, role *TeamRole) *TeamOutputSchema {
+	return &TeamOutputSchema{
+		OutputSchema: base,
+		SourceMember: sourceMember,
+		Role:         role,
+	}
+}
+
+// SchemaType 实现 stream.Schema 接口。
+func (s *TeamOutputSchema) SchemaType() string { return s.Type }
+
+// Validate 实现 stream.Schema 接口。
+func (s *TeamOutputSchema) Validate() error { return s.OutputSchema.Validate() }
+
+// ToMap 实现 stream.Schema 接口，对应 Python pydantic model_dump()。
+// 继承 OutputSchema 的 type/index/payload 三个字段，
+// 再附加 source_member/role；None 对应 nil（pydantic 默认包含 None 值字段）。
+// Python TeamRole 为 str 枚举，model_dump 输出字符串值。
+func (s *TeamOutputSchema) ToMap() map[string]any {
+	m := s.OutputSchema.ToMap()
+	if s.SourceMember != nil {
+		m["source_member"] = *s.SourceMember
+	} else {
+		m["source_member"] = nil
+	}
+	if s.Role != nil {
+		m["role"] = string(*s.Role)
+	} else {
+		m["role"] = nil
+	}
+	return m
+}

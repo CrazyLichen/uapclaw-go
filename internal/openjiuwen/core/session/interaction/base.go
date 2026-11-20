@@ -1,0 +1,196 @@
+package interaction
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// 图级中断 GraphInterrupt 已于 8.7 迁入 graph/pregel（单一来源），本包只保留
+// Agent 级中断 AgentInterrupt。
+
+// AgentInterrupt Agent 中断异常，通过 panic 传播。
+// Python: openjiuwen/core/session/interaction/base.py (AgentInterrupt)
+// Message 类型为 any（对齐 Python AgentInterrupt(message) 不限制参数类型）。
+type AgentInterrupt struct {
+	// Message 中断消息（可以是 string、dict 等任意类型，对齐 Python 行为）
+	Message any
+}
+
+// BaseInteraction 交互基类，管理交互输入队列。
+// Python: openjiuwen/core/session/interaction/base.py (BaseInteraction)
+type BaseInteraction struct {
+	// interactiveInputs 交互输入队列
+	interactiveInputs []any
+	// latestInteractiveInput 最近一次交互输入
+	latestInteractiveInput any
+	// idx 当前输入队列消费索引
+	idx int
+	// session 基础会话
+	session interfaces.InnerSession
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+const (
+	// InteractionType 交互事件类型标识
+	// Python: INTERACTION = "__interaction__"
+	InteractionType = "__interaction__"
+	// InteractiveInputKey 交互输入在 session state 中的键
+	// Python: INTERACTIVE_INPUT = "__interactive_input__"
+	InteractiveInputKey = "__interactive_input__"
+)
+
+const logComponent = logger.ComponentChannel
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Error 实现 error 接口，返回中断描述信息。
+// 纪律：与 pregel.GraphInterrupt 同理，任何层禁止用 r.(error) 判定 Agent 中断——
+// 必须断言 r.(*AgentInterrupt)。Python 侧 except 顺序（AgentInterrupt 先于
+// BaseError/Exception）在 Go 只能靠具体类型还原，按 error 兜底会把中断当普通
+// 错误吞掉（见 8.7 spec §7 D3）。
+func (e *AgentInterrupt) Error() string {
+	return fmt.Sprintf("AgentInterrupt: %v", e.Message)
+}
+
+// NewBaseInteraction 创建交互基类实例。
+// defaultInput 为可选的默认输入，会被追加到从 session state 读取的输入队列之后。
+// Python: BaseInteraction.__init__(session, default_input)
+func NewBaseInteraction(session interfaces.InnerSession, defaultInput ...any) *BaseInteraction {
+	bi := &BaseInteraction{
+		session: session,
+	}
+	if len(defaultInput) > 0 && defaultInput[0] != nil {
+		bi.interactiveInputs = []any{defaultInput[0]}
+	}
+	bi.initInteractiveInputs()
+	return bi
+}
+
+// PanicAgentInterrupt 触发 Agent 中断 panic。
+// Python: raise AgentInterrupt(message)
+func PanicAgentInterrupt(msg any) {
+	panic(&AgentInterrupt{Message: msg})
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// initInteractiveInputs 从 session state 读取已有的交互输入，合并到输入队列。
+// Python: BaseInteraction._init_interactive_inputs()
+// Python 中 session.state().get(INTERACTIVE_INPUT) 查询的是 agent_state，
+// Go 侧对应 SessionState.Get()（AgentStateCollection 中委托到 agentState，
+// WorkflowStateCollection 中委托到 compState）。
+func (b *BaseInteraction) initInteractiveInputs() {
+	st := b.session.State()
+	if st == nil {
+		return
+	}
+
+	// 从组件级/agent 级状态读取交互输入（对齐 Python state().get()）
+	existing := st.Get(state.StringKey(InteractiveInputKey))
+
+	if existing == nil {
+		// 无已有输入，仅更新 session state
+		if len(b.interactiveInputs) > 0 {
+			if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+				logger.Error(logComponent).
+					Err(err).
+					Str("action", "init_interactive_inputs").
+					Msg("failed to update interactive inputs to session state")
+			}
+			b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
+		}
+		return
+	}
+	// 已有输入列表
+	if inputList, ok := existing.([]any); ok {
+		if len(b.interactiveInputs) > 0 {
+			// session state 输入在前，defaultInput 在后
+			b.interactiveInputs = append(inputList, b.interactiveInputs...)
+		} else {
+			b.interactiveInputs = inputList
+		}
+	}
+	// 写回 session state
+	if len(b.interactiveInputs) > 0 {
+		if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("action", "init_interactive_inputs").
+				Msg("failed to write back interactive inputs to session state")
+		}
+		b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
+	}
+}
+
+// getNextInteractiveInput 从输入队列获取下一个输入。
+// Python: BaseInteraction._get_next_interactive_input()
+func (b *BaseInteraction) getNextInteractiveInput() any {
+	if b.interactiveInputs != nil && b.idx < len(b.interactiveInputs) {
+		res := b.interactiveInputs[b.idx]
+		b.idx++
+		logger.Info(logComponent).
+			Str("action", "interaction_resume").
+			Int("index", b.idx).
+			Msg("interaction resume: got user input from queue")
+		return res
+	}
+	return nil
+}
+
+// writeInteractionOutput 写入交互输出到流。
+// ✅ 5.10 已回填：StreamWriterManager 类型确定后直接调用
+func writeInteractionOutput(ctx context.Context, session interfaces.InnerSession, outputType string, index int, payload any) error {
+	mgr := session.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetInteractionOutputWriter()
+	if writer == nil {
+		return nil
+	}
+	err := writer.WriteInteraction(ctx, outputType, index, payload)
+	if err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Str("output_type", outputType).
+			Msg("failed to write interaction output to stream")
+	}
+	return err
+}
+
+// commitCMP 提交检查点状态。
+// Python: session.state().commit_cmp()
+// Python 中通过继承链直接调用，Go 中通过类型断言 WorkflowState 获取。
+// 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
+func commitCMP(session interfaces.InnerSession) {
+	st := session.State()
+	if ws, ok := st.(state.WorkflowState); ok {
+		ws.CommitCmp()
+		return
+	}
+	logger.Error(logComponent).
+		Str("action", "commit_cmp").
+		Str("state_type", fmt.Sprintf("%T", st)).
+		Msg("current state does not support CommitCmp, aligning with Python AttributeError")
+	panic(fmt.Sprintf("当前状态 %T 不支持 CommitCmp（未实现 WorkflowState 接口），对齐 Python AttributeError", st))
+}
+
+// getExecutableID 通过类型断言从 session 获取可执行路径 ID。
+// NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
+// 断言失败时记录 Warn 日志并返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
+func getExecutableID(session interfaces.InnerSession) string {
+	if provider, ok := session.(interfaces.ExecutableIDProvider); ok {
+		return provider.ExecutableID()
+	}
+	logger.Warn(logComponent).
+		Str("action", "get_executable_id").
+		Str("session_type", fmt.Sprintf("%T", session)).
+		Msg("session does not satisfy ExecutableIDProvider interface, returning empty string")
+	return ""
+}

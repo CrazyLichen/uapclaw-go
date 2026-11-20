@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/cron"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

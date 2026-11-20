@@ -1,0 +1,21 @@
+package messager
+
+import (
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateMessager 根据 config 构建 Messager 实例。
+// Python: create_messager(config) (openjiuwen/agent_teams/messager/base.py)
+func CreateMessager(config schema.MessagerTransportConfig) (Messager, error) {
+	switch config.Backend {
+	case "inprocess":
+		return NewInProcessMessager(config), nil
+	// ⤵️ 9.65-2: pyzmq 后端
+	default:
+		return nil, fmt.Errorf("不支持的消息传输后端: %s", config.Backend)
+	}
+}

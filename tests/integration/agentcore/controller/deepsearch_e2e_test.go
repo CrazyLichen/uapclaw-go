@@ -5,7 +5,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
 	"strings"
 	"sync"
 	"testing"
@@ -13,12 +13,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/modules"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/controller/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

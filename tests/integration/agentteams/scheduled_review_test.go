@@ -16,13 +16,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/scheduling"
-	ateamprompts "github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/handlers"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/agent/coordination/scheduling"
+	ateamprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/prompts"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools/database"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

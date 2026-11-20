@@ -22,8 +22,8 @@ import (
 	"errors"
 	"reflect"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/tools"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

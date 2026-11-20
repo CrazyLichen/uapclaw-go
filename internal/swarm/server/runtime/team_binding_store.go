@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"

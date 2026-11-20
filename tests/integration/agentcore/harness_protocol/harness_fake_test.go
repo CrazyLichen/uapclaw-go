@@ -11,16 +11,16 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interaction"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // fakeCLIProvider 扮演外部 CLI provider（进程边界角色）。
 //
-// 它实现 internal/agent_teams/harness.HarnessProtocol（L2 契约），
+// 它实现 internal/openjiuwen/agent_teams/harness.HarnessProtocol（L2 契约），
 // 用真实的 *session.Session 作为会话载体，并在「工具执行前」通过 15.3 的
 // HarnessInteractionHandler 向宿主发起 ToolApprovalRequest —— 这正是
 // Python harness_providers/base.py:724-739 _request_interaction 的行为。
@@ -381,7 +381,7 @@ func splitTools(s string) []string {
 }
 
 // newRealSession 用真实 session 子系统创建一个可用的会话。
-// 这条调用是本目录跨子系统的真实证据之一（internal/agentcore/session）。
+// 这条调用是本目录跨子系统的真实证据之一（internal/openjiuwen/core/session）。
 func newRealSession(t *testing.T, sessionID string) *session.Session {
 	t.Helper()
 	sess := session.CreateAgentSession(sessionID, nil, nil)
@@ -395,7 +395,7 @@ func newRealSession(t *testing.T, sessionID string) *session.Session {
 }
 
 // newInteractiveInput 用真实 interaction 子系统构造应答载体。
-// 这是第二个真实子系统的证据（internal/agentcore/session/interaction，
+// 这是第二个真实子系统的证据（internal/openjiuwen/core/session/interaction，
 // 按审计口径归并入 agentcore/session 子系统）。
 func newInteractiveInput(t *testing.T, raw any) *sessioninteraction.InteractiveInput {
 	t.Helper()

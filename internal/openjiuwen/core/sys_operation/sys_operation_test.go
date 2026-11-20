@@ -1,0 +1,599 @@
+package sys_operation
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/result"
+)
+
+// ──────────────────────────── OperationMode 枚举 ────────────────────────────
+
+// TestOperationMode_String 测试操作模式的字符串表示
+func TestOperationMode_String(t *testing.T) {
+	assert.Equal(t, "local", OperationModeLocal.String())
+	assert.Equal(t, "sandbox", OperationModeSandbox.String())
+	assert.Equal(t, "unknown(99)", OperationMode(99).String())
+}
+
+// TestOperationMode_MarshalJSON 测试操作模式的 JSON 序列化
+func TestOperationMode_MarshalJSON(t *testing.T) {
+	data, err := json.Marshal(OperationModeLocal)
+	require.NoError(t, err)
+	assert.JSONEq(t, `"local"`, string(data))
+
+	data, err = json.Marshal(OperationModeSandbox)
+	require.NoError(t, err)
+	assert.JSONEq(t, `"sandbox"`, string(data))
+}
+
+// TestOperationMode_UnmarshalJSON 测试操作模式的 JSON 反序列化
+func TestOperationMode_UnmarshalJSON(t *testing.T) {
+	var m OperationMode
+
+	err := json.Unmarshal([]byte(`"local"`), &m)
+	require.NoError(t, err)
+	assert.Equal(t, OperationModeLocal, m)
+
+	err = json.Unmarshal([]byte(`"sandbox"`), &m)
+	require.NoError(t, err)
+	assert.Equal(t, OperationModeSandbox, m)
+}
+
+// TestOperationMode_UnmarshalJSON_无效值 测试操作模式 JSON 反序列化无效值返回错误
+func TestOperationMode_UnmarshalJSON_无效值(t *testing.T) {
+	var m OperationMode
+	err := json.Unmarshal([]byte(`"invalid"`), &m)
+	assert.Error(t, err)
+}
+
+// TestOperationMode_默认值为LOCAL 测试操作模式默认值为 LOCAL(0)
+func TestOperationMode_默认值为LOCAL(t *testing.T) {
+	var m OperationMode
+	assert.Equal(t, OperationModeLocal, m)
+	assert.Equal(t, OperationMode(0), m)
+}
+
+// ──────────────────────────── ShellType 枚举 ────────────────────────────
+
+// TestShellType_String 测试 Shell 类型的字符串表示
+func TestShellType_String(t *testing.T) {
+	assert.Equal(t, "auto", ShellTypeAuto.String())
+	assert.Equal(t, "cmd", ShellTypeCmd.String())
+	assert.Equal(t, "powershell", ShellTypePowerShell.String())
+	assert.Equal(t, "bash", ShellTypeBash.String())
+	assert.Equal(t, "sh", ShellTypeSh.String())
+	assert.Equal(t, "unknown(99)", ShellType(99).String())
+}
+
+// TestParseShellType 测试字符串解析为 ShellType
+func TestParseShellType(t *testing.T) {
+	assert.Equal(t, ShellTypeAuto, ParseShellType("auto"))
+	assert.Equal(t, ShellTypeCmd, ParseShellType("cmd"))
+	assert.Equal(t, ShellTypePowerShell, ParseShellType("powershell"))
+	assert.Equal(t, ShellTypeBash, ParseShellType("bash"))
+	assert.Equal(t, ShellTypeSh, ParseShellType("sh"))
+}
+
+// TestParseShellType_无效输入 测试无效输入解析返回 ShellTypeAuto
+func TestParseShellType_无效输入(t *testing.T) {
+	assert.Equal(t, ShellTypeAuto, ParseShellType("zsh"))
+	assert.Equal(t, ShellTypeAuto, ParseShellType(""))
+	assert.Equal(t, ShellTypeAuto, ParseShellType("fish"))
+}
+
+// ──────────────────────────── ContainerScope 枚举 ────────────────────────────
+
+// TestContainerScope_String 测试容器作用域的字符串表示
+func TestContainerScope_String(t *testing.T) {
+	assert.Equal(t, "system", ContainerScopeSystem.String())
+	assert.Equal(t, "session", ContainerScopeSession.String())
+	assert.Equal(t, "custom", ContainerScopeCustom.String())
+	assert.Equal(t, "unknown(99)", ContainerScope(99).String())
+}
+
+// ──────────────────────────── FsOption 函数选项 ────────────────────────────
+
+// TestFsOption 测试文件系统操作函数选项
+func TestFsOption(t *testing.T) {
+	opts := NewFsOptions(
+		WithFsMode("read"),
+		WithFsHead(10),
+		WithFsTail(20),
+		WithFsEncoding("utf-8"),
+	)
+	assert.Equal(t, "read", opts.Mode)
+	assert.Equal(t, 10, opts.Head)
+	assert.Equal(t, 20, opts.Tail)
+	assert.Equal(t, "utf-8", opts.Encoding)
+}
+
+// TestFsOption_默认值 测试文件系统操作选项默认值
+// Python: mode 默认 "text"，encoding 默认 "utf-8"。
+func TestFsOption_默认值(t *testing.T) {
+	opts := NewFsOptions()
+	assert.Equal(t, "text", opts.Mode)
+	assert.Equal(t, 0, opts.Head)
+	assert.Equal(t, 0, opts.Tail)
+	assert.Equal(t, "utf-8", opts.Encoding)
+}
+
+// ──────────────────────────── ShellOption 函数选项 ────────────────────────────
+
+// TestShellOption 测试 Shell 操作函数选项
+func TestShellOption(t *testing.T) {
+	env := map[string]string{"FOO": "bar"}
+	opts := NewShellOptions(
+		WithShellTimeout(60),
+		WithShellEnvironment(env),
+		WithShellType(ShellTypeBash),
+	)
+	assert.Equal(t, 60, opts.Timeout)
+	assert.Equal(t, env, opts.Environment)
+	assert.Equal(t, ShellTypeBash, opts.ShellType)
+}
+
+// TestShellOption_默认值 测试 Shell 操作选项默认值
+// Python: timeout 默认 300。
+func TestShellOption_默认值(t *testing.T) {
+	opts := NewShellOptions()
+	assert.Equal(t, 300, opts.Timeout)
+	assert.Nil(t, opts.Environment)
+	assert.Equal(t, ShellTypeAuto, opts.ShellType)
+}
+
+// ──────────────────────────── CodeOption 函数选项 ────────────────────────────
+
+// TestCodeOption 测试代码执行函数选项
+func TestCodeOption(t *testing.T) {
+	env := map[string]string{"PATH": "/usr/bin"}
+	opts := NewCodeOptions(
+		WithCodeLanguage("python"),
+		WithCodeTimeout(30),
+		WithCodeEnvironment(env),
+	)
+	assert.Equal(t, "python", opts.Language)
+	assert.Equal(t, 30, opts.Timeout)
+	assert.Equal(t, env, opts.Environment)
+}
+
+// TestCodeOption_默认值 测试代码执行选项默认值
+// Python: language 默认 "python"，timeout 默认 300。
+func TestCodeOption_默认值(t *testing.T) {
+	opts := NewCodeOptions()
+	assert.Equal(t, "python", opts.Language)
+	assert.Equal(t, 300, opts.Timeout)
+	assert.Nil(t, opts.Environment)
+}
+
+// ──────────────────────────── Base*Operation 桩实现 ────────────────────────────
+
+// TestBaseFsOperation_接口实现 测试 BaseFsOperation 满足 FsOperation 接口
+func TestBaseFsOperation_接口实现(t *testing.T) {
+	var _ FsOperation = (*BaseFsOperation)(nil)
+}
+
+// TestBaseShellOperation_接口实现 测试 BaseShellOperation 满足 ShellOperation 接口
+func TestBaseShellOperation_接口实现(t *testing.T) {
+	var _ ShellOperation = (*BaseShellOperation)(nil)
+}
+
+// TestBaseCodeOperation_接口实现 测试 BaseCodeOperation 满足 CodeOperation 接口
+func TestBaseCodeOperation_接口实现(t *testing.T) {
+	var _ CodeOperation = (*BaseCodeOperation)(nil)
+}
+
+// TestBaseSysOperation_接口实现 测试 BaseSysOperation 满足 SysOperation 接口
+func TestBaseSysOperation_接口实现(t *testing.T) {
+	var _ SysOperation = (*BaseSysOperation)(nil)
+}
+
+// TestBaseFsOperation_桩方法返回错误 测试 BaseFsOperation 所有桩方法返回未实现错误
+func TestBaseFsOperation_桩方法返回错误(t *testing.T) {
+	b := &BaseFsOperation{}
+	ctx := context.Background()
+
+	res, err := b.ReadFile(ctx, "/tmp/test")
+	assert.Nil(t, res)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	res2, err := b.WriteFile(ctx, "/tmp/test", "content")
+	assert.Nil(t, res2)
+	assert.Error(t, err)
+
+	res3, err := b.ListFiles(ctx, "/tmp")
+	assert.Nil(t, res3)
+	assert.Error(t, err)
+
+	res4, err := b.ListDirectories(ctx, "/tmp")
+	assert.Nil(t, res4)
+	assert.Error(t, err)
+
+	res5, err := b.SearchFiles(ctx, "/tmp", "*.go")
+	assert.Nil(t, res5)
+	assert.Error(t, err)
+
+	tools := b.ListTools()
+	assert.Nil(t, tools)
+}
+
+// TestBaseShellOperation_桩方法返回错误 测试 BaseShellOperation 所有桩方法返回未实现错误
+func TestBaseShellOperation_桩方法返回错误(t *testing.T) {
+	b := &BaseShellOperation{}
+	ctx := context.Background()
+
+	res, err := b.ExecuteCmd(ctx, "ls")
+	assert.Nil(t, res)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	resStream, err := b.ExecuteCmdStream(ctx, "ls")
+	assert.Nil(t, resStream)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	resBg, err := b.ExecuteCmdBackground(ctx, "ls")
+	assert.Nil(t, resBg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	tools := b.ListTools()
+	assert.Nil(t, tools)
+}
+
+// TestBaseCodeOperation_桩方法返回错误 测试 BaseCodeOperation 所有桩方法返回未实现错误
+func TestBaseCodeOperation_桩方法返回错误(t *testing.T) {
+	b := &BaseCodeOperation{}
+	ctx := context.Background()
+
+	res, err := b.ExecuteCode(ctx, "print('hello')")
+	assert.Nil(t, res)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	tools := b.ListTools()
+	assert.Nil(t, tools)
+}
+
+// TestBaseSysOperation_桩方法返回零值 测试 BaseSysOperation 所有桩方法返回 nil 或零值
+func TestBaseSysOperation_桩方法返回零值(t *testing.T) {
+	b := &BaseSysOperation{}
+
+	assert.Nil(t, b.Card())
+	assert.Nil(t, b.Fs())
+	assert.Nil(t, b.Shell())
+	assert.Nil(t, b.Code())
+	assert.Equal(t, "", b.IsolationKeyTemplate())
+}
+
+// ──────────────────────────── 结果类型默认值 ────────────────────────────
+
+// TestReadFileResult_默认值 测试 ReadFileResult 默认值
+func TestReadFileResult_默认值(t *testing.T) {
+	var r result.ReadFileResult
+	assert.Equal(t, 0, r.Code)
+	assert.Equal(t, "", r.Message)
+}
+
+// TestWriteFileResult_默认值 测试 WriteFileResult 默认值
+func TestWriteFileResult_默认值(t *testing.T) {
+	var r result.WriteFileResult
+	assert.Equal(t, 0, r.Code)
+	assert.Equal(t, "", r.Message)
+}
+
+// TestExecuteCmdResult_默认值 测试 ExecuteCmdResult 默认值
+func TestExecuteCmdResult_默认值(t *testing.T) {
+	var r result.ExecuteCmdResult
+	assert.Equal(t, 0, r.Code)
+	assert.Equal(t, "", r.Message)
+}
+
+// TestExecuteCodeResult_默认值 测试 ExecuteCodeResult 默认值
+func TestExecuteCodeResult_默认值(t *testing.T) {
+	var r result.ExecuteCodeResult
+	assert.Equal(t, 0, r.Code)
+	assert.Equal(t, "", r.Message)
+}
+
+// ──────────────────────────── BaseOperation 方法 ────────────────────────────
+
+func TestNewBaseOperation(t *testing.T) {
+	b := NewBaseOperation("fs", OperationModeLocal, "文件操作", nil)
+	assert.Equal(t, "fs", b.Name())
+	assert.Equal(t, OperationModeLocal, b.Mode())
+	assert.Equal(t, "文件操作", b.Description())
+	assert.Nil(t, b.RunConfig())
+	assert.Nil(t, b.ListTools())
+}
+
+func TestNewBaseOperation_sandbox(t *testing.T) {
+	cfg := map[string]string{"host": "localhost"}
+	b := NewBaseOperation("shell", OperationModeSandbox, "Shell操作", cfg)
+	assert.Equal(t, "shell", b.Name())
+	assert.Equal(t, OperationModeSandbox, b.Mode())
+	assert.NotNil(t, b.RunConfig())
+}
+
+func TestFromOperationModeString(t *testing.T) {
+	assert.Equal(t, OperationModeLocal, FromOperationModeString("local"))
+	assert.Equal(t, OperationModeSandbox, FromOperationModeString("sandbox"))
+	assert.Equal(t, OperationModeLocal, FromOperationModeString("unknown"))
+}
+
+func TestCreateSysOperationEvent(t *testing.T) {
+	b := NewBaseOperation("fs", OperationModeLocal, "文件操作", nil)
+	event := b.createSysOperationEvent(
+		context.Background(),
+		"call",
+		"ReadFile",
+		map[string]any{"path": "/tmp"},
+		map[string]any{"content": "hello"},
+		10.5,
+	)
+	assert.Equal(t, "sys_operation", event["module_id"])
+	assert.Equal(t, "fs", event["operation_name"])
+	assert.Equal(t, "call", event["event_type"])
+	assert.Equal(t, "ReadFile", event["method_name"])
+}
+
+// ──────────────────────────── CodeOption 扩展 ────────────────────────────
+
+func TestWithCodeCwd(t *testing.T) {
+	opts := NewCodeOptions(WithCodeCwd("/tmp"))
+	assert.Equal(t, "/tmp", opts.Cwd)
+}
+
+// ──────────────────────────── FsOption 扩展 ────────────────────────────
+
+func TestWithFsAppend(t *testing.T) {
+	opts := NewFsOptions(WithFsAppend(true))
+	assert.True(t, opts.Append)
+}
+
+func TestWithFsRecursive(t *testing.T) {
+	opts := NewFsOptions(WithFsRecursive(true))
+	assert.True(t, opts.Recursive)
+}
+
+func TestWithFsPermissions(t *testing.T) {
+	opts := NewFsOptions(WithFsPermissions("755"))
+	assert.Equal(t, "755", opts.Permissions)
+}
+
+// TestNewSandboxLauncherConfig 测试创建默认 SandboxLauncherConfig
+func TestNewSandboxLauncherConfig(t *testing.T) {
+	cfg := NewSandboxLauncherConfig()
+	assert.Equal(t, "pre_deploy", cfg.LauncherType)
+	assert.Equal(t, "mock", cfg.SandboxType)
+	assert.Equal(t, "delete", cfg.OnStop)
+}
+
+// TestNewPreDeployLauncherConfig 测试创建 PreDeployLauncherConfig
+func TestNewPreDeployLauncherConfig(t *testing.T) {
+	cfg := NewPreDeployLauncherConfig("http://localhost:8080")
+	assert.Equal(t, "aio", cfg.SandboxType)
+	assert.Equal(t, "http://localhost:8080", cfg.BaseURL)
+}
+
+// TestNewGatewayStoreConfig 测试创建 GatewayStoreConfig
+func TestNewGatewayStoreConfig(t *testing.T) {
+	cfg := NewGatewayStoreConfig()
+	assert.Equal(t, "memory", cfg.Type)
+}
+
+// TestNewGatewayConfig 测试创建 GatewayConfig
+func TestNewGatewayConfig(t *testing.T) {
+	cfg := NewGatewayConfig()
+	assert.Equal(t, "memory", cfg.Store.Type)
+}
+
+// TestContainerScope_MarshalJSON 测试 JSON 序列化
+func TestContainerScope_MarshalJSON(t *testing.T) {
+	data, err := json.Marshal(ContainerScopeSession)
+	assert.NoError(t, err)
+	assert.Equal(t, `"session"`, string(data))
+}
+
+// TestContainerScope_UnmarshalJSON 测试 JSON 反序列化
+func TestContainerScope_UnmarshalJSON(t *testing.T) {
+	var s ContainerScope
+	err := json.Unmarshal([]byte(`"system"`), &s)
+	assert.NoError(t, err)
+	assert.Equal(t, ContainerScopeSystem, s)
+}
+
+// TestContainerScope_UnmarshalJSON_未知值 测试未知值报错
+func TestContainerScope_UnmarshalJSON_未知值(t *testing.T) {
+	var s ContainerScope
+	err := json.Unmarshal([]byte(`"invalid_scope"`), &s)
+	assert.Error(t, err)
+}
+
+// TestWithFsChunkSize 测试 WithFsChunkSize 选项
+func TestWithFsChunkSize(t *testing.T) {
+	opts := NewFsOptions(WithFsChunkSize(1024))
+	assert.Equal(t, 1024, opts.ChunkSize)
+}
+
+// TestWithFsLineRange 测试 WithFsLineRange 选项
+func TestWithFsLineRange(t *testing.T) {
+	opts := NewFsOptions(WithFsLineRange(10, 20))
+	assert.Equal(t, [2]int{10, 20}, opts.LineRange)
+}
+
+// TestWithFsPrependNewline 测试 WithFsPrependNewline 选项
+func TestWithFsPrependNewline(t *testing.T) {
+	opts := NewFsOptions(WithFsPrependNewline(true))
+	assert.NotNil(t, opts.PrependNewline)
+	assert.True(t, *opts.PrependNewline)
+}
+
+// TestWithFsAppendNewline 测试 WithFsAppendNewline 选项
+func TestWithFsAppendNewline(t *testing.T) {
+	opts := NewFsOptions(WithFsAppendNewline(true))
+	assert.NotNil(t, opts.AppendNewline)
+	assert.True(t, *opts.AppendNewline)
+}
+
+// TestWithFsCreateIfNotExist 测试 WithFsCreateIfNotExist 选项
+func TestWithFsCreateIfNotExist(t *testing.T) {
+	opts := NewFsOptions(WithFsCreateIfNotExist(true))
+	assert.True(t, opts.CreateIfNotExist)
+}
+
+// TestWithFsOverwrite 测试 WithFsOverwrite 选项
+func TestWithFsOverwrite(t *testing.T) {
+	opts := NewFsOptions(WithFsOverwrite(true))
+	assert.True(t, opts.Overwrite)
+}
+
+// TestWithFsCreateParentDirs 测试 WithFsCreateParentDirs 选项
+func TestWithFsCreateParentDirs(t *testing.T) {
+	opts := NewFsOptions(WithFsCreateParentDirs(true))
+	assert.True(t, opts.CreateParentDirs)
+}
+
+// TestWithFsPreservePerms 测试 WithFsPreservePerms 选项
+func TestWithFsPreservePerms(t *testing.T) {
+	opts := NewFsOptions(WithFsPreservePerms(true))
+	assert.True(t, opts.PreservePerms)
+}
+
+// TestWithFsMaxDepth 测试 WithFsMaxDepth 选项
+func TestWithFsMaxDepth(t *testing.T) {
+	opts := NewFsOptions(WithFsMaxDepth(5))
+	assert.Equal(t, 5, opts.MaxDepth)
+}
+
+// TestWithFsSortBy 测试 WithFsSortBy 选项
+func TestWithFsSortBy(t *testing.T) {
+	opts := NewFsOptions(WithFsSortBy("name"))
+	assert.Equal(t, "name", opts.SortBy)
+}
+
+// TestWithFsSortDescending 测试 WithFsSortDescending 选项
+func TestWithFsSortDescending(t *testing.T) {
+	opts := NewFsOptions(WithFsSortDescending(true))
+	assert.True(t, opts.SortDescending)
+}
+
+// TestWithFsFileTypes 测试 WithFsFileTypes 选项
+func TestWithFsFileTypes(t *testing.T) {
+	fts := []string{".go", ".py"}
+	opts := NewFsOptions(WithFsFileTypes(fts))
+	assert.Equal(t, fts, opts.FileTypes)
+}
+
+// TestWithFsExcludePatterns 测试 WithFsExcludePatterns 选项
+func TestWithFsExcludePatterns(t *testing.T) {
+	patterns := []string{"*.log", "*.tmp"}
+	opts := NewFsOptions(WithFsExcludePatterns(patterns))
+	assert.Equal(t, patterns, opts.ExcludePatterns)
+}
+
+// TestWithFsOptions 测试 WithFsOptions 选项
+func TestWithFsOptions_Map(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewFsOptions(WithFsOptions(m))
+	assert.Equal(t, m, opts.Options)
+}
+
+// TestWithCodeOptions 测试 WithCodeOptions 选项
+func TestWithCodeOptions_Map(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewCodeOptions(WithCodeOptions(m))
+	assert.Equal(t, m, opts.Options)
+}
+
+// TestWithShellOptions 验证 WithShellOptions 选项。
+func TestWithShellOptions(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewShellOptions(WithShellOptions(m))
+	assert.Equal(t, m, opts.Options)
+}
+
+// TestWithShellGrace 验证 WithShellGrace 选项。
+func TestWithShellGrace(t *testing.T) {
+	opts := NewShellOptions(WithShellGrace(5.0))
+	assert.Equal(t, 5.0, opts.Grace)
+}
+
+// ──────────────────────────── OperationRegistry M-52 覆盖语义 ────────────────────────────
+
+// TestOperationRegistry_Register_同定义跳过 测试 M-52：工厂+描述全等时幂等跳过。
+func TestOperationRegistry_Register_同定义跳过(t *testing.T) {
+	r := NewOperationRegistry()
+	factory := func(any) SysSubOperation { return &mockFsOperation{} }
+	def := OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "FS 操作",
+		NewFunc:     factory,
+	}
+	require.NoError(t, r.Register(def))
+	// 同一函数值 + 同描述再注册 → 跳过
+	require.NoError(t, r.Register(def))
+	names := r.GetSupportedOperations(OperationModeLocal)
+	assert.Equal(t, []string{"fs"}, names)
+}
+
+// TestOperationRegistry_Register_不同定义覆盖 测试 M-52：
+// 不同工厂函数 → 覆盖（对齐 Python override built-in 设计特性）。
+func TestOperationRegistry_Register_不同定义覆盖(t *testing.T) {
+	r := NewOperationRegistry()
+	require.NoError(t, r.Register(OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "内置 FS",
+		NewFunc:     func(any) SysSubOperation { return &mockFsOperation{} },
+	}))
+	// 用户自定义覆盖（不同工厂函数）
+	override := OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "自定义 FS",
+		NewFunc:     func(any) SysSubOperation { return &mockShellOperation{} },
+	}
+	require.NoError(t, r.Register(override))
+
+	info, ok := r.GetOperationInfo("fs", OperationModeLocal)
+	require.True(t, ok)
+	assert.Equal(t, "自定义 FS", info.Description)
+	// 工厂返回类型确实是覆盖后的
+	inst := info.NewFunc(nil)
+	_, isShell := inst.(*mockShellOperation)
+	assert.True(t, isShell, "覆盖后工厂应返回新类型实例")
+}
+
+// TestOperationRegistry_Register_同工厂不同描述覆盖 测试 M-52：仅描述不同也触发覆盖。
+func TestOperationRegistry_Register_同工厂不同描述覆盖(t *testing.T) {
+	r := NewOperationRegistry()
+	factory := func(any) SysSubOperation { return &mockFsOperation{} }
+	require.NoError(t, r.Register(OperationDef{
+		Name: "fs", Mode: OperationModeLocal, Description: "v1", NewFunc: factory,
+	}))
+	require.NoError(t, r.Register(OperationDef{
+		Name: "fs", Mode: OperationModeLocal, Description: "v2", NewFunc: factory,
+	}))
+	info, ok := r.GetOperationInfo("fs", OperationModeLocal)
+	require.True(t, ok)
+	assert.Equal(t, "v2", info.Description)
+}
+
+// TestOperationRegistry_GetSupportedOperations_排序 测试 M-51：sort.Strings 升序。
+func TestOperationRegistry_GetSupportedOperations_排序(t *testing.T) {
+	r := NewOperationRegistry()
+	for _, name := range []string{"code", "fs", "shell", "app", "zoo"} {
+		require.NoError(t, r.Register(OperationDef{
+			Name: name, Mode: OperationModeLocal,
+			Description: name, NewFunc: func(any) SysSubOperation { return &mockFsOperation{} },
+		}))
+	}
+	names := r.GetSupportedOperations(OperationModeLocal)
+	assert.Equal(t, []string{"app", "code", "fs", "shell", "zoo"}, names)
+}

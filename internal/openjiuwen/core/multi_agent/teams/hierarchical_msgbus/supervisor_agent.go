@@ -1,0 +1,181 @@
+package hierarchical_msgbus
+
+import (
+	"context"
+	"fmt"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/team_runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/agents"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SupervisorAgent 默认内置监督者 Agent，组合 CommunicableAgent + ReActAgent。
+// 通过 CommunicableAgent 获得 P2P/Pub-Sub 通信能力，
+// 通过 ReActAgent 获得 ReAct 循环执行能力，
+// 内部使用 P2PAbilityManager 将 AgentCard 类型的 tool_call 转为 P2P 消息派发。
+// Python: SupervisorAgent(CommunicableAgent, ReActAgent)
+type SupervisorAgent struct {
+	// CommunicableAgent 嵌入：Send/Publish/Subscribe/Unsubscribe/Runtime/BindRuntime
+	team_runtime.CommunicableAgent
+	// ReActAgent 嵌入：Invoke/Stream/Card/Configure/AgentID/...
+	*agents.ReActAgent
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultMaxParallelSubAgents 默认最大并行子 Agent 派发数
+	defaultMaxParallelSubAgents = 10
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// _ 编译时验证 SupervisorAgent 满足 BaseAgent 接口
+var _ agentinterfaces.BaseAgent = (*SupervisorAgent)(nil)
+
+// _ 编译时验证 SupervisorAgent 满足 Communicable 接口
+var _ team_runtime.Communicable = (*SupervisorAgent)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewSupervisorAgent 创建 SupervisorAgent 实例。
+// Python: SupervisorAgent(card, config, max_parallel_sub_agents)
+func NewSupervisorAgent(
+	card *agentschema.AgentCard,
+	config *saconfig.ReActAgentConfig,
+	maxParallelSubAgents int,
+) *SupervisorAgent {
+	// Python: super().__init__(card=card)，先创建默认实例
+	react := agents.NewReActAgent(card, nil)
+
+	// Python: if config is not None: ReActAgent.configure(self, config)
+	if config != nil {
+		_ = react.Configure(context.Background(), config)
+	}
+
+	supervisor := &SupervisorAgent{
+		CommunicableAgent: *team_runtime.NewCommunicableAgent(),
+		ReActAgent:        react,
+	}
+
+	if maxParallelSubAgents < 1 {
+		maxParallelSubAgents = defaultMaxParallelSubAgents
+	}
+
+	// 从 runtime 获取 timeout，若未绑定则使用默认值
+	p2pAm := NewP2PAbilityManager(supervisor, maxParallelSubAgents, defaultP2PTimeout)
+	react.SetAbilityManager(p2pAm)
+
+	return supervisor
+}
+
+// NewSupervisorAgentCard 创建预加载子 Agent 卡片的 SupervisorAgent。
+// 返回 (AgentCard, AgentProvider) 元组，兼容 HierarchicalTeam.AddAgent()。
+// Python: SupervisorAgent.create()
+func NewSupervisorAgentCard(
+	agentsList []*agentschema.AgentCard,
+	modelClientConfig *llmschema.ModelClientConfig,
+	modelRequestConfig *llmschema.ModelRequestConfig,
+	agentCard *agentschema.AgentCard,
+	systemPrompt string,
+	maxIterations int,
+	maxParallelSubAgents int,
+) (*agentschema.AgentCard, resources_manager.AgentProvider) {
+	if len(agentsList) == 0 {
+		panic(exception.BuildError(exception.StatusAgentTeamCreateRuntimeError,
+			exception.WithParam("error_msg", "[SupervisorAgent.create] agents 列表不能为空"),
+		))
+	}
+
+	for _, card := range agentsList {
+		if card == nil {
+			panic(exception.BuildError(exception.StatusAgentTeamCreateRuntimeError,
+				exception.WithParam("error_msg", "[SupervisorAgent.create] agents 中每项必须为 AgentCard"),
+			))
+		}
+	}
+
+	if maxIterations < 1 {
+		maxIterations = 5
+	}
+	if maxParallelSubAgents < 1 {
+		maxParallelSubAgents = defaultMaxParallelSubAgents
+	}
+
+	// 懒构造闭包
+	provider := func(ctx context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		cfg := saconfig.NewReActAgentConfig()
+		if modelClientConfig != nil {
+			cfg.ModelClientConfig = modelClientConfig
+			cfg.ModelProvider = fmt.Sprintf("%v", modelClientConfig.ClientProvider)
+			cfg.APIKey = modelClientConfig.APIKey
+			cfg.APIBase = modelClientConfig.APIBase
+		}
+		if modelRequestConfig != nil {
+			cfg.ModelRequestConfig = modelRequestConfig
+			if modelRequestConfig.ModelName != "" {
+				cfg.ModelNameVal = modelRequestConfig.ModelName
+			}
+		}
+		cfg.MaxIterations = maxIterations
+		if systemPrompt != "" {
+			cfg.PromptTemplate = []map[string]any{
+				{"role": "system", "content": systemPrompt},
+			}
+		}
+
+		supervisor := NewSupervisorAgent(agentCard, cfg, maxParallelSubAgents)
+
+		for _, card := range agentsList {
+			supervisor.RegisterSubAgentCard(card)
+			logger.Debug(p2pLogComponent).
+				Str("action", "supervisor_create").
+				Str("sub_agent_id", card.ID).
+				Msg("registering child agent card")
+		}
+
+		logger.Info(p2pLogComponent).
+			Str("action", "supervisor_create").
+			Str("supervisor_id", agentCard.ID).
+			Int("sub_agent_count", len(agentsList)).
+			Int("max_parallel", maxParallelSubAgents).
+			Msg("SupervisorAgent created")
+
+		return supervisor, nil
+	}
+
+	return agentCard, provider
+}
+
+// RegisterSubAgentCard 将子 Agent 卡片注册到 P2PAbilityManager。
+// 使 LLM 可将子 Agent 视为可调用的工具。
+// Python: SupervisorAgent.register_sub_agent_card(card)
+func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
+	am := s.AbilityManager()
+	if am != nil {
+		am.Add(card)
+	}
+	logger.Debug(p2pLogComponent).
+		Str("action", "register_sub_agent_card").
+		Str("card_name", card.Name).
+		Str("card_id", card.ID).
+		Msg("registering child agent card as LLM tool")
+}
+
+// Configure 配置 SupervisorAgent。
+// Python: SupervisorAgent.configure(config) — 只对 ReActAgentConfig 类型执行配置，其他类型 no-op。
+func (s *SupervisorAgent) Configure(ctx context.Context, config agentinterfaces.AgentConfig) error {
+	if reactCfg, ok := config.(*saconfig.ReActAgentConfig); ok {
+		return s.ReActAgent.Configure(ctx, reactCfg)
+	}
+	// 非 ReActAgentConfig 类型 no-op，与 Python isinstance 判断一致
+	return nil
+}

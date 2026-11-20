@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	hsecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	hsecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

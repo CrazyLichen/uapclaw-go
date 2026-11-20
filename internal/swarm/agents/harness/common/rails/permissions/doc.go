@@ -52,7 +52,7 @@
 // SensitiveDisplayPathPattern / DeterministicReadonlyPublicWebFetchSourceKinds /
 // ReviewerActionTargetMaxLength。按规则 9.2-4 照抄保留。
 // 脱敏能力（reviewer_redaction.go）已于 9.90e 下沉到
-// internal/agentcore/harness/rails/redaction 独立包——因为 9.90e 的 interrupt
+// internal/openjiuwen/harness/rails/redaction 独立包——因为 9.90e 的 interrupt
 // 包也要用它渲染审批卡片，而本包已 import interrupt，反向依赖会成环。
 // 原文件并未消费上述三个正则，后续不要凭旧注释臆断「接上」它们。
 // 其余常量的消费方在 9.90d-2 的 reviewer_metadata / deny_response /

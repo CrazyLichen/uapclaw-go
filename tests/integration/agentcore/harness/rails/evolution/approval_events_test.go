@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	evolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/signal"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 

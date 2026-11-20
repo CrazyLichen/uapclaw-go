@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/memory"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

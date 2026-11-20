@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/goal"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

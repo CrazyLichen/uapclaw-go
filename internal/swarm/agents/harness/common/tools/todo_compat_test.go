@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/todo"
 )
 
 // baseTodos 构造三任务基线。

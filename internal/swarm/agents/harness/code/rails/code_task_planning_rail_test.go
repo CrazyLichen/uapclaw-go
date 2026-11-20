@@ -3,21 +3,21 @@ package rails
 import (
 	"context"
 	"errors"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	result "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/prompts"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/todo"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
+	result "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation/result"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

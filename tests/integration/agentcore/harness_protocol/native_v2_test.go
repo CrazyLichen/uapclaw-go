@@ -10,13 +10,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	taskloop "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
-	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/native"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/vcs"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/harness"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	taskloop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/task_loop"
+	hp "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers"
+	_ "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness_providers/native"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/vcs"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

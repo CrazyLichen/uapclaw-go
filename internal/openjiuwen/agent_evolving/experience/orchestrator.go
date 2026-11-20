@@ -1,0 +1,340 @@
+package experience
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/operator"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/operator/skill_call"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_evolving/updater/single_dim"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// OnlineEvolutionOrchestrator 在线演进流水线协调器。
+// Python: OnlineEvolutionOrchestrator
+//
+// Manager 仍然是生命周期状态的所有者；此类仅编排
+// 上下文构建、更新生成、本地预览、暂存和可选自动审批。
+type OnlineEvolutionOrchestrator struct {
+	// store 所属的 EvolutionStore
+	store *checkpointing.EvolutionStore
+	// updater 单维更新器
+	updater *single_dim.SingleDimUpdater
+	// manager 经验生命周期管理器
+	manager *ExperienceManager
+	// skillOps 技能经验 Operator 映射
+	skillOps map[string]*skill_call.SkillExperienceOperator
+	// requestIDPrefix 请求标识前缀
+	requestIDPrefix string
+	// stageSource 暂存来源标识
+	stageSource string
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewOnlineEvolutionOrchestrator 创建在线演进编排器。
+// Python: OnlineEvolutionOrchestrator.__init__()
+func NewOnlineEvolutionOrchestrator(
+	store *checkpointing.EvolutionStore,
+	updater *single_dim.SingleDimUpdater,
+	manager *ExperienceManager,
+	skillOps map[string]*skill_call.SkillExperienceOperator,
+	requestIDPrefix string,
+	stageSource string,
+) *OnlineEvolutionOrchestrator {
+	return &OnlineEvolutionOrchestrator{
+		store:           store,
+		updater:         updater,
+		manager:         manager,
+		skillOps:        skillOps,
+		requestIDPrefix: requestIDPrefix,
+		stageSource:     stageSource,
+	}
+}
+
+// Evolve 执行在线演进并返回结构化结果。
+// Python: OnlineEvolutionOrchestrator.evolve()
+func (o *OnlineEvolutionOrchestrator) Evolve(
+	ctx context.Context,
+	skillName string,
+	signals []signal.EvolutionSignal,
+	messages []map[string]any,
+	userQuery string,
+	trajectoryArg *trajectory.Trajectory,
+	requiresApproval bool,
+	metadata map[string]any,
+	source *string,
+) (*OnlineEvolutionResult, error) {
+	// Python: 前置检查
+	if skillName == "" || len(signals) == 0 {
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusSkippedNoInput,
+			Message:   "online evolution skipped because skill_name or signals are empty",
+		}, nil
+	}
+	if !o.store.SkillExists(ctx, skillName) {
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusSkippedSkillNotFound,
+			Message:   fmt.Sprintf("online evolution skipped because skill '%s' does not exist", skillName),
+		}, nil
+	}
+
+	// Python: 获取或创建 SkillExperienceOperator
+	op := o.skillOps[skillName]
+	if op == nil {
+		op = skill_call.NewSkillExperienceOperator(skillName)
+		o.skillOps[skillName] = op
+	}
+
+	// Python: 构建上下文
+	onlineContext, err := o.buildContext(ctx, skillName, signals, messages, userQuery, trajectoryArg, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: 生成 LocalApplyPreview
+	preview, err := o.generateLocalApplyPreview(ctx, op, onlineContext)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(preview.Records) == 0 {
+		message := fmt.Sprintf("no applied updates for skill=%s", skillName)
+		logger.Info(logComponent).
+			Str("skill", skillName).
+			Msg(message)
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusNoEvolutionNoRecords,
+			Message:   message,
+		}, nil
+	}
+
+	// Python: stage_apply_results
+	stageSource := o.stageSource
+	if source != nil && *source != "" {
+		stageSource = *source
+	}
+	signalType := getSignalType(onlineContext)
+	signalSource := getSignalSource(onlineContext)
+	var messagesCopy []map[string]any
+	if onlineContext.Messages != nil {
+		messagesCopy = make([]map[string]any, len(onlineContext.Messages))
+		copy(messagesCopy, onlineContext.Messages)
+	}
+
+	request, err := o.manager.StageApplyResults(
+		ctx, skillName, preview.ApplyResults,
+		requiresApproval, stageSource, o.requestIDPrefix,
+		onlineContext.UserQuery, &signalType, &signalSource,
+		messagesCopy,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if requiresApproval {
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusStaged,
+			Request:   request,
+			Message:   fmt.Sprintf("evolution request staged for skill=%s", skillName),
+		}, nil
+	}
+
+	// Python: auto-approve
+	requestID := request.RequestID
+	result, err := o.manager.ApproveRequest(ctx, requestID)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("skill", skillName).
+			Str("request_id", requestID).
+			Err(err).
+			Msg("[OnlineEvolutionOrchestrator] auto-approve failed")
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusAutoApproved,
+			Request:   request,
+			Message:   fmt.Sprintf("auto-approve failed for skill=%s: %v", skillName, err),
+		}, fmt.Errorf("auto-approve failed: %w", err)
+	}
+	if result.AppliedCount > 0 || result.PendingCount > 0 {
+		logger.Info(logComponent).
+			Str("skill", skillName).
+			Int("applied_count", result.AppliedCount).
+			Int("pending_count", result.PendingCount).
+			Msg("[OnlineEvolutionOrchestrator] auto-approve completed")
+	}
+
+	return &OnlineEvolutionResult{
+		SkillName: skillName,
+		Status:    OnlineEvolutionStatusAutoApproved,
+		Request:   request,
+		Message:   fmt.Sprintf("evolution request auto-approved for skill=%s", skillName),
+	}, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildContext 构建 EvolutionContext。
+// Python: OnlineEvolutionOrchestrator._build_context()
+func (o *OnlineEvolutionOrchestrator) buildContext(
+	ctx context.Context,
+	skillName string,
+	signals []signal.EvolutionSignal,
+	messages []map[string]any,
+	userQuery string,
+	trajectoryArg *trajectory.Trajectory,
+	metadata map[string]any,
+) (*EvolutionContext, error) {
+	skillContent, err := o.store.ReadSkillContent(ctx, skillName)
+	if err != nil {
+		return nil, err
+	}
+
+	descTarget := signal.EvolutionTargetDescription
+	bodyTarget := signal.EvolutionTargetBody
+	scriptTarget := signal.EvolutionTargetScript
+
+	existingDescRecords := o.store.GetPendingRecords(ctx, skillName, &descTarget)
+	existingBodyRecords := o.store.GetPendingRecords(ctx, skillName, &bodyTarget)
+	existingScriptRecords := o.store.GetPendingRecords(ctx, skillName, &scriptTarget)
+
+	var messagesCopy []map[string]any
+	if messages != nil {
+		messagesCopy = make([]map[string]any, len(messages))
+		copy(messagesCopy, messages)
+	}
+
+	var metadataCopy map[string]any
+	if metadata != nil {
+		metadataCopy = make(map[string]any, len(metadata))
+		for k, v := range metadata {
+			metadataCopy[k] = v
+		}
+	}
+
+	return &EvolutionContext{
+		SkillName:             skillName,
+		Signals:               signals,
+		Messages:              messagesCopy,
+		UserQuery:             userQuery,
+		SkillContent:          skillContent,
+		ExistingDescRecords:   existingDescRecords,
+		ExistingBodyRecords:   existingBodyRecords,
+		ExistingScriptRecords: existingScriptRecords,
+		Trajectory:            trajectoryArg,
+		Metadata:              metadataCopy,
+	}, nil
+}
+
+// generateLocalApplyPreview 生成 LocalApplyPreview。
+// Python: OnlineEvolutionOrchestrator._generate_local_apply_preview()
+func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
+	ctx context.Context,
+	op *skill_call.SkillExperienceOperator,
+	onlineContext *EvolutionContext,
+) (*LocalApplyPreview, error) {
+	// Python: updater.bind()
+	operators := map[string]operator.Operator{
+		op.OperatorID(): op,
+	}
+	config := map[string]any{
+		"online_contexts": map[string]*EvolutionContext{
+			onlineContext.SkillName: onlineContext,
+		},
+	}
+	o.updater.Bind(operators, []string{schema.ExperiencesTarget}, config)
+
+	// Python: 构建 trajectories 列表
+	var trajectories []*trajectory.Trajectory
+	if onlineContext.Trajectory != nil {
+		trajectories = []*trajectory.Trajectory{onlineContext.Trajectory}
+	}
+
+	// Python: 将 EvolutionSignal 转为指针切片
+	signalPtrs := make([]*signal.EvolutionSignal, len(onlineContext.Signals))
+	for i := range onlineContext.Signals {
+		signalPtrs[i] = &onlineContext.Signals[i]
+	}
+
+	// Python: updater.process()
+	updates, err := o.updater.Process(ctx, trajectories, signalPtrs, map[string]any{})
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("skill", onlineContext.SkillName).
+			Err(err).
+			Msg("[OnlineEvolutionOrchestrator] updater.Process failed")
+		return nil, err
+	}
+
+	// Python: execute_updates → BuildLocalApplyPreview
+	// Python execute_updates 对 updates 无条件 normalize_updates——裸 records
+	// （如 SkillExperienceOptimizer.step 产出的 []EvolutionRecord）会被
+	// normalize_update_value 按 target=experiences 包装为 append/pending_change。
+	// 原实现只做 value.(schema.UpdateValue) 类型断言，裸 records 被静默丢弃，
+	// 导致 /evolve 成功路径生成的记录永远进不了 preview（NoEvolutionNoRecords）。
+	if len(updates) == 0 {
+		logger.Warn(logComponent).
+			Str("skill", onlineContext.SkillName).
+			Msg("[OnlineEvolutionOrchestrator] updater.Process returned empty update, skipping apply")
+		preview, _ := BuildLocalApplyPreview(onlineContext.SkillName, nil)
+		return &preview, nil
+	}
+	updateValues := schema.NormalizeUpdates(updates[0])
+	applyResults := ApplyUpdatesFromManager(
+		map[string]operator.Operator{op.OperatorID(): op},
+		updateValues,
+	)
+
+	preview, err := BuildLocalApplyPreview(onlineContext.SkillName, applyResults)
+	if err != nil {
+		return nil, err
+	}
+	return &preview, nil
+}
+
+// getPreferredSignal 获取优先信号。
+// Python: OnlineEvolutionOrchestrator._get_preferred_signal()
+func getPreferredSignal(onlineContext *EvolutionContext) *signal.EvolutionSignal {
+	for i := range onlineContext.Signals {
+		if onlineContext.Signals[i].SignalType == schema.UserIntentSignal {
+			return &onlineContext.Signals[i]
+		}
+	}
+	if len(onlineContext.Signals) > 0 {
+		return &onlineContext.Signals[0]
+	}
+	return nil
+}
+
+// getSignalType 获取信号类型。
+// Python: OnlineEvolutionOrchestrator._get_signal_type()
+func getSignalType(onlineContext *EvolutionContext) string {
+	preferred := getPreferredSignal(onlineContext)
+	if preferred != nil {
+		return preferred.SignalType
+	}
+	return ""
+}
+
+// getSignalSource 获取信号来源。
+// Python: OnlineEvolutionOrchestrator._get_signal_source()
+func getSignalSource(onlineContext *EvolutionContext) string {
+	preferred := getPreferredSignal(onlineContext)
+	if preferred != nil {
+		source := signal.GetSignalSource(preferred)
+		if source != nil {
+			return *source
+		}
+	}
+	return ""
+}

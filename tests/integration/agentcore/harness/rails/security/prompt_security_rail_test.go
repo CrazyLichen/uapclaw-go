@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	rails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	rails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails"
+	security "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

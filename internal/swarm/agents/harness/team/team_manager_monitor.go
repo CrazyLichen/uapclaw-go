@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

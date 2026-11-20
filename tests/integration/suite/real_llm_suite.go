@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/retrieval/embedding"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -1,7 +1,7 @@
 package team
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/monitor"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────

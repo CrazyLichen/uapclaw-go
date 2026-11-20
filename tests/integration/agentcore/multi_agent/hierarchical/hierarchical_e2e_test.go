@@ -8,17 +8,17 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/teams/hierarchical_msgbus"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/teams/hierarchical_tools"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	maschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/team_runtime"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/teams/hierarchical_msgbus"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/multi_agent/teams/hierarchical_tools"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/single_agent/schema"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────

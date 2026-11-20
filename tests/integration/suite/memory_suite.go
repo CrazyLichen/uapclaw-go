@@ -6,8 +6,8 @@ package suite
 import (
 	"os"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/lite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

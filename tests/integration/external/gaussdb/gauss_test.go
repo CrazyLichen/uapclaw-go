@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/vector"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/runner"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -67,7 +67,7 @@ func (s *GaussSuite) TestGaussDoc_包引用验证() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newGaussTestSchema 创建 GaussDB 测试用的向量集合 schema
-// 原位置：internal/agentcore/foundation/store/vector/gauss_test.go:createGaussTestSchema()
+// 原位置：internal/openjiuwen/core/foundation/store/vector/gauss_test.go:createGaussTestSchema()
 func newGaussTestSchema() *vector.CollectionSchema {
 	pk, _ := vector.NewFieldSchema("id", vector.VectorDataTypeVarchar, vector.WithPrimary())
 	vec, _ := vector.NewFieldSchema("embedding", vector.VectorDataTypeFloatVector, vector.WithDim(128))

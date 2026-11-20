@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/security"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/sys_operation"
 )
 
 // ──────────────────────────── sandbox_profile 沙箱描述符构建 ────────────────────────────

@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	sessionpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
-	flow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components/flow"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow"
+	flow "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/workflow/components/flow"
 )
 
 // WorkflowRunSuite 8.14 Workflow 全链集成。

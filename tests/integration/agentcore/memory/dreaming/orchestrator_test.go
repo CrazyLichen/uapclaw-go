@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
-	dreaming "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/dreaming"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/extensions/context_evolver/schema"
+	dreaming "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/dreaming"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

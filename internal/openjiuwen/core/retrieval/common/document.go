@@ -1,0 +1,466 @@
+package common
+
+import (
+	"encoding/base64"
+	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ModalityField 单个模态字段。
+type ModalityField struct {
+	// Kind 模态类型
+	Kind ModalityKind
+	// Data 文本内容、URL 或 base64 编码数据
+	Data string
+	// ID 多模态缓存用的 UUID（文本模态为空）
+	ID string
+}
+
+// MultimodalDocument 多模态文档，支持文本+图片+音频+视频混合输入。
+// Python: openjiuwen/core/retrieval/common/document.py (MultimodalDocument)
+type MultimodalDocument struct {
+	// Text 文本回退字段，供不支持多模态的服务使用
+	Text string
+	// fields 有序模态字段列表
+	fields []ModalityField
+	// mu 保护 fields 与两个缓存的并发访问
+	mu sync.Mutex
+	// contentCache Content() 方法的缓存结果，对齐 Python _content_cache
+	// （Python 用 list truthiness 判断是否已缓存，空列表视为未缓存）
+	contentCache []map[string]any
+	// dashscopeCache DashscopeInput() 方法的缓存结果，对齐 Python _dashscope_cache
+	// （Python 用 dict truthiness 判断是否已缓存，空字典视为未缓存）
+	dashscopeCache map[string]any
+}
+
+// addFieldOptions AddField 的可选参数
+type addFieldOptions struct {
+	// filePath 文件路径（与 data 二选一）
+	filePath string
+	// dataID 自定义数据 ID（仅非文本模态有效，长度 ≤ 32）
+	dataID string
+}
+
+// AddFieldOption AddField 可选参数函数
+type AddFieldOption func(*addFieldOptions)
+
+// TextChunk 文本分块数据模型，用于文档索引管线中的分块传递。
+// Python: openjiuwen/core/retrieval/common/document.py (TextChunk)
+type TextChunk struct {
+	// ID 分块 ID
+	ID string `json:"id_"`
+	// Text 分块文本内容
+	Text string `json:"text"`
+	// DocID 父文档 ID
+	DocID string `json:"doc_id"`
+	// Metadata 分块元数据
+	Metadata map[string]any `json:"metadata"`
+	// Embedding 分块嵌入向量（嵌入计算后填充）
+	Embedding []float64 `json:"embedding,omitempty"`
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ModalityKind 内容模态类型。
+type ModalityKind string
+
+const (
+	// ModalityText 文本模态
+	ModalityText ModalityKind = "text"
+	// ModalityImage 图片模态
+	ModalityImage ModalityKind = "image"
+	// ModalityAudio 音频模态
+	ModalityAudio ModalityKind = "audio"
+	// ModalityVideo 视频模态
+	ModalityVideo ModalityKind = "video"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+var (
+	// audioBase64Pattern 音频 base64 正则，提取格式类型。
+	// 提取为包级变量避免每次调用 Content() 时重复编译，对齐 T-28 修复。
+	audioBase64Pattern = regexp.MustCompile(`data:audio/(.+?);base64,`)
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewMultimodalDocument 创建空的多模态文档。
+func NewMultimodalDocument() *MultimodalDocument {
+	return &MultimodalDocument{}
+}
+
+// FieldFilePath 设置文件路径选项
+func FieldFilePath(path string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.filePath = path
+	}
+}
+
+// FieldDataID 设置自定义数据 ID 选项
+func FieldDataID(id string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.dataID = id
+	}
+}
+
+// AddField 添加模态字段，支持链式调用。
+// kind: 模态类型；data: 文本内容/URL/base64（kind 为 text 时必传）；
+// opts: 可选参数，支持 FieldFilePath(string) 和 FieldDataID(string)。
+// Python: MultimodalDocument.add_field()
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+// 注意：与 Python 对齐，add_field 不会更新 text 字段，text 始终保持默认空字符串。
+func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...AddFieldOption) (*MultimodalDocument, error) {
+	o := defaultAddFieldOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	var fp string
+	if o.filePath != "" {
+		fp = o.filePath
+	}
+
+	k, resolvedData, err := loadMultimodalData(kind, data, fp)
+	if err != nil {
+		return nil, err
+	}
+	dataID := ""
+	if kind != ModalityText {
+		if o.dataID != "" {
+			if len(o.dataID) > 32 {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", fmt.Sprintf("data_id 长度不能超过 32，当前长度: %d", len(o.dataID))),
+				)
+			}
+			dataID = o.dataID
+		} else {
+			dataID = strings.ReplaceAll(uuid.NewString(), "-", "")
+		}
+	}
+	// S-01: 对齐 Python add_field 中的 _content_cache.clear()/_dashscope_cache.clear()，
+	// 后续 AddField 会使缓存失效，Content()/DashscopeInput() 重新计算
+	d.mu.Lock()
+	d.fields = append(d.fields, ModalityField{Kind: k, Data: resolvedData, ID: dataID})
+	d.contentCache = nil
+	d.dashscopeCache = nil
+	d.mu.Unlock()
+	return d, nil
+}
+
+// Content 返回 OpenAI/vLLM 格式的结构化内容列表。
+// 使用 mutex + 空值检查缓存结果，对齐 Python content property 的 truthiness 语义
+// （Python 侧 `if self._content_cache:` 空列表视为未缓存，重新计算）。
+// Python: MultimodalDocument.content
+func (d *MultimodalDocument) Content() []map[string]any {
+	d.mu.Lock()
+	if len(d.contentCache) > 0 {
+		result := d.contentCache
+		d.mu.Unlock()
+		return result
+	}
+	d.mu.Unlock()
+
+	content := d.computeContent()
+
+	d.mu.Lock()
+	d.contentCache = content
+	d.mu.Unlock()
+	return content
+}
+
+// DashscopeInput 返回 DashScope 格式的输入字典。
+// 使用 mutex + 空值检查缓存结果，对齐 Python dashscope_input property 的 truthiness 语义
+// （Python 侧 `if self._dashscope_cache:` 空字典视为未缓存，重新计算）。
+// Python: MultimodalDocument.dashscope_input
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
+	d.mu.Lock()
+	if len(d.dashscopeCache) > 0 {
+		result := d.dashscopeCache
+		d.mu.Unlock()
+		return result, nil
+	}
+	d.mu.Unlock()
+
+	content, err := d.computeDashscopeInput()
+	if err != nil {
+		return nil, err
+	}
+
+	d.mu.Lock()
+	d.dashscopeCache = content
+	d.mu.Unlock()
+	return content, nil
+}
+
+// Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
+// Python: MultimodalDocument.strip()
+func (d *MultimodalDocument) Strip() *MultimodalDocument {
+	if len(d.fields) == 0 {
+		return nil
+	}
+	return d
+}
+
+// Fields 返回模态字段列表的只读副本。
+func (d *MultimodalDocument) Fields() []ModalityField {
+	result := make([]ModalityField, len(d.fields))
+	copy(result, d.fields)
+	return result
+}
+
+// NewTextChunkFromDocument 从 Document 创建 TextChunk。
+// Python: TextChunk.from_document()
+// id 为空时自动生成 UUID。
+func NewTextChunkFromDocument(doc *reranker.Document, chunkText string, id string) *TextChunk {
+	if id == "" {
+		id = uuid.NewString()
+	}
+	meta := doc.Metadata
+	if meta == nil {
+		meta = make(map[string]any)
+	}
+	return &TextChunk{
+		ID:       id,
+		Text:     chunkText,
+		DocID:    doc.ID,
+		Metadata: meta,
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// computeContent 计算 OpenAI/vLLM 格式的结构化内容列表（无缓存版本）。
+// 对齐 Python MultimodalDocument.content property 的计算逻辑。
+func (d *MultimodalDocument) computeContent() []map[string]any {
+	var content []map[string]any
+	for _, f := range d.fields {
+		switch f.Kind {
+		case ModalityText:
+			content = append(content, map[string]any{
+				"type": "text",
+				"text": f.Data,
+			})
+		case ModalityImage, ModalityVideo:
+			content = append(content, map[string]any{
+				"type":                        fmt.Sprintf("%s_url", f.Kind),
+				fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
+			})
+		case ModalityAudio:
+			matches := audioBase64Pattern.FindStringSubmatch(f.Data)
+			if len(matches) < 2 {
+				// 音频字段格式不匹配时记录警告，对齐 T-27 修复
+				logger.Warn(logComponent).
+					Str("modality", "audio").
+					Str("data_prefix", truncatePrefix(f.Data, 50)).
+					Msg("audio field does not match base64 format, skipped")
+				continue
+			}
+			content = append(content, map[string]any{
+				"type":        "input_audio",
+				"input_audio": map[string]any{"data": f.Data, "format": matches[1]},
+			})
+		}
+		if f.ID != "" && len(content) > 0 {
+			content[len(content)-1]["uuid"] = f.ID
+		}
+	}
+	return content
+}
+
+// computeDashscopeInput 计算 DashScope 格式的输入字典（无缓存版本）。
+// 对齐 Python MultimodalDocument.dashscope_input property 的计算逻辑。
+func (d *MultimodalDocument) computeDashscopeInput() (map[string]any, error) {
+	content := make(map[string]any)
+	var images []string
+	hasField := make(map[ModalityKind]bool)
+
+	for _, f := range d.fields {
+		if hasField[f.Kind] {
+			return nil, exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
+			)
+		}
+
+		switch f.Kind {
+		case ModalityText:
+			hasField[f.Kind] = true
+			content["text"] = f.Data
+		case ModalityImage:
+			images = append(images, f.Data)
+		case ModalityVideo:
+			if strings.HasPrefix(f.Data, "data:video/") {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
+				)
+			}
+			hasField[f.Kind] = true
+			content["video"] = f.Data
+		default:
+			return nil, exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
+			)
+		}
+	}
+
+	if len(images) == 1 {
+		content["image"] = images[0]
+	} else if len(images) > 1 {
+		content["multi_images"] = images
+	}
+
+	return content, nil
+}
+
+// init 注册 Python 端补充的 MIME 类型映射。
+// 对齐 Python mimetypes.add_type("image/jpeg", ".jfif", strict=True)——
+// Go 标准库 mime 包默认不识别 .jfif 扩展名，需显式注册。
+func init() {
+	// Python mimetypes.add_type 无返回值；注册失败仅影响该扩展名识别，不阻断启动
+	_ = mime.AddExtensionType(".jfif", "image/jpeg")
+}
+
+// defaultAddFieldOptions 返回默认的 AddField 选项
+func defaultAddFieldOptions() addFieldOptions {
+	return addFieldOptions{}
+}
+
+// loadMultimodalData 加载多模态数据。
+// Python: _load_multimodal_data()
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+func loadMultimodalData(kind ModalityKind, data string, filePath string) (ModalityKind, string, error) {
+	validKinds := map[ModalityKind]bool{
+		ModalityText:  true,
+		ModalityImage: true,
+		ModalityAudio: true,
+		ModalityVideo: true,
+	}
+	if !validKinds[kind] {
+		return "", "", exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("未知的模态类型: %s", kind)),
+		)
+	}
+
+	// 文件路径模式
+	if filePath != "" {
+		if data != "" {
+			return "", "", exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", "不能同时提供 data 和 filePath"),
+			)
+		}
+		return loadFromFile(kind, filePath)
+	}
+
+	// data 模式
+	// S-28: text 模态豁免空 data——对齐 Python `isinstance(data, str)` 对空串
+	// 成立 + `kind == "text"` 直接放行的语义（compute_chunk_embeddings 的
+	// `add_field("text", chunk.text or "")` 会传空串，非 None）。
+	// 其他模态空 data 仍走下方"必须提供数据"报错（对齐 Python no_xxx_source）。
+	if kind == ModalityText {
+		return kind, data, nil
+	}
+
+	if data == "" {
+		return "", "", exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("必须提供 %s 类型的数据或文件路径", kind)),
+		)
+	}
+
+	// 检查 base64 前缀
+	kindPrefix := fmt.Sprintf("data:%s/", kind)
+	if strings.HasPrefix(data, kindPrefix) {
+		return kind, data, nil
+	}
+
+	// URL 模式（音频只接受 base64）
+	if kind != ModalityAudio && strings.HasPrefix(data, "http") && strings.Contains(data, "://") {
+		return kind, data, nil
+	}
+
+	return "", "", exception.BuildError(
+		exception.StatusRetrievalEmbeddingInputInvalid,
+		exception.WithParam("error_msg", fmt.Sprintf("无效的 %s 数据，应为 URL 或以 'data:%s/' 开头的 base64", kind, kind)),
+	)
+}
+
+// loadFromFile 从文件路径加载数据为 base64。
+func loadFromFile(kind ModalityKind, path string) (ModalityKind, string, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return "", "", exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("无法打开 %s 文件: %s", kind, path)),
+		)
+	}
+
+	// 文本模态直接读取文件内容
+	if kind == ModalityText {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", "", exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("读取文本文件失败: %s", err)),
+			)
+		}
+		return kind, string(content), nil
+	}
+
+	mimeType := mime.TypeByExtension(filepath.Ext(path))
+	if mimeType == "" || !strings.Contains(mimeType, "/") {
+		return "", "", exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("无法确定 %s 文件的 MIME 类型: %s", kind, path)),
+		)
+	}
+	// S-03: 对齐 Python kind-override 逻辑——MIME type 不以 kind 开头时改写主类型，
+	// 例如 .svg 返回 image/svg+xml 但 kind 为 image 时保持兼容
+	if !strings.HasPrefix(mimeType, string(kind)) {
+		parts := strings.SplitN(mimeType, "/", 2)
+		if len(parts) == 2 {
+			mimeType = string(kind) + "/" + parts[1]
+		}
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("读取 %s 文件失败: %s", kind, err)),
+		)
+	}
+
+	b64Str := base64.StdEncoding.EncodeToString(raw)
+	return kind, fmt.Sprintf("data:%s;base64,%s", mimeType, b64Str), nil
+}
+
+// truncatePrefix 截取字符串前 n 个字符，用于日志输出避免过长。
+func truncatePrefix(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}

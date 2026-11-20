@@ -183,5 +183,3 @@ func itoaValue(v int) string {
 	return string(buf[i:])
 }
 
-// 编译期断言：适配器实现 SessionRuntimeLifecyclePort。
-var _ SessionRuntimeLifecyclePort = (*TeamSessionLifecycleAdapter)(nil)

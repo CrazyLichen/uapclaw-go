@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/manifest"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/agent_teams/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/manifest"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
 )
 
 // railTypes 提取 rail 类型名列表。

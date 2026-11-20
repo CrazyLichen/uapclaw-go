@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/goal"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

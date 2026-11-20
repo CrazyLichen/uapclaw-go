@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	multimodal "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/multimodal"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/llm/schema"
+	tool "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/schema"
+	multimodal "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/tools/multimodal"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
-	memconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/foundation/store/kv"
+	memconfig "github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/memory/ltm"
 )
 
 // ──────────────────────────── 测试套件 ────────────────────────────

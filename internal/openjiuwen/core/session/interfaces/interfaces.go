@@ -1,0 +1,143 @@
+package interfaces
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openjiuwen/core/session/tracer"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// InnerSession 会话基类接口，定义所有会话类型共有的核心能力。
+// Python: openjiuwen/core/session/session.py BaseSession(ABC)
+//
+// AgentSession、WorkflowSession、NodeSession、SubWorkflowSession 均实现此接口。
+// ProxySession 通过委托模式实现此接口。
+// Python 中 Checkpointer/Storage 方法签名直接接受 BaseSession，
+// Go 同样使用 InnerSession 作为 Checkpointer/Storage 方法的 session 参数类型，
+// 不再需要独立的 CheckpointerSession 子集接口（循环依赖已通过 interfaces 包解决）。
+// 子类型独有的方法通过 *Provider 接口 + 类型断言获取，
+// Python: hasattr/isinstance 运行时探测模式：
+//
+//	接口映射：AgentID      → AgentIDProvider       (Python: hasattr(session, "agent_id"))
+//	接口映射：TeamID       → TeamIDProvider         (Python: hasattr(session, "team_id"))
+//	接口映射：WorkflowID   → WorkflowIDProvider     (Python: hasattr(session, "workflow_id"))
+//	接口映射：Parent       → ParentProvider         (Python: isinstance(session.parent(), AgentSession))
+//	接口映射：ExecutableID → ExecutableIDProvider   (Python: hasattr(session, "executable_id"))
+type InnerSession interface {
+	// Config 获取会话配置
+	Config() config.SessionConfig
+	// State 获取会话状态
+	State() state.SessionState
+	// Tracer 获取会话追踪器
+	Tracer() *tracer.Tracer
+	// StreamWriterManager 获取流写入管理器
+	// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
+	StreamWriterManager() *stream.StreamWriterManager
+	// SessionID 获取会话唯一标识
+	SessionID() string
+	// Checkpointer 获取检查点管理器
+	Checkpointer() Checkpointer
+	// ActorManager 获取 Actor 管理器（可选，默认返回 nil）
+	// ✅ 8.12 已回填：返回类型从 any 改为 *stream_actor.ActorManager
+	ActorManager() *stream_actor.ActorManager
+	// Close 关闭会话，释放资源
+	Close() error
+}
+
+// Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
+// Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
+//
+// Python 中所有方法签名接受 BaseSession，Go 同样使用 InnerSession。
+// AgentID/TeamID/WorkflowID/Parent 等通过 *Provider 类型断言获取，
+// Python: hasattr/isinstance 运行时探测模式。
+type Checkpointer interface {
+	// PreWorkflowExecute 工作流执行前
+	PreWorkflowExecute(ctx context.Context, session InnerSession, inputs any) error
+	// PostWorkflowExecute 工作流执行后。
+	// result 收窄为 map[string]any：Python 侧该参数无类型注解（untyped），
+	// 唯一消费方式是 result.get(TASK_STATUS_INTERRUPT)，故只接受 map 形状结果，
+	// 非 map 结果由调用方在类型层面排除（偏差记录见 8.3d spec §12）。
+	PostWorkflowExecute(ctx context.Context, session InnerSession, result map[string]any, exception error) error
+	// PreAgentExecute Agent 执行前
+	PreAgentExecute(ctx context.Context, session InnerSession, inputs any) error
+	// PreAgentTeamExecute AgentTeam 执行前
+	PreAgentTeamExecute(ctx context.Context, session InnerSession, inputs any) error
+	// InterruptAgentExecute Agent 中断时保存检查点
+	InterruptAgentExecute(ctx context.Context, session InnerSession) error
+	// PostAgentExecute Agent 执行后保存检查点
+	PostAgentExecute(ctx context.Context, session InnerSession) error
+	// PostAgentTeamExecute AgentTeam 执行后保存检查点
+	PostAgentTeamExecute(ctx context.Context, session InnerSession) error
+	// SessionExists 检查会话是否存在
+	SessionExists(ctx context.Context, sessionID string) (bool, error)
+	// Release 释放会话资源。
+	// agentID 可选参数：提供时仅释放指定 Agent 的检查点（支持多个，循环清除），否则释放整个 session。
+	// Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
+	Release(ctx context.Context, sessionID string, agentID ...string) error
+	// GraphStore 获取图状态存储
+	GraphStore() pregel.Store
+}
+
+// Storage 状态存储接口，负责单个实体的状态保存/恢复/清除。
+// Python: openjiuwen/core/session/checkpointer/base.py (Storage)
+//
+// Python 中所有方法签名接受 BaseSession，Go 同样使用 InnerSession。
+type Storage interface {
+	// Save 保存会话状态
+	Save(ctx context.Context, session InnerSession) error
+	// Recover 恢复会话状态
+	Recover(ctx context.Context, session InnerSession, inputs any) error
+	// Clear 清除会话数据
+	// entityID 为实体标识（Agent 的 agentID / Workflow 的 workflowID）
+	// sessionID 为会话标识，Persistence 版用于构建 KV key，InMemory 版忽略
+	Clear(ctx context.Context, entityID, sessionID string) error
+	// Exists 检查状态是否存在
+	Exists(ctx context.Context, session InnerSession) (bool, error)
+}
+
+// AgentIDProvider 提供 Agent ID 的接口（通过类型断言获取）。
+// AgentSession 天然满足此接口。
+// Python: hasattr(session, "agent_id") 检测。
+type AgentIDProvider interface {
+	AgentID() string
+}
+
+// TeamIDProvider 提供 Team ID 的接口（通过类型断言获取）。
+// AgentTeamSession 天然满足此接口。
+// Python: hasattr(session, "team_id") 检测。
+type TeamIDProvider interface {
+	TeamID() string
+}
+
+// WorkflowIDProvider 提供 WorkflowID 的接口（通过类型断言获取）。
+// WorkflowSession/NodeSession 天然满足此接口。
+// Python: hasattr(session, "workflow_id") 检测。
+type WorkflowIDProvider interface {
+	WorkflowID() string
+}
+
+// ParentProvider 提供 Parent 的接口（通过类型断言获取）。
+// WorkflowSession/NodeSession 天然满足此接口，AgentSession 不满足。
+// Python: isinstance(session.parent(), AgentSession) 检测。
+type ParentProvider interface {
+	Parent() InnerSession
+}
+
+// ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
+// NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
+// 通过类型断言延迟绑定：WorkflowInteraction/AgentInteraction 运行时断言获取 nodeID。
+// Python: hasattr(session, "executable_id") 检测。
+type ExecutableIDProvider interface {
+	ExecutableID() string
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Deprecated: 使用 InnerSession
+type BaseSession = InnerSession

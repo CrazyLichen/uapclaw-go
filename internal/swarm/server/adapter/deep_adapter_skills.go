@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/openjiuwen/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
