@@ -104,6 +104,7 @@ func TestWorktreeManager_Prepare(t *testing.T) {
 	runner.deflt = CommandResult{ExitCode: 1, Output: ""}
 	runner.resps["git fetch origin"] = CommandResult{ExitCode: 0, Output: "fetched"}
 	runner.resps["git worktree prune"] = CommandResult{ExitCode: 0, Output: ""}
+	runner.resps["git worktree add -b auto-harness/fix-issue-42"] = CommandResult{ExitCode: 0, Output: ""}
 	cfg := newTestWorktreeConfig(localRepo)
 	cfg.WorktreesDir = t.TempDir()
 	mgr := NewWorktreeManager(nil, runner, func() WorktreeConfigSnapshot { return cfg }, "u", "tok")
@@ -130,9 +131,13 @@ func TestWorktreeManager_Prepare(t *testing.T) {
 			t.Fatalf("调用链缺 %q:\n%s", want, joined)
 		}
 	}
-	// worktree add 在 base 上执行
-	if !strings.Contains(runner.calls[len(runner.calls)-2], fmt.Sprintf("dir=%s cmd=git remote add", localRepo)) {
-		t.Fatalf("remote add 应在 base 执行")
+	// 最后一次调用是 remote add，且在 base 上执行
+	last := runner.calls[len(runner.calls)-1]
+	if !strings.Contains(last, "cmd=git remote add fork https://gitcode.com/forker/agent-core.git") {
+		t.Fatalf("末次调用 = %q", last)
+	}
+	if !strings.HasPrefix(last, fmt.Sprintf("dir=%s cmd=git remote add", localRepo)) {
+		t.Fatalf("remote add 应在 base 执行 = %q", last)
 	}
 }
 
