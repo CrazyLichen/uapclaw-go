@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
@@ -39,19 +40,19 @@ func InjectSwarmProviderBases() {
 	if providerBasesInjected {
 		return
 	}
-	providers.SetContextProcessorRailBuilder(func(config map[string]any) any {
+	providers.SetContextProcessorRailBuilder(func(config map[string]any) agentinterfaces.AgentRail {
 		return teamrt.BuildContextProcessorRail(config)
 	})
-	providers.SetWorkspaceReportPathCtor(func(rootDir, teamID, language string) any {
+	providers.SetWorkspaceReportPathCtor(func(rootDir, teamID, language string) agentinterfaces.AgentRail {
 		return teamrt.NewTeamWorkspaceReportPathRail(rootDir, teamID, language)
 	})
-	providers.SetMemberSkillToolkitRailCtor(func(workspaceDir string) any {
+	providers.SetMemberSkillToolkitRailCtor(func(workspaceDir string) agentinterfaces.AgentRail {
 		return teamrt.NewMemberSkillToolkitRail(workspaceDir)
 	})
-	providers.SetCodeAgentRailCtor(func(workspaceDir string) any {
+	providers.SetCodeAgentRailCtor(func(workspaceDir string) agentinterfaces.AgentRail {
 		return NewCodeAgentRail(workspaceDir, nil)
 	})
-	providers.SetUserHookRailCtor(func(config hookscfg.HooksConfig) any {
+	providers.SetUserHookRailCtor(func(config hookscfg.HooksConfig) agentinterfaces.AgentRail {
 		return serverhooks.NewUserHookRail(hookscfg.HooksConfig(config))
 	})
 	providerBasesInjected = true

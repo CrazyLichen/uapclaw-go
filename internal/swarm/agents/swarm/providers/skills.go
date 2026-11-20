@@ -2,6 +2,7 @@ package providers
 
 import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -108,11 +109,11 @@ func buildMemberSkillToolkit(params map[string]any, view SwarmContextView) (any,
 
 var (
 	// memberSkillToolkitRailCtor 成员技能工具箱 rail 构造（team 基座，注册段注入）。
-	memberSkillToolkitRailCtor func(workspaceDir string) any
+	memberSkillToolkitRailCtor func(workspaceDir string) agentinterfaces.AgentRail
 )
 
 // SetMemberSkillToolkitRailCtor 注入成员技能工具箱 rail 构造。
-func SetMemberSkillToolkitRailCtor(fn func(workspaceDir string) any) {
+func SetMemberSkillToolkitRailCtor(fn func(workspaceDir string) agentinterfaces.AgentRail) {
 	memberSkillToolkitRailCtor = fn
 }
 

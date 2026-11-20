@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
@@ -201,7 +202,7 @@ func TestBuildContextProcessorRail_开关门控(t *testing.T) {
 	assert.Nil(t, out2, "builder 未注入（team 基座经注册段注入）应跳过")
 
 	// 注入回环：注入后产出 rail
-	providers.SetContextProcessorRailBuilder(func(config map[string]any) any {
+	providers.SetContextProcessorRailBuilder(func(config map[string]any) agentinterfaces.AgentRail {
 		return fakeContextProcessorRail{}
 	})
 	defer providers.SetContextProcessorRailBuilder(nil)

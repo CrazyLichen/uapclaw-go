@@ -3,6 +3,7 @@ package providers
 import (
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -312,16 +313,21 @@ func stringSliceParam(params map[string]any, key string) []string {
 
 var (
 	// codeAgentRailCtor CodeAgentRail 构造（server/adapter 基座，注册段注入）。
-	codeAgentRailCtor func(workspaceDir string) any
+	// 返回类型收窄为 AgentRail（2026-12-04 裁决，同 member_rails 注入缝）。
+	codeAgentRailCtor func(workspaceDir string) agentinterfaces.AgentRail
 	// userHookRailCtor 用户钩子 rail 构造（server/hooks 基座，注册段注入）。
-	userHookRailCtor func(config hooks.HooksConfig) any
+	userHookRailCtor func(config hooks.HooksConfig) agentinterfaces.AgentRail
 )
 
 // SetCodeAgentRailCtor 注入 CodeAgentRail 构造。
-func SetCodeAgentRailCtor(fn func(workspaceDir string) any) { codeAgentRailCtor = fn }
+func SetCodeAgentRailCtor(fn func(workspaceDir string) agentinterfaces.AgentRail) {
+	codeAgentRailCtor = fn
+}
 
 // SetUserHookRailCtor 注入用户钩子 rail 构造。
-func SetUserHookRailCtor(fn func(config hooks.HooksConfig) any) { userHookRailCtor = fn }
+func SetUserHookRailCtor(fn func(config hooks.HooksConfig) agentinterfaces.AgentRail) {
+	userHookRailCtor = fn
+}
 
 // RegisterCodeRailProviders 注册 code_rails 全部 provider。
 // 清单顺序按 code_rails.py @harness_element 声明序。

@@ -481,19 +481,21 @@ func buildTeamPermissionRail(params map[string]any, view SwarmContextView) (any,
 
 var (
 	// contextProcessorRailBuilder 上下文压缩 rail 构造（team 包基座，注册段注入）。
-	contextProcessorRailBuilder func(config map[string]any) any
+	// 返回类型收窄为 AgentRail（2026-12-04 裁决：注入缝签名类型化，
+	// 落点仍是 RailProvider 的 any 契约，此处不再放大 any）。
+	contextProcessorRailBuilder func(config map[string]any) agentinterfaces.AgentRail
 	// workspaceReportPathCtor 团队工作区报告路径 rail 构造（同上）。
-	workspaceReportPathCtor func(rootDir, teamID, language string) any
+	workspaceReportPathCtor func(rootDir, teamID, language string) agentinterfaces.AgentRail
 )
 
 // SetContextProcessorRailBuilder 注入上下文压缩 rail 构造（父包注册段调用；
 // 偏差 D-15.16f-view 配套缝——team 基座经父包注入规避 providers↔team 成环）。
-func SetContextProcessorRailBuilder(fn func(config map[string]any) any) {
+func SetContextProcessorRailBuilder(fn func(config map[string]any) agentinterfaces.AgentRail) {
 	contextProcessorRailBuilder = fn
 }
 
 // SetWorkspaceReportPathCtor 注入团队工作区报告路径 rail 构造。
-func SetWorkspaceReportPathCtor(fn func(rootDir, teamID, language string) any) {
+func SetWorkspaceReportPathCtor(fn func(rootDir, teamID, language string) agentinterfaces.AgentRail) {
 	workspaceReportPathCtor = fn
 }
 
