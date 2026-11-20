@@ -49,3 +49,4 @@ internal/agent_teams/tools/index.json
 internal/agentcore/retrieval/indexing/processor/parser/images/
 tests/integration/cmd/memory.db
 coding_memory/uap-claw-go/memory.db
+.worktrees/
