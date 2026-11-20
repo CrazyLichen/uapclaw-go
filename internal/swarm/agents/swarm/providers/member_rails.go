@@ -23,10 +23,9 @@
 //	├── designer_tools.go  # designer 工具壳（designer_tools.py，基座缝 F4）
 //	└── builtin_rails.go  # response_prompt/stream_event 等包装（builtin_rails.py）
 //
-// 循环依赖拆解（偏差 D-15.16f-view）：Python providers 直接 import 父包的
-// SwarmBuildContext；Go 侧父包 registry.go 需调用本包注册函数（规则 9 目录
-// 1:1），为避免 providers↔swarm 成环，本包定义 SwarmContextView 窄接口，
-// SwarmBuildContext 以访问器方法隐式实现（Python 无对应方法，属性直读）。
+// 上下文承载（2026-12-04 叶包迁移，替代原偏差 D-15.16f-view）：Python
+// providers 直接 import 父包的 SwarmBuildContext；Go 侧 SwarmBuildContext
+// 已挪入 buildctx 叶包，本包直接使用具体类型（访问器接口已删）。
 package providers
 
 import (
@@ -39,75 +38,19 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SwarmContextView providers 工厂所需的平台构建上下文视图。
-//
-// *swarm.SwarmBuildContext 隐式实现（父包加访问器方法，偏差 D-15.16f-view）；
-// ctx 不是 SwarmBuildContext 时工厂按「上下文不可用」走各自 nil 门控。
-type SwarmContextView interface {
-	hschema.BuildContextInterface
+// SwarmContextView 平台构建上下文的具体类型别名（2026-12-04 叶包迁移：
+// SwarmBuildContext 已挪入 buildctx 叶包，providers 直接使用具体类型，
+// D-15.16f-view 的 22 个访问器接口删除；别名保留以减少调用点改动）。
+type SwarmContextView = buildctx.SwarmBuildContext
 
-	// ViewRole 成员角色（leader/teammate）。Python: context.role
-	ViewRole() string
-	// ViewTeamID 团队名。Python: context.team_id
-	ViewTeamID() string
-	// ViewSessionID 会话 id。Python: context.session_id
-	ViewSessionID() string
-	// ViewChannelID 渠道 id。Python: context.channel_id
-	ViewChannelID() string
-	// ViewChannel 渠道键。Python: context.channel
-	ViewChannel() string
-	// ViewMode 请求模式。Python: context.mode
-	ViewMode() string
-	// ViewUserID 请求属主。Python: context.user_id
-	ViewUserID() string
-	// ViewRequestID 发起请求 id。Python: context.request_id
-	ViewRequestID() string
-	// ViewMemberCardID 成员卡片 id。Python: context.member_card_id
-	ViewMemberCardID() string
-	// ViewMemberName 成员名。Python: context.member_name
-	ViewMemberName() string
-	// ViewTeamSkillVisibilityPath 团队技能可见性文件路径。
-	// Python: context.team_skill_visibility_path
-	ViewTeamSkillVisibilityPath() string
-	// ViewRequestMetadata 请求元数据。Python: context.request_metadata
-	ViewRequestMetadata() map[string]any
-	// ViewHeartbeatJobService 心跳作业服务句柄（any 别名，D-15.16-c2③）。
-	// Python: context.heartbeat_job_service
-	ViewHeartbeatJobService() any
-	// ViewConfig config.yaml 映射。Python: context.config
-	ViewConfig() map[string]any
-	// ViewProjectDir 用户项目目录。Python: context.project_dir
-	ViewProjectDir() string
-	// ViewTrustedDirs 客户端声明的受信目录。Python: context.trusted_dirs
-	ViewTrustedDirs() []string
-	// ViewGlobalSkillsDir 全局 Skill 库目录。Python: context.global_skills_dir
-	ViewGlobalSkillsDir() string
-	// ViewTeamWsRoot 团队共享工作区根。Python: context.team_ws_root
-	ViewTeamWsRoot() string
-	// ViewTeamOutputsDir 项目less 团队交付物目录。Python: context.team_outputs_dir
-	ViewTeamOutputsDir() string
-	// ViewTaskWorkspaceRoot 共享交付物根。Python: context.task_workspace_root
-	ViewTaskWorkspaceRoot() string
-	// ViewLanguage 成员语言码。Python: context.language
-	ViewLanguage() string
-	// ViewMemberWorkspaceRoot 成员工作区根（workspace.root_path）。
-	// Python: _workspace_root(ctx)（member_rails.py:214-218）
-	ViewMemberWorkspaceRoot() string
-	// ViewResolveMemberWorkDir 解析成员工作目录。
-	// Python: context.resolve_member_work_dir()
-	ViewResolveMemberWorkDir() (string, error)
-	// ViewResolveMemberSkillVisibilityPath 解析成员技能可见性文件路径。
-	// Python: context.resolve_member_skill_visibility_path()
-	ViewResolveMemberSkillVisibilityPath() string
-}
-
-// SwarmContextOf 从构建上下文取出平台视图；非平台上下文返回 nil。
-func SwarmContextOf(ctx hschema.BuildContextInterface) SwarmContextView {
-	if view, ok := ctx.(SwarmContextView); ok {
+// SwarmContextOf 从构建上下文取出平台具体类型；非平台上下文返回 nil。
+func SwarmContextOf(ctx hschema.BuildContextInterface) *buildctx.SwarmBuildContext {
+	if view, ok := ctx.(*buildctx.SwarmBuildContext); ok {
 		return view
 	}
 	return nil
@@ -116,7 +59,7 @@ func SwarmContextOf(ctx hschema.BuildContextInterface) SwarmContextView {
 // railProviderAdapter 把具体工厂适配成 hschema.RailProvider 签名，
 // 并在上下文非平台形态时返回 nil（跳过该 rail）。
 func railProviderAdapter(
-	build func(params map[string]any, view SwarmContextView) (any, error),
+	build func(params map[string]any, view *buildctx.SwarmBuildContext) (any, error),
 ) hschema.RailProvider {
 	return func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
 		view := SwarmContextOf(ctx)
@@ -148,9 +91,9 @@ const (
 // buildOrganizationOwnerInboxRail Owner 有序持久结果注入（leader-only）。
 // 基座 OrganizationOwnerInboxRail Go 未实施 ⤴️15.20（成员 rail 基座缺口批）。
 // Python: _build_organization_owner_inbox_rail (member_rails.py:87-93)
-func buildOrganizationOwnerInboxRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildOrganizationOwnerInboxRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil, nil
 	}
 	// Python: return OrganizationOwnerInboxRail(context.team_id, context.session_id)
@@ -160,18 +103,18 @@ func buildOrganizationOwnerInboxRail(params map[string]any, view SwarmContextVie
 // buildOrganizationModelRail 组织专家 Team 持久模型选择应用。
 // 基座 OrganizationModelRail Go 未实施 ⤴️15.20。
 // Python: _build_organization_model_rail (member_rails.py:97-103)
-func buildOrganizationModelRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildOrganizationModelRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	_ = view.ViewTeamID()
-	_ = view.ViewSessionID()
-	_ = view.ViewRole()
+	_ = view.TeamID
+	_ = view.SessionID
+	_ = view.Role
 	return nil, nil
 }
 
 // buildOrganizationAvailabilityRail 组织 leader 的 AgentGroup 可用性暴露。
 // 基座 OrganizationAvailabilityRail Go 未实施 ⤴️15.20。
 // Python: _build_organization_availability_rail (member_rails.py:108-112)
-func buildOrganizationAvailabilityRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildOrganizationAvailabilityRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	return nil, nil
 }
@@ -179,9 +122,9 @@ func buildOrganizationAvailabilityRail(params map[string]any, view SwarmContextV
 // buildSessionMessagingRouteRail 仅 Team leader 挂载 Session messaging 路由。
 // 分支体（SessionMessagingRouteRail）⤴️25.6 群聊（缝 F2）。
 // Python: _build_session_messaging_route_rail (member_rails.py:127-137)
-func buildSessionMessagingRouteRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildSessionMessagingRouteRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil, nil
 	}
 	// Python: return SessionMessagingRouteRail()——群聊域基座未实施
@@ -199,25 +142,25 @@ func buildSessionMessagingRouteRail(params map[string]any, view SwarmContextView
 // 但其构造为 NewHeartbeatRail()（service/context 绑定段未实现）；
 // is_heartbeat_supported / is_cron_execution_session 助手 ⤴️15.20。
 // Python: _build_heartbeat_rail (member_rails.py:143-196)
-func buildHeartbeatRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildHeartbeatRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	service := view.ViewHeartbeatJobService()
-	sessionID := trimSpaceOrEmpty(view.ViewSessionID())
+	service := view.HeartbeatJobService
+	sessionID := trimSpaceOrEmpty(view.SessionID)
 	if service == nil || sessionID == "" {
 		return nil, nil
 	}
-	metadata := copyMapOrEmpty(view.ViewRequestMetadata())
+	metadata := copyMapOrEmpty(view.RequestMetadata)
 	// cron 执行会话不挂心跳工具（心跳任务绑定创建它的会话，从 cron 运行里
 	// 再派生心跳任务与「禁止 cron 派生 cron」同理）。
 	if mapKeyTruthy(metadata, "cron") ||
-		trimSpaceOrEmpty(view.ViewChannelID()) == "__cron__" ||
+		trimSpaceOrEmpty(view.ChannelID) == "__cron__" ||
 		isCronExecutionSession(sessionID) {
 		logHeartbeatSkip("cron execution session", sessionID)
 		return nil, nil
 	}
 	// 小艺等渠道没有可用的主动投递路径（heartbeat_policy），不挂心跳工具，
 	// 否则成员会回答「心跳已创建」而结果永远送不到手机。
-	if !isHeartbeatSupported(view.ViewChannelID()) {
+	if !isHeartbeatSupported(view.ChannelID) {
 		logHeartbeatSkip("channel without heartbeat support", sessionID)
 		return nil, nil
 	}
@@ -232,7 +175,7 @@ func buildHeartbeatRail(params map[string]any, view SwarmContextView) (any, erro
 // 基座 PersonalContextRail（harness/rails/personal_context.py 360 行）Go
 // 未实施 ⤴️15.20。
 // Python: _build_personal_context_rail (member_rails.py:201-212)
-func buildPersonalContextRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildPersonalContextRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: PersonalContextRail(Path.home() / ".jiuwenswarm" / ".personal_context")，
@@ -251,9 +194,9 @@ func buildPersonalContextRail(params map[string]any, view SwarmContextView) (any
 // skill_retrieval_toolkit 消费段已有承接章节 9.11b（前置件清单含同名文件）
 // ⤴️9.11b；is_skill_retrieval_enabled 助手随 tools.go（Task 5）落地。
 // Python: _build_skill_retrieval_prompt_rail (member_rails.py:246-272)
-func buildSkillRetrievalPromptRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildSkillRetrievalPromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if !isSkillRetrievalEnabled(view.ViewConfig()) {
+	if !isSkillRetrievalEnabled(view.Config) {
 		return nil, nil
 	}
 	// Python: toolkit = skill_retrieval_toolkit_for_context(context);
@@ -266,9 +209,9 @@ func buildSkillRetrievalPromptRail(params map[string]any, view SwarmContextView)
 // 基座 SymphonyOrchestrationRail（symphony/orchestration_rail.py 1149 行）
 // 归领域十六 ⤴️领域十六。
 // Python: _build_symphony_orchestration_rail (member_rails.py:277-284)
-func buildSymphonyOrchestrationRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildSymphonyOrchestrationRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil, nil
 	}
 	return nil, nil
@@ -286,22 +229,22 @@ func buildSymphonyOrchestrationRail(params map[string]any, view SwarmContextView
 // task_work_dir/task_outputs_dir）⤴️15.20（runtime_prompt rail 全量对齐）；
 // 本工厂保留完整分支结构与路径解析，已支持形参全部传入。
 // Python: _build_runtime_prompt_rail (member_rails.py:321-384)
-func buildRuntimePromptRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildRuntimePromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	// RuntimePromptInput.resolve（:275-298 的 context_field 全集）
-	language := stringFieldOrEmpty(view.ViewLanguage(), "cn")
-	channel := stringFieldOrEmpty(view.ViewChannel(), "default")
-	projectDir := view.ViewProjectDir()
-	memberWorkspaceRoot := view.ViewMemberWorkspaceRoot()
-	taskWorkspaceRoot := view.ViewTaskWorkspaceRoot()
-	teamOutputsDir := view.ViewTeamOutputsDir()
-	trustedDirs := view.ViewTrustedDirs()
+	language := stringFieldOrEmpty(view.Language, "cn")
+	channel := stringFieldOrEmpty(view.Channel, "default")
+	projectDir := view.ProjectDir
+	memberWorkspaceRoot := memberWorkspaceRoot(view)
+	taskWorkspaceRoot := view.TaskWorkspaceRoot
+	teamOutputsDir := view.TeamOutputsDir
+	trustedDirs := view.TrustedDirs
 
 	rail := swarmrails.NewRuntimePromptRail(language, channel)
 	// 团队成员用自己的 RuntimePromptRail 实例：绑定发起请求，运行态从
 	// 活会话读取而非进程级 default 状态文件。
 	// Python: rail.set_mode(context.mode); rail.set_session_id(context.session_id)
-	rail.SetMode(view.ViewMode())
+	rail.SetMode(view.Mode)
 	// rail.set_session_id —— 基座缺 ⤴️15.20
 
 	// Python :346-379 分支：
@@ -310,7 +253,7 @@ func buildRuntimePromptRail(params map[string]any, view SwarmContextView) (any, 
 		// Python: rail.set_runtime_paths(cwd=..., project_dir=..., workspace_dir=...)
 		rail.SetRuntimePaths(orEmpty(projectDir, memberWorkspaceRoot), projectDir)
 	} else {
-		workDir, err := view.ViewResolveMemberWorkDir()
+		workDir, err := view.ResolveMemberWorkDir()
 		if err != nil {
 			return nil, err
 		}
@@ -332,9 +275,9 @@ func buildRuntimePromptRail(params map[string]any, view SwarmContextView) (any, 
 // 基座 TeamSkillStoragePolicyRail（team_skill_storage_policy_rail.py 140 行）
 // Go 未实施 ⤴️15.20。
 // Python: _build_team_skill_storage_policy_rail (member_rails.py:439-452)
-func buildTeamSkillStoragePolicyRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildTeamSkillStoragePolicyRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if view.ViewGlobalSkillsDir() == "" {
+	if view.GlobalSkillsDir == "" {
 		return nil, nil
 	}
 	// Python: TeamSkillStoragePolicyRail(global_skills_dir=..., team_workspace_root=...,
@@ -346,9 +289,9 @@ func buildTeamSkillStoragePolicyRail(params map[string]any, view SwarmContextVie
 // 基座 TeamSkillLibraryReloadRail（team_skill_library_reload_rail.py 147 行）
 // Go 未实施 ⤴️15.20。
 // Python: _build_team_skill_library_reload_rail (member_rails.py:483-495)
-func buildTeamSkillLibraryReloadRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildTeamSkillLibraryReloadRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if view.ViewGlobalSkillsDir() == "" {
+	if view.GlobalSkillsDir == "" {
 		return nil, nil
 	}
 	return nil, nil
@@ -357,8 +300,8 @@ func buildTeamSkillLibraryReloadRail(params map[string]any, view SwarmContextVie
 // buildTeamWorkspaceReportPathRail 团队工作区报告路径重写 rail。
 // 基座 TeamWorkspaceReportPathRail 已有（team/workspace_report_path_rail.go）。
 // Python: _build_team_workspace_report_path_rail (member_rails.py:549-568)
-func buildTeamWorkspaceReportPathRail(params map[string]any, view SwarmContextView) (any, error) {
-	if view.ViewTeamWsRoot() == "" {
+func buildTeamWorkspaceReportPathRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
+	if view.TeamWsRoot == "" {
 		return nil, nil
 	}
 	// Python 构造：root_dir/project_dir/outputs_dir/team_id/language（:556-563）
@@ -368,7 +311,7 @@ func buildTeamWorkspaceReportPathRail(params map[string]any, view SwarmContextVi
 	if workspaceReportPathCtor == nil {
 		return nil, nil
 	}
-	rail := workspaceReportPathCtor(view.ViewTeamWsRoot(), view.ViewTeamID(), stringFieldOrEmpty(view.ViewLanguage(), "cn"))
+	rail := workspaceReportPathCtor(view.TeamWsRoot, view.TeamID, stringFieldOrEmpty(view.Language, "cn"))
 	// Python: rail.bind_swarm_context(context)——基座缺 ⤴️15.20
 	_ = rail
 	return rail, nil
@@ -378,7 +321,7 @@ func buildTeamWorkspaceReportPathRail(params map[string]any, view SwarmContextVi
 // 基座 BuildContextProcessorRail 已有（team/runtime_inheritance.go:315，
 // 即 Python team_runtime_inheritance._build_context_processor_rail）。
 // Python: _build_context_processor (member_rails.py:597-611)
-func buildContextProcessorRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildContextProcessorRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	// ContextProcessorInput.resolve（:583-592：param_field 两个）
 	enabled := boolParamOr(params, "context_engine_enabled", true)
 	if !enabled {
@@ -401,7 +344,7 @@ func buildContextProcessorRail(params map[string]any, view SwarmContextView) (an
 // 基座 BuildModelAnomalyDetectionRail 已有（team/runtime_inheritance.go:258，
 // 注释即对齐 Python member_rails.py:613）。
 // Python: _build_model_anomaly_detection (member_rails.py:632-660)
-func buildModelAnomalyDetectionRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildModelAnomalyDetectionRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = view
 	railCfg, _ := params["rail_config"].(map[string]any)
 	if railCfg == nil {
@@ -422,7 +365,7 @@ func buildModelAnomalyDetectionRail(params map[string]any, view SwarmContextView
 // 基座 rail_manager（common/plugins/rail_manager.py）Go 未实施 ⤴️15.20
 // （扩展包管理 D-e12 同域）。
 // Python: _build_plugin_rails (member_rails.py:671-698)
-func buildPluginRails(params map[string]any, view SwarmContextView) (any, error) {
+func buildPluginRails(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: get_rail_manager().get_registered_rail_names() 逐个
@@ -434,7 +377,7 @@ func buildPluginRails(params map[string]any, view SwarmContextView) (any, error)
 // 基座 TeamPermissionPolicyRail（team_permission_policy_rail.py 75 行）
 // Go 未实施 ⤴️15.20。
 // Python: _build_team_permission_policy_rail (member_rails.py:783-797)
-func buildTeamPermissionPolicyRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildTeamPermissionPolicyRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	permissionsConfig, _ := params["permissions_config"].(map[string]any)
 	if permissionsConfig == nil {
 		permissionsConfig = map[string]any{}
@@ -444,7 +387,7 @@ func buildTeamPermissionPolicyRail(params map[string]any, view SwarmContextView)
 	}
 	// Python: TeamPermissionPolicyRail(permissions_config=..., language=...)
 	// ——基座 ⤴️15.20
-	_ = stringFieldOrEmpty(view.ViewLanguage(), "cn")
+	_ = stringFieldOrEmpty(view.Language, "cn")
 	return nil, nil
 }
 
@@ -456,7 +399,7 @@ func buildTeamPermissionPolicyRail(params map[string]any, view SwarmContextView)
 // openjiuwen。Go 侧 TeamPermissionRail 已在 agent_teams/rails 声明；
 // TeamApprovalOrchestrator / narrow_permissions 助手 ⤴️15.20。
 // Python: _build_team_permission_rail (member_rails.py:813-819)
-func buildTeamPermissionRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildTeamPermissionRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	backend := atrails.GetTeamBackend(view)
 	messager := atrails.GetMessager(view)
 	if backend == nil || messager == nil {

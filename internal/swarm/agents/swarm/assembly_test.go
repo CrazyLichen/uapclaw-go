@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	teamworkspace "github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -23,7 +24,7 @@ func TestEnrichTeamSpecForSwarmSeed_无项目分配产物目录(t *testing.T) {
 	if spec.BuildContext == nil {
 		t.Fatal("build_context 未挂")
 	}
-	bc := spec.BuildContext.(*SwarmBuildContext)
+	bc := spec.BuildContext.(*buildctx.SwarmBuildContext)
 	if bc.TaskWorkspaceRoot == "" || bc.TeamOutputsDir == "" {
 		t.Fatal("无项目团队应分配产物目录")
 	}
@@ -50,7 +51,7 @@ func TestEnrichTeamSpecForSwarmSeed_有项目(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bc := spec.BuildContext.(*SwarmBuildContext)
+	bc := spec.BuildContext.(*buildctx.SwarmBuildContext)
 	if bc.TaskWorkspaceRoot != "" || bc.TeamOutputsDir != "" {
 		t.Fatal("绑定项目的成员产物留在项目内，双 nil")
 	}
@@ -68,7 +69,7 @@ func TestEnrichTeamSpecForSwarmSeed_Workspace优先(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := spec.BuildContext.(*SwarmBuildContext).TeamWsRoot; got != "/custom/team-ws" {
+	if got := spec.BuildContext.(*buildctx.SwarmBuildContext).TeamWsRoot; got != "/custom/team-ws" {
 		t.Fatalf("workspace.root_path 应优先: %q", got)
 	}
 	// 默认布局回退
@@ -77,7 +78,7 @@ func TestEnrichTeamSpecForSwarmSeed_Workspace优先(t *testing.T) {
 	if err := EnrichTeamSpecForSwarmSeed(spec2, EnrichSeedParams{SessionID: "s1", Mode: "team"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := spec2.BuildContext.(*SwarmBuildContext).TeamWsRoot; got == "" {
+	if got := spec2.BuildContext.(*buildctx.SwarmBuildContext).TeamWsRoot; got == "" {
 		t.Fatal("默认布局回退失败")
 	}
 }
@@ -92,7 +93,7 @@ func TestEnrichTeamSpecForSwarmSeed_DisableWorktree(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !spec.BuildContext.(*SwarmBuildContext).DisableTeammateWorktree {
+	if !spec.BuildContext.(*buildctx.SwarmBuildContext).DisableTeammateWorktree {
 		t.Fatal("web+team 应禁用 teammate worktree")
 	}
 	// 非 web channel → false
@@ -103,7 +104,7 @@ func TestEnrichTeamSpecForSwarmSeed_DisableWorktree(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if spec2.BuildContext.(*SwarmBuildContext).DisableTeammateWorktree {
+	if spec2.BuildContext.(*buildctx.SwarmBuildContext).DisableTeammateWorktree {
 		t.Fatal("非 web channel 不禁用")
 	}
 }

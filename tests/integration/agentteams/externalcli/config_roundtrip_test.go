@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -162,7 +163,7 @@ func (s *ConfigRoundtripSuite) TestBuildContextSeed_往返与materialize() {
 	// materialize：平台工厂重建活载体，提取器取回路径
 	s.Require().NoError(received.MaterializeBuildContext())
 	s.Require().NotNil(received.BuildContext, "materialize 必须重建活载体")
-	bc := received.BuildContext.(*swarm.SwarmBuildContext)
+	bc := received.BuildContext.(*buildctx.SwarmBuildContext)
 	s.Equal("sess-1", bc.SessionID)
 	s.Equal("pay", bc.TeamID)
 	s.Equal("/proj/dir", bc.GetProjectDir(), "GetProjectDir 提取器（install_skills 门卫依赖）")

@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	swschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // logComponent 组件级日志组件。
@@ -174,9 +175,9 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 	teamVisibilityPath := teamWsRoot + "/" + agentteams.SKILL_VISIBILITY_FILENAME
 	globalSkillsDir := skillsLibrary
 
-	// 步骤 7: base = SwarmBuildContext(...)（:485-535）
-	base := NewSwarmBuildContext(SwarmBuildContextParams{
-		// Python: config=config（assembly.py:485，SwarmBuildContext config 字段
+	// 步骤 7: base = buildctx.SwarmBuildContext(...)（:485-535）
+	base := buildctx.NewSwarmBuildContext(buildctx.SwarmBuildContextParams{
+		// Python: config=config（assembly.py:485，buildctx.SwarmBuildContext config 字段
 		// context.py:124）——providers 工厂经 ctx.config 读开关（15.16f 执行期
 		// 集成矩阵发现的 parity 缺口：此前未传，工厂拿到 nil config）。
 		Config:                  legacyConfigMap(),
@@ -197,7 +198,7 @@ func EnrichTeamSpecForSwarmSeed(spec *atschema.TeamAgentSpec, p EnrichSeedParams
 		TeamSkillVisibilityPath: teamVisibilityPath,
 		GlobalSkillsDir:         globalSkillsDir,
 		TrajectorySpanProcessor: demand.GetTrajectorySpanProcessor(),
-		HeartbeatJobService:     GetHeartbeatJobService(),
+		HeartbeatJobService:     buildctx.GetHeartbeatJobService(),
 	})
 
 	// 步骤 8: mcp_configs（assembly.py:537-540 区段）

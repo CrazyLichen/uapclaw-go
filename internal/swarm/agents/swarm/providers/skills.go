@@ -1,6 +1,7 @@
 package providers
 
 import (
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -31,10 +32,10 @@ const constMemberSkillToolkit = "swarm.member_skill_toolkit"
 // （FileSkillVisibilityProvider，common 工具域）Go 未实施 ⤴️15.20——
 // 本函数保留完整门控与路径解析，provider 段由回收点接线。
 // Python: build_member_skill_visibility_provider (skills.py:60-93)
-func BuildMemberSkillVisibilityProvider(view SwarmContextView) bool {
-	memberPath := view.ViewResolveMemberSkillVisibilityPath()
-	teamPath := view.ViewTeamSkillVisibilityPath()
-	memberName := trimSpaceOrEmpty(view.ViewMemberName())
+func BuildMemberSkillVisibilityProvider(view *buildctx.SwarmBuildContext) bool {
+	memberPath := view.ResolveMemberSkillVisibilityPath()
+	teamPath := view.TeamSkillVisibilityPath
+	memberName := trimSpaceOrEmpty(view.MemberName)
 	if memberPath == "" {
 		return false
 	}
@@ -51,7 +52,7 @@ func BuildMemberSkillVisibilityProvider(view SwarmContextView) bool {
 // 压过 enabled。两条规则与 SkillUseRail 对自身 enabled/disabled 的处理一致。
 // 无可解析成员身份时仅进程级 disabled 清单生效。
 // Python: compose_member_skill_visibility (skills.py:96-125)
-func ComposeMemberSkillVisibility(view SwarmContextView) (map[string]struct{}, map[string]struct{}) {
+func ComposeMemberSkillVisibility(view *buildctx.SwarmBuildContext) (map[string]struct{}, map[string]struct{}) {
 	if !BuildMemberSkillVisibilityProvider(view) {
 		// Python: return set(), set(_load_global_disabled_skills())
 		disabled := make(map[string]struct{})
@@ -79,19 +80,19 @@ func LoadGlobalDisabledSkills() []string {
 // on_skill_library_changed 钩子：空 allow-list 已继承全库，显式 allow-list
 // 必须有意授予。成员无可用工区时跳过（nil）。
 // Python: build_member_skill_toolkit (skills.py:176-231)
-func buildMemberSkillToolkit(params map[string]any, view SwarmContextView) (any, error) {
+func buildMemberSkillToolkit(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	rootPath := view.ViewMemberWorkspaceRoot()
+	rootPath := memberWorkspaceRoot(view)
 	if rootPath == "" {
 		return nil, nil
 	}
-	visibilityPath := view.ViewResolveMemberSkillVisibilityPath()
+	visibilityPath := view.ResolveMemberSkillVisibilityPath()
 	agentDir := agentWorkspaceDir()
 	// Python: SkillManager(workspace_dir=str(agent_workspace_dir))（失败 warn）
 	// Python: member_skill_manager = SkillManager(workspace_dir=...)（失败 warn）
 	_ = skillruntime.NewSkillManager(agentDir)
 	logger.Info(logger.ComponentAgentServer).
-		Str("library", orEmpty(view.ViewGlobalSkillsDir(), agentpathsGlobalSkillsDir())).
+		Str("library", orEmpty(view.GlobalSkillsDir, agentpathsGlobalSkillsDir())).
 		Str("visibility", visibilityPath).
 		Msg("[swarm.member_skill_toolkit] MemberSkillToolkitRail built")
 	// Python: MemberSkillToolkitRail(workspace_dir=..., manager=...)

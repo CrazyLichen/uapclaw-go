@@ -7,6 +7,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 )
@@ -62,7 +63,7 @@ func RegisterSwarmProviders() {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildSwarmContextFromSeed 从可序列化种子重建 SwarmBuildContext。
+// buildSwarmContextFromSeed 从可序列化种子重建 buildctx.SwarmBuildContext。
 // 非序列化句柄从接收进程获取：config 来自本进程 config.yaml（与 team 包
 // teamLoadConfig 同源，等价 Python get_config()），轨迹处理器来自进程级
 // demand 单例。
@@ -74,7 +75,7 @@ func buildSwarmContextFromSeed(seed map[string]any) (hschema.BuildContextInterfa
 	if err != nil {
 		return nil, err
 	}
-	return SwarmBuildContextFromSeed(seed, cfg, demand.GetTrajectorySpanProcessor()), nil
+	return buildctx.SwarmBuildContextFromSeed(seed, cfg, demand.GetTrajectorySpanProcessor()), nil
 }
 
 // swarmLoadConfig 加载默认 config.yaml。

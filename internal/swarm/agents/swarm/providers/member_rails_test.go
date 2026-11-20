@@ -6,19 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
+		"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
 
-// newTestView 构造满足 providers.SwarmContextView 的最小平台上下文。
-// SwarmBuildContext（父包）内嵌 *atschema.BuildContext 指针（基类字段
-// Role/ProjectDir/Language/Workspace 等在其中），必须显式初始化基类。
-func newTestView() *swarm.SwarmBuildContext {
-	return &swarm.SwarmBuildContext{BuildContext: &atschema.BuildContext{}}
+// newTestView 构造最小平台上下文（buildctx 叶包具体类型；内嵌
+// *atschema.BuildContext 指针须显式初始化基类字段）。
+func newTestView() *buildctx.SwarmBuildContext {
+	return &buildctx.SwarmBuildContext{BuildContext: &atschema.BuildContext{}}
 }
 
 // TestMemberRailProviders_注册全集注册 member_rails 全部注册名可查。

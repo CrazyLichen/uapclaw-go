@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -58,7 +59,7 @@ func (s *SwarmSeedSuite) TestSeed跨JSON边界往返不丢() {
 
 	s.Require().NoError(received.MaterializeBuildContext())
 	s.Require().NotNil(received.BuildContext, "materialize 必须经平台工厂重建")
-	bc, ok := received.BuildContext.(*swarm.SwarmBuildContext)
+	bc, ok := received.BuildContext.(*buildctx.SwarmBuildContext)
 	s.Require().True(ok, "应重建为平台子类，got %T", received.BuildContext)
 	s.Equal("sess-e2e", bc.SessionID, "session_id 不丢")
 	s.Equal("pay", bc.TeamID, "team_id 不丢")

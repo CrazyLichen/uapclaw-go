@@ -14,7 +14,7 @@
 //	├── doc.go                    # 包文档
 //	├── model.go                  # 枚举、快照、执行句柄（handle）
 //	├── execution_registry.go     # 执行索引与终态回收（含双信号语义）
-//	├── session_lifecycle.go      # 生命周期事件、参与者接口与登记表
+//	├── session_lifecycle.go      # 生命周期事件、参与者接口与登记表（port/lease 已上移 runtime 顶层，见 D-25.3-4）
 //	├── coordinator_port.go       # CoordinatorPort 协调器能力接口 + ErrCoordinatorUnavailable
 //	├── session_delete.go         # 删除结果、删除锁与团队删除围栏
 //	└── session_input_errors.go   # 会话补充输入的三个拒收异常与意图枚举

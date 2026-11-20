@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -24,7 +25,6 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	swarm "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 )
 
 // TestLoadTeamSpec_分布式normalize 缺依赖时回退 local（Go 恒无缺依赖，仅验证 normalize 路径）。
@@ -617,7 +617,7 @@ func TestGetSwarmEnrichedTeamSpec_enrich接线(t *testing.T) {
 	if spec.BuildContextSeed["project_dir"] != "/tmp/nonexistent-proj" {
 		t.Fatalf("project_dir should travel in seed, got %v", spec.BuildContextSeed["project_dir"])
 	}
-	if bc, ok := spec.BuildContext.(*swarm.SwarmBuildContext); !ok || bc.TeamID == "" {
+	if bc, ok := spec.BuildContext.(*buildctx.SwarmBuildContext); !ok || bc.TeamID == "" {
 		t.Fatal("build_context should be platform subclass with session-scoped team_id")
 	}
 }

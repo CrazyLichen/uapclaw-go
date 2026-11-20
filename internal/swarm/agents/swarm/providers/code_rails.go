@@ -1,6 +1,7 @@
 package providers
 
 import (
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -58,8 +59,8 @@ const teamPlanExitNotificationCN = "<system-reminder>\n" +
 
 // isTeamPlanLeader 是否 normal/code Team Plan leader。
 // Python: _is_team_plan_leader (code_rails.py:78-80)
-func isTeamPlanLeader(view SwarmContextView) bool {
-	return schema.IsTeamPlanMode(view.ViewMode()) && view.ViewRole() == "leader"
+func isTeamPlanLeader(view *buildctx.SwarmBuildContext) bool {
+	return schema.IsTeamPlanMode(view.Mode) && view.Role == "leader"
 }
 
 // CodeRuntimeLanguage 解析 code 成员运行时提示语言。
@@ -67,7 +68,7 @@ func isTeamPlanLeader(view SwarmContextView) bool {
 // code 模式英文独占，唯 team.plan.code leader 用配置偏好语言
 // （镜像旧 force_english_runtime_prompt / team_plan_runtime_language 处理）。
 // Python: code_runtime_language (code_rails.py:83-99)
-func CodeRuntimeLanguage(view SwarmContextView) string {
+func CodeRuntimeLanguage(view *buildctx.SwarmBuildContext) string {
 	if isTeamPlanLeader(view) {
 		return hp.ResolveLanguage(preferredLanguage(view))
 	}
@@ -76,17 +77,17 @@ func CodeRuntimeLanguage(view SwarmContextView) string {
 
 // StructuredAskUserLanguage 解析 team/code profile 的 StructuredAskUserRail 语言。
 // Python: structured_ask_user_language (code_rails.py:102-108)
-func StructuredAskUserLanguage(view SwarmContextView) string {
-	if view.ViewRole() == "leader" &&
-		(schema.IsTeamMode(view.ViewMode()) || schema.IsTeamPlanMode(view.ViewMode())) {
+func StructuredAskUserLanguage(view *buildctx.SwarmBuildContext) string {
+	if view.Role == "leader" &&
+		(schema.IsTeamMode(view.Mode) || schema.IsTeamPlanMode(view.Mode)) {
 		return hp.ResolveLanguage(preferredLanguage(view))
 	}
 	return CodeRuntimeLanguage(view)
 }
 
 // preferredLanguage 读 config.preferred_language（缺省 zh，对齐 Python get("preferred_language", "zh")）。
-func preferredLanguage(view SwarmContextView) string {
-	cfg := view.ViewConfig()
+func preferredLanguage(view *buildctx.SwarmBuildContext) string {
+	cfg := view.Config
 	if cfg == nil {
 		return "zh"
 	}
@@ -98,14 +99,14 @@ func preferredLanguage(view SwarmContextView) string {
 
 // codeProjectDir 从构建上下文解析 code 项目目录。
 // Python: _project_dir (code_rails.py:111-117)
-func codeProjectDir(view SwarmContextView) string {
-	return orEmpty(view.ViewProjectDir(), view.ViewMemberWorkspaceRoot(), "./")
+func codeProjectDir(view *buildctx.SwarmBuildContext) string {
+	return orEmpty(view.ProjectDir, memberWorkspaceRoot(view), "./")
 }
 
 // codeAgentWorkspaceDir 解析 CodeAgentRail 工作区目录（工作区根或项目目录）。
 // Python: _code_agent_workspace_dir (code_rails.py:122-125)
-func codeAgentWorkspaceDir(view SwarmContextView) string {
-	return orEmpty(view.ViewMemberWorkspaceRoot(), codeProjectDir(view))
+func codeAgentWorkspaceDir(view *buildctx.SwarmBuildContext) string {
+	return orEmpty(memberWorkspaceRoot(view), codeProjectDir(view))
 }
 
 // buildCodeRuntimePrompt 构建 code RuntimePromptRail（英文或 plan leader 配置语言）。
@@ -113,12 +114,12 @@ func codeAgentWorkspaceDir(view SwarmContextView) string {
 // code 成员需要与常规 team profile 同款的按请求运行时绑定，否则 mode 回落
 // "unknown"（set_session_id 基座缺 ⤴️15.20）。构造失败 warn + nil。
 // Python: build_code_runtime_prompt (code_rails.py:162-180)
-func buildCodeRuntimePrompt(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeRuntimePrompt(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	rail := swarmrails.NewRuntimePromptRail(CodeRuntimeLanguage(view), stringFieldOrEmpty(view.ViewChannel(), "default"))
-	rail.SetMode(view.ViewMode())
+	rail := swarmrails.NewRuntimePromptRail(CodeRuntimeLanguage(view), stringFieldOrEmpty(view.Channel, "default"))
+	rail.SetMode(view.Mode)
 	// rail.set_session_id(ctx.session_id)——基座缺 ⤴️15.20
-	rail.SetRuntimePaths(view.ViewProjectDir(), view.ViewProjectDir())
+	rail.SetRuntimePaths(view.ProjectDir, view.ProjectDir)
 	return rail, nil
 }
 
@@ -126,9 +127,9 @@ func buildCodeRuntimePrompt(params map[string]any, view SwarmContextView) (any, 
 // 自会话工作目录向上三级内最近命中）。
 // 基座 AgentMdPromptRail Go 未实施 ⤴️15.20。构造失败 warn + nil。
 // Python: build_code_agent_md (code_rails.py:216-231)
-func buildCodeAgentMd(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeAgentMd(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	_ = view.ViewProjectDir()
+	_ = view.ProjectDir
 	// Python: AgentMdPromptRail(); rail.set_runtime_paths(cwd=inp.project_dir)
 	return nil, nil
 }
@@ -136,10 +137,10 @@ func buildCodeAgentMd(params map[string]any, view SwarmContextView) (any, error)
 // buildCodeProjectMemory 构建 ProjectMemoryRail（自动加载 JIUWENSWARM.md / CLAUDE.md
 // 及附加配置目录）。构造失败 warn + nil。
 // Python: build_code_project_memory (code_rails.py:268-283)
-func buildCodeProjectMemory(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeProjectMemory(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	additional := stringSliceParam(params, "additional_directories")
 	rail := swarmrails.NewProjectMemoryRail(
-		orEmpty(view.ViewProjectDir(), view.ViewMemberWorkspaceRoot(), "./"),
+		orEmpty(view.ProjectDir, memberWorkspaceRoot(view), "./"),
 		CodeRuntimeLanguage(view),
 		0,
 		additional,
@@ -157,11 +158,11 @@ func buildCodeProjectMemory(params map[string]any, view SwarmContextView) (any, 
 // （interrupt_helpers.py）与 is_a4p_preauthorization_active Go 未实施
 // ⤴️15.20——门控逻辑全量保留，构建段缺失时返回 nil。
 // Python: build_permission_interrupt (code_rails.py:336-378)
-func buildPermissionInterrupt(params map[string]any, view SwarmContextView) (any, error) {
+func buildPermissionInterrupt(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	requestMeta := view.ViewRequestMetadata()
-	isCron := mapKeyTruthy(requestMeta, "cron") || view.ViewChannelID() == "__cron__"
-	if isCron && !isA4PPreauthorizationActive(view.ViewConfig()) {
+	requestMeta := view.RequestMetadata
+	isCron := mapKeyTruthy(requestMeta, "cron") || view.ChannelID == "__cron__"
+	if isCron && !isA4PPreauthorizationActive(view.Config) {
 		// Python: 无 A4P 时跳过 cron
 		return nil, nil
 	}
@@ -185,7 +186,7 @@ func isA4PPreauthorizationActive(config map[string]any) bool {
 // 基座独立函数 create_coding_memory_rail Go 未实施（现仅 CodeAdapter 私有
 // 方法 buildCodingMemoryRail）⤴️15.20。构造失败 warn + nil。
 // Python: build_code_coding_memory (code_rails.py:415-444)
-func buildCodeCodingMemory(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeCodingMemory(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: create_coding_memory_rail(project_dir=..., agent_workspace_dir=...,
@@ -202,14 +203,14 @@ func buildCodeCodingMemory(params map[string]any, view SwarmContextView) (any, e
 // CodeAgentModeRail 及 _CODE_PLAN_ALLOWED_TOOLS/_PLAN_MODE_SYSTEM_NOTE/
 // _code_enter_plan_instructions Go 未实施 ⤴️15.20。构造失败 warn + nil。
 // Python: build_code_agent_mode (code_rails.py:485-520)
-func buildCodeAgentMode(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeAgentMode(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if schema.IsTeamPlanMode(view.ViewMode()) && !schema.IsCodeProfileMode(view.ViewMode()) && view.ViewRole() == "leader" {
+	if schema.IsTeamPlanMode(view.Mode) && !schema.IsCodeProfileMode(view.Mode) && view.Role == "leader" {
 		// Python: WorkAgentModeRail(language=..., exit_plan_notification=...)
 		// ——基座 ⤴️15.20
 		return nil, nil
 	}
-	if !schema.IsCodeProfileMode(view.ViewMode()) {
+	if !schema.IsCodeProfileMode(view.Mode) {
 		return nil, nil
 	}
 	// Python: CodeAgentModeRail(allowed_tools=..., plan_mode_system_note=...,
@@ -221,7 +222,7 @@ func buildCodeAgentMode(params map[string]any, view SwarmContextView) (any, erro
 // buildTeamPlanApproval Team Plan leader 的 exit_plan_mode 审批中断。
 // 基座 PlanApprovalInterruptRail Go 未实施 ⤴️15.20。构造失败 warn + nil。
 // Python: build_team_plan_approval (code_rails.py:525-537)
-func buildTeamPlanApproval(params map[string]any, view SwarmContextView) (any, error) {
+func buildTeamPlanApproval(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	if !isTeamPlanLeader(view) {
 		return nil, nil
@@ -233,8 +234,8 @@ func buildTeamPlanApproval(params map[string]any, view SwarmContextView) (any, e
 //
 // request_metadata.supports_user_interaction 为 False 时跳过。
 // Python: build_structured_ask_user (code_rails.py:561-577)
-func buildStructuredAskUser(params map[string]any, view SwarmContextView) (any, error) {
-	if v, ok := view.ViewRequestMetadata()["supports_user_interaction"]; ok && v == false {
+func buildStructuredAskUser(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
+	if v, ok := view.RequestMetadata["supports_user_interaction"]; ok && v == false {
 		return nil, nil
 	}
 	// Python: StructuredAskUserRail(language=inp.language)——基座签名核对：
@@ -246,7 +247,7 @@ func buildStructuredAskUser(params map[string]any, view SwarmContextView) (any, 
 
 // buildCodeTaskPlanning code 专属任务规划 rail（CC 对齐 todo 工具）。
 // Python: build_code_task_planning (code_rails.py:582-589)
-func buildCodeTaskPlanning(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeTaskPlanning(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: CodeTaskPlanningRail()——基座 Go 已有（code/rails/code_task_planning_rail.go）
@@ -257,7 +258,7 @@ func buildCodeTaskPlanning(params map[string]any, view SwarmContextView) (any, e
 // Go 基座 NewCodeAgentRail 需要 configLister 形参（Python 无——基座签名
 // 偏差登记 D-15.16f-codeagent-lister；无注册源时 nil lister 走基座缺省）。
 // Python: build_code_agent_rail (code_rails.py:608-620)
-func buildCodeAgentRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildCodeAgentRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	workspaceDir := codeAgentWorkspaceDir(view)
 	// 基座 NewCodeAgentRail 在 server/adapter 包（adapter→team→swarm 成环），
@@ -270,7 +271,7 @@ func buildCodeAgentRail(params map[string]any, view SwarmContextView) (any, erro
 
 // buildUserHooks 从 config.hooks 构建用户钩子 rail（无事件配置时 None）。
 // Python: build_user_hooks (code_rails.py:648-665)
-func buildUserHooks(params map[string]any, view SwarmContextView) (any, error) {
+func buildUserHooks(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	hooksSection, _ := params["hooks_section"].(map[string]any)
 	if hooksSection == nil {
 		hooksSection = map[string]any{}

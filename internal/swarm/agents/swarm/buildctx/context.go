@@ -17,7 +17,7 @@
 //	└── assembly.go   # enrich seed 生产段接线（15.16c）
 //
 // 对应 Python 代码：jiuwenswarm/agents/swarm/
-package swarm
+package buildctx
 
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -31,6 +31,13 @@ import (
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+// 叶包迁移注记（2026-12-04）：本文件自父包 swarm 迁入（用户裁决"立即挪
+// 叶包"），providers 工厂直接使用具体类型 *SwarmBuildContext，消灭
+// D-15.16f-view 的 22 个访问器接口；team 包经本包引用平台上下文，
+// 脱离对父包 swarm 的依赖（消 team→swarm 边）。Python: jiuwenswarm/
+// agents/swarm/context.py（上游为 providers 同目录父级模块，Go 因包系统
+// 需独立叶包承载）。
 
 // ──────────────────────────── 类型别名 ────────────────────────────
 

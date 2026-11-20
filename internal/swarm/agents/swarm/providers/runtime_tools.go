@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -33,9 +34,9 @@ const (
 // buildOrganizationOwnerInboxTools leader-only Owner 结果确认工具。
 // 基座 OrgAckOwnerResultTool（expert_org/inbox_tool.py）Go 未实施 ⤴️15.20。
 // Python: build_organization_owner_inbox_tools (runtime_tools.py:56-62)
-func buildOrganizationOwnerInboxTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func buildOrganizationOwnerInboxTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil
 	}
 	// Python: [OrgAckOwnerResultTool(ctx.team_id, ctx.session_id)]
@@ -45,9 +46,9 @@ func buildOrganizationOwnerInboxTools(params map[string]any, view SwarmContextVi
 // buildOrganizationModelTools leader-only 持久专家 Team 模型控制工具。
 // 基座 OrgSetTeamModelTool（expert_org/model_tool.py）Go 未实施 ⤴️15.20。
 // Python: build_organization_model_tools (runtime_tools.py:65-71)
-func buildOrganizationModelTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func buildOrganizationModelTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil
 	}
 	return nil
@@ -56,9 +57,9 @@ func buildOrganizationModelTools(params map[string]any, view SwarmContextView) [
 // buildSessionMessagingTools leader-only 跨会话持久消息工具。
 // 分支体（SessionMessagingToolkit）⤴️25.6 群聊（缝 F2）。
 // Python: build_session_messaging_tools (runtime_tools.py:79-88)
-func buildSessionMessagingTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func buildSessionMessagingTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	if view.ViewRole() != "leader" {
+	if view.Role != "leader" {
 		return nil
 	}
 	return nil
@@ -70,28 +71,28 @@ func buildSessionMessagingTools(params map[string]any, view SwarmContextView) []
 // 并委托 CronRuntimeBridge.BuildTools。cron 执行会话跳过（三个判定信号与
 // swarm.heartbeat / code_rails permission rail 对齐）。
 // Python: build_cron_tools (runtime_tools.py:122-216)
-func buildCronTools(params map[string]any, view SwarmContextView) []tool.Tool {
-	agentID := view.ViewMemberCardID()
-	metadata := copyMapOrEmpty(view.ViewRequestMetadata())
-	sessionID := trimSpaceOrEmpty(view.ViewSessionID())
+func buildCronTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
+	agentID := view.MemberCardID
+	metadata := copyMapOrEmpty(view.RequestMetadata)
+	sessionID := trimSpaceOrEmpty(view.SessionID)
 	// Python :152-176：session 元数据补齐（project_id/project_dir/work_mode/
 	// model_name 缺位时从 session_metadata 读，cache_bust=True，失败 debug 跳过）。
 	// Go 基座 session_metadata 读取段 ⤴️15.20（lifecycle GetSessionMetadata）。
 	_ = sessionID
 
 	cronCtx := &agentcron.CronToolContext{
-		ChannelID: orEmpty(view.ViewChannelID(), "web"),
+		ChannelID: orEmpty(view.ChannelID, "web"),
 		SessionID: sessionID,
 		Metadata:  metadata,
-		Mode:      orEmpty(view.ViewMode(), "team"),
+		Mode:      orEmpty(view.Mode, "team"),
 	}
 	if agentID != "" {
 		cronCtx.ToolScopeOverride = "team_member_" + agentID
 	} else {
 		cronCtx.ToolScopeOverride = "team_member_unknown"
 	}
-	cronExecutionSession := mapKeyTruthy(view.ViewRequestMetadata(), "cron") ||
-		trimSpaceOrEmpty(view.ViewChannelID()) == "__cron__" ||
+	cronExecutionSession := mapKeyTruthy(view.RequestMetadata, "cron") ||
+		trimSpaceOrEmpty(view.ChannelID) == "__cron__" ||
 		isCronExecutionSession(sessionID)
 	if cronExecutionSession {
 		logger.Info(logger.ComponentAgentServer).
@@ -100,7 +101,7 @@ func buildCronTools(params map[string]any, view SwarmContextView) []tool.Tool {
 		return nil
 	}
 	bridge := cronbridge.NewCronRuntimeBridge()
-	tools := bridge.BuildTools(cronCtx, agentID, stringFieldOrEmpty(view.ViewLanguage(), "cn"))
+	tools := bridge.BuildTools(cronCtx, agentID, stringFieldOrEmpty(view.Language, "cn"))
 	logger.Info(logger.ComponentAgentServer).
 		Int("count", len(tools)).
 		Str("agent_id", agentID).
@@ -112,9 +113,9 @@ func buildCronTools(params map[string]any, view SwarmContextView) []tool.Tool {
 //
 // 需要 request_id + channel_id，并被渠道 send_file_allowed 配置门控。
 // Python: build_send_file_tools (runtime_tools.py:275-333)
-func buildSendFileTools(params map[string]any, view SwarmContextView) []tool.Tool {
-	requestID := view.ViewRequestID()
-	channelID := view.ViewChannelID()
+func buildSendFileTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
+	requestID := view.RequestID
+	channelID := view.ChannelID
 	if requestID == "" || channelID == "" {
 		logger.Info(logger.ComponentAgentServer).
 			Msg("[swarm.send_file] skipped: missing request_id or channel_id")
@@ -130,18 +131,18 @@ func buildSendFileTools(params map[string]any, view SwarmContextView) []tool.Too
 			Msg("[swarm.send_file] skipped: send_file_allowed=False")
 		return nil
 	}
-	metadata := copyMapOrEmpty(view.ViewRequestMetadata())
+	metadata := copyMapOrEmpty(view.RequestMetadata)
 	toolkit := teamtools.NewSendFileToolkit(requestID, sessionOrEmpty(view), channelID, teamtools.SendFileRuntimeContext{
 		Metadata:          metadata,
-		UserID:            view.ViewUserID(),
-		ProjectDir:        view.ViewProjectDir(),
-		TeamWorkspaceRoot: view.ViewTeamWsRoot(),
+		UserID:            view.UserID,
+		ProjectDir:        view.ProjectDir,
+		TeamWorkspaceRoot: view.TeamWsRoot,
 	})
 	return toolkit.GetTools()
 }
 
 // sessionOrEmpty 会话 id（空串安全）。
-func sessionOrEmpty(view SwarmContextView) string { return view.ViewSessionID() }
+func sessionOrEmpty(view *buildctx.SwarmBuildContext) string { return view.SessionID }
 
 // isSendFileEnabled 渠道是否允许发文件。
 // 读 channels.<channel_id>.send_file_allowed；全双工内部委托未配置时继承

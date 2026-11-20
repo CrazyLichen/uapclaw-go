@@ -184,4 +184,4 @@ func itoaValue(v int) string {
 }
 
 // 编译期断言：适配器实现 SessionRuntimeLifecyclePort。
-var _ session.SessionRuntimeLifecyclePort = (*TeamSessionLifecycleAdapter)(nil)
+var _ SessionRuntimeLifecyclePort = (*TeamSessionLifecycleAdapter)(nil)

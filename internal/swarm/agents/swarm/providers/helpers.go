@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -158,7 +159,7 @@ func logPersonalContextSkip(err error) {
 // toolProviderAdapter 把具体工具工厂适配成 schema.ToolProvider 签名，
 // 并在上下文非平台形态时返回空表。
 func toolProviderAdapter(
-	build func(params map[string]any, view SwarmContextView) []tool.Tool,
+	build func(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool,
 ) hschema.ToolProvider {
 	return func(params map[string]any, ctx hschema.BuildContextInterface) ([]any, error) {
 		view := SwarmContextOf(ctx)
@@ -241,13 +242,13 @@ func intParamOr(params map[string]any, key string, fallback int) int {
 }
 
 // workspaceFromString 从 factory_kwargs["workspace_root"] 或上下文取工作区串。
-func workspaceFromString(factoryKwargs map[string]any, view SwarmContextView) *workspace.Workspace {
+func workspaceFromString(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) *workspace.Workspace {
 	root := ""
 	if v, ok := factoryKwargs["workspace_root"].(string); ok {
 		root = v
 	}
 	if root == "" {
-		root = orEmpty(view.ViewMemberWorkspaceRoot(), "./")
+		root = orEmpty(memberWorkspaceRoot(view), "./")
 	}
 	if root == "" {
 		return nil
@@ -257,7 +258,7 @@ func workspaceFromString(factoryKwargs map[string]any, view SwarmContextView) *w
 
 // parentSysOperation 父系统操作实例（extras 透传）。
 // Python: parent_sys_operation(ctx)（harness/schema/build_context.py）。
-func parentSysOperation(view SwarmContextView) sysop.SysOperation {
+func parentSysOperation(view *buildctx.SwarmBuildContext) sysop.SysOperation {
 	if v, ok := view.GetExtras()[hschema.ParentSysOperationExtrasKey].(sysop.SysOperation); ok {
 		return v
 	}
@@ -272,4 +273,13 @@ func parentSysOperation(view SwarmContextView) sysop.SysOperation {
 func cuaModelRejectsImages(model *llm.Model) bool {
 	_ = model
 	return false
+}
+
+// memberWorkspaceRoot 成员工作区根（workspace.root_path，nil 安全）。
+// Python: _workspace_root(ctx)（providers/member_rails.py:214-218）。
+func memberWorkspaceRoot(view *buildctx.SwarmBuildContext) string {
+	if view == nil || view.Workspace == nil {
+		return ""
+	}
+	return view.Workspace.RootPath
 }

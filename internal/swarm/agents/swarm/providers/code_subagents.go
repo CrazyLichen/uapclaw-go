@@ -2,6 +2,7 @@ package providers
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	subagents "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -32,7 +33,7 @@ const (
 
 // parentModelOf 从构建上下文 extras 取父模型。
 // Python: ctx.extras.get(_PARENT_MODEL_EXTRAS_KEY)（各工厂首行守卫）。
-func parentModelOf(view SwarmContextView) *llm.Model {
+func parentModelOf(view *buildctx.SwarmBuildContext) *llm.Model {
 	if v, ok := view.GetExtras()[parentModelExtrasKey].(*llm.Model); ok {
 		return v
 	}
@@ -41,7 +42,7 @@ func parentModelOf(view SwarmContextView) *llm.Model {
 
 // subagentProviderAdapter 把具体子代理工厂适配成 schema.SubagentProvider 签名。
 func subagentProviderAdapter(
-	build func(factoryKwargs map[string]any, view SwarmContextView) (*hschema.SubAgentConfig, error),
+	build func(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) (*hschema.SubAgentConfig, error),
 ) hschema.SubagentProvider {
 	return func(factoryKwargs map[string]any, ctx hschema.BuildContextInterface) (*hschema.SubAgentConfig, error) {
 		view := SwarmContextOf(ctx)
@@ -57,7 +58,7 @@ func subagentProviderAdapter(
 // build_code_agent_config 需要模型；上下文无父模型时跳过（None）。传入 rails
 // 会覆盖默认（SysOperationRail），因此必须与共享 CodingMemoryRail 一起显式带上。
 // Python: build_code_agent (code_subagents.py:108-143)
-func buildCodeAgent(factoryKwargs map[string]any, view SwarmContextView) (*hschema.SubAgentConfig, error) {
+func buildCodeAgent(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) (*hschema.SubAgentConfig, error) {
 	model := parentModelOf(view)
 	if model == nil {
 		logger.Warn(logger.ComponentAgentServer).
@@ -84,7 +85,7 @@ func buildCodeAgent(factoryKwargs map[string]any, view SwarmContextView) (*hsche
 // buildStatuslineSetupAgent TUI 状态行安装子代理。
 // 基座 BuildStatuslineSetupAgentConfig Go 未实施 ⤴️15.20。
 // Python: build_statusline_setup_agent (code_subagents.py:145-163)
-func buildStatuslineSetupAgent(factoryKwargs map[string]any, view SwarmContextView) (*hschema.SubAgentConfig, error) {
+func buildStatuslineSetupAgent(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) (*hschema.SubAgentConfig, error) {
 	model := parentModelOf(view)
 	if model == nil {
 		logger.Warn(logger.ComponentAgentServer).
@@ -129,7 +130,7 @@ func browserKeyOf(sessionID, memberName, role string) string {
 // apply_swarm_browser_settings 基座（browser_config/browser_runtime.py）Go
 // 未实施 ⤴️15.20——browser_key 派生与日志语义全量保留。
 // Python: build_swarm_browser_agent (code_subagents.py:224-259)
-func buildSwarmBrowserAgent(factoryKwargs map[string]any, view SwarmContextView) (*hschema.SubAgentConfig, error) {
+func buildSwarmBrowserAgent(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) (*hschema.SubAgentConfig, error) {
 	model := parentModelOf(view)
 	if model == nil {
 		logger.Warn(logger.ComponentAgentServer).
@@ -137,7 +138,7 @@ func buildSwarmBrowserAgent(factoryKwargs map[string]any, view SwarmContextView)
 		return nil, nil
 	}
 	maxIterations := intParamOr(factoryKwargs, "max_iterations", constDefaultBrowserIter)
-	browserKey := browserKeyOf(view.ViewSessionID(), view.ViewMemberName(), view.ViewRole())
+	browserKey := browserKeyOf(view.SessionID, view.MemberName, view.Role)
 	spec := subagents.BuildBrowserAgentConfig(model, &hschema.SubagentCreateParams{
 		Language:      CodeRuntimeLanguage(view),
 		MaxIterations: maxIterations,
@@ -150,8 +151,8 @@ func buildSwarmBrowserAgent(factoryKwargs map[string]any, view SwarmContextView)
 	// ——基座 ⤴️15.20（browser_key 随回收点传入 RuntimeSettings）。
 	_ = browserKey
 	logger.Info(logger.ComponentAgentServer).
-		Str("member_name", view.ViewMemberName()).
-		Str("role", view.ViewRole()).
+		Str("member_name", view.MemberName).
+		Str("role", view.Role).
 		Str("browser_key", browserKey).
 		Msg("[swarm.browser_agent] built")
 	return spec, nil
@@ -159,7 +160,7 @@ func buildSwarmBrowserAgent(factoryKwargs map[string]any, view SwarmContextView)
 
 // buildSwarmCuaAgent cua 桌面子代理配置（共享宿主桌面，无每成员实例键）。
 // Python: build_swarm_cua_agent (code_subagents.py:294-325)
-func buildSwarmCuaAgent(factoryKwargs map[string]any, view SwarmContextView) (*hschema.SubAgentConfig, error) {
+func buildSwarmCuaAgent(factoryKwargs map[string]any, view *buildctx.SwarmBuildContext) (*hschema.SubAgentConfig, error) {
 	model := parentModelOf(view)
 	if model == nil {
 		logger.Warn(logger.ComponentAgentServer).

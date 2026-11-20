@@ -174,7 +174,7 @@ func TestTeamLifecycle_IsRunning(t *testing.T) {
 
 // TestTeamLifecycle_实现Runtime端口 校验编译期接口满足。
 func TestTeamLifecycle_实现Runtime端口(t *testing.T) {
-	var _ session.SessionRuntimeLifecyclePort = (*TeamSessionLifecycleAdapter)(nil)
+	var _ SessionRuntimeLifecyclePort = (*TeamSessionLifecycleAdapter)(nil)
 }
 
 // ──────────────────────────── 删除事务 fake ────────────────────────────

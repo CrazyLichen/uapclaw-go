@@ -37,28 +37,6 @@ type SessionDeleteParticipant interface {
 	DeleteCommitted(ctx context.Context, target SessionLifecycleTarget) error
 }
 
-// RuntimeResourceLease Runtime 持有的资源租约。
-// Python: runtime/session_lifecycle.py RuntimeResourceLease
-type RuntimeResourceLease interface {
-	// Release 释放资源
-	Release(ctx context.Context) error
-}
-
-// SessionRuntimeLifecyclePort 由 AgentRuntime 编排的团队域生命周期动作。
-// Python: runtime/session_lifecycle.py SessionRuntimeLifecyclePort
-type SessionRuntimeLifecyclePort interface {
-	// RemoveResponseWaiter 移除当前请求拥有的响应等待者
-	RemoveResponseWaiter(ctx context.Context, exec ExecutionLifecycleContext, reason string) error
-	// PauseSession 暂停一个团队会话代次，返回是否暂停或排空
-	PauseSession(ctx context.Context, sess SessionLifecycleContext, reason string, channelID string) (bool, error)
-	// StopSession 停止一个团队会话代次
-	StopSession(ctx context.Context, sess SessionLifecycleContext, reason string) error
-	// PublishPauseCompleted 通过存活的会话观察者发布暂停完成
-	PublishPauseCompleted(ctx context.Context, sessionID string, generation *int, channelID string) error
-	// IsRunning 一个团队代次是否拥有活跃工作
-	IsRunning(sess SessionLifecycleContext) bool
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionDescriptor 传输无关的持久会话身份与路由元数据。

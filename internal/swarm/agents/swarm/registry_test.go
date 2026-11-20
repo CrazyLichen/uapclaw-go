@@ -8,6 +8,7 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // TestSwarmContextFactoryCoversDefault 覆盖注册后 MaterializeBuildContext
@@ -25,7 +26,7 @@ func TestSwarmContextFactoryCoversDefault(t *testing.T) {
 	if err := spec.MaterializeBuildContext(); err != nil {
 		t.Fatal(err)
 	}
-	bc, ok := spec.BuildContext.(*SwarmBuildContext)
+	bc, ok := spec.BuildContext.(*buildctx.SwarmBuildContext)
 	if !ok {
 		t.Fatalf("应重建为平台子类，got %T", spec.BuildContext)
 	}

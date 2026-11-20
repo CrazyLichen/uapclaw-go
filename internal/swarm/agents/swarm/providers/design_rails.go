@@ -1,6 +1,7 @@
 package providers
 
 import (
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 )
@@ -28,9 +29,9 @@ const (
 
 // buildDesignerAuthoringRail designer 授权 rail（无会话跳过）。
 // Python: _build_designer_authoring_rail (design_rails.py:56-65)
-func buildDesignerAuthoringRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildDesignerAuthoringRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if trimSpaceOrEmpty(view.ViewSessionID()) == "" {
+	if trimSpaceOrEmpty(view.SessionID) == "" {
 		return nil, nil
 	}
 	// Python: DesignerAuthoringRail(session_id=session_id)——基座 ⤴️25.12
@@ -39,9 +40,9 @@ func buildDesignerAuthoringRail(params map[string]any, view SwarmContextView) (a
 
 // buildDesignerExecutionRail designer 执行 rail（swarmflow + 画布触发提示段）。
 // Python: _build_designer_execution_rail (design_rails.py:73-82)
-func buildDesignerExecutionRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildDesignerExecutionRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	if trimSpaceOrEmpty(view.ViewSessionID()) == "" {
+	if trimSpaceOrEmpty(view.SessionID) == "" {
 		return nil, nil
 	}
 	// Python: DesignerExecutionRail(session_id=session_id)——基座 ⤴️25.12
@@ -51,7 +52,7 @@ func buildDesignerExecutionRail(params map[string]any, view SwarmContextView) (a
 // buildDesignerSurfaceSanitizerRail 从 team.design leader 表面减去非设计
 // 工具/提示段（workspace_meta、org_* 工具、群聊、build_team 引导段）。
 // Python: _build_designer_surface_sanitizer_rail (design_rails.py:90-94)
-func buildDesignerSurfaceSanitizerRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildDesignerSurfaceSanitizerRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: DesignerSurfaceSanitizerRail()——基座 ⤴️25.12
@@ -66,9 +67,9 @@ func buildDesignerSurfaceSanitizerRail(params map[string]any, view SwarmContextV
 // Python: build_designer_graph_tools (designer_tools.py:45-80)——
 // get_design_context_registry / DesignerGraphStore / StoreNodeSpawner /
 // NodeExecutionContext / DesignerGraphToolkit 基座 ⤴️25.12。
-func buildDesignerGraphTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func buildDesignerGraphTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	sessionID := trimSpaceOrEmpty(view.ViewSessionID())
+	sessionID := trimSpaceOrEmpty(view.SessionID)
 	_ = sessionID
 	// Python: context 未绑定 graph → raise ValueError；基座 ⤴️25.12
 	return nil

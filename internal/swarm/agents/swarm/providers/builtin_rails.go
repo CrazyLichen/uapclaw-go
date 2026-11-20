@@ -1,6 +1,7 @@
 package providers
 
 import (
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -32,10 +33,10 @@ const (
 // Go 基座 ResponsePromptRail 缺 set_channel（Python :58-60 存 runtime
 // channel）⤴️15.20；构造与挂载语义一致。
 // Python: _build_response_prompt_rail (builtin_rails.py:61-67)
-func buildResponsePromptRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildResponsePromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	// ResponsePromptInput.resolve：channel = context_field(attr="channel", default="default")
-	channel := stringFieldOrEmpty(view.ViewChannel(), "default")
+	channel := stringFieldOrEmpty(view.Channel, "default")
 	rail := swarmrails.NewResponsePromptRail()
 	// Python: rail.set_channel(inp.channel)——基座缺 ⤴️15.20
 	_ = channel
@@ -47,10 +48,10 @@ func buildResponsePromptRail(params map[string]any, view SwarmContextView) (any,
 // Go 基座 JiuClawStreamEventRail 构造无 role 形参（Python :292-299 构造期
 // 接收 role 并 lower-strip）⤴️15.20。
 // Python: _build_stream_event_rail (builtin_rails.py:77-84)
-func buildStreamEventRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildStreamEventRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	// StreamEventInput.resolve：role = context_field(attr="role", default="")
-	role := stringFieldOrEmpty(view.ViewRole(), "")
+	role := stringFieldOrEmpty(view.Role, "")
 	_ = role
 	rail := swarmrails.NewJiuClawStreamEventRail()
 	return rail, nil
@@ -58,7 +59,7 @@ func buildStreamEventRail(params map[string]any, view SwarmContextView) (any, er
 
 // buildAvatarPromptRail 注入每请求数字人提示段（class builder 直注册）。
 // Python: harness_element(name=AVATAR_PROMPT, builder=AvatarPromptRail)（:94-98）
-func buildAvatarPromptRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildAvatarPromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python builder=AvatarPromptRail：manifest 以 (params, context) 实例化；
@@ -69,7 +70,7 @@ func buildAvatarPromptRail(params map[string]any, view SwarmContextView) (any, e
 // buildMultimodalImageRail 请求图片附件注入成员模型上下文，或模型无原生
 // 图像输入时剥离图像块。
 // Python: harness_element(name=MULTIMODAL_IMAGE, builder=MultimodalImageRail)（:99-104）
-func buildMultimodalImageRail(params map[string]any, view SwarmContextView) (any, error) {
+func buildMultimodalImageRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = view
 	// Go 基座构造形参 enableImageMultimodal *bool；Python class builder 从
 	// params 取值。params 缺省 nil（基座自决）。

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
@@ -67,8 +68,8 @@ func markStatelessToo(tools []tool.Tool) []tool.Tool {
 // skillLibraryDir 本上下文读取的唯一物理 Skill 库。
 // Python: _skill_library_dir (tools.py:182-188)：global_skills_dir 优先，
 // 缺省 get_agent_skills_dir()（15.16c paths.go GlobalSkillsDir）。
-func skillLibraryDir(view SwarmContextView) string {
-	if raw := view.ViewGlobalSkillsDir(); raw != "" {
+func skillLibraryDir(view *buildctx.SwarmBuildContext) string {
+	if raw := view.GlobalSkillsDir; raw != "" {
 		return raw
 	}
 	return agentpathsGlobalSkillsDir()
@@ -113,7 +114,7 @@ func applySkillVisibility(names map[string]struct{}, enabledSkills, disabledSkil
 // visibleSkillNamesForListSkill list_skill 可见 Skill 名。
 // Python: visible_skill_names_for_list_skill (tools.py:238-260)——读
 // team_skill_visibility_path 的 enabled/disabled 集合再过滤扫描结果。
-func visibleSkillNamesForListSkill(view SwarmContextView) map[string]struct{} {
+func visibleSkillNamesForListSkill(view *buildctx.SwarmBuildContext) map[string]struct{} {
 	names := scanLibrarySkillNames(skillLibraryDir(view))
 	enabled, disabled := loadSkillVisibilitySets(view)
 	return applySkillVisibility(names, enabled, disabled)
@@ -122,10 +123,10 @@ func visibleSkillNamesForListSkill(view SwarmContextView) map[string]struct{} {
 // loadSkillVisibilitySets 读 skills-visibility.json 的 enabled/disabled。
 // Python: load_execution_disabled_skills / visibility 读取段（skills.py 侧）；
 // JSON 读写基座随 skills.go（Task 5 同批）。
-func loadSkillVisibilitySets(view SwarmContextView) (map[string]struct{}, map[string]struct{}) {
+func loadSkillVisibilitySets(view *buildctx.SwarmBuildContext) (map[string]struct{}, map[string]struct{}) {
 	enabled := make(map[string]struct{})
 	disabled := make(map[string]struct{})
-	path := view.ViewTeamSkillVisibilityPath()
+	path := view.TeamSkillVisibilityPath
 	if path == "" {
 		return enabled, disabled
 	}
@@ -154,8 +155,8 @@ func buildUserTodoTools() []tool.Tool {
 
 // buildVideoTools models.video 完整时构建视频理解工具。
 // Python: _build_video_tools (tools.py:424-440)
-func buildVideoTools(view SwarmContextView) []tool.Tool {
-	config := view.ViewConfig()
+func buildVideoTools(view *buildctx.SwarmBuildContext) []tool.Tool {
+	config := view.Config
 	if config == nil {
 		config = map[string]any{}
 	}
@@ -175,8 +176,8 @@ func buildVideoTools(view SwarmContextView) []tool.Tool {
 
 // buildImageGenTools models.image_gen 配置时构建图片生成工具。
 // Python: _build_image_gen_tools (tools.py:441-448)
-func buildImageGenTools(view SwarmContextView) []tool.Tool {
-	config := view.ViewConfig()
+func buildImageGenTools(view *buildctx.SwarmBuildContext) []tool.Tool {
+	config := view.Config
 	if config == nil {
 		config = map[string]any{}
 	}
@@ -189,7 +190,7 @@ func buildImageGenTools(view SwarmContextView) []tool.Tool {
 
 // buildVideoGenTools 开启且 Video Model 配置完整时构建视频生成工具组。
 // Python: _build_video_gen_tools (tools.py:449-458)
-func buildVideoGenTools(view SwarmContextView) []tool.Tool {
+func buildVideoGenTools(view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = view
 	if !teamtools.VideoGenEnabled() || !teamtools.VideoGenConfigured() {
 		return nil
@@ -204,7 +205,7 @@ func buildVideoGenTools(view SwarmContextView) []tool.Tool {
 // Python 基座 visual_gen_enabled/configured（tools.py:459-467）Go 无对应
 // 模块 ⤴️15.20——门控恒 false 对齐「未配置」分支。
 // Python: _build_visual_gen_tools (tools.py:459-467)
-func buildVisualGenTools(view SwarmContextView) []tool.Tool {
+func buildVisualGenTools(view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = view
 	return nil
 }
@@ -212,8 +213,8 @@ func buildVisualGenTools(view SwarmContextView) []tool.Tool {
 // buildXiaoyiPhoneTools channels.xiaoyi.phone_tools_enabled 时构建小艺电话工具。
 // 工具本体（28 个 HTTP 工具）⤴️10.6.24e（缝 F5）——开关门控全量保留。
 // Python: _build_xiaoyi_phone_tools (tools.py:469-479)
-func buildXiaoyiPhoneTools(view SwarmContextView) []tool.Tool {
-	config := view.ViewConfig()
+func buildXiaoyiPhoneTools(view *buildctx.SwarmBuildContext) []tool.Tool {
+	config := view.Config
 	if config == nil {
 		return nil
 	}
@@ -229,8 +230,8 @@ func buildXiaoyiPhoneTools(view SwarmContextView) []tool.Tool {
 
 // buildSymphonyTools leader 的 Symphony 工具（领域十六基座缝）。
 // Python: _build_symphony_tools (tools.py:480-490)
-func buildSymphonyTools(view SwarmContextView) []tool.Tool {
-	if view.ViewRole() != "leader" {
+func buildSymphonyTools(view *buildctx.SwarmBuildContext) []tool.Tool {
+	if view.Role != "leader" {
 		return nil
 	}
 	// Python: SymphonyToolkit().get_tools(config)——基座 ⤴️领域十六
@@ -241,8 +242,8 @@ func buildSymphonyTools(view SwarmContextView) []tool.Tool {
 // 基座 is_a4p_preauthorization_active / AUTHORIZATION_EXECUTION_CONTEXTS /
 // get_a4p_tools Go 未实施 ⤴️15.20——leader 门控保留，恒 false 对齐「未激活」。
 // Python: _build_a4p_intent_authorization_tools (tools.py:492-504)
-func buildA4PIntentAuthorizationTools(view SwarmContextView) []tool.Tool {
-	if view.ViewRole() != "leader" || !isA4PPreauthorizationActive(view.ViewConfig()) {
+func buildA4PIntentAuthorizationTools(view *buildctx.SwarmBuildContext) []tool.Tool {
+	if view.Role != "leader" || !isA4PPreauthorizationActive(view.Config) {
 		return nil
 	}
 	// Python: AUTHORIZATION_EXECUTION_CONTEXTS.get(session_id) 交互校验 +
@@ -256,8 +257,8 @@ func buildA4PIntentAuthorizationTools(view SwarmContextView) []tool.Tool {
 // 基座 SkillRetrievalToolkit ⤴️9.11b（与 member_rails.go 工厂同缝）；
 // session_scope 组装语义在此保留（session:team:member 三段）。
 // Python: skill_retrieval_toolkit_for_context (tools.py:380-413)
-func SkillToolkitForContext(view SwarmContextView) any {
-	memberScope := orEmpty(view.ViewMemberCardID(), view.ViewMemberName(), view.ViewRole(), "member")
+func SkillToolkitForContext(view *buildctx.SwarmBuildContext) any {
+	memberScope := orEmpty(view.MemberCardID, view.MemberName, view.Role, "member")
 	_ = memberScope
 	_ = skillLibraryDir(view)
 	// Python: SkillRetrievalToolkit(skill_directories=..., disabled_skills=...,
@@ -268,9 +269,9 @@ func SkillToolkitForContext(view SwarmContextView) any {
 
 // BuildSkillToolkit 白名单过滤后的技能管理工具（workspace_root 门控）。
 // Python: build_skill_toolkit (tools.py:531-543)
-func BuildSkillToolkit(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildSkillToolkit(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	if view.ViewMemberWorkspaceRoot() == "" {
+	if memberWorkspaceRoot(view) == "" {
 		return nil
 	}
 	return filterWhitelist(buildSkillToolkitTools())
@@ -278,9 +279,9 @@ func BuildSkillToolkit(params map[string]any, view SwarmContextView) []tool.Tool
 
 // BuildSkillRetrieval 白名单过滤后的已安装 Skill 目录检索工具。
 // Python: build_skill_retrieval (tools.py:545-563)
-func BuildSkillRetrieval(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildSkillRetrieval(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
-	if !isSkillRetrievalEnabled(view.ViewConfig()) {
+	if !isSkillRetrievalEnabled(view.Config) {
 		logger.Info(logger.ComponentAgentServer).Msg("[swarm.skill_retrieval] skipped: disabled")
 		return nil
 	}
@@ -291,7 +292,7 @@ func BuildSkillRetrieval(params map[string]any, view SwarmContextView) []tool.To
 
 // BuildUserTodos 白名单过滤后的用户 todo 工具。
 // Python: build_user_todos (tools.py:565-572)
-func BuildUserTodos(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildUserTodos(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	_ = view
 	return filterWhitelist(buildUserTodoTools())
@@ -299,49 +300,49 @@ func BuildUserTodos(params map[string]any, view SwarmContextView) []tool.Tool {
 
 // BuildVideoTools 白名单过滤后的视频工具。
 // Python: build_video_tools (tools.py:575-582)
-func BuildVideoTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildVideoTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return filterWhitelist(buildVideoTools(view))
 }
 
 // BuildImageGenTools 白名单过滤后的图片生成工具。
 // Python: build_image_gen_tools (tools.py:585-592)
-func BuildImageGenTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildImageGenTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return filterWhitelist(buildImageGenTools(view))
 }
 
 // BuildVideoGenTools 白名单过滤后的视频生成工具。
 // Python: build_video_gen_tools (tools.py:595-602)
-func BuildVideoGenTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildVideoGenTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return filterWhitelist(buildVideoGenTools(view))
 }
 
 // BuildVisualGenTools 白名单过滤后的视觉生成工具。
 // Python: build_visual_gen_tools (tools.py:605-612)
-func BuildVisualGenTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildVisualGenTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return filterWhitelist(buildVisualGenTools(view))
 }
 
 // BuildXiaoyiPhone 白名单过滤后的小艺电话工具。
 // Python: build_xiaoyi_phone (tools.py:615-622)
-func BuildXiaoyiPhone(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildXiaoyiPhone(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return filterWhitelist(buildXiaoyiPhoneTools(view))
 }
 
 // BuildSymphonyToolkit leader 的 Symphony 工具（teammate 无工具）。
 // Python: build_symphony_toolkit (tools.py:625-632)
-func BuildSymphonyToolkit(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildSymphonyToolkit(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return buildSymphonyTools(view)
 }
 
 // BuildA4PIntentAuthorization leader-only A4P 授权请求工具。
 // Python: build_a4p_intent_authorization (tools.py:635-642)
-func BuildA4PIntentAuthorization(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildA4PIntentAuthorization(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	return buildA4PIntentAuthorizationTools(view)
 }
@@ -349,7 +350,7 @@ func BuildA4PIntentAuthorization(params map[string]any, view SwarmContextView) [
 // BuildCodeExtraTools code 模式独占工具（当前 acp_chat）。
 // acp_enabled（config.acp_agents 配置）门控。
 // Python: build_code_extra_tools (tools.py:655-672)
-func BuildCodeExtraTools(params map[string]any, view SwarmContextView) []tool.Tool {
+func BuildCodeExtraTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	_ = view
 	// Python: acp_enabled param（default False）→ acp_chat 单工具；

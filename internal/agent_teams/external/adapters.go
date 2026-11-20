@@ -573,6 +573,7 @@ func init() {
 	// 同包直调（Python available_adapters/build_adapter 同包语义）——
 	// e14 双缝的注入端随 15.16e 收口批整包回归位而撤销。
 	adaptersProviderFn = AvailableAdapters
+	schemaAdapterNamesHook()
 	adaptersBuildFn = func(name string) (*AdapterBuildResult, error) {
 		adapter, err := BuildAdapter(name, nil)
 		if err != nil {
