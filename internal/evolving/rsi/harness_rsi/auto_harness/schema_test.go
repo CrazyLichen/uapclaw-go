@@ -107,21 +107,21 @@ func TestExperience_默认ID与时间戳(t *testing.T) {
 // TestAutoHarnessConfigFromDict_各段落 验证嵌套 YAML 字典的逐段映射
 func TestAutoHarnessConfigFromDict_各段落(t *testing.T) {
 	data := map[string]any{
-		"data_dir":     "/tmp/ah",
-		"local_repo":   "/repo",
-		"repo_url":     "https://gitcode.com/foo/bar.git",
-		"skills_dirs":  []any{"/s1", "/s2"},
-		"language":     "en",
-		"pipeline":     "pr_pipeline",
-		"workspace":    "/old-ws",
+		"data_dir":    "/tmp/ah",
+		"local_repo":  "/repo",
+		"repo_url":    "https://gitcode.com/foo/bar.git",
+		"skills_dirs": []any{"/s1", "/s2"},
+		"language":    "en",
+		"pipeline":    "pr_pipeline",
+		"workspace":   "/old-ws",
 		"git": map[string]any{
-			"remote":        "fork",
-			"base_branch":   "main",
-			"user_name":     "n",
-			"user_email":    "e",
-			"fork_owner":    "me",
+			"remote":         "fork",
+			"base_branch":    "main",
+			"user_name":      "n",
+			"user_email":     "e",
+			"fork_owner":     "me",
 			"upstream_owner": "up",
-			"upstream_repo": "repo-x",
+			"upstream_repo":  "repo-x",
 		},
 		"gitcode": map[string]any{
 			"username":         "u",
@@ -129,10 +129,10 @@ func TestAutoHarnessConfigFromDict_各段落(t *testing.T) {
 			"access_token":     "tok",
 		},
 		"budget": map[string]any{
-			"session_secs":         1234.5,
-			"cost_limit_usd":       20,
-			"task_timeout_secs":    100,
-			"model_timeout_secs":   200,
+			"session_secs":          1234.5,
+			"cost_limit_usd":        20,
+			"task_timeout_secs":     100,
+			"model_timeout_secs":    200,
 			"max_tasks_per_session": 7,
 		},
 		"ci_gate": map[string]any{
@@ -445,7 +445,7 @@ func TestDetectLocalRepo_命中与未命中(t *testing.T) {
 // TestRepoURLStem 验证 URL 末段去扩展名
 func TestRepoURLStem(t *testing.T) {
 	cases := map[string]string{
-		"https://gitcode.com/openJiuwen/agent-core.git": "agent-core",
+		"https://gitcode.com/openJiuwen/agent-core.git":  "agent-core",
 		"https://gitcode.com/openJiuwen/agent-core.git/": "agent-core",
 		"agent-core": "agent-core",
 	}

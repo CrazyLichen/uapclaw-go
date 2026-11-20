@@ -30,12 +30,12 @@ const (
 
 // pipelinePreferenceAliases 用户侧流水线偏好别名表
 var pipelinePreferenceAliases = map[string]string{
-	"":                     PipelinePreferenceAuto,
-	PipelinePreferenceAuto: PipelinePreferenceAuto,
-	"meta":                 MetaEvolvePipeline,
-	MetaEvolvePipeline:     MetaEvolvePipeline,
-	"extended":             ExtendedEvolvePipeline,
-	ExtendedEvolvePipeline: ExtendedEvolvePipeline,
+	"":                          PipelinePreferenceAuto,
+	PipelinePreferenceAuto:      PipelinePreferenceAuto,
+	"meta":                      MetaEvolvePipeline,
+	MetaEvolvePipeline:          MetaEvolvePipeline,
+	"extended":                  ExtendedEvolvePipeline,
+	ExtendedEvolvePipeline:      ExtendedEvolvePipeline,
 	"extended_harness_pipeline": ExtendedEvolvePipeline,
 	"pr_pipeline":               MetaEvolvePipeline,
 }
@@ -84,15 +84,15 @@ const (
 
 // Gap 竞品差距（对齐 dataclass Gap）
 type Gap struct {
-	ID               string   `yaml:"id" json:"id"`
-	Competitor       string   `yaml:"competitor" json:"competitor"`
-	Feature          string   `yaml:"feature" json:"feature"`
-	CurrentState     string   `yaml:"current_state" json:"current_state"`
-	GapDescription   string   `yaml:"gap_description" json:"gap_description"`
-	Impact           float64  `yaml:"impact" json:"impact"`
-	Feasibility      float64  `yaml:"feasibility" json:"feasibility"`
-	SuggestedApproach string  `yaml:"suggested_approach" json:"suggested_approach"`
-	TargetFiles      []string `yaml:"target_files" json:"target_files"`
+	ID                string   `yaml:"id" json:"id"`
+	Competitor        string   `yaml:"competitor" json:"competitor"`
+	Feature           string   `yaml:"feature" json:"feature"`
+	CurrentState      string   `yaml:"current_state" json:"current_state"`
+	GapDescription    string   `yaml:"gap_description" json:"gap_description"`
+	Impact            float64  `yaml:"impact" json:"impact"`
+	Feasibility       float64  `yaml:"feasibility" json:"feasibility"`
+	SuggestedApproach string   `yaml:"suggested_approach" json:"suggested_approach"`
+	TargetFiles       []string `yaml:"target_files" json:"target_files"`
 }
 
 // Priority impact x feasibility（对齐 property priority）
@@ -102,13 +102,13 @@ func (g *Gap) Priority() float64 {
 
 // OptimizationTask 单个优化任务（对齐 dataclass OptimizationTask）
 type OptimizationTask struct {
-	Topic         string     `yaml:"topic" json:"topic"`
-	Description   string     `yaml:"description" json:"description"`
-	Files         []string   `yaml:"files" json:"files"`
-	IssueRef      *string    `yaml:"issue_ref" json:"issue_ref"`
-	ExpectedEffect string    `yaml:"expected_effect" json:"expected_effect"`
-	PipelineName  string     `yaml:"pipeline_name" json:"pipeline_name"`
-	Status        TaskStatus `yaml:"status" json:"status"`
+	Topic          string     `yaml:"topic" json:"topic"`
+	Description    string     `yaml:"description" json:"description"`
+	Files          []string   `yaml:"files" json:"files"`
+	IssueRef       *string    `yaml:"issue_ref" json:"issue_ref"`
+	ExpectedEffect string     `yaml:"expected_effect" json:"expected_effect"`
+	PipelineName   string     `yaml:"pipeline_name" json:"pipeline_name"`
+	Status         TaskStatus `yaml:"status" json:"status"`
 }
 
 // Experience 经验库记录（对齐 dataclass Experience）
@@ -160,33 +160,33 @@ type TaskPlanArtifact struct {
 
 // PipelineSelectionArtifact select_pipeline 阶段的结构化产物（对齐 dataclass PipelineSelectionArtifact）
 type PipelineSelectionArtifact struct {
-	PipelineName   string   `yaml:"pipeline_name" json:"pipeline_name"`
-	Reason         string   `yaml:"reason" json:"reason"`
-	Alternatives   []string `yaml:"alternatives" json:"alternatives"`
-	Confidence     float64  `yaml:"confidence" json:"confidence"`
-	RiskLevel      string   `yaml:"risk_level" json:"risk_level"`
-	RequiredInputs []string `yaml:"required_inputs" json:"required_inputs"`
-	FallbackPipeline string `yaml:"fallback_pipeline" json:"fallback_pipeline"`
+	PipelineName     string   `yaml:"pipeline_name" json:"pipeline_name"`
+	Reason           string   `yaml:"reason" json:"reason"`
+	Alternatives     []string `yaml:"alternatives" json:"alternatives"`
+	Confidence       float64  `yaml:"confidence" json:"confidence"`
+	RiskLevel        string   `yaml:"risk_level" json:"risk_level"`
+	RequiredInputs   []string `yaml:"required_inputs" json:"required_inputs"`
+	FallbackPipeline string   `yaml:"fallback_pipeline" json:"fallback_pipeline"`
 }
 
 // GapAnalysisArtifact extended evolve 流水线的差距分析输出（对齐 dataclass GapAnalysisArtifact）
 type GapAnalysisArtifact struct {
-	Gaps             []Gap  `yaml:"gaps" json:"gaps"`
+	Gaps              []Gap  `yaml:"gaps" json:"gaps"`
 	CompetitorSummary string `yaml:"competitor_summary" json:"competitor_summary"`
-	RawAnalysis      string `yaml:"raw_analysis" json:"raw_analysis"`
+	RawAnalysis       string `yaml:"raw_analysis" json:"raw_analysis"`
 }
 
 // ExtensionDesign 一个扩展设计候选（对齐 dataclass ExtensionDesign）
 type ExtensionDesign struct {
-	GapID             string         `yaml:"gap_id" json:"gap_id"`
-	ExtensionName     string         `yaml:"extension_name" json:"extension_name"`
-	Kind              string         `yaml:"kind" json:"kind"`
-	DependsOn         []string       `yaml:"depends_on" json:"depends_on"`
-	AppliesTo         []string       `yaml:"applies_to" json:"applies_to"`
-	Components        []string       `yaml:"components" json:"components"`
-	FilePlan          map[string]string `yaml:"file_plan" json:"file_plan"`
-	HarnessConfigPatch map[string]any   `yaml:"harness_config_patch" json:"harness_config_patch"`
-	SkillSource       string         `yaml:"skill_source" json:"skill_source"`
+	GapID              string            `yaml:"gap_id" json:"gap_id"`
+	ExtensionName      string            `yaml:"extension_name" json:"extension_name"`
+	Kind               string            `yaml:"kind" json:"kind"`
+	DependsOn          []string          `yaml:"depends_on" json:"depends_on"`
+	AppliesTo          []string          `yaml:"applies_to" json:"applies_to"`
+	Components         []string          `yaml:"components" json:"components"`
+	FilePlan           map[string]string `yaml:"file_plan" json:"file_plan"`
+	HarnessConfigPatch map[string]any    `yaml:"harness_config_patch" json:"harness_config_patch"`
+	SkillSource        string            `yaml:"skill_source" json:"skill_source"`
 }
 
 // ExtensionDesignArtifact runtime extension 生成的设计输出（对齐 dataclass ExtensionDesignArtifact）
@@ -216,16 +216,16 @@ type SessionResultsArtifact struct {
 
 // CodeChangeArtifact Implement 阶段输出（对齐 dataclass CodeChangeArtifact）
 type CodeChangeArtifact struct {
-	Related    []Experience `yaml:"related" json:"related"`
-	EditedFiles []string   `yaml:"edited_files" json:"edited_files"`
+	Related     []Experience `yaml:"related" json:"related"`
+	EditedFiles []string     `yaml:"edited_files" json:"edited_files"`
 }
 
 // VerifyReportArtifact Verify 阶段输出（对齐 dataclass VerifyReportArtifact）
 type VerifyReportArtifact struct {
-	CIResult map[string]any `yaml:"ci_result" json:"ci_result"`
-	FixErrors string        `yaml:"fix_errors" json:"fix_errors"`
-	Reverted bool           `yaml:"reverted" json:"reverted"`
-	Error    string         `yaml:"error" json:"error"`
+	CIResult  map[string]any `yaml:"ci_result" json:"ci_result"`
+	FixErrors string         `yaml:"fix_errors" json:"fix_errors"`
+	Reverted  bool           `yaml:"reverted" json:"reverted"`
+	Error     string         `yaml:"error" json:"error"`
 }
 
 // CommitArtifact Commit 阶段输出（对齐 dataclass CommitArtifact）
@@ -253,40 +253,40 @@ type PullRequestDraft struct {
 
 // CommitFacts 提交阶段的事实快照（对齐 dataclass CommitFacts）
 type CommitFacts struct {
-	BranchName              string   `yaml:"branch_name" json:"branch_name"`
-	TaskDeclaredFiles       []string `yaml:"task_declared_files" json:"task_declared_files"`
-	PreexistingDirtyFiles   []string `yaml:"preexisting_dirty_files" json:"preexisting_dirty_files"`
-	CurrentDirtyFiles       []string `yaml:"current_dirty_files" json:"current_dirty_files"`
-	TrackedModifiedFiles    []string `yaml:"tracked_modified_files" json:"tracked_modified_files"`
-	UntrackedFiles          []string `yaml:"untracked_files" json:"untracked_files"`
-	EditedFiles             []string `yaml:"edited_files" json:"edited_files"`
-	AllowedFiles            []string `yaml:"allowed_files" json:"allowed_files"`
-	DerivedTestFiles        []string `yaml:"derived_test_files" json:"derived_test_files"`
-	LegacyRelatedTestFiles  []string `yaml:"legacy_related_test_files" json:"legacy_related_test_files"`
-	VerifyRelatedFiles      []string `yaml:"verify_related_files" json:"verify_related_files"`
-	DiffStat                string   `yaml:"diff_stat" json:"diff_stat"`
+	BranchName             string   `yaml:"branch_name" json:"branch_name"`
+	TaskDeclaredFiles      []string `yaml:"task_declared_files" json:"task_declared_files"`
+	PreexistingDirtyFiles  []string `yaml:"preexisting_dirty_files" json:"preexisting_dirty_files"`
+	CurrentDirtyFiles      []string `yaml:"current_dirty_files" json:"current_dirty_files"`
+	TrackedModifiedFiles   []string `yaml:"tracked_modified_files" json:"tracked_modified_files"`
+	UntrackedFiles         []string `yaml:"untracked_files" json:"untracked_files"`
+	EditedFiles            []string `yaml:"edited_files" json:"edited_files"`
+	AllowedFiles           []string `yaml:"allowed_files" json:"allowed_files"`
+	DerivedTestFiles       []string `yaml:"derived_test_files" json:"derived_test_files"`
+	LegacyRelatedTestFiles []string `yaml:"legacy_related_test_files" json:"legacy_related_test_files"`
+	VerifyRelatedFiles     []string `yaml:"verify_related_files" json:"verify_related_files"`
+	DiffStat               string   `yaml:"diff_stat" json:"diff_stat"`
 }
 
 // ProjectProfile 项目画像，承载 repo-specific 默认值（对齐 dataclass ProjectProfile）
 type ProjectProfile struct {
-	Name                string   `yaml:"name" json:"name"`
-	RepoURL             string   `yaml:"repo_url" json:"repo_url"`
-	RepoSlug            string   `yaml:"repo_slug" json:"repo_slug"`
-	Platform            string   `yaml:"platform" json:"platform"`
-	ImmutableFiles      []string `yaml:"immutable_files" json:"immutable_files"`
-	HighImpactPrefixes  []string `yaml:"high_impact_prefixes" json:"high_impact_prefixes"`
-	DefaultBaseBranch   string   `yaml:"default_base_branch" json:"default_base_branch"`
-	DefaultCIProfile    string   `yaml:"default_ci_profile" json:"default_ci_profile"`
+	Name               string   `yaml:"name" json:"name"`
+	RepoURL            string   `yaml:"repo_url" json:"repo_url"`
+	RepoSlug           string   `yaml:"repo_slug" json:"repo_slug"`
+	Platform           string   `yaml:"platform" json:"platform"`
+	ImmutableFiles     []string `yaml:"immutable_files" json:"immutable_files"`
+	HighImpactPrefixes []string `yaml:"high_impact_prefixes" json:"high_impact_prefixes"`
+	DefaultBaseBranch  string   `yaml:"default_base_branch" json:"default_base_branch"`
+	DefaultCIProfile   string   `yaml:"default_ci_profile" json:"default_ci_profile"`
 }
 
 // AutoHarnessPaths 运行所需的路径派生结果（对齐 dataclass AutoHarnessPaths）
 type AutoHarnessPaths struct {
-	DataDir               string `yaml:"data_dir" json:"data_dir"`
-	ExperienceDir         string `yaml:"experience_dir" json:"experience_dir"`
-	WorktreesDir          string `yaml:"worktrees_dir" json:"worktrees_dir"`
-	RunsDir               string `yaml:"runs_dir" json:"runs_dir"`
-	CacheRepoDir          string `yaml:"cache_repo_dir" json:"cache_repo_dir"`
-	RuntimeExtensionsDir  string `yaml:"runtime_extensions_dir" json:"runtime_extensions_dir"`
+	DataDir              string `yaml:"data_dir" json:"data_dir"`
+	ExperienceDir        string `yaml:"experience_dir" json:"experience_dir"`
+	WorktreesDir         string `yaml:"worktrees_dir" json:"worktrees_dir"`
+	RunsDir              string `yaml:"runs_dir" json:"runs_dir"`
+	CacheRepoDir         string `yaml:"cache_repo_dir" json:"cache_repo_dir"`
+	RuntimeExtensionsDir string `yaml:"runtime_extensions_dir" json:"runtime_extensions_dir"`
 }
 
 // AutoHarnessRuntimeState 运行时状态（对齐 dataclass AutoHarnessRuntimeState）
@@ -321,9 +321,9 @@ type StageSpec struct {
 
 // PipelineSpec Pipeline 的声明式模板（对齐 dataclass PipelineSpec）
 type PipelineSpec struct {
-	Name           string   `yaml:"name" json:"name"`
-	PipelineCls    any      `yaml:"pipeline_cls" json:"pipeline_cls"`
-	Description    string   `yaml:"description" json:"description"`
+	Name            string   `yaml:"name" json:"name"`
+	PipelineCls     any      `yaml:"pipeline_cls" json:"pipeline_cls"`
+	Description     string   `yaml:"description" json:"description"`
 	ExpectedOutputs []string `yaml:"expected_outputs" json:"expected_outputs"`
 }
 
@@ -345,14 +345,14 @@ type AutoHarnessConfig struct {
 	PlanModel *llm.Model
 
 	// ---- 路径 ----
-	DataDir     string
-	LocalRepo   string
-	RepoURL     string
-	SkillsDirs  []string
-	CommunitySkillRepos []string
+	DataDir                string
+	LocalRepo              string
+	RepoURL                string
+	SkillsDirs             []string
+	CommunitySkillRepos    []string
 	CommunitySkillCacheDir string
-	StageRegistrars    []string
-	PipelineRegistrars []string
+	StageRegistrars        []string
+	PipelineRegistrars     []string
 
 	// ---- 语言 ----
 	Language           string
@@ -360,12 +360,12 @@ type AutoHarnessConfig struct {
 	PipelinePreference string
 
 	// ---- 预算 ----
-	SessionBudgetSecs         float64
-	CostLimitUSD              float64
-	TaskTimeoutSecs           float64
-	ModelTimeoutSecs          float64
-	MaxTasksPerSession        int
-	SelfDrivenSlots           int
+	SessionBudgetSecs          float64
+	CostLimitUSD               float64
+	TaskTimeoutSecs            float64
+	ModelTimeoutSecs           float64
+	MaxTasksPerSession         int
+	SelfDrivenSlots            int
 	ExtensionVerifyConcurrency int
 
 	// ---- Git ----
@@ -383,9 +383,9 @@ type AutoHarnessConfig struct {
 	GitcodeTokenEnv string
 
 	// ---- CI 门控 ----
-	CIGateConfig          string
+	CIGateConfig           string
 	CIGatePythonExecutable string
-	CIGateInstallCommand  string
+	CIGateInstallCommand   string
 
 	// ---- Fix Loop ----
 	FixPhase1MaxRetries int
@@ -813,14 +813,14 @@ func (c *AutoHarnessConfig) BuildProjectProfile() ProjectProfile {
 	profile := ProjectProfile{
 		// Name/RepoSlug/Platform 取 ProjectProfile dataclass 字段默认值
 		// （Python build_project_profile 仅显式传后四项）
-		Name:              "agent-core",
-		RepoSlug:          "openJiuwen/agent-core",
-		Platform:          "gitcode",
-		RepoURL:           c.RepoURL,
-		ImmutableFiles:    c.ResolveImmutableFiles(),
+		Name:               "agent-core",
+		RepoSlug:           "openJiuwen/agent-core",
+		Platform:           "gitcode",
+		RepoURL:            c.RepoURL,
+		ImmutableFiles:     c.ResolveImmutableFiles(),
 		HighImpactPrefixes: append([]string(nil), c.HighImpactPrefixes...),
-		DefaultBaseBranch: c.GitBaseBranch,
-		DefaultCIProfile:  "default",
+		DefaultBaseBranch:  c.GitBaseBranch,
+		DefaultCIProfile:   "default",
 	}
 	if profile.DefaultBaseBranch == "" {
 		profile.DefaultBaseBranch = "develop"
@@ -854,8 +854,8 @@ func repoURLStem(repoURL string) string {
 // newDefaultAutoHarnessConfig 构造带默认值的配置（对齐 dataclass 字段默认值）
 func newDefaultAutoHarnessConfig() *AutoHarnessConfig {
 	return &AutoHarnessConfig{
-		RepoURL:                    defaultRepoURL,
-		CommunitySkillRepos:        []string{
+		RepoURL: defaultRepoURL,
+		CommunitySkillRepos: []string{
 			"https://github.com/anthropics/skills.git",
 			"https://github.com/JimLiu/baoyu-skills.git",
 		},

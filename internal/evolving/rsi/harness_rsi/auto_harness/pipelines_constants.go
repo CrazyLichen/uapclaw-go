@@ -19,7 +19,7 @@ const (
 
 // pipelineNameAliases 用户侧流水线名别名表
 var pipelineNameAliases = map[string]string{
-	"pr_pipeline":              MetaEvolvePipeline,
+	"pr_pipeline":               MetaEvolvePipeline,
 	"extended_harness_pipeline": ExtendedEvolvePipeline,
 }
 
