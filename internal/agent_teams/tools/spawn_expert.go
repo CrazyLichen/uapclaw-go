@@ -558,12 +558,12 @@ type spawnExpertTool struct {
 	team                *TeamBackend
 	t                   locales.Translator
 	resolver            *ExpertTemplateResolver
-	allocateModelConfig func(string) *models.Allocation
+	allocateModelConfig func(modelName string, opts ...models.AllocateOption) *models.Allocation
 }
 
 // newSpawnExpertTool 构造 spawn_expert。
 // Python: __init__ (:906-958)
-func newSpawnExpertTool(team *TeamBackend, t locales.Translator, catalog experts.ExpertCatalog, language string, boundGroup *experts.BoundAgentGroup, personaWorkspace, personaLanguage string, modelConfigAllocator func(string) *models.Allocation, resolver *ExpertTemplateResolver) *spawnExpertTool {
+func newSpawnExpertTool(team *TeamBackend, t locales.Translator, catalog experts.ExpertCatalog, language string, boundGroup *experts.BoundAgentGroup, personaWorkspace, personaLanguage string, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, resolver *ExpertTemplateResolver) *spawnExpertTool {
 	if resolver == nil {
 		resolver = NewExpertTemplateResolver(catalog, language, boundGroup, personaWorkspace, personaLanguage)
 	}

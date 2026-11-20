@@ -50,7 +50,7 @@ type TeamToolRail struct {
 	// swarmflowEnabled leader 是否持有 swarmflow 工具
 	swarmflowEnabled bool
 	// modelConfigAlloc 模型配置分配器
-	modelConfigAlloc func(modelName string) *models.Allocation
+	modelConfigAlloc func(modelName string, opts ...models.AllocateOption) *models.Allocation
 	// excludeTools 排除的工具名集合
 	excludeTools map[string]struct{}
 	// workspaceManager 工作空间管理器
@@ -314,7 +314,7 @@ func WithExpertBinding(b *ExpertBinding) TeamToolRailOption {
 }
 
 // WithModelConfigAllocator 设置模型配置分配器。
-func WithModelConfigAllocator(fn func(modelName string) *models.Allocation) TeamToolRailOption {
+func WithModelConfigAllocator(fn func(modelName string, opts ...models.AllocateOption) *models.Allocation) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.modelConfigAlloc = fn }
 }
 

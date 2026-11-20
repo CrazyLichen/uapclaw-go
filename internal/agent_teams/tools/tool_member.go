@@ -58,12 +58,12 @@ type ExternalCliModels struct {
 // Python: ExternalCliModelRules (tool_member.py:231-455)
 type ExternalCliModelRules struct {
 	team                *TeamBackend
-	allocateModelConfig func(string) *models.Allocation
+	allocateModelConfig func(modelName string, opts ...models.AllocateOption) *models.Allocation
 }
 
 // NewExternalCliModelRules 构造规则求解器。
 // Python: __init__ (tool_member.py:234-240)
-func NewExternalCliModelRules(team *TeamBackend, allocateModelConfig func(string) *models.Allocation) *ExternalCliModelRules {
+func NewExternalCliModelRules(team *TeamBackend, allocateModelConfig func(modelName string, opts ...models.AllocateOption) *models.Allocation) *ExternalCliModelRules {
 	return &ExternalCliModelRules{team: team, allocateModelConfig: allocateModelConfig}
 }
 
@@ -278,20 +278,11 @@ func (r *ExternalCliModelRules) resolveBuiltinModel(builtinModel, effort, cliAge
 	return r.team.ResolveBuiltinModel(cliAgent, builtinName, effortName)
 }
 
-// allocateWithFilter 带 provider 过滤的分配（Go allocator 接口无
-// provider_filter 形参——按 Python 语义先断言目录兼容性再分配；偏差
-// D-15.16-e16：Python allocate_model_config(model_name, provider_filter=...)
-// 的过滤在 Go 侧由调用方 allocator 自身兼容性承担，本包装在分配后校验
-// provider 并在失配时返回 nil）。
+// allocateWithFilter 带 provider 过滤的分配——e16 修正后 allocator 接口
+// 承载 WithProviderFilter option（对齐 Python allocate(provider_filter=)
+// 分配前过滤语义），原分配后校验兜底删除。
 func (r *ExternalCliModelRules) allocateWithFilter(modelName string, providerFilter func(string) bool) *models.Allocation {
-	alloc := r.allocateModelConfig(modelName)
-	if alloc == nil {
-		return nil
-	}
-	if providerFilter != nil && !providerFilter(alloc.Entry.APIProvider) {
-		return nil
-	}
-	return alloc
+	return r.allocateModelConfig(modelName, models.WithProviderFilter(providerFilter))
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -575,7 +566,7 @@ func RegisterExternalCLIMember(ctx context.Context, team *TeamBackend, in Regist
 // RegisterExternalCLIMemberInput RegisterExternalCLIMember 的具名入参。
 type RegisterExternalCLIMemberInput struct {
 	ToolName            string
-	AllocateModelConfig func(string) *models.Allocation
+	AllocateModelConfig func(modelName string, opts ...models.AllocateOption) *models.Allocation
 	CLIAgent            string
 	MemberName          string
 	DisplayName         string
@@ -601,7 +592,7 @@ type spawnTeammateTool struct {
 	TeamTool
 	team                *TeamBackend
 	t                   locales.Translator
-	allocateModelConfig func(string) *models.Allocation
+	allocateModelConfig func(modelName string, opts ...models.AllocateOption) *models.Allocation
 	forkEnabled         bool
 	externalCLIEnabled  bool
 }
@@ -615,7 +606,7 @@ var (
 	builtinModelSlots = []string{"builtin_model_param_rows", "builtin_model_usage"}
 )
 
-func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAllocator func(string) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
+func newSpawnTeammateTool(team *TeamBackend, t locales.Translator, modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation, forkEnabled bool) *spawnTeammateTool {
 	externalCLIEnabled := len(team.DeclaredCLIKinds()) > 0
 	builtinModelsEnabled := externalCLIEnabled && team.BuiltinModelsEnabled()
 	st := &spawnTeammateTool{

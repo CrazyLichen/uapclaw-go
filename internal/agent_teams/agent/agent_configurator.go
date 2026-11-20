@@ -84,7 +84,7 @@ type setupTeamBackendConfig struct {
 	// db 数据库实例（可选，默认使用 getSharedDB）
 	db database.TeamDatabase
 	// modelConfigAllocator 模型分配回调
-	modelConfigAllocator func(modelName string) *models.Allocation
+	modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation
 	// leaderAllocation Leader 模型分配结果
 	leaderAllocation *models.Allocation
 	// onTeamCleaned 团队清理回调
@@ -176,7 +176,7 @@ func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 }
 
 // WithBackendModelAllocator 设置模型分配回调。
-func WithBackendModelAllocator(fn func(modelName string) *models.Allocation) SetupTeamBackendOption {
+func WithBackendModelAllocator(fn func(modelName string, opts ...models.AllocateOption) *models.Allocation) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.modelConfigAllocator = fn }
 }
 

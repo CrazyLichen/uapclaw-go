@@ -101,7 +101,7 @@ type SpawnMemberTool struct {
 	// team 团队后端实例
 	team *TeamBackend
 	// modelConfigAlloc 模型配置分配器
-	modelConfigAlloc func(modelName string) *models.Allocation
+	modelConfigAlloc func(modelName string, opts ...models.AllocateOption) *models.Allocation
 }
 
 // ShutdownMemberTool 关闭团队成员工具。
@@ -253,7 +253,7 @@ var memberSet = mergeSets(memberOnlySet, sharedSet)
 func CreateTeamTools(
 	teamBackend *TeamBackend,
 	opts TeamToolOptions,
-	modelConfigAlloc func(modelName string) *models.Allocation,
+	modelConfigAlloc func(modelName string, opts ...models.AllocateOption) *models.Allocation,
 	excludeTools map[string]struct{},
 ) []tool.Tool {
 	role := opts.Role

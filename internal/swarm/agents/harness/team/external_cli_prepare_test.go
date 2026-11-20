@@ -1,8 +1,8 @@
 package team
 
 import (
-	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"encoding/json"
+	external "github.com/uapclaw/uapclaw-go/internal/agent_teams/external"
 	"os"
 	"path/filepath"
 	"testing"

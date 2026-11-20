@@ -834,7 +834,7 @@ func TestIsTeamCompleted_已完成(t *testing.T) {
 // TestWithModelConfigAllocator 测试模型分配回调。
 func TestWithModelConfigAllocator(t *testing.T) {
 	called := false
-	allocator := func(modelName string) *models.Allocation {
+	allocator := func(modelName string, opts ...models.AllocateOption) *models.Allocation {
 		called = true
 		return nil
 	}

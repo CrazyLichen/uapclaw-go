@@ -62,11 +62,11 @@ func TestTeamBindingStore_模型选择(t *testing.T) {
 	store := NewTeamBindingStore(filepath.Join(dir, "bindings.json"))
 	_, err := store.Create("t1", "tpl-1", nil, false)
 	require.NoError(t, err)
-	_, err = store.SetTeamSelection("t1", map[string]any{"mode": "model", "model_name": "m1"})
+	_, err = store.SetTeamSelection("t1", map[string]any{"type": "model", "id": "m1"})
 	require.NoError(t, err)
 	selection := store.GetTeamSelection("t1")
 	require.NotNil(t, selection)
-	assert.Equal(t, "m1", selection["model_name"])
+	assert.Equal(t, "m1", selection["id"])
 	// 未绑定团得 nil
 	assert.Nil(t, store.GetTeamSelection("missing"))
 }

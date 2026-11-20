@@ -67,7 +67,7 @@ type TeamBackend struct {
 	// predefinedMembers 预定义成员规格
 	predefinedMembers []atschema.TeamMemberSpec
 	// modelConfigAllocator 模型配置分配器
-	modelConfigAllocator func(modelName string) *models.Allocation
+	modelConfigAllocator func(modelName string, opts ...models.AllocateOption) *models.Allocation
 	// currentModelName/currentModelProvider 团队当前模型（可空）。
 	// Python: team.py:287-288
 	currentModelName     string
@@ -228,7 +228,7 @@ func WithPredefinedMembers(members []atschema.TeamMemberSpec) TeamBackendOption 
 }
 
 // WithModelConfigAllocator 设置模型分配回调。
-func WithModelConfigAllocator(fn func(modelName string) *models.Allocation) TeamBackendOption {
+func WithModelConfigAllocator(fn func(modelName string, opts ...models.AllocateOption) *models.Allocation) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.modelConfigAllocator = fn }
 
 }

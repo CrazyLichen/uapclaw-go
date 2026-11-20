@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sessionpaths "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
 )
 
@@ -323,12 +324,21 @@ func (s *TeamBindingStore) SetTeamSelection(teamName string, selection map[strin
 	if err != nil {
 		return TeamBinding{}, err
 	}
-	// Python: ModelSelection.model_validate——Go 侧 schema 校验面
-	// （gateway/common/model_selection）⤴️模型选择章节；此处按形状校验
-	// （D-15.16-e18：selection 非法时 BAD_REQUEST 的结构化校验 ⤴️同点）。
+	// Python: ModelSelection.model_validate（model_selection.py:10-38）——
+	// 23.4d 已落 swarmcommon.ModelSelectionFromMap（map 还原 + 三约束校验），
+	// e18 撤销：结构化校验直连，normalized 以 model_dump(exclude_none=True)
+	// 等价形态回存。
 	if selection == nil {
 		return TeamBinding{}, &TeamBindingStoreError{Msg: "invalid model selection: empty", Code: "BAD_REQUEST"}
 	}
+	ms, msErr := swarmcommon.ModelSelectionFromMap(selection)
+	if msErr != nil {
+		return TeamBinding{}, &TeamBindingStoreError{
+			Msg:  fmt.Sprintf("invalid model selection: %v", msErr),
+			Code: "BAD_REQUEST",
+		}
+	}
+	selection = ms.ToMap() // Python model_dump() 等价
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data := s.readUnlocked()

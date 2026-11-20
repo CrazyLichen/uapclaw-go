@@ -20,11 +20,44 @@ import (
 // 返回 nil 表示"无可用条目"——调用者回退到每 Agent 的模型配置。
 type ModelAllocator interface {
 	// Allocate 返回下一次分配，或 nil 当不可用时。
-	Allocate(modelName string) *Allocation
+	// provider_filter：可选 api_provider 谓词；设置后不满足谓词的池条目被
+	// 跳过——外部 CLI 成员用它把池条目协议匹配到 CLI kind（Claude 需
+	// Anthropic、Codex 需 OpenAI 兼容）。
+	// Python: allocate(model_name, provider_filter=...)（allocator.py:156-175
+	// 协议签名；:393-405 round-robin 过滤、:470-473 组内过滤、:386 模型组忽略）。
+	Allocate(modelName string, opts ...AllocateOption) *Allocation
 	// StateDict 返回分配器计数器的 JSON 友好快照。
 	StateDict() map[string]any
 	// LoadStateDict 从先前的 StateDict 恢复计数器。
 	LoadStateDict(state map[string]any)
+}
+
+// AllocateOption allocate 的可选参数（Python keyword-only provider_filter 的
+// Go functional option 形态，偏差 D-15.16-e16 修正：原单形参签名与 Python
+// 协议 allocate(model_name, provider_filter=) 不对齐）。
+type AllocateOption func(*allocateParams)
+
+// allocateParams AllocateOption 载荷。
+type allocateParams struct {
+	// providerFilter api_provider 谓词（nil = 不过滤）
+	providerFilter func(string) bool
+}
+
+// WithProviderFilter 设置 provider 过滤谓词。
+// Python: allocate(provider_filter=...)（allocator.py:160）
+func WithProviderFilter(f func(string) bool) AllocateOption {
+	return func(p *allocateParams) { p.providerFilter = f }
+}
+
+// applyAllocateOptions 归并选项。
+func applyAllocateOptions(opts []AllocateOption) *allocateParams {
+	p := &allocateParams{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(p)
+		}
+	}
+	return p
 }
 
 // Allocation 模型分配结果。
@@ -169,12 +202,33 @@ func NewRoundRobinModelAllocator(pool []ModelPoolEntry) *RoundRobinModelAllocato
 	}
 }
 
-// Allocate 返回下一个池条目。对齐 Python RoundRobinModelAllocator.allocate — 真实实现
-func (a *RoundRobinModelAllocator) Allocate(_ string) *Allocation {
+// Allocate 返回下一个池条目。对齐 Python RoundRobinModelAllocator.allocate
+// （allocator.py:382-405）——provider_filter 过滤池条目后轮转；filter 设置时
+// model_name 参与组合过滤（Python :399-402）。
+func (a *RoundRobinModelAllocator) Allocate(modelName string, opts ...AllocateOption) *Allocation {
+	params := applyAllocateOptions(opts)
 	if len(a.pool) == 0 {
 		return nil
 	}
-	entry := a.pool[a.index%len(a.pool)]
+	if params.providerFilter == nil {
+		entry := a.pool[a.index%len(a.pool)]
+		a.index++
+		group := a.groups[entry.ModelName]
+		if len(group) == 0 {
+			group = []ModelPoolEntry{entry}
+		}
+		return &Allocation{Entry: entry, GroupIndex: groupIndexOf(entry, group)}
+	}
+	filtered := []ModelPoolEntry{}
+	for _, entry := range a.pool {
+		if params.providerFilter(entry.APIProvider) && (modelName == "" || entry.ModelName == modelName) {
+			filtered = append(filtered, entry)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	entry := filtered[a.index%len(filtered)]
 	a.index++
 	group := a.groups[entry.ModelName]
 	if len(group) == 0 {
@@ -219,7 +273,7 @@ func NewByModelNameAllocator(pool []ModelPoolEntry) *ByModelNameAllocator {
 }
 
 // Allocate 按名分配。对齐 Python ByModelNameAllocator.allocate — 真实实现
-func (a *ByModelNameAllocator) Allocate(modelName string) *Allocation {
+func (a *ByModelNameAllocator) Allocate(modelName string, opts ...AllocateOption) *Allocation {
 	if modelName == "" {
 		return nil
 	}
@@ -227,9 +281,26 @@ func (a *ByModelNameAllocator) Allocate(modelName string) *Allocation {
 	if !ok {
 		return nil
 	}
-	idx := a.innerIndexes[modelName] % len(group)
+	// Python :470-473——filter 在组内过滤；:477-480 group_index 必须映回原组
+	// 位置，resolve_member_model（不再应用 filter）才能在 rehydrate 时找到
+	// 同一条目。
+	params := applyAllocateOptions(opts)
+	filtered := group
+	if params.providerFilter != nil {
+		filtered = []ModelPoolEntry{}
+		for _, e := range group {
+			if params.providerFilter(e.APIProvider) {
+				filtered = append(filtered, e)
+			}
+		}
+		if len(filtered) == 0 {
+			return nil
+		}
+	}
+	idx := a.innerIndexes[modelName] % len(filtered)
 	a.innerIndexes[modelName]++
-	return &Allocation{Entry: group[idx], GroupIndex: idx}
+	picked := filtered[idx]
+	return &Allocation{Entry: picked, GroupIndex: groupIndexOf(picked, group)}
 }
 
 // StateDict 快照组内计数器+池摘要。对齐 Python ByModelNameAllocator.state_dict
@@ -345,7 +416,7 @@ func NewRouterAllocator(pool []ModelPoolEntry) (*RouterAllocator, error) {
 
 // Allocate 路由分配。对齐 Python RouterAllocator.allocate — 真实实现
 // modelName="" → 首条目；modelName=已知名 → 精确查找；未知名 → nil
-func (a *RouterAllocator) Allocate(modelName string) *Allocation {
+func (a *RouterAllocator) Allocate(modelName string, opts ...AllocateOption) *Allocation {
 	if modelName == "" {
 		return &Allocation{Entry: a.pool[0], GroupIndex: 0}
 	}
@@ -442,7 +513,7 @@ func NewIntelliRouterAllocator(pool []ModelPoolEntry) (*IntelliRouterAllocator, 
 // provider_filter 忽略——provider 过滤作用于物理 CLI 部署，不是逻辑条目。
 // 不可选名返回 nil——显式点名的模型绝不回退整组。
 // Python: IntelliRouterAllocator.allocate (allocator.py:712)
-func (a *IntelliRouterAllocator) Allocate(modelName string) *Allocation {
+func (a *IntelliRouterAllocator) Allocate(modelName string, opts ...AllocateOption) *Allocation {
 	tag := strings.TrimSpace(modelName)
 	if tag == "" || tag == INTELLI_ROUTER_UNIFIED_MODEL {
 		return &Allocation{Entry: a.pool[0], GroupIndex: 0}
