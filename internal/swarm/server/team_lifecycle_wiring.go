@@ -25,9 +25,6 @@ func init() {
 	serverruntime.SetTeamLifecycleFactory(newTeamLifecycleAdapter)
 }
 
-// RoundStateRounds 导出轮状态协调器窄面别名（server/runtime 的 roundStateRounds）。
-type RoundStateRounds = serverruntime.RoundStateRounds
-
 // newTeamLifecycleAdapter 构造一个渠道的团队会话生命周期适配器。
 func newTeamLifecycleAdapter(channelID string, rounds serverruntime.RoundStateRounds) swsession.SessionRuntimeLifecyclePort {
 	tm := teamharness.GetTeamManager(channelID)
