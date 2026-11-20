@@ -9,6 +9,11 @@ type WorktreeConfig struct {
 	Enabled bool `json:"enabled"`
 	// BaseDir Worktree 基础目录
 	BaseDir string `json:"base_dir,omitempty"`
+	// BaseDirIsWorktreesDir 把 BaseDir 视作 worktrees 父目录本身。
+	// 为 false 时 worktree 落在 {BaseDir}/.worktrees 下（单 agent 通用路径）；
+	// 团队拥有的 worktree 传 true，使会话根为 sessions/{id}/worktrees/{slug}。
+	// Python: WorktreeConfig.base_dir_is_worktrees_dir (models.py:74)
+	BaseDirIsWorktreesDir bool `json:"base_dir_is_worktrees_dir,omitempty"`
 	// SparsePaths 稀疏检出路径列表
 	SparsePaths []string `json:"sparse_paths,omitempty"`
 	// SymlinkDirectories 需要创建符号链接的目录列表
@@ -21,6 +26,22 @@ type WorktreeConfig struct {
 	AutoCleanupOnShutdown bool `json:"auto_cleanup_on_shutdown"`
 	// LifecyclePolicy 生命周期策略
 	LifecyclePolicy WorktreeLifecyclePolicy `json:"lifecycle_policy"`
+	// RepoLock 是否按 repo_root 串行化 worktree 创建/删除关键段。
+	// 为 true 时 WorktreeManager 在 enter / create_owner_worktree / _remove_worktree
+	// 外层包进程内 + 跨进程双锁（见 lock.go RepoLock）。
+	// 自行管理隔离的远端后端可禁用。
+	// Python: WorktreeConfig.repo_lock (models.py:87)
+	RepoLock bool `json:"repo_lock"`
+	// RepoLockTimeout 仓库锁等待秒数，超时显式报错（不静默降级）。
+	// 覆盖最坏情况的串行链（如 5 个 worker 各自 fetch + worktree add）。
+	// Python: WorktreeConfig.repo_lock_timeout (models.py:96)
+	RepoLockTimeout float64 `json:"repo_lock_timeout"`
+	// LongpathsSupport 创建 worktree 前在 repo_root 上设 core.longpaths=true（Windows）。
+	// Windows 上 git worktree add 检出超 260 字符路径会 rc=128 失败；core.longpaths
+	// 使 git 使用扩展长度路径前缀绕过 Win32 限制，不改变源仓库目录结构。
+	// 默认开启（rc=128 是主要失败形态）；源仓库禁止 git config 写入时关闭。
+	// Python: WorktreeConfig.longpaths_support (models.py:99)
+	LongpathsSupport bool `json:"longpaths_support"`
 }
 
 // WorktreeSession Worktree 运行时状态。
@@ -104,5 +125,8 @@ func NewWorktreeConfig() WorktreeConfig {
 		CleanupAfterDays:      30,
 		AutoCleanupOnShutdown: true,
 		LifecyclePolicy:       WorktreeLifecyclePolicyAuto,
+		RepoLock:              true,
+		RepoLockTimeout:       120.0,
+		LongpathsSupport:      true,
 	}
 }

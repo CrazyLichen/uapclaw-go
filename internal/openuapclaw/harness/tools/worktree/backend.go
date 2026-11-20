@@ -66,6 +66,10 @@ type WorktreeBackend interface {
 type GitBackend struct {
 	// config Worktree 配置
 	config WorktreeConfig
+	// RemoteBase 是否从远端默认分支解析基准（远端 worktree 节点场景）。
+	// Python: GitBackend.remote_base (backend.py:119)，由
+	// agent_teams/worktree_remote 的构造方置位；默认 false 走本地优先。
+	RemoteBase bool
 }
 
 // managerOptions WorktreeManager 内部构造选项。
@@ -148,15 +152,28 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 		}, nil
 	}
 
+	// 阶段 1b: 检出前开启 Windows 长路径支持（rc=128 主因）
+	// Python: backend.py:154-155
+	if g.config.LongpathsSupport {
+		if err := setLongpaths(ctx, repoRoot, true); err != nil {
+			return nil, err
+		}
+	}
+
 	// 阶段 2: 解析基准分支
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建 worktree 父目录失败: %w", err)
 	}
 	baseBranch, baseSHA := g.resolveBase(ctx, repoRoot)
 
-	// 阶段 3: 创建 worktree
+	// 阶段 3: 创建 worktree —— 基准优先用 SHA，退回分支名
+	// Python: backend.py:163-168 "base_sha or base_branch"
+	base := baseSHA
+	if base == "" {
+		base = baseBranch
+	}
 	sparse := g.config.SparsePaths
-	if err := worktreeAdd(ctx, repoRoot, targetPath, wtBranch, baseBranch, len(sparse) > 0); err != nil {
+	if err := worktreeAdd(ctx, repoRoot, targetPath, wtBranch, base, len(sparse) > 0); err != nil {
 		return nil, err
 	}
 
@@ -200,11 +217,58 @@ func (g *GitBackend) Exists(_ context.Context, worktreePath string) bool {
 	return err == nil && sha != ""
 }
 
-// resolveBase 解析新 worktree 的基准分支和 SHA。
-// Python: GitBackend._resolve_base(repo_root)
+// resolveBase 为新 worktree 解析基准 ref 和 SHA，本地状态优先。
+// Python: GitBackend._resolve_base(repo_root) (backend.py:225-262)
 //
-// 优化：跳过本地已存在的 origin ref，节省 6-8s。
+// 顺序：当前检出的本地分支 → 本地默认分支（main/master/develop）→
+// 已存在的 origin/<default> ref → 分离 HEAD → 未出生仓库建空初始提交。
+// 不做 fetch：worktree 从用户本地状态分叉（含未推送提交）。
+// 远端 worktree 节点走 resolveRemoteBase（backend.py:264）。
 func (g *GitBackend) resolveBase(ctx context.Context, repoRoot string) (string, string) {
+	if g.RemoteBase {
+		return g.resolveRemoteBase(ctx, repoRoot)
+	}
+
+	current, _ := getCurrentBranch(ctx, repoRoot)
+	// Python: local_names = dict.fromkeys(name for name in (current, *_DEFAULT_BRANCH_NAMES) if name)
+	seen := map[string]bool{}
+	localNames := []string{}
+	for _, name := range append([]string{current}, defaultBranchNames()...) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			localNames = append(localNames, name)
+		}
+	}
+	// 本地分支优先：refs/heads/<name>
+	for _, name := range localNames {
+		if sha, err := revParse(ctx, "refs/heads/"+name+"^{commit}", repoRoot); err == nil && sha != "" {
+			return name, sha
+		}
+	}
+	// 已存在的 origin ref：refs/remotes/origin/<name>
+	for _, name := range defaultBranchNames() {
+		if sha, err := revParse(ctx, "refs/remotes/origin/"+name+"^{commit}", repoRoot); err == nil && sha != "" {
+			return "origin/" + name, sha
+		}
+	}
+	// 分离 HEAD
+	if sha, err := revParse(ctx, "HEAD", repoRoot); err == nil && sha != "" {
+		return "HEAD", sha
+	}
+	// 未出生仓库：建真实空基础提交，git worktree 才能从 HEAD 分叉
+	// 且不吞已暂存/未跟踪的用户文件（backend.py:258-262）
+	sha, err := createEmptyInitialCommit(ctx, repoRoot)
+	if err != nil {
+		return "HEAD", ""
+	}
+	return "HEAD", sha
+}
+
+// resolveRemoteBase 从远端默认分支解析基准（远端 worktree 节点）。
+// Python: GitBackend._resolve_remote_base(repo_root) (backend.py:264-301)
+//
+// 优化：origin/<default> 本地已存在则跳过 fetch，大仓库节省 6-8s。
+func (g *GitBackend) resolveRemoteBase(ctx context.Context, repoRoot string) (string, string) {
 	defaultBranch := getDefaultBranch(ctx, repoRoot)
 	originRef := "origin/" + defaultBranch
 
@@ -220,9 +284,23 @@ func (g *GitBackend) resolveBase(ctx context.Context, repoRoot string) (string, 
 		}
 	}
 
-	// 最后回退：使用当前 HEAD
-	sha, _ := revParse(ctx, "HEAD", repoRoot)
+	// 最后回退：当前 HEAD
+	if sha, err := revParse(ctx, "HEAD", repoRoot); err == nil && sha != "" {
+		return "HEAD", sha
+	}
+
+	// 未出生仓库：建真实空基础提交（backend.py:297-301）
+	sha, err := createEmptyInitialCommit(ctx, repoRoot)
+	if err != nil {
+		return "HEAD", ""
+	}
 	return "HEAD", sha
+}
+
+// defaultBranchNames 默认分支名集合。
+// Python: backend.py:36 _DEFAULT_BRANCH_NAMES = ("main", "master", "develop")
+func defaultBranchNames() []string {
+	return []string{"main", "master", "develop"}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -438,3 +438,79 @@ func resolveCommonDir(gitDir, raw string) (string, error) {
 	}
 	return common, nil
 }
+
+// createEmptyInitialCommit 创建空初始提交且不触碰索引。
+// Python: git.py create_empty_initial_commit(cwd) (:175-203)
+//
+// `git commit --allow-empty` 会把未出生仓库里已暂存的用户文件一并提交；
+// 改用 plumbing 命令，worktree 初始化不吞用户的待提交改动。
+//
+// 返回创建的提交 SHA；git 失败返回 GitError。
+func createEmptyInitialCommit(ctx context.Context, cwd string) (string, error) {
+	tree := runGit(ctx, []string{"mktree"}, cwd)
+	if !tree.OK() {
+		return "", &GitError{Command: "mktree", ReturnCode: tree.ReturnCode, Stderr: tree.Stderr}
+	}
+	commit := runGit(ctx, []string{
+		"-c", "user.name=OpenJiuwen",
+		"-c", "user.email=openjiuwen@example.invalid",
+		"commit-tree", tree.Stdout,
+		"-m", "chore: initialize repository for worktrees",
+	}, cwd)
+	if !commit.OK() {
+		return "", &GitError{Command: "commit-tree", ReturnCode: commit.ReturnCode, Stderr: commit.Stderr}
+	}
+	update := runGit(ctx, []string{"update-ref", "HEAD", commit.Stdout}, cwd)
+	if !update.OK() {
+		return "", &GitError{Command: "update-ref", ReturnCode: update.ReturnCode, Stderr: update.Stderr}
+	}
+	return commit.Stdout, nil
+}
+
+// setLongpaths 在 repo_root 上设置 core.longpaths 以绕过 Windows MAX_PATH。
+// Python: git.py set_longpaths(repo_root, *, enabled) (:380-398)
+//
+// git worktree add 会把源仓库内容检出到新 worktree；Windows 上超过 260 字符
+// 的路径检出失败 rc=128——深层嵌套仓库的主要失败形态。core.longpaths=true
+// 使 git 使用扩展长度 Windows 路径前缀绕过 Win32 限制，不改变源仓库目录结构。
+//
+// config 写失败（如 bare 仓库、只读 .git）返回 GitError。
+func setLongpaths(ctx context.Context, repoRoot string, enabled bool) error {
+	value := "true"
+	if !enabled {
+		value = "false"
+	}
+	r := runGit(ctx, []string{"config", "core.longpaths", value}, repoRoot)
+	if !r.OK() {
+		return &GitError{Command: "git config core.longpaths", ReturnCode: r.ReturnCode, Stderr: r.Stderr}
+	}
+	return nil
+}
+
+// isRefAncestor 返回一个 ref 是否可达自另一个 ref。
+// Python: git.py is_ref_ancestor(ancestor_ref, descendant_ref, cwd) (:445-471)
+//
+// 返回值三态：true=祖先关系成立；false=两 ref 有效但无该关系；
+// nil=git 无法验证（如 ref 不存在）。
+func isRefAncestor(ctx context.Context, ancestorRef, descendantRef, cwd string) *bool {
+	r := runGit(ctx, []string{"merge-base", "--is-ancestor", ancestorRef, descendantRef}, cwd)
+	if r.ReturnCode == 0 {
+		t := true
+		return &t
+	}
+	if r.ReturnCode == 1 {
+		f := false
+		return &f
+	}
+	return nil
+}
+
+// mergeBase 返回两个 ref 的最佳公共祖先 SHA；git 无法判定时返回空串。
+// Python: git.py merge_base(first_ref, second_ref, cwd) (:473-493)
+func mergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
+	r := runGit(ctx, []string{"merge-base", firstRef, secondRef}, cwd)
+	if r.OK() && r.Stdout != "" {
+		return r.Stdout
+	}
+	return ""
+}
