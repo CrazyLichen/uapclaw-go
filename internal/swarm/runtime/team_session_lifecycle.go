@@ -11,8 +11,8 @@ import (
 
 // TeamLifecycleManager 生命周期适配器需要的团队运行时操作。
 // Python: runtime/team_session_lifecycle.py _TeamLifecycleManager（Protocol，6 方法）
-// Go 侧 2 个可用现有能力实现（PauseSessionRuntime / StopSessionRuntime），
-// 其余 4 个为桩，spec §10 R-7。
+// 生产实现：harness/team TeamManager（编译期断言见 team_manager_port_assert.go；
+// 六账本真实现见 team_manager_round_state.go，25.2b Task 12）。
 type TeamLifecycleManager interface {
 	// SetRoundStateReporter 附加活跃/停泊团队轮的 Runtime 观察者（桩）
 	SetRoundStateReporter(reporter func(sessionID string, generation int, running bool))
@@ -22,8 +22,8 @@ type TeamLifecycleManager interface {
 	PauseSessionRuntime(ctx context.Context, sessionID, reason string, generation *int) (bool, error)
 	// StopSessionRuntime 停止匹配代次的运行时资源
 	StopSessionRuntime(ctx context.Context, sessionID, reason string, stopRunner bool, generation *int) (bool, error)
-	// BroadcastEvent 向匹配代次广播事件（桩）
-	BroadcastEvent(sessionID, eventType string, payload map[string]any)
+	// BroadcastEvent 向匹配代次广播事件（返回是否有存活接收方，Python broadcast_event -> bool）
+	BroadcastEvent(sessionID, eventType string, payload map[string]any) bool
 	// IsGenerationRunning 匹配代次是否拥有活跃工作（桩）
 	IsGenerationRunning(sessionID string, generation int) bool
 }
@@ -121,6 +121,8 @@ func (a *TeamSessionLifecycleAdapter) PublishPauseCompleted(
 		Str("session_id", sessionID).
 		Str("generation", intPtrText(generation)).
 		Msg("[TeamProcessingStatus] generated: source=pause_completed is_processing=false is_complete=true")
+	// 偏差 D-25.3-1：Python adapter 经 channel_id=channel_id 透传给 broadcast_event，
+	// Go TeamManager.BroadcastEvent 现签名无 channel 参数（回收条件 ⤴️25.6 消息投递批）。
 	a.manager.BroadcastEvent(sessionID, "chat.processing_status", map[string]any{
 		"event_type":    "chat.processing_status",
 		"session_id":    sessionID,
