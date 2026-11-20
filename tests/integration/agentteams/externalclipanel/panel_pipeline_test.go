@@ -11,11 +11,11 @@ import (
 
 	externalcli "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

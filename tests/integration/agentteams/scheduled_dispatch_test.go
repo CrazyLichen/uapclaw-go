@@ -67,6 +67,8 @@ func (h *schedFakeHost) AutoStartMember(_ context.Context, memberName string) bo
 type schedFakeBackend struct {
 	shutdownCalls []string
 	shutdown      map[string]bool
+	// verificationEnabled 验证开关（评审链套件覆写为 true）。
+	verificationEnabled bool
 }
 
 func (b *schedFakeBackend) ListRetirableMembers(context.Context) ([]database.RetirableMemberRow, error) {
@@ -83,7 +85,9 @@ func (b *schedFakeBackend) ShutdownMember(_ context.Context, memberName string) 
 func (b *schedFakeBackend) MembersWithUnread(context.Context, []string) (map[string]bool, error) {
 	return map[string]bool{}, nil
 }
-func (b *schedFakeBackend) TaskVerificationEnabled(context.Context) (bool, error) { return false, nil }
+func (b *schedFakeBackend) TaskVerificationEnabled(context.Context) (bool, error) {
+	return b.verificationEnabled, nil
+}
 
 func (s *TeamScheduledDispatchSuite) strPtr(v string) *string { return &v }
 
