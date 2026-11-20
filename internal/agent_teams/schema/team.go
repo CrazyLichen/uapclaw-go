@@ -131,9 +131,6 @@ type TeamRuntimeContext struct {
 	// TemplateExternalCLI）。
 	// Python: TeamRuntimeContext.agent_template_spec (spawn_manager.py:568)
 	AgentTemplateSpec *hschema.AgentTemplateSpec `json:"agent_template_spec,omitempty"`
-	// TemplateExternalCLI 外部 CLI 专家成员的启动配置。
-	// Python: TeamRuntimeContext.template_external_cli (spawn_manager.py:568)
-	TemplateExternalCLI *ExternalCliAgentSpec `json:"template_external_cli,omitempty"`
 	// TeamPrompt 团队级提示词（DB team_info.prompt）
 	// Python: TeamRuntimeContext.team_prompt (schema/team.py:674)
 	TeamPrompt string `json:"team_prompt,omitempty"`

@@ -400,7 +400,7 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 		DBConfig:            runtimeCtx.DBConfig,
 		MemberModel:         memberModel,
 		AgentTemplateSpec:   agentTemplateSpec,
-		TemplateExternalCLI: templateExternalCLI,
+		TemplateExternalCli: templateExternalCLI,
 		MessagerConfig:      messagerConfig,
 	}, nil
 }

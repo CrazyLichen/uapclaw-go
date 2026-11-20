@@ -75,7 +75,7 @@ func TestBuildContextFromDB_expert快照读行(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ctx.AgentTemplateSpec)
 	assert.Equal(t, "writer", ctx.AgentTemplateSpec.AgentCard.BaseCard.Name)
-	assert.Nil(t, ctx.TemplateExternalCLI)
+	assert.Nil(t, ctx.TemplateExternalCli)
 }
 
 // TestBuildContextFromDB_普通成员双nil 非 expert 成员恢复 → 快照/外部配置双 nil。
@@ -85,7 +85,7 @@ func TestBuildContextFromDB_普通成员双nil(t *testing.T) {
 	ctx, err := manager.BuildContextFromDB(context.Background(), "dev-writer")
 	require.NoError(t, err)
 	assert.Nil(t, ctx.AgentTemplateSpec)
-	assert.Nil(t, ctx.TemplateExternalCLI)
+	assert.Nil(t, ctx.TemplateExternalCli)
 }
 
 // TestTemplateFields_externalCLI 外部 CLI 模板记录反序列化。
