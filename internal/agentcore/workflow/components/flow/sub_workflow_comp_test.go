@@ -1,6 +1,59 @@
 package flow
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+)
+
+// fakeWorkflow 测试替身：记录 Invoke 调用并返回固定输出
+type fakeWorkflow struct {
+	invokeCalled int
+	invokeInputs any
+	invokeKwargs map[string]any
+	invokeOut    *workflow.WorkflowOutput
+	invokeErr    error
+}
+
+func (f *fakeWorkflow) Invoke(ctx context.Context, inputs any,
+	sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error) {
+	f.invokeCalled++
+	f.invokeInputs = inputs
+	f.invokeKwargs = kwargs
+	if f.invokeErr != nil {
+		return nil, f.invokeErr
+	}
+	if f.invokeOut == nil {
+		return &workflow.WorkflowOutput{Result: map[string]any{"done": true}, State: workflow.WorkflowExecutionStateCompleted}, nil
+	}
+	return f.invokeOut, nil
+}
+
+// fakeNodeSessionFacade 最小 NodeSessionFacade 替身：invokeSubWorkflow 转调链只要求 SessionFacade 面
+// （生产 InvokeFn 槽收 *session.NodeSessionFacade——node.go:42 已断言满足 SessionFacade——后转调私有方法）
+type fakeNodeSessionFacade struct {
+	sessioninterfaces.SessionFacade
+}
+
+func newFakeNodeSession(t *testing.T) sessioninterfaces.SessionFacade {
+	t.Helper()
+	return &fakeNodeSessionFacade{}
+}
+
+// newSubWorkflowComponentForTest 测试构造缝：注入 fake 调用缝，
+// 生产构造函数只收 *workflow.Workflow（Python 形参类型 Workflow）。
+func newSubWorkflowComponentForTest(fw *fakeWorkflow, cacheStream bool) (*SubWorkflowComponent, error) {
+	comp, err := newSubWorkflowComponent(&workflow.Workflow{}, WithCacheStream(cacheStream))
+	if err != nil {
+		return nil, err
+	}
+	comp.subWorkflowInvokeFn = fw.Invoke
+	return comp, nil
+}
 
 // TestBuildFinalResult_空累积 返回空 map（Python workflow_comp.py:47-48）
 func TestBuildFinalResult_空累积(t *testing.T) {
@@ -96,5 +149,93 @@ func TestClear(t *testing.T) {
 	got, _ = s.BuildFinalResult()
 	if got["k2"] != "v2" {
 		t.Fatalf("Clear 后应可重新累积, got %v", got)
+	}
+}
+
+// TestNewSubWorkflowComponent_nil拒绝 构造参数校验（Python __init__ :70-72）
+func TestNewSubWorkflowComponent_nil拒绝(t *testing.T) {
+	_, err := NewSubWorkflowComponent(nil)
+	if err == nil {
+		t.Fatal("期望 nil sub_workflow 报错")
+	}
+	if !strings.Contains(err.Error(), "sub_workflow is None") {
+		t.Fatalf("文案复刻 Python, got %v", err)
+	}
+}
+
+// TestSubWorkflowComponent_三override 方法提升遮蔽（Python :87-91 / :93-94）
+func TestSubWorkflowComponent_三override(t *testing.T) {
+	fw := &fakeWorkflow{}
+	comp, err := newSubWorkflowComponentForTest(fw, false)
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if !comp.GraphInvoker() {
+		t.Fatal("GraphInvoker 应恒 true（Python :87-88）")
+	}
+	if comp.ComponentType() != SubWorkflowComponentType {
+		t.Fatalf("期望 %q, got %q", SubWorkflowComponentType, comp.ComponentType())
+	}
+	if comp.SubWorkflow() == nil {
+		t.Fatal("SubWorkflow() 应返回注入实例")
+	}
+}
+
+// TestSubWorkflowComponent_Invoke_空缓存不短路 Quirk A 修复锁定（D-14b-1）
+func TestSubWorkflowComponent_Invoke_空缓存不短路(t *testing.T) {
+	fw := &fakeWorkflow{}
+	comp, _ := newSubWorkflowComponentForTest(fw, true) // cacheStream=true
+	sess := newFakeNodeSession(t)
+	env := map[string]any{
+		graph.InputsKey: map[string]any{"q": "hi"},
+		graph.ConfigKey: nil,
+	}
+	out, err := comp.invokeSubWorkflow(context.Background(), env, sess)
+	if err != nil {
+		t.Fatalf("期望真实转调, got err %v", err)
+	}
+	if fw.invokeCalled != 1 {
+		t.Fatalf("空缓存必须转调子工作流（D-14b-1）, invokeCalled=%d", fw.invokeCalled)
+	}
+	if fw.invokeKwargs["is_sub"] != true {
+		t.Fatalf("期望 kwargs 携带 is_sub=true, got %v", fw.invokeKwargs)
+	}
+	if out == nil {
+		t.Fatal("期望有输出")
+	}
+}
+
+// TestSubWorkflowComponent_Invoke_非空短路 缓存命中不重跑
+func TestSubWorkflowComponent_Invoke_非空短路(t *testing.T) {
+	fw := &fakeWorkflow{}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	comp.streamState.Accumulate(map[string]any{"output": map[string]any{"out": "cached"}})
+	sess := newFakeNodeSession(t)
+	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
+	out, err := comp.invokeSubWorkflow(context.Background(), env, sess)
+	if err != nil {
+		t.Fatalf("短路路径不应报错: %v", err)
+	}
+	if fw.invokeCalled != 0 {
+		t.Fatalf("缓存命中不应重跑子工作流, invokeCalled=%d", fw.invokeCalled)
+	}
+	m, ok := out["output"].(map[string]any)
+	if !ok || m["out"] != "cached" {
+		t.Fatalf("期望 {'output': cached} 形态, got %v", out)
+	}
+}
+
+// TestSubWorkflowComponent_Invoke_关缓存恒转调 cache_stream=false
+func TestSubWorkflowComponent_Invoke_关缓存恒转调(t *testing.T) {
+	fw := &fakeWorkflow{}
+	comp, _ := newSubWorkflowComponentForTest(fw, false)
+	comp.streamState.Accumulate(map[string]any{"output": map[string]any{"out": "cached"}})
+	sess := newFakeNodeSession(t)
+	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
+	if _, err := comp.invokeSubWorkflow(context.Background(), env, sess); err != nil {
+		t.Fatalf("转调不应报错: %v", err)
+	}
+	if fw.invokeCalled != 1 {
+		t.Fatalf("cache_stream=false 恒转调, invokeCalled=%d", fw.invokeCalled)
 	}
 }

@@ -1,6 +1,19 @@
 package flow
 
-import "fmt"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/agentcore/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -14,7 +27,156 @@ type SubWorkflowStreamState struct {
 	accumulatedOutputs []any
 }
 
+// SubWorkflowOption 子工作流组件构造选项（Python keyword-only 参数的 Go 惯用法承载，D-14b-4）
+type SubWorkflowOption func(*SubWorkflowComponent)
+
+// SubWorkflowComponent 子工作流嵌套组件（Python workflow_comp.py:66-96 一比一）。
+// 嵌入 WorkflowComponent：执行面经 InvokeFn/StreamFn 槽、包装序由基类
+// OnInvoke/OnStream 承担；GraphInvoker/ComponentType 经方法提升遮蔽 override
+// （深度 1 > 嵌入基座的深度 2，≙ Python 方法覆写）。
+type SubWorkflowComponent struct {
+	components.WorkflowComponent
+	// subWorkflow 内嵌子工作流（Python _sub_workflow）
+	subWorkflow *workflow.Workflow
+	// cacheStream 是否缓存流式结果（Python _cache_stream）
+	cacheStream bool
+	// streamState 流式累积缓存（Python _stream_state；组件实例字段，
+	// 生存期跨单次调用——中断恢复读到部分缓存即 Quirk B 的机制，D-14b-2）
+	streamState SubWorkflowStreamState
+
+	// subWorkflowInvokeFn 子工作流批式调用缝（生产=闭包转 subWorkflow.Invoke；测试可注入 fake）
+	subWorkflowInvokeFn func(ctx context.Context, inputs any,
+		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error)
+	// subWorkflowStreamFn 子工作流流式调用缝（生产=闭包转 subWorkflow.Stream）
+	subWorkflowStreamFn func(ctx context.Context, inputs any,
+		sess sessioninterfaces.SessionFacade, modelContext any, streamModes []stream.StreamMode,
+		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error)
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// SubWorkflowComponentType 子工作流组件类型标签（Python SUB_WORKFLOW_COMPONENT）
+const SubWorkflowComponentType = "sub_workflow"
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewSubWorkflowComponent 构造子工作流组件（Python __init__ :66-75）。
+// subWorkflow 为 nil → StatusComponentSubWorkflowParamInvalid 复刻 build_error 文案。
+func NewSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflowOption) (*SubWorkflowComponent, error) {
+	return newSubWorkflowComponent(subWorkflow, opts...)
+}
+
+// WithCacheStream 是否缓存流式结果供批式取用（Python cache_stream=False keyword-only）
+func WithCacheStream(enabled bool) SubWorkflowOption {
+	return func(c *SubWorkflowComponent) { c.cacheStream = enabled }
+}
+
+// GraphInvoker 子图递归入口标识（Python :87-88，恒 true；
+// _workflow.py:109 据此给 Vertex 递 InnerPregelConfig 形成 ns 嵌套）
+func (c *SubWorkflowComponent) GraphInvoker() bool { return true }
+
+// ComponentType 组件类型标签（Python :90-91）
+func (c *SubWorkflowComponent) ComponentType() string { return SubWorkflowComponentType }
+
+// SubWorkflow 暴露内嵌子工作流（Python sub_workflow property）
+func (c *SubWorkflowComponent) SubWorkflow() *workflow.Workflow { return c.subWorkflow }
+
+// GetStreamOutput 批式侧取缓存结果（Python get_stream_output :81-85；
+// Vertex postStream 接口断言 vertex.go:1487 自动接通写 SetOutputs）
+func (c *SubWorkflowComponent) GetStreamOutput() map[string]any {
+	if !c.cacheStream {
+		return nil
+	}
+	merged, err := c.streamState.BuildFinalResult()
+	if err != nil {
+		// Python build_final_result 对异类型抛 TypeError 会中断 postStream；
+		// Go 防御收敛为 nil（异常路径不顶替正常执行链），
+		// 合并错误在 invoke 短路检查路径可传播给调用方。
+		return nil
+	}
+	return merged
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newSubWorkflowComponent 内部构造（测试缝经 subWorkflowInvokeFn/subWorkflowStreamFn 注入）
+func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflowOption) (*SubWorkflowComponent, error) {
+	if subWorkflow == nil {
+		return nil, exception.BuildError(exception.StatusComponentSubWorkflowParamInvalid,
+			exception.WithParam("reason", "sub_workflow is None"))
+	}
+	c := &SubWorkflowComponent{subWorkflow: subWorkflow}
+	for _, opt := range opts {
+		opt(c)
+	}
+	// 生产调用缝（Python invoke :79-83 直接调 self._sub_workflow.invoke 的等价承载）
+	c.subWorkflowInvokeFn = func(ctx context.Context, inputs any,
+		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (*workflow.WorkflowOutput, error) {
+		return subWorkflow.Invoke(ctx, inputs, sess, modelContext, kwargs)
+	}
+	c.subWorkflowStreamFn = func(ctx context.Context, inputs any,
+		sess sessioninterfaces.SessionFacade, modelContext any, streamModes []stream.StreamMode,
+		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
+		return subWorkflow.Stream(ctx, inputs, sess, modelContext, streamModes, kwargs)
+	}
+	// InvokeFn 槽绑定（Python invoke :78-84，含 Quirk A 修复 D-14b-1）
+	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
+		sess *session.NodeSessionFacade) (map[string]any, error) {
+		return c.invokeSubWorkflow(ctx, inputs, sess)
+	}
+	// StreamFn 槽绑定（Python stream :76-81：转调子工作流流式 + cache_stream 逐帧累积；
+	// 帧信封 {"frame": <stream.Schema>} 为 Go map 槽承载惯例，End 同款，D-17-1 延伸）
+	c.StreamFn = func(ctx context.Context, inputs map[string]any,
+		sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+		subCh, err := c.subWorkflowStreamFn(ctx, inputs[graph.InputsKey], sess, nil,
+			nil, map[string]any{graph.ConfigKey: inputs[graph.ConfigKey], "is_sub": true})
+		if err != nil {
+			return nil, err
+		}
+		out := make(chan graphexe.StreamChunk[map[string]any])
+		go func() {
+			defer close(out)
+			for frame := range subCh {
+				if c.cacheStream {
+					c.streamState.Accumulate(frame)
+				}
+				out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"frame": frame}}
+			}
+		}()
+		return out, nil
+	}
+	return c, nil
+}
+
+// invokeSubWorkflow 批式调用逻辑（Python invoke :78-84 步骤一比一）：
+// cache_stream 开且缓存非空 → 直接回 {'output': cached}（短路，不重跑子工作流）；
+// 否则取信封 INPUTS_KEY/CONFIG_KEY → 转调 sub_workflow.invoke(..., is_sub=true)。
+// Quirk A 修复（D-14b-1）：Python workflow_comp.py:81-84 空缓存 build_final_result
+// 返回 {}（非 None）触发 cached is not None 短路 → 批入腿永不执行子工作流，属上游
+// 缺陷；Go 修复为「缓存非空才短路」，空缓存真实转调（回收条件=上游修复后跟齐）。
+func (c *SubWorkflowComponent) invokeSubWorkflow(ctx context.Context, inputs map[string]any,
+	sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+	if c.cacheStream {
+		merged, err := c.streamState.BuildFinalResult()
+		if err == nil && len(merged) > 0 {
+			return map[string]any{"output": merged}, nil
+		}
+	}
+	cfg := inputs[graph.ConfigKey]
+	out, err := c.subWorkflowInvokeFn(ctx, inputs[graph.InputsKey], sess, nil,
+		map[string]any{graph.ConfigKey: cfg, "is_sub": true})
+	if err != nil {
+		return nil, err
+	}
+	// *WorkflowOutput → map（D-17-1 延伸：Output TypeVar 具体化承载，
+	// JSON 往返对齐 pydantic 序列化面 {"result":…,"state":…}）
+	raw, _ := json.Marshal(out)
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	return m, nil
+}
+
+// ──────────────────────────── SubWorkflowStreamState 方法 ────────────────────────────
 
 // Accumulate 累积流帧（Python accumulate）
 func (s *SubWorkflowStreamState) Accumulate(output any) {
@@ -61,8 +223,6 @@ func (s *SubWorkflowStreamState) BuildFinalResult() (map[string]any, error) {
 func (s *SubWorkflowStreamState) Clear() {
 	s.accumulatedOutputs = nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // addValues 复刻 Python merged[key] + value 的类型分派：
 // string+string 拼接、数值求和（int/float 提升）、其余报错对齐 TypeError。
