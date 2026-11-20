@@ -2,16 +2,22 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -689,4 +695,106 @@ func flattenDict(d map[string]any) map[string]any {
 	}
 	walk("", d)
 	return out
+}
+
+// ExecuteSingleComponent 单组件直调（Python _workflow.py:56-139 模块级函数一比一；
+// 不经过图引擎，中断只存 io 侧——SINGLE_COMPONENT_EXECUTION 标记供 checkpointer
+// 恢复校验跳过图侧快照检查）。
+func ExecuteSingleComponent(ctx context.Context, componentID string, sess session.Session,
+	executor components.ComponentComposable, inputs any,
+	inputsSchema, outputsSchema any, modelContext any) (any, error) {
+	// 1. Create WorkflowSession（:67-71）
+	workflowSession := session.NewWorkflowSessionFacade(componentID, sess.GetSessionID(), nil)
+	// 单组件直调：中断状态只存 io 侧、无图侧快照（Python :72-74）
+	workflowSession.Config().SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+	if err := workflowSession.Checkpointer().PreWorkflowExecute(ctx, workflowSession, inputs); err != nil {
+		return nil, err
+	}
+	// 2. Create NodeSession（:77-79）：Python type(executor).__name__ 作类型名
+	_, innerNode := session.NewWorkflowNodeSessionPair(workflowSession.Inner(), componentID, executorTypeName(executor), false)
+	wcs, _ := innerNode.State().(state.WorkflowState)
+	if _, isII := inputs.(*interaction.InteractiveInput); !isII {
+		// Python :78-79 非 InteractiveInput 才 commit_user_inputs
+		//（WorkflowCommitState 具体方法，接口未收口——8.15 NodeSession.NodeConfig 同款接缝）
+		if cu, ok := innerNode.State().(interface {
+			CommitUserInputs(inputs map[string]any)
+		}); ok {
+			if m, ok := inputs.(map[string]any); ok {
+				cu.CommitUserInputs(m)
+			}
+		}
+	}
+	// 3. Create Vertex（:81-82）
+	exec := executor.ToExecutable()
+	vertex := graph.NewVertex(componentID, exec)
+	// 4. Initialize Vertex（:86）
+	// 4. Initialize Vertex（:86；context 为 nil 时仍可正常初始化）
+	vertex.Init(innerNode, nil)
+	// 5. 直设 node config（:90-106 SimpleNodeConfig）——Go 以 config 注册面承载：
+	// 注册单条 WorkflowConfig，NodeConfig() 即从此取（偏差注记：Python 直设属性）
+	spec := NewWorkflowSpec()
+	simpleSpec, _ := NewNodeSpec()
+	simpleSpec.IOConfigs = &CompIOConfig{InputsSchema: inputsSchema, OutputsSchema: outputsSchema}
+	simpleSpec.Abilities = []components.ComponentAbility{components.ComponentAbilityInvoke}
+	simpleSpec.MaxRetries = 0
+	spec.CompConfigs[componentID] = simpleSpec
+	wfc, _ := NewWorkflowConfig(NewWorkflowCard())
+	wfc.Spec = spec
+	workflowSession.Config().AddWorkflowConfig(componentID, wfc)
+
+	// 7. Create PregelConfig（:109-120：graph_invoker 有无 → Inner/Plain 双形态）
+	var cfg any
+	if isGraphInvoker(exec) {
+		inner := pregel.CreateInnerConfig(pregel.PregelConfig{
+			SessionID: workflowSession.SessionID(), Ns: componentID,
+			RecursionLimit: 100,
+		})
+		inner.ParentNs = componentID
+		cfg = inner
+	} else {
+		cfg = pregel.PregelConfig{
+			SessionID: workflowSession.SessionID(), Ns: componentID,
+			RecursionLimit: 100,
+		}
+	}
+
+	var interruptErr *pregel.GraphInterrupt
+	// 8. Execute component（:125）
+	_, err := vertex.Call(ctx, nil, cfg)
+	if err != nil {
+		if errors.As(err, &interruptErr) {
+			// Python :126-128 GraphInterrupt → return e.value[0].value
+			if len(interruptErr.Interrupts) > 0 {
+				return interruptErr.Interrupts[0].Value, nil
+			}
+			return nil, nil
+		}
+	}
+	// 9-10. Commit + outputs（:130-139；Python finally 块，Go 顺序等价——
+	// 非 interrupt 时才走常规收口）
+	// ≙ node_session.state().commit() + get_outputs(component_id)
+	wcs.Commit()
+	result := wcs.GetOutputs(componentID)
+	if result == nil {
+		result = map[string]any{}
+	}
+	// post_workflow_execute 异常吞掉（Python :135-138 except Exception: pass）
+	if resultMap, ok := result.(map[string]any); ok {
+		_ = workflowSession.Checkpointer().PostWorkflowExecute(ctx, workflowSession, resultMap, err)
+	}
+	if m, ok := result.(map[string]any); ok {
+		return m[componentID], nil
+	}
+	return result, nil
+}
+
+// isGraphInvoker 判定可执行体是否为子图调用面（Python :109 hasattr(executable,"graph_invoker")）。
+func isGraphInvoker(exec graph.GeneralExecutor) bool {
+	gi, ok := any(exec).(interface{ GraphInvoker() bool })
+	return ok && gi.GraphInvoker()
+}
+
+// executorTypeName 组件类型名（Python type(executor).__name__）。
+func executorTypeName(executor components.ComponentComposable) string {
+	return reflect.TypeOf(executor).Elem().Name()
 }

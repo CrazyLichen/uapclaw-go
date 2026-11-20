@@ -1,9 +1,14 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	workflow "github.com/uapclaw/uapclaw-go/internal/agentcore/workflow/workflowconfig"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -41,7 +46,36 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 	for _, opt := range opts {
 		opt(ws)
 	}
+	if ws.inner == nil {
+		// Python WorkflowSession(workflow_id, parent, session_id) 无参默认：
+		// inner 兜底创建，保证门面 InnerSession 契约完整（8.14 前置件）
+		ws.inner = internal.NewWorkflowSession()
+	}
 	return ws
+}
+
+// NewWorkflowSessionFacade 工作流会话门面三参构造（Python workflow.py:711-713
+// WorkflowSession(workflow_id=..., parent=..., session_id=...) 一比一）。
+func NewWorkflowSessionFacade(workflowID, sessionID string, parent sessioninterfaces.InnerSession) *WorkflowSession {
+	ws := NewWorkflowSession(WithWorkflowSessionID(sessionID))
+	ws.inner.SetWorkflowID(workflowID)
+	// Python: workflow_session.config().set_envs(session.get_envs())
+	if parent != nil && parent.Config() != nil {
+		ws.inner.Config().SetEnvs(parent.Config().GetEnvs())
+	}
+	return ws
+}
+
+// NewSubWorkflowSessionFacade 子工作流会话门面构造（Python workflow.py:735-744
+// SubWorkflowSession(inner_session, workflow_id=..., actor_manager=...) 一比一）。
+// inner 需为 NodeSession（Python getattr(session, "_inner") 产物）。
+func NewSubWorkflowSessionFacade(inner sessioninterfaces.InnerSession, workflowID string,
+	am *stream_actor.ActorManager) sessioninterfaces.InnerSession {
+	ns, ok := inner.(*internal.NodeSession)
+	if !ok {
+		return nil
+	}
+	return internal.NewSubWorkflowSession(ns, workflowID, am)
 }
 
 // WithWorkflowSessionParent 设置父会话的选项
@@ -133,4 +167,98 @@ func (ws *WorkflowSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 // Python: agent.py:74 get_parent_session_id() -> str | None
 func (ws *WorkflowSession) GetParentSessionID() string {
 	return ""
+}
+
+// ──────────────────────────── InnerSession 契约委托（8.14 前置件）────────────────────────────
+
+// SessionID 返回会话唯一标识（InnerSession 契约）。
+func (ws *WorkflowSession) SessionID() string {
+	if ws.inner == nil {
+		return ""
+	}
+	return ws.inner.SessionID()
+}
+
+// Config 返回会话配置（InnerSession 契约）。
+func (ws *WorkflowSession) Config() config.SessionConfig {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.Config()
+}
+
+// State 返回会话状态（InnerSession 契约）。
+func (ws *WorkflowSession) State() state.SessionState {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.State()
+}
+
+// Tracer 返回追踪器（InnerSession 契约）。
+func (ws *WorkflowSession) Tracer() *tracer.Tracer {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.Tracer()
+}
+
+// StreamWriterManager 返回流写入管理器（InnerSession 契约）。
+func (ws *WorkflowSession) StreamWriterManager() *stream.StreamWriterManager {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.StreamWriterManager()
+}
+
+// Checkpointer 返回检查点器（InnerSession 契约）。
+func (ws *WorkflowSession) Checkpointer() sessioninterfaces.Checkpointer {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.Checkpointer()
+}
+
+// ActorManager 返回 Actor 管理器（InnerSession 契约）。
+func (ws *WorkflowSession) ActorManager() *stream_actor.ActorManager {
+	if ws.inner == nil {
+		return nil
+	}
+	return ws.inner.ActorManager()
+}
+
+// WorkflowID 返回工作流标识（WorkflowIDProvider 契约）。
+func (ws *WorkflowSession) WorkflowID() string {
+	if ws.inner == nil {
+		return ""
+	}
+	return ws.inner.WorkflowID()
+}
+
+// SetWorkflowID 设置工作流标识（Python set_workflow_id）。
+func (ws *WorkflowSession) SetWorkflowID(id string) {
+	if ws.inner != nil {
+		ws.inner.SetWorkflowID(id)
+	}
+}
+
+// SetActorManager 设置 Actor 管理器（Python set_actor_manager）。
+func (ws *WorkflowSession) SetActorManager(mgr *stream_actor.ActorManager) {
+	if ws.inner != nil {
+		ws.inner.SetActorManager(mgr)
+	}
+}
+
+// SetStreamWriterManager 设置流写入管理器（Python set_stream_writer_manager）。
+func (ws *WorkflowSession) SetStreamWriterManager(mgr *stream.StreamWriterManager) {
+	if ws.inner != nil {
+		ws.inner.SetStreamWriterManager(mgr)
+	}
+}
+
+// SetTracer 设置追踪器（Python set_tracer）。
+func (ws *WorkflowSession) SetTracer(t *tracer.Tracer) {
+	if ws.inner != nil {
+		ws.inner.SetTracer(t)
+	}
 }

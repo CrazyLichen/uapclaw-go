@@ -306,6 +306,15 @@ func NewWorkflowVertexSession(parent interfaces.InnerSession, nodeID, nodeType s
 	return internal.NewNodeSession(parent, nodeID, nodeType, skipTrace)
 }
 
+// NewWorkflowNodeSessionPair 工作流节点会话成对构造（8.14 前置件）：
+// 返回组件开发者面门面与内部层节点会话（后者供 ExecuteSingleComponent 的
+// state/commit 操作；调用方以类型推断持有，无需命名 internal 类型）。
+func NewWorkflowNodeSessionPair(parent interfaces.InnerSession, nodeID, nodeType string,
+	skipTrace bool) (*NodeSessionFacade, *internal.NodeSession) {
+	inner := internal.NewNodeSession(parent, nodeID, nodeType, skipTrace)
+	return NewNodeSessionFacade(inner, false), inner
+}
+
 // NewComponentSession 组件级会话构造：校验入参为工作流顶点会话（底层须为
 // internal.NodeSession）并包装为组件开发者面门面。
 // Python: components/component.py:95-99 isinstance(session, NodeSession) 校验 +
