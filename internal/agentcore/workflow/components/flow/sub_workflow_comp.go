@@ -119,7 +119,7 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
 		return subWorkflow.Stream(ctx, inputs, sess, modelContext, streamModes, kwargs)
 	}
-	// InvokeFn 槽绑定（Python invoke :78-84，含 Quirk A 修复 D-14b-1）
+	// InvokeFn 槽绑定（Python invoke :78-84；Quirk A 空缓存短路逐字复刻，D-14b-1 已知行为）
 	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
 		sess *session.NodeSessionFacade) (map[string]any, error) {
 		return c.invokeSubWorkflow(ctx, inputs, sess)
@@ -149,18 +149,20 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 }
 
 // invokeSubWorkflow 批式调用逻辑（Python invoke :78-84 步骤一比一）：
-// cache_stream 开且缓存非空 → 直接回 {'output': cached}（短路，不重跑子工作流）；
-// 否则取信封 INPUTS_KEY/CONFIG_KEY → 转调 sub_workflow.invoke(..., is_sub=true)。
-// Quirk A 修复（D-14b-1）：Python workflow_comp.py:81-84 空缓存 build_final_result
-// 返回 {}（非 None）触发 cached is not None 短路 → 批入腿永不执行子工作流，属上游
-// 缺陷；Go 修复为「缓存非空才短路」，空缓存真实转调（回收条件=上游修复后跟齐）。
+// cache_stream 开 → get_stream_output 恒非 nil（空累积返回 {} 非 None）→
+// 直接回 {'output': cached} 短路，不重跑子工作流——Python workflow_comp.py:81-84
+// 真实行为逐字复刻（含空缓存 `{}` 短路效应：cache_stream 开启时批入腿不执行
+// 子工作流；用户拍板 2026-11-21「对齐按上游真实实现」，撤销此前修复决定，
+// D-14b-1 由偏差改登记为已知行为复刻）；cache_stream 关 → 恒转调。
 func (c *SubWorkflowComponent) invokeSubWorkflow(ctx context.Context, inputs map[string]any,
 	sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if c.cacheStream {
 		merged, err := c.streamState.BuildFinalResult()
-		if err == nil && len(merged) > 0 {
-			return map[string]any{"output": merged}, nil
+		if err != nil {
+			// Python build_final_result 异类型 + 抛 TypeError 直接上抛（:81 调用点无捕获）
+			return nil, err
 		}
+		return map[string]any{"output": merged}, nil
 	}
 	cfg := inputs[graph.ConfigKey]
 	out, err := c.subWorkflowInvokeFn(ctx, inputs[graph.InputsKey], sess, nil,

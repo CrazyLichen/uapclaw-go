@@ -187,8 +187,10 @@ func TestSubWorkflowComponent_三override(t *testing.T) {
 	}
 }
 
-// TestSubWorkflowComponent_Invoke_空缓存不短路 Quirk A 修复锁定（D-14b-1）
-func TestSubWorkflowComponent_Invoke_空缓存不短路(t *testing.T) {
+// TestSubWorkflowComponent_Invoke_空缓存短路 Quirk A 逐字复刻锁定（D-14b-1 已知行为）：
+// Python workflow_comp.py:81-84 空累积 build_final_result 返回 {}（非 None）→
+// cached is not None 命中 → 批入腿不执行子工作流（用户拍板：对齐按上游真实实现）
+func TestSubWorkflowComponent_Invoke_空缓存短路(t *testing.T) {
 	fw := &fakeWorkflow{}
 	comp, _ := newSubWorkflowComponentForTest(fw, true) // cacheStream=true
 	sess := newFakeNodeSession(t)
@@ -198,16 +200,14 @@ func TestSubWorkflowComponent_Invoke_空缓存不短路(t *testing.T) {
 	}
 	out, err := comp.invokeSubWorkflow(context.Background(), env, sess)
 	if err != nil {
-		t.Fatalf("期望真实转调, got err %v", err)
+		t.Fatalf("空缓存短路不应报错, got %v", err)
 	}
-	if fw.invokeCalled != 1 {
-		t.Fatalf("空缓存必须转调子工作流（D-14b-1）, invokeCalled=%d", fw.invokeCalled)
+	if fw.invokeCalled != 0 {
+		t.Fatalf("Quirk A 复刻：空缓存即短路, 不应转调子工作流, invokeCalled=%d", fw.invokeCalled)
 	}
-	if fw.invokeKwargs["is_sub"] != true {
-		t.Fatalf("期望 kwargs 携带 is_sub=true, got %v", fw.invokeKwargs)
-	}
-	if out == nil {
-		t.Fatal("期望有输出")
+	m, ok := out["output"].(map[string]any)
+	if !ok || len(m) != 0 {
+		t.Fatalf("期望 {'output': {}} 形态, got %v", out)
 	}
 }
 
@@ -243,6 +243,9 @@ func TestSubWorkflowComponent_Invoke_关缓存恒转调(t *testing.T) {
 	}
 	if fw.invokeCalled != 1 {
 		t.Fatalf("cache_stream=false 恒转调, invokeCalled=%d", fw.invokeCalled)
+	}
+	if fw.invokeKwargs["is_sub"] != true {
+		t.Fatalf("期望 kwargs 携带 is_sub=true（Python :82-83）, got %v", fw.invokeKwargs)
 	}
 }
 
@@ -307,11 +310,11 @@ func TestSubWorkflowComponent_Stream_关缓存不累积(t *testing.T) {
 	}
 }
 
-// TestSubWorkflowComponent_Stream_流后批式空缓存转调 Schema 帧过滤 + 流后批式联动
+// TestSubWorkflowComponent_Stream_流后批式联动 Schema 帧过滤后仍短路（Quirk A 复刻）
 func TestSubWorkflowComponent_Stream_dict帧累积命中短路(t *testing.T) {
-	// Schema 帧经累积后被合并过滤（对齐 Python isinstance dict），缓存为空；
-	// 短路命中路径由 TestSubWorkflowComponent_Invoke_非空短路 以 dict 帧直接累积锁定。
-	// 此处锁定流后批式 invoke 在空缓存下真实转调（D-14b-1 流式联动形态）。
+	// Schema 帧经累积后被合并过滤（对齐 Python isinstance dict），缓存为空 {}；
+	// Quirk A 复刻：cache_stream 开启时空缓存 {} 仍短路（cached 非 None），
+	// 流后批式 invoke 同样不转调子工作流。
 	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
 		&sessionStream.CustomSchema{Type: "out", Data: map[string]any{"output": map[string]any{"out": "x"}}},
 	}}
@@ -320,12 +323,16 @@ func TestSubWorkflowComponent_Stream_dict帧累积命中短路(t *testing.T) {
 	ch, _ := comp.StreamFn(context.Background(), env, nil)
 	for range ch {
 	}
-	// 流后批式 invoke：空缓存（Schema 帧被过滤）真实转调
-	if _, err := comp.invokeSubWorkflow(context.Background(), env, newFakeNodeSession(t)); err != nil {
-		t.Fatalf("转调路径不应报错: %v", err)
+	// 流后批式 invoke：空缓存（Schema 帧被过滤）→ {} 非 None → 仍短路
+	out, err := comp.invokeSubWorkflow(context.Background(), env, newFakeNodeSession(t))
+	if err != nil {
+		t.Fatalf("短路路径不应报错: %v", err)
 	}
-	if fw.invokeCalled != 1 {
-		t.Fatalf("Schema 帧过滤后空缓存应真实转调（D-14b-1）, invokeCalled=%d", fw.invokeCalled)
+	if fw.invokeCalled != 0 {
+		t.Fatalf("Quirk A 复刻：cache_stream 开启恒短路, invokeCalled=%d", fw.invokeCalled)
+	}
+	if _, ok := out["output"].(map[string]any); !ok {
+		t.Fatalf("期望 {'output': {}} 形态, got %v", out)
 	}
 }
 
