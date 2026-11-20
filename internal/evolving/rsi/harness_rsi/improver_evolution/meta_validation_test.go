@@ -1,7 +1,11 @@
 package improver_evolution
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
 	"strings"
 	"testing"
 )
@@ -562,4 +566,68 @@ func contains(list []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// ─────────────── Task 8：黄金样例接线 ───────────────
+
+func TestPairedMetaValidate_黄金样例双向断言(t *testing.T) {
+	var baseline, candidate []map[string]any
+	raw, _ := os.ReadFile(goldenDir + "/meta_validation_input_baseline.json")
+	// 与 Python json.load 数字语义一致（int 保留 int64）
+	decoded, err := decodeJSONWithInts(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline = anyToRecords(decoded, "baseline")
+	raw, _ = os.ReadFile(goldenDir + "/meta_validation_input_candidate.json")
+	decoded, err = decodeJSONWithInts(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate = anyToRecords(decoded, "candidate")
+	var hashes map[string]any
+	raw, _ = os.ReadFile(goldenDir + "/expected_compact_hashes.json")
+	if err := json.Unmarshal(raw, &hashes); err != nil {
+		t.Fatal(err)
+	}
+
+	for mode, hashKey := range map[string]string{
+		"offline_rerank":  "meta_validation_expected_offline_rerank",
+		"live_generation": "meta_validation_expected_live_generation",
+	} {
+		rep := PairedMetaValidate(baseline, candidate, mode, nil, nil)
+		var expected map[string]any
+		raw, _ = os.ReadFile(goldenDir + "/meta_validation_expected_" + mode + ".json")
+		if err := json.Unmarshal(raw, &expected); err != nil {
+			t.Fatal(err)
+		}
+		if !pyDeepEqual(rep, expected) {
+			t.Fatalf("%s 报告与 Python 黄金样例不一致", mode)
+		}
+		canonical, err := marshalCanonical(rep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(canonical)
+		if got := fmt.Sprintf("sha256:%x", sum); got != hashes[hashKey].(string) {
+			t.Fatalf("%s compact hash 不一致\n want: %s\n  got: %s", mode, hashes[hashKey], got)
+		}
+	}
+}
+
+// anyToRecords 将 decodeJSONWithInts 的顶层数组转为记录切片
+func anyToRecords(value any, name string) []map[string]any {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		record, ok := item.(map[string]any)
+		if !ok {
+			return nil
+		}
+		out = append(out, record)
+	}
+	return out
 }
