@@ -1058,6 +1058,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 15.17 | ☐ | 测试 | 协议一致性单测（编解码/事件序）+ 假 CLI 进程集成（stdio 双工）+ 失败恢复（崩溃/鉴权失败/超时） | `tests/integration/agentcore/harness_protocol/` |
 | 15.18 | ☐ | 单会话 External Harness 会话接入 | 会话不可变绑定（resolve/persist/load binding，换模板冲突报错）、`start_external_harness`（manifest→create_harness→IOAdapter 启动）、HarnessIOAdapter、会话级 checkpoint 导入导出、`_merge_host_external_cli_config`（读面板 external_cli_agent_* 配置合入 provider config）；消费方=会话适配器 `resolve_runtime_binding` | `internal/swarm/server/agent_adapter/`（或对应 runtime 位置）← `jiuwenswarm/server/runtime/agent_adapter/external_harness_helpers.py` · `interface_deep.py`（resolve_runtime_binding 段）· `config_panel/external_cli_read.py` |
 
+| 15.19 | ☐ | cua harness 工具链与 create 物化半区（**2026-12-04 15.16f 执行期新设**：无既有承接章节，按用户执行规则登记于领域十五末尾） | `harness/tools/cua/` 六文件 2299 行（desktop_tools.py 701 / backend.py 607 / rails.py 673 / user_activity.py 123 + capabilities ✅ 已随 15.16f A4 落地 `tools/cua/cua_capabilities.go`）+ `create_cua_agent`（cua_agent.py:292-429：桌面工具构建 + CuaRuntimeRail/CuaRepeatFailureRail/CuaProgressRail/CuaScreenshotDownscaleRail/CuaUserTakeoverRail/MultimodalContextSummarizerRail 注入 + ToolResultWindowProcessor 窗口化 + WithCuaPermissionRules 合入）；消费方 = subagent 工厂分派（15.16f 已注册 factory_name="cua_agent"，SubAgentConfig.factory_kwargs 四键齐）；cua 桌面引擎本体（cua_engine 1.48 万行）归领域十八 | `internal/agentcore/harness/tools/cua/{desktop_tools,backend,rails,user_activity}.go` · `internal/agentcore/harness/subagents/cua_agent.go`（create 段）← `openjiuwen/harness/tools/cua/` · `harness/subagents/cua_agent.py:292-429` |
+
 **验证点**：一次对话可由外部 CLI provider 完成，事件、工具结果、审批与轨迹四路可观测且可恢复。
 
 ---
