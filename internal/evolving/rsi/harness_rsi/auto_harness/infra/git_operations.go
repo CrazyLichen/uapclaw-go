@@ -132,10 +132,10 @@ func (g *GitOperations) CreateBranch(branchName string) map[string]any {
 func (g *GitOperations) CollectStatus() map[string][]string {
 	code, out := g.git([]string{"status", "--porcelain", "--untracked-files=all"}, nil)
 	status := map[string][]string{
-		"dirty_files":           {},
+		"dirty_files":            {},
 		"tracked_modified_files": {},
-		"untracked_files":       {},
-		"renamed_files":         {},
+		"untracked_files":        {},
+		"renamed_files":          {},
 	}
 	if code != 0 || out == "" {
 		return status

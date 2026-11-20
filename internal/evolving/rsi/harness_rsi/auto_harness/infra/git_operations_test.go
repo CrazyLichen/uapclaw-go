@@ -11,9 +11,9 @@ import (
 
 // fakeRunner 记录调用并按脚本返回（键为命令前缀，取最长匹配）
 type fakeRunner struct {
-	calls []string
-	resps map[string]CommandResult
-	deflt CommandResult
+	calls  []string
+	resps  map[string]CommandResult
+	deflt  CommandResult
 	runErr error
 }
 
@@ -118,7 +118,7 @@ func TestGitOperations_CollectStatus(t *testing.T) {
 	runner := newFakeRunner()
 	runner.resps["git status --porcelain --untracked-files=all"] = CommandResult{
 		ExitCode: 0,
-		Output: " M a.py\n M a.py\nR  old.py -> new.py\n?? u1.txt\n?? u2.txt\n",
+		Output:   " M a.py\n M a.py\nR  old.py -> new.py\n?? u1.txt\n?? u2.txt\n",
 	}
 	g := newTestGitOps(runner)
 	status := g.CollectStatus()
