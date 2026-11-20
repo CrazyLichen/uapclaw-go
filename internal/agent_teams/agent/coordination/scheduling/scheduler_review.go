@@ -22,6 +22,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -109,8 +110,8 @@ func (s *TeamScheduler) reconcileReviews(ctx context.Context) (bool, error) {
 			if s.settlePass(ctx, task) {
 				logger.Info(logComponent).
 					Str("task_id", task.TaskID).Int64("round", task.ReviewRound).
-					Int("pass", intOfTally(tally["pass_count"])).Int("fail", intOfTally(tally["fail_count"])).
-					Int("total", intOfTally(tally["reviewer_count"])).
+					Int("pass", tallyInt(tally, "pass_count")).Int("fail", tallyInt(tally, "fail_count")).
+					Int("total", tallyInt(tally, "reviewer_count")).
 					Msg("[judge-pass]")
 				acted = true
 			}
@@ -119,8 +120,8 @@ func (s *TeamScheduler) reconcileReviews(ctx context.Context) (bool, error) {
 			if s.settleFailOrEscalate(ctx, fullTask, tally) {
 				logger.Info(logComponent).
 					Str("task_id", task.TaskID).Int64("round", task.ReviewRound).
-					Int("pass", intOfTally(tally["pass_count"])).Int("fail", intOfTally(tally["fail_count"])).
-					Int("total", intOfTally(tally["reviewer_count"])).
+					Int("pass", tallyInt(tally, "pass_count")).Int("fail", tallyInt(tally, "fail_count")).
+					Int("total", tallyInt(tally, "reviewer_count")).
 					Msg("[judge-fail]")
 				acted = true
 			}
@@ -368,16 +369,14 @@ func failFeedbackOf(tally map[string]any) map[string]string {
 	return map[string]string{}
 }
 
-// intOfTally 计票列取整。
-func intOfTally(value any) int {
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	default:
+// tallyInt 计票列取整：复用通用解析 utils.PyInt（int 族/数字文本），
+// 未命中或非数取 0（计票列缺省语义）。
+func tallyInt(tally map[string]any, key string) int {
+	n, err := utils.PyInt(tally[key])
+	if err != nil {
 		return 0
 	}
+	return n
 }
 
 // derefStr 字符串指针解引用。

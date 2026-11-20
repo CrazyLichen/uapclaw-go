@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -81,73 +82,16 @@ type UapClawSwarm struct {
 	// 确保服务关闭时后台服务可优雅停止。
 	appCtx    context.Context
 	appCancel context.CancelFunc
-
-	// teamLifecyclePorts 渠道 → 团队会话生命周期适配器（懒构造缓存）。
-	// Python: service.py:_team_lifecycle（L4023-4031）按需构造后复用；
-	// Go 侧 TeamManager 按渠道多实例，适配器随渠道各建一个（reporter 注册到各自 manager）。
-	// 构造器由 swarm/server 包经 SetTeamLifecycleFactory 装配
-	//（adapter 实体在 swruntime，server/runtime 反向 import 会成环）。
-	teamLifecycleMu    sync.Mutex
-	teamLifecyclePorts map[string]swsession.SessionRuntimeLifecyclePort
 }
 
 // roundStateRounds 轮状态协调器窄面（结构化匹配 swruntime.RoundStateCoordinator，
 // 由 CoordinatorPort 的 mark/resume waiting-for-input 两方法构成；接口本身留在
 // session 包避免 server/runtime 反向 import swruntime）。
-// RoundStateRounds 轮状态协调器窄面（导出别名供 swarm/server 装配引用）。
-type RoundStateRounds = roundStateRounds
-
 type roundStateRounds interface {
 	MarkSessionWaitingForInput(sessionID string, generation int)
 	ResumeWaitingForInput(sessionID string, generation int)
 }
 
-// teamLifecycleFactoryGlobal 生命周期适配器构造器（生产装配点：swarm/server 包）。
-var teamLifecycleFactoryMu sync.Mutex
-
-var teamLifecycleFactoryGlobal func(channelID string, rounds roundStateRounds) swsession.SessionRuntimeLifecyclePort
-
-// SetTeamLifecycleFactory 注册团队生命周期适配器构造器。
-// Python: TeamSessionLifecycleAdapter 在 service._team_lifecycle 懒构造（service.py:4023-4031）；
-// Go 侧 adapter 实体（swruntime）不可被 server/runtime 反向引用，故由
-// 能同时见到 swruntime 与 harness/team 的 swarm/server 包注入。
-func SetTeamLifecycleFactory(f func(channelID string, rounds roundStateRounds) swsession.SessionRuntimeLifecyclePort) {
-	teamLifecycleFactoryMu.Lock()
-	defer teamLifecycleFactoryMu.Unlock()
-	teamLifecycleFactoryGlobal = f
-}
-
-// teamLifecycle 取渠道的团队会话生命周期适配器（懒构造；未装配或无团队 manager 返回 nil）。
-func (uc *UapClawSwarm) teamLifecycle(channelID string) swsession.SessionRuntimeLifecyclePort {
-	teamLifecycleFactoryMu.Lock()
-	factory := teamLifecycleFactoryGlobal
-	teamLifecycleFactoryMu.Unlock()
-	if factory == nil {
-		return nil
-	}
-	uc.teamLifecycleMu.Lock()
-	defer uc.teamLifecycleMu.Unlock()
-	if uc.teamLifecyclePorts == nil {
-		uc.teamLifecyclePorts = map[string]swsession.SessionRuntimeLifecyclePort{}
-	}
-	if a, ok := uc.teamLifecyclePorts[channelID]; ok {
-		return a
-	}
-	a := factory(channelID, uc.coordinatorRounds())
-	if a != nil {
-		uc.teamLifecyclePorts[channelID] = a
-	}
-	return a
-}
-
-// coordinatorRounds 取执行账本的轮状态协调器面（未注入返回 nil）。
-func (uc *UapClawSwarm) coordinatorRounds() roundStateRounds {
-	c := uc.executionCoordinator()
-	if c == nil {
-		return nil
-	}
-	return c
-}
 
 // agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
 // 避免 adapter 直接导入 runtime 包造成循环依赖。
@@ -1028,17 +972,15 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		), nil
 
 	case "pause":
-		// Python: service.py:1418 team_paused = await self._team_lifecycle().pause_session(context, reason=..., channel_id=...)
-		// 适配器按代次守卫暂停，并向 TeamManager 注册轮状态 reporter（板清回写协调器）。
+		// Python: interface.py:3279 paused = await team_manager.pause_session_runtime(session_id, reason)
+		// interrupt 流直调团队管理器（懒 import 的 Go 等价物是普通 import）；
+		// 生命周期适配器（runtime/team_session_lifecycle.py）只服务
+		// service.py:1418 的执行取消流（ExecutionCancelCause），不在此路径。
 		reason := "interrupt(intent=pause): "
 		paused := false
-		if a := uc.teamLifecycle(request.ChannelID); a != nil {
-			sess := swsession.SessionLifecycleContext{SessionID: sessionID}
-			if snap := uc.executionCoordinator().SnapshotSession(sessionID); snap != nil {
-				sess.Generation = snap.Generation
-			}
+		if tm := team.GetTeamManager(request.ChannelID); tm != nil {
 			var pauseErr error
-			paused, pauseErr = a.PauseSession(ctx, sess, reason, request.ChannelID)
+			paused, pauseErr = tm.PauseSessionRuntime(ctx, sessionID, reason, nil)
 			if pauseErr != nil {
 				logger.Warn(logComponent).Err(pauseErr).Str("session_id", sessionID).
 					Msg("team pause failed")
@@ -1064,23 +1006,11 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		), nil
 
 	case "cancel":
-		// Python: service.py:1424 await self._team_lifecycle().stop_session(context, reason=...)
-		//        + service.py:4069 取消请求时经 _remove_team_response_waiter 摘除响应等待者。
-		// 随后取消前台业务流（cancel_request 同形）。
-		if a := uc.teamLifecycle(request.ChannelID); a != nil {
-			sess := swsession.SessionLifecycleContext{SessionID: sessionID}
-			if snap := uc.executionCoordinator().SnapshotSession(sessionID); snap != nil {
-				sess.Generation = snap.Generation
-				_ = a.RemoveResponseWaiter(ctx, swsession.ExecutionLifecycleContext{
-					Session:   sess,
-					RequestID: request.RequestID,
-					ChannelID: request.ChannelID,
-				}, "interrupt(intent=cancel)")
-			}
-			_ = a.StopSession(ctx, sess, "interrupt(intent=cancel)")
-		}
+		// Python: interface.py:3289 cancelled = await team_manager.cancel_session_runtime(
+		//     session_id, reason=..., workflow_disposition=...)
+		// Go 的 TeamManager.cancel_session_runtime 尚未移植（⤴️10.6.19-23 挂账），
+		// 现以协调器取消顶替、cancelled 恒 false——语义缺口见挂账注记。
 		cancelled := false
-		// Python: cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
 		_, _ = uc.cancelExecution(sessionID, swsession.CancelExecutionOptions{
 			RequestID: &sessionID,
 		})
