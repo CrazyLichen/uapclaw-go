@@ -74,21 +74,21 @@ func TestSessionBudgetController_未启动(t *testing.T) {
 
 // TestDetectPipelineSignal
 func TestDetectPipelineSignal(t *testing.T) {
-	cfg := newDefaultAutoHarnessConfig()
+	cfg := autoharness.NewDefaultAutoHarnessConfig()
 	cfg.OptimizationGoal = "把 cursor 的补全能力加入我们"
 	if got := DetectPipelineSignal(nil, cfg); got != autoharness.ExtendedEvolvePipeline {
 		t.Fatalf("goal 信号 = %q", got)
 	}
-	cfg2 := newDefaultAutoHarnessConfig()
+	cfg2 := autoharness.NewDefaultAutoHarnessConfig()
 	tasks := []autoharness.OptimizationTask{{Topic: "吸收 hermes 的做法"}}
 	if got := DetectPipelineSignal(tasks, cfg2); got != autoharness.ExtendedEvolvePipeline {
 		t.Fatalf("task 信号 = %q", got)
 	}
-	cfg3 := newDefaultAutoHarnessConfig()
+	cfg3 := autoharness.NewDefaultAutoHarnessConfig()
 	if got := DetectPipelineSignal([]autoharness.OptimizationTask{{Topic: "优化性能"}}, cfg3); got != "" {
 		t.Fatalf("无信号 = %q", got)
 	}
-	if got := DetectPipelineSignal(nil, newDefaultAutoHarnessConfig()); got != "" {
+	if got := DetectPipelineSignal(nil, autoharness.NewDefaultAutoHarnessConfig()); got != "" {
 		t.Fatalf("空输入 = %q", got)
 	}
 }
@@ -98,7 +98,7 @@ func TestChooseSessionPipeline(t *testing.T) {
 	available := []string{autoharness.MetaEvolvePipeline, autoharness.ExtendedEvolvePipeline}
 
 	// 偏好强制指定
-	cfg := newDefaultAutoHarnessConfig()
+	cfg := autoharness.NewDefaultAutoHarnessConfig()
 	cfg.PipelinePreference = autoharness.MetaEvolvePipeline
 	sel := ChooseSessionPipeline(nil, cfg, available)
 	if sel.PipelineName != autoharness.MetaEvolvePipeline || sel.Confidence != 1.0 ||
@@ -107,7 +107,7 @@ func TestChooseSessionPipeline(t *testing.T) {
 	}
 
 	// auto + 信号命中
-	cfg2 := newDefaultAutoHarnessConfig()
+	cfg2 := autoharness.NewDefaultAutoHarnessConfig()
 	cfg2.OptimizationGoal = "learn from competitor"
 	sel2 := ChooseSessionPipeline(nil, cfg2, available)
 	if sel2.PipelineName != autoharness.ExtendedEvolvePipeline || sel2.Confidence != 0.85 ||
@@ -116,21 +116,21 @@ func TestChooseSessionPipeline(t *testing.T) {
 	}
 
 	// auto 无信号 → 默认 meta
-	cfg3 := newDefaultAutoHarnessConfig()
+	cfg3 := autoharness.NewDefaultAutoHarnessConfig()
 	sel3 := ChooseSessionPipeline(nil, cfg3, available)
 	if sel3.PipelineName != autoharness.MetaEvolvePipeline || sel3.Confidence != 0.7 {
 		t.Fatalf("默认 = %+v", sel3)
 	}
 
 	// available 不含 meta → 取第一个
-	cfg4 := newDefaultAutoHarnessConfig()
+	cfg4 := autoharness.NewDefaultAutoHarnessConfig()
 	sel4 := ChooseSessionPipeline(nil, cfg4, []string{autoharness.ExtendedEvolvePipeline})
 	if sel4.PipelineName != autoharness.ExtendedEvolvePipeline {
 		t.Fatalf("仅一条可选 = %+v", sel4)
 	}
 
 	// 偏好不在 available → 走信号/默认
-	cfg5 := newDefaultAutoHarnessConfig()
+	cfg5 := autoharness.NewDefaultAutoHarnessConfig()
 	cfg5.PipelinePreference = autoharness.MetaEvolvePipeline
 	sel5 := ChooseSessionPipeline(nil, cfg5, []string{autoharness.ExtendedEvolvePipeline})
 	if sel5.PipelineName != autoharness.ExtendedEvolvePipeline || sel5.Confidence != 0.7 {

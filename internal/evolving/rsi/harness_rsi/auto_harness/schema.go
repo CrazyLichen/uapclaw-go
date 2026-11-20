@@ -853,6 +853,11 @@ func repoURLStem(repoURL string) string {
 
 // newDefaultAutoHarnessConfig 构造带默认值的配置（对齐 dataclass 字段默认值）
 func newDefaultAutoHarnessConfig() *AutoHarnessConfig {
+	return NewDefaultAutoHarnessConfig()
+}
+
+// NewDefaultAutoHarnessConfig 构造带默认值的配置（导出供 infra/e4 使用）
+func NewDefaultAutoHarnessConfig() *AutoHarnessConfig {
 	return &AutoHarnessConfig{
 		RepoURL: defaultRepoURL,
 		CommunitySkillRepos: []string{
