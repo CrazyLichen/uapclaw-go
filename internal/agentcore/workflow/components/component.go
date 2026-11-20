@@ -51,11 +51,11 @@ type WorkflowComponent struct {
 	// InvokeFn 批入批出（Python invoke(inputs, Session(session, False), context)）
 	InvokeFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error)
 	// StreamFn 批入流出（Python stream(inputs, Session(session, False), context)）
-	StreamFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error)
+	StreamFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error)
 	// CollectFn 流入批出（Python collect(inputs, Session(session, True), context)）
 	CollectFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (map[string]any, error)
 	// TransformFn 流入流出（Python transform(inputs, Session(session, True), context)）
-	TransformFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error)
+	TransformFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error)
 	// TraceMetadataFn 组件追踪元数据（Python trace_metadata，默认 nil 不产出）
 	TraceMetadataFn func() map[string]any
 }
@@ -151,7 +151,7 @@ func (c *WorkflowComponent) OnInvoke(ctx context.Context, inputs map[string]any,
 // OnStream 单进流出钩子：会话校验（streamMode=false）→ Trigger 序列 → 转调 StreamFn，
 // 输出转换按帧应用（COMPONENT_STREAM_OUTPUT 逐项语义）。
 // Python: component.py:101-107 on_stream。
-func (c *WorkflowComponent) OnStream(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[map[string]any], error) {
+func (c *WorkflowComponent) OnStream(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
 	compSess, err := session.NewComponentSession(sess, false)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (c *WorkflowComponent) OnStream(ctx context.Context, inputs map[string]any,
 			inputs = m
 		}
 	}
-	var ch <-chan graphexe.StreamChunk[map[string]any]
+	var ch <-chan graphexe.StreamChunk[any]
 	if c.StreamFn == nil {
 		ch, err = c.BaseExecutable.OnStream(ctx, inputs, sess, kwargs)
 	} else {
@@ -204,14 +204,14 @@ func (c *WorkflowComponent) OnCollect(ctx context.Context, inputs <-chan map[str
 
 // OnTransform 流进流出钩子：会话校验（streamMode=true）→ Trigger 序列 → 转调
 // TransformFn，输出转换按帧应用。Python: component.py:116-122 on_transform。
-func (c *WorkflowComponent) OnTransform(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[map[string]any], error) {
+func (c *WorkflowComponent) OnTransform(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
 	compSess, err := session.NewComponentSession(sess, true)
 	if err != nil {
 		return nil, err
 	}
 	fw := callback.GetCallbackFramework()
 	fw.TriggerWorkflow(ctx, &callback.WorkflowEventData{Event: callback.ComponentStreamInput, NodeID: compSess.GetComponentID()})
-	var ch <-chan graphexe.StreamChunk[map[string]any]
+	var ch <-chan graphexe.StreamChunk[any]
 	if c.TransformFn == nil {
 		ch, err = c.BaseExecutable.OnTransform(ctx, inputs, sess, kwargs)
 	} else {
@@ -228,8 +228,8 @@ func (c *WorkflowComponent) OnTransform(ctx context.Context, inputs <-chan map[s
 // transformStreamOutput 对流出通道逐帧应用 COMPONENT_STREAM_OUTPUT 转换与触发。
 // Python transform_io 对 AsyncIterator 输出的逐项 output_event 语义
 // （events.py:143 COMPONENT_STREAM_OUTPUT 注释 "Fired for each item"）。
-func transformStreamOutput(ctx context.Context, fw *callback.CallbackFramework, nodeID string, ch <-chan graphexe.StreamChunk[map[string]any]) <-chan graphexe.StreamChunk[map[string]any] {
-	out := make(chan graphexe.StreamChunk[map[string]any])
+func transformStreamOutput(ctx context.Context, fw *callback.CallbackFramework, nodeID string, ch <-chan graphexe.StreamChunk[any]) <-chan graphexe.StreamChunk[any] {
+	out := make(chan graphexe.StreamChunk[any])
 	go func() {
 		defer close(out)
 		for chunk := range ch {

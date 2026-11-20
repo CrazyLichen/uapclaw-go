@@ -275,7 +275,7 @@ func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
 	if err != nil {
 		t.Fatalf("流启动失败: %v", err)
 	}
-	var got []graphexe.StreamChunk[map[string]any]
+	var got []graphexe.StreamChunk[any]
 	for c := range ch {
 		got = append(got, c)
 	}
@@ -283,7 +283,7 @@ func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
 		t.Fatalf("期望两帧无错误, got %v", got)
 	}
 	// 转发形态：Schema 载荷 dict（D-14b-6，流边路径提取可用形态）
-	if got[0].Val["out"] != "a" {
+	if got[0].Val.(map[string]any)["out"] != "a" {
 		t.Fatalf("期望帧承载载荷 dict, got %v", got[0].Val)
 	}
 	// 累积的是原始帧值：Schema 帧 BuildFinalResult 跳过（对齐 Python isinstance dict）

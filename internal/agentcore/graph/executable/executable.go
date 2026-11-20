@@ -33,12 +33,16 @@ type Executable[I, O any] interface {
 	// OnInvoke 单进单出（Python on_invoke，executable.py:14）
 	OnInvoke(ctx context.Context, inputs I, sess session.BaseSession, kwargs map[string]any) (O, error)
 	// OnStream 单进流出（Python on_stream，executable.py:23）；
-	// 第二返回值承载启动错误，流中错误经 StreamChunk.Err 作为末元素送达
-	OnStream(ctx context.Context, inputs I, sess session.BaseSession, kwargs map[string]any) (<-chan StreamChunk[O], error)
+	// 第二返回值承载启动错误，流中错误经 StreamChunk.Err 作为末元素送达。
+	// 帧元素 any（2026-11-21 用户拍板，D-8 延伸）：Python AsyncIterator 无元素类型
+	// 约束，组件产出 OutputSchema/dict 等异构帧；绑 O 会迫使组件装箱信封（D-17-1）
+	// 并在边界出口反复拆封（8.14b 嵌套流式五层断裂链实证）
+	OnStream(ctx context.Context, inputs I, sess session.BaseSession, kwargs map[string]any) (<-chan StreamChunk[any], error)
 	// OnCollect 流进单出（Python on_collect，executable.py:32）：聚合上游多块输入为一份输出
 	OnCollect(ctx context.Context, inputs <-chan I, sess session.BaseSession, kwargs map[string]any) (O, error)
-	// OnTransform 流进流出（Python on_transform，executable.py:41）：逐块变换转发
-	OnTransform(ctx context.Context, inputs <-chan I, sess session.BaseSession, kwargs map[string]any) (<-chan StreamChunk[O], error)
+	// OnTransform 流进流出（Python on_transform，executable.py:41）：逐块变换转发。
+	// 帧元素 any（同 OnStream，D-8 延伸）
+	OnTransform(ctx context.Context, inputs <-chan I, sess session.BaseSession, kwargs map[string]any) (<-chan StreamChunk[any], error)
 	// SkipTrace 是否跳过 tracer 埋点（默认 false；Python executable.py:50）
 	SkipTrace() bool
 	// GraphInvoker 是否子图递归入口（默认 false；Python executable.py:53）
@@ -78,7 +82,7 @@ func (BaseExecutable[I, O]) OnInvoke(_ context.Context, _ I, _ session.BaseSessi
 }
 
 // OnStream 默认未实现（Python executable.py:23-30；偏差 D2）
-func (BaseExecutable[I, O]) OnStream(_ context.Context, _ I, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[O], error) {
+func (BaseExecutable[I, O]) OnStream(_ context.Context, _ I, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, errors.New("OnStream 未实现：请在 Executable 子类覆写本方法以提供流式逻辑（对齐 Python on_stream 抽象语义）")
 }
 
@@ -89,7 +93,7 @@ func (BaseExecutable[I, O]) OnCollect(_ context.Context, _ <-chan I, _ session.B
 }
 
 // OnTransform 默认未实现（Python executable.py:41-48；偏差 D2）
-func (BaseExecutable[I, O]) OnTransform(_ context.Context, _ <-chan I, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[O], error) {
+func (BaseExecutable[I, O]) OnTransform(_ context.Context, _ <-chan I, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, errors.New("OnTransform 未实现：请在 Executable 子类覆写本方法以提供变换逻辑（对齐 Python on_transform 抽象语义）")
 }
 

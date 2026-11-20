@@ -390,7 +390,7 @@ func TestEnd_Stream_有模板_信封帧(t *testing.T) {
 		if chunk.Err != nil {
 			t.Fatalf("流中错误: %v", chunk.Err)
 		}
-		got = append(got, chunk.Val["frame"].(stream.OutputSchema))
+		got = append(got, chunk.Val.(map[string]any)["frame"].(stream.OutputSchema))
 	}
 	if len(got) != 2 || got[0].Type != constants.EndNodeStream {
 		t.Fatalf("信封帧不符: %+v", got)
@@ -418,7 +418,7 @@ func TestEnd_Stream_无模板_逐key吐出(t *testing.T) {
 			t.Fatalf("流中错误: %v", chunk.Err)
 		}
 		count++
-		if wrapper, ok := chunk.Val["output"].(map[string]any); ok {
+		if wrapper, ok := chunk.Val.(map[string]any)["output"].(map[string]any); ok {
 			for k := range wrapper {
 				seen[k] = true
 			}
@@ -446,7 +446,7 @@ func TestEnd_Transform_无模板_叶子帧(t *testing.T) {
 			t.Fatalf("流中错误: %v", chunk.Err)
 		}
 		if first == nil {
-			first = chunk.Val
+			first, _ = chunk.Val.(map[string]any)
 		}
 	}
 	if first == nil {
@@ -503,7 +503,7 @@ func TestEnd_Transform_有模板_信封帧(t *testing.T) {
 		if chunk.Err != nil {
 			t.Fatalf("流中错误: %v", chunk.Err)
 		}
-		if _, ok := chunk.Val["frame"].(stream.OutputSchema); ok {
+		if _, ok := chunk.Val.(map[string]any)["frame"].(stream.OutputSchema); ok {
 			n++
 		}
 	}
@@ -717,7 +717,7 @@ func TestEnd_OnTransform_真实StreamReader信封(t *testing.T) {
 			t.Fatalf("流中错误: %v", c.Err)
 		}
 		// TRANSFORM 输出为逐帧信封 map[frame]=stream.OutputSchema{Payload:{response: 段文本}}
-		f, ok := c.Val["frame"].(stream.OutputSchema)
+		f, ok := c.Val.(map[string]any)["frame"].(stream.OutputSchema)
 		if !ok {
 			t.Fatalf("信封形状不符: %v", c.Val)
 		}

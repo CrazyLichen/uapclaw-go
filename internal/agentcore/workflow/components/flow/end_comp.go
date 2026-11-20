@@ -459,7 +459,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		e.template = NewTemplateProcessor(conf.ResponseTemplate)
 	}
 	// StreamFn 绑定（Python stream，end_comp.py:91-142）
-	e.StreamFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+	e.StreamFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetComponentID()).
 			Str("session_id", sess.GetSessionID()).
@@ -469,7 +469,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		if inputs == nil {
 			inputs = map[string]any{}
 		}
-		out := make(chan graphexe.StreamChunk[map[string]any])
+		out := make(chan graphexe.StreamChunk[any])
 		frameCount := 0
 		go func() {
 			defer close(out)
@@ -495,11 +495,11 @@ func NewEnd(conf *EndConfig) (*End, error) {
 							Bool("has_template", e.template != nil).
 							Bool("mix", e.mix).
 							Msg("End component stream failed")
-						out <- graphexe.StreamChunk[map[string]any]{Err: chunk.Err}
+						out <- graphexe.StreamChunk[any]{Err: chunk.Err}
 						return
 					}
 					frameCount++
-					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+					out <- graphexe.StreamChunk[any]{Val: map[string]any{
 						"frame": stream.OutputSchema{
 							Type:    constants.EndNodeStream,
 							Index:   chunk.Val.Index,
@@ -512,7 +512,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 			// 无模板：dict 逐 key 吐 {"output": {k:v}}（end_comp.py:116-119）
 			for key, value := range inputs {
 				frameCount++
-				out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+				out <- graphexe.StreamChunk[any]{Val: map[string]any{
 					"output": map[string]any{key: value},
 				}}
 			}
@@ -521,14 +521,14 @@ func NewEnd(conf *EndConfig) (*End, error) {
 	}
 
 	// TransformFn 绑定（Python transform，end_comp.py:144-179）
-	e.TransformFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+	e.TransformFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetExecutableID()).
 			Str("session_id", sess.GetSessionID()).
 			Bool("has_template", e.template != nil).
 			Bool("mix", e.mix).
 			Msg("End component transform started")
-		out := make(chan graphexe.StreamChunk[map[string]any])
+		out := make(chan graphexe.StreamChunk[any])
 		frameCount := 0
 		go func() {
 			defer close(out)
@@ -547,11 +547,11 @@ func NewEnd(conf *EndConfig) (*End, error) {
 				timeout := envTimeoutToFloat(sess.GetEnv(constants.EndCompTemplateRenderPositionTimeoutKey))
 				for chunk := range e.template.RenderStream(ctx, merged, sess, timeout) {
 					if chunk.Err != nil {
-						out <- graphexe.StreamChunk[map[string]any]{Err: chunk.Err}
+						out <- graphexe.StreamChunk[any]{Err: chunk.Err}
 						return
 					}
 					frameCount++
-					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+					out <- graphexe.StreamChunk[any]{Val: map[string]any{
 						"frame": stream.OutputSchema{
 							Type:    constants.EndNodeStream,
 							Index:   chunk.Val.Index,
@@ -565,7 +565,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 			for frame := range inputs {
 				for _, leaf := range commonutils.ExtractLeafNodes(frame) {
 					frameCount++
-					out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{
+					out <- graphexe.StreamChunk[any]{Val: map[string]any{
 						"output": map[string]any{commonutils.FormatPath(leaf.Path): leaf.Value},
 					}}
 				}

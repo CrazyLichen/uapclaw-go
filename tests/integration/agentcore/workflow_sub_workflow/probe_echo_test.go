@@ -157,12 +157,12 @@ type echoStreamComp struct {
 func NewEchoStreamComp() *echoStreamComp {
 	c := &echoStreamComp{}
 	c.StreamFn = func(ctx context.Context, inputs map[string]any,
-		sess *sessionpkg.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
-		out := make(chan graphexe.StreamChunk[map[string]any])
+		sess *sessionpkg.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+		out := make(chan graphexe.StreamChunk[any])
 		go func() {
 			defer close(out)
-			out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"v": "part1"}}
-			out <- graphexe.StreamChunk[map[string]any]{Val: map[string]any{"v": "part2"}}
+			out <- graphexe.StreamChunk[any]{Val: map[string]any{"v": "part1"}}
+			out <- graphexe.StreamChunk[any]{Val: map[string]any{"v": "part2"}}
 		}()
 		return out, nil
 	}

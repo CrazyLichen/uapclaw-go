@@ -146,13 +146,13 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 	// StreamFn 槽绑定（Python stream :76-81：转调子工作流流式 + cache_stream 逐帧累积；
 	// 帧信封 {"frame": <stream.Schema>} 为 Go map 槽承载惯例，End 同款，D-17-1 延伸）
 	c.StreamFn = func(ctx context.Context, inputs map[string]any,
-		sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[map[string]any], error) {
+		sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
 		subCh, err := c.subWorkflowStreamFn(ctx, inputs[graph.InputsKey], sess, nil,
 			nil, map[string]any{graph.ConfigKey: inputs[graph.ConfigKey], "is_sub": true})
 		if err != nil {
 			return nil, err
 		}
-		out := make(chan graphexe.StreamChunk[map[string]any])
+		out := make(chan graphexe.StreamChunk[any])
 		go func() {
 			defer close(out)
 			for frame := range subCh {
@@ -167,7 +167,7 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 				// sourcePathMap 空不投 EndFrame → StreamReader 永不关 → transform 挂死
 				//（Python 同链路 OutputSchema 对象无 __getitem__ 同样断裂，属上游死路径，
 				// Go 以 Payload dict 对齐官方流式组件产出形态承载）
-				out <- graphexe.StreamChunk[map[string]any]{Val: schemaPayloadMap(frame)}
+				out <- graphexe.StreamChunk[any]{Val: schemaPayloadMap(frame)}
 			}
 		}()
 		return out, nil

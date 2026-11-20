@@ -1415,7 +1415,7 @@ func (v *Vertex) preStream(ctx context.Context, ability compability.ComponentAbi
 }
 
 // postStream 流入产出收尾（Python _post_stream，vertex.py:590-628 步骤一比一）
-func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[map[string]any], ability compability.ComponentAbility) {
+func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[any], ability compability.ComponentAbility) {
 	// ① 形态标记（vertex.py:591-593）
 	isSubGraph := v.nodeSession.ParentID() != ""
 	am := v.nodeSession.ActorManager()
@@ -1442,14 +1442,20 @@ func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[
 			panic(chunk.Err)
 		}
 		var message any
-		if outputTransformer == nil {
-			if len(outputSchema) > 0 {
-				message = am.StreamTransform().GetByDefaultTransformer(chunk.Val, outputSchema)
+		// chunk.Val 为 any（D-8 延伸：组件可产任意帧形态）；transformer 契约输入为
+		// map（Python workflow_state.py:127），非 map 帧对齐 .get 宽容语义跳过转换
+		if frameMap, isMap := chunk.Val.(map[string]any); isMap {
+			if outputTransformer == nil {
+				if len(outputSchema) > 0 {
+					message = am.StreamTransform().GetByDefaultTransformer(frameMap, outputSchema)
+				} else {
+					message = frameMap
+				}
 			} else {
-				message = chunk.Val
+				message = am.StreamTransform().GetByDefinedTransformer(frameMap, outputTransformer)
 			}
 		} else {
-			message = am.StreamTransform().GetByDefinedTransformer(chunk.Val, outputTransformer)
+			message = chunk.Val
 		}
 		_ = outputSchema
 		logger.Debug(logComponent).

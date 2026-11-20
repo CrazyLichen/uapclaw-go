@@ -40,11 +40,14 @@ type ExecutableGraph[I, O any] interface {
 	// 默认实现见 DefaultGraphInvoke
 	Invoke(ctx context.Context, inputs map[string]any, sess session.BaseSession) (O, error)
 	// Stream 流式执行（Python stream，base.py:16-17 默认 pass）；默认实现见 DefaultGraphStream
-	Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[O], error)
+	// 帧元素类型 any（2026-11-21 用户拍板，D-8 延伸）：Python AsyncIterator 无元素类型
+	// 约束，组件产出 OutputSchema/dict 等异构帧；绑 O 会迫使组件装箱信封（D-17-1）
+	// 并在边界出口反复拆封（8.14b 嵌套流式五层断裂链实证）
+	Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[any], error)
 	// Collect 聚合执行（Python collect，base.py:19-20 默认 pass）；默认实现见 DefaultGraphCollect
 	Collect(ctx context.Context, inputs <-chan I, sess session.BaseSession) (O, error)
 	// Transform 流式变换（Python transform，base.py:22-23 默认 pass）；默认实现见 DefaultGraphTransform
-	Transform(ctx context.Context, inputs <-chan I, sess session.BaseSession) (<-chan StreamChunk[O], error)
+	Transform(ctx context.Context, inputs <-chan I, sess session.BaseSession) (<-chan StreamChunk[any], error)
 	// Interrupt 中断图执行（Python interrupt，base.py:25-26 默认 pass）；默认实现见 DefaultGraphInterrupt
 	Interrupt(ctx context.Context, message map[string]any) error
 	// Invoke_ 拆信封后的抽象执行入口（Python 抽象方法 _invoke，base.py:28-30；
@@ -88,8 +91,8 @@ func DefaultGraphInvoke[I, O any](g ExecutableGraph[I, O], ctx context.Context, 
 // DefaultGraphStream Python stream 的默认实现（base.py:16-17）：
 // 返回已关闭的空 channel + nil error（偏差 D5）。
 // 实现者实现 Stream 时一行转手本函数即沿用默认 pass。
-func DefaultGraphStream[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ map[string]any, _ session.BaseSession) (<-chan StreamChunk[O], error) {
-	ch := make(chan StreamChunk[O])
+func DefaultGraphStream[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ map[string]any, _ session.BaseSession) (<-chan StreamChunk[any], error) {
+	ch := make(chan StreamChunk[any])
 	close(ch)
 	return ch, nil
 }
@@ -102,8 +105,8 @@ func DefaultGraphCollect[I, O any](_ ExecutableGraph[I, O], _ context.Context, _
 
 // DefaultGraphTransform Python transform 的默认实现（base.py:22-23）：
 // 返回已关闭的空 channel + nil error（偏差 D5）。
-func DefaultGraphTransform[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ <-chan I, _ session.BaseSession) (<-chan StreamChunk[O], error) {
-	ch := make(chan StreamChunk[O])
+func DefaultGraphTransform[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ <-chan I, _ session.BaseSession) (<-chan StreamChunk[any], error) {
+	ch := make(chan StreamChunk[any])
 	close(ch)
 	return ch, nil
 }
