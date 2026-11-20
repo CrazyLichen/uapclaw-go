@@ -26,7 +26,7 @@ var (
 // registry.py:180-198 中的工厂注册段）。安全地可多次调用，只有首次执行
 // 注册；覆盖注册语义（后者覆盖前者）由 core 侧注册函数保证。
 // 偏差 D-15.16-c3：Python register_swarm_providers 的 rails 目录注册段
-// （register_from_catalog / ensure_harness_elements_registered）⤵️15.7/15.8，
+// （register_from_catalog / ensure_harness_elements_registered）⤵️15.16f（2026-12-02 改标：15.7/15.8 仅 cc/cx SDK provider，swarm 平台要素归 15.16f），
 // 本节不含。
 func RegisterSwarmBuildContextFactory() {
 	registeredMu.Lock()

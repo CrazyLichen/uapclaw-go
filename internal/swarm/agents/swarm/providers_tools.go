@@ -5,8 +5,8 @@
 // scoped 落地说明（偏差 D-15.16-e10 ③）：tools.py 其余函数是 rail/tool 的
 // 构造函数段（_build_skill_toolkit_tools / skill_retrieval_toolkit_for_context /
 // _build_video_tools 等，:161-270/:362-687），消费方是 rail 注册缝
-// （register_swarm_providers 的 tools 注册段），⤴️15.7/15.8（与 D-15.16-c3
-// 同域）；常量字面值已由 registry.go 常量段承载。
+// （register_swarm_providers 的 tools 注册段），⤴️15.16f（2026-12-02 用户裁决改标：15.7/15.8 仅 cc/cx SDK
+// provider，swarm 平台要素归 15.16f 新小节）；常量字面值已由 registry.go 常量段承载。
 
 package swarm
 
