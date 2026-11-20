@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"os"
 	"path/filepath"
@@ -398,13 +399,13 @@ func TestValidateCohort_候选校验带位置前缀(t *testing.T) {
 }
 
 func TestIsNumber_排除布尔与非有限数(t *testing.T) {
-	if isNumber(true) || isNumber("1") || isNumber(nil) {
+	if pythonsem.IsNumber(true) || pythonsem.IsNumber("1") || pythonsem.IsNumber(nil) {
 		t.Fatal("bool/string/nil 不应是数字")
 	}
-	if !isNumber(1) || !isNumber(1.5) || !isNumber(int64(3)) {
+	if !pythonsem.IsNumber(1) || !pythonsem.IsNumber(1.5) || !pythonsem.IsNumber(int64(3)) {
 		t.Fatal("int/int64/float64 应是数字")
 	}
-	if isNumber(math.Inf(1)) || isNumber(math.Inf(-1)) {
+	if pythonsem.IsNumber(math.Inf(1)) || pythonsem.IsNumber(math.Inf(-1)) {
 		t.Fatal("Inf 不是有限数")
 	}
 }
@@ -911,7 +912,7 @@ func TestAnalyzeCandidateFeedbackLedgers_黄金样例双向断言(t *testing.T) 
 	if err := json.Unmarshal(raw, &expected); err != nil {
 		t.Fatal(err)
 	}
-	if !pyDeepEqual(report, expected) {
+	if !pythonsem.PyDeepEqual(report, expected) {
 		t.Fatal("报告与 Python 黄金样例不一致")
 	}
 	// 紧凑序列化 hash 与 Python 记录一致（D-e1-3 实证）

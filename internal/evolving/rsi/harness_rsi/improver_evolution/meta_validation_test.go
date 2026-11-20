@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"os"
 	"strings"
@@ -533,7 +534,7 @@ func TestPairedMetaValidate_checkpoint集不齐(t *testing.T) {
 	for _, issue := range issues {
 		if issue["code"] == "checkpoint_set_mismatch" {
 			found = true
-			if !pyDeepEqual(issue["baseline_only"], []any{"a"}) {
+			if !pythonsem.PyDeepEqual(issue["baseline_only"], []any{"a"}) {
 				t.Fatalf("baseline_only: %v", issue)
 			}
 		}
@@ -601,7 +602,7 @@ func TestPairedMetaValidate_黄金样例双向断言(t *testing.T) {
 		if err := json.Unmarshal(raw, &expected); err != nil {
 			t.Fatal(err)
 		}
-		if !pyDeepEqual(rep, expected) {
+		if !pythonsem.PyDeepEqual(rep, expected) {
 			t.Fatalf("%s 报告与 Python 黄金样例不一致", mode)
 		}
 		canonical, err := marshalCanonical(rep)

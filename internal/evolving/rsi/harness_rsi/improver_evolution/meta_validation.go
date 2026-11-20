@@ -5,6 +5,8 @@
 package improver_evolution
 
 import (
+	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"math"
 	"strings"
 )
@@ -38,7 +40,7 @@ func NewMetaValidationThresholds(
 	maxInfrastructureFailureRateIncrease float64,
 ) (*MetaValidationThresholds, error) {
 	if minUnseenCheckpoints < 1 {
-		return nil, errNew("min_unseen_checkpoints must be an integer of at least 1")
+		return nil, errors.New("min_unseen_checkpoints must be an integer of at least 1")
 	}
 	values := map[string]float64{
 		"top_m_gain_non_degradation_tolerance":                    topMGainNonDegradationTolerance,
@@ -58,7 +60,7 @@ func NewMetaValidationThresholds(
 	} {
 		value := values[name]
 		if math.IsInf(value, 0) || math.IsNaN(value) || value < 0 {
-			return nil, errNew(name + " must be a finite non-negative number")
+			return nil, errors.New(name + " must be a finite non-negative number")
 		}
 	}
 	return &MetaValidationThresholds{
@@ -285,7 +287,7 @@ func pairIssues(checkpointID string, baseline, candidate map[string]any, trainID
 		record map[string]any
 	}{{"baseline", baseline}, {"candidate", candidate}} {
 		split := sideRecord.record["split"]
-		if !pyEqual(split, "meta_test") {
+		if !pythonsem.PyEqual(split, "meta_test") {
 			issues = append(issues, map[string]any{
 				"code":          "non_meta_test_checkpoint",
 				"checkpoint_id": checkpointID,
@@ -308,7 +310,7 @@ func pairIssues(checkpointID string, baseline, candidate map[string]any, trainID
 	for _, field := range _FROZEN_FIELDS {
 		baseValue, hasBase := baseline[field]
 		candValue, hasCand := candidate[field]
-		if hasBase && hasCand && !pyEqual(baseValue, candValue) {
+		if hasBase && hasCand && !pythonsem.PyEqual(baseValue, candValue) {
 			issues = append(issues, map[string]any{
 				"code":          "frozen_field_mismatch",
 				"checkpoint_id": checkpointID,
@@ -316,7 +318,7 @@ func pairIssues(checkpointID string, baseline, candidate map[string]any, trainID
 			})
 		}
 	}
-	if pyEqual(baseline["k"], 1) && pyEqual(candidate["k"], 1) {
+	if pythonsem.PyEqual(baseline["k"], 1) && pythonsem.PyEqual(candidate["k"], 1) {
 		issues = append(issues, map[string]any{
 			"code": "search_metrics_require_k_at_least_two", "checkpoint_id": checkpointID,
 		})
@@ -351,7 +353,7 @@ func frozenValueIssues(checkpointID string, record map[string]any, side string) 
 	}
 	k := record["k"]
 	topM := record["top_m"]
-	if isPositiveInt(k) && isPositiveInt(topM) && pyInt(topM) > pyInt(k) {
+	if isPositiveInt(k) && isPositiveInt(topM) && pythonsem.PyInt(topM) > pythonsem.PyInt(k) {
 		issues = append(issues, map[string]any{
 			"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
 			"field": "top_m", "reason": "top_m_exceeds_k",
@@ -359,7 +361,7 @@ func frozenValueIssues(checkpointID string, record map[string]any, side string) 
 	}
 	for _, field := range []string{"token_budget", "tool_budget", "runtime_budget"} {
 		value := record[field]
-		if value != nil && (!isFiniteNumber(value) || pyFloat(value) < 0) {
+		if value != nil && (!isFiniteNumber(value) || pythonsem.PyFloat(value) < 0) {
 			issues = append(issues, map[string]any{
 				"code": "invalid_frozen_field", "checkpoint_id": checkpointID,
 				"side": side, "field": field,
@@ -371,15 +373,15 @@ func frozenValueIssues(checkpointID string, record map[string]any, side string) 
 
 // isPositiveInt 正整数判定（对应 Python _is_positive_int L577-578）
 func isPositiveInt(value any) bool {
-	return !isBool(value) && isInt(value) && pyInt(value) > 0
+	return !pythonsem.IsBool(value) && pythonsem.IsInt(value) && pythonsem.PyInt(value) > 0
 }
 
 // isFiniteNumber 有限数判定且非布尔（对应 Python _is_finite_number L573-574）
 func isFiniteNumber(value any) bool {
-	if isBool(value) {
+	if pythonsem.IsBool(value) {
 		return false
 	}
-	return isNumber(value)
+	return pythonsem.IsNumber(value)
 }
 
 // reasonCodes 从 issues 提取去重保序的 code 列表（对应 Python _reason_codes L569-570）
@@ -579,14 +581,14 @@ func requiredMetrics(checkpointID string, record map[string]any, side string, re
 			})
 			continue
 		}
-		if !isFiniteNumber(value) || (_RATE_METRICS[metric] && (pyFloat(value) < 0 || pyFloat(value) > 1)) {
+		if !isFiniteNumber(value) || (_RATE_METRICS[metric] && (pythonsem.PyFloat(value) < 0 || pythonsem.PyFloat(value) > 1)) {
 			issues = append(issues, map[string]any{
 				"code": "invalid_metric_value", "checkpoint_id": checkpointID,
 				"side": side, "metric": metric,
 			})
 			continue
 		}
-		output[metric] = pyFloat(value)
+		output[metric] = pythonsem.PyFloat(value)
 	}
 	return output, issues
 }
