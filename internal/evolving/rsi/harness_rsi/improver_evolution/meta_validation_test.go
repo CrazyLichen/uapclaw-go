@@ -306,3 +306,260 @@ func TestReasonCodes_去重保序(t *testing.T) {
 		t.Fatalf("unexpected: %v", got)
 	}
 }
+
+// ─────────────── Task 7：指标/宏平均/晋升/主函数 ───────────────
+
+func TestRequiredMetrics_全分支(t *testing.T) {
+	// metrics 缺失
+	rec := checkpointFixture("a")
+	delete(rec, "metrics")
+	got, issues := requiredMetrics("a", rec, "baseline", []string{"top_m_gain"})
+	if len(got) != 0 || len(issues) != 1 || issues[0]["code"] != "missing_required_metrics" {
+		t.Fatalf("unexpected: %v %v", got, issues)
+	}
+	// 指标缺失
+	rec["metrics"] = map[string]any{"other": 1.0}
+	got, issues = requiredMetrics("a", rec, "baseline", []string{"top_m_gain"})
+	if len(issues) != 1 || issues[0]["code"] != "missing_required_metric" || issues[0]["metric"] != "top_m_gain" {
+		t.Fatalf("unexpected: %v", issues)
+	}
+	// 指标为 None
+	rec["metrics"] = map[string]any{"top_m_gain": nil}
+	_, issues = requiredMetrics("a", rec, "baseline", []string{"top_m_gain"})
+	if len(issues) != 1 || issues[0]["code"] != "missing_required_metric" {
+		t.Fatalf("unexpected: %v", issues)
+	}
+	// 非有限数
+	rec["metrics"] = map[string]any{"top_m_gain": math.Inf(1)}
+	_, issues = requiredMetrics("a", rec, "baseline", []string{"top_m_gain"})
+	if len(issues) != 1 || issues[0]["code"] != "invalid_metric_value" {
+		t.Fatalf("unexpected: %v", issues)
+	}
+	// 比率越界
+	rec["metrics"] = map[string]any{"regression_failure_rate": 1.5}
+	_, issues = requiredMetrics("a", rec, "baseline", []string{"regression_failure_rate"})
+	if len(issues) != 1 || issues[0]["code"] != "invalid_metric_value" {
+		t.Fatalf("unexpected: %v", issues)
+	}
+	// 合法
+	rec["metrics"] = map[string]any{"regression_failure_rate": 0.5}
+	got, issues = requiredMetrics("a", rec, "baseline", []string{"regression_failure_rate"})
+	if len(issues) != 0 || got["regression_failure_rate"] != 0.5 {
+		t.Fatalf("unexpected: %v %v", got, issues)
+	}
+}
+
+func TestCheckpointReport_方向翻转(t *testing.T) {
+	base := checkpointFixture("a")
+	rep := checkpointReport("a", base,
+		map[string]float64{"top_m_gain": 0.1, "selection_regret": 0.05},
+		map[string]float64{"top_m_gain": 0.15, "selection_regret": 0.02},
+		[]string{"top_m_gain", "selection_regret"})
+	deltas := rep["deltas"].(map[string]float64)
+	if deltas["top_m_gain"] != 0.05 {
+		t.Fatalf("delta = candidate-baseline: %v", deltas)
+	}
+	if deltas["selection_regret"] != -0.03 {
+		t.Fatalf("delta: %v", deltas)
+	}
+	imp := rep["directional_improvements"].(map[string]float64)
+	// selection_regret 是"越低越好"：improvement = baseline - candidate
+	if imp["selection_regret"] != 0.03 {
+		t.Fatalf("unexpected: %v", imp)
+	}
+	if imp["top_m_gain"] != 0.05 {
+		t.Fatalf("unexpected: %v", imp)
+	}
+	// frozen_context 取 baseline 侧
+	fc := rep["frozen_context"].(map[string]any)
+	if fc["base_harness_id"] != "h1" {
+		t.Fatalf("unexpected: %v", fc)
+	}
+}
+
+func TestMacroAverages_方向标注(t *testing.T) {
+	checkpoints := []map[string]any{
+		{
+			"baseline_metrics":  map[string]float64{"top_m_gain": 0.1, "selection_regret": 0.04},
+			"candidate_metrics": map[string]float64{"top_m_gain": 0.2, "selection_regret": 0.02},
+		},
+		{
+			"baseline_metrics":  map[string]float64{"top_m_gain": 0.3, "selection_regret": 0.02},
+			"candidate_metrics": map[string]float64{"top_m_gain": 0.1, "selection_regret": 0.04},
+		},
+	}
+	out := macroAverages(checkpoints, []string{"top_m_gain", "selection_regret"})
+	tm := out["top_m_gain"].(map[string]any)
+	if tm["baseline"] != 0.2 || tm["candidate"] != 0.15 || tm["direction"] != "higher_is_better" {
+		t.Fatalf("unexpected: %v", tm)
+	}
+	sr := out["selection_regret"].(map[string]any)
+	if sr["direction"] != "lower_is_better" {
+		t.Fatalf("unexpected: %v", sr)
+	}
+	// improvement = baseline - candidate = 0.03 - (-0.01) → 0.03+0.01? baseline均值0.03, candidate均值0.03 → improvement 0
+	if sr["improvement"] != 0.0 {
+		t.Fatalf("unexpected: %v", sr)
+	}
+}
+
+func TestPromotionDecision_全分支(t *testing.T) {
+	mk := func(topMDelta, srImprovement, bokDelta float64) map[string]map[string]any {
+		return map[string]map[string]any{
+			"top_m_gain":                    {"delta": topMDelta},
+			"selection_regret":              {"improvement": srImprovement},
+			"best_of_k_gain":                {"delta": bokDelta},
+			"final_harness_gain_per_budget": {"delta": 0.1},
+			"regression_failure_rate":       {"delta": 0.0},
+			"infrastructure_failure_rate":   {"delta": 0.0},
+		}
+	}
+	th := DefaultMetaValidationThresholds()
+
+	// insufficient
+	dec := promotionDecision("live_generation", mk(0.1, 0.01, 0.1), 2, th)
+	if dec["status"] != "inconclusive" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+	if dec["reason_codes"].([]string)[0] != "insufficient_unseen_checkpoints" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// top_m 退步
+	dec = promotionDecision("live_generation", mk(-0.1, 0.01, 0.1), 4, th)
+	if dec["status"] != "ineligible" || dec["reason_codes"].([]string)[0] != "top_m_gain_decreased" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// selection_regret 未改善
+	dec = promotionDecision("live_generation", mk(0.1, 0.0, 0.1), 4, th)
+	if dec["reason_codes"].([]string)[0] != "selection_regret_not_improved" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// best_of_k 退步
+	dec = promotionDecision("live_generation", mk(0.1, 0.01, -0.1), 4, th)
+	if dec["reason_codes"].([]string)[0] != "best_of_k_gain_decreased" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// 回归率上升
+	dec = promotionDecision("live_generation", mk(0.1, 0.01, 0.1), 4, th)
+	// 先构造比率上升输入
+	rateMacro := mk(0.1, 0.01, 0.1)
+	rateMacro["regression_failure_rate"]["delta"] = 0.01
+	dec = promotionDecision("live_generation", rateMacro, 4, th)
+	if dec["reason_codes"].([]string)[0] != "regression_failure_rate_increased" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// 全过 → eligible + promotion_thresholds_satisfied
+	dec = promotionDecision("live_generation", mk(0.1, 0.01, 0.1), 4, th)
+	if dec["status"] != "eligible" || dec["reason_codes"].([]string)[0] != "promotion_thresholds_satisfied" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+
+	// offline 模式恒 inconclusive + ranker_evidence_only
+	dec = promotionDecision("offline_rerank", mk(0.1, 0.01, 0.1), 4, th)
+	if dec["status"] != "inconclusive" || dec["scope"] != "ranker_evidence_only" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+	if dec["offline_ranker_assessment"] != "eligible" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+	found := false
+	for _, code := range dec["reason_codes"].([]string) {
+		if code == "offline_rerank_cannot_promote_full_improver" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("缺 offline_rerank_cannot_promote_full_improver: %v", dec)
+	}
+
+	// offline + insufficient → ranker_assessment inconclusive
+	dec = promotionDecision("offline_rerank", mk(0.1, 0.01, 0.1), 2, th)
+	if dec["offline_ranker_assessment"] != "inconclusive" {
+		t.Fatalf("unexpected: %v", dec)
+	}
+}
+
+func TestPairedMetaValidate_无效模式(t *testing.T) {
+	rep := PairedMetaValidate([]map[string]any{checkpointFixture("a")}, []map[string]any{checkpointFixture("a")},
+		"bogus", nil, nil)
+	if rep["validation"].(map[string]any)["status"] != "rejected" {
+		t.Fatalf("unexpected: %v", rep)
+	}
+	if rep["validation"].(map[string]any)["reason_codes"].([]string)[0] != "invalid_mode" {
+		t.Fatalf("unexpected: %v", rep)
+	}
+	if rep["promotion"].(map[string]any)["reason_codes"].([]string)[0] != "invalid_mode" {
+		t.Fatalf("unexpected: %v", rep)
+	}
+}
+
+func TestPairedMetaValidate_空结果与指纹相同(t *testing.T) {
+	// 空输入
+	rep := PairedMetaValidate(nil, nil, "live_generation", nil, nil)
+	if rep["validation"].(map[string]any)["status"] != "rejected" {
+		t.Fatalf("unexpected: %v", rep)
+	}
+	// 指纹相同
+	rep = PairedMetaValidate([]map[string]any{checkpointFixture("a")}, []map[string]any{checkpointFixture("a")},
+		"live_generation", nil, nil)
+	codes := rep["validation"].(map[string]any)["reason_codes"].([]string)
+	if !contains(codes, "identical_improver_policy_digest") {
+		t.Fatalf("unexpected: %v", codes)
+	}
+	if !contains(codes, "empty_checkpoint_results") == false {
+		// 此处两侧非空，不应含 empty
+	}
+}
+
+func TestPairedMetaValidate_checkpoint集不齐(t *testing.T) {
+	base := checkpointFixture("a")
+	cand := checkpointFixture("b")
+	rep := PairedMetaValidate([]map[string]any{base}, []map[string]any{cand}, "live_generation", nil, nil)
+	v := rep["validation"].(map[string]any)
+	if v["status"] != "rejected" || v["checkpoint_count"] != 0 {
+		t.Fatalf("unexpected: %v", v)
+	}
+	issues := v["issues"].([]map[string]any)
+	found := false
+	for _, issue := range issues {
+		if issue["code"] == "checkpoint_set_mismatch" {
+			found = true
+			if !pyDeepEqual(issue["baseline_only"], []any{"a"}) {
+				t.Fatalf("baseline_only: %v", issue)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("缺 checkpoint_set_mismatch")
+	}
+}
+
+func TestPairedMetaValidate_训练集污染拒绝(t *testing.T) {
+	rep := PairedMetaValidate([]map[string]any{checkpointFixture("a")}, []map[string]any{checkpointFixture("a")},
+		"live_generation", nil, []string{"a"})
+	if rep["validation"].(map[string]any)["status"] != "rejected" {
+		t.Fatalf("unexpected: %v", rep)
+	}
+	codes := rep["validation"].(map[string]any)["reason_codes"].([]string)
+	if !contains(codes, "meta_train_contamination") {
+		t.Fatalf("unexpected: %v", codes)
+	}
+	// reason_codes 同步进 promotion
+	if !contains(rep["promotion"].(map[string]any)["reason_codes"].([]string), "meta_train_contamination") {
+		t.Fatalf("unexpected promotion: %v", rep["promotion"])
+	}
+}
+
+func contains(list []string, item string) bool {
+	for _, v := range list {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}
