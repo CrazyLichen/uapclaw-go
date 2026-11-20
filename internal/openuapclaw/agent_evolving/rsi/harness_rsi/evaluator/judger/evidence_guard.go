@@ -12,6 +12,10 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	contextutils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
@@ -353,4 +357,112 @@ func mustAbs(path string) string {
 // marshalJSONCompact 紧凑序列化（json.dumps ensure_ascii=False 默认分隔符）。
 func marshalJSONCompact(payload map[string]any) ([]byte, error) {
 	return json.Marshal(payload)
+}
+
+// ──────────────────────────── GuardedJudgeModel（evidence_guard.py L132-166）────────────────────────────
+
+// GuardedJudgeModel 守卫真实模型边界（而非 rail 前的消息预览）。
+// Python: evidence_guard.py GuardedJudgeModel(Model)——构造期把 model_config 经
+// with_rsi_output_budget 预算化；调用期 _prepare 以 guard_messages 边界化输入
+// 证据，invoke/stream 后经 record_judge_model_response 记录完成元数据。
+//
+// 已知偏差（对齐登记）：Python _prepare 返回 rsi_output_options(kwargs) 处理后的
+// kwargs；Go 调用点的 opts 由调用方构造（judge_runtime 各调用点均不携带
+// tools/token 选项），保持原样透传即等价。
+type GuardedJudgeModel struct {
+	// Model 被守卫的底层模型
+	*llm.Model
+}
+
+// NewGuardedJudgeModel 构造守卫裁判模型。
+// Python: __init__——request = with_rsi_output_budget(
+// {"model_request_config": model_config.model_dump()})["model_request_config"]；
+// Go 侧 ModelRequestConfig 指针可选性已承载预算语义（同 BudgetedRsiModel D-1），
+// 直接转调父类构造。
+func NewGuardedJudgeModel(clientConfig *llmschema.ModelClientConfig, requestConfig *llmschema.ModelRequestConfig) (*GuardedJudgeModel, error) {
+	model, err := llm.NewModel(clientConfig, requestConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &GuardedJudgeModel{Model: model}, nil
+}
+
+// prepare 边界化输入证据，保留配置的请求选项。
+// Python: _prepare——guarded = guard_messages(messages, tools)。
+func (g *GuardedJudgeModel) prepare(messages model_clients.MessagesParam) model_clients.MessagesParam {
+	// Python guard_messages 先把 BaseMessage/model_dump/str 统一成行，
+	// 再对 role=tool 行做 bound_tool_content；Go 侧统一经 dict 行处理。
+	rows := GuardMessages(dictsFromMessagesParam(messages))
+	return model_clients.NewDictsMessagesParam(rows)
+}
+
+// Invoke 非流式调用（边界化后转调父类并记录完成元数据）。
+// Python: invoke——messages, kwargs = self._prepare(messages, kwargs);
+// response = await super().invoke(messages, **kwargs);
+// record_judge_model_response(response)。
+func (g *GuardedJudgeModel) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	response, err := g.Model.Invoke(ctx, g.prepare(messages), opts...)
+	if err != nil {
+		return nil, err
+	}
+	RecordJudgeModelResponse(ctx, response.FinishReason, response.UsageMetadata)
+	return response, nil
+}
+
+// Stream 流式调用（边界化后转调父类并逐块记录完成元数据）。
+// Python: stream——async for chunk in super().stream(messages, **kwargs):
+// record_judge_model_response(chunk); yield chunk。
+func (g *GuardedJudgeModel) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	ch, err := g.Model.Stream(ctx, g.prepare(messages), opts...)
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan *llmschema.AssistantMessageChunk)
+	go func() {
+		defer close(out)
+		for chunk := range ch {
+			RecordJudgeModelResponse(ctx, chunk.FinishReason, chunk.UsageMetadata)
+			out <- chunk
+		}
+	}()
+	return out, nil
+}
+
+// ContextBudget 与证据装配器共享模型容量。
+// Python: context_budget——ContextUtils.resolve_context_max(model_name=...,
+// fallback_context_window_tokens=self.model_config.context_window)。
+func (g *GuardedJudgeModel) ContextBudget() int {
+	var modelName string
+	var fallback int
+	if g.ModelConfig != nil {
+		modelName = g.ModelConfig.ModelName
+		if g.ModelConfig.ContextWindow != nil {
+			fallback = *g.ModelConfig.ContextWindow
+		}
+	}
+	// Python 未传 model_context_window_tokens 映射，Go 对齐传 nil。
+	return contextutils.ResolveContextMax(modelName, fallback, nil)
+}
+
+// dictsFromMessagesParam 把 MessagesParam 展平成 OpenAI dict 行。
+// Python guard_messages 的 model_dump(mode="json") 等价；仅覆盖裁判直评
+// 调用点实际使用的 system/user 消息形态（tool 行由调用方以 dict 传入）。
+func dictsFromMessagesParam(param model_clients.MessagesParam) []map[string]any {
+	switch {
+	case param.IsText():
+		return []map[string]any{{"role": "user", "content": param.Text()}}
+	case param.IsDicts():
+		return param.Dicts()
+	case param.IsMessages():
+		rows := make([]map[string]any, 0, len(param.Messages()))
+		for _, msg := range param.Messages() {
+			rows = append(rows, map[string]any{
+				"role":    msg.GetRole().String(),
+				"content": msg.GetContent().String(),
+			})
+		}
+		return rows
+	default:
+		return []map[string]any{}
+	}
 }

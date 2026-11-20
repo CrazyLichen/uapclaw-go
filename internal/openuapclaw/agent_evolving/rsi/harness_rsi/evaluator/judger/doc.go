@@ -11,8 +11,10 @@
 //	├── judge_evidence.go     # 证据工作区快照与响应分页（judge_evidence.py）
 //	├── judge_diagnostics.go  # 单次评估尝试的模型调用诊断（judge_diagnostics.py）
 //	├── judge_search.go       # 冻结证据字面量搜索工具（judge_search.py）
-//	├── evidence_guard.go     # 证据读取工具与消息分页守卫（evidence_guard.py）
+//	├── evidence_guard.go     # 证据读取工具与消息分页守卫 + GuardedJudgeModel（evidence_guard.py）
 //	├── direct_evidence.go    # 小体量评估的无损内联证据（direct_evidence.py）
+//	├── judge_runtime.go      # 裁判 DeepAgent 运行时：只读/预算护栏、修复链、closeout 直评（judge_runtime.py）
+//	├── errors.go             # 评估基础设施错误（包内反转缝，语义同父包 evaluator/errors.py）
 //	├── judge_prompt.md       # 连续判分模式裁判提示词（Python 原文件逐字）
 //	├── judge_prompt.legacy.md# 二元判分模式裁判提示词（Python 原文件逐字）
 //	└── fs_helpers.go         # 包内文件系统小助手（Go 侧共用，非 Python 对应）
