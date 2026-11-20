@@ -316,3 +316,19 @@ func availableBackends() []string {
 	}
 	return names
 }
+
+// EnableRemoteBase 把后端切到远端基准模式（GitBackend 才有此概念）。
+// Python: worktree_remote.py WorktreeRemoteHandler.__init__ 的
+// "backend.remote_base = True"（:247-249）；非 GitBackend 后端为 no-op。
+func EnableRemoteBase(backend WorktreeBackend) {
+	if g, ok := backend.(*GitBackend); ok {
+		g.RemoteBase = true
+	}
+}
+
+// BackendIsRemoteBase 查询后端是否处于远端基准模式（测试与诊断用）。
+// Python: getattr(backend, "remote_base", False)
+func BackendIsRemoteBase(backend WorktreeBackend) bool {
+	g, ok := backend.(*GitBackend)
+	return ok && g.RemoteBase
+}

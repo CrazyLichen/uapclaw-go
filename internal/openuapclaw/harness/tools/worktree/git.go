@@ -548,3 +548,22 @@ func MergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
 func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
 	return statusPorcelain(ctx, cwd)
 }
+
+// GetDefaultBranch 返回仓库默认分支名（main/master/develop 探测）。
+// Python: git.py get_default_branch(cwd) (:127)
+func GetDefaultBranch(ctx context.Context, cwd string) string {
+	return getDefaultBranch(ctx, cwd)
+}
+
+// FetchRef 从 origin 拉取指定分支；成功返回 true。
+// Python: git.py fetch_ref(repo_root, ref) (:339)
+func FetchRef(ctx context.Context, repoRoot, ref string) bool {
+	return fetchRef(ctx, repoRoot, ref)
+}
+
+// RunGit 执行 git 命令并返回结构化结果。
+// Python: git.py _run_git(args, cwd=..., check=...) 的非 check 面（check 语义由
+// 调用方判定 GitResult.OK()，Python worktree_remote.py:222-226 同款）。
+func RunGit(ctx context.Context, args []string, cwd string) GitResult {
+	return runGit(ctx, args, cwd)
+}
