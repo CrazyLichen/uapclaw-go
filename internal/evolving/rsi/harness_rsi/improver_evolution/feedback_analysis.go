@@ -11,11 +11,199 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// surfaceEvidence 单个触发面的触发/回归证据累积器
+// （对应 Python class _SurfaceEvidence L234-289）
+type surfaceEvidence struct {
+	// triggerAvailability 触发可用性计数
+	triggerAvailability map[string]int
+	// triggerOpportunityCandidates 触发机会候选数（observed）
+	triggerOpportunityCandidates int
+	// triggerFailureCandidates 触发失败候选数（observed 且 not_triggered）
+	triggerFailureCandidates int
+	// triggerOpportunityCohorts 触发机会 cohort 集合
+	triggerOpportunityCohorts map[string]bool
+	// triggerFailureCohorts 触发失败 cohort 集合
+	triggerFailureCohorts map[string]bool
+	// regressionAvailability 回归可用性计数
+	regressionAvailability map[string]int
+	// regressionOpportunityCandidates 回归机会候选数（observed）
+	regressionOpportunityCandidates int
+	// regressionFailureCandidates 回归失败候选数（observed 且退步数>0）
+	regressionFailureCandidates int
+	// regressionOpportunityCohorts 回归机会 cohort 集合
+	regressionOpportunityCohorts map[string]bool
+	// regressionFailureCohorts 回归失败 cohort 集合
+	regressionFailureCohorts map[string]bool
+}
+
+// newSurfaceEvidence 构造零值累积器
+func newSurfaceEvidence() *surfaceEvidence {
+	return &surfaceEvidence{
+		triggerAvailability:          map[string]int{},
+		triggerOpportunityCohorts:    map[string]bool{},
+		triggerFailureCohorts:        map[string]bool{},
+		regressionAvailability:       map[string]int{},
+		regressionOpportunityCohorts: map[string]bool{},
+		regressionFailureCohorts:     map[string]bool{},
+	}
+}
+
+// observeTrigger 记录一次候选激活观察（对应 Python observe_trigger L247-256）
+func (e *surfaceEvidence) observeTrigger(cohortID string, activation map[string]any) {
+	availability, _ := activation["availability"].(string)
+	e.triggerAvailability[availability]++
+	if availability != "observed" {
+		return
+	}
+	e.triggerOpportunityCandidates++
+	e.triggerOpportunityCohorts[cohortID] = true
+	if state, _ := activation["state"].(string); state == "not_triggered" {
+		e.triggerFailureCandidates++
+		e.triggerFailureCohorts[cohortID] = true
+	}
+}
+
+// observeRegression 记录一次候选回归观察（对应 Python observe_regression L258-267）
+func (e *surfaceEvidence) observeRegression(cohortID string, regression map[string]any) {
+	availability, _ := regression["availability"].(string)
+	e.regressionAvailability[availability]++
+	if availability != "observed" {
+		return
+	}
+	e.regressionOpportunityCandidates++
+	e.regressionOpportunityCohorts[cohortID] = true
+	count := 0
+	if v, ok := regression["regressed_case_count"]; ok {
+		if n, isInt := v.(int); isInt {
+			count = n
+		} else if n, ok := v.(int64); ok {
+			count = int(n)
+		} else if f, ok := v.(float64); ok {
+			count = int(f)
+		}
+	}
+	if count > 0 {
+		e.regressionFailureCandidates++
+		e.regressionFailureCohorts[cohortID] = true
+	}
+}
+
+// triggerSummary 触发侧汇总（对应 Python trigger_summary L269-278）
+func (e *surfaceEvidence) triggerSummary() map[string]any {
+	return map[string]any{
+		"availability_counts":                  counterDict(e.triggerAvailability),
+		"observed_opportunity_candidate_count": e.triggerOpportunityCandidates,
+		"failure_candidate_count":              e.triggerFailureCandidates,
+		"rate":                                 rate(e.triggerFailureCandidates, e.triggerOpportunityCandidates),
+		"opportunity_cohort_count":             len(e.triggerOpportunityCohorts),
+		"support_cohort_count":                 len(e.triggerFailureCohorts),
+		"evidence_cohort_ids":                  sortedSetKeys(e.triggerFailureCohorts),
+	}
+}
+
+// regressionSummary 回归侧汇总（对应 Python regression_summary L280-289）
+func (e *surfaceEvidence) regressionSummary() map[string]any {
+	return map[string]any{
+		"availability_counts":                  counterDict(e.regressionAvailability),
+		"observed_opportunity_candidate_count": e.regressionOpportunityCandidates,
+		"regression_candidate_count":           e.regressionFailureCandidates,
+		"rate":                                 rate(e.regressionFailureCandidates, e.regressionOpportunityCandidates),
+		"opportunity_cohort_count":             len(e.regressionOpportunityCohorts),
+		"support_cohort_count":                 len(e.regressionFailureCohorts),
+		"evidence_cohort_ids":                  sortedSetKeys(e.regressionFailureCohorts),
+	}
+}
+
+// featureEvidence 单个排序特征的对齐证据累积器
+// （对应 Python class _FeatureEvidence L292-342）
+type featureEvidence struct {
+	// comparablePairCount 可比较特征对数
+	comparablePairCount int
+	// comparableCohorts 可比较 cohort 集合
+	comparableCohorts map[string]bool
+	// alignedPairCount 预测与实际赢家一致的对数
+	alignedPairCount int
+	// alignedCohorts 一致 cohort 集合
+	alignedCohorts map[string]bool
+	// oppositePairCount 不一致的对数
+	oppositePairCount int
+	// oppositeCohorts 不一致 cohort 集合
+	oppositeCohorts map[string]bool
+	// increasePairCount 建议 increase 权重的对数
+	increasePairCount int
+	// increaseCohorts 建议 increase 的 cohort 集合
+	increaseCohorts map[string]bool
+	// decreasePairCount 建议 decrease 权重的对数
+	decreasePairCount int
+	// decreaseCohorts 建议 decrease 的 cohort 集合
+	decreaseCohorts map[string]bool
+}
+
+// newFeatureEvidence 构造零值累积器
+func newFeatureEvidence() *featureEvidence {
+	return &featureEvidence{
+		comparableCohorts: map[string]bool{},
+		alignedCohorts:    map[string]bool{},
+		oppositeCohorts:   map[string]bool{},
+		increaseCohorts:   map[string]bool{},
+		decreaseCohorts:   map[string]bool{},
+	}
+}
+
+// observe 记录一次特征对观察（对应 Python observe L305-319）
+func (e *featureEvidence) observe(cohortID string, aligned bool, adjustment string) {
+	e.comparablePairCount++
+	e.comparableCohorts[cohortID] = true
+	if aligned {
+		e.alignedPairCount++
+		e.alignedCohorts[cohortID] = true
+		return
+	}
+	e.oppositePairCount++
+	e.oppositeCohorts[cohortID] = true
+	switch adjustment {
+	case "increase":
+		e.increasePairCount++
+		e.increaseCohorts[cohortID] = true
+	case "decrease":
+		e.decreasePairCount++
+		e.decreaseCohorts[cohortID] = true
+	}
+}
+
+// summary 特征证据汇总（对应 Python summary L321-342）
+func (e *featureEvidence) summary() map[string]any {
+	return map[string]any{
+		"comparable_pair_count":   e.comparablePairCount,
+		"comparable_cohort_count": len(e.comparableCohorts),
+		"comparable_cohort_ids":   sortedSetKeys(e.comparableCohorts),
+		"aligned_pair_count":      e.alignedPairCount,
+		"aligned_cohort_count":    len(e.alignedCohorts),
+		"aligned_cohort_ids":      sortedSetKeys(e.alignedCohorts),
+		"opposite_pair_count":     e.oppositePairCount,
+		"opposite_cohort_count":   len(e.oppositeCohorts),
+		"opposite_cohort_ids":     sortedSetKeys(e.oppositeCohorts),
+		"increase_weight_evidence": map[string]any{
+			"pair_count":   e.increasePairCount,
+			"cohort_count": len(e.increaseCohorts),
+			"cohort_ids":   sortedSetKeys(e.increaseCohorts),
+		},
+		"decrease_weight_evidence": map[string]any{
+			"pair_count":   e.decreasePairCount,
+			"cohort_count": len(e.decreaseCohorts),
+			"cohort_ids":   sortedSetKeys(e.decreaseCohorts),
+		},
+	}
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -438,4 +626,311 @@ func isNonnegativeInt(value any) bool {
 		return false
 	}
 	return pyInt(value) >= 0
+}
+
+// comparabilityReason 判定 cohort 不可比较的原因，可比较返回空串
+// （对应 Python _comparability_reason L463-496，分支顺序照抄）
+func comparabilityReason(cohort map[string]any) string {
+	candidates := cohort["candidates"].([]any)
+	if len(candidates) < 2 {
+		return "requires_at_least_two_comparable_candidates"
+	}
+	identity := cohort["cohort"].(map[string]any)
+	requiredFields := []string{"parent_harness_ref", "source_eval_ref", "evaluation_protocol"}
+	for _, field := range requiredFields {
+		if pyFalsy(identity[field]) {
+			return "cohort_identity_missing"
+		}
+	}
+	if pyFalsy(identity["target_case_ids"]) {
+		return "cohort_identity_missing"
+	}
+	if identity["rank_frozen"] != true {
+		return "rank_not_frozen_before_evaluation"
+	}
+	candidateIDs := make([]string, 0, len(candidates))
+	for _, item := range candidates {
+		candidateIDs = append(candidateIDs, item.(map[string]any)["candidate_id"].(string))
+	}
+	if len(candidateIDs) != len(setOf(candidateIDs)) {
+		return "duplicate_candidate_id"
+	}
+	// 对应 Python ranks = [candidate["proposal_rank"].get("predicted_rank") for ...]
+	ranks := make([]any, 0, len(candidates))
+	for _, item := range candidates {
+		ranks = append(ranks, item.(map[string]any)["proposal_rank"].(map[string]any)["predicted_rank"])
+	}
+	for _, r := range ranks {
+		if isBool(r) || !isInt(r) {
+			return "predicted_rank_missing"
+		}
+	}
+	// 对应 Python set(ranks) != set(range(1, len(candidates)+1))
+	expected := map[int64]bool{}
+	for i := 1; i <= len(candidates); i++ {
+		expected[int64(i)] = true
+	}
+	actual := map[int64]bool{}
+	for _, r := range ranks {
+		actual[pyInt(r)] = true
+	}
+	if len(actual) != len(expected) {
+		return "predicted_ranks_not_permutation"
+	}
+	for k := range expected {
+		if !actual[k] {
+			return "predicted_ranks_not_permutation"
+		}
+	}
+	for _, item := range candidates {
+		candidate := item.(map[string]any)
+		candidateIdentity := candidate["identity"].(map[string]any)
+		for _, field := range requiredFields {
+			if !pyEqual(candidateIdentity[field], identity[field]) {
+				return field + "_mismatch"
+			}
+		}
+		// 对应 Python set(candidate_target_case_ids) != set(identity_target_case_ids)
+		if !stringSetEqual(candidateIdentity["target_case_ids"], identity["target_case_ids"]) {
+			return "target_case_set_mismatch"
+		}
+		if candidate["proposal_rank"].(map[string]any)["rank_frozen"] != true {
+			return "candidate_rank_not_frozen"
+		}
+		if !pyEqual(candidate["proposal_rank"].(map[string]any)["ranking_policy"], identity["ranking_policy"]) {
+			return "candidate_ranking_policy_mismatch"
+		}
+		if !isNumber(candidate["outcome"].(map[string]any)["target_gain"]) {
+			return "target_gain_missing"
+		}
+	}
+	for _, name := range []string{"best_of_k_gain", "top_m_gain"} {
+		metric := cohort["metrics"].(map[string]any)[name].(map[string]any)
+		if metric["status"] != "available" {
+			return "search_metric_unavailable"
+		}
+	}
+	return ""
+}
+
+// pyFalsy 复刻 Python falsy 判定（None/空串/空列表/0）
+func pyFalsy(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		return true
+	case string:
+		return v == ""
+	case bool:
+		return !v
+	case int:
+		return v == 0
+	case int64:
+		return v == 0
+	case float64:
+		return v == 0
+	case []any:
+		return len(v) == 0
+	case map[string]any:
+		return len(v) == 0
+	default:
+		return false
+	}
+}
+
+// setOf 去重集合
+func setOf(items []string) map[string]bool {
+	out := map[string]bool{}
+	for _, item := range items {
+		out[item] = true
+	}
+	return out
+}
+
+// sortedSetKeys 集合排序为字符串切片（对应 Python sorted(set)）
+func sortedSetKeys(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for key := range set {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// stringSetEqual 复刻 Python set(list) == set(list) 比较
+func stringSetEqual(left, right any) bool {
+	leftList, okL := left.([]any)
+	rightList, okR := right.([]any)
+	if !okL || !okR {
+		return false
+	}
+	leftSet := map[string]bool{}
+	for _, item := range leftList {
+		leftSet[pyStr(item)] = true
+	}
+	rightSet := map[string]bool{}
+	for _, item := range rightList {
+		rightSet[pyStr(item)] = true
+	}
+	if len(leftSet) != len(rightSet) {
+		return false
+	}
+	for key := range leftSet {
+		if !rightSet[key] {
+			return false
+		}
+	}
+	return true
+}
+
+// pyStr 字符串化（对应 Python str()，仅用于集合键）
+func pyStr(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return fmt.Sprintf("%v", value)
+}
+
+// collectHighValueOutsideTopM 收集"高点候选在 Top-m 预算外"证据
+// （对应 Python _collect_high_value_outside_top_m L499-520）
+func collectHighValueOutsideTopM(cohort map[string]any, threshold float64, opportunityIDs, supportIDs *[]string) error {
+	best := cohort["metrics"].(map[string]any)["best_of_k_gain"].(map[string]any)
+	topM := cohort["metrics"].(map[string]any)["top_m_gain"].(map[string]any)
+	if pyFloat(best["value"]) <= threshold {
+		return nil
+	}
+	cohortID := cohort["cohort"].(map[string]any)["cohort_id"].(string)
+	*opportunityIDs = append(*opportunityIDs, cohortID)
+	candidateID := best["candidate_id"]
+	var candidate map[string]any
+	for _, item := range cohort["candidates"].([]any) {
+		if pyEqual(item.(map[string]any)["candidate_id"], candidateID) {
+			candidate = item.(map[string]any)
+			break
+		}
+	}
+	if candidate == nil {
+		return errNew(fmt.Sprintf("cohort %s best_of_k_gain candidate_id is not in candidates", pyRepr(cohortID)))
+	}
+	effectiveM := topM["effective_m"]
+	if isBool(effectiveM) || !isInt(effectiveM) || pyInt(effectiveM) < 1 {
+		return errNew(fmt.Sprintf("cohort %s top_m_gain.effective_m must be a positive integer", pyRepr(cohortID)))
+	}
+	predictedRank := candidate["proposal_rank"].(map[string]any)["predicted_rank"]
+	if pyInt(predictedRank) > pyInt(effectiveM) {
+		*supportIDs = append(*supportIDs, cohortID)
+	}
+	return nil
+}
+
+// cohortDuplicateCounts 返回（候选指纹总数，重复指纹数）
+// （对应 Python _cohort_duplicate_counts L523-525）
+func cohortDuplicateCounts(cohort map[string]any) (int, int) {
+	fingerprints := make([]string, 0)
+	for _, item := range cohort["candidates"].([]any) {
+		fingerprints = append(fingerprints, item.(map[string]any)["candidate_fingerprint"].(string))
+	}
+	return len(fingerprints), len(fingerprints) - len(setOf(fingerprints))
+}
+
+// collectFeatureEvidence 收集特征-结果对齐证据：候选两两组合，恰好一个数值特征不同
+// 且预测/实际赢家不一致时计入（对应 Python _collect_feature_evidence L528-563）
+func collectFeatureEvidence(cohort map[string]any, featureEvidence map[string]*featureEvidence) {
+	cohortID := cohort["cohort"].(map[string]any)["cohort_id"].(string)
+	candidates := cohort["candidates"].([]any)
+	for i := 0; i < len(candidates); i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			first := candidates[i].(map[string]any)
+			second := candidates[j].(map[string]any)
+			firstFeatures := numericRankingFeatures(first)
+			secondFeatures := numericRankingFeatures(second)
+			if len(firstFeatures) == 0 || !featureKeySetsEqual(firstFeatures, secondFeatures) {
+				continue
+			}
+			differing := make([]string, 0)
+			for feature, value := range firstFeatures {
+				if value != secondFeatures[feature] {
+					differing = append(differing, feature)
+				}
+			}
+			sort.Strings(differing)
+			if len(differing) != 1 {
+				continue
+			}
+			feature := differing[0]
+			firstGain := pyFloat(first["outcome"].(map[string]any)["target_gain"])
+			secondGain := pyFloat(second["outcome"].(map[string]any)["target_gain"])
+			firstScore := first["proposal_rank"].(map[string]any)["predicted_score"]
+			secondScore := second["proposal_rank"].(map[string]any)["predicted_score"]
+			if firstGain == secondGain || !isNumber(firstScore) || !isNumber(secondScore) {
+				continue
+			}
+			if pyFloat(firstScore) == pyFloat(secondScore) {
+				continue
+			}
+			predictedWinnerIsFirst := pyFloat(firstScore) > pyFloat(secondScore)
+			realizedWinnerIsFirst := firstGain > secondGain
+			aligned := predictedWinnerIsFirst == realizedWinnerIsFirst
+			adjustment := ""
+			if !aligned {
+				higherFeatureIsFirst := firstFeatures[feature] > secondFeatures[feature]
+				higherFeaturePredicted := predictedWinnerIsFirst == higherFeatureIsFirst
+				if higherFeaturePredicted {
+					adjustment = "decrease"
+				} else {
+					adjustment = "increase"
+				}
+			}
+			evidence, present := featureEvidence[feature]
+			if !present {
+				evidence = newFeatureEvidence()
+				featureEvidence[feature] = evidence
+			}
+			evidence.observe(cohortID, aligned, adjustment)
+		}
+	}
+}
+
+// featureKeySetsEqual 特征键集合相等（对应 Python first_features.keys() != second_features.keys()）
+func featureKeySetsEqual(left, right map[string]float64) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key := range left {
+		if _, ok := right[key]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// numericRankingFeatures 提取数值排序特征（对应 Python _numeric_ranking_features L566-570）
+func numericRankingFeatures(candidate map[string]any) map[string]float64 {
+	raw, ok := candidate["proposal_rank"].(map[string]any)["ranking_features"].(map[string]any)
+	if !ok {
+		return map[string]float64{}
+	}
+	out := map[string]float64{}
+	for key, value := range raw {
+		if isNumber(value) {
+			out[key] = pyFloat(value)
+		}
+	}
+	return out
+}
+
+// rate 计算比率，分母为 0 返回 nil（对应 Python _rate L757-758）
+func rate(numerator, denominator int) any {
+	if denominator == 0 {
+		return nil
+	}
+	return float64(numerator) / float64(denominator)
+}
+
+// counterDict 计数 map 键排序输出（对应 Python _counter_dict L761-762）
+func counterDict(counter map[string]int) map[string]int {
+	out := make(map[string]int, len(counter))
+	for key, value := range counter {
+		out[key] = value
+	}
+	return out
 }

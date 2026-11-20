@@ -431,3 +431,309 @@ func TestRequireExact_数值跨类型相等(t *testing.T) {
 	}
 	assertErrMsg(t, requireExact(2, 1, "loc"), "loc must be 1, got 2")
 }
+
+// ─────────────── Task 2：证据收集器与可比性判定 ───────────────
+
+// comparableCohortFixture 构造可通过 _comparability_reason 的最小 cohort（2 候选）
+func comparableCohortFixture() map[string]any {
+	cohortIdentity := map[string]any{
+		"cohort_id":           "cc1",
+		"candidate_count":     2,
+		"parent_harness_ref":  "h1",
+		"source_eval_ref":     "e1",
+		"evaluation_protocol": "p1",
+		"target_case_ids":     []any{"case_1"},
+		"rank_frozen":         true,
+		"ranking_policy":      "score_desc",
+	}
+	makeCandidate := func(id string, rank int, gain float64) map[string]any {
+		c := validCandidateFixture()
+		c["candidate_id"] = id
+		c["identity"] = map[string]any{
+			"parent_harness_ref":  "h1",
+			"source_eval_ref":     "e1",
+			"evaluation_protocol": "p1",
+			"target_case_ids":     []any{"case_1"},
+		}
+		c["proposal_rank"] = map[string]any{
+			"predicted_rank":  rank,
+			"predicted_score": 0.9 - 0.1*float64(rank),
+			"rank_frozen":     true,
+			"ranking_policy":  "score_desc",
+		}
+		c["outcome"] = map[string]any{"target_gain": gain}
+		return c
+	}
+	return map[string]any{
+		"schema_version": 1,
+		"record_type":    "candidate_feedback_cohort",
+		"cohort":         cohortIdentity,
+		"candidates":     []any{makeCandidate("a", 1, 0.2), makeCandidate("b", 2, 0.1)},
+		"metrics": map[string]any{
+			"best_of_k_gain":   map[string]any{"status": "available", "value": 0.2, "candidate_id": "a"},
+			"top_m_gain":       map[string]any{"status": "available", "value": 0.2, "effective_m": 2},
+			"selection_regret": map[string]any{"status": "unavailable", "value": nil, "reason": "r"},
+		},
+	}
+}
+
+func TestSurfaceEvidence_触发观察三态计数(t *testing.T) {
+	e := newSurfaceEvidence()
+	// observed + triggered → 机会
+	e.observeTrigger("c1", map[string]any{"availability": "observed", "state": "triggered"})
+	// observed + not_triggered → 机会+失败
+	e.observeTrigger("c2", map[string]any{"availability": "observed", "state": "not_triggered"})
+	// 非 observed → 只计 availability
+	e.observeTrigger("c3", map[string]any{"availability": "not_instrumented", "state": "not_instrumented"})
+	got := e.triggerSummary()
+	if got["observed_opportunity_candidate_count"] != 2 || got["failure_candidate_count"] != 1 {
+		t.Fatalf("unexpected: %v", got)
+	}
+	if got["opportunity_cohort_count"] != 2 || got["support_cohort_count"] != 1 {
+		t.Fatalf("unexpected: %v", got)
+	}
+	ids := got["evidence_cohort_ids"].([]string)
+	if len(ids) != 1 || ids[0] != "c2" {
+		t.Fatalf("unexpected ids: %v", ids)
+	}
+	av := got["availability_counts"].(map[string]int)
+	if av["observed"] != 2 || av["not_instrumented"] != 1 {
+		t.Fatalf("unexpected availability: %v", av)
+	}
+}
+
+func TestSurfaceEvidence_回归观察计数(t *testing.T) {
+	e := newSurfaceEvidence()
+	e.observeRegression("c1", map[string]any{"availability": "observed", "regressed_case_count": 2})
+	e.observeRegression("c2", map[string]any{"availability": "observed", "regressed_case_count": 0})
+	e.observeRegression("c3", map[string]any{"availability": "not_evaluated"})
+	got := e.regressionSummary()
+	if got["observed_opportunity_candidate_count"] != 2 || got["regression_candidate_count"] != 1 {
+		t.Fatalf("unexpected: %v", got)
+	}
+	if got["rate"] != 0.5 {
+		t.Fatalf("rate: %v", got["rate"])
+	}
+}
+
+func TestSurfaceEvidence_空观察速率为nil(t *testing.T) {
+	e := newSurfaceEvidence()
+	got := e.triggerSummary()
+	if got["rate"] != nil {
+		t.Fatalf("分母为0时 rate 应为 nil: %v", got["rate"])
+	}
+}
+
+func TestFeatureEvidence_观察与汇总(t *testing.T) {
+	e := newFeatureEvidence()
+	e.observe("c1", true, "")
+	e.observe("c2", false, "increase")
+	e.observe("c3", false, "decrease")
+	s := e.summary()
+	if s["aligned_pair_count"] != 1 || s["opposite_pair_count"] != 2 {
+		t.Fatalf("unexpected: %v", s)
+	}
+	inc := s["increase_weight_evidence"].(map[string]any)
+	dec := s["decrease_weight_evidence"].(map[string]any)
+	if inc["pair_count"] != 1 || dec["pair_count"] != 1 {
+		t.Fatalf("unexpected: %v %v", inc, dec)
+	}
+	if s["comparable_pair_count"] != 3 {
+		t.Fatalf("unexpected: %v", s)
+	}
+}
+
+func TestComparabilityReason_全部原因逐字(t *testing.T) {
+	// 基线：可比较 → ""
+	base := comparableCohortFixture()
+	if reason := comparabilityReason(base); reason != "" {
+		t.Fatalf("基线应可比较，got %q", reason)
+	}
+
+	// 单候选
+	c := comparableCohortFixture()
+	c["candidates"] = c["candidates"].([]any)[:1]
+	c["cohort"].(map[string]any)["candidate_count"] = 1
+	if reason := comparabilityReason(c); reason != "requires_at_least_two_comparable_candidates" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// cohort_identity_missing
+	c = comparableCohortFixture()
+	c["cohort"].(map[string]any)["parent_harness_ref"] = ""
+	if reason := comparabilityReason(c); reason != "cohort_identity_missing" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// rank_not_frozen_before_evaluation
+	c = comparableCohortFixture()
+	c["cohort"].(map[string]any)["rank_frozen"] = false
+	if reason := comparabilityReason(c); reason != "rank_not_frozen_before_evaluation" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// duplicate_candidate_id
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[1].(map[string]any)["candidate_id"] = "a"
+	if reason := comparabilityReason(c); reason != "duplicate_candidate_id" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// predicted_rank_missing
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["proposal_rank"].(map[string]any)["predicted_rank"] = 1.0
+	if reason := comparabilityReason(c); reason != "predicted_rank_missing" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// predicted_ranks_not_permutation
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[1].(map[string]any)["proposal_rank"].(map[string]any)["predicted_rank"] = 1
+	if reason := comparabilityReason(c); reason != "predicted_ranks_not_permutation" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// identity 字段不匹配
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["identity"].(map[string]any)["parent_harness_ref"] = "h2"
+	if reason := comparabilityReason(c); reason != "parent_harness_ref_mismatch" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// target_case_set_mismatch
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["identity"].(map[string]any)["target_case_ids"] = []any{"case_9"}
+	if reason := comparabilityReason(c); reason != "target_case_set_mismatch" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// candidate_rank_not_frozen
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["proposal_rank"].(map[string]any)["rank_frozen"] = false
+	if reason := comparabilityReason(c); reason != "candidate_rank_not_frozen" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// candidate_ranking_policy_mismatch
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["proposal_rank"].(map[string]any)["ranking_policy"] = "other"
+	if reason := comparabilityReason(c); reason != "candidate_ranking_policy_mismatch" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// target_gain_missing
+	c = comparableCohortFixture()
+	c["candidates"].([]any)[0].(map[string]any)["outcome"].(map[string]any)["target_gain"] = nil
+	if reason := comparabilityReason(c); reason != "target_gain_missing" {
+		t.Fatalf("got %q", reason)
+	}
+
+	// search_metric_unavailable
+	c = comparableCohortFixture()
+	c["metrics"].(map[string]any)["best_of_k_gain"] = map[string]any{"status": "unavailable", "value": nil, "reason": "r"}
+	if reason := comparabilityReason(c); reason != "search_metric_unavailable" {
+		t.Fatalf("got %q", reason)
+	}
+}
+
+func TestCohortDuplicateCounts(t *testing.T) {
+	c := comparableCohortFixture()
+	c["candidates"].([]any)[1].(map[string]any)["candidate_fingerprint"] =
+		c["candidates"].([]any)[0].(map[string]any)["candidate_fingerprint"]
+	total, dup := cohortDuplicateCounts(c)
+	if total != 2 || dup != 1 {
+		t.Fatalf("got %d %d", total, dup)
+	}
+}
+
+func TestCollectFeatureEvidence_组合枚举与对齐判定(t *testing.T) {
+	c := comparableCohortFixture()
+	cands := c["candidates"].([]any)
+	// a: rank1 score0.8 gain0.2 size2.0；b: rank2 score0.7 gain0.1 size1.0
+	// 预测赢家 a（0.8>0.7），实际赢家 a（0.2>0.1）→ aligned
+	fe := map[string]*featureEvidence{}
+	cands[0].(map[string]any)["proposal_rank"].(map[string]any)["ranking_features"] = map[string]any{"size": 2.0}
+	cands[1].(map[string]any)["proposal_rank"].(map[string]any)["ranking_features"] = map[string]any{"size": 1.0}
+	collectFeatureEvidence(c, fe)
+	if e, ok := fe["size"]; !ok || e.alignedPairCount != 1 {
+		t.Fatalf("unexpected: %v", fe)
+	}
+
+	// 反向：实际赢家是 b → misaligned，higher_feature_predicted=True → decrease
+	c["candidates"].([]any)[1].(map[string]any)["outcome"].(map[string]any)["target_gain"] = 0.3
+	fe = map[string]*featureEvidence{}
+	collectFeatureEvidence(c, fe)
+	if e := fe["size"]; e.oppositePairCount != 1 || e.decreasePairCount != 1 {
+		t.Fatalf("unexpected: %v", e.summary())
+	}
+
+	// 相同增益 → 跳过
+	c["candidates"].([]any)[1].(map[string]any)["outcome"].(map[string]any)["target_gain"] = 0.2
+	fe = map[string]*featureEvidence{}
+	collectFeatureEvidence(c, fe)
+	if len(fe) != 0 {
+		t.Fatalf("相同增益应跳过: %v", fe)
+	}
+}
+
+func TestCollectFeatureEvidence_多个差异特征跳过(t *testing.T) {
+	c := comparableCohortFixture()
+	cands := c["candidates"].([]any)
+	cands[0].(map[string]any)["proposal_rank"].(map[string]any)["ranking_features"] =
+		map[string]any{"size": 2.0, "depth": 1.0}
+	cands[1].(map[string]any)["proposal_rank"].(map[string]any)["ranking_features"] =
+		map[string]any{"size": 1.0, "depth": 2.0}
+	fe := map[string]*featureEvidence{}
+	collectFeatureEvidence(c, fe)
+	if len(fe) != 0 {
+		t.Fatalf("两个差异特征应跳过: %v", fe)
+	}
+}
+
+func TestNumericRankingFeatures_排除布尔与非数(t *testing.T) {
+	c := map[string]any{
+		"proposal_rank": map[string]any{
+			"ranking_features": map[string]any{"a": 1.5, "b": true, "c": "x", "d": 2},
+		},
+	}
+	got := numericRankingFeatures(c)
+	if len(got) != 2 || got["a"] != 1.5 || got["d"] != 2.0 {
+		t.Fatalf("unexpected: %v", got)
+	}
+}
+
+func TestCollectHighValueOutsideTopM_全分支(t *testing.T) {
+	// best ≤ threshold → 跳过
+	c := comparableCohortFixture()
+	var opp, sup []string
+	if err := collectHighValueOutsideTopM(c, 0.3, &opp, &sup); err != nil {
+		t.Fatal(err)
+	}
+	if len(opp) != 0 || len(sup) != 0 {
+		t.Fatalf("best低于阈值应跳过")
+	}
+
+	// best > threshold 且 best 候选 rank > effective_m → 支持
+	c = comparableCohortFixture()
+	c["metrics"].(map[string]any)["best_of_k_gain"].(map[string]any)["candidate_id"] = "b"
+	c["candidates"].([]any)[1].(map[string]any)["outcome"].(map[string]any)["target_gain"] = 0.3
+	c["metrics"].(map[string]any)["top_m_gain"].(map[string]any)["effective_m"] = 1
+	if err := collectHighValueOutsideTopM(c, 0.1, &opp, &sup); err != nil {
+		t.Fatal(err)
+	}
+	if len(opp) != 1 || len(sup) != 1 || sup[0] != "cc1" {
+		t.Fatalf("unexpected: %v %v", opp, sup)
+	}
+
+	// best 候选不在 candidates → 逐字错误
+	c = comparableCohortFixture()
+	c["metrics"].(map[string]any)["best_of_k_gain"].(map[string]any)["candidate_id"] = "ghost"
+	err := collectHighValueOutsideTopM(c, 0.0, &opp, &sup)
+	assertErrMsg(t, err, "cohort 'cc1' best_of_k_gain candidate_id is not in candidates")
+
+	// effective_m 非法 → 逐字错误
+	c = comparableCohortFixture()
+	c["metrics"].(map[string]any)["top_m_gain"].(map[string]any)["effective_m"] = 0
+	err = collectHighValueOutsideTopM(c, 0.0, &opp, &sup)
+	assertErrMsg(t, err, "cohort 'cc1' top_m_gain.effective_m must be a positive integer")
+}
