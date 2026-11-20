@@ -46,3 +46,21 @@ func TestHookType_值验证(t *testing.T) {
 		t.Errorf("HookTypeCleanup = %q, want %q", HookTypeCleanup, "cleanup")
 	}
 }
+
+// TestWorkflowEventType_常量值锁定 8.14 前置件核对结论：WORKFLOW_STARTED/
+// FINISHED/CANCELLED/ERROR 四事件常量已存在且字面量与 Python WorkflowEvents
+// 对齐（_framework:workflow_*）；锁定防拼写漂移（plan Task 0 Step 6）。
+func TestWorkflowEventType_常量值锁定(t *testing.T) {
+	if WorkflowStarted != "_framework:workflow_started" {
+		t.Errorf("WorkflowStarted = %q, want %q", WorkflowStarted, "_framework:workflow_started")
+	}
+	if WorkflowFinished != "_framework:workflow_finished" {
+		t.Errorf("WorkflowFinished = %q, want %q", WorkflowFinished, "_framework:workflow_finished")
+	}
+	if WorkflowError != "_framework:workflow_error" {
+		t.Errorf("WorkflowError = %q, want %q", WorkflowError, "_framework:workflow_error")
+	}
+	if WorkflowCancelled != "_framework:workflow_cancelled" {
+		t.Errorf("WorkflowCancelled = %q, want %q", WorkflowCancelled, "_framework:workflow_cancelled")
+	}
+}

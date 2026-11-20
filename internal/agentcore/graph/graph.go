@@ -72,6 +72,14 @@ func NewPregelGraph() *PregelGraph {
 	}
 }
 
+// ResolveBarrierGroups 互斥前驱 CNF 解析的导出访问器（8.14 前置件，偏差 D-f）。
+// Python `_workflow.py:452` 用 getattr(self._graph, "_resolve_barrier_groups", None)
+// 反射偷调非导出方法；Go 反射不可行，改加访问器——非导出本体与 8.1 API 面不动，
+// 消费方为 BaseWorkflow.completeStreamSourceGroups（stream_source_groups 构造）。
+func (g *PregelGraph) ResolveBarrierGroups(targetID string, sourceList []map[string]struct{}) []map[string]struct{} {
+	return g.resolveBarrierGroups(targetID, sourceList)
+}
+
 // StartNode 登记起始边。Python: graph.py:69-72（add_edge([START], node_id)——列表形态=barrier）
 func (g *PregelGraph) StartNode(nodeID string) Graph {
 	g.validateNodeID(nodeID)
