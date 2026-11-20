@@ -970,7 +970,7 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		paused := false
 		if tm := team.GetTeamManager(request.ChannelID); tm != nil {
 			var pauseErr error
-			paused, pauseErr = tm.PauseSessionRuntime(ctx, sessionID, reason)
+			paused, pauseErr = tm.PauseSessionRuntime(ctx, sessionID, reason, nil)
 			if pauseErr != nil {
 				logger.Warn(logComponent).Err(pauseErr).Str("session_id", sessionID).
 					Msg("team pause failed")
