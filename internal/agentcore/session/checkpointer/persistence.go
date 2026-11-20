@@ -836,6 +836,11 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 		Msg("starting to process pre-workflow-execute checkpoint")
 
 	if isInteractiveInput(inputs) {
+		// 修复6 统一前置校验（Python persistence.py:827-833）：校验逻辑下沉为基类
+		// 共享方法（validate_interactive_resume），InMemory 后端统一接入。
+		if err := ValidateInteractiveResume(ctx, session, cp.workflowStorage, cp.graphStore, "persistence"); err != nil {
+			return err
+		}
 		if err := cp.workflowStorage.Recover(ctx, session, inputs); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("session_id", sessionID).

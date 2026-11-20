@@ -142,6 +142,13 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			Str("storage_type", "inmemory").
 			Msg("starting to recover workflow session")
 
+		// 修复6 统一前置校验（Python inmemory.py:53-63）：InteractiveInput 恢复
+		// 必须有可恢复的 checkpoint，否则静默全新起跑难定位崩溃。
+		// Python base.py validate_interactive_resume 下沉为基类共享方法，双后端统一接入。
+		if err := ValidateInteractiveResume(ctx, session, workflowStore, cp.graphStore, "in_memory"); err != nil {
+			return err
+		}
+
 		if err := workflowStore.Recover(ctx, session, inputs); err != nil {
 			logger.Error(logComponent).
 				Err(err).

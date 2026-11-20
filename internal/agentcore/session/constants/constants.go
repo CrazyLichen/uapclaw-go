@@ -64,6 +64,10 @@ const (
 	LoopNumberMaxLimitEnvKey = "LOOP_NUMBER_MAX_LIMIT"
 	// ForceDelWorkflowStateEnvKey 强制删除工作流状态环境变量
 	ForceDelWorkflowStateEnvKey = "FORCE_DEL_WORKFLOW_STATE"
+	// SingleComponentExecutionEnvKey 单组件直调标记（Python session/constants.py
+	// SINGLE_COMPONENT_EXECUTION_KEY）：中断状态只存 io 侧、无图侧快照，
+	// 供 InteractiveInput 恢复校验（Checkpointer.ValidateInteractiveResume）跳过图侧快照检查。
+	SingleComponentExecutionEnvKey = "SINGLE_COMPONENT_EXECUTION"
 )
 
 // 默认值

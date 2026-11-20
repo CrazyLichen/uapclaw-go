@@ -755,11 +755,23 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_交互输入(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在，先建店并经 innerSave 落 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	err := cp.PreWorkflowExecute(ctx, session, ii)
 	if err != nil {
@@ -814,12 +826,25 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
 	// 先 Pre
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
@@ -845,12 +870,25 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_异常(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
 	// 先 Pre
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
@@ -933,12 +971,25 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_有状态非交互输入(t *tes
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
 	// 先保存一次状态
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("第一次 PreWorkflowExecute 返回错误：%v", err)
@@ -970,7 +1021,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 		workflowID:  "wf1",
 		config: func() config.SessionConfig {
 			cfg := config.NewSessionConfig(context.Background())
-			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
+			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true, constants.SingleComponentExecutionEnvKey: true})
 			return cfg
 		}(),
 		st: wcs,
@@ -978,6 +1029,14 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 
 	ctx := context.Background()
 	// 先保存一次状态
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("第一次 PreWorkflowExecute 返回错误：%v", err)
@@ -1008,11 +1067,24 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
@@ -1040,18 +1112,36 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成AgentSession(t *te
 		testSession: testSession{sessionID: "parent-sess1"},
 		agentID:     "parent-agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      config.NewSessionConfig(context.Background()),
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
 	}
 
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
-		parent:      parentSession,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st:     wcs,
+		parent: parentSession,
 	}
 
 	ctx := context.Background()
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在（Python base.py:59 校验先于 :73
+	// 单组件放行），先建店（非交互 Pre）并经 innerSave 落一份 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, session, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
+	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
@@ -1091,19 +1181,34 @@ func TestInMemoryCheckpointer_Release_全量释放(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          agentSt,
-		config:      config.NewSessionConfig(context.Background()),
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
 	}
 	teamSession := &testTeamSession{
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          teamSt,
-		config:      config.NewSessionConfig(context.Background()),
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
 	}
 	workflowSession := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      config.NewSessionConfig(context.Background()),
-		st:          wcs,
+		config: func() config.SessionConfig {
+			// io 侧直调流程（SINGLE_COMPONENT_EXECUTION）：跳过图侧快照校验
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.SingleComponentExecutionEnvKey: true})
+			return cfg
+		}(),
+		st: wcs,
 	}
 
 	ctx := context.Background()
@@ -1112,6 +1217,13 @@ func TestInMemoryCheckpointer_Release_全量释放(t *testing.T) {
 	}
 	if err := cp.PreAgentTeamExecute(ctx, teamSession, nil); err != nil {
 		t.Fatalf("PreAgentTeamExecute 返回错误：%v", err)
+	}
+	// 种子：新语义下交互恢复要求 io 侧检查点已存在，先建店并经 innerSave 落 io 侧检查点
+	if err := cp.PreWorkflowExecute(ctx, workflowSession, nil); err != nil {
+		t.Fatalf("种子 Pre 失败：%v", err)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", workflowSession, "seed"); err != nil {
+		t.Fatalf("种子检查点保存失败：%v", err)
 	}
 	ii, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, workflowSession, ii); err != nil {

@@ -1,15 +1,31 @@
 package checkpointer
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
+
+// assertCheckpointerPreError 断言 err 为 CHECKPOINTER_PRE_WORKFLOW_EXECUTION_ERROR。
+func assertCheckpointerPreError(t *testing.T, err error) {
+	t.Helper()
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Status() != exception.StatusCheckpointerPreWorkflowExecutionError {
+		t.Errorf("期望 CHECKPOINTER_PRE_WORKFLOW_EXECUTION_ERROR，实际=%v", err)
+	}
+}
 
 // ──────────────────────────── 命名空间常量测试 ────────────────────────────
 
@@ -169,3 +185,125 @@ type testSessionWithTeamID struct {
 }
 
 func (s *testSessionWithTeamID) TeamID() string { return s.teamID }
+
+// ──────────────────────────── ValidateInteractiveResume 测试（8.14 前置件）────────────────────────────
+
+// fakeValidateStorage ValidateInteractiveResume 用的 Storage 测试实现（仅 Exists 有意义）。
+type fakeValidateStorage struct{ exists bool }
+
+func (f *fakeValidateStorage) Save(_ context.Context, _ interfaces.InnerSession) error { return nil }
+func (f *fakeValidateStorage) Recover(_ context.Context, _ interfaces.InnerSession, _ any) error {
+	return nil
+}
+func (f *fakeValidateStorage) Clear(_ context.Context, _, _ string) error { return nil }
+func (f *fakeValidateStorage) Exists(_ context.Context, _ interfaces.InnerSession) (bool, error) {
+	return f.exists, nil
+}
+
+// fakeValidateGraphStore ValidateInteractiveResume 用的 pregel.Store 测试实现（仅 Get 有意义）。
+type fakeValidateGraphStore struct{ state *pregel.GraphState }
+
+func (f *fakeValidateGraphStore) Get(_ context.Context, _, _ string) (*pregel.GraphState, error) {
+	return f.state, nil
+}
+func (f *fakeValidateGraphStore) Save(_ context.Context, _, _ string, _ *pregel.GraphState) error {
+	return nil
+}
+func (f *fakeValidateGraphStore) Delete(_ context.Context, _, _ string) error { return nil }
+
+// newValidateSession 构造带 env 的 Workflow 会话测试实现。
+func newValidateSession(t *testing.T, env map[string]any) *testWorkflowSession {
+	t.Helper()
+	cfg := config.NewSessionConfig(context.Background())
+	cfg.SetEnvs(env)
+	return &testWorkflowSession{
+		testSession: testSession{sessionID: "sess-vr"},
+		workflowID:  "wf-vr",
+		config:      cfg,
+	}
+}
+
+// TestValidateInteractiveResume_无WorkflowCheckpoint拒绝 Python base.py:59-72：
+// io 侧 workflow state 不存在 → CHECKPOINTER_PRE_WORKFLOW_EXECUTION_ERROR 显式报错。
+func TestValidateInteractiveResume_无WorkflowCheckpoint拒绝(t *testing.T) {
+	sess := newValidateSession(t, nil)
+	err := ValidateInteractiveResume(context.Background(), sess,
+		&fakeValidateStorage{exists: false},
+		&fakeValidateGraphStore{state: nil}, "in_memory")
+	if err == nil {
+		t.Fatal("期望错误，实际为 nil")
+	}
+	assertCheckpointerPreError(t, err)
+	if !strings.Contains(err.Error(), "no workflow checkpoint exists for session sess-vr") {
+		t.Errorf("错误文案不符：%v", err)
+	}
+}
+
+// TestValidateInteractiveResume_单组件直调放行 Python base.py:73-76：
+// SINGLE_COMPONENT_EXECUTION env 为真 → io 侧校验通过即放行，不查图侧快照。
+func TestValidateInteractiveResume_单组件直调放行(t *testing.T) {
+	sess := newValidateSession(t, map[string]any{constants.SingleComponentExecutionEnvKey: true})
+	err := ValidateInteractiveResume(context.Background(), sess,
+		&fakeValidateStorage{exists: true},
+		&fakeValidateGraphStore{state: nil}, "in_memory") // 图侧快照本就不存在
+	if err != nil {
+		t.Fatalf("未期望错误：%v", err)
+	}
+}
+
+// TestValidateInteractiveResume_图快照可续跑放行 Python base.py:78-80。
+func TestValidateInteractiveResume_图快照可续跑放行(t *testing.T) {
+	sess := newValidateSession(t, nil)
+	resumable := &pregel.GraphState{PendingNode: map[string]pregel.PendingNode{"n1": {NodeName: "n1"}}}
+	err := ValidateInteractiveResume(context.Background(), sess,
+		&fakeValidateStorage{exists: true},
+		&fakeValidateGraphStore{state: resumable}, "persistence")
+	if err != nil {
+		t.Fatalf("未期望错误：%v", err)
+	}
+}
+
+// TestValidateInteractiveResume_图快照缺失拒绝 Python base.py:81-93：
+// 非单组件直调且图侧快照为 nil → 拒绝（否则引擎全新起跑）。
+func TestValidateInteractiveResume_图快照缺失拒绝(t *testing.T) {
+	sess := newValidateSession(t, nil)
+	err := ValidateInteractiveResume(context.Background(), sess,
+		&fakeValidateStorage{exists: true},
+		&fakeValidateGraphStore{state: nil}, "persistence")
+	if err == nil {
+		t.Fatal("期望错误，实际为 nil")
+	}
+	assertCheckpointerPreError(t, err)
+	if !strings.Contains(err.Error(), "graph checkpoint is missing or empty for session sess-vr") {
+		t.Errorf("错误文案不符：%v", err)
+	}
+}
+
+// TestValidateInteractiveResume_图快照不可续跑拒绝 空快照（IsResumable()==false）同样拒绝。
+func TestValidateInteractiveResume_图快照不可续跑拒绝(t *testing.T) {
+	sess := newValidateSession(t, nil)
+	err := ValidateInteractiveResume(context.Background(), sess,
+		&fakeValidateStorage{exists: true},
+		&fakeValidateGraphStore{state: &pregel.GraphState{}}, "in_memory")
+	if err == nil {
+		t.Fatal("期望错误，实际为 nil")
+	}
+	assertCheckpointerPreError(t, err)
+}
+
+// TestInMemoryCheckpointer_PreWorkflowExecute_交互恢复无快照显式报错
+// 后端接线：InteractiveInput 分支先校验再 recover（inmemory.py:53-63）；
+// 全新会话（无任何快照）恢复交互输入必须显式报错，而非静默全新起跑。
+func TestInMemoryCheckpointer_PreWorkflowExecute_交互恢复无快照显式报错(t *testing.T) {
+	cp := NewInMemoryCheckpointer()
+	sess := newValidateSession(t, nil)
+	ii, err := interaction.NewInteractiveInput()
+	if err != nil {
+		t.Fatalf("未期望错误：%v", err)
+	}
+	err = cp.PreWorkflowExecute(context.Background(), sess, ii)
+	if err == nil {
+		t.Fatal("期望错误，实际为 nil")
+	}
+	assertCheckpointerPreError(t, err)
+}

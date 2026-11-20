@@ -339,6 +339,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 	wcs1.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session1 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		st:          wcs1,
 		config:      config.NewSessionConfig(context.Background()),
 	}
@@ -348,10 +349,19 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 		t.Fatalf("PostWorkflowExecute 保存失败：%v", err)
 	}
 
+	// 图侧快照种子（Python base.py:78-80：完整图执行的交互恢复要求图侧快照可续跑；
+	// 真实链路由引擎在步进间落盘，此处单测直接注入一份可续跑状态）
+	if err := cp.graphStore.Save(ctx, "sess1", "wf1", &pregel.GraphState{
+		PendingNode: map[string]pregel.PendingNode{"n1": {NodeName: "n1"}},
+	}); err != nil {
+		t.Fatalf("图侧快照种子失败：%v", err)
+	}
+
 	// 2. 恢复阶段（交互输入）
 	wcs2 := newTestWorkflowCommitState()
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		st:          wcs2,
 		config:      config.NewSessionConfig(context.Background()),
 	}

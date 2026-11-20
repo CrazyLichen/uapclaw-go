@@ -1,12 +1,16 @@
 package checkpointer
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -75,6 +79,82 @@ func GetConfigEnv(session interfaces.InnerSession, key string, defaultValue ...a
 		return nil, false
 	}
 	return cfg.GetEnv(key, defaultValue...), true
+}
+
+// ValidateInteractiveResume InteractiveInput 恢复的共享前置校验
+// （Python base.py:23-93，修复 6 的三后端统一实现；Go 侧 InMemory/Persistence
+// 双后端经本函数统一接入，Redis 后端 Python 有 Go 未移植——见偏差注记）。
+//
+// 交互恢复（InteractiveInput）必须有可恢复的 checkpoint。此前快照缺失时
+// recover() 静默返回，图从 start 节点全新起跑，在首个节点因拿不到用户输入
+// 以难以定位的校验错误崩溃，并连带 error 分支 release 删除会话数据。这里
+// 显式校验并抛错，把静默降级变成可诊断错误：
+//  1. io 侧 workflow state 必须存在；
+//  2. 图侧 graph checkpoint 必须存在且可续跑（GraphState.IsResumable()，
+//     与 PregelLoop 的 isResume 同口径），否则引擎仍会全新起跑。
+//
+// 单组件直调（execute_single_component，SINGLE_COMPONENT_EXECUTION env 标记）
+// 不经过 Pregel 图引擎，中断状态只存 io 侧、图侧快照本就不存在，
+// io 侧校验通过即放行。
+//
+// workflowStore: io 侧工作流状态存储；graphStore: 图侧快照存储（pregel.Store）；
+// storageType: 后端标识（persistence/in_memory），仅用于日志。
+func ValidateInteractiveResume(
+	ctx context.Context,
+	session interfaces.InnerSession,
+	workflowStore interfaces.Storage,
+	graphStore pregel.Store,
+	storageType string,
+) error {
+	sessionID := session.SessionID()
+	workflowID := getWorkflowID(session)
+	exists, err := workflowStore.Exists(ctx, session)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		logger.Error(logComponent).
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("operation", "pre_execute").
+			Str("storage_type", storageType).
+			Msg("Interactive resume rejected: no workflow checkpoint")
+		return BuildErrorWithWorkflow(exception.StatusCheckpointerPreWorkflowExecutionError,
+			workflowID,
+			fmt.Sprintf("interactive resume requested but no workflow checkpoint exists for session %s", sessionID))
+	}
+	// Python base.py:73-76：单组件直调不经过图引擎，io 侧校验通过即放行。
+	if val, ok := GetConfigEnv(session, constants.SingleComponentExecutionEnvKey, false); ok {
+		if flag, isBool := val.(bool); isBool && flag {
+			return nil
+		}
+	}
+	// Python base.py:78-80：完整图执行的中断恢复必须有图侧快照（否则引擎全新起跑）。
+	graphState, err := graphStore.Get(ctx, sessionID, workflowID)
+	if err != nil {
+		return err
+	}
+	if graphState != nil && graphState.IsResumable() {
+		return nil
+	}
+	logger.Error(logComponent).
+		Str("session_id", sessionID).
+		Str("workflow_id", workflowID).
+		Str("event_type", "CHECKPOINT_ERROR").
+		Str("operation", "pre_execute").
+		Str("storage_type", storageType).
+		Msg("Interactive resume rejected: graph checkpoint not resumable")
+	return BuildErrorWithWorkflow(exception.StatusCheckpointerPreWorkflowExecutionError,
+		workflowID,
+		fmt.Sprintf("interactive resume requested but graph checkpoint is missing or empty for session %s", sessionID))
+}
+
+// BuildErrorWithWorkflow 构建带 workflow 参数的检查点错误（Python build_error(workflow=...)）。
+func BuildErrorWithWorkflow(status exception.StatusCode, workflowID, reason string) *exception.BaseError {
+	return exception.BuildError(status,
+		exception.WithParam("workflow", workflowID),
+		exception.WithParam("reason", reason))
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
