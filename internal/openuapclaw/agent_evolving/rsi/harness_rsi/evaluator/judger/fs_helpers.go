@@ -129,3 +129,16 @@ func decodeUTF8Sigil(raw []byte) string {
 func jsonMarshalCompactAny(value any) ([]byte, error) {
 	return json.Marshal(value)
 }
+
+// writeFile 写文本文件（script_based patch 落盘等共用）。
+func writeFile(path, content string) error {
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// passedScore 通过与否转分数（Python 1.0 if passed else 0.0）。
+func passedScore(passed bool) float64 {
+	if passed {
+		return 1.0
+	}
+	return 0.0
+}

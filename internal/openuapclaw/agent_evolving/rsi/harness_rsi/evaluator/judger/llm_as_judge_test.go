@@ -13,14 +13,21 @@ import (
 
 // stubExecution 用例执行结果桩（CaseExecutionView）。
 type stubExecution struct {
-	response any
-	status   string
-	errText  string
+	response     any
+	status       string
+	errText      string
+	workspaceDir string
+	metadata     map[string]any
 }
 
-func (s *stubExecution) ResponseView() any           { return s.response }
-func (s *stubExecution) ExecutionStatusView() string { return s.status }
-func (s *stubExecution) ErrorView() string           { return s.errText }
+func (s *stubExecution) ResponseView() any             { return s.response }
+func (s *stubExecution) ExecutionStatusView() string   { return s.status }
+func (s *stubExecution) ErrorView() string             { return s.errText }
+func (s *stubExecution) WorkspaceDirView() string      { return s.workspaceDir }
+func (s *stubExecution) JudgeResultView() *JudgeResult { return nil }
+
+// MetadataView 附加元数据（script_based patch 源嗅探）。
+func (s *stubExecution) MetadataView() map[string]any { return s.metadata }
 
 // validVerdict 面向 behaviors 清单的合法判决 JSON。
 func validVerdict() string {

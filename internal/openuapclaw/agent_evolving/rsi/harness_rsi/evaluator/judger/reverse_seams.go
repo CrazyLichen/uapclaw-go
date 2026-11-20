@@ -42,3 +42,40 @@ func callOptimizationSignalsContract(continuousScore any, dimensions map[string]
 	}
 	return optimizationSignalsContractFn(continuousScore, dimensions, source)
 }
+
+// ──────────────────────────── SWE-bench 验证缝 ────────────────────────────
+
+// SwebenchVerifierView SWE-bench 官方验证能力视图（依赖反转缝）。
+// Python: script_based.py 直接引用 evaluator.swebench_runtime 的
+// collect_model_patch / run_official_swebench_evaluation；Go 包树不可环
+// （真身属父包 evaluator/swebench_runtime.go，Task 11 落地），经本缝注入。
+type SwebenchVerifierView interface {
+	// CollectModelPatch 从工作区收集模型 patch（Python collect_model_patch）
+	CollectModelPatch(workspaceDir string) (string, error)
+	// RunOfficialEvaluation 跑官方验证（Python run_official_swebench_evaluation）
+	RunOfficialEvaluation(caseMapping map[string]any, modelPatch, outputDir string) (map[string]any, error)
+}
+
+// swebenchVerifierFn 注册的验证实现。
+var swebenchVerifierFn SwebenchVerifierView
+
+// RegisterSwebenchVerifier 由父包 evaluator 在 init 时注册官方验证实现。
+func RegisterSwebenchVerifier(view SwebenchVerifierView) {
+	swebenchVerifierFn = view
+}
+
+// callCollectModelPatch 经缝调用 patch 收集；未注册时报基建错误。
+func callCollectModelPatch(workspaceDir string) (string, error) {
+	if swebenchVerifierFn == nil {
+		return "", NewEvaluationInfrastructureError("swebench verifier not registered")
+	}
+	return swebenchVerifierFn.CollectModelPatch(workspaceDir)
+}
+
+// callRunOfficialSwebenchEvaluation 经缝调用官方验证；未注册时报基建错误。
+func callRunOfficialSwebenchEvaluation(caseMapping map[string]any, modelPatch, outputDir string) (map[string]any, error) {
+	if swebenchVerifierFn == nil {
+		return nil, NewEvaluationInfrastructureError("swebench verifier not registered")
+	}
+	return swebenchVerifierFn.RunOfficialEvaluation(caseMapping, modelPatch, outputDir)
+}

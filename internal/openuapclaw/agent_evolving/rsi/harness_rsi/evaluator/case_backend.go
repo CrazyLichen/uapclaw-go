@@ -37,4 +37,10 @@ func (r *CaseExecutionResult) ExecutionStatusView() string { return r.ExecutionS
 // ErrorView 错误视图。
 func (r *CaseExecutionResult) ErrorView() string { return r.Error }
 
+// WorkspaceDirView 工作区路径视图。
+func (r *CaseExecutionResult) WorkspaceDirView() string { return r.WorkspaceDir }
+
+// JudgeResultView 判分结果视图。
+func (r *CaseExecutionResult) JudgeResultView() *judger.JudgeResult { return r.JudgeResult }
+
 var _ judger.CaseExecutionView = (*CaseExecutionResult)(nil)

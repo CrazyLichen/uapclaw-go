@@ -19,7 +19,13 @@
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluator/judger/base.py
 package judger
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -49,6 +55,10 @@ type CaseExecutionView interface {
 	ExecutionStatusView() string
 	// ErrorView 执行错误描述
 	ErrorView() string
+	// WorkspaceDirView 执行工作区路径（script_based 用）
+	WorkspaceDirView() string
+	// JudgeResultView 后端已产出的判分结果（无则返回 nil）
+	JudgeResultView() *JudgeResult
 }
 
 // EvaluationJudger 全部评估方法的抽象基类。
@@ -63,6 +73,24 @@ type EvaluationJudger interface {
 		outputDir string, baselineContext BaselineContextView) (*JudgeResult, error)
 	// FailureResult 执行失败的规范化 0 分结果（Python _failure_result）
 	FailureResult(err string) *JudgeResult
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// BuildJudger 由评估器配置构造具体判分器。
+// Python: judger/__init__.py build_judger。
+func BuildJudger(cfg *config.EvaluatorConfig) (EvaluationJudger, error) {
+	normalized := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(cfg.EvaluationMethod)), "-", "_")
+	switch normalized {
+	case "exact_match":
+		return &ExactMatchJudger{}, nil
+	case "llm_as_judge":
+		return NewLlmAsJudgeJudger(cfg)
+	case "script_based", "rule_based", "", "default", "pass_through":
+		return &ScriptBasedJudger{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported evaluation_method: %s", cfg.EvaluationMethod)
+	}
 }
 
 // IsExecutionOnlyEvaluation 识别遗留的仅完成态评分——不得作为证据复用
