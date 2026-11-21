@@ -1,0 +1,739 @@
+package llm
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"regexp"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/security"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// WORKFLOW_CHAT_HISTORY 工作流聊天历史键（llm_comp.py:25 逐字保留）
+const WORKFLOW_CHAT_HISTORY = "workflow_chat_history"
+
+// 模板元素键名（llm_comp.py:26-34 逐字保留，Python 私有 → Go 非导出）
+const (
+	// roleKey 模板元素角色键
+	roleKey = "role"
+	// contentKey 模板元素内容键
+	contentKey = "content"
+	// spanKey 追踪 span 键
+	spanKey = "span"
+	// workflowDataKey 工作流数据键
+	workflowDataKey = "workflow_data"
+	// idKey id 键
+	idKey = "id"
+	// typeKey type 键
+	typeKey = "type"
+	// instructionNameKey 指令名键
+	instructionNameKey = "instruction_name"
+	// templateNameKey 模板名键
+	templateNameKey = "template_name"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ROLE_MAP 角色中文映射（llm_comp.py:28 逐字保留）
+var ROLE_MAP = map[string]string{"user": "用户", "assistant": "助手", "system": "系统"}
+
+// RESPONSE_FORMAT_TO_PROMPT_MAP 响应格式到提示词指令的映射（llm_comp.py:49-58 一比一）
+var RESPONSE_FORMAT_TO_PROMPT_MAP = map[string]map[string]string{
+	"json":     {instructionNameKey: "jsonInstruction", templateNameKey: "llm_json_formatting"},
+	"markdown": {instructionNameKey: "markdownInstruction", templateNameKey: "llm_markdown_formatting"},
+}
+
+// responseFormatPattern 响应格式 type 正则（llm_comp.py:391 pattern）
+var responseFormatPattern = regexp.MustCompile(`^(text|markdown|json)$`)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// MessageRole 模板消息角色（Python str Enum，值承载；llm_comp.py:37-40）
+type MessageRole string
+
+const (
+	// MessageRoleUser 用户角色
+	MessageRoleUser MessageRole = "user"
+	// MessageRoleAssistant 助手角色
+	MessageRoleAssistant MessageRole = "assistant"
+	// MessageRoleFunction 函数角色
+	MessageRoleFunction MessageRole = "function"
+)
+
+// WorkflowLLMResponseType 响应格式类型（llm_comp.py:43-46）
+type WorkflowLLMResponseType string
+
+const (
+	// ResponseTypeJSON JSON 格式
+	ResponseTypeJSON WorkflowLLMResponseType = "json"
+	// ResponseTypeMarkdown Markdown 格式
+	ResponseTypeMarkdown WorkflowLLMResponseType = "markdown"
+	// ResponseTypeText 纯文本
+	ResponseTypeText WorkflowLLMResponseType = "text"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// LLMCompConfig LLM 组件配置（Python dataclass LLMCompConfig :377-388 一比一）
+type LLMCompConfig struct {
+	// ModelID 预注册模型 ID（None ≙ nil，走 client/request config 直构）
+	ModelID *string
+	// ModelClientConfig 模型客户端配置
+	ModelClientConfig *llmschema.ModelClientConfig
+	// ModelConfig 模型请求配置
+	ModelConfig *llmschema.ModelRequestConfig
+	// TemplateContent 模板消息列表（dict 元素；Python List[Any]）
+	TemplateContent []any
+	// SystemPromptTemplate 系统提示词模板
+	SystemPromptTemplate *llmschema.SystemMessage
+	// UserPromptTemplate 用户提示词模板
+	UserPromptTemplate *llmschema.UserMessage
+	// ResponseFormat 响应格式声明
+	ResponseFormat map[string]any
+	// OutputConfig 输出配置
+	OutputConfig map[string]any
+	// EnableHistory 是否启用会话历史
+	EnableHistory bool
+	// CacheStream 是否缓存流式结果
+	CacheStream bool
+}
+
+// LLMExecutableState 流式缓存状态（Python LLMExecutableState :400-424 一比一）
+type LLMExecutableState struct {
+	// finalResult 最终结果缓存（Python self.final_result）
+	finalResult map[string]any
+	// accumulatedContent 累积内容（Python self._accumulated_content）
+	accumulatedContent string
+}
+
+// LLMExecutable LLM 组件执行体（Python LLMExecutable :427-436 一比一）。
+// 挂接方式（spec 拍板 #3）：复用 8.17 WorkflowComponent 槽位模式，invoke/stream
+// 逻辑经 InvokeFn/StreamFn 槽接入（Task 6/7 装配）；实例字段 _session/_context/
+// _state 逐字对齐无锁（spec 拍板 #4，Vertex 对同节点串行）。
+type LLMExecutable struct {
+	// cfg 组件配置（Python self._config；字段名避开同名方法）
+	cfg *LLMCompConfig
+	// llModel 懒初始化模型实例（Python self._llm，Union[Model, None]）
+	llModel llModelInvoker
+	// initialized 懒初始化标记（Python self._initialized）
+	initialized bool
+	// session 当前会话（Python self._session）
+	session *session.NodeSessionFacade
+	// context 当前模型上下文（Python self._context）
+	context iface.ModelContext
+	// state 流式缓存状态（Python self._state）
+	state *LLMExecutableState
+
+	// getModelFn 按 ID 取预注册模型的注入缝（Python Runner.resource_mgr.get_model；
+	// 注入承载避免 llm→runner 包环，8.14b InvokeFn 注入缝先例，spec 偏差 D-18-5）
+	getModelFn func(ctx context.Context, modelID string) (llModelInvoker, error)
+}
+
+// llModelInvoker 统一模型调用面（Python Union[Model, None] → invoke/stream 双方法；
+// Task 6 接线 foundation/llm.Model 与 BaseModelClient 时定稿签名，暂以最小接口承载）
+type llModelInvoker interface {
+	invokeModel(ctx context.Context, messages []llmschema.BaseMessage) (string, error)
+}
+
+// LLMComponent LLM 组件组合面（Python LLMComponent :793-806；Task 8 落组合面槽，
+// 本 Task 先落骨架占位——executable 懒初始化语义见 Task 8 D-18-4）
+type LLMComponent struct {
+	// cfg 组件配置（Python self._config；字段名避开同名方法）
+	cfg *LLMCompConfig
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewLLMComponent 构造组件组合面（Python __init__ :794-797）
+func NewLLMComponent(componentConfig *LLMCompConfig) *LLMComponent {
+	return &LLMComponent{cfg: componentConfig}
+}
+
+// NewLLMExecutable 构造执行体（Python __init__ :428-436：validate_config → 字段装配）。
+// Python 构造异常抛出 → Go error 承载（构造期校验错误码 101000/101001/101002 原样透传）。
+func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
+	if err := validateConfig(componentConfig); err != nil {
+		return nil, err
+	}
+	return &LLMExecutable{
+		cfg:     componentConfig,
+		state:   newLLMExecutableState(),
+	}, nil
+}
+
+// ──────────────────────────── LLMExecutableState 方法 ────────────────────────────
+
+// AccumulateContent 累积流式内容块（Python accumulate_content :407-409）
+func (s *LLMExecutableState) AccumulateContent(content string) {
+	s.accumulatedContent += content
+}
+
+// BuildFinalResult 从累积内容构建最终结果（Python build_final_result :411-419：
+// 空累积返回空 dict，否则 OutputFormatter.format_response）
+func (s *LLMExecutableState) BuildFinalResult(responseFormat map[string]any, outputConfig map[string]any) map[string]any {
+	if s.accumulatedContent == "" {
+		return map[string]any{}
+	}
+	return formatResponse(s.accumulatedContent, responseFormat, outputConfig)
+}
+
+// Clear 清空状态（Python clear :421-424）
+func (s *LLMExecutableState) Clear() {
+	s.finalResult = map[string]any{}
+	s.accumulatedContent = ""
+}
+
+// ──────────────────────────── LLMExecutable 访问器 ────────────────────────────
+
+// getConfig 返回配置（Python config property :438-440）
+func (e *LLMExecutable) getConfig() *LLMCompConfig { return e.cfg }
+
+// getState 返回流式缓存状态（Go 槽位消费面；Python 无对应 property）
+func (e *LLMExecutable) getState() *LLMExecutableState { return e.state }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newLLMExecutableState 空状态构造（Python __init__ :404-405）
+func newLLMExecutableState() *LLMExecutableState {
+	return &LLMExecutableState{finalResult: map[string]any{}}
+}
+
+// validateConfig 构造期校验链（Python _validate_config :787-790，顺序一比一）
+func validateConfig(config *LLMCompConfig) error {
+	if err := validateTemplate(config.TemplateContent, config.SystemPromptTemplate, config.UserPromptTemplate); err != nil {
+		return err
+	}
+	if err := validateResponseFormat(config.ResponseFormat, config.OutputConfig); err != nil {
+		return err
+	}
+	return validateOutputConfig(config.OutputConfig)
+}
+
+// validateTemplate 模板校验（Python _validate_template :443-472 一比一）
+func validateTemplate(templateContent []any, systemPromptTemplate *llmschema.SystemMessage, userPromptTemplate *llmschema.UserMessage) error {
+	// 步骤1：system/user 模板任一非 None 或模板内容为空 → 直接返回（:444-445）
+	if systemPromptTemplate != nil || userPromptTemplate != nil || len(templateContent) == 0 {
+		return nil
+	}
+	// 步骤2：校验所有 system 元素（Pydantic SystemMessage.model_validate 等价，
+	// :446-455）；Python ValidationError → 101000 "system message is invalid"
+	for _, element := range templateContent {
+		dict, ok := element.(map[string]any)
+		if !ok {
+			continue
+		}
+		if roleString(dict) == "system" && !validSystemElement(dict) {
+			return exception.BuildError(exception.StatusComponentLLMTemplateConfigError,
+				exception.WithMsg("system message is invalid"))
+		}
+	}
+	// 步骤3：遍历——user 必须存在，且 user 之后不得再出现 system（:457-472）
+	ifContainUserMessage := false
+	for _, element := range templateContent {
+		dict, ok := element.(map[string]any)
+		if !ok {
+			continue
+		}
+		if roleString(dict) == "user" {
+			// Pydantic UserMessage.model_validate 等价（:460）
+			if !validUserElement(dict) {
+				return exception.BuildError(exception.StatusComponentLLMTemplateConfigError,
+					exception.WithMsg("user message is invalid"))
+			}
+			ifContainUserMessage = true
+		}
+		if ifContainUserMessage && roleString(dict) == "system" {
+			// Python 同元素先 validate 再 raise，语义等价保留（:462-467）
+			return exception.BuildError(exception.StatusComponentLLMTemplateConfigError,
+				exception.WithMsg("system message must be before user message"))
+		}
+	}
+	// 步骤4：无 user → 101000（:468-472）
+	if !ifContainUserMessage {
+		return exception.BuildError(exception.StatusComponentLLMTemplateConfigError,
+			exception.WithMsg("user message is required"))
+	}
+	return nil
+}
+
+// validateResponseFormat 响应格式校验（Python _validate_response_format :507-522 一比一）
+func validateResponseFormat(responseFormat map[string]any, outputConfig map[string]any) error {
+	// 步骤1：type 正则校验（Pydantic ResponseFormatConfig.model_validate 等价，:509-516）
+	typeStr, _ := responseFormat[typeKey].(string)
+	if !responseFormatPattern.MatchString(typeStr) {
+		return exception.BuildError(exception.StatusComponentLLMResponseConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("response format %v is invalid", responseFormat)))
+	}
+	// 步骤2：text/markdown 要求 output_config 恰一字段（:518-522）
+	if (typeStr == "text" || typeStr == "markdown") && len(outputConfig) != 1 {
+		return exception.BuildError(exception.StatusComponentLLMResponseConfigInvalid,
+			exception.WithMsg("output config must contain exactly one parameter for text or markdown response type"))
+	}
+	return nil
+}
+
+// validateOutputConfig 输出配置校验（Python _validate_output_config :475-504 一比一）
+func validateOutputConfig(outputConfig map[string]any) error {
+	// 步骤1：空配置 → 101002（:476-480）
+	if len(outputConfig) == 0 {
+		return exception.BuildError(exception.StatusComponentLLMConfigError,
+			exception.WithMsg("output config is empty"))
+	}
+	// 步骤2：object 型整体 schema 直通（:481-483）
+	if t, ok := outputConfig[typeKey].(string); ok && t == "object" {
+		return nil
+	}
+	// 步骤3：逐字段校验（:484-504）——空参数名 101002；OutputParamConfig 等价校验，
+	// 失败按敏感模式分文案（:493-504）
+	for param, value := range outputConfig {
+		if param == "" {
+			return exception.BuildError(exception.StatusComponentLLMConfigError,
+				exception.WithMsg(fmt.Sprintf("output config parameter %s is empty", param)))
+		}
+		if !validOutputParam(value) {
+			if security.IsSensitive() {
+				return exception.BuildError(exception.StatusComponentLLMConfigError,
+					exception.WithMsg("output config parameter's config value is invalid"))
+			}
+			return exception.BuildError(exception.StatusComponentLLMConfigError,
+				exception.WithMsg(fmt.Sprintf("output config parameter's config %v is invalid", value)))
+		}
+	}
+	return nil
+}
+
+// validSystemElement SystemMessage.model_validate 等价：role 必须为 system 且
+// content 必填非空（pydantic 必填字段校验面，spec §4）
+func validSystemElement(dict map[string]any) bool {
+	content, ok := dict[contentKey]
+	if !ok {
+		return false
+	}
+	str, isStr := content.(string)
+	return isStr && str != ""
+}
+
+// validUserElement UserMessage.model_validate 等价（同 validSystemElement）
+func validUserElement(dict map[string]any) bool {
+	return validSystemElement(dict)
+}
+
+// validOutputParam OutputParamConfig.model_validate 等价（llm_comp.py:394-397）：
+// value 须为 map，type/description 为 string（缺省 ""）、required 为 bool（缺省 false）。
+// Python pydantic 默认忽略多余键（extra=ignore），Go 同样放行未声明键。
+func validOutputParam(value any) bool {
+	dict, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	if t, exists := dict["type"]; exists {
+		if _, isStr := t.(string); !isStr {
+			return false
+		}
+	}
+	if d, exists := dict["description"]; exists {
+		if _, isStr := d.(string); !isStr {
+			return false
+		}
+	}
+	if r, exists := dict["required"]; exists {
+		if _, isBool := r.(bool); !isBool {
+			return false
+		}
+	}
+	return true
+}
+
+// roleString 模板元素 role 键取值（Python element.get("role", "") 等价）
+func roleString(dict map[string]any) string {
+	role, _ := dict[roleKey].(string)
+	return role
+}
+
+// formatResponse 响应格式化分派（Python OutputFormatter.format_response :201-215 一比一；
+// Task 2 提前落地：BuildFinalResult 消费面，json 分支的 _format_json_response 于 Task 4 补齐）
+func formatResponse(responseContent string, responseFormat map[string]any, outputsConfig map[string]any) map[string]any {
+	responseType, _ := responseFormat[typeKey].(string)
+	// Python: validate_outputs_config(outputs_config)（:203）
+	validateOutputsConfig(outputsConfig)
+
+	switch responseType {
+	case "text", "markdown":
+		return formatTextResponse(responseContent, outputsConfig)
+	case "json":
+		return formatJSONResponse(responseContent, outputsConfig)
+	default:
+		// Python: formatter 为 None → raise_invalid_params_error（:212-213）
+		panicErr := exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("no supported response type: '%s'", responseType)))
+		panic(panicErr)
+	}
+}
+
+// validateOutputsConfig 输出配置非空校验（Python validate_outputs_config :132-137）
+func validateOutputsConfig(outputsConfig map[string]any) {
+	if len(outputsConfig) == 0 {
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg("outputs config must not be empty")))
+	}
+}
+
+// formatTextResponse text/markdown 单字段包装（Python _format_text_response :218-223：
+// 恰一字段，返回 {字段名: 原文}）
+func formatTextResponse(responseContent string, outputsConfig map[string]any) map[string]any {
+	if len(outputsConfig) != 1 {
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg("text/markdown response type, outputs_config must contain only one field")))
+	}
+	for fieldName := range outputsConfig {
+		return map[string]any{fieldName: responseContent}
+	}
+	return map[string]any{}
+}
+
+// formatJSONResponse json 响应格式化（Python _format_json_response :226-241 一比一）
+func formatJSONResponse(responseContent string, outputsConfig map[string]any) map[string]any {
+	// 步骤1：空配置拒绝（:227-229）
+	if len(outputsConfig) == 0 {
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg("json response format, output config should contain at least one field")))
+	}
+	// 步骤2：解析（含围栏剥离，:231）
+	parsedJSON := parseJSONContent(responseContent)
+	// 步骤3：object 型 schema 直用；否则生成 schema 校验后提取字段（:233-241）
+	configType, _ := outputsConfig[typeKey].(string)
+	if configType == "object" {
+		// Python: SchemaUtils.validate_with_schema + format_with_schema（D-18-1：
+		// llm 包内自承载 JSON Schema dict 路径，workflow.go 弱等价面不共享）
+		validateWithSchema(parsedJSON, outputsConfig)
+		return formatWithSchema(parsedJSON, outputsConfig)
+	}
+	jsonSchema := generateJSONSchema(outputsConfig)
+	validateJSONSchemaForOutput(parsedJSON, jsonSchema, responseContent)
+	return extractConfiguredFields(parsedJSON, outputsConfig)
+}
+
+// parseJSONContent 解析 JSON 文本（Python JsonParser.parse_json_content :170-179 一比一：
+// 剥围栏后 json.loads；失败按敏感模式分文案 101007）
+func parseJSONContent(responseContent string) map[string]any {
+	content := cleanMarkdownBlocks(responseContent)
+	var out map[string]any
+	if err := json.Unmarshal([]byte(content), &out); err != nil {
+		if security.IsSensitive() {
+			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+				exception.WithMsg("Json parse error")))
+		}
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("Json parse error: %s", responseContent))))
+	}
+	return out
+}
+
+// cleanMarkdownBlocks 剥 markdown 代码围栏（Python _clean_markdown_blocks :182-196 一比一）
+func cleanMarkdownBlocks(content string) string {
+	content = strings.TrimSpace(content)
+	// 非 ``` 头尾围栏原样返回（:185-186）
+	if !(strings.HasPrefix(content, "```") && strings.HasSuffix(content, "```")) {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	// 首行以 ``` 开头则剥除（:190-191）
+	if strings.HasPrefix(lines[0], "```") {
+		lines = lines[1:]
+	}
+	// 尾行恰为 ``` 则剥除（:193-194）
+	if len(lines) > 0 && lines[len(lines)-1] == "```" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// validateWithSchema JSON Schema dict 路径校验（Python SchemaUtils.validate_with_schema
+// 的 dict 分支等价面；D-18-1）——复用 validateJSONSchema 递归判定
+func validateWithSchema(data map[string]any, schema map[string]any) {
+	validateJSONSchema(data, schema)
+}
+
+// formatWithSchema JSON Schema dict 路径格式化（Python SchemaUtils.format_with_schema
+// 的 dict 分支等价面；D-18-1）：properties 中带 default 的缺省字段补默认值，其余原样。
+// Python 的 pydantic create_model 默认值填充 → Go 以 schema["properties"][k]["default"]
+// 读取承载；required 缺失字段由 validateWithSchema 前置拒绝。
+func formatWithSchema(data map[string]any, schema map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range data {
+		out[k] = v
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return out
+	}
+	for k, ps := range props {
+		if _, present := out[k]; present {
+			continue
+		}
+		if pd, ok := ps.(map[string]any); ok {
+			if def, hasDefault := pd["default"]; hasDefault {
+				out[k] = def
+			}
+		}
+	}
+	return out
+}
+
+// validateJSONSchemaForOutput json 输出校验包装（Python _validate_json_schema :244-253：
+// BaseError 原样上抛、其他异常按敏感模式分文案）
+func validateJSONSchemaForOutput(parsedJSON map[string]any, jsonSchema map[string]any, originalContent string) {
+	validateJSONSchemaRecover(parsedJSON, jsonSchema, originalContent)
+}
+
+// validateJSONSchemaRecover 校验并按 Python 异常分类包装（BaseError 直传 / 其他包装）
+func validateJSONSchemaRecover(parsedJSON map[string]any, jsonSchema map[string]any, originalContent string) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		if be, ok := r.(*exception.BaseError); ok {
+			panic(be) // Python: except BaseError as e: raise e（:247-248）
+		}
+		if security.IsSensitive() {
+			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+				exception.WithMsg("json schema validation failed.")))
+		}
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("json schema validation failed: %s", originalContent))))
+	}()
+	validateJSONSchema(parsedJSON, jsonSchema)
+}
+
+// extractConfiguredFields 提取声明字段（Python _extract_configured_fields :256-277 一比一：
+// 缺 required 记入 missing；dict 值遍历剔除未声明 key——Python 海象怪癖逐字复刻；
+// missing 非空按敏感模式分文案）
+func extractConfiguredFields(parsedJSON map[string]any, outputsConfig map[string]any) map[string]any {
+	output := map[string]any{}
+	missingKeys := []string{}
+
+	for fieldName, fieldConfigAny := range outputsConfig {
+		value, present := parsedJSON[fieldName]
+		if !present {
+			fieldConfig, ok := fieldConfigAny.(map[string]any)
+			// Python: field_config.get("required", True) —— 扁平 dict 缺省视为 required
+			if !ok || requiredOf(fieldConfig) {
+				missingKeys = append(missingKeys, fieldName)
+			}
+			continue
+		}
+		// Python: iterable_data = list(v) if (v := parsed_json[field_name]) and isinstance(v, dict) else []
+		// —— 值非空且为 dict 才遍历剔除未声明 key
+		if dict, isDict := value.(map[string]any); isDict && len(dict) > 0 {
+			fieldConfig, _ := fieldConfigAny.(map[string]any)
+			props, _ := fieldConfig["properties"].(map[string]any)
+			for key := range dict {
+				if _, declared := props[key]; !declared {
+					delete(dict, key)
+				}
+			}
+		}
+		output[fieldName] = value
+	}
+
+	if len(missingKeys) > 0 {
+		if security.IsSensitive() {
+			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+				exception.WithMsg("missing required fields.")))
+		}
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("missing required fields: %s", strings.Join(missingKeys, ", ")))))
+	}
+	return output
+}
+
+// validateType 六类型校验（Python validate_type :78-94 一比一：integer 特判 bool）
+func validateType(instance any, expectedType string) bool {
+	switch expectedType {
+	case "object":
+		_, ok := instance.(map[string]any)
+		return ok
+	case "array":
+		_, ok := instance.([]any)
+		return ok
+	case "string":
+		_, ok := instance.(string)
+		return ok
+	case "integer":
+		if _, ok := instance.(int); ok {
+			return true
+		}
+		// json.Unmarshal 数字落 float64：整值即整数（Python isinstance(int) 语义面）
+		f, ok := instance.(float64)
+		return ok && !math.IsNaN(f) && !math.IsInf(f, 0) && isIntegerFloat(f)
+	case "boolean":
+		_, ok := instance.(bool)
+		return ok
+	case "number":
+		switch v := instance.(type) {
+		case bool:
+			return false
+		case float64, int:
+			return true
+		default:
+			_ = v
+			return false
+		}
+	default:
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("%s is not a valid type", expectedType))))
+	}
+}
+
+// isIntegerFloat float64 是否整值（json 解析路径的 integer 判定辅助）
+func isIntegerFloat(f float64) bool {
+	return f == math.Trunc(f)
+}
+
+// validateJSONSchema JSON Schema 递归校验（Python validate_json_schema :97-106 一比一）
+func validateJSONSchema(instance any, schema map[string]any) {
+	schemaType, ok := schema[typeKey].(string)
+	if !ok {
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg("schema must have 'type' key")))
+	}
+	if !validateType(instance, schemaType) {
+		panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("expected type %s but got %T", schemaType, instance))))
+	}
+	switch schemaType {
+	case "object":
+		validateObjectProperties(instance, schema)
+	case "array":
+		validateArrayItems(instance, schema)
+	}
+}
+
+// validateObjectProperties object 属性校验（Python _validate_object_properties :109-118 一比一）
+func validateObjectProperties(instance any, schema map[string]any) {
+	dict, ok := instance.(map[string]any)
+	if !ok {
+		return
+	}
+	props, hasProps := schema["properties"].(map[string]any)
+	if !hasProps {
+		return
+	}
+	// required 缺失检查（:112-115）
+	if requiredList, ok := schema["required"].([]any); ok {
+		missing := []string{}
+		for _, r := range requiredList {
+			rs, _ := r.(string)
+			if _, present := dict[rs]; !present {
+				missing = append(missing, rs)
+			}
+		}
+		if len(missing) > 0 {
+			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+				exception.WithMsg(fmt.Sprintf("missing required properties %v", missing))))
+		}
+	}
+	// properties 逐个递归（:116-118）
+	for propName, propSchemaAny := range props {
+		propSchema, ok := propSchemaAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		if value, present := dict[propName]; present {
+			validateJSONSchema(value, propSchema)
+		}
+	}
+}
+
+// validateArrayItems array 元素校验（Python _validate_array_items :121-129 一比一：
+// 无 items 直接返回；逐项校验失败重包装 "invalid array item i: <异常类名>"）
+func validateArrayItems(instance any, schema map[string]any) {
+	list, ok := instance.([]any)
+	if !ok {
+		return
+	}
+	itemsSchema, hasItems := schema["items"].(map[string]any)
+	if !hasItems {
+		return
+	}
+	for i, item := range list {
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					return
+				}
+				be, isBase := r.(*exception.BaseError)
+				typeName := fmt.Sprintf("%T", r)
+				if isBase {
+					typeName = be.Status().Name()
+				}
+				panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+					exception.WithMsg(fmt.Sprintf("invalid array item %d: %s", i, typeName))))
+			}()
+			validateJSONSchema(item, itemsSchema)
+		}()
+	}
+}
+
+// generateJSONSchema outputs_config → 标准 JSON Schema（Python generate_json_schema
+// :142-165 一比一：type 缺省 string、description 缺省 ""、array 透传 items、
+// object 透传 properties、required 缺省 true）
+func generateJSONSchema(outputsConfig map[string]any) map[string]any {
+	properties := map[string]any{}
+	required := []string{}
+
+	for fieldName, fieldConfigAny := range outputsConfig {
+		fieldConfig, _ := fieldConfigAny.(map[string]any)
+		propType := "string"
+		if t, ok := fieldConfig["type"].(string); ok && t != "" {
+			propType = t
+		}
+		description := ""
+		if d, ok := fieldConfig["description"].(string); ok {
+			description = d
+		}
+		prop := map[string]any{"type": propType, "description": description}
+
+		if propType == "array" {
+			if items, ok := fieldConfig["items"]; ok {
+				prop["items"] = items
+			}
+		}
+		if propType == "object" {
+			if p, ok := fieldConfig["properties"]; ok {
+				prop["properties"] = p
+			}
+		}
+		properties[fieldName] = prop
+
+		if requiredOf(fieldConfig) {
+			required = append(required, fieldName)
+		}
+	}
+
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"required":   required,
+	}
+}
+
+// requiredOf 扁平 output_config 字段的 required 语义（Python field_config.get("required", True)
+// 与 OutputParamConfig param_required 默认 False 的双轨——format 链路取前者缺省 True）。
+// 扁平 dict 缺省 → True；OutputParamConfig 已由 validOutputParam 校验面单独承载缺省 False。
+func requiredOf(fieldConfig map[string]any) bool {
+	if r, ok := fieldConfig["required"].(bool); ok {
+		return r
+	}
+	return true
+}
