@@ -11,7 +11,7 @@
 //	├── doc.go                            # 包文档
 //	├── runtime_adapters.go              # RSISysOperationRail/RSITrajectoryRail/RSISkillUseRail/空响应恢复
 //	├── case_backend.go                  # 考场：CaseExecutionResult 契约（Task 4 前置切片）
-//	├── case_backend_main.go             # 考场主链：SingleHarnessExecutionBackend/SwebenchContainerOps 缝
+//	├── case_backend_main.go             # 考场主链：SingleHarnessExecutionBackend（swebench 分支直调容器 runtime）
 //	├── case_backend_helpers.go          # 考场助手：快照对比/资产备场/工作区判定
 //	├── case_runner.go                   # 监考编排：CaseRunner 六步主链/判分/轨迹/trace/收卷（17.6b）
 //	├── baseline_context.go              # 基线判分上下文（17.4d 前置件）
