@@ -434,7 +434,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 			"judge_dir":            judgeDir,
 			"pass_threshold":       j.cfg.JudgeSuccessScore,
 			"score_mode":           j.cfg.ScoreMode,
-			"optimization_signals": callOptimizationSignalsContract(score, nil, "llm_as_judge.assessment.overall_score"),
+			"optimization_signals": callOptimizationSignalsContract(&score, nil, "llm_as_judge.assessment.overall_score"),
 			"attempt":              attempt,
 			"assessment_attempts":  assessmentAttempts,
 			"recovery":             recovery,

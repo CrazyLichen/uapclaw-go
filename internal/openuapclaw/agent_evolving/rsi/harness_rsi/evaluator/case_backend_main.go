@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
@@ -102,7 +103,7 @@ func NewSingleHarnessExecutionBackend(cfg *config.EvaluatorConfig) *SingleHarnes
 func (b *SingleHarnessExecutionBackend) ReuseTrajectoryProcessor(_ *SingleHarnessExecutionBackend) {}
 
 // TrajectorySpanProcessor 返回用例共享的 processor（Python property 等价）。
-func (b *SingleHarnessExecutionBackend) TrajectorySpanProcessor() any {
+func (b *SingleHarnessExecutionBackend) TrajectorySpanProcessor() *trajectory.TrajectorySpanProcessor {
 	return demandProcessor()
 }
 

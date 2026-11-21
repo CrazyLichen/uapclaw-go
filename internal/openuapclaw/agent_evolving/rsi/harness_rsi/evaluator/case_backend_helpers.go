@@ -717,7 +717,7 @@ func workspaceOf(workspaceDir string) *workspace.Workspace {
 }
 
 // demandProcessor 进程级轨迹 processor 单例。
-func demandProcessor() any {
+func demandProcessor() *trajectory.TrajectorySpanProcessor {
 	if p := demand.GetTrajectorySpanProcessor(); p != nil {
 		if tp, ok := p.(*trajectory.TrajectorySpanProcessor); ok {
 			return tp

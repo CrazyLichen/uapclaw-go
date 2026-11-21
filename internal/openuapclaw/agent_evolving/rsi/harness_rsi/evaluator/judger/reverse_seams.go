@@ -11,7 +11,7 @@ package judger
 var transientTransportErrorFn func(errText string) string
 
 // optimizationSignalsContractFn 优化信号契约函数（evaluator.OptimizationSignalsContract 注册）。
-var optimizationSignalsContractFn func(continuousScore any, dimensions map[string]any, source string) map[string]any
+var optimizationSignalsContractFn func(continuousScore *float64, dimensions map[string]any, source string) map[string]any
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -21,7 +21,9 @@ func RegisterTransientTransportError(fn func(errText string) string) {
 }
 
 // RegisterOptimizationSignalsContract 由父包 evaluator 在 init 时注册优化信号契约。
-func RegisterOptimizationSignalsContract(fn func(continuousScore any, dimensions map[string]any, source string) map[string]any) {
+// continuousScore 用 *float64 承载 Python Any=None 的"信号不可用"显式语义
+// （evaluation_optimization_signals 在 availability 非 available 时传 None）。
+func RegisterOptimizationSignalsContract(fn func(continuousScore *float64, dimensions map[string]any, source string) map[string]any) {
 	optimizationSignalsContractFn = fn
 }
 
@@ -36,7 +38,7 @@ func callTransientTransportError(errText string) string {
 }
 
 // callOptimizationSignalsContract 经缝调用优化信号契约；未注册时返回空结构。
-func callOptimizationSignalsContract(continuousScore any, dimensions map[string]any, source string) map[string]any {
+func callOptimizationSignalsContract(continuousScore *float64, dimensions map[string]any, source string) map[string]any {
 	if optimizationSignalsContractFn == nil {
 		return map[string]any{}
 	}

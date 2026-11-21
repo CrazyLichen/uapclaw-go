@@ -11,8 +11,9 @@ import (
 )
 
 func TestOptimizationSignalsContract_归一化(t *testing.T) {
+	score := 0.75
 	contract := OptimizationSignalsContract(
-		0.75,
+		&score,
 		map[string]any{
 			"b_dim": map[string]any{"availability": "available", "value": 0.5, "source": "s1"},
 			"a_dim": map[string]any{"availability": "unavailable", "value": 9},
