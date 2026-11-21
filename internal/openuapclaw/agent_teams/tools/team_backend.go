@@ -120,6 +120,9 @@ type TeamBackend struct {
 	hittMu sync.RWMutex
 	// specEnableHITT 配置是否启用 HITT
 	specEnableHITT bool
+	// forkEnabled 上下文继承（fork）开关（spec 级）。
+	// Python: TeamAgentSpec.enable_fork（由 spec 传入）。
+	forkEnabled bool
 	// enableHITT 运行时是否启用 HITT
 	enableHITT bool
 	// hittNames HITT 名册名称集合
@@ -341,6 +344,12 @@ func WithLeaderAllocation(a *models.Allocation) TeamBackendOption {
 // WithEnableHITT 设置 HITT 能力开关（spec 级天花板）。
 func WithEnableHITT(enable bool) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.specEnableHITT = enable; tb.enableHITT = enable }
+}
+
+// WithForkEnabled 设置上下文继承（fork）开关（spec 级）。
+// Python: TeamAgentSpec.enable_fork（blueprint.py:554）。
+func WithForkEnabled(enable bool) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.forkEnabled = enable }
 }
 
 // WithDispatchMode 设置本团队的调度模式（"autonomous" / "scheduled"）。
@@ -719,12 +728,8 @@ type storeCheckpointFn = func(name string, count int, description, createdBy str
 
 // ForkEnabled 该团队的上下文继承（fork）是否开放。
 //
-// 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段
-// （grep 零命中），恒 false。后果：身份块不带 fork 能力声明、不嵌 <identity>
-// 元素——与上游 enable_fork=false 的字节表现一致。
-//
-// Python: fork_enabled (team.py L505-517)
-func (tb *TeamBackend) ForkEnabled() bool { return false }
+// Python: fork_enabled (team.py:505-517)——bool(spec.enable_fork)。
+func (tb *TeamBackend) ForkEnabled() bool { return tb.forkEnabled }
 
 // SnapshotContextLength 当前会话上下文长度（fork 快照的消息数）。
 // 无回调时 Debug 日志 + 返回 0（Python team.py:639-654 同款）。

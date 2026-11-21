@@ -1285,14 +1285,19 @@ func TestTeamBackend_GetMemberUpdatedAtState(t *testing.T) {
 	_ = ts2
 }
 
-// TestTeamBackend_ForkEnabled 测试 fork 开关恒 false
+// TestTeamBackend_ForkEnabled 测试 fork 开关读 spec 真值。
 //
-// 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段。
-// Python: fork_enabled (team.py L505-517)
+// Python: fork_enabled (team.py:505-517)——bool(spec.enable_fork)。
 func TestTeamBackend_ForkEnabled(t *testing.T) {
+	// 默认关闭（Python enable_fork: bool = False）
 	tb := newTestTeamBackend()
 	if tb.ForkEnabled() {
-		t.Fatal("ForkEnabled() = true, want false（偏差 D-8）")
+		t.Fatal("ForkEnabled() = true, want false（默认关闭）")
+	}
+	// WithForkEnabled(true) 后开放
+	tb2 := newTestTeamBackendWithOptions(WithForkEnabled(true))
+	if !tb2.ForkEnabled() {
+		t.Fatal("ForkEnabled() = false, want true（WithForkEnabled(true)）")
 	}
 }
 
