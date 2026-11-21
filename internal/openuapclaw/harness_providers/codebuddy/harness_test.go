@@ -114,8 +114,9 @@ func (s *HarnessSuite) TestStart_idle与OpenSession() {
 		ProtocolVersion: harnessprotocol.ProtocolVersion,
 	}))
 	s.Equal(harnessprotocol.HarnessStateIdle, h.State())
+	// 会话标识协商推迟到 ExecuteTurn 首帧（CLI 2.181.0 实测）；此处断言占位非空
 	s.Require().NotNil(h.ProviderSessionID())
-	s.Equal("sess-1", *h.ProviderSessionID())
+	s.NotEmpty(*h.ProviderSessionID())
 	s.Require().NoError(h.Stop(context.Background()))
 }
 
@@ -145,6 +146,8 @@ func (s *HarnessSuite) TestSend_text整轮() {
 	}
 	s.Equal(1, kinds[string(harnessprotocol.TurnEventKindStarted)])
 	s.Equal(1, kinds[string(harnessprotocol.TurnEventKindFinished)])
+	// init 帧在轮内到达：真实会话标识已协商
+	s.Equal("sess-1", h.sessionID)
 	s.Require().NoError(h.Stop(context.Background()))
 }
 

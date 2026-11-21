@@ -160,10 +160,13 @@ func (h *CodebuddyHarness) ValidateContext(_ context.Context, _ harnessprotocol.
 	return nil
 }
 
-// OpenSession 启动 CLI 子进程周期并协商会话标识。
+// OpenSession 启动 CLI 子进程周期。
 // Python 无对应物；启动失败错误不携带 stderr 尾巴（对齐 dsh harness.py:126-128
 // 敏感信息语义）。
-func (h *CodebuddyHarness) OpenSession(ctx context.Context, harnessContext harnessprotocol.HarnessContext) (*string, error) {
+// ⚠️ CLI 2.181.0 实测（偏差 D-15.22-c）：与 Claude Code 不同，CLI 在收到
+// 首条 user 输入帧之后才发 init 帧——因此本方法不阻塞读 init，会话标识
+// 协商推迟到 ExecuteTurn 首帧（返回 resumeSessionID 或占位标识）。
+func (h *CodebuddyHarness) OpenSession(_ context.Context, harnessContext harnessprotocol.HarnessContext) (*string, error) {
 	// 步骤 1：解析 cwd（上下文优先，配置兜底）
 	cwd := derefString(harnessContext.Cwd)
 	if cwd == "" {
@@ -212,17 +215,9 @@ func (h *CodebuddyHarness) OpenSession(ctx context.Context, harnessContext harne
 		}
 	}
 	h.transport = transport
-
-	// 步骤 5：读 init 帧协商会话标识（无 init 帧属启动失败）
-	initFrame, err := transport.ReadFrame(ctx)
-	if err != nil || initFrame.Type != "system" || initFrame.Subtype != "init" {
-		_ = transport.Close()
-		h.transport = nil
-		return nil, &harnessprotocol.HarnessProtocolError{
-			Msg: "codebuddy CLI did not send the init frame",
-		}
-	}
-	h.sessionID = initFrame.SessionID
+	// 会话标识协商推迟到 ExecuteTurn 首帧（init 帧在首条 user 输入后到达）；
+	// 恢复载体已知时直接返回，否则返回占位标识
+	h.sessionID = h.resumeSessionID
 	if h.sessionID == "" {
 		h.sessionID = newSessionID()
 	}
@@ -279,7 +274,8 @@ func (h *CodebuddyHarness) ExecuteTurn(ctx context.Context, turn *providers.Pend
 		return harnessprotocol.TurnEventKindFailed, result, nil
 	}
 
-	// 步骤 2：读帧循环
+	// 步骤 2：读帧循环；首条 system/init 帧协商真实会话标识（CLI 在首条
+	// user 输入后才发 init，见 OpenSession 注释）
 	for {
 		if turn.StopRequested() {
 			result, err := h.buildAbortedResult(accumulator, timing.StartedAt)
@@ -296,6 +292,13 @@ func (h *CodebuddyHarness) ExecuteTurn(ctx context.Context, turn *providers.Pend
 				return "", harnessprotocol.TurnResult{}, buildErr
 			}
 			return harnessprotocol.TurnEventKindFailed, result, nil
+		}
+		if frame.Type == "system" && frame.Subtype == "init" {
+			// 会话标识协商：CLI 的原生 session_id 覆盖占位值
+			if frame.SessionID != "" {
+				h.sessionID = frame.SessionID
+			}
+			continue
 		}
 		mapped, err := accumulator.Consume(frame)
 		if err != nil {
