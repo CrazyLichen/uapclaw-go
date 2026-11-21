@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -69,12 +70,19 @@ func InProcessSpawn(
 	runtimeCtx atschema.TeamRuntimeContext,
 	initialMessage string,
 	sessionID string,
+	forkFrom *agentteams.ForkContext,
 ) (*InProcessSpawnHandle, error) {
 	// 1. 调用工厂创建并配置 teammate
 	teammate, err := factory(runtimeCtx)
 	if err != nil {
 		return nil, fmt.Errorf("工厂创建 Agent 失败: %w", err)
 	}
+
+	// 1a. fork 注入：把 fork 源的对话历史种进新成员的 context engine，
+	// 让它继承先前的理解。空 fork 上下文（抓取没拿到消息）不注入。
+	// Python: inprocess_spawn.py:100-124——create_new_context_engine +
+	// compact_context（compact 缝缺口见 CompactContext 接线处）。
+	injectForkContext(ctx, teammate, runtimeCtx, sessionID, forkFrom)
 
 	// 2. 准备输入
 	query := initialMessage
@@ -164,4 +172,56 @@ func InProcessSpawn(
 		Msg("[inprocess] spawned teammate")
 
 	return handle, nil
+}
+
+// ──────────────────────────── 非导出函数（25.5 fork 半区）────────────────────────────
+
+// injectForkContext 注入 fork 继承上下文：把 fork 源的对话历史种进新成员的
+// context engine，让它继承先前的理解；空 fork 上下文（抓取没拿到消息）不注入。
+// Python: inprocess_spawn.py:100-131——create_new_context_engine +
+// compact_context（compact 模型摘要缝 ⤵️ CompactContext 落地后接线）。
+func injectForkContext(
+	ctx context.Context,
+	teammate SpawnableAgent,
+	runtimeCtx atschema.TeamRuntimeContext,
+	sessionID string,
+	forkFrom *agentteams.ForkContext,
+) {
+	if forkFrom == nil || forkFrom.IsEmpty() {
+		logger.Debug(logComponent).
+			Str("member_name", runtimeCtx.MemberName).
+			Bool("fork_from_present", forkFrom != nil).
+			Msg("[fork] inprocess_spawn: NO fork injection")
+		return
+	}
+	target, ok := teammate.(ForkTarget)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("member_name", runtimeCtx.MemberName).
+			Msg("[fork] teammate does not implement ForkTarget; injection skipped")
+		return
+	}
+	if _, err := target.CreateNewContextEngine(ctx, sessionID, forkFrom.ToForkMessages()); err != nil {
+		logger.Warn(logComponent).
+			Str("member_name", runtimeCtx.MemberName).
+			Err(err).
+			Msg("[fork] fork context injection failed")
+		return
+	}
+	logger.Debug(logComponent).
+		Int("msgs", len(forkFrom.Messages)).
+		Str("member_name", runtimeCtx.MemberName).
+		Msg("[fork] inprocess_spawn: injected messages")
+	logger.Info(logComponent).
+		Int("msgs", len(forkFrom.Messages)).
+		Str("member_name", runtimeCtx.MemberName).
+		Msg("[fork] messages injected")
+	if forkFrom.CompactSplit != nil {
+		// Python: compact_context(native, split_at=..., session_id=..., direction=...)
+		// （inprocess_spawn.py:117-125）。模型摘要压缩缝尚未落地——显式登记缺口，
+		// 不静默吞（fork 上下文保持未压缩注入）。
+		logger.Warn(logComponent).
+			Str("member_name", runtimeCtx.MemberName).
+			Msg("[fork] compact_context not yet wired; fork context stays uncompacted")
+	}
 }

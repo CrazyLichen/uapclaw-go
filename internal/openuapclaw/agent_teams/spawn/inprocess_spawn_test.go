@@ -42,6 +42,7 @@ func TestInProcessSpawn_基本流程(t *testing.T) {
 		runtimeCtx,
 		"Hello team",
 		"session-1",
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("InProcessSpawn() error = %v", err)
@@ -71,7 +72,7 @@ func TestInProcessSpawn_空initialMessage使用默认值(t *testing.T) {
 		MemberName: "bob",
 	}
 
-	handle, err := spawn.InProcessSpawn(context.Background(), factory, runtimeCtx, "", "session-1")
+	handle, err := spawn.InProcessSpawn(context.Background(), factory, runtimeCtx, "", "session-1", nil)
 	if err != nil {
 		t.Fatalf("InProcessSpawn() error = %v", err)
 	}
@@ -89,7 +90,7 @@ func TestInProcessSpawn_工厂返回错误(t *testing.T) {
 		MemberName: "charlie",
 	}
 
-	_, err := spawn.InProcessSpawn(context.Background(), factory, runtimeCtx, "", "session-1")
+	_, err := spawn.InProcessSpawn(context.Background(), factory, runtimeCtx, "", "session-1", nil)
 	if err == nil {
 		t.Fatal("InProcessSpawn() error = nil, want error")
 	}
@@ -111,7 +112,7 @@ func TestInProcessSpawn_取消context关闭goroutine(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handle, err := spawn.InProcessSpawn(ctx, factory, runtimeCtx, "test", "session-1")
+	handle, err := spawn.InProcessSpawn(ctx, factory, runtimeCtx, "test", "session-1", nil)
 	if err != nil {
 		t.Fatalf("InProcessSpawn() error = %v", err)
 	}

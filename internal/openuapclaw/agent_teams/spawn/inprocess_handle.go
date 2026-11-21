@@ -244,6 +244,15 @@ func (h *InProcessSpawnHandle) AgentRef() SpawnableAgent {
 	return h.agentRef
 }
 
+// ForkSource 返回 fork 继承的源上下文读取面（agentRef 断言 ForkContextSource）。
+// 断言失败（外部 CLI 成员等非 in-process 源）返回 nil——fork 继承整体跳过。
+// Python: InProcessSpawnHandle.agent_ref 的 hasattr(agent, "resources") 分支
+// （team_agent.py:1651-1657）。
+func (h *InProcessSpawnHandle) ForkSource() ForkContextSource {
+	src, _ := h.agentRef.(ForkContextSource)
+	return src
+}
+
 // ChunkForward 返回 chunk 转发观察者引用。
 // ⤴️ 9.60 已回填
 func (h *InProcessSpawnHandle) ChunkForward() atschema.ChunkObserver {

@@ -46,6 +46,7 @@ func TestInProcessSpawn_父ctx取消后成员ctx不被取消(t *testing.T) {
 		atschema.TeamRuntimeContext{MemberName: "fake"},
 		"",
 		"sess-detached",
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("InProcessSpawn 失败: %v", err)
