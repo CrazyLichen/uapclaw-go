@@ -1,4 +1,4 @@
-package tool
+package schemautils
 
 import (
 	"fmt"
@@ -94,6 +94,36 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 // schemaMap 格式为标准 JSON Schema：{"type":"object","properties":{...},"required":[...]}。
 // 流程：RemoveNoneValues（可选）→ 校验必填字段（可选）→ 填充默认值
 //
+// ValidateWithSchemaMap 按标准 JSON Schema map 校验数据（dict 路径独立校验面）。
+// Python: SchemaUtils.validate_with_schema(data, schema=Dict[str,Any])：
+// jsonschema_validate 失败时回落 pydantic 动态模型校验——Go 无动态模型等价物，
+// jsonschema 校验失败直接报 SCHEMA_VALIDATE_INVALID（偏差：pydantic 回退分支
+// 语义由 jsonschema 库全量校验覆盖，登记于 8.18 D-18-1 收口）。
+// 用于 LLMComp object 型 output_config 等仅需校验不需格式化的场景。
+func (su SchemaUtils) ValidateWithSchemaMap(data map[string]any, schemaMap map[string]any) error {
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("schema.json", schemaMap); err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+		)
+	}
+	sch, err := c.Compile("schema.json")
+	if err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+		)
+	}
+	if err := sch.Validate(data); err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+	return nil
+}
+
 // Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
 func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[string]any, opts ...FormatOption) (map[string]any, error) {
 	o := &formatOptions{}

@@ -7,6 +7,7 @@ import (
 
 	runnnercallback "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -136,9 +137,9 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 			Extra:    map[string]any{"schema": f.card.InputParams},
 		})
 
-		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
-			WithFormatSkipNoneValue(o.SkipNoneValue),
-			WithFormatSkipValidate(o.SkipInputsValidate),
+		formatted, err := schemautils.SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
+			schemautils.WithFormatSkipNoneValue(o.SkipNoneValue),
+			schemautils.WithFormatSkipValidate(o.SkipInputsValidate),
 		)
 		if err != nil {
 			return nil, err

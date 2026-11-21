@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	runnnercallback "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -242,16 +243,16 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 			Inputs:   inputs,
 			Extra:    map[string]any{"schema": t.card.InputParams},
 		})
-		formatted, err := tool.SchemaUtils{}.FormatWithSchema(
+		formatted, err := schemautils.SchemaUtils{}.FormatWithSchema(
 			inputs, t.card.InputParams,
-			tool.WithFormatSkipValidate(callOpts.SkipInputsValidate),
+			schemautils.WithFormatSkipValidate(callOpts.SkipInputsValidate),
 		)
 		if err != nil {
 			return nil, err
 		}
 		arguments = formatted
 		if callOpts.SkipNoneValue {
-			arguments = tool.SchemaUtils{}.RemoveNoneValues(arguments)
+			arguments = schemautils.SchemaUtils{}.RemoveNoneValues(arguments)
 			if arguments == nil {
 				arguments = make(map[string]any)
 			}

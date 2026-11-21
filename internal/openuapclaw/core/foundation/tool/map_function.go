@@ -5,6 +5,7 @@ import (
 
 	runnnercallback "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -68,9 +69,9 @@ func (f *MapFunction) Invoke(ctx context.Context, inputs map[string]any, opts ..
 			Extra:    map[string]any{"schema": f.card.InputParams},
 		})
 
-		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
-			WithFormatSkipNoneValue(o.SkipNoneValue),
-			WithFormatSkipValidate(o.SkipInputsValidate),
+		formatted, err := schemautils.SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
+			schemautils.WithFormatSkipNoneValue(o.SkipNoneValue),
+			schemautils.WithFormatSkipValidate(o.SkipInputsValidate),
 		)
 		if err != nil {
 			return nil, err
@@ -116,9 +117,9 @@ func (f *MapFunction) Stream(ctx context.Context, inputs map[string]any, opts ..
 			Extra:    map[string]any{"schema": f.card.InputParams},
 		})
 
-		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
-			WithFormatSkipNoneValue(o.SkipNoneValue),
-			WithFormatSkipValidate(o.SkipInputsValidate),
+		formatted, err := schemautils.SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
+			schemautils.WithFormatSkipNoneValue(o.SkipNoneValue),
+			schemautils.WithFormatSkipValidate(o.SkipInputsValidate),
 		)
 		if err != nil {
 			return nil, err

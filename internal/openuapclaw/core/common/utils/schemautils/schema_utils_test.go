@@ -1,9 +1,10 @@
-package tool
+package schemautils
 
 import (
 	"math"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -755,5 +756,50 @@ func TestSchemaUtils_Validate_Integer拒绝小数(t *testing.T) {
 	}
 	if err := (SchemaUtils{}).Validate(map[string]any{"limit": 10.5}, params); err == nil {
 		t.Error("10.5 不应通过 integer 校验")
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_通过 dict 路径独立校验通过
+func TestSchemaUtils_ValidateWithSchemaMap_通过(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+			"age":  map[string]any{"type": "integer"},
+		},
+		"required": []any{"name"},
+	}
+	if err := (SchemaUtils{}).ValidateWithSchemaMap(map[string]any{"name": "x", "age": float64(3)}, schema); err != nil {
+		t.Fatalf("合法数据不应报错: %v", err)
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_缺必填 dict 路径独立校验拒绝
+func TestSchemaUtils_ValidateWithSchemaMap_缺必填(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+		"required": []any{"name"},
+	}
+	err := SchemaUtils{}.ValidateWithSchemaMap(map[string]any{"age": 1}, schema)
+	if err == nil {
+		t.Fatal("缺 required 应报错")
+	}
+	be, ok := err.(*exception.BaseError)
+	if !ok || be.Code() != exception.StatusSchemaValidateInvalid.Code() {
+		t.Fatalf("错误码应 SCHEMA_VALIDATE_INVALID: %v", err)
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_类型不符 类型校验拒绝
+func TestSchemaUtils_ValidateWithSchemaMap_类型不符(t *testing.T) {
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"n": map[string]any{"type": "integer"}},
+	}
+	if err := (SchemaUtils{}).ValidateWithSchemaMap(map[string]any{"n": "str"}, schema); err == nil {
+		t.Fatal("类型不符应报错")
 	}
 }

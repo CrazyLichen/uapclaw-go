@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/form_handler"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -217,10 +218,10 @@ func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...
 
 	// 1. 格式化输入
 	if r.card.InputSchema != nil {
-		formatted, err := tool.SchemaUtils{}.FormatWithSchemaMap(
+		formatted, err := schemautils.SchemaUtils{}.FormatWithSchemaMap(
 			inputs, r.card.InputSchema,
-			tool.WithFormatSkipNoneValue(callOpts.SkipNoneValue),
-			tool.WithFormatSkipValidate(callOpts.SkipInputsValidate),
+			schemautils.WithFormatSkipNoneValue(callOpts.SkipNoneValue),
+			schemautils.WithFormatSkipValidate(callOpts.SkipInputsValidate),
 		)
 		if err != nil {
 			return nil, err
