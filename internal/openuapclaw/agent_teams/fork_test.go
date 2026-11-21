@@ -1,11 +1,10 @@
-package agent_test
+package agent_teams
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
 )
 
 // ──────────────────────────── 测试 ────────────────────────────
@@ -28,7 +27,7 @@ func forkTestMessages() []llmschema.BaseMessage {
 func TestForkContextFromMessages_Before跨边界携带闭合ToolMessage(t *testing.T) {
 	msgs := forkTestMessages()
 	checkpoint := 2
-	fc := agent.ForkContextFromMessages(msgs, &checkpoint, "before")
+	fc := ForkContextFromMessages(msgs, &checkpoint, "before")
 	// u1, a1（带 tool_calls）+ 跨边界补入的 t1 → 3 条，无悬挂 tool call
 	require.Len(t, fc.Messages, 3)
 	decoded := fc.ToForkMessages()
@@ -44,7 +43,7 @@ func TestForkContextFromMessages_Before跨边界携带闭合ToolMessage(t *testi
 func TestForkContextFromMessages_After剥孤儿ToolMessage(t *testing.T) {
 	msgs := forkTestMessages()
 	checkpoint := 2
-	fc := agent.ForkContextFromMessages(msgs, &checkpoint, "after")
+	fc := ForkContextFromMessages(msgs, &checkpoint, "after")
 	// 窗口 [t1(孤儿), a2] → 剥掉 t1 → 仅 a2
 	require.Len(t, fc.Messages, 1)
 	decoded := fc.ToForkMessages()
@@ -59,7 +58,7 @@ func TestForkContextFromMessages_剥SystemMessage(t *testing.T) {
 		llmschema.NewSystemMessage("you are alice"),
 		llmschema.NewUserMessage("u1"),
 	}
-	fc := agent.ForkContextFromMessages(msgs, nil, "before")
+	fc := ForkContextFromMessages(msgs, nil, "before")
 	require.Len(t, fc.Messages, 1)
 	require.False(t, fc.IsEmpty())
 }
@@ -67,7 +66,7 @@ func TestForkContextFromMessages_剥SystemMessage(t *testing.T) {
 // TestForkContextFromMessages_无checkpoint全量 验证 checkpoint=nil 返回全量。
 func TestForkContextFromMessages_无checkpoint全量(t *testing.T) {
 	msgs := forkTestMessages()
-	fc := agent.ForkContextFromMessages(msgs, nil, "before")
+	fc := ForkContextFromMessages(msgs, nil, "before")
 	require.Len(t, fc.Messages, 4)
 }
 
@@ -75,16 +74,16 @@ func TestForkContextFromMessages_无checkpoint全量(t *testing.T) {
 func TestForkContextFromMessages_checkpoint越界无效(t *testing.T) {
 	msgs := forkTestMessages()
 	checkpoint := 99
-	fc := agent.ForkContextFromMessages(msgs, &checkpoint, "before")
+	fc := ForkContextFromMessages(msgs, &checkpoint, "before")
 	require.Len(t, fc.Messages, 4)
 	negative := -1
-	fc = agent.ForkContextFromMessages(msgs, &negative, "before")
+	fc = ForkContextFromMessages(msgs, &negative, "before")
 	require.Len(t, fc.Messages, 4)
 }
 
 // TestForkContextFromMessages_空消息 验证空序列 → IsEmpty。
 func TestForkContextFromMessages_空消息(t *testing.T) {
-	fc := agent.ForkContextFromMessages(nil, nil, "before")
+	fc := ForkContextFromMessages(nil, nil, "before")
 	require.True(t, fc.IsEmpty())
 }
 
@@ -92,7 +91,7 @@ func TestForkContextFromMessages_空消息(t *testing.T) {
 // Python: to_messages (fork.py:177-179)
 func TestForkContext_RoundTrip(t *testing.T) {
 	msgs := []llmschema.BaseMessage{llmschema.NewUserMessage("你好，世界")}
-	fc := agent.ForkContextFromMessages(msgs, nil, "before")
+	fc := ForkContextFromMessages(msgs, nil, "before")
 	decoded := fc.ToForkMessages()
 	require.Len(t, decoded, 1)
 	require.Equal(t, "你好，世界", decoded[0].GetContent().String())
@@ -104,10 +103,10 @@ func TestForkContext_RoundTrip(t *testing.T) {
 func TestNormalizeMessages(t *testing.T) {
 	// BaseMessage 直收
 	base := []llmschema.BaseMessage{llmschema.NewUserMessage("u1")}
-	require.Len(t, agent.NormalizeForkMessages(base), 1)
+	require.Len(t, NormalizeForkMessages(base), 1)
 	// dict decode
 	dicts := []any{map[string]any{"role": "user", "content": "u1"}}
-	require.Len(t, agent.NormalizeForkMessageValues(dicts), 1)
+	require.Len(t, NormalizeForkMessageValues(dicts), 1)
 	// 非法形态 → nil
-	require.Nil(t, agent.NormalizeForkMessageValues([]any{"junk"}))
+	require.Nil(t, NormalizeForkMessageValues([]any{"junk"}))
 }

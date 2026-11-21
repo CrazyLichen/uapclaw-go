@@ -19,6 +19,7 @@
 //	├── i18n.go             # 多语言 i18n 支持
 //	├── id_generator.go     # 团队任务前缀 id 生成（async_tool/swarmflow/session_spawn）
 //	├── paths.go            # 团队路径工具
+//	├── fork.go             # ForkContext fork 上下文抓取与截断（25.5，Python fork.py）
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）

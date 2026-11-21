@@ -14,8 +14,6 @@
 //	agent/
 //	├── doc.go                # 包文档
 //	├── blueprint.go          # TeamAgentBlueprint 不可变蓝图
-//	├── fork.go               # ForkContext fork 上下文抓取与截断（25.5，Python fork.py）
-//	├── fork_compact.go       # CompactContext fork 感知压缩（25.5，Python fork_compact.py）
 //	├── team_agent.go         # TeamAgent 主体
 //	├── state.go              # TeamAgentState 可变状态
 //	├── member.go             # TeamMember 成员状态管理
