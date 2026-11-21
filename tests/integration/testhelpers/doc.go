@@ -7,6 +7,7 @@
 //
 //	testhelpers/
 //	├── doc.go                    # 包文档
+//	├── turn_invariants.go        # 单轮事件序不变量断言助手
 //	├── helpers.go                # 断言和构造助手函数
 //	├── controlled_react_agent.go # 可控内层 Agent（对齐 Python ControlledReactAgent）
 //	├── tool_trace_rail.go        # 工具调用追踪 Rail
