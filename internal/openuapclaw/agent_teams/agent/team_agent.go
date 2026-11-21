@@ -1420,6 +1420,14 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 		agent.RestoreAllocatorState(allocatorState)
 	}
 
+	// 步骤 7b: 还原命名 checkpoint 索引表——冷恢复出的 leader 仍能为后续
+	// spawn 的队友解析 fork="<checkpoint>"。
+	// Python: team_agent.py:2175-2179（recover_from_session 内，restore_allocator_state
+	// 之后、set_session_id 之前）
+	if checkpoints, ok := metadata.ReadTeamCheckpoints(sf, teamName); ok && len(checkpoints) > 0 {
+		agent.setCheckpointsFrom(checkpoints)
+	}
+
 	// 步骤 8: 设置 session_id
 	if sessionIDer, ok := session.(interface{ GetSessionID() string }); ok {
 		if state := sessionctx.SessionStateFromCtx(ctx); state != nil {
