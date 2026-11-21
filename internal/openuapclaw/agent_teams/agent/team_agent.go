@@ -2482,7 +2482,7 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 
 	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）——模式分支前
 	// 先全量抓取；compact 模式靠 compact_split 让 split 下标对齐注入上下文。
-	forkCtx = agentteams.ForkContextFromAgent(ctx, native, nil, "before")
+	forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", nil, "before")
 
 	if !isNamed {
 		// live fork：唯一有意义的 mode 是 full
@@ -2507,9 +2507,9 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 		// Python: :1571-1596
 		switch forkMode {
 		case "before":
-			forkCtx = agentteams.ForkContextFromAgent(ctx, native, ckptIdx, "before")
+			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "before")
 		case "after":
-			forkCtx = agentteams.ForkContextFromAgent(ctx, native, ckptIdx, "after")
+			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "after")
 		case "keep_before_compact_after":
 			// Python: fork_ctx.compact_split=ckpt_idx; compact_direction="after"
 			forkCtx.CompactSplit = ckptIdx
