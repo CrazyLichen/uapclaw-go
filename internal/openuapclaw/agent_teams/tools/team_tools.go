@@ -2001,3 +2001,15 @@ func NewVerifyTaskToolInstance(taskManager *TeamTaskManager, language string, de
 func NewViewTaskToolInstance(taskManager *TeamTaskManager, language string, descKey string) tool.Tool {
 	return newViewTaskTool(taskManager, locales.MakeTranslator(atschema.Language(language)))
 }
+
+// ──────────────────────────── 单实例导出（25.4 集成装配用） ────────────────────────────
+
+// NewUpdateTaskToolInstance 构造 update_task 工具单实例（集成装配用）。
+func NewUpdateTaskToolInstance(agentTeam *TeamBackend, language string) *UpdateTaskTool {
+	return newUpdateTaskTool(agentTeam, locales.MakeTranslator(atschema.Language(language)))
+}
+
+// NewClaimTaskToolInstance 构造 claim_task 工具单实例（集成装配用）。
+func NewClaimTaskToolInstance(taskManager *TeamTaskManager, language string) *ClaimTaskTool {
+	return newClaimTaskTool(taskManager, locales.MakeTranslator(atschema.Language(language)))
+}
