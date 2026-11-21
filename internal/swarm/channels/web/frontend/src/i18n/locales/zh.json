@@ -1047,6 +1047,17 @@
       "external_cli_agent_codex_cli_path": {
         "title": "Codex CLI 路径"
       },
+      "external_cli_agent_codebuddy_enabled": {
+        "title": "启用 CodeBuddy",
+        "description": "允许 Team Leader 拉起 CodeBuddy 成员。无需安装依赖，CLI 随应用自带。"
+      },
+      "external_cli_agent_codebuddy_use_builtin": {
+        "title": "CodeBuddy 使用内置 CLI",
+        "description": "不指定本机 CLI 路径，使用应用自带的 CLI 查找方式。"
+      },
+      "external_cli_agent_codebuddy_cli_path": {
+        "title": "CodeBuddy CLI 路径"
+      },
       "proactive_recommendation_enabled": {
         "title": "启用主动推荐",
         "description": "允许系统在满足条件时主动发送推荐。"

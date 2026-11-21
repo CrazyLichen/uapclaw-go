@@ -72,6 +72,26 @@ func TestAvailableBackends_包含三类(t *testing.T) {
 	}
 }
 
+// TestThirdPartyProviders_闭集收编例外 偏差 D-15.22-e：codebuddy 已进
+// ProviderNames 闭集（D-15.22-b）但经白名单例外保留成员后端资格；其余闭集
+// 名（如 dsh）仍按上游 backends.py:78-79 语义排除。
+func TestThirdPartyProviders_闭集收编例外(t *testing.T) {
+	third := ThirdPartyProviders()
+	if !slices.Contains(third, "codebuddy") {
+		t.Fatalf("codebuddy 应在成员后端清单: %v", third)
+	}
+	if slices.Contains(third, "dsh") {
+		t.Fatalf("dsh 是内置闭集名，不应在成员后端清单: %v", third)
+	}
+	b := BackendFor("codebuddy")
+	if b == nil || b.Kind != BackendKindProvider || b.Provider != "codebuddy" {
+		t.Fatalf("codebuddy 成员后端解析: %+v", b)
+	}
+	if !IsKnownBackend("codebuddy") {
+		t.Fatal("codebuddy 应为已知后端")
+	}
+}
+
 // TestIsKnownBackend 对齐 is_known_backend。
 func TestIsKnownBackend(t *testing.T) {
 	if !IsKnownBackend("gemini") {

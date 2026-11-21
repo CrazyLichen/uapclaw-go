@@ -9,11 +9,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -74,7 +74,7 @@ type teamWorkspaceConfig = team_workspace.TeamWorkspaceConfig
 const (
 	// TeamJoinEnv 携带 JSON 描述符的唯一环境变量。
 	// Python: TEAM_JOIN_ENV (external/descriptor.py:26)
-	TeamJoinEnv = "OPENJIUWEN_TEAM_JOIN"
+	TeamJoinEnv = "OPENUAPCLAW_TEAM_JOIN"
 
 	// OpenuapclawHomeEnv 覆盖运行时 home 的环境变量。spawn 的子进程（Codex 的
 	// MCP server）无法继承 host 平台内存中的 configure_openjiuwen_home 覆盖，
@@ -103,6 +103,30 @@ func (d *TeamJoinDescriptor) ToJSON() string {
 		return ""
 	}
 	return string(b)
+}
+
+// UnmarshalJSON 自定义反序列化：db_config 是 DBConfigProvider 联合面字段，
+// 编码json 无法把对象装回接口——按 db_type 分派具体类型（对齐 Python
+// pydantic 联合面 DatabaseConfigProvider 的自动分派语义）。
+// Python: TeamJoinDescriptor 模型联合（team.py DatabaseConfigProvider）
+func (d *TeamJoinDescriptor) UnmarshalJSON(data []byte) error {
+	type alias TeamJoinDescriptor
+	aux := struct {
+		*alias
+		DBConfig json.RawMessage `json:"db_config,omitempty"`
+	}{alias: (*alias)(d)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if len(aux.DBConfig) == 0 || string(aux.DBConfig) == "null" {
+		return nil
+	}
+	provider, err := database.UnmarshalDBConfig(aux.DBConfig)
+	if err != nil {
+		return err
+	}
+	d.DBConfig = provider
+	return nil
 }
 
 // ToEnv 返回 spawn 外部成员时应注入的环境变量映射。

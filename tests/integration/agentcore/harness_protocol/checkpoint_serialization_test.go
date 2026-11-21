@@ -13,10 +13,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

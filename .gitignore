@@ -50,3 +50,13 @@ internal/agentcore/retrieval/indexing/processor/parser/images/
 tests/integration/cmd/memory.db
 coding_memory/uap-claw-go/memory.db
 .worktrees/
+
+# 根目录构建产物（go build 输出的可执行文件）
+/uapclawmcpserver
+/uapclaw
+/uapclaw-debug
+/uapclaw-process
+/uapclawmcpserver-test
+/rpc-matrix
+/jiuwenbox
+/integration-audit

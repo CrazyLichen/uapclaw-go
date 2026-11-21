@@ -83,8 +83,8 @@ export type ExternalCliAgentChoice = {
   force?: boolean;
 };
 
-/** Built-in agents whose SDK the app installs on demand. */
-export const EXTERNAL_CLI_AGENT_KINDS: ExternalCliAgentKind[] = ['claude', 'codex'];
+/** Built-in agents shown in the settings section. claude/codex install SDKs on demand; codebuddy needs no dependency install (CLI ships with the app). */
+export const EXTERNAL_CLI_AGENT_KINDS: ExternalCliAgentKind[] = ['claude', 'codex', 'codebuddy'];
 
 export const EXTERNAL_CLI_CUSTOM_AGENTS_CONFIG_KEY = 'external_cli_custom_agents';
 
@@ -123,6 +123,7 @@ export function externalCliAgentKinds(customAgents: ExternalCliCustomAgent[]): E
 export function externalCliAgentDisplayName(cliAgent: ExternalCliAgentKind): string {
   if (cliAgent === 'claude') return 'Claude';
   if (cliAgent === 'codex') return 'Codex';
+  if (cliAgent === 'codebuddy') return 'CodeBuddy';
   return cliAgent;
 }
 

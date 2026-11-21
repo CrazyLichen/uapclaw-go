@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -22,6 +20,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
