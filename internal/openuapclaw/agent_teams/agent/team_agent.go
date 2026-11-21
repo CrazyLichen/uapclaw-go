@@ -45,9 +45,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
+	spawnpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
@@ -65,6 +67,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentcoreharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
@@ -72,6 +75,7 @@ import (
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	sessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
@@ -114,6 +118,15 @@ type TeamAgent struct {
 	// 与运行时的「事件驱动宣告」共享同一份（Python 同构：两个 rail 各自持有一份
 	// tracker 会把同一次编辑播两遍）。
 	taskEventTracker tracker.TaskEventTracker
+
+	// ── 25.5 fork 半区：命名 checkpoint 索引 ──
+	// namedCheckpointsMu 保护 namedCheckpoints（Python 单线程共享状态，
+	// asyncio→Go 并发移植按惯例加锁）。
+	namedCheckpointsMu sync.RWMutex
+	// namedCheckpoints 命名 checkpoint 索引（权威源，名字团队全局唯一）。
+	// 值只存下标不存消息内容。
+	// Python: self._named_checkpoints（team_agent.py:185）
+	namedCheckpoints map[string]metadata.CheckpointRecord
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -320,6 +333,27 @@ func (a *TeamAgent) Harness() *harness.TeamHarness {
 		return a.configurator.Harness()
 	}
 	return nil
+}
+
+// GetCurrentContext 返回本成员 DeepAgent 当前上下文消息。
+// fork 继承的源读取面（spawn.ForkContextSource 窄接口由 *TeamAgent 满足）。
+// Python: agent.resources.harness.get_deep_agent().get_current_context(session_id=...)
+func (a *TeamAgent) GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error) {
+	h := a.Harness()
+	if h == nil || h.Native() == nil || h.Native().DeepAgent() == nil {
+		return nil, fmt.Errorf("harness 未装配，无法读取上下文")
+	}
+	return h.Native().DeepAgent().GetCurrentContext(ctx, sessionID, contextID)
+}
+
+// CreateNewContextEngine 以 messages 为种子创建新的上下文引擎（fork 注入面）。
+// Python: native.create_new_context_engine(session_id=..., messages=...)
+func (a *TeamAgent) CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error) {
+	h := a.Harness()
+	if h == nil || h.Native() == nil || h.Native().DeepAgent() == nil {
+		return "", fmt.Errorf("harness 未装配，无法创建上下文引擎")
+	}
+	return h.Native().DeepAgent().CreateNewContextEngine(ctx, sessionID, messages)
 }
 
 // MemberRuntime 返回外部成员运行时（external CLI 成员）；nil 表示 DeepAgent 路。
@@ -733,6 +767,29 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 		WithOnTeamBuilt(a.markTeamBuilt),
 	); err != nil {
 		return err
+	}
+
+	// 25.5: leader 自身 checkpoint() 工具的存储回调进 leader 权威命名空间。
+	// set_store_checkpoint_fn 否则只为 in-process 队友接线（inprocess_spawn）；
+	// 不接这条的话 leader 自己的快照会落进 backend fallback dict，fork 解析
+	// 永远看不到。
+	// Python: team_agent.py:730-741（role == TeamRole.LEADER 分支）
+	if runtimeCtx.Role == atschema.TeamRoleLeader {
+		if backend := a.configurator.TeamBackend(); backend != nil {
+			backend.SetStoreCheckpointFn(a.SetCheckpoint)
+			backend.SetCheckpointListFn(func() map[string]map[string]any {
+				snapshot := a.checkpointsSnapshot()
+				out := make(map[string]map[string]any, len(snapshot))
+				for name, rec := range snapshot {
+					out[name] = map[string]any{
+						"count":       rec.Count,
+						"description": rec.Description,
+						"created_by":  rec.CreatedBy,
+					}
+				}
+				return out
+			})
+		}
 	}
 
 	// Phase 2: Agent 组装
@@ -1163,9 +1220,9 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 
 // SpawnTeammate 生成 Teammate。
 // Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
-func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, sessionID string, spawnCfg *runnerspawn.SpawnConfig) error {
+func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, sessionID string, spawnCfg *runnerspawn.SpawnConfig, forkFrom *agentteams.ForkContext) error {
 	if a.spawnManager != nil {
-		return a.spawnManager.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
+		return a.spawnManager.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg, forkFrom)
 	}
 	return nil
 }
@@ -1361,6 +1418,14 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	allocatorStateAny := bucket["model_allocator_state"]
 	if allocatorState, ok := allocatorStateAny.(map[string]any); ok {
 		agent.RestoreAllocatorState(allocatorState)
+	}
+
+	// 步骤 7b: 还原命名 checkpoint 索引表——冷恢复出的 leader 仍能为后续
+	// spawn 的队友解析 fork="<checkpoint>"。
+	// Python: team_agent.py:2175-2179（recover_from_session 内，restore_allocator_state
+	// 之后、set_session_id 之前）
+	if checkpoints, ok := metadata.ReadTeamCheckpoints(sf, teamName); ok && len(checkpoints) > 0 {
+		agent.setCheckpointsFrom(checkpoints)
 	}
 
 	// 步骤 8: 设置 session_id
@@ -2173,19 +2238,367 @@ func (a *TeamAgent) RefreshIdleBaseline() {
 	}
 }
 
+// ──────────────────────────── 25.5 fork 半区：命名 checkpoint 索引 ────────────────────────────
+
+// SetCheckpoint 存命名 checkpoint：名字团队全局唯一，重名返回既有记录
+// （nil=成功）。leader 侧把全量映射镜像进 bound team session 的 per-team
+// 命名空间以扛进程重启——持久化随运行循环的 post_run 落盘（无显式 flush），
+// 对齐 allocator / lifecycle / pending_resume 语义。
+// 返回 map 形态（与 storeCheckpointFn 回调签名一致）：nil 成功；冲突返回
+// {count, description, created_by}。
+// Python: set_checkpoint (team_agent.py:1774-1797)
+func (a *TeamAgent) SetCheckpoint(name string, count int, description, createdBy string) map[string]any {
+	a.namedCheckpointsMu.Lock()
+	defer a.namedCheckpointsMu.Unlock()
+	if a.namedCheckpoints == nil {
+		a.namedCheckpoints = make(map[string]metadata.CheckpointRecord)
+	}
+	if existing, ok := a.namedCheckpoints[name]; ok {
+		return map[string]any{
+			"count":       existing.Count,
+			"description": existing.Description,
+			"created_by":  existing.CreatedBy,
+		}
+	}
+	a.namedCheckpoints[name] = metadata.CheckpointRecord{
+		Count:       count,
+		Description: description,
+		CreatedBy:   createdBy,
+	}
+	if a.Role() == atschema.TeamRoleLeader {
+		a.mergeCheckpointsIntoSession()
+	}
+	return nil
+}
+
+// mergeCheckpointsIntoSession 把当前索引表全量镜像进 bound team session 的
+// per-team 命名空间（TEAM_CHECKPOINTS_KEY）。走 persistTeamDbState 同款通道。
+// Python: _merge_checkpoints_into_session (team_agent.py:1799-1813)
+func (a *TeamAgent) mergeCheckpointsIntoSession() {
+	teamSession := a.sessionManager.TeamSession()
+	teamName := a.TeamName()
+	if teamSession == nil || teamName == "" {
+		return
+	}
+	snapshot := a.checkpointsSnapshot()
+	metadata.MergeTeamCheckpoints(teamSession, teamName, snapshot)
+}
+
+// checkpointsSnapshot 返回索引表的只读快照（RLock 拷贝）。
+// 作为 TeamBackend.listCheckpointFn 回调注入（Python: set_checkpoint_list_fn）。
+func (a *TeamAgent) checkpointsSnapshot() map[string]metadata.CheckpointRecord {
+	a.namedCheckpointsMu.RLock()
+	defer a.namedCheckpointsMu.RUnlock()
+	out := make(map[string]metadata.CheckpointRecord, len(a.namedCheckpoints))
+	for name, rec := range a.namedCheckpoints {
+		out[name] = rec
+	}
+	return out
+}
+
+// checkpointNamesSnapshot 返回索引表名字快照（通知 leader 时列 available 用）。
+func (a *TeamAgent) checkpointNamesSnapshot() []string {
+	snapshot := a.checkpointsSnapshot()
+	names := make([]string, 0, len(snapshot))
+	for name := range snapshot {
+		names = append(names, name)
+	}
+	return names
+}
+
+// setCheckpointsFrom 整表覆盖索引表（冷恢复还原 / share 用）。
+// Python: set_checkpoints_from (team_agent.py:1815-1822)
+func (a *TeamAgent) setCheckpointsFrom(source map[string]metadata.CheckpointRecord) {
+	a.namedCheckpointsMu.Lock()
+	defer a.namedCheckpointsMu.Unlock()
+	a.namedCheckpoints = make(map[string]metadata.CheckpointRecord, len(source))
+	for name, rec := range source {
+		a.namedCheckpoints[name] = rec
+	}
+}
+
+// ShareCheckpointsWith 把 leader 的索引表共享给另一个 TeamAgent（in-process
+// 队友复用同一份权威映射）。
+// Python: share_checkpoints_with (team_agent.py:1699-1701)
+func (a *TeamAgent) ShareCheckpointsWith(other *TeamAgent) {
+	if other == nil {
+		return
+	}
+	other.setCheckpointsFrom(a.checkpointsSnapshot())
+}
+
+// PersistedContextMessages 读取绑定会话持久化的上下文消息（fork 抓取兜底）。
+// context engine 每轮把 ModelContext.SaveState()（含 messages）写入绑定会话
+// state 的 "context" 命名空间（default_context_id），pre_run 的 checkpoint 恢复
+// 也吃这份——内存池为空时它是 fork 抓取的持久事实源。
+// Python: _read_persisted_messages (fork.py:120-148)
+func (a *TeamAgent) PersistedContextMessages() []llmschema.BaseMessage {
+	teamSession := a.sessionManager.TeamSession()
+	if teamSession == nil {
+		return nil
+	}
+	raw, err := teamSession.GetState(state.StringKey("context"))
+	if err != nil || raw == nil {
+		return nil
+	}
+	stateMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	ctxState, ok := stateMap["default_context_id"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	values, ok := ctxState["messages"].([]any)
+	if !ok {
+		return nil
+	}
+	// Python: cls.normalize_messages(messages)——畸形输入整体退化 nil
+	return agentteams.NormalizeForkMessageValues(values)
+}
+
 // onTeammateCreated 队友创建回调。
-// Python: TeamAgent._on_teammate_created(teammate_id)
+// Python: TeamAgent._on_teammate_created(teammate_id)（team_agent.py:1480-1662）
+//
+// 步骤顺序对齐 Python：先解析 fork 上下文（含五模式分派），再
+// build_context_from_db，fork 命中时回填 ctx.fork_source（身份块转换公告），
+// 最后 spawn。Go 的 SpawnTeammate 以 forkFrom 形参承载 Python 的 fork_from=。
 func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) error {
+	// ── Resolve fork context ──（Python: team_agent.py:1484-1491）
+	var forkInfo *tools.ForkInfo
+	if backend := a.TeamBackend(); backend != nil {
+		forkInfo = backend.ConsumeForkOnSpawn(teammateID)
+		logger.Debug(logComponent).
+			Str("member", teammateID).
+			Any("fork_info", forkInfo).
+			Str("checkpoints", strings.Join(a.checkpointNamesSnapshot(), ",")).
+			Str("spawned_handles", strings.Join(a.spawnManager.SpawnedHandleNames(), ",")).
+			Msg("[fork] onTeammateCreated")
+	}
+
+	// Python: team_agent.py:1492-1622——五模式分派构造 ForkContext
+	var forkCtx *agentteams.ForkContext
+	if forkInfo != nil {
+		forkCtx = a.buildForkContext(ctx, teammateID, forkInfo)
+	}
+
 	runtimeCtx, err := a.spawnManager.BuildContextFromDB(ctx, teammateID)
 	if err != nil || runtimeCtx.MemberName == "" {
 		return err
+	}
+	// Python: team_agent.py:1627-1636——记录继承来源，供身份块转换公告
+	//（TeamContextTracker 渲染 <identity-conversion>）。空 fork 上下文
+	//（抓取没拿到消息）意味着什么都没继承，不记公告。
+	if forkCtx != nil && !forkCtx.IsEmpty() {
+		source := forkInfo.Source
+		if source == "" {
+			source = a.MemberName()
+		}
+		runtimeCtx.ForkSource = source
 	}
 	teammate, _ := a.TeamBackend().GetMember(ctx, teammateID)
 	prompt := ""
 	if teammate != nil {
 		prompt = teammate.Prompt
 	}
-	return a.SpawnTeammate(ctx, runtimeCtx, prompt, a.SessionID(ctx), nil)
+	return a.SpawnTeammate(ctx, runtimeCtx, prompt, a.SessionID(ctx), nil, forkCtx)
+}
+
+// buildForkContext 按 fork_info 构造继承上下文（五模式分派）。
+// 整段异常兜底：warning + nil（无继承继续 spawn）——fork 抓取失败绝不阻塞 spawn。
+// Python: team_agent.py:1494-1622
+func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, forkInfo *tools.ForkInfo) (forkCtx *agentteams.ForkContext) {
+	// Python: try: ... except Exception: warning + fork_ctx = None（:1618-1622）
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Str("member", teammateID).
+				Any("panic", r).
+				Msg("[fork] fork capture failed; spawning without inherited context")
+			forkCtx = nil
+		}
+	}()
+
+	native := a.resolveForkSource(forkInfo.Source)
+	logger.Debug(logComponent).
+		Str("source", forkInfo.Source).
+		Bool("native_resolved", native != nil).
+		Msg("[fork] resolve_fork_source")
+	if native == nil {
+		return nil
+	}
+
+	forkValue := forkInfo.Fork
+	// Python: is_named = isinstance(fork_value, str) and fork_value not in ("true", "false")（:1506）
+	forkStr, isStr := forkValue.(string)
+	isNamed := isStr && forkStr != "true" && forkStr != "false"
+	// Python: 默认 mode——live→full；named→before（:1508-1509）
+	forkMode := forkInfo.ForkMode
+	if forkMode == "" {
+		if isNamed {
+			forkMode = "before"
+		} else {
+			forkMode = "full"
+		}
+	}
+
+	// 命名 checkpoint 索引查找
+	var ckptRecord *metadata.CheckpointRecord
+	var ckptIdx *int
+	if isNamed {
+		snapshot := a.checkpointsSnapshot()
+		if rec, ok := snapshot[forkStr]; ok {
+			r := rec
+			ckptRecord = &r
+			idx := rec.Count
+			ckptIdx = &idx
+		}
+	}
+
+	// Python: mode 是否消费下标（:1514-1518）
+	modeUsesCkpt := forkMode == "before" || forkMode == "after" ||
+		forkMode == "keep_before_compact_after" || forkMode == "keep_after_compact_before"
+
+	// Python: creator/fork_source 不匹配（:1519-1545）——下标只对创建者的上下文
+	// 有意义，错源时清空下标降级 full 并通知 leader。
+	sourceName := forkInfo.Source
+	if sourceName == "" {
+		sourceName = a.MemberName()
+	}
+	if isNamed && modeUsesCkpt && ckptRecord != nil {
+		creator := ckptRecord.CreatedBy
+		if creator != "" && creator != sourceName {
+			logger.Warn(logComponent).
+				Str("checkpoint", forkStr).
+				Str("creator", creator).
+				Str("fork_source", sourceName).
+				Msg("[fork] checkpoint created by another member; falling back to full context")
+			ckptIdx = nil
+			detail, _ := agentteams.T("checkpoint.fork_source_mismatch",
+				map[string]any{"creator": creator, "source": sourceName})
+			a.notifyForkNameNotFound(ctx, teammateID, forkStr, detail)
+		}
+	}
+
+	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）——模式分支前
+	// 先全量抓取；compact 模式靠 compact_split 让 split 下标对齐注入上下文。
+	forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", nil, "before")
+
+	if !isNamed {
+		// live fork：唯一有意义的 mode 是 full
+		if forkMode != "full" {
+			logger.Warn(logComponent).
+				Str("fork_mode", forkMode).
+				Str("member", teammateID).
+				Msg("[fork] fork_mode ignored for live fork; using full context")
+		}
+	} else if forkMode == "full" {
+		// named + full：忽略下标（Python :1568-1570 pass）
+	} else if ckptIdx == nil {
+		if ckptRecord == nil {
+			// 未知名：warning + 通知 + full 兜底（creator 不匹配也已通知过）
+			logger.Warn(logComponent).
+				Str("checkpoint", forkStr).
+				Str("member", teammateID).
+				Msg("[fork] checkpoint not found; falling back to full context")
+			a.notifyForkNameNotFound(ctx, teammateID, forkStr, "")
+		}
+	} else {
+		// Python: :1571-1596
+		switch forkMode {
+		case "before":
+			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "before")
+		case "after":
+			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "after")
+		case "keep_before_compact_after":
+			// Python: fork_ctx.compact_split=ckpt_idx; compact_direction="after"
+			forkCtx.CompactSplit = ckptIdx
+			forkCtx.CompactDirection = "after"
+		case "keep_after_compact_before":
+			forkCtx.CompactSplit = ckptIdx
+		default:
+			logger.Warn(logComponent).
+				Str("fork_mode", forkMode).
+				Str("member", teammateID).
+				Msg("[fork] unknown fork_mode; using full context")
+		}
+	}
+
+	kind := "live fork"
+	if forkCtx.CompactSplit != nil {
+		kind = "compacted fork"
+	} else if isNamed && forkMode != "full" {
+		kind = "checkpoint fork"
+	}
+	logger.Info(logComponent).
+		Str("kind", kind).
+		Str("member", teammateID).
+		Int("msgs", len(forkCtx.Messages)).
+		Msg("[fork] context inheritance resolved")
+	return forkCtx
+}
+
+// resolveForkSource 返回源成员的上下文读取面；nil=无法解析（跳过继承）。
+//   - source 为空/等于自己 → 本 agent（leader 视角）
+//   - spawned_handles[source] 命中 → 队友的 DeepAgent 读取面
+//   - 未命中/非 in-process（外部 CLI）→ warning + nil，继承整体跳过
+//
+// Python: _resolve_fork_native (team_agent.py:1644-1661)
+func (a *TeamAgent) resolveForkSource(sourceName string) spawnpkg.ForkContextSource {
+	if sourceName == "" || sourceName == a.MemberName() {
+		return a
+	}
+	handleAny := a.spawnManager.SpawnedHandles()[sourceName]
+	handle, ok := handleAny.(*spawnpkg.InProcessSpawnHandle)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("fork_source", sourceName).
+			Str("leader", a.MemberName()).
+			Str("spawned", strings.Join(a.spawnManager.SpawnedHandleNames(), ",")).
+			Msg("[fork] fork source not found or not in-process; fork inheritance will be SKIPPED")
+		return nil
+	}
+	src := handle.ForkSource()
+	if src == nil {
+		logger.Warn(logComponent).
+			Str("fork_source", sourceName).
+			Str("leader", a.MemberName()).
+			Str("spawned", strings.Join(a.spawnManager.SpawnedHandleNames(), ",")).
+			Msg("[fork] fork source not found or not in-process; fork inheritance will be SKIPPED")
+	}
+	return src
+}
+
+// notifyForkNameNotFound 把错误的 fork checkpoint 名告知 leader。
+// spawn 照常以全量兜底继续，但 leader 被告知请求了哪个名字、实际有哪些名字
+// ——命名错配（未知名或 creator 与 fork_source 不匹配）不再静默。
+// best-effort：发送失败 warning，绝不阻塞 spawn。
+// Python: _notify_fork_name_not_found (team_agent.py:1664-1683)
+func (a *TeamAgent) notifyForkNameNotFound(ctx context.Context, member, forkName, detail string) {
+	available := strings.Join(a.checkpointNamesSnapshot(), ", ")
+	if available == "" {
+		available = "（无）"
+	}
+	content, err := agentteams.T("checkpoint.fork_not_found", map[string]any{
+		"fork":      forkName,
+		"member":    member,
+		"available": available,
+		"detail":    detail,
+	})
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[checkpoint] fork_not_found 文案渲染失败")
+		return
+	}
+	mgr := a.MessageManager()
+	if mgr == nil {
+		return
+	}
+	if _, err := mgr.SendMessage(ctx, content, a.MemberName(), ""); err != nil {
+		logger.Warn(logComponent).
+			Str("checkpoint", forkName).
+			Err(err).
+			Msg("[fork] failed to notify leader about missing checkpoint")
+	}
 }
 
 // markTeamCleaned 团队清理回调。

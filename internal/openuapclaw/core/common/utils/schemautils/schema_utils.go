@@ -1,9 +1,10 @@
-package tool
+package schemautils
 
 import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -94,6 +95,36 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 // schemaMap 格式为标准 JSON Schema：{"type":"object","properties":{...},"required":[...]}。
 // 流程：RemoveNoneValues（可选）→ 校验必填字段（可选）→ 填充默认值
 //
+// ValidateWithSchemaMap 按标准 JSON Schema map 校验数据（dict 路径独立校验面）。
+// Python: SchemaUtils.validate_with_schema(data, schema=Dict[str,Any])：
+// jsonschema_validate 失败时回落 pydantic 动态模型校验——Go 无动态模型等价物，
+// jsonschema 校验失败直接报 SCHEMA_VALIDATE_INVALID（偏差：pydantic 回退分支
+// 语义由 jsonschema 库全量校验覆盖，登记于 8.18 D-18-1 收口）。
+// 用于 LLMComp object 型 output_config 等仅需校验不需格式化的场景。
+func (su SchemaUtils) ValidateWithSchemaMap(data map[string]any, schemaMap map[string]any) error {
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("schema.json", schemaMap); err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+		)
+	}
+	sch, err := c.Compile("schema.json")
+	if err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+		)
+	}
+	if err := sch.Validate(data); err != nil {
+		return exception.BuildError(
+			exception.StatusSchemaValidateInvalid,
+			exception.WithParam("reason", err.Error()),
+		)
+	}
+	return nil
+}
+
 // Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
 func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[string]any, opts ...FormatOption) (map[string]any, error) {
 	o := &formatOptions{}
@@ -130,10 +161,42 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 		}
 	}
 
-	// 保留额外字段（不在 properties 中的）
-	for k, v := range data {
-		if _, ok := result[k]; !ok {
-			result[k] = v
+	// 额外字段（不在 properties 中的）按 additionalProperties 语义处置
+	// （Python _create_model_from_schema：get("additionalProperties", False) →
+	// extra_config：True=allow / False=forbid / 其他值=ignore；动态模型
+	// model_validate 遇 forbid 额外键抛 ValidationError → format_with_schema
+	// 包装 SCHEMA_FORMAT_INVALID。Go 等价承载。2026-11-21 用户拍板
+	// 「保持和 Python 一致」，收紧原无条件保留行为）
+	additionalProperties, hasAP := schemaMap["additionalProperties"]
+	apAllow := false
+	switch {
+	case !hasAP:
+		apAllow = false // 缺省 False → forbid
+	case hasAP:
+		if b, isBool := additionalProperties.(bool); isBool {
+			apAllow = b // True=allow / False=forbid
+		} else {
+			apAllow = true // 非 bool 其他值 → ignore（放行）
+		}
+	}
+	extras := []string{}
+	for k := range data {
+		if _, declared := properties[k]; !declared {
+			extras = append(extras, k)
+		}
+	}
+	if len(extras) > 0 {
+		if !apAllow {
+			sort.Strings(extras)
+			return nil, exception.BuildError(
+				exception.StatusSchemaFormatInvalid,
+				exception.WithParam("reason", fmt.Sprintf("extra fields not allowed by schema (additionalProperties=%v): %v", additionalProperties, extras)),
+			)
+		}
+		for k, v := range data {
+			if _, ok := result[k]; !ok {
+				result[k] = v
+			}
 		}
 	}
 

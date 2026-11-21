@@ -562,6 +562,9 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	if spec.EnableHITT {
 		tbOpts = append(tbOpts, tools.WithEnableHITT(spec.EnableHITT))
 	}
+	if spec.EnableFork {
+		tbOpts = append(tbOpts, tools.WithForkEnabled(spec.EnableFork))
+	}
 	if cfg.onTeamCleaned != nil {
 		tbOpts = append(tbOpts, tools.WithOnTeamCleaned(cfg.onTeamCleaned))
 	}
@@ -589,6 +592,26 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	}))
 
 	tb := tools.NewTeamBackend(teamName, currentMemberName, isLeader, db, msg, tbOpts...)
+
+	// 25.5 fork 半区：checkpoint 工具的 count 来源——闭包惰性读 harness 的
+	// DeepAgent 当前上下文长度（harness 在后续 SetupAgent 阶段装配，不能在此
+	// 急切取值）。Python: agent_configurator.py:1230-1240 _snapshot_length 闭包
+	// + agent_team.set_snapshot_length(_snapshot_length)。
+	tb.SetSnapshotLengthFn(func() int {
+		h := c.Harness()
+		if h == nil || h.Native() == nil {
+			return 0
+		}
+		native := h.Native().DeepAgent()
+		if native == nil {
+			return 0
+		}
+		msgs, err := native.GetCurrentContext(context.Background(), "", "")
+		if err != nil {
+			return 0
+		}
+		return len(msgs)
+	})
 
 	// Python 步骤 6-8: 设置到 infra
 	c.SetTeamBackend(tb)

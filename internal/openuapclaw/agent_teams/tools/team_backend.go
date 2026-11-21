@@ -82,6 +82,9 @@ type TeamBackend struct {
 	// checkpoints 本地快照 dict（无回调时的回退存储）。
 	// Python: TeamBackend._checkpoints。
 	checkpoints map[string]storeCheckpointRecord
+	// pendingForks 待消费的 fork 请求（key=memberName）。
+	// Python: TeamBackend._pending_forks（team.py:612）。
+	pendingForks map[string]ForkInfo
 	// translator 翻译闭包（构造注入；Python team.py 的 t）。
 	translator locales.Translator
 	// setMemberModelFn 运行中外部 CLI 成员的模型切换回调。
@@ -120,6 +123,9 @@ type TeamBackend struct {
 	hittMu sync.RWMutex
 	// specEnableHITT 配置是否启用 HITT
 	specEnableHITT bool
+	// forkEnabled 上下文继承（fork）开关（spec 级）。
+	// Python: TeamAgentSpec.enable_fork（由 spec 传入）。
+	forkEnabled bool
 	// enableHITT 运行时是否启用 HITT
 	enableHITT bool
 	// hittNames HITT 名册名称集合
@@ -341,6 +347,12 @@ func WithLeaderAllocation(a *models.Allocation) TeamBackendOption {
 // WithEnableHITT 设置 HITT 能力开关（spec 级天花板）。
 func WithEnableHITT(enable bool) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.specEnableHITT = enable; tb.enableHITT = enable }
+}
+
+// WithForkEnabled 设置上下文继承（fork）开关（spec 级）。
+// Python: TeamAgentSpec.enable_fork（blueprint.py:554）。
+func WithForkEnabled(enable bool) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.forkEnabled = enable }
 }
 
 // WithDispatchMode 设置本团队的调度模式（"autonomous" / "scheduled"）。
@@ -717,14 +729,77 @@ type storeCheckpointRecord struct {
 // Python: TeamBackend._store_checkpoint_fn。
 type storeCheckpointFn = func(name string, count int, description, createdBy string) map[string]any
 
+// SetStoreCheckpointFn 注册命名 checkpoint 存储回调（写 leader 权威命名空间）。
+// Python: set_store_checkpoint_fn (team.py:584-589)
+func (tb *TeamBackend) SetStoreCheckpointFn(fn func(name string, count int, description, createdBy string) map[string]any) {
+	tb.storeCheckpointFn = fn
+}
+
+// SetCheckpointListFn 注册权威索引表读取回调（list_checkpoints 工具消费）。
+// Python: set_checkpoint_list_fn (team.py:597-599)
+func (tb *TeamBackend) SetCheckpointListFn(fn func() map[string]map[string]any) {
+	tb.listCheckpointFn = fn
+}
+
+// SetSnapshotLengthFn 注册当前会话上下文长度回调（checkpoint 工具的 count 来源）。
+// 装配点在 agent_configurator（闭包惰性读 harness 的 DeepAgent 上下文长度）。
+// Python: set_snapshot_length (team.py:578-583)
+func (tb *TeamBackend) SetSnapshotLengthFn(fn func() int) {
+	tb.snapshotLengthFn = fn
+}
+
+// ForkInfo spawn 时携带的上下文继承请求。
+// Python: mark_fork_on_spawn 值形态 {fork, since, source, fork_mode}（team.py:617-626）。
+// since 恒 None（Python 侧亦如此，保留字段语义：占位）。
+type ForkInfo struct {
+	// Fork true=继承调用者当前全部上下文；字符串=从命名 checkpoint 继承
+	Fork any `json:"fork"`
+	// Source 上下文来源成员名（fork_source，空=leader）
+	Source string `json:"source"`
+	// ForkMode 保留 checkpoint 的哪一侧（空=分派期默认：live→full，named→before）
+	ForkMode string `json:"fork_mode"`
+}
+
+// MarkForkOnSpawn 登记成员的 fork 请求（spawn_teammate 工具调用时写入，
+// 成员创建回调一次性消费）。
+// Python: mark_fork_on_spawn (team.py:617-626)
+func (tb *TeamBackend) MarkForkOnSpawn(member string, forkValue any, forkSource string, forkMode string) {
+	if tb.pendingForks == nil {
+		tb.pendingForks = make(map[string]ForkInfo)
+	}
+	tb.pendingForks[member] = ForkInfo{
+		Fork:     forkValue,
+		Source:   forkSource,
+		ForkMode: forkMode,
+	}
+	logger.Debug(logComponent).
+		Str("member", member).
+		Any("fork", forkValue).
+		Str("source", forkSource).
+		Str("fork_mode", forkMode).
+		Str("team_name", tb.teamName).
+		Msg("[fork] mark_fork_on_spawn")
+}
+
+// ConsumeForkOnSpawn 取走并删除成员的 fork 请求（一次性）。
+// Python: consume_fork_on_spawn (team.py:628-633)
+func (tb *TeamBackend) ConsumeForkOnSpawn(member string) *ForkInfo {
+	info, ok := tb.pendingForks[member]
+	if !ok {
+		return nil
+	}
+	delete(tb.pendingForks, member)
+	logger.Debug(logComponent).
+		Str("member", member).
+		Str("team_name", tb.teamName).
+		Msg("[fork] consume_fork_on_spawn")
+	return &info
+}
+
 // ForkEnabled 该团队的上下文继承（fork）是否开放。
 //
-// 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段
-// （grep 零命中），恒 false。后果：身份块不带 fork 能力声明、不嵌 <identity>
-// 元素——与上游 enable_fork=false 的字节表现一致。
-//
-// Python: fork_enabled (team.py L505-517)
-func (tb *TeamBackend) ForkEnabled() bool { return false }
+// Python: fork_enabled (team.py:505-517)——bool(spec.enable_fork)。
+func (tb *TeamBackend) ForkEnabled() bool { return tb.forkEnabled }
 
 // SnapshotContextLength 当前会话上下文长度（fork 快照的消息数）。
 // 无回调时 Debug 日志 + 返回 0（Python team.py:639-654 同款）。

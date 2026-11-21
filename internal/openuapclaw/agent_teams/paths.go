@@ -1,6 +1,7 @@
 package agent_teams
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +18,11 @@ const (
 	// agentTeamsSubDir openjiuwen home 下的 agent_teams 子目录
 	agentTeamsSubDir = ".agent_teams"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// taskHomeCtxKey 任务级 home 的 context 键（Python ContextVar 私有承载的对应物）。
+type taskHomeCtxKey struct{}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -45,10 +51,32 @@ func ResetHome() {
 // configure_openjiuwen_home(get_user_workspace_dir()) 的效果。
 // Python: get_openjiuwen_home()
 func GetHome() string {
+	return GetHomeWithContext(context.Background())
+}
+
+// GetHomeWithContext 返回 openjiuwen 本地状态的根目录（ctx 感知变体）。
+// 解析序对齐 Python get_openjiuwen_home（paths.py:52-77）：任务级绑定
+// （SetTaskOpenuapclawHome 写入的 ctx value）→ 进程级 ConfigureHome
+// 覆盖 → 数据根 WorkspaceDir()。Python 的 OPENJIWEN_HOME 环境变量
+// 分支 Go 侧不承载（spawn 子进程经 OpenuapclawHomeEnv 注入，见
+// external/descriptor.go）。
+func GetHomeWithContext(ctx context.Context) string {
+	if taskHome, ok := ctx.Value(taskHomeCtxKey{}).(string); ok && taskHome != "" {
+		return taskHome
+	}
 	if configuredHome != "" {
 		return configuredHome
 	}
 	return workspace.WorkspaceDir()
+}
+
+// SetTaskOpenuapclawHome 把 case 级运行时 home 绑进当前任务的 ctx。
+// Python: set_task_openjiuwen_home(path)（paths.py:26-29）。
+// Go ctx 不可变：还原（Python reset_task_openjiuwen_home 的 token 语义）
+// 表现为调用方在作用域结束后改用外层 ctx——对齐 rsi/usage.go
+// ModelUsageStage 的 spec P1 口径，故不提供带 token 的 Reset 函数。
+func SetTaskOpenuapclawHome(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, taskHomeCtxKey{}, dir)
 }
 
 // GetAgentTeamsHome 返回 agent_teams 状态的根目录。

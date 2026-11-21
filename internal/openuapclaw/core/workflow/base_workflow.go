@@ -42,6 +42,16 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// branchRouterLike 条件边登记所需的 BranchRouter 结构面（偏差 D-19-3：
+// workflow→flow 禁止反向导入——flow 经 SubWorkflowComponent 依赖 workflow 成环，
+// Python isinstance(BranchRouter)（_workflow.py:281）以结构等价接口承载，
+// SetSession/AllTargets/Select 三方法唯 flow.BranchRouter 满足）。
+type branchRouterLike interface {
+	SetSession(session.BaseSession) error
+	AllTargets() map[string]struct{}
+	Select(ctx context.Context, state any) ([]string, error)
+}
+
 // BaseWorkflow 工作流构图与编译基座（Python _workflow.py BaseWorkflow 一比一）。
 type BaseWorkflow struct {
 	graph          *graph.PregelGraph
@@ -220,7 +230,7 @@ func (w *BaseWorkflow) AddStreamConnection(srcCompID string, targetCompID string
 }
 
 // AddConditionalConnection 条件边（Python _workflow.py:259-295 四重校验 + 双分支）。
-// BranchRouter 分支属 8.19（类型未落地，接入时补 case）；普通 router 反射嗅探
+// BranchRouter 分支已接入（8.19 回填 8.14 ⤴️ 钩子）；普通 router 反射嗅探
 // session 形参在调用方包装（workflow 层显式嗅探必须复刻，与 8.5 D2 引擎层不冲突）。
 func (w *BaseWorkflow) AddConditionalConnection(srcCompID any, router any) error {
 	toStr := w.workflowToStr()
@@ -238,6 +248,26 @@ func (w *BaseWorkflow) AddConditionalConnection(srcCompID any, router any) error
 			exception.WithParam("workflow", toStr))
 	}
 	switch r := router.(type) {
+	case branchRouterLike:
+		// Python isinstance(BranchRouter) 分支（_workflow.py:281-283）：
+		// 构图期注入工作流会话 + 条件边 + 目标登记。
+		// 偏差 D-19-3：workflow→flow 禁止反向导入（flow 经 SubWorkflowComponent
+		// 依赖 workflow，成环），isinstance 判定以结构等价接口承载
+		//（SetSession/AllTargets/Select 三方法唯 BranchRouter 满足）。
+		if err := r.SetSession(w.session); err != nil {
+			return err
+		}
+		w.graph.AddConditionalEdges(src, r)
+		// Register branch target mapping for CNF barrier resolution at compile time
+		//（_workflow.py:284-285 逐字复刻：len>1 才登记）
+		allTargets := r.AllTargets()
+		if len(allTargets) > 1 {
+			ids := make([]string, 0, len(allTargets))
+			for id := range allTargets {
+				ids = append(ids, id)
+			}
+			w.graph.RegisterBranchTargets(src, ids)
+		}
 	case graph.Router:
 		// Python 非 BranchRouter 分支（_workflow.py:284-291）：签名嗅探在调用方
 		// 包装 selector 时完成，此处直接登记
@@ -279,7 +309,10 @@ func (w *BaseWorkflow) Compile(sess session.BaseSession, context any) (ec graph.
 	}
 	// Python _workflow.py:310：self._session.set_session(session)
 	w.session.SetSession(sess)
-	return w.graph.Compile(sess, nil), nil
+	// Python _workflow.py:312：self._graph.compile(session, context=context)
+	//——D-18-7 修正：context（ModelContext）经 kwargs["context"] 下发至各 Vertex.Init，
+	// 原实现传 nil 致 ModelContext 全链丢失
+	return w.graph.Compile(sess, map[string]any{"context": context}), nil
 }
 
 // Reset 复位（Python _workflow.py:337-339）。
@@ -708,9 +741,10 @@ func ExecuteSingleComponent(ctx context.Context, componentID string, sess sessio
 	// 3. Create Vertex（:81-82）
 	exec := executor.ToExecutable()
 	vertex := graph.NewVertex(componentID, exec)
-	// 4. Initialize Vertex（:86）
 	// 4. Initialize Vertex（:86；context 为 nil 时仍可正常初始化）
-	vertex.Init(innerNode, nil)
+	// Python :86 vertex.init(node_session, context=context)——D-18-7 修正：
+	// modelContext（ModelContext）经 kwargs 下发，原实现传 nil 丢失
+	vertex.Init(innerNode, map[string]any{"context": modelContext})
 	// 5. 直设 node config（:90-106 SimpleNodeConfig）——Go 以 config 注册面承载：
 	// 注册单条 WorkflowConfig，NodeConfig() 即从此取（偏差注记：Python 直设属性）
 	spec := NewWorkflowSpec()

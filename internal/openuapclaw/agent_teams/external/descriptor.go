@@ -74,13 +74,13 @@ type teamWorkspaceConfig = team_workspace.TeamWorkspaceConfig
 const (
 	// TeamJoinEnv 携带 JSON 描述符的唯一环境变量。
 	// Python: TEAM_JOIN_ENV (external/descriptor.py:26)
-	TeamJoinEnv = "OPENJIUWEN_TEAM_JOIN"
+	TeamJoinEnv = "OPENUAPCLAW_TEAM_JOIN"
 
 	// OpenuapclawHomeEnv 覆盖运行时 home 的环境变量。spawn 的子进程（Codex 的
 	// MCP server）无法继承 host 平台内存中的 configure_openjiuwen_home 覆盖，
 	// home 必须经 env 传播以对齐 session 文件 spill/deref 路径。
 	// Python: OPENJIUWEN_HOME_ENV (external/descriptor.py:31)
-	OpenuapclawHomeEnv = "OPENJIUWEN_HOME"
+	OpenuapclawHomeEnv = "OPENUAPCLAW_HOME"
 )
 
 // MCPServerEnvVars Codex MCP server 子进程必须从其 Codex App Server 父进程

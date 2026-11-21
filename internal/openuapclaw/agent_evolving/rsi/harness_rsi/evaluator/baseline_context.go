@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -326,10 +325,6 @@ func expandUserB(path string) string {
 }
 
 // evalToString 任意值转字符串。
-// evalAnyEqual 深度相等。
-func evalAnyEqual(left, right any) bool {
-	return reflect.DeepEqual(left, right)
-}
 
 func evalToString(value any) string {
 	switch v := value.(type) {
@@ -361,3 +356,18 @@ func evalMappingOrNil(value any) map[string]any {
 	}
 	return map[string]any{}
 }
+
+// ──────────────────────────── 导出函数（视图访问器，17.6c 基座增件） ────────────────────────────
+
+// CaseIDView 基线用例 ID 视图访问器（满足 judger.BaselineContextView；
+// 17.6c TeamEvaluator 并发路径传基线上下文进监考所需）。
+func (c *BaselineJudgeContext) CaseIDView() string { return c.CaseID }
+
+// EvalRefPathView 成绩单路径视图访问器。
+func (c *BaselineJudgeContext) EvalRefPathView() string { return c.EvalRefPath }
+
+// ResultPathView 用例结果路径视图访问器。
+func (c *BaselineJudgeContext) ResultPathView() string { return c.ResultPath }
+
+// EvidenceDigestView 证据摘要视图访问器。
+func (c *BaselineJudgeContext) EvidenceDigestView() string { return c.EvidenceDigest }

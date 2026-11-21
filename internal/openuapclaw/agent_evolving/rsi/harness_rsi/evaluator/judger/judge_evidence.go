@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"os"
 	"path/filepath"
 	"sort"
@@ -178,7 +179,7 @@ func PrepareJudgeWorkspace(params PrepareJudgeWorkspaceParams) error {
 	inventory = append(inventory, responseFiles...)
 	trace := filepath.Join(params.CaseDir, "judge", "normalized_trace.json")
 	if fileExists(trace) {
-		if err := copyFile(trace, filepath.Join(params.Workspace, "execution_trace.json")); err != nil {
+		if err := utils.CopyFile(trace, filepath.Join(params.Workspace, "execution_trace.json")); err != nil {
 			return err
 		}
 		inventory = append(inventory, "execution_trace.json")
@@ -212,7 +213,7 @@ func PrepareJudgeWorkspace(params PrepareJudgeWorkspaceParams) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err
 			}
-			if err := copyFile(paths[index], target); err != nil {
+			if err := utils.CopyFile(paths[index], target); err != nil {
 				return err
 			}
 			inventory = append(inventory, name)
@@ -417,7 +418,7 @@ func prepareBaseline(caseMapping map[string]any, context BaselineContextView,
 	files = append(files, "baseline/assessment.json")
 	trace := filepath.Join(source, "judge", "normalized_trace.json")
 	if fileExists(trace) {
-		if err := copyFile(trace, filepath.Join(target, "execution_trace.json")); err != nil {
+		if err := utils.CopyFile(trace, filepath.Join(target, "execution_trace.json")); err != nil {
 			return nil, nil, err
 		}
 		files = append(files, "baseline/execution_trace.json")
@@ -484,7 +485,7 @@ func copyTree(source, destination string) ([]string, error) {
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := copyFile(path, target); err != nil {
+		if err := utils.CopyFile(path, target); err != nil {
 			return err
 		}
 		copied = append(copied, filepath.ToSlash(rel))
@@ -495,25 +496,6 @@ func copyTree(source, destination string) ([]string, error) {
 	}
 	sort.Strings(copied)
 	return copied, nil
-}
-
-// copyFile 拷贝文件并保留模式与修改时间（shutil.copy2 语义）。
-func copyFile(source, target string) error {
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(source)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(target, data, info.Mode().Perm()); err != nil {
-		return err
-	}
-	return os.Chtimes(target, info.ModTime(), info.ModTime())
 }
 
 // fileSHA256 文件内容哈希（judge_evidence 的 hashlib.sha256(...)hexdigest）。

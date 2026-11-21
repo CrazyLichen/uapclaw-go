@@ -1,9 +1,10 @@
-package tool
+package schemautils
 
 import (
 	"math"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -371,22 +372,55 @@ func TestSchemaUtils_FormatWithSchemaMap_必填但有默认值(t *testing.T) {
 	}
 }
 
-// TestSchemaUtils_FormatWithSchemaMap_额外字段保留 测试额外字段保留
-func TestSchemaUtils_FormatWithSchemaMap_额外字段保留(t *testing.T) {
+// TestSchemaUtils_FormatWithSchemaMap_额外字段_缺省拒绝 additionalProperties
+// 缺省（Python get("additionalProperties", False)→forbid）拒绝未声明额外字段，
+// 报 SCHEMA_FORMAT_INVALID（2026-11-21 用户拍板与 Python 一致）
+func TestSchemaUtils_FormatWithSchemaMap_额外字段_缺省拒绝(t *testing.T) {
 	schemaMap := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"name": map[string]any{"type": "string", "description": "名称"},
 		},
 	}
+	_, err := (SchemaUtils{}).FormatWithSchemaMap(map[string]any{"name": "Alice", "extra": "value"}, schemaMap)
+	if err == nil {
+		t.Fatal("additionalProperties 缺省应拒绝额外字段")
+	}
+	be, ok := err.(*exception.BaseError)
+	if !ok || be.Code() != exception.StatusSchemaFormatInvalid.Code() {
+		t.Fatalf("应报 SCHEMA_FORMAT_INVALID: %v", err)
+	}
+}
 
-	data := map[string]any{"name": "Alice", "extra": "value"}
-	result, err := SchemaUtils{}.FormatWithSchemaMap(data, schemaMap)
+// TestSchemaUtils_FormatWithSchemaMap_额外字段_显式True保留 additionalProperties=true 放行
+func TestSchemaUtils_FormatWithSchemaMap_额外字段_显式True保留(t *testing.T) {
+	schemaMap := map[string]any{
+		"type":                 "object",
+		"additionalProperties": true,
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(map[string]any{"name": "Alice", "extra": "value"}, schemaMap)
 	if err != nil {
-		t.Fatalf("FormatWithSchemaMap 失败: %v", err)
+		t.Fatalf("显式 True 应保留额外字段: %v", err)
 	}
 	if result["extra"] != "value" {
 		t.Errorf("额外字段应保留: extra=%v", result["extra"])
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_额外字段_显式False拒绝 additionalProperties=false 拒绝
+func TestSchemaUtils_FormatWithSchemaMap_额外字段_显式False拒绝(t *testing.T) {
+	schemaMap := map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}
+	if _, err := (SchemaUtils{}).FormatWithSchemaMap(map[string]any{"name": "a", "extra": "v"}, schemaMap); err == nil {
+		t.Fatal("显式 false 应拒绝额外字段")
 	}
 }
 
@@ -469,15 +503,13 @@ func TestSchemaUtils_FormatWithSchemaMap_输入覆盖默认值(t *testing.T) {
 	}
 }
 
-// TestSchemaUtils_FormatWithSchemaMap_空schema 测试空 schema
+// TestSchemaUtils_FormatWithSchemaMap_空schema 空 schema（{}）下任何键都是
+// 未声明额外字段——Python 动态模型 additionalProperties 缺省 forbid 同样拒绝
+// （model_validate 抛 ValidationError → SCHEMA_FORMAT_INVALID），对齐收紧
 func TestSchemaUtils_FormatWithSchemaMap_空schema(t *testing.T) {
 	data := map[string]any{"key": "value"}
-	result, err := SchemaUtils{}.FormatWithSchemaMap(data, map[string]any{})
-	if err != nil {
-		t.Fatalf("空 schema 不应报错: %v", err)
-	}
-	if result["key"] != "value" {
-		t.Errorf("空 schema 下数据应原样返回: key=%v", result["key"])
+	if _, err := (SchemaUtils{}).FormatWithSchemaMap(data, map[string]any{}); err == nil {
+		t.Fatal("空 schema + 非空数据应拒绝（additionalProperties 缺省 forbid）")
 	}
 }
 
@@ -755,5 +787,50 @@ func TestSchemaUtils_Validate_Integer拒绝小数(t *testing.T) {
 	}
 	if err := (SchemaUtils{}).Validate(map[string]any{"limit": 10.5}, params); err == nil {
 		t.Error("10.5 不应通过 integer 校验")
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_通过 dict 路径独立校验通过
+func TestSchemaUtils_ValidateWithSchemaMap_通过(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+			"age":  map[string]any{"type": "integer"},
+		},
+		"required": []any{"name"},
+	}
+	if err := (SchemaUtils{}).ValidateWithSchemaMap(map[string]any{"name": "x", "age": float64(3)}, schema); err != nil {
+		t.Fatalf("合法数据不应报错: %v", err)
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_缺必填 dict 路径独立校验拒绝
+func TestSchemaUtils_ValidateWithSchemaMap_缺必填(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+		"required": []any{"name"},
+	}
+	err := SchemaUtils{}.ValidateWithSchemaMap(map[string]any{"age": 1}, schema)
+	if err == nil {
+		t.Fatal("缺 required 应报错")
+	}
+	be, ok := err.(*exception.BaseError)
+	if !ok || be.Code() != exception.StatusSchemaValidateInvalid.Code() {
+		t.Fatalf("错误码应 SCHEMA_VALIDATE_INVALID: %v", err)
+	}
+}
+
+// TestSchemaUtils_ValidateWithSchemaMap_类型不符 类型校验拒绝
+func TestSchemaUtils_ValidateWithSchemaMap_类型不符(t *testing.T) {
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"n": map[string]any{"type": "integer"}},
+	}
+	if err := (SchemaUtils{}).ValidateWithSchemaMap(map[string]any{"n": "str"}, schema); err == nil {
+		t.Fatal("类型不符应报错")
 	}
 }

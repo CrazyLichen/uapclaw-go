@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,4 +39,21 @@ type SpawnHandle interface {
 type SpawnableAgent interface {
 	// AgentCard 返回 Agent 身份卡片
 	AgentCard() *agentschema.AgentCard
+}
+
+// ForkContextSource fork 继承的源上下文读取面。
+// Python agent_ref 的 resources.harness.get_deep_agent().get_current_context(...)
+// 窄化——spawn 包不 import harness 包，源读取经此窄接口（依赖倒置）。
+// Python: _resolve_fork_native (team_agent.py:1644-1661) 的读取半区。
+type ForkContextSource interface {
+	// GetCurrentContext 返回当前上下文消息
+	GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error)
+}
+
+// ForkTarget fork 继承的注入目标写入面（新成员 context engine 创建）。
+// Python: native.create_new_context_engine(session_id=..., messages=...)
+// （inprocess_spawn.py:105-108）。
+type ForkTarget interface {
+	// CreateNewContextEngine 以 messages 为种子创建新的上下文引擎
+	CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error)
 }

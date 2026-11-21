@@ -1,6 +1,7 @@
 package agent_teams
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -191,5 +192,36 @@ func TestTeamSkillVisibilityPath(t *testing.T) {
 	want := "/custom/home/.agent_teams/team-a/team-workspace/skills-visibility.json"
 	if got != want {
 		t.Fatalf("TeamSkillVisibilityPath = %q, want %q", got, want)
+	}
+}
+
+// TestSetTaskOpenuapclawHome_任务级绑定优先 验证任务级 home 覆盖进程级配置。
+// Python: set_task_openjiuwen_home/get_openjiuwen_home 解析序（paths.py:52-77）。
+func TestSetTaskOpenuapclawHome_任务级绑定优先(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+	configuredHome = "/process/home"
+
+	base := context.Background()
+	if got := GetHomeWithContext(base); got != "/process/home" {
+		t.Fatalf("无任务绑定时期望进程级 home，实际 %s", got)
+	}
+
+	taskCtx := SetTaskOpenuapclawHome(base, "/case/dir")
+	if got := GetHomeWithContext(taskCtx); got != "/case/dir" {
+		t.Fatalf("任务绑定后期望 case 级 home，实际 %s", got)
+	}
+	// 外层 ctx 不受影响（还原=改用外层 ctx，spec P1 口径）
+	if got := GetHomeWithContext(base); got != "/process/home" {
+		t.Fatalf("外层 ctx 被污染，实际 %s", got)
+	}
+	// GetHome 无 ctx 变体保持原语义
+	if got := GetHome(); got != "/process/home" {
+		t.Fatalf("GetHome 期望进程级 home，实际 %s", got)
+	}
+	// 空串绑定视为未绑定
+	emptyCtx := SetTaskOpenuapclawHome(base, "")
+	if got := GetHomeWithContext(emptyCtx); got != "/process/home" {
+		t.Fatalf("空串绑定应回落进程级 home，实际 %s", got)
 	}
 }

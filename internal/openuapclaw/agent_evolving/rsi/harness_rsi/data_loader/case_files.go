@@ -3,7 +3,7 @@ package dataloader
 import (
 	"crypto/sha256"
 	"fmt"
-	"io/fs"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,7 +250,7 @@ func CopyDatasetFiles(cases []map[string]any, source, target string) (map[string
 			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 				return nil, err
 			}
-			if err := copyFile(origin, destination); err != nil {
+			if err := utils.CopyFile(origin, destination); err != nil {
 				return nil, err
 			}
 			copiedDigest, err := fileSHA256(destination)
@@ -299,7 +299,7 @@ func CopyPublicAssets(caseMapping map[string]any, workspace string) ([][2]string
 		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 			return nil, err
 		}
-		if err := copyFile(paths[index], destination); err != nil {
+		if err := utils.CopyFile(paths[index], destination); err != nil {
 			return nil, err
 		}
 		copied = append(copied, [2]string{pair[1], destination})
@@ -367,18 +367,4 @@ func fileSHA256(path string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(raw)), nil
-}
-
-// copyFile 复制文件（shutil.copy2 等价：内容+权限）
-func copyFile(origin, destination string) error {
-	raw, err := os.ReadFile(origin)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(origin)
-	mode := fs.FileMode(0o644)
-	if err == nil {
-		mode = info.Mode()
-	}
-	return os.WriteFile(destination, raw, mode)
 }

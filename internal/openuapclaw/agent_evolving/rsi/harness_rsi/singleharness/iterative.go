@@ -16,7 +16,6 @@ import (
 	"strings"
 	"unicode"
 
-	hresources "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	configpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
@@ -25,6 +24,7 @@ import (
 	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/improver_evolution"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	hresources "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	"gopkg.in/yaml.v3"
 )
 
@@ -3372,7 +3372,12 @@ func NewSingleHarnessIterativeOptimizationOrchestrator(
 		orchestratorCfg.Evaluator.ScoreMode = "continuous"
 	}
 	if evaluator == nil {
-		evaluator = NewStubEvaluatorInvoker(orchestratorCfg.Evaluator)
+		// 17.6c：默认注入改接真身 *evaluator.TeamEvaluator（回填件①，桩已删）。
+		realEvaluator, terr := NewEvaluatorInvoker(orchestratorCfg.Evaluator)
+		if terr != nil {
+			return nil, terr
+		}
+		evaluator = realEvaluator
 	}
 	if analyzer == nil {
 		analyzer = analyzerpkg.NewEvaluationResultAnalyzer(&orchestratorCfg.EvaluationResultAnalyzer)
@@ -5009,16 +5014,16 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) evaluate(
 		return "", err
 	}
 
-	emitCaseStage := func(payload map[string]any) error {
+	emitCaseStage := func(payload evaluatorpkg.EvaluationStageEvent) error {
 		return rsi.Emit(ctx, params.onEvent, rsi.NewNodeStageEvent(
 			params.nodeRef,
 			CaseStagePayload(
-				toInt(payload["case_index"]),
-				toInt(payload["total_cases"]),
-				defaultString(payload["status"], "running"),
-				toString(payload["case_id"]),
-				numberOf(payload["score"]),
-				toIntPointer(payload["completed_cases"]),
+				payload.CaseIndex,
+				payload.TotalCases,
+				payload.Status,
+				payload.CaseID,
+				payload.Score,
+				payload.CompletedCases,
 			), nil))
 	}
 	result, err := o.evaluator.EvaluateBatch(ctx, params.cases, "", params.harnessRefsPath,
