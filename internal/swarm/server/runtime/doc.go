@@ -23,6 +23,9 @@
 //	├── agent_config_llm.go   # LLM 生成 whenToUse + systemPrompt
 //	├── tenant_pool.go                 # TenantAgentPool 多租户 Agent 池化（10.3.14）
 //	├── sandbox_no_host_fallback.go    # 沙箱禁宿主回退的任务级执行域标记
+//	├── equipment_slice.go             # 15.18a：extension_package_manager.py 最小切片
+//	│                                    （agent_template runtime 校验 + 本地包目录解析），
+//	│                                    ⤴️扩展包管理章节回填，等待回填状态
 //	└── skill/                         # 技能管理子包
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/
