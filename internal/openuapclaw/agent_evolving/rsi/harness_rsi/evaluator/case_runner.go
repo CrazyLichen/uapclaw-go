@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
@@ -117,7 +119,6 @@ func (r *CaseRunner) Execute(ctx context.Context, params CaseRunnerParams) (*har
 	startedAt := time.Now()
 	resolvedTeamName := "single_harness"
 	artifactRefs := map[string][]string{"harvested": {}, "missing": {}}
-	var response any
 
 	// try 块等价：defer 段对应 Python finally。
 	defer func() {
@@ -129,7 +130,43 @@ func (r *CaseRunner) Execute(ctx context.Context, params CaseRunnerParams) (*har
 		_ = homeCtx
 	}()
 
-	executionResult, execErr := r.backend.Execute(homeCtx, ExecuteParams{
+	// Python except Exception 全覆盖等价：主链任意非基建错误统一在
+	// 最外层降级为错误件；基建错误落 evaluation_error.json 后上抛。
+	caseState := &executeCaseState{artifactRefs: artifactRefs}
+	ref, bodyErr := r.executeCaseBody(homeCtx, params, caseID, sessionID, caseDir,
+		tracePath, resultPath, startedAt, resolvedTeamName, caseState)
+	if bodyErr != nil {
+		var infra *EvaluationInfrastructureError
+		if asEvaluationInfrastructureError(bodyErr, &infra) {
+			_ = writeJSON(filepath.Join(caseDir, "evaluation_error.json"), map[string]any{
+				"case_id": caseID, "status": "error", "score": nil, "error": bodyErr.Error(),
+			})
+			return nil, bodyErr
+		}
+		return writeErrorCaseArtifacts(writeErrorCaseArtifactsParams{
+			caseMapping: params.Case, caseID: caseID, sessionID: sessionID,
+			teamName: resolvedTeamName, startedAt: startedAt, finishedAt: time.Now(),
+			tracePath: tracePath, resultPath: resultPath,
+			artifactRefs: caseState.artifactRefs, response: caseState.response, errorStr: bodyErr.Error(),
+		}), nil
+	}
+	return ref, nil
+}
+
+// executeCaseState 主链对外暴露的中间态（错误件路由需要 response 与已收卷清单）。
+type executeCaseState struct {
+	// response 主链已取得的回答（backend 成功后即有值）
+	response any
+	// artifactRefs 收卷清单（harvest 后更新；初始值由 Execute 注入）
+	artifactRefs map[string][]string
+}
+
+// executeCaseBody 主链主体（Python execute try 块 L112-280）。
+// 错误一律上抛，由 Execute 最外层统一路由——对齐 Python except 全覆盖。
+func (r *CaseRunner) executeCaseBody(ctx context.Context, params CaseRunnerParams,
+	caseID, sessionID, caseDir, tracePath, resultPath string, startedAt time.Time,
+	resolvedTeamName string, state *executeCaseState) (*harnessrsi.EvaluationCaseTraceRef, error) {
+	executionResult, execErr := r.backend.Execute(ctx, ExecuteParams{
 		Case:             params.Case,
 		OutputDir:        caseDir,
 		SessionID:        sessionID,
@@ -137,33 +174,21 @@ func (r *CaseRunner) Execute(ctx context.Context, params CaseRunnerParams) (*har
 		HarnessRefs:      params.HarnessRefs,
 	})
 	if execErr != nil {
-		// Python except Exception 分支：基建错误上抛（先落 evaluation_error.json）。
-		var infra *EvaluationInfrastructureError
-		if asEvaluationInfrastructureError(execErr, &infra) {
-			_ = writeJSON(filepath.Join(caseDir, "evaluation_error.json"), map[string]any{
-				"case_id": caseID, "status": "error", "score": nil, "error": execErr.Error(),
-			})
-			return nil, execErr
-		}
-		// 其余错误降级为错误件（返回 ref，不上抛）。
-		return writeErrorCaseArtifacts(writeErrorCaseArtifactsParams{
-			caseMapping: params.Case, caseID: caseID, sessionID: sessionID,
-			teamName: resolvedTeamName, startedAt: startedAt, finishedAt: time.Now(),
-			tracePath: tracePath, resultPath: resultPath,
-			artifactRefs: artifactRefs, response: response, errorStr: execErr.Error(),
-		}), nil
+		return nil, execErr
 	}
-	response = executionResult.Response
+	response := executionResult.Response
+	state.response = response
 	finishedAt := time.Now()
 
 	runtimeWorkspaceDir := executionWorkspaceDir(executionResult, caseDir)
 	expectedArtifactFiles := expectedArtifactFiles(params.Case)
-	artifactRefs = harvestArtifacts(runtimeWorkspaceDir, filepath.Join(caseDir, "artifacts"), expectedArtifactFiles)
+	artifactRefs := harvestArtifacts(runtimeWorkspaceDir, filepath.Join(caseDir, "artifacts"), expectedArtifactFiles)
 	if executionResult.WorkspaceDir != "" && len(artifactRefs["harvested"]) == 0 {
 		artifactRefs = harvestChangedWorkspaceFiles(
 			runtimeWorkspaceDir, filepath.Join(caseDir, "artifacts"),
 			executionResult.Metadata["workspace_changes"], expectedArtifactFiles)
 	}
+	state.artifactRefs = artifactRefs
 
 	trajectoryDir := filepath.Join(caseDir, RoleTrajectoryDirName)
 	behaviorTrace := behaviorTraceOf(executionResult.Metadata)
@@ -193,19 +218,7 @@ func (r *CaseRunner) Execute(ctx context.Context, params CaseRunnerParams) (*har
 	judgeResult, judgeErr := r.judge(judgeCtx, params.Case, executionResult, caseDir, params.BaselineContext)
 	judgeDone()
 	if judgeErr != nil {
-		var infra *EvaluationInfrastructureError
-		if asEvaluationInfrastructureError(judgeErr, &infra) {
-			_ = writeJSON(filepath.Join(caseDir, "evaluation_error.json"), map[string]any{
-				"case_id": caseID, "status": "error", "score": nil, "error": judgeErr.Error(),
-			})
-			return nil, judgeErr
-		}
-		return writeErrorCaseArtifacts(writeErrorCaseArtifactsParams{
-			caseMapping: params.Case, caseID: caseID, sessionID: sessionID,
-			teamName: resolvedTeamName, startedAt: startedAt, finishedAt: time.Now(),
-			tracePath: tracePath, resultPath: resultPath,
-			artifactRefs: artifactRefs, response: response, errorStr: judgeErr.Error(),
-		}), nil
+		return nil, judgeErr
 	}
 	finalStatus := caseResultStatus(executionResult.ExecutionStatus, judgeResult)
 	publishedExecutionStatus := publishedExecutionStatus(executionResult.ExecutionStatus, finalStatus, judgeResult)
@@ -1137,8 +1150,9 @@ func messagesFromLargeRoleTrajectoryFile(path string) []map[string]any {
 		offset = 0
 	}
 	rawTail := make([]byte, readSize)
-	if _, err := f.ReadAt(rawTail, offset); err != nil && err.Error() != "EOF" {
-		// ReadAt 尾部读满不报 EOF；读不满时忽略错误取已读内容
+	if _, err := f.ReadAt(rawTail, offset); err != nil && err != io.EOF {
+		// Python except OSError: return []——读失败返回空消息，不解析残缺数据
+		return []map[string]any{}
 	}
 	tail := strings.TrimSpace(decodeIgnoreUTF8(rawTail))
 	if tail == "" {
@@ -1416,7 +1430,7 @@ func harvestArtifacts(workspaceDir, destDir string, expectedFiles []string) map[
 	_ = os.MkdirAll(destDir, 0o755)
 	var harvested []string
 	if len(expected) > 0 {
-		harvested, missing = copyArtifactTreesWithExpected(sources, destDir)
+		harvested, missing = copyArtifactTrees(sources, destDir)
 		normalizeDeliverableArtifacts(destDir)
 		missing = filterExpectedArtifacts(destDir, expected)
 	} else {
@@ -1521,7 +1535,7 @@ func harvestChangedWorkspaceFiles(workspaceDir, destDir string, workspaceChanges
 		}
 		target := filepath.Join(destDir, filepath.FromSlash(rel))
 		_ = os.MkdirAll(filepath.Dir(target), 0o755)
-		if err := copyFile(sourceAbs, target); err != nil {
+		if err := utils.CopyFile(sourceAbs, target); err != nil {
 			missing = append(missing, rel)
 			continue
 		}
@@ -1550,7 +1564,7 @@ func copyArtifactTree(src, destDir string) ([]string, []string) {
 		target := filepath.Join(destDir, relPath)
 		_ = os.MkdirAll(filepath.Dir(target), 0o755)
 		if shouldCopyArtifact(path, target) {
-			if cerr := copyFile(path, target); cerr != nil {
+			if cerr := utils.CopyFile(path, target); cerr != nil {
 				missing = append(missing, filepath.ToSlash(relPath))
 				// Python continue：仍登记 harvested
 			}
@@ -1574,12 +1588,6 @@ func copyArtifactTrees(sources []string, destDir string) ([]string, []string) {
 	return harvested, missing
 }
 
-// copyArtifactTreesWithExpected 预期清单优先拷贝（Python _harvest_artifacts expected 分支：
-// 先全树拷贝再过滤，missing 以 filter_expected_artifacts 结果为准）。
-func copyArtifactTreesWithExpected(sources []string, destDir string) ([]string, []string) {
-	return copyArtifactTrees(sources, destDir)
-}
-
 // copyExpectedArtifactsFromSources 按预期清单跨来源拷贝（Python: _copy_expected_artifacts_from_sources）。
 func copyExpectedArtifactsFromSources(sources []string, destDir string, expectedFiles []string) ([]string, []string) {
 	var harvested, missing []string
@@ -1591,7 +1599,7 @@ func copyExpectedArtifactsFromSources(sources []string, destDir string, expected
 		}
 		target := filepath.Join(destDir, filename)
 		_ = os.MkdirAll(filepath.Dir(target), 0o755)
-		if err := copyFile(source, target); err != nil {
+		if err := utils.CopyFile(source, target); err != nil {
 			missing = append(missing, filename)
 			continue
 		}
@@ -1611,7 +1619,7 @@ func copyExpectedArtifacts(src, destDir string, expectedFiles []string) ([]strin
 		}
 		target := filepath.Join(destDir, filename)
 		_ = os.MkdirAll(filepath.Dir(target), 0o755)
-		if err := copyFile(source, target); err != nil {
+		if err := utils.CopyFile(source, target); err != nil {
 			missing = append(missing, filename)
 			continue
 		}
@@ -1638,7 +1646,7 @@ func copyProofArtifacts(sources []string, destDir string) []string {
 			target := filepath.Join(destDir, relPath)
 			_ = os.MkdirAll(filepath.Dir(target), 0o755)
 			if shouldCopyArtifact(path, target) {
-				if copyFile(path, target) == nil {
+				if utils.CopyFile(path, target) == nil {
 					harvested = append(harvested, filepath.ToSlash(relPath))
 				}
 			}
@@ -1660,7 +1668,7 @@ func filterExpectedArtifacts(destDir string, expectedFiles []string) []string {
 		}
 		if !samePath(source, rootTarget) {
 			_ = os.MkdirAll(filepath.Dir(rootTarget), 0o755)
-			_ = copyFile(source, rootTarget)
+			_ = utils.CopyFile(source, rootTarget)
 		}
 	}
 	expectedSet := map[string]bool{}
@@ -1787,7 +1795,7 @@ func normalizeDeliverableArtifacts(destDir string) {
 		}
 		_ = os.MkdirAll(filepath.Dir(rootTarget), 0o755)
 		if shouldCopyArtifact(source, rootTarget) {
-			_ = copyFile(source, rootTarget)
+			_ = utils.CopyFile(source, rootTarget)
 		}
 	}
 }
@@ -1954,15 +1962,6 @@ func pathIsDir(path string) bool {
 func pathIsFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
-}
-
-// copyFile 逐字节拷贝（shutil.copy2 等价：Go 不复制 mtime，偏差可接受）。
-func copyFile(src, dst string) error {
-	raw, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, raw, 0o644)
 }
 
 // removeEmptyDirs 自底向上删除空目录。
