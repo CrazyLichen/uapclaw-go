@@ -68,7 +68,7 @@ type CompactContextTarget interface {
 // Python: compact_context (fork_compact.py:36-95)
 func CompactContext(ctx context.Context, target CompactContextTarget, splitAt int, sessionID string, direction string) {
 	// Python: msgs = deep_agent.get_current_context(session_id=session_id)
-	msgs, err := target.GetCurrentContext(ctx, sessionID, "")
+	msgs, err := target.GetCurrentContext(ctx, sessionID, "default_context_id")
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).

@@ -103,8 +103,8 @@ func ForkContextFromMessages(msgs []llmschema.BaseMessage, checkpoint *int, keep
 // defer/recover）收敛为「无继承继续 spawn」。
 //
 // Python: ForkContext.from_agent (fork.py:52-117)
-func ForkContextFromAgent(ctx context.Context, source AgentContextReader, checkpoint *int, keep string) *ForkContext {
-	msgs, err := source.GetCurrentContext(ctx, "", "")
+func ForkContextFromAgent(ctx context.Context, source AgentContextReader, sessionID string, checkpoint *int, keep string) *ForkContext {
+	msgs, err := source.GetCurrentContext(ctx, sessionID, "default_context_id")
 	if err != nil {
 		// Python: except Exception → cls._read_persisted_messages(agent)（fork.py:57-64）
 		if sr, ok := source.(AgentSessionContextReader); ok {
