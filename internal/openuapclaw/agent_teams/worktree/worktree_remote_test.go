@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,33 +31,26 @@ func (m *loopbackMessager) SendAndWait(ctx context.Context, nodeID string, paylo
 	m.mu.Lock()
 	m.payload = append(m.payload, payload)
 	m.mu.Unlock()
+	// json tag 往返（与生产 requestToPayload/responseFromPayload 同一序列化层）
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
 	req := &WorktreeRemoteRequest{}
-	if v, ok := payload["action"].(string); ok {
-		req.Action = v
-	}
-	if v, ok := payload["slug"].(string); ok {
-		req.Slug = v
-	}
-	if v, ok := payload["repo_url"].(string); ok {
-		req.RepoURL = v
-	}
-	if v, ok := payload["base_branch"].(string); ok {
-		req.BaseBranch = v
-	}
-	if v, ok := payload["worktree_path"].(string); ok {
-		req.WorktreePath = v
+	if err := json.Unmarshal(raw, req); err != nil {
+		return nil, err
 	}
 	// 直投 handler：响应原样回传（Python messager 返回 response dict 语义）
 	resp := m.handler.Handle(ctx, req)
-	return map[string]any{
-		"success":        resp.Success,
-		"worktree_path":  resp.WorktreePath,
-		"worktree_branch": resp.WorktreeBranch,
-		"head_commit":    resp.HeadCommit,
-		"existed":        resp.Existed,
-		"exists":         resp.Exists,
-		"error":          resp.Error,
-	}, nil
+	respRaw, err := json.Marshal(resp)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(respRaw, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // initBareOrigin 建带初始提交的裸仓库 origin + 本地克隆。
@@ -205,4 +199,30 @@ func TestWorktreeRemoteHandler_Remove无仓库报错(t *testing.T) {
 	})
 	assert.False(t, resp.Success)
 	assert.True(t, strings.Contains(resp.Error, "Cannot find repo root"))
+}
+
+// TestResponseFromPayload_类型不符显式报错 载荷键类型漂移 → error 而非静默零值
+//（Python model_validate strict 语义；json tag 往返层防御）。
+func TestResponseFromPayload_类型不符显式报错(t *testing.T) {
+	// success 键是字符串 → Unmarshal 报错
+	_, err := responseFromPayload(map[string]any{"success": "yes"})
+	require.Error(t, err)
+	// 键缺失 → 合法（omitted），零值即缺省
+	resp, err := responseFromPayload(map[string]any{})
+	require.NoError(t, err)
+	assert.False(t, resp.Success)
+}
+
+// TestRequestToPayload_roundtrip 请求经 json tag 往返字段无损。
+func TestRequestToPayload_roundtrip(t *testing.T) {
+	payload, err := requestToPayload(&WorktreeRemoteRequest{
+		Action: "create", Slug: "agent-x", RepoURL: "https://x/y.git",
+		BaseBranch: "main", Config: map[string]any{"enabled": true},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "create", payload["action"])
+	assert.Equal(t, "https://x/y.git", payload["repo_url"])
+	// 空 WorktreePath omitempty → 不出现
+	_, ok := payload["worktree_path"]
+	assert.False(t, ok)
 }
