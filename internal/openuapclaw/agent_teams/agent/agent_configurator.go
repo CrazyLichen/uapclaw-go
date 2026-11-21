@@ -562,6 +562,9 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	if spec.EnableHITT {
 		tbOpts = append(tbOpts, tools.WithEnableHITT(spec.EnableHITT))
 	}
+	if spec.EnableFork {
+		tbOpts = append(tbOpts, tools.WithForkEnabled(spec.EnableFork))
+	}
 	if cfg.onTeamCleaned != nil {
 		tbOpts = append(tbOpts, tools.WithOnTeamCleaned(cfg.onTeamCleaned))
 	}
