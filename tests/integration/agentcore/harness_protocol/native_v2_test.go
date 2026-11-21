@@ -12,11 +12,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/vcs"
 	taskloop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
 	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/native"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/vcs"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

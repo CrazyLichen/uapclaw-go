@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	basesuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
