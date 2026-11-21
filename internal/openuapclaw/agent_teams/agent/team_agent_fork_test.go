@@ -28,9 +28,9 @@ func forkDispatchMessages() []llmschema.BaseMessage {
 // fakeForkFrom 构造分派测试用抓取闭包（生产闭包由 resolveForkSource 组装、
 // 内部走根包 ForkContextFromAgent；测试注入 FromMessages 包装——分派逻辑
 // 与抓取来源解耦，抓取本身由集成链路覆盖）。
-func fakeForkFrom(msgs []llmschema.BaseMessage) func(ckpt *int, keep string) *agentteams.ForkContext {
-	return func(ckpt *int, keep string) *agentteams.ForkContext {
-		return agentteams.ForkContextFromMessages(msgs, ckpt, keep)
+func fakeForkFrom(msgs []llmschema.BaseMessage) func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+	return func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+		return agentteams.ForkContextFromMessages(msgs, ckpt, keep), nil
 	}
 }
 
@@ -143,8 +143,8 @@ func TestBuildForkContext_Named默认ModeBefore(t *testing.T) {
 // Python: fork.py:65 raise + team_agent.py:1618-1622 except。
 func TestBuildForkContext_抓取失败返回Nil(t *testing.T) {
 	a := newTestTeamAgent(t)
-	forkFrom := func(ckpt *int, keep string) *agentteams.ForkContext {
-		panic(errors.New("pool 未懒加载且无持久化兜底"))
+	forkFrom := func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+		return nil, errors.New("pool 未懒加载且无持久化兜底")
 	}
 	forkCtx := a.buildForkContext(context.Background(), "mate",
 		&tools.ForkInfo{Fork: true, Source: "", ForkMode: "full"}, forkFrom)
@@ -156,8 +156,8 @@ func TestBuildForkContext_抓取失败返回Nil(t *testing.T) {
 func TestBuildForkContext_抓取失败回落持久化(t *testing.T) {
 	a := newTestTeamAgent(t)
 	persisted := forkDispatchMessages()
-	forkFrom := func(ckpt *int, keep string) *agentteams.ForkContext {
-		return agentteams.ForkContextFromMessages(persisted, ckpt, keep)
+	forkFrom := func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+		return agentteams.ForkContextFromMessages(persisted, ckpt, keep), nil
 	}
 	forkCtx := a.buildForkContext(context.Background(), "mate",
 		&tools.ForkInfo{Fork: true, Source: "", ForkMode: "full"}, forkFrom)
