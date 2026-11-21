@@ -171,7 +171,8 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 
 	result, err := w.executeWithTimeout(ctx, func(ctx context.Context) (any, error) {
 		var chunks []WorkflowChunk
-		ch, chErr := w.streamInternal(ctx, inputs, ws, kwargs)
+		// Python workflow.py:367 self._stream(inputs, workflow_session, context=context)
+		ch, chErr := w.streamInternal(ctx, inputs, ws, modelContext, kwargs)
 		for chunk := range ch {
 			// 顶层工作流帧恒 Schema（writer 产出 OutputSchema）；any 化后断言收集
 			// 保持 Result 类型闭集（is_sub 的 dict 帧只出现在嵌套路径，不经此处）
@@ -227,7 +228,7 @@ func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterface
 	inputs = fw.TransformWorkflowIOInput(ctx, callback.WorkflowStreamInput, inputs)
 	logWorkflowStart("stream", w.card, inputs)
 	ws := w.createWorkflowSession(sess, streamModes, false)
-	out, _ := w.streamInternal(ctx, inputs, ws, kwargs)
+	out, _ := w.streamInternal(ctx, inputs, ws, modelContext, kwargs)
 	return out, nil
 }
 
@@ -252,8 +253,9 @@ func (w *Workflow) Draw(title, outputFormat string, expandSubgraph bool, enableA
 
 // streamInternal 内部流循环（workflow.py:501-592 步骤一比一；
 // 主循环中转禁直透——spec §10：转发层承载 workflow_final 补帧/取消事件/逐帧日志）。
+// context 形参对齐 Python _stream(inputs, session, context)（D-18-7 修正：原漏形参）。
 func (w *Workflow) streamInternal(ctx context.Context, inputs any,
-	ws sessioninterfaces.InnerSession, kwargs map[string]any) (<-chan any, <-chan error) {
+	ws sessioninterfaces.InnerSession, modelContext any, kwargs map[string]any) (<-chan any, <-chan error) {
 	out := make(chan any)
 	errCh := make(chan error, 1)
 	go func() { // 转发协程（spec §10 注记 3；Python _stream 协程）
@@ -279,7 +281,8 @@ func (w *Workflow) streamInternal(ctx context.Context, inputs any,
 
 		// workflow.py:524-537 后台图执行（stream_process；spawn_background_task group="workflow"）
 		task, terr := utils.CreateBackgroundTask(ctx, func(ctx context.Context) error {
-			compiled, err := w.internal.Compile(ws, nil)
+			// workflow.py:525 self._internal.compile(session, context)
+			compiled, err := w.internal.Compile(ws, modelContext)
 			if err != nil {
 				return err
 			}

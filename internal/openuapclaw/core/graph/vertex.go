@@ -49,8 +49,11 @@ type Vertex struct {
 	executable GeneralExecutor
 	// nodeID 节点标识（Python: self._node_id）
 	nodeID string
-	// ctx 执行上下文（Python: self._context，init 时从 kwargs 注入）
-	ctx context.Context
+	// modelContext 模型上下文（Python: self._context: ModelContext，init 时从
+	// kwargs["context"] 注入并原样持有——D-18-7 修正：原误作 context.Context 断言，
+	// 使 workflow 层透传的 ModelContext 静默丢失；vertex.py:64-86 context 形参
+	// 为 ModelContext 可选参数，on_invoke/on_stream 经 kwargs.get("context") 下发）
+	modelContext any
 	// streamCalledTimeout 流调用等待超时秒数（Python: self._stream_called_timeout = 10）
 	streamCalledTimeout float64
 	// nodeSession 节点级会话（Python: self._session: NodeSession；Go 侧经
@@ -212,8 +215,9 @@ func (v *Vertex) resetStreamDone() {
 func (v *Vertex) Init(sess session.BaseSession, kwargs map[string]any) bool {
 	// ① NodeSession 构造（vertex.py:88-89）：nodeType=可执行体类型名、skipTrace 透传
 	v.nodeSession = session.NewWorkflowVertexSession(sess, v.nodeID, executableTypeName(v.executable), v.executable.SkipTrace())
-	// ② context 注入（vertex.py:90）
-	v.ctx, _ = kwargs["context"].(context.Context)
+	// ② context 注入（vertex.py:90：self._context = context，原样赋值无类型断言——
+	// D-18-7 修正：Python context 形参为 ModelContext，非 Go ctx）
+	v.modelContext = kwargs["context"]
 	// ③ 流调用超时（vertex.py:91）
 	v.streamCalledTimeout = anyToFloat64(sess.Config().GetEnv(constants.CompStreamCallTimeoutKey))
 	// ④⑤⑥⑦ node_config 读取与能力派生（vertex.py:92-97，✅ 8.15 D-3 内联回收）
@@ -415,7 +419,7 @@ func (v *Vertex) runExecutable(ctx context.Context, ability compability.Componen
 			batchInputs = map[string]any{InputsKey: batchInputs, ConfigKey: config}
 		}
 		results, err := v.executable.OnInvoke(ctx, toMapAny(batchInputs), v.nodeSession,
-			map[string]any{"context": v.ctx})
+			map[string]any{"context": v.modelContext})
 		if err != nil {
 			return err
 		}
@@ -434,7 +438,7 @@ func (v *Vertex) runExecutable(ctx context.Context, ability compability.Componen
 			batchInputs = map[string]any{InputsKey: batchInputs, ConfigKey: config}
 		}
 		resultsIter, err := v.executable.OnStream(ctx, toMapAny(batchInputs), v.nodeSession,
-			map[string]any{"context": v.ctx})
+			map[string]any{"context": v.modelContext})
 		if err != nil {
 			return err
 		}
@@ -463,7 +467,7 @@ func (v *Vertex) runExecutable(ctx context.Context, ability compability.Componen
 		envelope <- collectIter
 		close(envelope)
 		batchOutput, err := v.executable.OnCollect(ctx, envelope, v.nodeSession,
-			map[string]any{"context": v.ctx})
+			map[string]any{"context": v.modelContext})
 		if err != nil {
 			return err
 		}
@@ -494,7 +498,7 @@ func (v *Vertex) runExecutable(ctx context.Context, ability compability.Componen
 		envelope <- transformIter
 		close(envelope)
 		outputIter, err := v.executable.OnTransform(ctx, envelope, v.nodeSession,
-			map[string]any{"context": v.ctx})
+			map[string]any{"context": v.modelContext})
 		if err != nil {
 			return err
 		}

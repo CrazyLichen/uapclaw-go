@@ -217,7 +217,7 @@ func TestInit_主干默认能力(t *testing.T) {
 	if v.nodeSession.SkipTrace() != false {
 		t.Fatal("skipTrace 应透传 executable.SkipTrace()（vertex.py:89）")
 	}
-	if v.ctx != ctxVal {
+	if v.modelContext != ctxVal {
 		t.Fatal("context 应从 kwargs 注入（vertex.py:90）")
 	}
 	if v.streamCalledTimeout != 3.5 {
