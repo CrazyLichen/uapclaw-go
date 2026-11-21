@@ -530,7 +530,7 @@ func TestTeamAgent_ConcludeCompletedRound(t *testing.T) {
 func TestTeamAgent_SpawnTeammate(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(context.Background(), card)
-	err := a.SpawnTeammate(context.Background(), atschema.TeamRuntimeContext{}, "msg", "sid", nil)
+	err := a.SpawnTeammate(context.Background(), atschema.TeamRuntimeContext{}, "msg", "sid", nil, nil)
 	assert.NoError(t, err)
 }
 

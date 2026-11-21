@@ -176,6 +176,14 @@ type TeamAgentSpec struct {
 	// build_reviewer_deep_agent_spec 产出）。25.2b 评审链消费。
 	// Python: reviewer_agent (blueprint.py:208)
 	ReviewerAgent *hschema.DeepAgentSpec `json:"reviewer_agent,omitempty"`
+	// EnableFork 上下文继承（fork）开关。
+	//
+	// True 时成员可调 checkpoint/list_checkpoints 工具，spawn_teammate 接受
+	// fork/fork_source/fork_mode 参数；False（默认）时三者均被拒（checkpoint
+	// 工具直接报错，fork 参数触发"without these arguments, or enable fork"错误）。
+	//
+	// Python: enable_fork (blueprint.py:554)
+	EnableFork bool `json:"enable_fork,omitempty"`
 	// EnablePermissions 生效的团队权限开关（TeamAgentSpec 级）。
 	// Python: enable_permissions (blueprint.py:623)
 	EnablePermissions bool `json:"enable_permissions"`

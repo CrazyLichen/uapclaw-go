@@ -109,6 +109,10 @@ func NewEventDispatcher(
 		staleTask = handlers.NewStaleTaskHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
 	}
 	teamCompletion := handlers.NewTeamCompletionHandler(host, bp, inf, pollCtrl)
+	// 25.5: checkpoint 创建通告（专用 event_key，无 fan-out overlap），注册
+	// 位置不承重。
+	// Python: dispatcher.py:254-256 self.checkpoint = CheckpointHandler(...)
+	checkpoint := handlers.NewCheckpointHandler(host, bp, inf, pollCtrl)
 
 	// Python: dispatcher.py:258-286 — reliability handler 仅在团队 opt-in
 	// （spec.reliability.enabled）时装配（含团队级 pingpong detector 的构造）；
@@ -142,7 +146,7 @@ func NewEventDispatcher(
 	// 依次为 lifecycle、member、message、task_board、stale_task、team_completion，
 	// 之后 reliability（非 nil 时）、external_runtime 恒最后。
 	// 即：生命周期、成员、消息、任务面板、过期任务、团队完成、可靠性、外部运行时
-	handlerList := []types.CallbacksProvider{lifecycle, member, message, taskBoard, staleTask, teamCompletion}
+	handlerList := []types.CallbacksProvider{lifecycle, member, message, taskBoard, staleTask, teamCompletion, checkpoint}
 	if reliabilityHandler != nil {
 		handlerList = append(handlerList, reliabilityHandler)
 	}

@@ -1,6 +1,8 @@
 package metadata
 
 import (
+	"encoding/json"
+
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 )
@@ -26,6 +28,9 @@ const (
 	// TeamPendingResumeKey 冷恢复标记在 per-team 命名空间中的键
 	// Python: TEAM_PENDING_RESUME_KEY = "pending_resume"（metadata.py L41）
 	TeamPendingResumeKey = "pending_resume"
+	// TeamCheckpointsKey 命名 checkpoint 索引在 per-team 命名空间中的键
+	// Python: TEAM_CHECKPOINTS_KEY = "checkpoints"（metadata.py L43）
+	TeamCheckpointsKey = "checkpoints"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -198,4 +203,66 @@ func copyMap(m map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+// ──────────────────────────── 导出函数（fork 半区）────────────────────────────
+
+// CheckpointRecord 命名 checkpoint 索引记录——只存下标不存消息内容。
+// Python: _named_checkpoints 值形态 {count, description, created_by}
+// （team_agent.py:1790-1794）；镜像到 session state 时的序列化形态。
+type CheckpointRecord struct {
+	Count       int    `json:"count"`
+	Description string `json:"description"`
+	CreatedBy   string `json:"created_by"`
+}
+
+// ReadTeamCheckpoints 读取 per-team 命名空间中的命名 checkpoint 索引；
+// 缺失/形态不符返回不存在。
+// Python: read_team_checkpoints (metadata.py:129-157)
+func ReadTeamCheckpoints(sess interfaces.SessionFacade, teamName string) (map[string]CheckpointRecord, bool) {
+	bucket := ReadTeamNamespace(sess, teamName)
+	if bucket == nil {
+		return nil, false
+	}
+	raw, ok := bucket[TeamCheckpointsKey].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	out := make(map[string]CheckpointRecord, len(raw))
+	for name, v := range raw {
+		rec, err := decodeCheckpointRecord(v)
+		if err != nil {
+			return nil, false
+		}
+		out[name] = rec
+	}
+	return out, true
+}
+
+// MergeTeamCheckpoints 记录/整表覆盖命名 checkpoint 索引。
+// Python: merge_team_checkpoints (metadata.py:158-160)——
+// merge_team_namespace(session, team_name, {TEAM_CHECKPOINTS_KEY: dict(mapping)})
+func MergeTeamCheckpoints(sess interfaces.SessionFacade, teamName string, mapping map[string]CheckpointRecord) {
+	values := make(map[string]any, len(mapping))
+	for name, rec := range mapping {
+		values[name] = rec
+	}
+	MergeTeamNamespace(sess, teamName, map[string]any{TeamCheckpointsKey: values})
+}
+
+// ──────────────────────────── 非导出函数（fork 半区）────────────────────────────
+
+// decodeCheckpointRecord 把 session state 中的记录值（map[string]any）还原为
+// CheckpointRecord：经 json tag 序列化往返（struct json tag 直转，不写独立
+// marshal 包装层）。任何形态不符返回错误，由调用方整体退化为“没有索引”。
+func decodeCheckpointRecord(v any) (CheckpointRecord, error) {
+	var rec CheckpointRecord
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return rec, err
+	}
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		return rec, err
+	}
+	return rec, nil
 }

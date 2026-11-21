@@ -135,7 +135,6 @@ func NewTeamContextTracker(
 		role == atschema.TeamRoleHumanAgent ||
 		exposeHumanAgentsToTeammates
 	// Python: bool(team_backend and getattr(team_backend, "fork_enabled", lambda: False)())
-	// 偏差 D-8：Go 的 TeamAgentSpec 无 enable_fork 字段，ForkEnabled() 恒 false
 	forkCapable := false
 	if teamBackend != nil {
 		forkCapable = teamBackend.ForkEnabled()

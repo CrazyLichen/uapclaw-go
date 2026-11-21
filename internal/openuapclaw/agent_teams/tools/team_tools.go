@@ -73,9 +73,6 @@ type TeamToolOptions struct {
 	// SwarmflowEnabled leader 是否持有 swarmflow 工具（偏差 D-3）
 	// Python: 由 swarmflow 工具是否注册推导，非显式参数
 	SwarmflowEnabled bool
-	// ForkEnabled 上下文继承开关（TeamAgentSpec.enable_fork）——门控
-	// spawn_teammate 的 fork 参数面与描述槽（tool_member.py:703-714）。
-	ForkEnabled bool
 	// ExpertCatalog host 注入的专家定位协议（nil = 不注册专家三件）
 	ExpertCatalog experts.ExpertCatalog
 	// ExpertBoundGroup / ExpertPersonaWorkspace / ExpertPersonaLanguage
@@ -277,7 +274,7 @@ func CreateTeamTools(
 		allTools["clean_team"] = newCleanTeamTool(teamBackend, t)
 		// Python: spawn_teammate（tool_member.py SpawnTeammateTool）+ spawn_human_agent
 		// 两个独立工具（旧 SpawnMemberTool 的 role_type 分支拆分，规则 8 删旧）。
-		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, atschema.Language(opts.Language), modelConfigAlloc, opts.ForkEnabled)
+		allTools["spawn_teammate"] = newSpawnTeammateTool(teamBackend, t, atschema.Language(opts.Language), modelConfigAlloc, teamBackend.ForkEnabled())
 		// fork 半区两件（Python tool_factory.py:322-323 无条件注册 + :461-467
 		// fork 关闭时 allowed 剔除——死工具不进每个成员的工具面）。
 		allTools["spawn_passive_human"] = newSpawnPassiveHumanTool(teamBackend, t)
@@ -349,7 +346,11 @@ func CreateTeamTools(
 	// 专家三件：catalog 非 nil 时并入 allowed（Python create_team_tools 的
 	// allowed 含全部 all_tools 键，catalog None 才减 EXPERT_TOOLS；
 	// tool_factory.py:495-497）。
-	if !opts.ForkEnabled {
+	// fork 半区两件（Python tool_factory.py:322-323 无条件注册 + :461-467
+	// fork 关闭时 allowed 剔除——死工具不进每个成员的工具面）。
+	// Python: allowed 依 fork_enabled 剔除（team_backend.fork_enabled() 直读
+	// spec 开关）。
+	if teamBackend == nil || !teamBackend.ForkEnabled() {
 		delete(allowed, "checkpoint")
 		delete(allowed, "list_checkpoints")
 	}

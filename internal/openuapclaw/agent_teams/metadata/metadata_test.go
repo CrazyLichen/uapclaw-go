@@ -236,6 +236,48 @@ func TestPendingResume_非dict视为不存在(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestReadMergeTeamCheckpoints 验证命名 checkpoint 索引的写入与读取。
+// Python: read_team_checkpoints / merge_team_checkpoints (metadata.py:129-160)
+func TestReadMergeTeamCheckpoints(t *testing.T) {
+	sess := newFakeSessionFacade()
+
+	// 缺失命名空间 → 不存在
+	_, ok := metadata.ReadTeamCheckpoints(sess, "team-a")
+	assert.False(t, ok)
+
+	mapping := map[string]metadata.CheckpointRecord{
+		"code-ready": {Count: 12, Description: "编码就绪", CreatedBy: "alice"},
+	}
+	metadata.MergeTeamCheckpoints(sess, "team-a", mapping)
+	got, ok := metadata.ReadTeamCheckpoints(sess, "team-a")
+	assert.True(t, ok)
+	assert.Equal(t, mapping, got)
+
+	// 覆盖写（merge_team_checkpoints 整表替换）
+	mapping2 := map[string]metadata.CheckpointRecord{
+		"review-pass": {Count: 30, CreatedBy: "bob"},
+	}
+	metadata.MergeTeamCheckpoints(sess, "team-a", mapping2)
+	got, ok = metadata.ReadTeamCheckpoints(sess, "team-a")
+	assert.True(t, ok)
+	assert.Equal(t, mapping2, got)
+}
+
+// TestReadTeamCheckpoints_坏数据视为不存在 验证非 dict / 非法记录退化为“没有索引”。
+func TestReadTeamCheckpoints_坏数据视为不存在(t *testing.T) {
+	sess := newFakeSessionFacade()
+	metadata.MergeTeamNamespace(sess, "team-a", map[string]any{metadata.TeamCheckpointsKey: "bad"})
+	_, ok := metadata.ReadTeamCheckpoints(sess, "team-a")
+	assert.False(t, ok)
+
+	sess2 := newFakeSessionFacade()
+	metadata.MergeTeamNamespace(sess2, "team-a", map[string]any{
+		metadata.TeamCheckpointsKey: map[string]any{"x": "not-a-record"},
+	})
+	_, ok = metadata.ReadTeamCheckpoints(sess2, "team-a")
+	assert.False(t, ok)
+}
+
 // GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
 // Python: SessionFacade.get_cache_identity 的测试替身实现。
 func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
