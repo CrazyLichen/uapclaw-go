@@ -3,8 +3,8 @@ package evolution
 import (
 	"context"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -56,6 +56,16 @@ type EvolutionExtension interface {
 	// GetEvolutionTotalTimeoutSecs 获取演进总超时秒数。
 	// Python: EvolutionExtension.get_evolution_total_timeout_secs()
 	GetEvolutionTotalTimeoutSecs() float64
+}
+
+// ExecutionIncrementRecorder 可选扩展：执行增量归档记录。
+// Python: evolution_rail.py:816 _record_execution_increment 覆写点——基类空
+// 实现，TrajectoryRail 覆写做归档累积。Go Final 回调设计下经可选接口断言
+// 分派（与 ext 接口同源偏差），实现方按需挂载。
+type ExecutionIncrementRecorder interface {
+	// RecordExecutionIncrement 收到一次增量轨迹（含带质量问题的增量，
+	// Python 注释：receives every normalizable increment）。
+	RecordExecutionIncrement(increment *trajectory.Trajectory)
 }
 
 // noOpExtension EvolutionExtension 的默认空实现。

@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 )
 
 // rail_scope.go 演化 rail 的订阅与 scope 窗口机械。
@@ -153,9 +153,15 @@ func (r *EvolutionRail) scopeProcessor() ScopeProcessorLike {
 	return nil
 }
 
-// mergeScopeIncrement 把 builder 增量合并进 scope 窗口并裁剪。
-// Python: evolution_rail.py _merge_clean_increment（L732-740）。
-func (r *EvolutionRail) mergeScopeIncrement(capture *invokeCapture) (*trajectory.Trajectory, error) {
+// collectScopeIncrement 收集自上次消费以来的 builder 新增 spans 并标记已消费。
+// Python: evolution_rail.py _drain_for_hook 的 subscription drain 段
+// （increment, issues = processor.drain(subscription)）——D-25.2b-11 拍板下
+// 增量源为 builder 游标（偏差登记见文件头），issues 由 captureQualityIssues
+// 等价实现。
+// 2026-11-21 审计修复（17.6 基座缺口 1）：原 mergeScopeIncrement 的"收集+合并"
+// 两步拆分——收集先行（消费即标记，gate 丢弃时不重放），合并由 drainForHook
+// 在 quality gate 通过后执行。
+func (r *EvolutionRail) collectScopeIncrement(capture *invokeCapture) ([]map[string]any, error) {
 	if capture == nil || r.builder == nil {
 		return nil, nil
 	}
@@ -180,6 +186,31 @@ func (r *EvolutionRail) mergeScopeIncrement(capture *invokeCapture) (*trajectory
 		}
 		state.consumed[spanID] = struct{}{}
 		additions = append(additions, span)
+	}
+	return additions, nil
+}
+
+// incrementFromAdditions 把增量 spans 包成增量轨迹（空增量返回 nil）。
+// Python: processor.drain 返回的 increment 轨迹等价物。
+func incrementFromAdditions(additions []map[string]any) (*trajectory.Trajectory, error) {
+	if len(additions) == 0 {
+		return nil, nil
+	}
+	return trajectory.MergeTrajectories(additionsToPayload(additions))
+}
+
+// mergeAdditions 把增量合并进 scope 窗口并裁剪（clean-window gate 通过后调用）。
+// Python: evolution_rail.py _merge_clean_increment（L732-740）。
+func (r *EvolutionRail) mergeAdditions(capture *invokeCapture, additions []map[string]any) (*trajectory.Trajectory, error) {
+	if capture == nil {
+		return nil, nil
+	}
+	r.scopeMu.Lock()
+	defer r.scopeMu.Unlock()
+	state := r.scopeWindows[capture.scopeKey]
+	if state == nil {
+		state = &scopeWindowState{}
+		r.scopeWindows[capture.scopeKey] = state
 	}
 	merged, err := r.mergeWindowLocked(state.trajectory, additions)
 	if err != nil {
