@@ -33,7 +33,8 @@ func (s *BranchCompSuite) newEnd(tmpl string) *flow.End {
 	return e
 }
 
-// newBranch 构造双出口分支组件：${amount} > 100 → high 出口，AlwaysTrue → low 出口。
+// newBranch 构造双出口分支组件：复合表达式命中 → high 出口，AlwaysTrue → low 出口。
+// high 条件覆盖 BoolOp(and)+Call(is_not_empty)+真值链（D-19-4 后复合表达式集成面）。
 // withNoMatch=true 时两条均为不可能命中的表达式（全不命中场景）。
 func (s *BranchCompSuite) newBranch(withNoMatch bool) *flow.BranchComponent {
 	b := flow.NewBranchComponent()
@@ -42,7 +43,7 @@ func (s *BranchCompSuite) newBranch(withNoMatch bool) *flow.BranchComponent {
 		s.Require().NoError(b.AddBranch("${amount} < -999999", []string{"end_b"}, "low"))
 		return b
 	}
-	s.Require().NoError(b.AddBranch("${amount} > 100", []string{"end_a"}, "high"))
+	s.Require().NoError(b.AddBranch("${amount} > 100 && is_not_empty(${items})", []string{"end_a"}, "high"))
 	s.Require().NoError(b.AddBranch(conditionpkg.NewAlwaysTrue(), []string{"end_b"}, "low"))
 	return b
 }
@@ -60,7 +61,7 @@ func (s *BranchCompSuite) Test双出口_表达式命中high出口() {
 
 	sess := sessionpkg.NewSession(sessionpkg.WithEnvs(map[string]any{}))
 	out, err := w.Invoke(context.Background(),
-		map[string]any{"amount": 150}, sess, nil, nil)
+		map[string]any{"amount": 150, "items": []any{"x"}}, sess, nil, nil)
 	s.Require().NoError(err)
 	wo, ok := out.(*workflow.WorkflowOutput)
 	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
