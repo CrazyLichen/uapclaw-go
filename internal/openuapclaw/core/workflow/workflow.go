@@ -7,6 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
@@ -21,9 +25,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -403,7 +404,7 @@ func (w *Workflow) subInvoke(ctx context.Context, inputs any, sess sessioninterf
 
 // subStream 子工作流流式（workflow.py:628-651 一比一）。
 // 帧元素 any（D-14b-6 延伸）：Python _sub_stream yield 的 messages 为队列原样帧
-//（dict/OutputSchema 混流），WorkflowChunk 接口约束会迫使 drain 包装 dict 帧，
+// （dict/OutputSchema 混流），WorkflowChunk 接口约束会迫使 drain 包装 dict 帧，
 // 破坏 accumulate 的 isinstance-dict 合并语义（缓存恒空，与 Python 分叉）
 func (w *Workflow) subStream(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
 	modelContext any, kwargs map[string]any) (<-chan any, error) {
@@ -616,38 +617,38 @@ func (w *Workflow) validateInputs(inputs any, kwargs map[string]any) error {
 	if _, isII := inputs.(*interaction.InteractiveInput); isII {
 		return nil // ≙ not isinstance(inputs, InteractiveInput) 取反
 	}
-	// Python SchemaUtils.format_with_schema(inputs, card.input_params, skip_validate=...)
-	// JSON Schema 校验面由调用方 schema 工具承载；此处校验失败转错误码
-	if err := validateInputSchema(inputs, w.card.InputParams); err != nil {
-		return exception.BuildError(exception.StatusWorkflowExecuteInputInvalid,
-			exception.WithParam("inputs", fmt.Sprintf("%v", inputs)),
-			exception.WithParam("reason", fmt.Sprintf("input validation failed against schema: %v", err)),
-			exception.WithParam("workflow", w.card.ID+":"+w.card.Version))
+	// Python SchemaUtils.format_with_schema(inputs, card.input_params,
+	// skip_validate=kwargs.get("skip_inputs_validate"))（workflow.py:748-749）
+	// ——共享实现 core/common/utils/schemautils（D-18-1 收口：降级等价面删除，
+	// 校验行为向 Python 对齐变严）。Python 侧格式化结果仅在函数内局部复用，
+	// _validate_inputs 对外只承载校验失败错误，Go 同步丢弃格式化产物。
+	skipValidate := false
+	if sv, ok := kwargs["skip_inputs_validate"].(bool); ok {
+		skipValidate = sv
+	}
+	m, isMap := inputs.(map[string]any)
+	if !isMap {
+		// Python 非 dict 输入过 object 型 schema 必然校验失败（动态模型
+		// model_validate 抛 ValidationError → SCHEMA_FORMAT_INVALID）
+		return w.workflowInputInvalid(inputs, fmt.Errorf("input is not a JSON object"))
+	}
+	opts := []schemautils.FormatOption{}
+	if skipValidate {
+		opts = append(opts, schemautils.WithFormatSkipValidate(true))
+	}
+	if _, err := (schemautils.SchemaUtils{}).FormatWithSchemaMap(m, w.card.InputParams, opts...); err != nil {
+		return w.workflowInputInvalid(inputs, err)
 	}
 	return nil
 }
 
-// validateInputSchema 按 JSON Schema 校验输入（SchemaUtils.format_with_schema 等价面）。
-func validateInputSchema(inputs any, schemaMap map[string]any) error {
-	// skip_inputs_validate 经 kwargs 透传时跳过（Python skip_validate）
-	if len(schemaMap) == 0 {
-		return nil
-	}
-	if m, ok := inputs.(map[string]any); ok {
-		for k := range schemaMap {
-			if _, present := m[k]; !present {
-				if required, ok := schemaMap["required"].([]any); ok {
-					for _, r := range required {
-						if rs, _ := r.(string); rs == k {
-							return fmt.Errorf("missing required field: %s", k)
-						}
-					}
-				}
-			}
-		}
-		return nil
-	}
-	return nil
+// workflowInputInvalid 输入校验失败统一错误（workflow.py:750-753 build_error，
+// reason 携带底层校验错误字符串对齐 str(e)）
+func (w *Workflow) workflowInputInvalid(inputs any, cause error) error {
+	return exception.BuildError(exception.StatusWorkflowExecuteInputInvalid,
+		exception.WithParam("inputs", fmt.Sprintf("%v", inputs)),
+		exception.WithParam("reason", fmt.Sprintf("input validation failed against schema: %v", cause)),
+		exception.WithParam("workflow", w.card.ID+":"+w.card.Version))
 }
 
 // taskGroupScope 任务组作用域（workflow.py:119-129；偏差 D-b：anyio 语义 →

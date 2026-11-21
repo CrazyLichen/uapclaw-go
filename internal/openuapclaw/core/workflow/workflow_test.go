@@ -103,6 +103,59 @@ func TestValidateInputs_InteractiveInput直通(t *testing.T) {
 	}
 }
 
+// TestValidateInputs_必填缺失拒绝 对齐 workflow.py:746-754 共享 SchemaUtils 收口后
+// 校验行为变严（D-18-1）：缺 required 字段 → WORKFLOW_EXECUTE_INPUT_INVALID
+func TestValidateInputs_必填缺失拒绝(t *testing.T) {
+	w := NewWorkflow(nil)
+	w.card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"name": map[string]any{"type": "string"}},
+		"required":   []any{"name"},
+	}
+	err := w.validateInputs(map[string]any{"other": 1}, nil)
+	if err == nil {
+		t.Fatal("缺 required 应拒绝")
+	}
+	if !strings.Contains(err.Error(), "input validation failed") {
+		t.Fatalf("错误文案不符：%v", err)
+	}
+}
+
+// TestValidateInputs_合法输入通过 合法 map 输入走共享校验通过
+func TestValidateInputs_合法输入通过(t *testing.T) {
+	w := NewWorkflow(nil)
+	w.card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"name": map[string]any{"type": "string"}},
+		"required":   []any{"name"},
+	}
+	if err := w.validateInputs(map[string]any{"name": "x"}, nil); err != nil {
+		t.Fatalf("合法输入不应报错：%v", err)
+	}
+}
+
+// TestValidateInputs_skip透传 skip_inputs_validate=true 跳过 jsonschema 约束级
+// 校验（workflow.py:749 skip_validate=kwargs.get("skip_inputs_validate")）——
+// Python 语义：skip 只跳过 validate_with_schema 段，动态模型 model_validate
+// 仍执行（required/额外字段仍拒），故此用例以合法结构输入验证透传不报错
+func TestValidateInputs_skip透传(t *testing.T) {
+	w := NewWorkflow(nil)
+	w.card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"name": map[string]any{"type": "string"}},
+		"required":   []any{"name"},
+	}
+	if err := w.validateInputs(map[string]any{"name": "x"},
+		map[string]any{"skip_inputs_validate": true}); err != nil {
+		t.Fatalf("skip_inputs_validate + 合法输入应通过：%v", err)
+	}
+	// 结构性违规（额外字段）即便 skip 也拒绝——Python 动态模型 forbid 语义
+	if err := w.validateInputs(map[string]any{"other": 1},
+		map[string]any{"skip_inputs_validate": true}); err == nil {
+		t.Fatal("skip 下额外字段仍应拒绝（Python model_validate 不受 skip_validate 影响）")
+	}
+}
+
 // ──────────────────────────── executeWithTimeout 三分类 ────────────────────────────
 
 // TestExecuteWithTimeout_超时转错误码 对齐 workflow.py:671-679。
@@ -463,16 +516,6 @@ func TestAddConnections_形态(t *testing.T) {
 	w.AddConnection([]string{"mid"}, "end")
 	if len(w.internal.Config().Spec.StreamEdges) != 2 {
 		t.Fatalf("流边应 2 条, got %d", len(w.internal.Config().Spec.StreamEdges))
-	}
-}
-
-// TestValidateInputSchema_分支 validateInputSchema 直通/校验两分支。
-func TestValidateInputSchema_分支(t *testing.T) {
-	if err := validateInputSchema(map[string]any{"a": 1}, nil); err != nil {
-		t.Fatalf("无 schema 应直通: %v", err)
-	}
-	if err := validateInputSchema(map[string]any{"a": 1}, map[string]any{"type": "object"}); err != nil {
-		t.Fatalf("合法输入应通过: %v", err)
 	}
 }
 

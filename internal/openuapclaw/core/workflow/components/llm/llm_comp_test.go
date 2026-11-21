@@ -315,9 +315,13 @@ func TestFormatJSONResponse_object型schema(t *testing.T) {
 	}
 	out := formatJSONResponse(`{"a": "v"}`, objectSchema)
 	assert.Equal(t, "v", out["a"])
-	// 违反 schema → 校验失败
+	// 违反 schema → 校验失败，错误按 Python 异常分类直传
+	// SCHEMA_VALIDATE_INVALID（llm_comp.py:247-248 except BaseError: raise）
 	err := recoverErr(t, func() { formatJSONResponse(`{"a": 1}`, objectSchema) })
-	assertLLMCode(t, err, exception.StatusComponentLLMConfigInvalid)
+	be, ok := err.(*exception.BaseError)
+	if !ok || be.Code() != exception.StatusSchemaValidateInvalid.Code() {
+		t.Fatalf("应直传 SCHEMA_VALIDATE_INVALID, 实得 %v", err)
+	}
 }
 
 // TestFormatJSONResponse_空配置拒绝（:227-229）
@@ -326,18 +330,35 @@ func TestFormatJSONResponse_空配置拒绝(t *testing.T) {
 	assert.Contains(t, errMsg(t, err), "at least one field")
 }
 
-// TestFormatWithSchema_default填充 object schema 带默认值字段补齐（D-18-1 等价面）
-func TestFormatWithSchema_default填充(t *testing.T) {
-	schema := map[string]any{
+// TestFormatJSONResponse_object分支_default填充 object schema 走共享
+// SchemaUtils.FormatWithSchemaMap 带默认值字段补齐（D-18-1 收口：私有等价面删除）；
+// 校验错误按 Python 异常分类直传（SCHEMA_VALIDATE_INVALID 原样，非 101007）
+func TestFormatJSONResponse_object分支_default填充(t *testing.T) {
+	outputConfig := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"a": map[string]any{"type": "string"},
 			"b": map[string]any{"type": "string", "default": "dflt"},
 		},
+		"required": []any{"a"},
 	}
-	out := formatWithSchema(map[string]any{"a": "v"}, schema)
+	out := formatJSONResponse(`{"a": "v"}`, outputConfig)
 	assert.Equal(t, "v", out["a"])
 	assert.Equal(t, "dflt", out["b"])
+}
+
+// TestFormatJSONResponse_object分支_校验错误直传 校验失败错误保持
+// SCHEMA_VALIDATE_INVALID 原样（llm_comp.py:247-248 except BaseError: raise）
+func TestFormatJSONResponse_object分支_校验错误直传(t *testing.T) {
+	outputConfig := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"a": map[string]any{"type": "integer"}},
+	}
+	err := recoverErr(t, func() { formatJSONResponse(`{"a": "str"}`, outputConfig) })
+	be, ok := err.(*exception.BaseError)
+	if !ok || be.Code() != exception.StatusSchemaValidateInvalid.Code() {
+		t.Fatalf("应直传 SCHEMA_VALIDATE_INVALID, 实得 %v", err)
+	}
 }
 
 // ──────────────────────────── Task5 提示词格式化 + 流式状态 ────────────────────────────
