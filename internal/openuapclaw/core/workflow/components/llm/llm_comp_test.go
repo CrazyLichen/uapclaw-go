@@ -13,6 +13,7 @@ import (
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
 // ──────────────────────────── 测试助手 ────────────────────────────
@@ -728,4 +729,102 @@ func TestLLMComponent_校验失败panic(t *testing.T) {
 	}()
 	_ = c.ToExecutableFn()
 	_ = "unreachable"
+}
+
+// ──────────────────────────── 补测：钩子捕获/注入缝/工具函数 ────────────────────────────
+
+// TestOnInvokeOnStream_context捕获 kwargs["context"] 为 ModelContext 时写入实例字段
+func TestOnInvokeOnStream_context捕获(t *testing.T) {
+	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{respContent: "x"})
+	baseInvoked := false
+	e.baseInvoke = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
+		baseInvoked = true
+		return map[string]any{}, nil
+	}
+	baseStreamCalled := false
+	e.baseStream = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
+		baseStreamCalled = true
+		ch := make(chan graphexe.StreamChunk[any], 1)
+		close(ch)
+		return ch, nil
+	}
+	mc := &recordingMCStub{}
+	_, err := e.OnInvoke(context.Background(), map[string]any{}, nil, map[string]any{"context": mc})
+	require.NoError(t, err)
+	require.True(t, baseInvoked, "基座钩子应被转调")
+	require.Equal(t, mc, e.context, "OnInvoke 应捕获 ModelContext")
+	_, err = e.OnStream(context.Background(), map[string]any{}, nil, map[string]any{"context": mc})
+	require.NoError(t, err)
+	require.True(t, baseStreamCalled)
+}
+
+// TestOnInvoke_context非ModelContext kwargs 携带非 ModelContext 值时不覆盖
+func TestOnInvoke_context非ModelContext(t *testing.T) {
+	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{respContent: "x"})
+	e.baseInvoke = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
+		return map[string]any{}, nil
+	}
+	e.context = nil
+	_, err := e.OnInvoke(context.Background(), map[string]any{}, nil, map[string]any{"context": "not-mc"})
+	require.NoError(t, err)
+	require.Nil(t, e.context, "非 ModelContext 断言失败应保持原字段")
+}
+
+// TestWithModelResolver_注入生效 选项注入 getModelFn 并经懒初始化消费
+func TestWithModelResolver_注入生效(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ModelClientConfig = nil
+	cfg.ModelConfig = nil
+	modelID := "m9"
+	cfg.ModelID = &modelID
+	e, err := newLLMExecutableWithOptions(cfg, WithModelResolver(func(ctx context.Context, id string) (LLMInvoker, error) {
+		require.Equal(t, "m9", id)
+		return &fakeModelClient{respContent: "ok"}, nil
+	}))
+	require.NoError(t, err)
+	e.setSession(newTestNodeSession(t))
+	out, err := e.invokeEntry(context.Background(), map[string]any{}, newTestNodeSession(t))
+	require.NoError(t, err)
+	require.Equal(t, "ok", out["answer"])
+}
+
+// TestWithComponentModelResolver_组合面下发 组件级缝透传至可执行体
+func TestWithComponentModelResolver_组合面下发(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ModelClientConfig = nil
+	cfg.ModelConfig = nil
+	modelID := "mC"
+	cfg.ModelID = &modelID
+	c := NewLLMComponent(cfg, WithComponentModelResolver(func(ctx context.Context, id string) (LLMInvoker, error) {
+		return &fakeModelClient{respContent: "via-comp"}, nil
+	}))
+	e := c.ToExecutableFn().(*LLMExecutable)
+	require.NotNil(t, e.getModelFn, "组件级 resolver 应下发至执行体")
+}
+
+// TestExtractContent_两形态 chunk 对象取 content、裸串兜底
+func TestExtractContent_两形态(t *testing.T) {
+	require.Equal(t, "abc", extractContent(llmschema.NewAssistantMessageChunk("abc")))
+	require.Equal(t, "raw", extractContent("raw"))
+}
+
+// TestDefaultGetModel_mgr未初始化 ResourceMgr 为 nil 时报错
+func TestDefaultGetModel_mgr未初始化(t *testing.T) {
+	_, err := defaultGetModel(context.Background(), "m1")
+	require.Error(t, err)
+}
+
+// newRecordingMC 可记录写回的 ModelContext 桩（iface 边界替身，集成套件同款）
+type recordingMCStub struct {
+	iface.ModelContext
+	messages []llmschema.BaseMessage
+}
+
+func (r *recordingMCStub) GetMessages(size int, withHistory bool) ([]llmschema.BaseMessage, error) {
+	return r.messages, nil
+}
+
+func (r *recordingMCStub) AddMessages(ctx context.Context, msgs []llmschema.BaseMessage, opts ...iface.Option) ([]llmschema.BaseMessage, error) {
+	r.messages = append(r.messages, msgs...)
+	return r.messages, nil
 }

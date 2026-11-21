@@ -105,3 +105,42 @@ func resetUserConfigForTest(t *testing.T) {
 func getUserConfigForTest(configPath string) *UserConfig {
 	return NewUserConfig(configPath)
 }
+
+// ──────────────────────────── 单例面（GetUserConfig/SetConfigPath/GetSensitivePaths） ────────────────────────────
+
+// TestGetUserConfig_单例 首调初始化、后续同一实例
+func TestGetUserConfig_单例(t *testing.T) {
+	a := GetUserConfig()
+	b := GetUserConfig()
+	if a != b {
+		t.Fatal("GetUserConfig 应返回同一单例")
+	}
+}
+
+// TestSetConfigPath_已初始化拒绝 单例存在后 SetConfigPath 报 188001
+func TestSetConfigPath_已初始化拒绝(t *testing.T) {
+	_ = GetUserConfig() // 确保已初始化
+	if err := SetConfigPath("/tmp/x.ini"); err == nil {
+		t.Fatal("单例已初始化后 SetConfigPath 应报错")
+	}
+}
+
+// TestGetSensitivePaths_默认清单 默认 sensitive_paths 非空
+func TestGetSensitivePaths_默认清单(t *testing.T) {
+	paths := GetSensitivePaths()
+	if len(paths) == 0 {
+		t.Fatal("默认敏感路径清单不应为空")
+	}
+}
+
+// TestIsSensitive_环境变量短路 IS_SENSITIVE=false 直接返回 False
+func TestIsSensitive_环境变量短路(t *testing.T) {
+	t.Setenv("IS_SENSITIVE", "false")
+	if IsSensitive() {
+		t.Fatal("IS_SENSITIVE=false 应短路返回 false")
+	}
+	t.Setenv("IS_SENSITIVE", "true")
+	if !IsSensitive() {
+		t.Fatal("IS_SENSITIVE=true 应回落单例配置（默认 true）")
+	}
+}
