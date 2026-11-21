@@ -14,16 +14,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	codetool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/code"
-	filesystemtool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
-	shelltool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/shell"
-	skilltools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/skills"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -31,9 +27,13 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	codetool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/code"
+	filesystemtool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
+	shelltool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/shell"
+	skilltools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/skills"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -290,6 +290,24 @@ func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 	}
 	return result
 }
+
+// SetListSkillModel 设置 list_skill 路由模型（Python list_skill_model 属性赋值等价）。
+func (r *SkillUseRail) SetListSkillModel(model *llm.Model) { r.listSkillModel = model }
+
+// SetIncludeTools 设置是否注册技能工具（Python include_tools 属性赋值等价）。
+func (r *SkillUseRail) SetIncludeTools(enabled bool) { r.includeTools = enabled }
+
+// SkillModeName 返回技能暴露模式（RSI 适配器跨包读取）。
+func (r *SkillUseRail) SkillModeName() string { return r.skillMode }
+
+// ListSkillModelAccessor 返回 list_skill 路由模型（可 nil；RSI 适配器跨包读取）。
+func (r *SkillUseRail) ListSkillModelAccessor() *llm.Model { return r.listSkillModel }
+
+// LanguageName 返回语言标识（RSI 适配器跨包读取）。
+func (r *SkillUseRail) LanguageName() string { return r.language() }
+
+// AttachmentManagerAccessor 返回会话附件管理器（可 nil；RSI 适配器跨包读取）。
+func (r *SkillUseRail) AttachmentManagerAccessor() *hprompts.Manager { return r.attachmentManager }
 
 // ReloadSkills 重新加载技能 + 演化经验。
 // Python: SkillUseRail.reload_skills()

@@ -22,10 +22,11 @@
 //	├── contracts.go                    # 契约类型 + ApprovalManager 接口
 //	├── approval_events.go              # 审批事件构建函数（7 导出 + 1 非导出）
 //	├── approval_runtime.go             # EvolutionApprovalRuntime 结构体 + 4 方法
-//	├── extension.go                    # EvolutionExtension 接口（10 方法）+ noOpExtension 默认实现 + EvolutionTriggerPoint 枚举
-//	├── evolution_rail.go               # EvolutionRail 基类 + 构造选项 + 回调注册 + 轨迹收集 + 异步演化
+//	├── extension.go                    # EvolutionExtension 接口（10 方法）+ ExecutionIncrementRecorder 可选接口 + noOpExtension 默认实现 + EvolutionTriggerPoint 枚举
+//	├── evolution_rail.go               # EvolutionRail 基类 + 构造选项 + 回调注册 + drainForHook（quality gate/missing_required_span/recordExecutionIncrement）+ 异步演化
+//	├── rail_scope.go                   # scope 窗口/订阅机械（collect/merge 拆分 + drainForHook 增量源）
 //	├── context_evolution_rail.go       # ContextEvolutionRail 上下文演化轨道（Priority=50+记忆注入+自动总结）
-//	├── trajectory_rail.go              # TrajectoryRail 纯轨迹收集轨道（Priority=10）
+//	├── trajectory_rail.go              # TrajectoryRail 同步执行轨迹归档轨道（Priority=10，accumulator+身份去重+AfterInvoke 至多一次落盘）
 //	├── skill_evolution_rail.go         # SkillEvolutionRail 单 Agent 技能演进护栏（Priority=80）+ Sharing 集成
 //	├── team_skill_evolution_rail.go    # TeamSkillEvolutionRail 团队技能演进护栏（Priority=80）+ Slash 命令集成
 //	├── team_skill_create_rail.go     # TeamSkillCreateRail 团队技能创建护栏（检测 spawn_member 阈值→提议创建技能）

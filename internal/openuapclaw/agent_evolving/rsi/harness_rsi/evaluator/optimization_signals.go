@@ -6,7 +6,14 @@ import (
 	"strconv"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
+
+// init 向 judger 反转缝注册优化信号契约（evaluator/optimization_signals 能力）。
+func init() {
+	judger.RegisterOptimizationSignalsContract(OptimizationSignalsContract)
+}
 
 // OptimizationSignalsSchemaVersion 优化信号契约版本。
 const OptimizationSignalsSchemaVersion = 1
@@ -18,11 +25,12 @@ const OptimizationSignalsSchemaVersion = 1
 // 这些信号可用于选择修复父本；晋级始终使用 case.score；
 // continuous 协议直接把可信 rubric 分写入该字段。
 func OptimizationSignalsContract(
-	continuousScore any,
+	continuousScore *float64,
 	dimensions map[string]any,
 	source string,
 ) map[string]any {
-	score := finiteFloat(continuousScore)
+	// Python: _finite_float(continuous_score)——*float64 nil=不可用（None 语义）。
+	score := continuousScore
 	normalizedDimensions := map[string]any{}
 	for rawName, rawValue := range dimensions {
 		name := trimSpaces(toSignalString(rawName))
@@ -87,9 +95,13 @@ func EvaluationOptimizationSignals(metadata map[string]any) map[string]any {
 	if dimensions == nil {
 		dimensions = map[string]any{}
 	}
-	var continuousScore any
+	// Python: continuous.get("value") if availability=="available" else None——
+	// 非可用即显式 None（Go nil 指针承载）。
+	var continuousScore *float64
 	if toSignalString(continuous["availability"]) == "available" {
-		continuousScore = continuous["value"]
+		if value := finiteFloat(continuous["value"]); value != nil {
+			continuousScore = value
+		}
 	}
 	return OptimizationSignalsContract(
 		continuousScore,

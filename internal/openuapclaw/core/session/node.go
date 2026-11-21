@@ -67,6 +67,15 @@ func (f *NodeSessionFacade) GetWorkflowID() string {
 	return f.inner.WorkflowID()
 }
 
+// InnerNodeSession 暴露包装的内部节点会话（Python getattr(session, "_inner")，
+// workflow.py:734 子工作流会话装配取 inner）。
+// 8.14 缺陷修复（R-14b-1）：createWorkflowSession is_sub 分支经此访问器取 inner，
+// 此前全仓无实现者导致子会话分支恒 nil → cleanup 空指针；8.14b SubWorkflowComponent
+// 为首个真实消费者（workflow_comp.py invoke/stream 转调 is_sub=true）。
+func (f *NodeSessionFacade) InnerNodeSession() interfaces.InnerSession {
+	return f.inner
+}
+
 // GetComponentID 返回组件 ID（节点 ID）
 // Python: Session.get_component_id()
 func (f *NodeSessionFacade) GetComponentID() string {

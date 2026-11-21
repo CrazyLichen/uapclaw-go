@@ -12,7 +12,7 @@
 //
 //	evaluator/
 //	├── doc.go                # 包文档
-//	├── runtime_adapters.go  # RSISysOperationRail（17.4b1 切片 ⤴️ 17.6 补齐其余）
+//	├── runtime_adapters.go  # RSIBashTool/RSISysOperationRail（17.4b1）+ RSITrajectoryRail（25.2b）+ RSISkillUseRail + 空响应恢复（17.6a 全量）
 //	└── team_evaluator.go    # TeamEvaluator 打分桩（⤴️ 17.6 回填删除）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluator/

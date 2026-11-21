@@ -496,6 +496,14 @@ func createParentID(s interfaces.InnerSession) string {
 	if ns, ok := s.(*NodeSession); ok {
 		return ns.ExecutableID()
 	}
+	// SubWorkflowSession 嵌入（非继承）NodeSession，类型断言 *NodeSession 不命中；
+	// Python SubWorkflowSession 继承 NodeSession（node.py:186 super().__init__），
+	// 子图节点 parent_id = 子工作流宿主节点 executable_id（实证：嵌套探针
+	// parent_id='composite'，get_inputs 据此下钻 io_state 子树）。
+	// 缺此分支则子图节点 parentID 为空串、从根解引用，嵌套输入全部丢失。
+	if sws, ok := s.(*SubWorkflowSession); ok {
+		return sws.ExecutableID()
+	}
 	return ""
 }
 

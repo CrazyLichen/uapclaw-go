@@ -8,14 +8,15 @@ import (
 	"sync"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -442,10 +443,14 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 		}
 	}
 
-	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
-	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
-		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）。
+	// 2026-11-21 审计修复（17.6 基座缺口 1-4）：改经 drainForHook——
+	// quality gate / missing_required_span / recordExecutionIncrement 落地。
+	window, _, issues, derr := r.drainForHook(r.currentCapture, "llm", false)
+	if derr != nil {
+		logger.Warn(logComponent).Err(derr).Msg("scope window drain failed")
 	}
+	logCaptureIssues(issues)
 
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterModelCall(ctx, cbc); err != nil {
@@ -455,9 +460,8 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 	// Python: if trigger == AFTER_MODEL_CALL and _allow_evolution_trigger → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterModelCall &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterModelCall, cbc) {
-		traj := r.buildTrajectory()
-		if traj != nil {
-			return r.triggerEvolution(ctx, traj, cbc)
+		if window != nil {
+			return r.triggerEvolution(ctx, window, cbc)
 		}
 	}
 
@@ -495,10 +499,13 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 		}
 	}
 
-	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）
-	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
-		logger.Warn(logComponent).Err(werr).Msg("scope window merge failed")
+	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）。
+	// 2026-11-21 审计修复：改经 drainForHook（required="tool"）。
+	window, _, issues, derr := r.drainForHook(r.currentCapture, "tool", true)
+	if derr != nil {
+		logger.Warn(logComponent).Err(derr).Msg("scope window drain failed")
 	}
+	logCaptureIssues(issues)
 
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterToolCall(ctx, cbc); err != nil {
@@ -508,9 +515,8 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 	// Python: if trigger == AFTER_TOOL_CALL → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterToolCall &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterToolCall, cbc) {
-		traj := r.buildTrajectory()
-		if traj != nil {
-			return r.triggerEvolution(ctx, traj, cbc)
+		if window != nil {
+			return r.triggerEvolution(ctx, window, cbc)
 		}
 	}
 
@@ -520,6 +526,13 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 // AfterTaskIteration 在每次任务循环迭代后触发扩展点。
 // Python: EvolutionRail.after_task_iteration(ctx)
 func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	// 2026-11-21 审计修复：最终 drain（Python after_task_iteration 的 _drain_for_hook）。
+	window, _, issues, derr := r.drainForHook(r.currentCapture, "", true)
+	if derr != nil {
+		logger.Warn(logComponent).Err(derr).Msg("scope window drain failed")
+	}
+	logCaptureIssues(issues)
+
 	// Python: await self._on_after_task_iteration(ctx)
 	if err := r.ext.OnAfterTaskIteration(ctx, cbc); err != nil {
 		return err
@@ -528,9 +541,8 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 	// Python: if trigger == AFTER_TASK_ITERATION → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterTaskIteration &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterTaskIteration, cbc) {
-		traj := r.buildTrajectory()
-		if traj != nil {
-			return r.triggerEvolution(ctx, traj, cbc)
+		if window != nil {
+			return r.triggerEvolution(ctx, window, cbc)
 		}
 	}
 
@@ -544,21 +556,18 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	if r.builder == nil {
 		return nil
 	}
-	// 12-04：最终窗口合并；收口释放订阅但窗口保留（上游同语义）。
-	if _, werr := r.mergeScopeIncrement(r.currentCapture); werr != nil {
-		logger.Warn(logComponent).Err(werr).Msg("scope window final merge failed")
-	}
+	// 2026-11-21 审计修复（17.6 基座缺口 1-6）：对齐 Python after_invoke——
+	// 最终 drain（gate 生效）→ ext 扩展点（TrajectoryRail 归档挂点）→
+	// 触发（trajectory 非 nil 才触发）→ finally 释放订阅。
+	// Python 基类 after_invoke 不落 store（归档属 TrajectoryRail 覆写），
+	// 原 Go 无条件 saveTrajectory 为结构漂移，已删除。
 	defer r.endScopeCapture(r.currentCapture)
 
-	// Python: trajectory = self._build_trajectory()
-	traj := r.buildTrajectory()
-	if traj == nil {
-		return nil
+	window, _, issues, derr := r.drainForHook(r.currentCapture, "", true)
+	if derr != nil {
+		logger.Warn(logComponent).Err(derr).Msg("scope window final drain failed")
 	}
-	if err := r.saveTrajectory(ctx, traj); err != nil {
-		return err
-	}
-	// 【12-04】sink 发布段已删除（上游无对应物）。
+	logCaptureIssues(issues)
 
 	// Python: await self._on_after_invoke(ctx)
 	if err := r.ext.OnAfterInvoke(ctx, cbc); err != nil {
@@ -566,15 +575,16 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	}
 
 	// Python: if trigger == AFTER_INVOKE and _allow_evolution_trigger:
-	//     await self._trigger_evolution(trajectory, ctx)
-	//     await self._on_after_evolution_triggered(trajectory, ctx)
+	//     if trajectory is not None: await _trigger_evolution + _on_after_evolution_triggered
 	if r.evolutionTrigger == TriggerAfterInvoke &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterInvoke, cbc) {
-		if err := r.triggerEvolution(ctx, traj, cbc); err != nil {
-			return err
-		}
-		if err := r.ext.OnAfterEvolutionTriggered(ctx, traj, cbc); err != nil {
-			return err
+		if window != nil {
+			if err := r.triggerEvolution(ctx, window, cbc); err != nil {
+				return err
+			}
+			if err := r.ext.OnAfterEvolutionTriggered(ctx, window, cbc); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -620,14 +630,131 @@ func (r *EvolutionRail) BuilderSessionID() string {
 	return r.builder.SessionID()
 }
 
-// saveTrajectory 保存轨迹到存储。
-// Python: EvolutionRail._save_trajectory(traj)
-func (r *EvolutionRail) saveTrajectory(_ context.Context, traj *trajectory.Trajectory) error {
-	if r.trajectoryStore == nil {
+// ──────────────────────────── 非导出函数（drain/gate 链） ────────────────────────────
+
+// drainForHook 排空一次增量并应用 clean-window quality gate。
+// Python: evolution_rail.py:777 _drain_for_hook。
+// 返回 (窗口轨迹, 增量轨迹, 质量问题清单, 错误)；gate 生效时窗口为 nil。
+// 偏差登记（D-25.2b-11 既有拍板的延伸）：增量源=builder 游标而非
+// processor.Drain 订阅——processor 转换 issues 不接入，quality issues 由
+// captureQualityIssues 等价实现；回收条件同 D-25.2b-11。
+func (r *EvolutionRail) drainForHook(capture *invokeCapture, requiredCategory string,
+	merge bool) (*trajectory.Trajectory, *trajectory.Trajectory, []map[string]any, error) {
+	if capture == nil {
+		return nil, nil, nil, nil
+	}
+	additions, err := r.collectScopeIncrement(capture)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	increment, err := incrementFromAdditions(additions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var issues []map[string]any
+	if increment != nil {
+		// Python: self._record_execution_increment(capture, increment)
+		r.recordExecutionIncrement(increment)
+		// Python: issues = tuple(issues) + self._capture_quality_issues(increment)
+		issues = captureQualityIssues(increment)
+	}
+	// Python: RSITrajectoryRail._drain_for_hook 覆写收集 capture_issues——
+	// Go 经可选观察接口在 gate 判定前回调（含空清单）。
+	if observer, ok := r.ext.(CaptureIssueObserver); ok {
+		observer.ObserveCaptureIssues(issues)
+	}
+	if len(issues) > 0 {
+		// Python: if issues: return None, increment, issues——clean-window gate。
+		return nil, increment, issues, nil
+	}
+	if requiredCategory != "" {
+		// Python: 增量中不存在对应类别 ended span → missing_required_span
+		// （捕获质量失败，非业务错误）。
+		hasRequired := false
+		if increment != nil {
+			for _, span := range trajectory.IterSpans(increment.ToOTLP()) {
+				if trajectory.SpanCategory(span) == requiredCategory {
+					hasRequired = true
+					break
+				}
+			}
+		}
+		if !hasRequired {
+			return nil, increment, []map[string]any{
+				{"code": "missing_required_span", "category": requiredCategory},
+			}, nil
+		}
+	}
+	if increment != nil && merge {
+		window, err := r.mergeAdditions(capture, additions)
+		if err != nil {
+			return nil, increment, nil, err
+		}
+		return window, increment, nil, nil
+	}
+	// Python: return self._project_window(capture), None-or-increment, ()
+	projection, err := r.projectScopeWindow(capture)
+	if err != nil {
+		return nil, increment, nil, err
+	}
+	return projection, increment, nil, nil
+}
+
+// captureQualityIssues 报告 processor 无法推断的解析/连续性失败。
+// Python: evolution_rail.py:754 _capture_quality_issues——tool span 的
+// arguments/result 形似 JSON（[/{ 开头）时必须可解析，否则记
+// tool_payload_json_error。
+func captureQualityIssues(traj *trajectory.Trajectory) []map[string]any {
+	if traj == nil {
 		return nil
 	}
-	r.trajectoryStore.Save(traj, "")
-	return nil
+	var issues []map[string]any
+	for _, span := range trajectory.IterSpans(traj.ToOTLP()) {
+		if trajectory.SpanCategory(span) != "tool" {
+			continue
+		}
+		attrs := trajectory.SpanAttributes(span)
+		for _, key := range []string{
+			obs.GenAIToolCallArguments,
+			obs.GenAIToolCallResult,
+		} {
+			value, ok := attrs[key].(string)
+			if !ok {
+				continue
+			}
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" || (trimmed[0] != '[' && trimmed[0] != '{') {
+				continue
+			}
+			var probe any
+			if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
+				issues = append(issues, map[string]any{
+					"code": "tool_payload_json_error", "attribute": key,
+				})
+			}
+		}
+	}
+	return issues
+}
+
+// logCaptureIssues 记录采集质量问题（Python gate 丢弃轨迹的可见性日志）。
+func logCaptureIssues(issues []map[string]any) {
+	for _, issue := range issues {
+		code, _ := issue["code"].(string)
+		logger.Warn(logComponent).
+			Str("issue_code", code).
+			Msg("trajectory capture quality issue; increment excluded from clean window")
+	}
+}
+
+// recordExecutionIncrement 执行增量记录扩展点（基类不归档）。
+// Python: evolution_rail.py:816 _record_execution_increment——基类空实现，
+// TrajectoryRail 覆写归档；Go 经可选接口 ExecutionIncrementRecorder 分派
+// （偏差登记：Python 方法覆写 → Go 可选接口断言，与 Final 回调设计同源）。
+func (r *EvolutionRail) recordExecutionIncrement(increment *trajectory.Trajectory) {
+	if recorder, ok := r.ext.(ExecutionIncrementRecorder); ok {
+		recorder.RecordExecutionIncrement(increment)
+	}
 }
 
 // triggerEvolution 根据配置异步或同步触发演化。
@@ -855,3 +982,10 @@ func argsToJSONAttr(value any) string {
 
 // DefaultMemberRole 返回默认成员角色（测试观测面）。
 func (r *EvolutionRail) DefaultMemberRole() string { return r.defaultMemberRole }
+
+// SetExtension 换装扩展点实现（TrajectoryRail/RSITrajectoryRail ext 包装挂载用；
+// 跨包导出——RSI evaluator 子包构造时换装）。
+func (r *EvolutionRail) SetExtension(ext EvolutionExtension) { r.ext = ext }
+
+// GetExtension 读取当前扩展点实现。
+func (r *EvolutionRail) GetExtension() EvolutionExtension { return r.ext }

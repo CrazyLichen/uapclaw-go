@@ -2,7 +2,15 @@ package evaluator
 
 import (
 	"sort"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
+
+// init 向 judger 包注册需求结果契约实现（依赖反转缝，解除 evaluator→judger 反向包环；
+// Python score_judge_output 直调本包 requirement_results_contract，步骤归属不变）。
+func init() {
+	judger.RegisterRequirementResultsContract(RequirementResultsContract)
+}
 
 // ──────────────────────────── 常量 ────────────────────────────
 

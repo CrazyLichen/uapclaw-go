@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // rail_scope_test.go 订阅窗口机械测试（对齐 evolution_rail.py 语义）。
@@ -57,8 +57,8 @@ func TestScopeWindow_跨钩子增量合并(t *testing.T) {
 func TestScopeWindow_游标幂等(t *testing.T) {
 	rail := newScopeTestRail(t, "sess-scope")
 	recordToolSpan(t, rail, "write_file")
-	// 二次合并（无新 span）不改变窗口。
-	_, err := rail.mergeScopeIncrement(rail.currentCapture)
+	// 二次 drain（无新 span）不改变窗口（2026-11-21 审计：collect+merge 拆分）。
+	_, _, _, err := rail.drainForHook(rail.currentCapture, "", true)
 	require.NoError(t, err)
 	window, err := rail.projectScopeWindow(rail.currentCapture)
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestDemand_并发同实例(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			recordToolSpan(t, rail, "tool")
-			_, _ = rail.mergeScopeIncrement(rail.currentCapture)
+			_, _, _, _ = rail.drainForHook(rail.currentCapture, "", true)
 		}()
 	}
 	wg.Wait()

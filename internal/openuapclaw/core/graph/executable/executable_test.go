@@ -108,11 +108,11 @@ type streamComp struct {
 	streamErr error
 }
 
-func (c streamComp) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
-	ch := make(chan StreamChunk[map[string]any], 3)
-	ch <- StreamChunk[map[string]any]{Val: map[string]any{"i": 1}}
-	ch <- StreamChunk[map[string]any]{Val: map[string]any{"i": 2}}
-	ch <- StreamChunk[map[string]any]{Err: c.streamErr}
+func (c streamComp) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
+	ch := make(chan StreamChunk[any], 3)
+	ch <- StreamChunk[any]{Val: map[string]any{"i": 1}}
+	ch <- StreamChunk[any]{Val: map[string]any{"i": 2}}
+	ch <- StreamChunk[any]{Err: c.streamErr}
 	close(ch)
 	return ch, nil
 }
@@ -133,7 +133,7 @@ func TestStreamChunk_错误末元素后关闭(t *testing.T) {
 			gotErr = chunk.Err
 			break
 		}
-		vals = append(vals, chunk.Val["i"].(int))
+		vals = append(vals, chunk.Val.(map[string]any)["i"].(int))
 	}
 	if len(vals) != 2 {
 		t.Errorf("错误前应收到 2 个正常块, got %d", len(vals))
@@ -149,8 +149,8 @@ func TestStreamChunk_错误末元素后关闭(t *testing.T) {
 
 // TestStreamChunk_正常流关闭不带Err 断言正常结束的流不含 Err 元素
 func TestStreamChunk_正常流关闭不带Err(t *testing.T) {
-	ch := make(chan StreamChunk[map[string]any], 1)
-	ch <- StreamChunk[map[string]any]{Val: map[string]any{"done": true}}
+	ch := make(chan StreamChunk[any], 1)
+	ch <- StreamChunk[any]{Val: map[string]any{"done": true}}
 	close(ch)
 	for chunk := range ch {
 		if chunk.Err != nil {

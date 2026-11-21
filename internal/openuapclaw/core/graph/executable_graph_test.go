@@ -29,7 +29,7 @@ func (f *fakeGraph) Invoke(ctx context.Context, inputs map[string]any, sess sess
 	return DefaultGraphInvoke[map[string]any, map[string]any](f, ctx, inputs, sess)
 }
 
-func (f *fakeGraph) Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+func (f *fakeGraph) Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[any], error) {
 	return DefaultGraphStream[map[string]any, map[string]any](f, ctx, inputs, sess)
 }
 
@@ -37,7 +37,7 @@ func (f *fakeGraph) Collect(ctx context.Context, inputs <-chan map[string]any, s
 	return DefaultGraphCollect[map[string]any, map[string]any](f, ctx, inputs, sess)
 }
 
-func (f *fakeGraph) Transform(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+func (f *fakeGraph) Transform(ctx context.Context, inputs <-chan map[string]any, sess session.BaseSession) (<-chan StreamChunk[any], error) {
 	return DefaultGraphTransform[map[string]any, map[string]any](f, ctx, inputs, sess)
 }
 
