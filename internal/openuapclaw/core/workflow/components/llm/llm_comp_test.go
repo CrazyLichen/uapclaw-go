@@ -426,7 +426,7 @@ func TestLLMExecutableState_累积与清空(t *testing.T) {
 
 // ──────────────────────────── Task6 invoke 链 ────────────────────────────
 
-// fakeModelClient 可控 Invoke 返回的模型桩（满足 llModelInvoker 面）
+// fakeModelClient 可控 Invoke 返回的模型桩（满足 LLMInvoker 面）
 type fakeModelClient struct {
 	respContent string
 	invokeErr   error
@@ -452,7 +452,7 @@ func (f *fakeModelClient) Stream(ctx context.Context, messages modelclients.Mess
 }
 
 // newTestExecutable 构造带 fake 模型的执行体（WithModelResolver 注入缝）
-func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake llModelInvoker) *LLMExecutable {
+func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake LLMInvoker) *LLMExecutable {
 	t.Helper()
 	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
@@ -490,7 +490,7 @@ func TestInvoke_懒初始化modelID路径(t *testing.T) {
 	cfg.ModelConfig = nil
 	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
-	e.getModelFn = func(ctx context.Context, modelID string) (llModelInvoker, error) {
+	e.getModelFn = func(ctx context.Context, modelID string) (LLMInvoker, error) {
 		assert.Equal(t, "m1", modelID)
 		return &fakeModelClient{respContent: "ok"}, nil
 	}
@@ -699,4 +699,33 @@ func TestStream_cacheStream_成功累积(t *testing.T) {
 	out := e.getStreamOutput()
 	require.NotNil(t, out)
 	assert.Equal(t, "ok", out["name"])
+}
+
+// ──────────────────────────── Task8 组合面 ────────────────────────────
+
+// TestLLMComponent_槽位懒初始化 ToExecutableFn 首调构造并缓存（D-18-4）
+func TestLLMComponent_槽位懒初始化(t *testing.T) {
+	c := NewLLMComponent(llmTestConfig())
+	assert.Nil(t, c.executable)
+	first := c.ToExecutableFn()
+	require.NotNil(t, first)
+	second := c.ToExecutableFn()
+	assert.Same(t, first, second, "缓存语义：两次取同一实例")
+	assert.Same(t, first, c.ToExecutable(), "组合面转调同槽")
+}
+
+// TestLLMComponent_校验失败panic 构造期校验错误经槽 panic（Python 异常上抛等价）
+func TestLLMComponent_校验失败panic(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ResponseFormat = map[string]any{"type": "bogus"}
+	c := NewLLMComponent(cfg)
+	defer func() {
+		r := recover()
+		require.NotNil(t, r)
+		be, ok := r.(*exception.BaseError)
+		require.True(t, ok)
+		assert.Equal(t, exception.StatusComponentLLMResponseConfigInvalid, be.Status())
+	}()
+	_ = c.ToExecutableFn()
+	_ = "unreachable"
 }

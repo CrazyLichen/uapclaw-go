@@ -132,7 +132,7 @@ type LLMExecutable struct {
 	// cfg 组件配置（Python self._config；字段名避开同名方法）
 	cfg *LLMCompConfig
 	// llModel 懒初始化模型实例（Python self._llm，Union[Model, None]）
-	llModel llModelInvoker
+	llModel LLMInvoker
 	// initialized 懒初始化标记（Python self._initialized）
 	initialized bool
 	// session 当前会话（Python self._session）
@@ -144,15 +144,15 @@ type LLMExecutable struct {
 
 	// getModelFn 按 ID 取预注册模型的注入缝（Python Runner.resource_mgr.get_model；
 	// 注入承载避免 llm→runner 包环，8.14b InvokeFn 注入缝先例，spec 偏差 D-18-5）
-	getModelFn func(ctx context.Context, modelID string) (llModelInvoker, error)
+	getModelFn func(ctx context.Context, modelID string) (LLMInvoker, error)
 	// baseInvoke/baseStream 基座钩子引用（方法遮蔽后转调用；D-17-1 同款遮蔽模式）
 	baseInvoke func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error)
 	baseStream func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error)
 }
 
-// llModelInvoker 统一模型调用面（Python Union[Model, None]；*llm.Model 与
+// 统一模型调用面（导出，注入缝对外契约；（Python Union[Model, None]；*llm.Model 与
 // model_clients.BaseModelClient 均满足——Runner.GetModel 返回后者，spec D-18-5）
-type llModelInvoker interface {
+type LLMInvoker interface {
 	Invoke(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error)
 	Stream(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error)
 }
@@ -160,15 +160,53 @@ type llModelInvoker interface {
 // LLMComponent LLM 组件组合面（Python LLMComponent :793-806；Task 8 落组合面槽，
 // 本 Task 先落骨架占位——executable 懒初始化语义见 Task 8 D-18-4）
 type LLMComponent struct {
+	// BaseComponentComposable 组合面基座（Python ComponentComposable mixin 嵌入；
+	// executable property 懒初始化由 ToExecutableFn 槽缓存承载，D-18-4）
+	components.BaseComponentComposable
 	// cfg 组件配置（Python self._config；字段名避开同名方法）
 	cfg *LLMCompConfig
+	// executable 缓存产物（Python self._executable）
+	executable *LLMExecutable
+	// modelResolver 模型解析注入缝（D-18-5：集成测试 fake 注入；nil=默认 runner）
+	modelResolver func(ctx context.Context, modelID string) (LLMInvoker, error)
+}
+
+// WithComponentModelResolver 注入组件级模型解析缝（D-18-5：构造 LLMExecutable
+// 时下发；Python 无对应物——测试注入需求，spec 预登记偏差）
+func WithComponentModelResolver(fn func(ctx context.Context, modelID string) (LLMInvoker, error)) func(*LLMComponent) {
+	return func(c *LLMComponent) { c.modelResolver = fn }
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewLLMComponent 构造组件组合面（Python __init__ :794-797）
-func NewLLMComponent(componentConfig *LLMCompConfig) *LLMComponent {
-	return &LLMComponent{cfg: componentConfig}
+// NewLLMComponent 构造组件组合面（Python __init__ :794-797；
+// _executable=None 懒初始化 → ToExecutableFn 槽首调构造缓存，D-18-4）
+func NewLLMComponent(componentConfig *LLMCompConfig, opts ...func(*LLMComponent)) *LLMComponent {
+	c := &LLMComponent{cfg: componentConfig}
+	for _, opt := range opts {
+		opt(c)
+	}
+	c.ToExecutableFn = c.toExecutableCached
+	return c
+}
+
+// toExecutableCached 可执行体供应槽（Python to_executable :805-806 + executable
+// property 懒初始化合并承载：首调构造并缓存）
+func (c *LLMComponent) toExecutableCached() graphexe.GeneralExecutor {
+	if c.executable == nil {
+		var e *LLMExecutable
+		var err error
+		if c.modelResolver != nil {
+			e, err = newLLMExecutableWithOptions(c.cfg, WithModelResolver(c.modelResolver))
+		} else {
+			e, err = NewLLMExecutable(c.cfg)
+		}
+		if err != nil {
+			panic(err)
+		}
+		c.executable = e
+	}
+	return c.executable
 }
 
 // NewLLMExecutable 构造执行体（Python __init__ :428-436：validate_config → 字段装配）。
@@ -193,12 +231,24 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 
 // WithModelResolver 注入按 ID 取模型的解析缝（生产默认 runner.GetResourceMgr；
 // 测试注入 fake，spec D-18-5）
-func WithModelResolver(fn func(ctx context.Context, modelID string) (llModelInvoker, error)) func(*LLMExecutable) {
+func WithModelResolver(fn func(ctx context.Context, modelID string) (LLMInvoker, error)) func(*LLMExecutable) {
 	return func(e *LLMExecutable) { e.getModelFn = fn }
 }
 
+// newLLMExecutableWithOptions 变参选项构造缝（NewLLMExecutable 的选项扩展面）
+func newLLMExecutableWithOptions(componentConfig *LLMCompConfig, opts ...func(*LLMExecutable)) (*LLMExecutable, error) {
+	e, err := NewLLMExecutable(componentConfig)
+	if err != nil {
+		return nil, err
+	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e, nil
+}
+
 // defaultGetModel 生产默认解析（Python Runner.resource_mgr.get_model(id=...) 一比一）
-func defaultGetModel(ctx context.Context, modelID string) (llModelInvoker, error) {
+func defaultGetModel(ctx context.Context, modelID string) (LLMInvoker, error) {
 	mgr := runner.GetResourceMgr()
 	if mgr == nil {
 		return nil, fmt.Errorf("resource mgr is not initialized")
@@ -1002,7 +1052,7 @@ func (e *LLMExecutable) initializeIfNeeded(ctx context.Context) error {
 // createLLMInstance 模型实例创建（Python _create_llm_instance :624-634 一比一：
 // model_id 为 nil → client/request config 双非空校验（缺任一 101003）后 NewModel；
 // 否则按 ID 走 Runner）
-func (e *LLMExecutable) createLLMInstance(ctx context.Context) (llModelInvoker, error) {
+func (e *LLMExecutable) createLLMInstance(ctx context.Context) (LLMInvoker, error) {
 	if e.cfg.ModelID == nil {
 		if e.cfg.ModelClientConfig == nil || e.cfg.ModelConfig == nil {
 			return nil, exception.BuildError(exception.StatusComponentLLMInvokeCallFailed,
