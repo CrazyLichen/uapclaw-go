@@ -10,7 +10,8 @@
 // runtime_policy.OnMaxIterations 记入 runtime_config 但不生效。
 // ③清理链：Python agent.cleanup_task_resources/Runner.resource_mgr
 // .remove_sys_operation；Go 走 DeepAgent 内置生命周期（TeardownTools 保留）。
-// ④swebench 容器分支经 SwebenchContainerOps 缝（真身 Task 11）。
+// ④17.6d 缝拆除：swebench 容器分支直调 swebench_runtime/terminal_bench_runtime
+// 真身（Python 同包直调对齐）；sys_operation 经 BuildTerminalBenchSysOperation 组装。
 
 package evaluator
 
@@ -22,10 +23,10 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
@@ -67,26 +68,6 @@ type SingleHarnessExecutionBackend struct {
 	cfg *config.EvaluatorConfig
 	// opsMu 复用锁
 	opsMu sync.Mutex
-	// containerOps swebench 容器操作缝（nil 时 swebench 用例报基建错误；Task 11 注入）
-	containerOps SwebenchContainerOps
-}
-
-// SwebenchContainerOps swebench 容器操作缝（Python: prepare_swebench_workspace /
-// start_terminal_bench_solver_container / sync_container_git_patch_to_workspace /
-// remove_terminal_bench_container——真身 Task 11；本缝由 17.6d 注册）。
-type SwebenchContainerOps interface {
-	PrepareWorkspace(caseMapping map[string]any, workspaceDir string, timeoutSec int) (string, error)
-	StartSolverContainer(dockerImage, caseID, workspaceDir string, timeoutSec int) (string, error)
-	SyncGitPatch(containerName, workspaceDir string) (string, error)
-	RemoveContainer(containerName string)
-}
-
-// swebenchContainerOpsFn 注册的容器操作实现。
-var swebenchContainerOpsFn SwebenchContainerOps
-
-// RegisterSwebenchContainerOps 由 17.6d swebench_runtime.go 在 init 时注册。
-func RegisterSwebenchContainerOps(ops SwebenchContainerOps) {
-	swebenchContainerOpsFn = ops
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -134,9 +115,13 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	swebenchDict, isSwebench := params.Case["swebench"].(map[string]any)
 
 	defer func() {
-		// Python finally 段：容器 patch sync → 工作区后快照 → 资源清理。
+		// Python finally 段（L282-317）：容器 patch sync → 工作区后快照 → 资源清理。
 		if solverContainerName != "" {
-			patch, err := b.containerOpsSync(solverContainerName, workspaceDir)
+			patch, err := SyncContainerGitPatchToWorkspace(SyncPatchParams{
+				ContainerName:         solverContainerName,
+				WorkspaceDir:          workspaceDir,
+				ContainerWorkspaceDir: "/testbed",
+			})
 			if err != nil {
 				status = "failed"
 				errText = fmt.Sprintf("failed to sync SWE-bench solver workspace: %v", err)
@@ -148,7 +133,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 					}
 				}
 			}
-			b.containerOpsRemove(solverContainerName)
+			RemoveTerminalBenchContainer(solverContainerName)
 		}
 		workspaceAfter = snapshotWorkspace(workspaceDir)
 		if agent != nil {
@@ -183,20 +168,30 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	}
 	workspaceDir = singleHarnessWorkspaceDir(params.Case, absPath(params.OutputDir), params.SessionID)
 
+	var commandRecorder *TerminalBenchCommandRecorder
 	if isSwebench {
-		// Python L160-186 容器分支（swebench case）。
+		// Python L160-188 容器分支（swebench case）：prepare → start solver 容器 →
+		// 舞台资产 → 组装 Terminal-Bench 容器系统操作（recorder + testbed 环境）。
 		timeoutSec := 1800
 		if raw, ok := swebenchDict["timeout_sec"]; ok {
 			if f, ok := toFloatAny(raw); ok {
 				timeoutSec = int(f)
 			}
 		}
-		image, prepErr := b.containerOpsPrepare(params.Case, workspaceDir, timeoutSec)
+		image, prepErr := PrepareSwebenchWorkspace(PrepareSwebenchParams{
+			Case: params.Case, WorkspaceDir: workspaceDir, TimeoutSec: timeoutSec,
+		})
 		if prepErr != nil {
 			return nil, NewEvaluationInfrastructureError(prepErr.Error())
 		}
-		name, startErr := b.containerOpsStart(image, stringOrTP(params.Case["case_id"], params.SessionID),
-			workspaceDir, timeoutSec)
+		name, startErr := StartTerminalBenchSolverContainer(StartSolverContainerParams{
+			DockerImage:           image,
+			CaseID:                stringOrTP(params.Case["case_id"], params.SessionID),
+			WorkspaceDir:          workspaceDir,
+			TimeoutSec:            timeoutSec,
+			ContainerWorkspaceDir: "/testbed",
+			MountWorkspace:        false,
+		})
 		if startErr != nil {
 			return nil, NewEvaluationInfrastructureError(startErr.Error())
 		}
@@ -204,6 +199,17 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 		if stageErr := stageCaseAssets(params.Case, workspaceDir, solverContainerName); stageErr != nil {
 			return nil, stageErr
 		}
+		commandRecorder = NewTerminalBenchCommandRecorder()
+		sysOperation = BuildTerminalBenchSysOperation(SysOpBuildParams{
+			SysOperationID:         fmt.Sprintf("sweb_single_%s", params.SessionID),
+			ContainerName:          solverContainerName,
+			WorkspaceDir:           workspaceDir,
+			Recorder:               commandRecorder,
+			ContainerWorkspaceDir:  "/testbed",
+			CleanShell:             true,
+			RuntimeEnvironment:     swebenchTestbedEnvironment(),
+			EnforceInContainerTime: true,
+		})
 	} else {
 		if prepErr := prepareSingleHarnessWorkspace(params.Case, workspaceDir); prepErr != nil {
 			return nil, NewEvaluationInfrastructureError(prepErr.Error())
@@ -361,7 +367,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 		teamSkillRefPath:         params.TeamSkillRefPath,
 		controlledSkillTreatment: controlledEvidenceOf(controlledSkillTreatment),
 		skillTriggers:            collectSkillTriggers(skillUseRails),
-		commandRecorder:          nil,
+		commandRecorder:          commandRecorderToList(commandRecorder),
 		swebenchModelPatchPath:   swebenchModelPatchPath,
 		solverMaxIterations:      runtimePolicy.MaxIterations,
 		runtimeConfig:            runtimeConfig,
@@ -398,31 +404,7 @@ func BuildBackend(cfg *config.EvaluatorConfig) (CaseExecutionBackend, error) {
 	return NewSingleHarnessExecutionBackend(cfg), nil
 }
 
-// ──────────────────────────── 缝位转发 ────────────────────────────
-
-func (b *SingleHarnessExecutionBackend) containerOpsPrepare(caseMapping map[string]any, workspaceDir string, timeoutSec int) (string, error) {
-	if swebenchContainerOpsFn == nil {
-		return "", NewEvaluationInfrastructureError("swebench container ops not registered (Task 11)")
-	}
-	return swebenchContainerOpsFn.PrepareWorkspace(caseMapping, workspaceDir, timeoutSec)
-}
-
-func (b *SingleHarnessExecutionBackend) containerOpsStart(image, caseID, workspaceDir string, timeoutSec int) (string, error) {
-	if swebenchContainerOpsFn == nil {
-		return "", NewEvaluationInfrastructureError("swebench container ops not registered (Task 11)")
-	}
-	return swebenchContainerOpsFn.StartSolverContainer(image, caseID, workspaceDir, timeoutSec)
-}
-
-func (b *SingleHarnessExecutionBackend) containerOpsSync(containerName, workspaceDir string) (string, error) {
-	if swebenchContainerOpsFn == nil {
-		return "", NewEvaluationInfrastructureError("swebench container ops not registered (Task 11)")
-	}
-	return swebenchContainerOpsFn.SyncGitPatch(containerName, workspaceDir)
-}
-
-func (b *SingleHarnessExecutionBackend) containerOpsRemove(containerName string) {
-	if swebenchContainerOpsFn != nil {
-		swebenchContainerOpsFn.RemoveContainer(containerName)
-	}
-}
+// ──────────────────────────── 初始化 ────────────────────────────
+// （17.6d 缝拆除：swebench 容器四操作改同包直调，对齐 Python case_backend.py:42-49
+// 直接 import prepare_swebench_workspace / start_terminal_bench_solver_container /
+// sync_container_git_patch_to_workspace / remove_terminal_bench_container。）

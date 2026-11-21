@@ -131,10 +131,40 @@ func stageCaseAssets(caseMapping map[string]any, workspacePath, containerName st
 	if containerName == "" {
 		return nil
 	}
-	// Python: docker exec mkdir -p + docker cp（Task 11 真身；缝未注册时跳过
-	// 宿主侧即可，容器内资产由镜像携带）。
-	_ = copied
+	// Python L478-482：逐资产 docker exec mkdir -p + docker cp 进容器 /testbed。
+	// CopyPublicAssets 返回 (relative, 宿主路径) 二元组。
+	for _, pair := range copied {
+		target := "/testbed/" + filepath.ToSlash(pair[0])
+		if _, err := runDocker([]string{"docker", "exec", containerName, "mkdir", "-p", "--", filepath.ToSlash(filepath.Dir(target))}, true, 120); err != nil {
+			return NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
+		}
+		if _, err := runDocker([]string{"docker", "cp", pair[1], containerName + ":" + target}, true, 120); err != nil {
+			return NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
+		}
+	}
 	return nil
+}
+
+// swebenchTestbedEnvironment 直接使用镜像内 testbed 解释器而不跑 conda 激活
+// （Python case_backend.py:821 _swebench_testbed_environment：SWE-bench 镜像经
+// login-shell profile 激活环境；逐次重放 profile 昂贵且 docker exec 超时会残留
+// conda 激活进程）。
+func swebenchTestbedEnvironment() map[string]string {
+	return map[string]string{
+		"CONDA_DEFAULT_ENV": "testbed",
+		"CONDA_PREFIX":      "/opt/miniconda3/envs/testbed",
+		"PATH": "/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/bin:" +
+			"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"PYTHONNOUSERSITE": "1",
+	}
+}
+
+// commandRecorderToList 录音机 → metadata command_log（nil → nil）。
+func commandRecorderToList(recorder *TerminalBenchCommandRecorder) []map[string]any {
+	if recorder == nil {
+		return nil
+	}
+	return recorder.ToList()
 }
 
 // taskInputOf 任务输入（Python: :508-510 _case_inputs = task_input(case)）。

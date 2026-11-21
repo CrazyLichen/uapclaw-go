@@ -14,7 +14,6 @@ import (
 // intPtr / strPtr 测试助手（Python 字面 None→nil 对齐）。
 func intPtr(v int) *int { return &v }
 
-func strPtr(v string) *string { return &v }
 
 // ──────────────────────────── 测试桩（对齐 Python monkeypatch subprocess.run） ────────────────────────────
 
@@ -456,15 +455,15 @@ func TestShellOperation_ExecuteCmdBackground(t *testing.T) {
 }
 
 // tbRunProcess 真实子进程路径（echo + 退出码透传）。
-func TestTbRunProcess_真实子进程(t *testing.T) {
-	res, err := tbRunProcess("echo", []string{"hello"}, 0, nil)
+func TestSubprocessRunWithCwd_真实子进程(t *testing.T) {
+	res, err := subprocessRunWithCwd("echo", []string{"hello"}, 0, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Stdout != "hello\n" || res.ExitCode != 0 {
 		t.Fatalf("result mismatch: %#v", res)
 	}
-	res, err = tbRunProcess("sh", []string{"-c", "echo e >&2; exit 3"}, 0, nil)
+	res, err = subprocessRunWithCwd("sh", []string{"-c", "echo e >&2; exit 3"}, 0, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,12 +471,12 @@ func TestTbRunProcess_真实子进程(t *testing.T) {
 		t.Fatalf("exit code passthrough mismatch: %#v", res)
 	}
 	// 超时：1 秒限时跑 sleep 3 → errTBDeadline + 部分输出（Go 侧无输出）。
-	_, err = tbRunProcess("sleep", []string{"3"}, 1, nil)
+	_, err = subprocessRunWithCwd("sleep", []string{"3"}, 1, nil, "")
 	if !errors.Is(err, errTBDeadline) {
 		t.Fatalf("expected deadline error, got %v", err)
 	}
 	// stdin 输入传递（cat 回显）。
-	res, err = tbRunProcess("cat", nil, 5, []byte("piped"))
+	res, err = subprocessRunWithCwd("cat", nil, 5, []byte("piped"), "")
 	if err != nil || res.Stdout != "piped" {
 		t.Fatalf("stdin passthrough mismatch: %#v err=%v", res, err)
 	}
