@@ -741,6 +741,13 @@ func (tb *TeamBackend) SetCheckpointListFn(fn func() map[string]map[string]any) 
 	tb.listCheckpointFn = fn
 }
 
+// SetSnapshotLengthFn 注册当前会话上下文长度回调（checkpoint 工具的 count 来源）。
+// 装配点在 agent_configurator（闭包惰性读 harness 的 DeepAgent 上下文长度）。
+// Python: set_snapshot_length (team.py:578-583)
+func (tb *TeamBackend) SetSnapshotLengthFn(fn func() int) {
+	tb.snapshotLengthFn = fn
+}
+
 // ForkInfo spawn 时携带的上下文继承请求。
 // Python: mark_fork_on_spawn 值形态 {fork, since, source, fork_mode}（team.py:617-626）。
 // since 恒 None（Python 侧亦如此，保留字段语义：占位）。
