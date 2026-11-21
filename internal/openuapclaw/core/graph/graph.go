@@ -183,6 +183,20 @@ func (g *PregelGraph) RegisterBranchTargets(branchNodeID string, targets []strin
 	return g
 }
 
+// BranchTargets 读分支节点的目标全集（只读快照；未登记返回 nil）。
+// 8.19 BranchComponent 的消费方断言面（8.1「特有方法由消费方断言」的读侧配套）。
+func (g *PregelGraph) BranchTargets(branchNodeID string) map[string]struct{} {
+	set := g.branchTargets[branchNodeID]
+	if set == nil {
+		return nil
+	}
+	out := make(map[string]struct{}, len(set))
+	for k := range set {
+		out[k] = struct{}{}
+	}
+	return out
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateNodeID 校验节点 ID 非空。Python: graph.py:74-76

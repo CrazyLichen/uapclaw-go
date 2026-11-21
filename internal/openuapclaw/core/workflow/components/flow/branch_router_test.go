@@ -181,24 +181,22 @@ func TestBranchRouter_Call_条件求值错误上抛(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestBranchRouter_Dispatch_产出Trigger消息 对齐 pregel.Router 契约（消息产出 router.py:47）
-func TestBranchRouter_Dispatch_产出Trigger消息(t *testing.T) {
+// TestBranchRouter_Select_命中返回目标 对齐 graph.Router（=pregel.Selector）契约
+func TestBranchRouter_Select_命中返回目标(t *testing.T) {
 	r := NewBranchRouter(false)
 	require.NoError(t, r.AddBranch("true", "end_a", "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
-	msgs, err := r.Dispatch(context.Background(), "branch")
+	targets, err := r.Select(context.Background(), nil) // state 恒 nil（8.5 D2 惯例）
 	require.NoError(t, err)
-	require.Len(t, msgs, 1)
-	assert.Equal(t, "branch", msgs[0].Sender)
-	assert.Equal(t, "end_a", msgs[0].Target)
+	assert.Equal(t, []string{"end_a"}, targets)
 }
 
-// TestBranchRouter_Dispatch_错误上抛 对齐 error 不包装（8.3b errors.As 依赖）
-func TestBranchRouter_Dispatch_错误上抛(t *testing.T) {
+// TestBranchRouter_Select_错误上抛 对齐 error 不包装（8.3b errors.As 依赖）
+func TestBranchRouter_Select_错误上抛(t *testing.T) {
 	r := NewBranchRouter(false)
 	require.NoError(t, r.AddBranch("nope == 1", "x", "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
-	_, err := r.Dispatch(context.Background(), "branch")
+	_, err := r.Select(context.Background(), nil)
 	require.Error(t, err)
 }
 
