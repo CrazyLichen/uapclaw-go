@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -38,6 +39,10 @@ func runCLI(args []string) int {
 	minSubsys := fs.Int("min-subsystems", defaultVerifySubsystems, "覆盖验证：真实覆盖子系统数下限")
 	minLines := fs.Int("min-lines", defaultVerifyLines, "覆盖验证：每子系统覆盖行数下限")
 	verifyWorkDir := fs.String("verify-workdir", "", "覆盖验证档案输出目录（默认临时目录）")
+	onlyChanged := fs.Bool("only-changed", false, "本地降级：只对本次改动过的灰区目录跑覆盖验证，其余跳过不判罚（CI 全量兜底）")
+	baseRef := fs.String("base", "origin/main", "-only-changed 的 diff 基线（已提交改动相对此引用）")
+	cacheDir := fs.String("cache-dir", "", "覆盖档案缓存目录（空 = 默认系统临时目录下的 integration-audit-cache）")
+	noCache := fs.Bool("no-cache", false, "禁用覆盖档案缓存，全部真实重跑（CI 口径）")
 
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "参数解析失败: %v\n", err)
@@ -62,11 +67,28 @@ func runCLI(args []string) int {
 	// 覆盖交叉验证层：对灰区目录（PendingCoverage）逐目录运行 go test 裁决
 	var verifyResult *VerifyResult
 	if *verify {
+		// -only-changed：判定改动过的集成测试目录；判定失败（git 不可用）回退全量
+		var changed map[string]bool
+		if *onlyChanged {
+			changed = ChangedIntegrationDirs(".", *baseRef)
+			if changed == nil {
+				fmt.Fprintln(os.Stderr, "警告: 改动目录判定失败（git 不可用或无基线），回退全量覆盖验证")
+			}
+		}
+		absCache := *cacheDir
+		if *noCache {
+			absCache = ""
+		} else if absCache == "" {
+			absCache = filepath.Join(os.TempDir(), "integration-audit-cache")
+		}
 		verifyResult, err = VerifyCoverage(&VerifyConfig{
 			RepoRoot:      ".",
 			MinSubsystems: *minSubsys,
 			MinLines:      *minLines,
 			WorkDir:       *verifyWorkDir,
+			CacheDir:      absCache,
+			KeySalt:       verifyGoTestTags,
+			ChangedDirs:   changed,
 		}, result)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "覆盖交叉验证失败: %v\n", err)
@@ -193,6 +215,9 @@ func printVerifyReport(vr *VerifyResult) {
 		status := "通过"
 		if !dv.Passed {
 			status = "不通过"
+		}
+		if dv.Cached {
+			status += "(缓存)"
 		}
 		fmt.Printf("  [%s] %s：%s\n", status, dv.Dir, dv.Reason)
 		// 展示各子系统覆盖行数（降序前 8 个）
