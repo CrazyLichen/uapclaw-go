@@ -115,6 +115,27 @@ for frame := range ch:
 | D-14b-5 | 已知行为（复刻，Python 同为死路径） | 嵌套流式 + 流式引用子图帧内部字段（`${sub.response}`）：Python payload 为 OutputSchema 对象、pydantic 无 `__getitem__` → 路径提取 None → 同样断链挂死；上游无嵌套流式测试故从未暴露。Go 以 dict 载荷形态走通（见 D-14b-6） | 不回收（Go 比 Python 健壮，登记防误判为回归） |
 | D-14b-6 | 有意偏差（Go 槽承载约束） | 转发/缓存形态分离：转发取 Schema 载荷 dict（对齐官方 StreamCompNode 产出形态，流边路径提取可用）；缓存累积原始 Schema 帧（isinstance-dict 过滤语义对齐 Python，缓存保持空 → Quirk A 短路行为一致）。Python 两腿同为 chunk 对象；另 END_FRAME 恢复入队哨兵（撤 8.14 D-14-3 close 等价，close 会 forceClear 丢帧）+ AsyncStreamQueue closed 先排空缓冲 + 流式槽帧元素 any 化（D-8 延伸：Executable/ExecutableGraph/组件槽 StreamChunk[O]→StreamChunk[any]，2026-11-21 用户拍板「返回类型不能固定死」） | D-17-1 信封在单层 end 出口的承载保留（8.17 已验收形态）；若后续撤封按本节五层断裂链逐出口核对 |
 
+## §12 方法对照表（12.4 回填③，实施后实测行号）
+
+| Python workflow_comp.py | Go sub_workflow_comp.go | 一致性 |
+|---|---|---|
+| SUB_WORKFLOW_COMPONENT (:19) | SubWorkflowComponentType (:59) | ✅ |
+| SubWorkflowStreamState（状态字段 :23-25） | SubWorkflowStreamState 结构体 (:25) | ✅ |
+| .accumulate (:27-29) | Accumulate (:244) | ✅（累积原始帧，isinstance-dict 过滤对齐） |
+| .build_final_result (:31-60) | BuildFinalResult (:251) | ✅（合并四态 + 异类型 TypeError 上抛） |
+| .clear (:62-65) | Clear (:285) | ✅ |
+| SubWorkflowComponent.__init__ (:66-75) | NewSubWorkflowComponent (:65) | ✅（D-14b-1 已知行为登记） |
+| .invoke (:78-84) | InvokeFn 槽 (:142) + invokeSubWorkflow (:213) | ✅（短路/转调双态；CONFIG_KEY 透传修复） |
+| .stream (:76-81) | StreamFn 槽 (:148) | ✅（累积原始帧 + 转发载荷 dict，D-14b-6） |
+| .get_stream_output (:83-85) | GetStreamOutput (:105) | ✅ |
+| .graph_invoker (:87-88) | GraphInvoker (:76) | ✅ |
+| .component_type (:90-91) | ComponentType (:98) | ✅ |
+| .sub_workflow property (:93-94) | SubWorkflow 访问器 (:101) | ✅ |
+| （上游无）ToExecutable/AddComponent override | (:82-95 一带) | Go 静态解析必需（Python self 动态分派等价物），偏差 D-14b-4 延伸 |
+
+实施期超额修复（Python 源码实证的四项移植缺陷 + 嵌套流式三层数据断裂，均已提交）：
+①createParentID 对 *SubWorkflowSession 断言失效 ②subInvoke/subStream CONFIG_KEY 透传缺失 ③DefaultGraphInvoke 信封 config 双形态 ④AsyncStreamQueue closed 丢缓冲帧 + END_FRAME 入队哨兵恢复（撤 D-14-3）⑤end-sub 分支槽信封剥离 ⑥流式槽帧元素 any 化（D-8 延伸，用户拍板）。
+
 ## 8. 测试要求（用户明确要求：讨论过的点全部有覆盖，中断恢复场景必须真实输入输出）
 
 ### 8.1 单测（sub_workflow_comp_test.go）

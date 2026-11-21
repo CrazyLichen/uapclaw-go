@@ -447,6 +447,7 @@ func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.Inn
 	var messages []WorkflowChunk
 	for streamAbilityCount > 0 {
 		frame, rerr := subStreamQ.Receive(context.Background(), streamTimeout)
+		println("PROBE-DEBUG drain frame=", fmt.Sprint(frame), "type=", fmt.Sprintf("%T", frame), "eq=", fmt.Sprint(frame == constants.StreamEmitterEndFrame), "count=", streamAbilityCount)
 		if rerr != nil {
 			continue // Python frame is None → continue
 		}
