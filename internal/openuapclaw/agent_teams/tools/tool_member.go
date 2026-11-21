@@ -754,14 +754,13 @@ func (s *spawnTeammateTool) Invoke(ctx context.Context, inputs map[string]any, _
 	if !result.OK {
 		return toolError(result.Reason)
 	}
-	// Python: fork 记账（:848-855）
-	// Python: team.mark_fork_on_spawn（:848-855）——fork 快照/继承链属
-	// 20.4 域（CheckpointTool 同源），Go TeamBackend 未落该方法。
-	// 偏差 D-15.16-e17：spawn 期 fork 记账 ⤴️fork 章节，步骤位置保留。
+	// Python: fork 记账（:848-855）——fork 值非 "false"/False 时登记 pending，
+	// 由成员创建回调（TeamAgent._on_teammate_created → consume_fork_on_spawn）
+	// 一次性消费并按 fork_mode 构造继承上下文。
 	if forkValue, ok := inputs["fork"]; ok && forkValue != nil && forkValue != "false" && forkValue != false {
-		logger.Warn(toolMemberLogComponent).
-			Str("member_name", memberName).
-			Msg("fork-on-spawn accounting not ported (D-15.16-e17, pending fork chapter)")
+		forkSource, _ := inputs["fork_source"].(string)
+		forkMode, _ := inputs["fork_mode"].(string)
+		s.team.MarkForkOnSpawn(memberName, forkValue, forkSource, forkMode)
 	}
 	data := map[string]any{
 		"member_name": memberName, "display_name": displayName, "role_type": "teammate",

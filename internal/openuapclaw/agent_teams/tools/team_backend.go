@@ -82,6 +82,9 @@ type TeamBackend struct {
 	// checkpoints 本地快照 dict（无回调时的回退存储）。
 	// Python: TeamBackend._checkpoints。
 	checkpoints map[string]storeCheckpointRecord
+	// pendingForks 待消费的 fork 请求（key=memberName）。
+	// Python: TeamBackend._pending_forks（team.py:612）。
+	pendingForks map[string]ForkInfo
 	// translator 翻译闭包（构造注入；Python team.py 的 t）。
 	translator locales.Translator
 	// setMemberModelFn 运行中外部 CLI 成员的模型切换回调。
@@ -736,6 +739,54 @@ func (tb *TeamBackend) SetStoreCheckpointFn(fn func(name string, count int, desc
 // Python: set_checkpoint_list_fn (team.py:597-599)
 func (tb *TeamBackend) SetCheckpointListFn(fn func() map[string]map[string]any) {
 	tb.listCheckpointFn = fn
+}
+
+// ForkInfo spawn 时携带的上下文继承请求。
+// Python: mark_fork_on_spawn 值形态 {fork, since, source, fork_mode}（team.py:617-626）。
+// since 恒 None（Python 侧亦如此，保留字段语义：占位）。
+type ForkInfo struct {
+	// Fork true=继承调用者当前全部上下文；字符串=从命名 checkpoint 继承
+	Fork any `json:"fork"`
+	// Source 上下文来源成员名（fork_source，空=leader）
+	Source string `json:"source"`
+	// ForkMode 保留 checkpoint 的哪一侧（空=分派期默认：live→full，named→before）
+	ForkMode string `json:"fork_mode"`
+}
+
+// MarkForkOnSpawn 登记成员的 fork 请求（spawn_teammate 工具调用时写入，
+// 成员创建回调一次性消费）。
+// Python: mark_fork_on_spawn (team.py:617-626)
+func (tb *TeamBackend) MarkForkOnSpawn(member string, forkValue any, forkSource string, forkMode string) {
+	if tb.pendingForks == nil {
+		tb.pendingForks = make(map[string]ForkInfo)
+	}
+	tb.pendingForks[member] = ForkInfo{
+		Fork:     forkValue,
+		Source:   forkSource,
+		ForkMode: forkMode,
+	}
+	logger.Debug(logComponent).
+		Str("member", member).
+		Any("fork", forkValue).
+		Str("source", forkSource).
+		Str("fork_mode", forkMode).
+		Str("team_name", tb.teamName).
+		Msg("[fork] mark_fork_on_spawn")
+}
+
+// ConsumeForkOnSpawn 取走并删除成员的 fork 请求（一次性）。
+// Python: consume_fork_on_spawn (team.py:628-633)
+func (tb *TeamBackend) ConsumeForkOnSpawn(member string) *ForkInfo {
+	info, ok := tb.pendingForks[member]
+	if !ok {
+		return nil
+	}
+	delete(tb.pendingForks, member)
+	logger.Debug(logComponent).
+		Str("member", member).
+		Str("team_name", tb.teamName).
+		Msg("[fork] consume_fork_on_spawn")
+	return &info
 }
 
 // ForkEnabled 该团队的上下文继承（fork）是否开放。
