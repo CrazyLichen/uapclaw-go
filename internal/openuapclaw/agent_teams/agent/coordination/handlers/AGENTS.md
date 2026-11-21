@@ -77,7 +77,7 @@ leader-only 且 round 真空闲（三条件全否）；三条件完成判定（�
 TeamBackend 判；上升沿发 TEAM_COMPLETED；persistent 额外 conclude_completed_round；rearm() 每轮独立判定。
 
 ### WorkflowHandler / ReliabilityHandler
-见 coordination/agent.md 索引表。
+见 coordination/AGENTS.md 索引表。
 
 ## 跨 handler fan-out 三处协作
 

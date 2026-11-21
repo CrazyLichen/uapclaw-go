@@ -75,7 +75,7 @@ Invoke 白名单给 MCP 客户端，两层都必须有。
 
 同步 `TeamTool` 的 LLM 可见文本唯一来源；分四档（纯文本确认 / 结构化行 / 详情 / 文本+行为引导）+
 时间上下文（`timefmt.FormatTimeContext`）。async 工具两段式文本：launch 段走 `RenderForLLM`、终态段走
-`format_completed/failed` 注入（见 `harness/agent.md`）。外部 CLI 成员复用同一套工具与渲染（F_26）——
+`format_completed/failed` 注入（见 `harness/AGENTS.md`）。外部 CLI 成员复用同一套工具与渲染（F_26）——
 保持角色中立。
 
 ## i18n

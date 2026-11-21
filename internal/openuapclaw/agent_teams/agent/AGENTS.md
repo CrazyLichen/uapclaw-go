@@ -33,8 +33,8 @@
 
 ## 子目录
 
-- `coordination/` — 唤醒循环（见 `coordination/agent.md`）
-- `coordination/scheduling/` — 调度模式决策引擎（见 `coordination/scheduling/agent.md`）
+- `coordination/` — 唤醒循环（见 `coordination/AGENTS.md`）
+- `coordination/scheduling/` — 调度模式决策引擎（见 `coordination/scheduling/AGENTS.md`）
 
 ## 跨文件协作关键点
 

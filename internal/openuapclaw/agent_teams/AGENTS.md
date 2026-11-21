@@ -3,16 +3,16 @@
 多智能体团队协作子系统。一个 Leader + 若干 Teammate，通过消息总线与任务数据库协同完成复杂任务。
 
 > 本文件改编自上游 `openjiuwen/agent_teams/AGENTS.md`（Go 侧对齐版）。描述的是 Go 现状；
-> 上游独有的、Go 尚未实施的部分以「⤴️ 未实施」标注并注明计划章节。各包细节见同目录 `agent.md` 与 `doc.go`。
+> 上游独有的、Go 尚未实施的部分以「⤴️ 未实施」标注并注明计划章节。各包细节见同目录 `AGENTS.md` 与 `doc.go`。
 
 本文件是域入口索引，深入细节跳转到：
-- `tools/agent.md` — 团队工具设计与描述契约
-- `prompts/agent.md` — Prompt 模板与语言切换
-- `runtime/agent.md` — 对象池 / 派发 / 并发门禁
-- `interaction/agent.md` — 三视角交互 inbox + HITT 表面
-- `agent/agent.md` — TeamAgent 四象限分解 + 各 manager
-- `agent/coordination/agent.md` · `agent/coordination/handlers/agent.md` · `agent/coordination/scheduling/agent.md` — 唤醒循环 / handler 策略 / 调度引擎
-- `harness/agent.md` — NativeHarness 运行时外壳与异步工具框架
+- `tools/AGENTS.md` — 团队工具设计与描述契约
+- `prompts/AGENTS.md` — Prompt 模板与语言切换
+- `runtime/AGENTS.md` — 对象池 / 派发 / 并发门禁
+- `interaction/AGENTS.md` — 三视角交互 inbox + HITT 表面
+- `agent/AGENTS.md` — TeamAgent 四象限分解 + 各 manager
+- `agent/coordination/AGENTS.md` · `agent/coordination/handlers/AGENTS.md` · `agent/coordination/scheduling/AGENTS.md` — 唤醒循环 / handler 策略 / 调度引擎
+- `harness/AGENTS.md` — NativeHarness 运行时外壳与异步工具框架
 
 ## 统一术语
 
@@ -82,7 +82,7 @@ internal/openuapclaw/agent_teams/
 ### agent/ — 运行时主骨架
 
 `TeamAgent`（`agent/team_agent.go`）单一实现承担 Leader/Teammate，按 `TeamRole` 切，内部组合 DeepAgent。
-四象限拆分与 manager 清单见 [`agent/agent.md`](agent/agent.md)。
+四象限拆分与 manager 清单见 [`agent/AGENTS.md`](agent/AGENTS.md)。
 
 ### prompts/
 
@@ -94,7 +94,7 @@ internal/openuapclaw/agent_teams/
 | `prompts/{cn,en}/` | 语言模板（25.0g 后 34 个/语言） |
 
 模板里的工具一律写**裸名**；外部 CLI 成员经 `<team-policy tools="...">` + `tool_namespace.md` 一次声明归属。
-详见 [`prompts/agent.md`](prompts/agent.md)。
+详见 [`prompts/AGENTS.md`](prompts/AGENTS.md)。
 
 ### rails/ — 团队 Rail 装配
 
@@ -142,11 +142,11 @@ CAS 是链上唯一并发闸。模式由 `TeamAgentSpec.spawn_mode` 决定（Go 
 ### runtime/ — 对象池 + 派发 + 并发门禁
 
 `TeamRuntimePool` + `TeamRuntimeManager` + 7 路 dispatch truth table（`runtime/dispatch.go`）+ `InteractGate`
-（`runtime/gate.go`）。详见 [`runtime/agent.md`](runtime/agent.md)。
+（`runtime/gate.go`）。详见 [`runtime/AGENTS.md`](runtime/AGENTS.md)。
 
 ### interaction/ — 外部交互 + HITT + Bridge
 
-三视角交互 + inbox 实现 + HITT runtime 表面。详见 [`interaction/agent.md`](interaction/agent.md)。
+三视角交互 + inbox 实现 + HITT runtime 表面。详见 [`interaction/AGENTS.md`](interaction/AGENTS.md)。
 
 ### external/ · mcp/ — 外部 agent 直连
 
@@ -156,7 +156,7 @@ session/Turn 协议**不要合并**。
 
 ### worktree / team_workspace
 
-通用 worktree 在 `internal/openuapclaw/harness/tools/worktree`；team 侧三件事见 `worktree/agent.md`（25.7 交付）。
+通用 worktree 在 `internal/openuapclaw/harness/tools/worktree`；team 侧三件事见 `worktree/AGENTS.md`（25.7 交付）。
 **worktree 管代码隔离，workspace 管产物协同**，两者独立。
 
 ## 架构铁律
@@ -179,6 +179,6 @@ session/Turn 协议**不要合并**。
 ## 对齐与文档同步（本域强制）
 
 本域是 Python 对齐体量最大的域（583 文件/10.5 万行）。规则 9/12（结构忠实）在此域执行最严。
-- 每个包的 `doc.go` 是 Go 侧结构真相源；本目录各 `agent.md` 是**决策与不变量**真相源。
+- 每个包的 `doc.go` 是 Go 侧结构真相源；本目录各 `AGENTS.md` 是**决策与不变量**真相源。
 - 读到与代码不一致的描述必须当场修文档（对齐上游 AGENTS.md 双向同步铁律）。
 - 设计/计划归 `docs/superpowers/{specs,plans}/`；进度归 `IMPLEMENTATION_PLAN.md`。

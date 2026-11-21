@@ -28,7 +28,7 @@
 | `AgentLifecycleHandler` | USER_INPUT(inner)/STANDBY/CLEANED/TOOL_APPROVAL_RESULT/TASK_PLAN_RESPONSE | 无 | 本地生命周期信号直通 host |
 | `MemberHandler` | REFRESH_TEAM_CONTEXT(inner) + 6 个 MEMBER_* | 无 | leader 侧纯观测 + 活动登记（F_74）；**不清理团队**——名册全空是状态不是意图（F_81）；非 leader 只反应自身事件；名册变动触发外部 CLI 成员 announce_team_context（F_70） |
 | `MessageHandler` | MESSAGE/BROADCAST/POLL_MAILBOX(inner) + MEMBER_SHUTDOWN(fan-out) | 无 | 三条投递路径统一先过 `_harness_input_blocked` 闸门（S_03 机制 18）；投递前 `_expand` 做 F_63 两阶段模板渲染；leader ack user-bound + 通知 human-agent inbound |
-| `TaskBoardHandler` | INITIAL_POLL_TASK(F_69) + 15 个 TASK_*（4 定向 + 3 verify 闸 + PLAN_RESPONSE + 6 看板巡视）；调度子类加 TASK_REVIEW_VOTE | 无 | 三组策略 + 首启板巡视（见 `handlers/agent.md`） |
+| `TaskBoardHandler` | INITIAL_POLL_TASK(F_69) + 15 个 TASK_*（4 定向 + 3 verify 闸 + PLAN_RESPONSE + 6 看板巡视）；调度子类加 TASK_REVIEW_VOTE | 无 | 三组策略 + 首启板巡视（见 `handlers/AGENTS.md`） |
 | `StaleTaskHandler` | POLL_TASK(inner) | 4 个私有记账 | 两个按 assignee 划分的 sweep（成员自催 self-only / leader 催无主 PENDING） |
 | `TeamCompletionHandler` | POLL_TASK / TASK_LIST_DRAINED / TEAM_COMPLETED | 上升沿标志 + 回调表 | leader 且 round 真空闲的三条件完成判定，上升沿发 TEAM_COMPLETED；persistent 额外结束 leader 流触发 auto-pause |
 | `WorkflowHandler` | WORKFLOW_PROGRESS | 无 | leader-only，叙述 swarmflow 中途里程碑（⤴️ 消费 25.12） |
@@ -49,5 +49,5 @@ poll 恢复前重置，pause 窗口不计入。调度模式仍走 updated_at，�
 **铁律 3：异常自己记。** 回调框架吞普通异常（AbortError 上抛），handler 内部失败必须自己记
 error 日志，不能把框架的 swallow 当隐式错误处理。
 
-策略细节（五个决策维度、各 handler 分支规则、fan-out 契约）见 [`handlers/agent.md`](handlers/agent.md)；
-调度引擎见 [`scheduling/agent.md`](scheduling/agent.md)。
+策略细节（五个决策维度、各 handler 分支规则、fan-out 契约）见 [`handlers/AGENTS.md`](handlers/AGENTS.md)；
+调度引擎见 [`scheduling/AGENTS.md`](scheduling/AGENTS.md)。
