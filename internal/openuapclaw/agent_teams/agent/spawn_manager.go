@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
@@ -96,6 +97,7 @@ func (m *SpawnManager) SpawnTeammate(
 	initialMessage string,
 	sessionID string,
 	spawnCfg *runnerspawn.SpawnConfig,
+	forkFrom *agentteams.ForkContext,
 ) error {
 	memberName := runtimeCtx.MemberName
 	spawnMode := "process" // 默认 subprocess
@@ -125,7 +127,9 @@ func (m *SpawnManager) SpawnTeammate(
 		}
 		handle, err = m.spawnExternalCLI(ctx, runtimeCtx, initialMessage, sessionID)
 	} else if spawnMode == "inprocess" {
-		handle, err = m.spawnInprocess(ctx, runtimeCtx, initialMessage, sessionID)
+		// Python: fork_from 只进 inprocess 分支（spawn_manager.py:141/189）——
+		// 子进程/外部 CLI 成员不消费 fork 继承。
+		handle, err = m.spawnInprocess(ctx, runtimeCtx, initialMessage, sessionID, forkFrom)
 	} else {
 		handle, err = m.spawnSubprocess(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
 	}
@@ -287,7 +291,7 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	sessionID := sessionctx.GetSessionID(ctx)
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
+		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg, nil)
 		if err == nil {
 			m.PublishRestartEvent(ctx, memberName, attempt)
 			logger.Info(logComponent).
@@ -554,6 +558,7 @@ func (m *SpawnManager) spawnInprocess(
 	runtimeCtx atschema.TeamRuntimeContext,
 	initialMessage string,
 	sessionID string,
+	forkFrom *agentteams.ForkContext,
 ) (*spawn.InProcessSpawnHandle, error) {
 	// 构建工厂函数（对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)）
 	// 注意：闭包参数重命名为 runtimeCtxParam，避免遮蔽外层 ctx context.Context
@@ -582,10 +587,23 @@ func (m *SpawnManager) spawnInprocess(
 			return nil, err
 		}
 
+		// 25.5: 共享 leader 的 checkpoint 命名空间并把存储回调路由到 leader 的
+		// set_checkpoint——共享字典让队友的写入立即可见，leader 是唯一写镜像进
+		// session per-team 命名空间的写者（避免各自独立 State 在 post_run 互相
+		// 覆盖）。
+		// Python: inprocess_spawn.py:97-107（share_checkpoints_with +
+		// set_store_checkpoint_fn）
+		if leader := m.getTeamAgent(); leader != nil {
+			leader.ShareCheckpointsWith(teammate)
+			if tb := teammate.TeamBackend(); tb != nil {
+				tb.SetStoreCheckpointFn(leader.SetCheckpoint)
+			}
+		}
+
 		return teammate, nil
 	}
 
-	handle, err := spawn.InProcessSpawn(ctx, factory, runtimeCtx, initialMessage, sessionID)
+	handle, err := spawn.InProcessSpawn(ctx, factory, runtimeCtx, initialMessage, sessionID, forkFrom)
 	if err != nil {
 		return nil, err
 	}
