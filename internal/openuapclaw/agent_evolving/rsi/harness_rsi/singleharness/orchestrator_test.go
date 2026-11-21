@@ -38,7 +38,7 @@ func (f *fakeOrchestratorEvaluator) Evaluate(ctx context.Context, dataset harnes
 func (f *fakeOrchestratorEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]any,
 	teamSkillRefPath, harnessRefsPath, outputDir string,
 	dataset *harnessrsi.DatasetArtifact,
-	onCaseStage func(map[string]any) error,
+	onCaseStage func(evaluatorpkg.EvaluationStageEvent) error,
 	caseConcurrency int,
 	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error) {
 	f.calls++
@@ -718,7 +718,7 @@ func (f *fakePathEvaluator) Evaluate(ctx context.Context, dataset harnessrsi.Dat
 func (f *fakePathEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]any,
 	teamSkillRefPath, harnessRefsPath, outputDir string,
 	dataset *harnessrsi.DatasetArtifact,
-	onCaseStage func(map[string]any) error,
+	onCaseStage func(evaluatorpkg.EvaluationStageEvent) error,
 	caseConcurrency int,
 	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error) {
 	f.calls++

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
-	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 )
 
@@ -33,13 +32,13 @@ func (f *fakeEvaluator) Evaluate(ctx context.Context, dataset harnessrsi.Dataset
 	return f.EvaluateBatch(ctx, nil, teamSkillRefPath, harnessRefsPath, outputDir, &dataset, nil, 1, nil)
 }
 
-// EvaluateBatch 实现 EvaluatorInvoker。
+// EvaluateBatch 实现 EvaluatorInvoker（17.6c 收窄签名：EvaluationStageEvent）。
 func (f *fakeEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]any,
 	teamSkillRefPath, harnessRefsPath, outputDir string,
 	dataset *harnessrsi.DatasetArtifact,
-	onCaseStage func(map[string]any) error,
+	onCaseStage func(evaluator.EvaluationStageEvent) error,
 	caseConcurrency int,
-	baselineContexts map[string]any) (string, error) {
+	baselineContexts map[string]*evaluator.BaselineJudgeContext) (string, error) {
 	idx := f.calls
 	f.calls++
 	f.lastBatch.cases = cases
@@ -57,15 +56,11 @@ func (f *fakeEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]an
 	return ref, err
 }
 
-// TestStubSatisfiesSeam 桩满足注入面。
-func TestStubSatisfiesSeam(t *testing.T) {
-	invoker := NewStubEvaluatorInvoker(harnessconfig.EvaluatorConfig{})
+// TestRealEvaluatorSatisfiesSeam 真身满足注入面（17.6c，桩哨兵已删，回填件①）。
+func TestRealEvaluatorSatisfiesSeam(t *testing.T) {
+	var invoker EvaluatorInvoker = &evaluator.TeamEvaluator{}
 	if invoker == nil {
-		t.Fatal("默认注入不应为空")
-	}
-	_, err := invoker.Evaluate(context.Background(), harnessrsi.DatasetArtifact{}, "", "", t.TempDir())
-	if !errors.Is(err, evaluator.ErrEvaluatorNotImplemented) {
-		t.Fatalf("桩应返回哨兵错误: %v", err)
+		t.Fatal("注入面兜底失败")
 	}
 }
 
@@ -89,8 +84,5 @@ func TestFakeEvaluatorSequence(t *testing.T) {
 	}
 	if len(fake.lastBatch.cases) != 0 {
 		t.Fatal("第二次调用 cases 应为空")
-	}
-	if ErrEvaluatorStubReexported != evaluator.ErrEvaluatorNotImplemented {
-		t.Fatal("转发哨兵应一致")
 	}
 }

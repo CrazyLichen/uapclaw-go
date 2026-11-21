@@ -1,9 +1,9 @@
 // Package evaluator 提供 RSI 评估器侧的运行时适配件。
 //
-// 本包对应 Python openjiuwen/rsi/harness_rsi/evaluator/。17.6a/17.6b
-// 已全量落地：judger 裁判组（judger/ 子包）、运行时适配三轨、
-// case_backend 考场、case_runner 监考编排。17.4f TeamEvaluator 打分桩
-//（team_evaluator.go）⤴️ 17.6c 真身落地时按规则 8 删除。
+// 本包对应 Python openjiuwen/rsi/harness_rsi/evaluator/。17.6a/17.6b/17.6c
+// 已全量落地：judger 裁判组（judger/ 子包）、运行时适配三轨、case_backend
+// 考场、case_runner 监考编排、TeamEvaluator 评估门面（17.6c 真身，17.4f
+// 桩与哨兵 ErrEvaluatorNotImplemented 已按规则 8 删除，回填件①②③④兑现）。
 //
 // 文件目录：
 //
@@ -24,7 +24,7 @@
 //	├── trajectory_paths.go              # 角色轨迹路径与 RoleFileTrajectoryStore
 //	├── trajectory_usage.go              # 轨迹用量归集
 //	├── errors.go                        # EvaluationInfrastructureError
-//	├── team_evaluator.go                # TeamEvaluator 打分桩（⤴️ 17.6c 回填删除）
+//	├── team_evaluator.go                # TeamEvaluator 评估门面真身（17.6c，Python team_evaluator.py 501 行）
 //	└── judger/                          # 17.6a 裁判组子包（评分五件+提示词 embed+判分器工厂）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluator/
