@@ -737,3 +737,91 @@ func requiredOf(fieldConfig map[string]any) bool {
 	}
 	return true
 }
+
+// ──────────────────────────── LLMPromptFormatter（llm_comp.py:280-373） ────────────────────────────
+
+// defaultMarkdownInstruction 默认 markdown 格式指令（Python _DEFAULT_MARKDOWN_INSTRUCTION
+// :282-292 英文原文逐字复制，含 ${query} 占位符）
+const defaultMarkdownInstruction = "Please return the answer in markdown format.\n" +
+	"- For headings, use number signs (#).\n" +
+	"- For list items, start with dashes (-).\n" +
+	"- To emphasize text, wrap it with asterisks (*).\n" +
+	"- For code or commands, surround them with backticks (`).\n" +
+	"- For quoted text, use greater than signs (>).\n" +
+	"- For links, wrap the text in square brackets [], followed by the URL in parentheses ().\n" +
+	"- For images, use square brackets [] for the alt text, followed by the image URL in parentheses ().\n" +
+	"The question is: ${query}."
+
+// defaultJSONInstruction 默认 JSON 格式指令（Python _DEFAULT_JSON_INSTRUCTION :294-302 逐字复制）
+const defaultJSONInstruction = "Carefully consider the user's question to ensure your answer is logical and makes sense.\n" +
+	"- Make sure your explanation is concise and easy to understand, not verbose.\n" +
+	"- Strictly return the answer in valid JSON format only, and " +
+	"\"DO NOT ADD ANY COMMENTS BEFORE OR AFTER IT\" to ensure it could be formatted " +
+	"as a JSON instance that conforms to the JSON schema below.\n" +
+	"Here is the JSON schema: ${json_schema}.\n" +
+	"The question is: ${query}."
+
+// findLastUserIndex 最后一条 user 消息下标（Python _find_last_user_index :327-331 一比一：
+// 倒序遍历 role=="user"；无则 -1 ≙ Python None）
+func findLastUserIndex(history []llmschema.BaseMessage) int {
+	for idx := len(history) - 1; idx >= 0; idx-- {
+		if history[idx].GetRole().String() == "user" {
+			return idx
+		}
+	}
+	return -1
+}
+
+// formatPrompt 提示词格式化（Python format_prompt :334-373 一比一：text 原样返回；
+// 无 user 消息原样返回；markdown/json 找最后一条 user 消息改写后原地写回）
+func formatPrompt(history []llmschema.BaseMessage, responseFormat map[string]any, outputConfig map[string]any) []llmschema.BaseMessage {
+	resType, _ := responseFormat[typeKey].(string)
+	// text 原样（:340-341）
+	if resType == "text" {
+		return history
+	}
+	lastUserIdx := findLastUserIndex(history)
+	if lastUserIdx < 0 {
+		return history
+	}
+	query := history[lastUserIdx].GetContent().String()
+	prompt := query
+
+	switch resType {
+	case "markdown":
+		// 自带 markdownInstruction 优先（:349-354）
+		instruction, ok := responseFormat["markdownInstruction"].(string)
+		if !ok || instruction == "" {
+			instruction = defaultMarkdownInstruction
+		}
+		prompt = strings.Replace(instruction, "${query}", query, 1)
+	case "json":
+		// object 型 config_type 直接用作 schema，否则生成（:357-361）
+		var jsonSchema map[string]any
+		configType, _ := outputConfig[typeKey].(string)
+		if configType == "object" {
+			jsonSchema = outputConfig
+		} else {
+			jsonSchema = generateJSONSchema(outputConfig)
+		}
+		instruction, ok := responseFormat["jsonInstruction"].(string)
+		if !ok || instruction == "" {
+			instruction = defaultJSONInstruction
+		}
+		// ${json_schema} 序列化：ensure_ascii=False → Go Encoder SetEscapeHTML(false)
+		//（spec 预登记偏差第 4 条，8.9a D-9 同款）
+		var sb strings.Builder
+		enc := json.NewEncoder(&sb)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(jsonSchema); err != nil {
+			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
+				exception.WithMsg(fmt.Sprintf("json schema marshal failed: %v", err))))
+		}
+		schemaJSON := strings.TrimSuffix(sb.String(), "\n")
+		prompt = strings.Replace(instruction, "${json_schema}", schemaJSON, 1)
+		prompt = strings.Replace(prompt, "${query}", query, 1)
+	}
+	// 原地写回（:372）
+	history[lastUserIdx].SetContent(llmschema.NewTextContent(prompt))
+	return history
+}

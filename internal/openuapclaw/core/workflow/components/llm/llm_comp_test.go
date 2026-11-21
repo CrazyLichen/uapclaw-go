@@ -332,3 +332,88 @@ func TestFormatWithSchema_default填充(t *testing.T) {
 	assert.Equal(t, "v", out["a"])
 	assert.Equal(t, "dflt", out["b"])
 }
+
+// ──────────────────────────── Task5 提示词格式化 + 流式状态 ────────────────────────────
+
+// newMsgHistory 构造历史消息
+func newMsgHistory(contents ...string) []llmschema.BaseMessage {
+	out := make([]llmschema.BaseMessage, 0, len(contents))
+	for _, c := range contents {
+		out = append(out, llmschema.NewUserMessage(c))
+	}
+	return out
+}
+
+// TestFormatPrompt_json注入 最后一条 user 消息被原地改写（llm_comp.py:356-372）
+func TestFormatPrompt_json注入(t *testing.T) {
+	history := newMsgHistory("第一条", "真正的问题")
+	outputConfig := map[string]any{"name": map[string]any{"type": "string"}}
+	out := formatPrompt(history, map[string]any{"type": "json"}, outputConfig)
+	content := out[1].GetContent().String()
+	assert.Contains(t, content, "真正的问题")
+	assert.Contains(t, content, "properties", "占位符应替换为实际 schema JSON")
+	// 非最后消息不改写
+	first := out[0].GetContent().String()
+	assert.Equal(t, "第一条", first)
+	// 原地写回：入参切片同一对象
+	assert.Same(t, history[1], out[1])
+}
+
+// TestFormatPrompt_text原样 text 模式不改写（:340-341）
+func TestFormatPrompt_text原样(t *testing.T) {
+	history := newMsgHistory("q")
+	out := formatPrompt(history, map[string]any{"type": "text"}, nil)
+	c := out[0].GetContent().String()
+	assert.Equal(t, "q", c)
+}
+
+// TestFormatPrompt_无user消息 不改写（:344-345）
+func TestFormatPrompt_无user消息(t *testing.T) {
+	history := []llmschema.BaseMessage{llmschema.NewSystemMessage("s")}
+	out := formatPrompt(history, map[string]any{"type": "json"}, map[string]any{})
+	c := out[0].GetContent().String()
+	assert.Equal(t, "s", c)
+}
+
+// TestFormatPrompt_markdown注入 默认 markdown 指令（:349-354）
+func TestFormatPrompt_markdown注入(t *testing.T) {
+	history := newMsgHistory("q")
+	out := formatPrompt(history, map[string]any{"type": "markdown"}, map[string]any{})
+	c := out[0].GetContent().String()
+	assert.Contains(t, c, "markdown format")
+	assert.Contains(t, c, "q")
+}
+
+// TestFormatPrompt_自定义instruction 自带指令优先（:351-352,363-364）
+func TestFormatPrompt_自定义instruction(t *testing.T) {
+	history := newMsgHistory("q")
+	rf := map[string]any{"type": "json", "jsonInstruction": "OUT ${json_schema} ASK ${query}"}
+	out := formatPrompt(history, rf, map[string]any{"a": map[string]any{"type": "string"}})
+	c := out[0].GetContent().String()
+	assert.Contains(t, c, "OUT")
+	// 默认模板不再出现
+	assert.NotContains(t, c, "Carefully consider")
+}
+
+// TestFormatPrompt_json_object型config_type object 型直接用作 schema（:357-359）
+func TestFormatPrompt_json_object型config_type(t *testing.T) {
+	history := newMsgHistory("q")
+	objectSchema := map[string]any{"type": "object", "properties": map[string]any{}}
+	out := formatPrompt(history, map[string]any{"type": "json"}, objectSchema)
+	c := out[0].GetContent().String()
+	// object 型 config 的 json 序列化含 "properties" 键
+	assert.Contains(t, c, "properties")
+}
+
+// TestLLMExecutableState_累积与清空（:404-424）
+func TestLLMExecutableState_累积与清空(t *testing.T) {
+	st := newLLMExecutableState()
+	res := st.BuildFinalResult(map[string]any{"type": "text"}, map[string]any{"a": nil})
+	assert.Empty(t, res)
+	st.AccumulateContent("hel")
+	st.AccumulateContent("lo")
+	res = st.BuildFinalResult(map[string]any{"type": "text"}, map[string]any{"answer": nil})
+	assert.Equal(t, "hello", res["answer"])
+	st.Clear()
+	assert.Equal(t, "", st.accumulatedContent)
+}
