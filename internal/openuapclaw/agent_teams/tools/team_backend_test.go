@@ -1766,3 +1766,28 @@ func TestTeamBackend_ListRouteTags(t *testing.T) {
 		t.Fatal("无池 tags 空")
 	}
 }
+
+// TestTeamBackend_MarkConsumeForkOnSpawn 验证 pending fork 的登记与一次性消费。
+// Python: mark_fork_on_spawn / consume_fork_on_spawn (team.py:617-633)
+func TestTeamBackend_MarkConsumeForkOnSpawn(t *testing.T) {
+	tb := newTestTeamBackend()
+	// 未登记 → nil
+	if got := tb.ConsumeForkOnSpawn("mate"); got != nil {
+		t.Fatal("未登记应返回 nil")
+	}
+	tb.MarkForkOnSpawn("mate", "code-ready", "leader", "before")
+	info := tb.ConsumeForkOnSpawn("mate")
+	if info == nil || info.Fork != "code-ready" || info.Source != "leader" || info.ForkMode != "before" {
+		t.Fatalf("consume 结果不符: %+v", info)
+	}
+	// 一次性：再次消费为 nil
+	if got := tb.ConsumeForkOnSpawn("mate"); got != nil {
+		t.Fatal("fork 请求应被一次性消费")
+	}
+	// fork=true 形态
+	tb.MarkForkOnSpawn("m2", true, "", "")
+	info2 := tb.ConsumeForkOnSpawn("m2")
+	if info2 == nil || info2.Fork != true || info2.Source != "" {
+		t.Fatalf("fork=true 形态不符: %+v", info2)
+	}
+}
