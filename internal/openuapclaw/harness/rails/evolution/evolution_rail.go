@@ -658,6 +658,11 @@ func (r *EvolutionRail) drainForHook(capture *invokeCapture, requiredCategory st
 		// Python: issues = tuple(issues) + self._capture_quality_issues(increment)
 		issues = captureQualityIssues(increment)
 	}
+	// Python: RSITrajectoryRail._drain_for_hook 覆写收集 capture_issues——
+	// Go 经可选观察接口在 gate 判定前回调（含空清单）。
+	if observer, ok := r.ext.(CaptureIssueObserver); ok {
+		observer.ObserveCaptureIssues(issues)
+	}
 	if len(issues) > 0 {
 		// Python: if issues: return None, increment, issues——clean-window gate。
 		return nil, increment, issues, nil
@@ -978,8 +983,9 @@ func argsToJSONAttr(value any) string {
 // DefaultMemberRole 返回默认成员角色（测试观测面）。
 func (r *EvolutionRail) DefaultMemberRole() string { return r.defaultMemberRole }
 
-// setExtension 换装扩展点实现（TrajectoryRail ext 包装挂载用）。
-func (r *EvolutionRail) setExtension(ext EvolutionExtension) { r.ext = ext }
+// SetExtension 换装扩展点实现（TrajectoryRail/RSITrajectoryRail ext 包装挂载用；
+// 跨包导出——RSI evaluator 子包构造时换装）。
+func (r *EvolutionRail) SetExtension(ext EvolutionExtension) { r.ext = ext }
 
-// getExtension 读取当前扩展点实现。
-func (r *EvolutionRail) getExtension() EvolutionExtension { return r.ext }
+// GetExtension 读取当前扩展点实现。
+func (r *EvolutionRail) GetExtension() EvolutionExtension { return r.ext }

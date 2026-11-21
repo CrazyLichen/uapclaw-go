@@ -68,6 +68,15 @@ type ExecutionIncrementRecorder interface {
 	RecordExecutionIncrement(increment *trajectory.Trajectory)
 }
 
+// CaptureIssueObserver 可选扩展：采集质量问题观察。
+// Python: RSITrajectoryRail._drain_for_hook 覆写收集 capture_issues
+// （rsi/harness_rsi/evaluator/runtime_adapters.py:64）；Go Final 回调设计下
+// 经可选接口断言分派，由 drainForHook 在 issues 计算后回调。
+type CaptureIssueObserver interface {
+	// ObserveCaptureIssues 收到一次 drain 的质量问题清单（可为空切片或 nil）。
+	ObserveCaptureIssues(issues []map[string]any)
+}
+
 // noOpExtension EvolutionExtension 的默认空实现。
 // TrajectoryRail 直接使用此实例；子类可嵌入后只覆写需要的方法。
 // NoOpExtension 空扩展导出别名（集成装配与外部消费的最小桩；对齐 Python

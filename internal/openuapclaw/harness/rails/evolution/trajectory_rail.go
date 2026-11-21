@@ -61,7 +61,7 @@ func NewTrajectoryRail(opts ...EvolutionRailOption) *TrajectoryRail {
 		executionSeenSpans:    map[trajectory.SpanIdentity]struct{}{},
 	}
 	// ext 换装归档包装（evolution_trigger=NONE，Python __init__ 同参）。
-	inner.setExtension(&archiveExtension{inner: inner.getExtension(), rail: rail})
+	inner.SetExtension(&archiveExtension{inner: inner.GetExtension(), rail: rail})
 	return rail
 }
 
