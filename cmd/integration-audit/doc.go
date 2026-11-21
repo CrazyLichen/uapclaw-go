@@ -17,6 +17,13 @@
 // 典型裁决（实测）：静跨度=1 的 heartbeat 覆盖 7 个子系统 → 真集成；
 // 冒充目录 swarm/server 各子系统 ≤24 行（纯基线污染）→ 不通过。
 //
+// 本地提速（verify_cache.go，防伪语义不变）：
+//   - 覆盖档案内容寻址缓存：键 = sha256(源码指纹 | 构建标签 | 测试目录)，
+//     指纹覆盖 internal/ 与 tests/ 全部 .go 内容——任一源码变动整批失效重跑；
+//     CI 用 -no-cache 保持全量真实重跑口径。
+//   - -only-changed 本地降级：只对本次改动过的灰区目录跑覆盖验证（git diff/status
+//     判定），未改动目录跳过且不判罚，由 CI 全量兜底。
+//
 // 同时保留原有三条静态规则：build tag、suite.Run、import 存在性。
 //
 // 输出：按目录聚合的审计结果 + 覆盖验证结果（JSON 或文本），CI 消费 exit code 判定失败。
@@ -24,14 +31,16 @@
 // 文件目录：
 //
 //	integration-audit/
-//	├── doc.go           # 包文档
-//	├── main.go          # Execute() + main()（build tag !test 隔离）
-//	├── audit.go         # 第一层：AST 调用分析与目录聚合
-//	├── audit_test.go    # 第一层单元测试
-//	├── verify.go        # 第二层：覆盖交叉验证引擎
-//	├── verify_test.go   # 第二层单元测试（fake runner + 合成档案）
-//	├── report.go        # 报告输出与 CLI 参数解析
-//	└── report_test.go   # CLI 层单元测试
+//	├── doc.go              # 包文档
+//	├── main.go             # Execute() + main()（build tag !test 隔离）
+//	├── audit.go            # 第一层：AST 调用分析与目录聚合
+//	├── audit_test.go       # 第一层单元测试
+//	├── verify.go           # 第二层：覆盖交叉验证引擎
+//	├── verify_test.go      # 第二层单元测试（fake runner + 合成档案）
+//	├── verify_cache.go     # 源码指纹 + 档案缓存 + 改动目录判定
+//	├── verify_cache_test.go # 缓存与指纹单元测试
+//	├── report.go          # 报告输出与 CLI 参数解析
+//	└── report_test.go     # CLI 层单元测试
 //
 // 对应 Python 代码：无（Go 端 CI 基础设施，Python 无此工具）。
 package main
