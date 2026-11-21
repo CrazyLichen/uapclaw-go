@@ -2358,24 +2358,29 @@ func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) er
 // （生产闭包内部走根包 ForkContextFromAgent，Python from_agent 一比一）；
 // 整段异常兜底：warning + nil（无继承继续 spawn）——fork 抓取失败绝不阻塞 spawn。
 // Python: team_agent.py:1494-1622
-func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, forkInfo *tools.ForkInfo, forkFrom func(ckpt *int, keep string) *agentteams.ForkContext) (forkCtx *agentteams.ForkContext) {
-	// Python: try: ... except Exception: warning + fork_ctx = None（:1618-1622）
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn(logComponent).
-				Str("member", teammateID).
-				Any("panic", r).
-				Msg("[fork] fork capture failed; spawning without inherited context")
-			forkCtx = nil
-		}
-	}()
-
+func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, forkInfo *tools.ForkInfo, forkFrom func(ckpt *int, keep string) (*agentteams.ForkContext, error)) *agentteams.ForkContext {
 	logger.Debug(logComponent).
 		Str("source", forkInfo.Source).
 		Bool("fork_from_resolved", forkFrom != nil).
 		Msg("[fork] resolve_fork_source")
 	if forkFrom == nil {
 		return nil
+	}
+	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）——try 内存上下文
+	// → except 回落持久化（fork.py:57-64，ForkContextFromAgent 内联）→ 兜底
+	// 也无果重抛（fork.py:65）。Go 以 error 向上返回；本函数按 Python 外层
+	// except 收敛（team_agent.py:1618-1622）：warning + 无继承继续 spawn。
+	// 抓取失败即整段收敛——后续分派不再执行（fork_ctx=None 语义）。
+	forkFromSafe := func(ckpt *int, keep string) (*agentteams.ForkContext, bool) {
+		forkCtx, err := forkFrom(ckpt, keep)
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("member", teammateID).
+				Err(err).
+				Msg("[fork] fork capture failed; spawning without inherited context")
+			return nil, false
+		}
+		return forkCtx, true
 	}
 
 	forkValue := forkInfo.Fork
@@ -2432,7 +2437,10 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 
 	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）——模式分支前
 	// 先全量抓取；compact 模式靠 compact_split 让 split 下标对齐注入上下文。
-	forkCtx = forkFrom(nil, "before")
+	forkCtx, ok := forkFromSafe(nil, "before")
+	if !ok {
+		return nil
+	}
 
 	if !isNamed {
 		// live fork：唯一有意义的 mode 是 full
@@ -2457,9 +2465,17 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 		// Python: :1571-1596
 		switch forkMode {
 		case "before":
-			forkCtx = forkFrom(ckptIdx, "before")
+			retryCtx, retryOk := forkFromSafe(ckptIdx, "before")
+			if !retryOk {
+				return nil
+			}
+			forkCtx = retryCtx
 		case "after":
-			forkCtx = forkFrom(ckptIdx, "after")
+			retryCtx, retryOk := forkFromSafe(ckptIdx, "after")
+			if !retryOk {
+				return nil
+			}
+			forkCtx = retryCtx
 		case "keep_before_compact_after":
 			// Python: fork_ctx.compact_split=ckpt_idx; compact_direction="after"
 			forkCtx.CompactSplit = ckptIdx
@@ -2505,15 +2521,10 @@ func (a *TeamAgent) ForkDeep() *agentcoreharness.DeepAgent {
 //   - 未命中/非 in-process（外部 CLI）→ warning + nil，继承整体跳过
 //
 // Python: _resolve_fork_native (team_agent.py:1644-1661)
-func (a *TeamAgent) resolveForkSource(ctx context.Context, sourceName string) func(ckpt *int, keep string) *agentteams.ForkContext {
-	deep := func(source *agentcoreharness.DeepAgent) func(ckpt *int, keep string) *agentteams.ForkContext {
-		return func(ckpt *int, keep string) *agentteams.ForkContext {
-			forkCtx, err := agentteams.ForkContextFromAgent(ctx, source, "", ckpt, keep)
-			if err != nil {
-				// Python: raise exc（fork.py:65）——由 buildForkContext recover 收敛
-				panic(err)
-			}
-			return forkCtx
+func (a *TeamAgent) resolveForkSource(ctx context.Context, sourceName string) func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+	deep := func(source *agentcoreharness.DeepAgent) func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+		return func(ckpt *int, keep string) (*agentteams.ForkContext, error) {
+			return agentteams.ForkContextFromAgent(ctx, source, "", ckpt, keep)
 		}
 	}
 	if sourceName == "" || sourceName == a.MemberName() {

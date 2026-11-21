@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
@@ -273,3 +274,79 @@ func testAgentCard(name string) *agentschema.AgentCard {
 
 // intPtr int 指针助手。
 func intPtr(v int) *int { return &v }
+
+// TestForkCheckpoint_IT5_PendingForks生命周期与一次性消费 spawn 工具链的
+// fork 请求信箱：MarkForkOnSpawn 登记 → 成员创建回调 ConsumeForkOnSpawn
+// 一次性取走（二次消费/未登记成员得 nil）。跨 tools 层生命周期契约。
+// Python: mark_fork_on_spawn/consume_fork_on_spawn (team.py:617-633)。
+func (s *ForkCheckpointSuite) TestForkCheckpoint_IT5_PendingForks生命周期与一次性消费() {
+	leaderBackend, memberBackend := s.newForkBackends()
+
+	// 未登记成员 → nil（ConsumeForkOnSpawn 幂等安全）
+	s.Require().Nil(leaderBackend.ConsumeForkOnSpawn("nobody"))
+
+	// spawn 工具链登记 fork 请求
+	leaderBackend.MarkForkOnSpawn("coder", "code-ready", "alice", "before")
+
+	// 创建回调一次性消费：内容完整取回
+	info := leaderBackend.ConsumeForkOnSpawn("coder")
+	s.Require().NotNil(info)
+	s.Require().Equal("code-ready", info.Fork)
+	s.Require().Equal("alice", info.Source)
+	s.Require().Equal("before", info.ForkMode)
+
+	// 一次性：二次消费 nil；未登记成员 nil
+	s.Require().Nil(leaderBackend.ConsumeForkOnSpawn("coder"))
+	s.Require().Nil(leaderBackend.ConsumeForkOnSpawn("painter"))
+
+	// memberBackend 独立信箱（各自后端各自 pending 集合）
+	memberBackend.MarkForkOnSpawn("helper", true, "", "full")
+	info2 := memberBackend.ConsumeForkOnSpawn("helper")
+	s.Require().NotNil(info2)
+	s.Require().Equal(true, info2.Fork) // live fork：bool 形态
+}
+
+// TestForkCheckpoint_IT6_Checkpoint事件Messager真链 PublishCheckpointCreated
+// → 真 InProcessMessager（topic 编码 + payload 序列化）→ 订阅端取回——
+// payload 键位与 CheckpointHandler 解码期望（name/member_name/message_count/
+// description）契约一致。handler 渲染逻辑由 handlers 包单测覆盖。
+// Python: publish_checkpoint_created (team.py:703-730) · TeamTopic.TEAM。
+func (s *ForkCheckpointSuite) TestForkCheckpoint_IT6_Checkpoint事件Messager真链() {
+	ctx := s.Ctx
+	leaderBackend, _ := s.newForkBackends()
+	msg := leaderBackend.Messager()
+	s.Require().NotNil(msg)
+	s.Require().NoError(msg.Start(ctx))
+
+	topic := events.TeamTopicTeam.Build("", "fork-team")
+	got := make(chan *events.EventMessage, 1)
+	s.Require().NoError(msg.Subscribe(ctx, topic, func(_ context.Context, m *events.EventMessage) error {
+		got <- m
+		return nil
+	}))
+
+	leaderBackend.PublishCheckpointCreated(ctx, "code-ready", 42, "编码就绪")
+
+	select {
+	case em := <-got:
+		s.Require().Equal(events.TeamEventCheckpointCreated, em.EventType)
+		// payload 键位契约 = CheckpointHandler.OnCheckpointCreated 的解码期望
+		name, _ := em.Payload["name"].(string)
+		member, _ := em.Payload["member_name"].(string)
+		// 进程内直传保持 int，跨 JSON 边界为 float64（CheckpointHandler 解码
+		// 同款双类型兼容，checkpoint.go:77-81）
+		count := 0
+		if v, ok := em.Payload["message_count"].(float64); ok {
+			count = int(v)
+		} else if v, ok := em.Payload["message_count"].(int); ok {
+			count = v
+		}
+		desc, _ := em.Payload["description"].(string)
+		s.Require().Equal("code-ready", name)
+		s.Require().Equal("leader", member)
+		s.Require().Equal(42, count)
+		s.Require().Equal("编码就绪", desc)
+	case <-ctx.Done():
+		s.Fail("checkpoint 事件未在超时内到达订阅端")
+	}
+}
