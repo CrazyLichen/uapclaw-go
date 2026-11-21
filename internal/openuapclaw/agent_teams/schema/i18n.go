@@ -161,6 +161,8 @@ var STRINGS = map[Language]map[string]string{
 		// ── 25.5：fork/checkpoint（i18n.py checkpoint.* 逐字复制）──
 		"checkpoint.fork_not_found":       "[fork 警告] checkpoint '{fork}' 未能按 fork_source 解析{detail}，已回退为全量继承（成员 {member}）。可用 checkpoint：{available}。请用 list_checkpoints 核对名字后再 fork。",
 		"checkpoint.fork_source_mismatch": "（创建者 '{creator}' 与 fork_source '{source}' 不匹配）",
+		"checkpoint.created_body":         "成员 {member} 创建了 checkpoint '{name}'（消息位置 {count}）{description}",
+		"checkpoint.created_note":         "这是 checkpoint 创建公告，仅供你 fork 时核对名字使用，不需要回复。",
 		"reliability.model_no_substitute_group":  "模型组中的其他模型也都不可用",
 		"reliability.model_label":                "{name}（{where}）",
 		"reliability.model_label_ranked":         "第 {position} 顺位 {name}（{where}）",
@@ -319,6 +321,8 @@ var STRINGS = map[Language]map[string]string{
 		// ── 25.5：fork/checkpoint（i18n.py checkpoint.* 逐字复制）──
 		"checkpoint.fork_not_found":       "[fork warning] checkpoint '{fork}' could not be resolved against fork_source{detail}; fell back to full-context inheritance (member {member}). Available checkpoints: {available}. Use list_checkpoints to verify names before forking.",
 		"checkpoint.fork_source_mismatch": " (creator '{creator}' does not match fork_source '{source}')",
+		"checkpoint.created_body":         "Member {member} created checkpoint '{name}' (message position {count}){description}",
+		"checkpoint.created_note":         "This is a checkpoint-created announcement for your fork coordination; no reply is needed.",
 		"reliability.model_no_substitute_pinned": "No same-name model in the model group can replace it",
 		"reliability.model_no_substitute_group":  "No other model in the model group is available either",
 		"reliability.model_label":                "{name} ({where})",
