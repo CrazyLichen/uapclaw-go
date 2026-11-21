@@ -81,7 +81,7 @@ func InProcessSpawn(
 	// 1a. fork 注入：把 fork 源的对话历史种进新成员的 context engine，
 	// 让它继承先前的理解。空 fork 上下文（抓取没拿到消息）不注入。
 	// Python: inprocess_spawn.py:100-124——create_new_context_engine +
-	// compact_context（compact 缝缺口见 CompactContext 接线处）。
+	// compact_context（CompactContext 已接线，fork_compact.go 一比一）。
 	injectForkContext(ctx, teammate, runtimeCtx, sessionID, forkFrom)
 
 	// 2. 准备输入
@@ -179,7 +179,7 @@ func InProcessSpawn(
 // injectForkContext 注入 fork 继承上下文：把 fork 源的对话历史种进新成员的
 // context engine，让它继承先前的理解；空 fork 上下文（抓取没拿到消息）不注入。
 // Python: inprocess_spawn.py:100-131——create_new_context_engine +
-// compact_context（compact 模型摘要缝 ⤵️ CompactContext 落地后接线）。
+// compact_context（fork_compact.go CompactContext 一比一）。
 func injectForkContext(
 	ctx context.Context,
 	teammate SpawnableAgent,
@@ -218,10 +218,20 @@ func injectForkContext(
 		Msg("[fork] messages injected")
 	if forkFrom.CompactSplit != nil {
 		// Python: compact_context(native, split_at=..., session_id=..., direction=...)
-		// （inprocess_spawn.py:117-125）。模型摘要压缩缝尚未落地——显式登记缺口，
-		// 不静默吞（fork 上下文保持未压缩注入）。
-		logger.Warn(logComponent).
-			Str("member_name", runtimeCtx.MemberName).
-			Msg("[fork] compact_context not yet wired; fork context stays uncompacted")
+		// （inprocess_spawn.py:117-125）。compact_direction 空串回退 "before"
+		// （ForkContext 默认方向语义，fork.py:44）。
+		// Python duck-typing：CompactContext 自行处理目标缺模型/引擎不可用等
+		// 退化路径（skipped 文案），不阻塞 spawn。
+		direction := forkFrom.CompactDirection
+		if direction == "" {
+			direction = "before"
+		}
+		if target, ok := teammate.(agentteams.CompactContextTarget); ok {
+			agentteams.CompactContext(ctx, target, *forkFrom.CompactSplit, sessionID, direction)
+		} else {
+			logger.Warn(logComponent).
+				Str("member_name", runtimeCtx.MemberName).
+				Msg("[fork] teammate does not implement CompactContextTarget; fork context stays uncompacted")
+		}
 	}
 }
