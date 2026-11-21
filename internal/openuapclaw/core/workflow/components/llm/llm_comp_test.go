@@ -1,11 +1,15 @@
 package llm
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -416,4 +420,168 @@ func TestLLMExecutableState_累积与清空(t *testing.T) {
 	assert.Equal(t, "hello", res["answer"])
 	st.Clear()
 	assert.Equal(t, "", st.accumulatedContent)
+}
+
+// ──────────────────────────── Task6 invoke 链 ────────────────────────────
+
+// fakeModelClient 可控 Invoke 返回的模型桩（满足 llModelInvoker 面）
+type fakeModelClient struct {
+	respContent string
+	invokeErr   error
+	invokeCalls int
+	lastInputs  []llmschema.BaseMessage
+}
+
+func (f *fakeModelClient) Invoke(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	f.invokeCalls++
+	f.lastInputs = messages.Messages()
+	if f.invokeErr != nil {
+		return nil, f.invokeErr
+	}
+	return llmschema.NewAssistantMessage(f.respContent), nil
+}
+
+func (f *fakeModelClient) Stream(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	ch := make(chan *llmschema.AssistantMessageChunk, 1)
+	c := llmschema.NewAssistantMessageChunk(f.respContent)
+	ch <- c
+	close(ch)
+	return ch, nil
+}
+
+// newTestExecutable 构造带 fake 模型的执行体（WithModelResolver 注入缝）
+func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake *fakeModelClient) *LLMExecutable {
+	t.Helper()
+	e, err := NewLLMExecutable(cfg)
+	require.NoError(t, err)
+	require.NoError(t, fakeInit(e, fake))
+	return e
+}
+
+// fakeInit 直填懒初始化字段（绕过 createLLMInstance 走 fake）
+func fakeInit(e *LLMExecutable, fake *fakeModelClient) error {
+	if fake == nil {
+		return nil
+	}
+	e.llModel = fake
+	e.initialized = true
+	return nil
+}
+
+// TestInvoke_全链 懒初始化→日志→上下文写回→格式化（llm_comp.py:524-572 十步）
+func TestInvoke_全链(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.EnableHistory = true
+	e := newTestExecutable(t, cfg, &fakeModelClient{respContent: "模型回答"})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	e.setContext(newFakeModelContext())
+	out, err := e.invokeEntry(context.Background(), map[string]any{"q": "hi"}, sess)
+	require.NoError(t, err)
+	assert.Equal(t, "模型回答", out["answer"])
+	assert.True(t, e.initialized)
+	// 上下文写回 user + assistant 两条
+	msgs, _ := e.context.GetMessages(0, true)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, "user", msgs[0].GetRole().String())
+	assert.Equal(t, "assistant", msgs[1].GetRole().String())
+}
+
+// TestInvoke_懒初始化modelID路径 ModelID 走 getModelFn 注入缝
+func TestInvoke_懒初始化modelID路径(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ModelID = ptrString("m1")
+	cfg.ModelClientConfig = nil
+	cfg.ModelConfig = nil
+	e, err := NewLLMExecutable(cfg)
+	require.NoError(t, err)
+	e.getModelFn = func(ctx context.Context, modelID string) (llModelInvoker, error) {
+		assert.Equal(t, "m1", modelID)
+		return &fakeModelClient{respContent: "ok"}, nil
+	}
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	out, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", out["answer"])
+}
+
+// TestInvoke_双nil配置拒绝 → 101003（llm_comp.py:626-630）
+func TestInvoke_双nil配置拒绝(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ModelClientConfig = nil
+	cfg.ModelConfig = nil
+	e := newTestExecutable(t, cfg, nil)
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	// Python: createLLMInstance 的 101003 经 _initialize_if_needed 再包装为 101005
+	assertLLMCode(t, err, exception.StatusComponentLLMInitFailed)
+}
+
+// TestInvoke_调用失败包装 → 101003 敏感模式文案 "invoke llm failed"（:545-557）
+func TestInvoke_调用失败包装(t *testing.T) {
+	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{invokeErr: errors.New("boom")})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	assertLLMCode(t, err, exception.StatusComponentLLMInvokeCallFailed)
+	assert.Equal(t, "invoke llm failed", errMsg(t, err))
+}
+
+// TestInvoke_格式化101007转101004（:687-695）：构造期校验合法（text 单字段），
+// json 格式下 LLM 输出非法 → formatResponse 抛 101007 → createOutput 转 101004。
+// （text 两字段的 101007 在 Python __init__ 即被 validate_response_format 拦截，
+// 运行时不可达，故场景取 json 解析失败。）
+func TestInvoke_格式化101007转101004(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ResponseFormat = map[string]any{"type": "json"}
+	e := newTestExecutable(t, cfg, &fakeModelClient{respContent: "not-json{"})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	assertLLMCode(t, err, exception.StatusComponentLLMExecutionProcessError)
+}
+
+// TestGetModelInput_模板组装 template_content 组装 + system 头部连续截取
+func TestGetModelInput_模板组装(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ResponseFormat = map[string]any{"type": "text"}
+	e := newTestExecutable(t, cfg, &fakeModelClient{})
+	msgs := e.getModelInput(map[string]any{"q": "hi"})
+	require.Len(t, msgs, 2)
+	assert.Equal(t, "system", msgs[0].GetRole().String())
+	assert.Equal(t, "user", msgs[1].GetRole().String())
+}
+
+// TestGetModelInput_userPromptTemplate缺省 模板分支：user 模板 nil → 空用户消息（:640-643）
+func TestGetModelInput_userPromptTemplate缺省(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.TemplateContent = nil
+	cfg.SystemPromptTemplate = llmschema.NewSystemMessage("sys")
+	e := newTestExecutable(t, cfg, &fakeModelClient{})
+	msgs := e.getModelInput(map[string]any{})
+	// system 模板 1 条 + user 缺省空消息 1 条（Python: system prompt + [UserMessage(content="")]）
+	require.Len(t, msgs, 2)
+	assert.Equal(t, "system", msgs[0].GetRole().String())
+	assert.Equal(t, "", msgs[1].GetContent().String())
+}
+
+func ptrString(s string) *string { return &s }
+
+// fakeModelContext 可写上下文桩
+type fakeModelContext struct {
+	iface.ModelContext
+	messages []llmschema.BaseMessage
+}
+
+func newFakeModelContext() *fakeModelContext { return &fakeModelContext{} }
+
+func (f *fakeModelContext) GetMessages(size int, withHistory bool) ([]llmschema.BaseMessage, error) {
+	return f.messages, nil
+}
+
+func (f *fakeModelContext) AddMessages(ctx context.Context, messages []llmschema.BaseMessage, opts ...iface.Option) ([]llmschema.BaseMessage, error) {
+	f.messages = append(f.messages, messages...)
+	return f.messages, nil
 }

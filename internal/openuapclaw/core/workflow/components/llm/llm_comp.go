@@ -9,10 +9,17 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -119,6 +126,8 @@ type LLMExecutableState struct {
 // 逻辑经 InvokeFn/StreamFn 槽接入（Task 6/7 装配）；实例字段 _session/_context/
 // _state 逐字对齐无锁（spec 拍板 #4，Vertex 对同节点串行）。
 type LLMExecutable struct {
+	// WorkflowComponent 8.17 组件基座（四槽 + 组合面，spec 拍板 #3）
+	components.WorkflowComponent
 	// cfg 组件配置（Python self._config；字段名避开同名方法）
 	cfg *LLMCompConfig
 	// llModel 懒初始化模型实例（Python self._llm，Union[Model, None]）
@@ -135,12 +144,16 @@ type LLMExecutable struct {
 	// getModelFn 按 ID 取预注册模型的注入缝（Python Runner.resource_mgr.get_model；
 	// 注入承载避免 llm→runner 包环，8.14b InvokeFn 注入缝先例，spec 偏差 D-18-5）
 	getModelFn func(ctx context.Context, modelID string) (llModelInvoker, error)
+	// baseInvoke/baseStream 基座钩子引用（方法遮蔽后转调用；D-17-1 同款遮蔽模式）
+	baseInvoke func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error)
+	baseStream func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error)
 }
 
-// llModelInvoker 统一模型调用面（Python Union[Model, None] → invoke/stream 双方法；
-// Task 6 接线 foundation/llm.Model 与 BaseModelClient 时定稿签名，暂以最小接口承载）
+// llModelInvoker 统一模型调用面（Python Union[Model, None]；*llm.Model 与
+// model_clients.BaseModelClient 均满足——Runner.GetModel 返回后者，spec D-18-5）
 type llModelInvoker interface {
-	invokeModel(ctx context.Context, messages []llmschema.BaseMessage) (string, error)
+	Invoke(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error)
+	Stream(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error)
 }
 
 // LLMComponent LLM 组件组合面（Python LLMComponent :793-806；Task 8 落组合面槽，
@@ -163,10 +176,58 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 	if err := validateConfig(componentConfig); err != nil {
 		return nil, err
 	}
-	return &LLMExecutable{
-		cfg:   componentConfig,
-		state: newLLMExecutableState(),
-	}, nil
+	e := &LLMExecutable{
+		cfg:        componentConfig,
+		state:      newLLMExecutableState(),
+		getModelFn: defaultGetModel,
+	}
+	// 保存基座钩子（方法遮蔽后转调）
+	e.baseInvoke = e.WorkflowComponent.OnInvoke
+	e.baseStream = e.WorkflowComponent.OnStream
+	// 四槽装配：invoke 槽（stream 槽 Task 7 装配）
+	e.InvokeFn = e.invokeEntry
+	return e, nil
+}
+
+// WithModelResolver 注入按 ID 取模型的解析缝（生产默认 runner.GetResourceMgr；
+// 测试注入 fake，spec D-18-5）
+func WithModelResolver(fn func(ctx context.Context, modelID string) (llModelInvoker, error)) func(*LLMExecutable) {
+	return func(e *LLMExecutable) { e.getModelFn = fn }
+}
+
+// defaultGetModel 生产默认解析（Python Runner.resource_mgr.get_model(id=...) 一比一）
+func defaultGetModel(ctx context.Context, modelID string) (llModelInvoker, error) {
+	mgr := runner.GetResourceMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("resource mgr is not initialized")
+	}
+	clients, err := mgr.GetModel(ctx, []string{modelID})
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("model %s not found", modelID)
+	}
+	return clients[0], nil
+}
+
+// ──────────────────────────── LLMExecutable 钩子遮蔽 ────────────────────────────
+
+// OnInvoke 批入批出钩子：先从 kwargs 捕获 ModelContext（Python on_invoke 的
+// kwargs.get("context") 等价，component.py:99）→ 转调基座（Trigger 序列 + InvokeFn 槽）。
+func (e *LLMExecutable) OnInvoke(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
+	if mc, ok := kwargs["context"].(iface.ModelContext); ok {
+		e.context = mc
+	}
+	return e.baseInvoke(ctx, inputs, sess, kwargs)
+}
+
+// OnStream 批入流出钩子：同 OnInvoke 捕获 context（component.py:106）→ 转调基座。
+func (e *LLMExecutable) OnStream(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
+	if mc, ok := kwargs["context"].(iface.ModelContext); ok {
+		e.context = mc
+	}
+	return e.baseStream(ctx, inputs, sess, kwargs)
 }
 
 // ──────────────────────────── LLMExecutableState 方法 ────────────────────────────
@@ -824,4 +885,299 @@ func formatPrompt(history []llmschema.BaseMessage, responseFormat map[string]any
 	// 原地写回（:372）
 	history[lastUserIdx].SetContent(llmschema.NewTextContent(prompt))
 	return history
+}
+
+// ──────────────────────────── LLMExecutable invoke 链（llm_comp.py:524-572） ────────────────────────────
+
+// setSession 注入会话（Python _set_session :697-698）
+func (e *LLMExecutable) setSession(sess *session.NodeSessionFacade) {
+	e.session = sess
+}
+
+// setContext 注入模型上下文（Python _set_context :700-701）
+func (e *LLMExecutable) setContext(mc iface.ModelContext) {
+	e.context = mc
+}
+
+// invokeEntry 批入批出槽函数（Python invoke :524-572 十步一比一）
+func (e *LLMExecutable) invokeEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	// 步骤1：setSession/setContext（:525-526）
+	e.setSession(sess)
+	e.setContext(e.context)
+	// 步骤2：准备模型输入（懒初始化 + 提示词组装，:527）
+	modelInputs, err := e.prepareModelInputs(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
+	// 步骤3：START 日志（:528-539）
+	modelName := ""
+	if e.cfg.ModelConfig != nil {
+		modelName = e.cfg.ModelConfig.ModelName
+	}
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_START").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "LLMComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Str("model_name", modelName).
+		Bool("has_inputs", len(modelInputs) > 0).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("LLM component invoke started")
+	// 步骤4：写最后一条 user 消息进 context（:540）
+	e.writeUserMessageToContext(ctx, modelInputs)
+	// 步骤5-6：invoke → 取 content（:541-557）
+	response := ""
+	llmResponse, invokeErr := e.llModel.Invoke(ctx, modelclients.NewMessagesParam(modelInputs...))
+	if invokeErr != nil {
+		msg := invokeErr.Error()
+		if security.IsSensitive() {
+			msg = "invoke llm failed"
+		}
+		return nil, exception.BuildError(exception.StatusComponentLLMInvokeCallFailed,
+			exception.WithMsg(msg), exception.WithCause(invokeErr))
+	}
+	response = llmResponse.Content.String()
+	// 步骤7：END 日志（:559-570）
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_END").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "LLMComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Bool("has_response", response != "").
+		Int("response_length", len(response)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("LLM component invoke completed")
+	// 步骤8：写 assistant 消息进 context（:571）
+	e.writeAssistantMessageToContext(ctx, response)
+	// 步骤9：格式化输出（101007 → 101004 转换，:681-695 + :572；
+	// Python 异常上抛 → Go recover 转 error）
+	return e.createOutputAsResult(response)
+}
+
+// createOutputAsResult createOutput 的 error 返回形态（Python 调用面异常上抛承载）
+func (e *LLMExecutable) createOutputAsResult(llmOutput string) (out map[string]any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			be, ok := r.(*exception.BaseError)
+			if !ok {
+				panic(r)
+			}
+			err = be
+		}
+	}()
+	return e.createOutput(llmOutput), nil
+}
+
+// prepareModelInputs 懒初始化 + 组装输入（Python _prepare_model_inputs :703-705）
+func (e *LLMExecutable) prepareModelInputs(ctx context.Context, inputs map[string]any) ([]llmschema.BaseMessage, error) {
+	if err := e.initializeIfNeeded(ctx); err != nil {
+		return nil, err
+	}
+	return e.getModelInput(inputs), nil
+}
+
+// initializeIfNeeded 懒初始化（Python _initialize_if_needed :612-622：
+// 失败包装 101005）
+func (e *LLMExecutable) initializeIfNeeded(ctx context.Context) error {
+	if e.initialized {
+		return nil
+	}
+	model, err := e.createLLMInstance(ctx)
+	if err != nil {
+		return exception.BuildError(exception.StatusComponentLLMInitFailed,
+			exception.WithMsg("failed to initialize llm if needed"), exception.WithCause(err))
+	}
+	e.llModel = model
+	e.initialized = true
+	return nil
+}
+
+// createLLMInstance 模型实例创建（Python _create_llm_instance :624-634 一比一：
+// model_id 为 nil → client/request config 双非空校验（缺任一 101003）后 NewModel；
+// 否则按 ID 走 Runner）
+func (e *LLMExecutable) createLLMInstance(ctx context.Context) (llModelInvoker, error) {
+	if e.cfg.ModelID == nil {
+		if e.cfg.ModelClientConfig == nil || e.cfg.ModelConfig == nil {
+			return nil, exception.BuildError(exception.StatusComponentLLMInvokeCallFailed,
+				exception.WithMsg("failed to create llm instance"))
+		}
+		return forllm.NewModel(e.cfg.ModelClientConfig, e.cfg.ModelConfig)
+	}
+	model, err := e.getModelFn(ctx, *e.cfg.ModelID)
+	if err != nil {
+		return nil, err
+	}
+	return model, nil
+}
+
+// getModelInput 组装模型输入（Python _get_model_input :656-662 步骤一比一：
+// system prompt → user prompt → 拼接历史 → 提示词格式化）
+func (e *LLMExecutable) getModelInput(inputs map[string]any) []llmschema.BaseMessage {
+	systemPrompt := e.buildSystemPrompt(inputs)
+	userPrompt := e.buildUserPromptContent(inputs)
+	allPrompts := e.insertHistoryToSystemAndUserPrompt(systemPrompt, userPrompt)
+	return formatPrompt(allPrompts, e.cfg.ResponseFormat, e.cfg.OutputConfig)
+}
+
+// insertHistoryToSystemAndUserPrompt 历史拼接（Python :664-670 一比一：
+// enable_history 且 context 非 None 时取 context.get_messages() 拼在 system 后、user 前）
+func (e *LLMExecutable) insertHistoryToSystemAndUserPrompt(systemPrompt []llmschema.BaseMessage, userPrompt []llmschema.BaseMessage) []llmschema.BaseMessage {
+	originalHistory := make([]llmschema.BaseMessage, 0, len(systemPrompt)+len(userPrompt))
+	originalHistory = append(originalHistory, systemPrompt...)
+	if e.cfg.EnableHistory && e.context != nil {
+		chatHistory, err := e.context.GetMessages(0, true)
+		if err == nil && chatHistory != nil {
+			originalHistory = append(originalHistory, chatHistory...)
+		}
+	}
+	originalHistory = append(originalHistory, userPrompt...)
+	return originalHistory
+}
+
+// buildSystemPrompt 系统提示词组装（Python _build_system_prompt :754-769 一比一：
+// 模板优先分支；否则取 template_content 头部连续 system 元素——遇非 system 即 break）
+func (e *LLMExecutable) buildSystemPrompt(inputs map[string]any) []llmschema.BaseMessage {
+	// 分支1：system/user 模板任一非 nil（:758-761）
+	if e.cfg.SystemPromptTemplate != nil || e.cfg.UserPromptTemplate != nil {
+		if e.cfg.SystemPromptTemplate == nil {
+			return nil
+		}
+		return formatTemplateMessage(e.cfg.SystemPromptTemplate.GetRole(), e.cfg.SystemPromptTemplate.GetContent().String(), inputs)
+	}
+	// 分支2：template_content 头部连续 system 元素（:763-768）
+	systemPrompt := []any{}
+	for _, element := range e.cfg.TemplateContent {
+		dict, ok := element.(map[string]any)
+		if !ok {
+			break
+		}
+		if roleString(dict) == "system" {
+			systemPrompt = append(systemPrompt, dict)
+		} else {
+			break
+		}
+	}
+	if len(systemPrompt) == 0 {
+		return nil
+	}
+	return formatTemplateDicts(systemPrompt, inputs)
+}
+
+// buildUserPromptContent 用户提示词组装（Python _build_user_prompt_content :636-654 一比一）
+func (e *LLMExecutable) buildUserPromptContent(inputs map[string]any) []llmschema.BaseMessage {
+	// 分支1：system/user 模板任一非 nil——user 缺省 → [UserMessage(content="")]（:640-643）
+	if e.cfg.SystemPromptTemplate != nil || e.cfg.UserPromptTemplate != nil {
+		if e.cfg.UserPromptTemplate == nil {
+			return []llmschema.BaseMessage{llmschema.NewUserMessage("")}
+		}
+		return formatTemplateMessage(e.cfg.UserPromptTemplate.GetRole(), e.cfg.UserPromptTemplate.GetContent().String(), inputs)
+	}
+	// 分支2：template_content 取首个 user 元素（:645-654）
+	templateContent := e.cfg.TemplateContent
+	if len(templateContent) == 0 {
+		return []llmschema.BaseMessage{llmschema.NewUserMessage("")}
+	}
+	var userPrompt []any
+	for _, element := range templateContent {
+		dict, ok := element.(map[string]any)
+		if !ok {
+			continue
+		}
+		if roleString(dict) == string(MessageRoleUser) {
+			userPrompt = append(userPrompt, dict)
+		}
+	}
+	if len(userPrompt) == 0 {
+		return []llmschema.BaseMessage{llmschema.NewUserMessage("")}
+	}
+	return formatTemplateDicts([]any{userPrompt[0]}, inputs)
+}
+
+// formatTemplateDicts 模板 dict 元素 → 格式化消息（Python PromptTemplate(content=[...])
+// .format(inputs).to_messages() 等价面：取 content 文本 → Format(inputs) → 按原 role
+// 重建消息；Go ToMessages 仅支持 string/[]BaseMessage，role 由本助手承载）
+func formatTemplateDicts(elements []any, inputs map[string]any) []llmschema.BaseMessage {
+	out := make([]llmschema.BaseMessage, 0, len(elements))
+	for _, element := range elements {
+		dict, ok := element.(map[string]any)
+		if !ok {
+			continue
+		}
+		content, _ := dict[contentKey].(string)
+		out = append(out, formatTemplateString(roleString(dict), content, inputs))
+	}
+	return out
+}
+
+// formatTemplateMessage 模板消息对象 → 格式化消息（同上，role/content 取自消息对象）
+func formatTemplateMessage(role llmschema.RoleType, content string, inputs map[string]any) []llmschema.BaseMessage {
+	return []llmschema.BaseMessage{formatTemplateString(role.String(), content, inputs)}
+}
+
+// formatTemplateString 单条模板渲染（role 保留 + content 经 PromptTemplate.Format）
+func formatTemplateString(role, content string, inputs map[string]any) llmschema.BaseMessage {
+	tpl := prompt.NewPromptTemplate("", content)
+	rendered, err := tpl.Format(inputs)
+	if err != nil {
+		rendered = tpl
+	}
+	text := content
+	if msgs, mErr := rendered.ToMessages(); mErr == nil && len(msgs) > 0 {
+		text = msgs[0].GetContent().String()
+	}
+	// role 重建：system → SystemMessage，其余 → UserMessage（模板面仅此两角色）
+	if role == llmschema.RoleTypeSystem.String() {
+		return llmschema.NewSystemMessage(text)
+	}
+	return llmschema.NewUserMessage(text)
+}
+
+// writeUserMessageToContext 写最后一条 user 消息（Python _write_user_message_to_context
+// :771-779 一比一：context 非空 + enable_history 才写；倒序找首个 role=user 且 content 非空）
+func (e *LLMExecutable) writeUserMessageToContext(ctx context.Context, modelInputs []llmschema.BaseMessage) {
+	if e.context == nil || !e.cfg.EnableHistory {
+		return
+	}
+	for i := len(modelInputs) - 1; i >= 0; i-- {
+		msg := modelInputs[i]
+		if msg.GetRole().String() == "user" {
+			if content := msg.GetContent().String(); content != "" {
+				_, _ = e.context.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(content)})
+			}
+			break
+		}
+	}
+}
+
+// writeAssistantMessageToContext 写 assistant 消息（Python _write_assistant_message_to_context
+// :781-785 一比一）
+func (e *LLMExecutable) writeAssistantMessageToContext(ctx context.Context, content string) {
+	if e.context == nil || !e.cfg.EnableHistory {
+		return
+	}
+	if content != "" {
+		_, _ = e.context.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewAssistantMessage(content)})
+	}
+}
+
+// createOutput 格式化输出（Python _create_output :681-695 一比一：101007 → 101004
+// 转换重抛，其他 BaseError 原样上抛；panic 承载 Python raise 控制流）
+func (e *LLMExecutable) createOutput(llmOutput string) (out map[string]any) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		be, ok := r.(*exception.BaseError)
+		if !ok {
+			panic(r)
+		}
+		if be.Status().Code() == exception.StatusComponentLLMConfigInvalid.Code() {
+			// Python: e.code == CONFIG_INVALID.code → 转 EXECUTION_PROCESS_ERROR
+			panic(exception.BuildError(exception.StatusComponentLLMExecutionProcessError,
+				exception.WithMsg(be.Message()), exception.WithCause(be)))
+		}
+		panic(be)
+	}()
+	return formatResponse(llmOutput, e.cfg.ResponseFormat, e.cfg.OutputConfig)
 }
