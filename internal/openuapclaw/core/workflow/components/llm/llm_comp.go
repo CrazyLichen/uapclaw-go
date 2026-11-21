@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	schemautils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/common/utils/schemautils"
 	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -524,10 +525,19 @@ func formatJSONResponse(responseContent string, outputsConfig map[string]any) ma
 	// 步骤3：object 型 schema 直用；否则生成 schema 校验后提取字段（:233-241）
 	configType, _ := outputsConfig[typeKey].(string)
 	if configType == "object" {
-		// Python: SchemaUtils.validate_with_schema + format_with_schema（D-18-1：
-		// llm 包内自承载 JSON Schema dict 路径，workflow.go 弱等价面不共享）
-		validateWithSchema(parsedJSON, outputsConfig)
-		return formatWithSchema(parsedJSON, outputsConfig)
+		// Python: SchemaUtils.validate_with_schema + format_with_schema（llm_comp.py:235-236，
+		// 共享实现 core/common/utils/schemautils，D-18-1 收口）。错误按 Python 异常分类
+		// 直传：SCHEMA_VALIDATE_INVALID/SCHEMA_FORMAT_INVALID 均为 BaseError，
+		// _validate_json_schema（:247-248 except BaseError: raise）与 _create_output
+		// （:687-695 仅拦截 101007）都原样再抛——Go panic(BaseError) 等价承载。
+		if err := (schemautils.SchemaUtils{}).ValidateWithSchemaMap(parsedJSON, outputsConfig); err != nil {
+			panic(err)
+		}
+		formatted, err := (schemautils.SchemaUtils{}).FormatWithSchemaMap(parsedJSON, outputsConfig)
+		if err != nil {
+			panic(err)
+		}
+		return formatted
 	}
 	jsonSchema := generateJSONSchema(outputsConfig)
 	validateJSONSchemaForOutput(parsedJSON, jsonSchema, responseContent)
@@ -567,38 +577,6 @@ func cleanMarkdownBlocks(content string) string {
 		lines = lines[:len(lines)-1]
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
-}
-
-// validateWithSchema JSON Schema dict 路径校验（Python SchemaUtils.validate_with_schema
-// 的 dict 分支等价面；D-18-1）——复用 validateJSONSchema 递归判定
-func validateWithSchema(data map[string]any, schema map[string]any) {
-	validateJSONSchema(data, schema)
-}
-
-// formatWithSchema JSON Schema dict 路径格式化（Python SchemaUtils.format_with_schema
-// 的 dict 分支等价面；D-18-1）：properties 中带 default 的缺省字段补默认值，其余原样。
-// Python 的 pydantic create_model 默认值填充 → Go 以 schema["properties"][k]["default"]
-// 读取承载；required 缺失字段由 validateWithSchema 前置拒绝。
-func formatWithSchema(data map[string]any, schema map[string]any) map[string]any {
-	out := map[string]any{}
-	for k, v := range data {
-		out[k] = v
-	}
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		return out
-	}
-	for k, ps := range props {
-		if _, present := out[k]; present {
-			continue
-		}
-		if pd, ok := ps.(map[string]any); ok {
-			if def, hasDefault := pd["default"]; hasDefault {
-				out[k] = def
-			}
-		}
-	}
-	return out
 }
 
 // validateJSONSchemaForOutput json 输出校验包装（Python _validate_json_schema :244-253：
