@@ -120,11 +120,16 @@ func (l *TeammateWorktreeLifecycle) EnsureMemberWorktree(
 		return "", fmt.Errorf("Team worktree isolation requires a team backend")
 	}
 
+	// Python :226 worktree = get_member_worktree(teammate) 先取 DB 选项，
+	// :211 _member_needs_worktree 要求角色为协调成员且 DB 行声明 isolation=="worktree"
+	worktreeOptions := l.memberWorktreeOptions(memberName)
+	if !memberNeedsWorktree(role, worktreeOptions) {
+		return "", nil
+	}
 	scope, err := l.ownerScope(ctx, teamName, memberName)
 	if err != nil {
 		return "", err
 	}
-	worktreeOptions := l.memberWorktreeOptions(memberName)
 	worktreePath := strDeref(worktreeOptionsPath(worktreeOptions))
 	if worktreeOptions != nil && worktreePath != "" {
 		if st, serr := os.Stat(worktreePath); serr == nil && st.IsDir() {

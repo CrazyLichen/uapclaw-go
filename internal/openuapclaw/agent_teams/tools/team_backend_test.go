@@ -1589,7 +1589,7 @@ func TestDeleteUnstartedMember_Backend(t *testing.T) {
 
 // TestSpawnMember_Lifetime与Isolation 新选项落到 options 里。
 func TestSpawnMember_Lifetime与Isolation(t *testing.T) {
-	tb := newTestTeamBackend()
+	tb := newTestTeamBackendWithOptions(WithWorktreeValidator(func(memberName string) error { return nil }))
 	ctx := context.Background()
 	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
 
@@ -1612,6 +1612,25 @@ func TestSpawnMember_Lifetime与Isolation(t *testing.T) {
 	assert.Equal(t, "worktree", *wt.Isolation)
 
 	assert.Equal(t, map[string]string{"bash": "deny"}, database.GetMemberPermissionsOverride(member))
+}
+
+// TestSpawnMember_Isolation_无校验器报错 isolation=worktree 但未配置校验器 → fail。
+// Python: tools/team.py:876-880（"no worktree validator was configured"）
+func TestSpawnMember_Isolation_无校验器报错(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+
+	res := tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "d", "", "",
+		WithIsolation("worktree"))
+	assert.False(t, res.OK)
+	assert.Contains(t, res.Reason, "no worktree validator was configured")
+
+	// 非法值 → fail（Python team.py:871-873）
+	res2 := tb.SpawnMember(ctx, "dev-2", "Dev", nil, string(atschema.TeamRoleTeammate), "d", "", "",
+		WithIsolation("chroot"))
+	assert.False(t, res2.OK)
+	assert.Contains(t, res2.Reason, "Invalid isolation")
 }
 
 // TestRegisterTeammate_边界 team 为 nil 时返回失败；prompt 为 nil 时不 panic。

@@ -58,8 +58,11 @@ func newLifecycleFixture(t *testing.T, projectDir string, seedOverrides map[stri
 	t.Cleanup(agent_teams.ResetHome)
 
 	db := database.NewInMemoryTeamDatabase()
+	// Python 语义：spawn_teammate isolation 参数先写成员行 options（member_options.py:194-198），
+	// ensure 的 _member_needs_worktree 门读取该声明
+	options := database.BuildMemberOptions(database.MemberOptionsInput{WorktreeIsolation: "worktree"})
 	require.True(t, db.Member().CreateMember(context.Background(), "alice", "team-a", "alice", "{}",
-		"", string(schema.TeamRoleTeammate), "", "", "", "", ""))
+		"", string(schema.TeamRoleTeammate), "", "", "", "", options))
 
 	seed := map[string]any{"project_dir": projectDir}
 	for k, v := range seedOverrides {
@@ -310,4 +313,50 @@ func TestStatusPath_重命名行(t *testing.T) {
 	assert.Equal(t, "new.txt", statusPath(`R  old.txt -> new.txt`))
 	assert.Equal(t, "plain.txt", statusPath("?? plain.txt"))
 	assert.Equal(t, "dir", statusPath("?? dir/"))
+}
+
+// TestClassifyWorktreeContribution_无HeadCommit回退mergeBase 无 head_commit 时
+// 走 merge_base 回退分支：分支领先 HEAD → CONTRIBUTED；等于 → NOT_CONTRIBUTED。
+// Python: _classify_worktree_contribution :184-203
+func TestClassifyWorktreeContribution_无HeadCommit回退mergeBase(t *testing.T) {
+	repo := t.TempDir()
+	initGitRepoAt(t, repo)
+
+	// 分支领先 HEAD：建 worktree 并提交
+	wtPath := filepath.Join(t.TempDir(), "wt")
+	addCmd := exec.Command("git", "worktree", "add", "-B", "worktree-lead", wtPath, "HEAD")
+	addCmd.Dir = repo
+	addCmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=t@t.com",
+		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=t@t.com")
+	require.NoError(t, addCmd.Run())
+	commitCmd := exec.Command("git", "commit", "--allow-empty", "-m", "lead")
+	commitCmd.Dir = wtPath
+	commitCmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=t@t.com",
+		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=t@t.com")
+	require.NoError(t, commitCmd.Run())
+
+	state := classifyWorktreeContribution(context.Background(), &MemberWorktreeInfo{
+		WorktreePath:   wtPath,
+		WorktreeBranch: "worktree-lead",
+		// HeadCommit 为空 → merge_base 回退分支
+	}, repo)
+	assert.Equal(t, WorktreeContributionContributed, state)
+
+	// 分支等于 HEAD（基线分支）：NOT_CONTRIBUTED
+	state2 := classifyWorktreeContribution(context.Background(), &MemberWorktreeInfo{
+		WorktreePath:   repo,
+		WorktreeBranch: "main",
+	}, repo)
+	assert.Equal(t, WorktreeContributionNotContributed, state2)
+}
+
+// TestMemberNeedsWorktree_门禁 非协调角色或未声明 isolation 均返回 false。
+// Python: _member_needs_worktree :91-98
+func TestMemberNeedsWorktree_门禁(t *testing.T) {
+	assert.False(t, memberNeedsWorktree(schema.TeamRoleHumanAgent, &database.MemberWorktreeOptions{Isolation: strPtr("worktree")}))
+	assert.False(t, memberNeedsWorktree(schema.TeamRoleTeammate, nil))
+	assert.False(t, memberNeedsWorktree(schema.TeamRoleTeammate, &database.MemberWorktreeOptions{Isolation: strPtr("none")}))
+	assert.True(t, memberNeedsWorktree(schema.TeamRoleTeammate, &database.MemberWorktreeOptions{Isolation: strPtr("worktree")}))
 }
