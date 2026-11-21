@@ -45,6 +45,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
@@ -114,6 +115,15 @@ type TeamAgent struct {
 	// 与运行时的「事件驱动宣告」共享同一份（Python 同构：两个 rail 各自持有一份
 	// tracker 会把同一次编辑播两遍）。
 	taskEventTracker tracker.TaskEventTracker
+
+	// ── 25.5 fork 半区：命名 checkpoint 索引 ──
+	// namedCheckpointsMu 保护 namedCheckpoints（Python 单线程共享状态，
+	// asyncio→Go 并发移植按惯例加锁）。
+	namedCheckpointsMu sync.RWMutex
+	// namedCheckpoints 命名 checkpoint 索引（权威源，名字团队全局唯一）。
+	// 值只存下标不存消息内容。
+	// Python: self._named_checkpoints（team_agent.py:185）
+	namedCheckpoints map[string]metadata.CheckpointRecord
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -733,6 +743,29 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 		WithOnTeamBuilt(a.markTeamBuilt),
 	); err != nil {
 		return err
+	}
+
+	// 25.5: leader 自身 checkpoint() 工具的存储回调进 leader 权威命名空间。
+	// set_store_checkpoint_fn 否则只为 in-process 队友接线（inprocess_spawn）；
+	// 不接这条的话 leader 自己的快照会落进 backend fallback dict，fork 解析
+	// 永远看不到。
+	// Python: team_agent.py:730-741（role == TeamRole.LEADER 分支）
+	if runtimeCtx.Role == atschema.TeamRoleLeader {
+		if backend := a.configurator.TeamBackend(); backend != nil {
+			backend.SetStoreCheckpointFn(a.SetCheckpoint)
+			backend.SetCheckpointListFn(func() map[string]map[string]any {
+				snapshot := a.checkpointsSnapshot()
+				out := make(map[string]map[string]any, len(snapshot))
+				for name, rec := range snapshot {
+					out[name] = map[string]any{
+						"count":       rec.Count,
+						"description": rec.Description,
+						"created_by":  rec.CreatedBy,
+					}
+				}
+				return out
+			})
+		}
 	}
 
 	// Phase 2: Agent 组装
@@ -2171,6 +2204,95 @@ func (a *TeamAgent) RefreshIdleBaseline() {
 	if !a.state.IdleSince.IsZero() {
 		a.state.IdleSince = time.Now()
 	}
+}
+
+// ──────────────────────────── 25.5 fork 半区：命名 checkpoint 索引 ────────────────────────────
+
+// SetCheckpoint 存命名 checkpoint：名字团队全局唯一，重名返回既有记录
+// （nil=成功）。leader 侧把全量映射镜像进 bound team session 的 per-team
+// 命名空间以扛进程重启——持久化随运行循环的 post_run 落盘（无显式 flush），
+// 对齐 allocator / lifecycle / pending_resume 语义。
+// 返回 map 形态（与 storeCheckpointFn 回调签名一致）：nil 成功；冲突返回
+// {count, description, created_by}。
+// Python: set_checkpoint (team_agent.py:1774-1797)
+func (a *TeamAgent) SetCheckpoint(name string, count int, description, createdBy string) map[string]any {
+	a.namedCheckpointsMu.Lock()
+	defer a.namedCheckpointsMu.Unlock()
+	if a.namedCheckpoints == nil {
+		a.namedCheckpoints = make(map[string]metadata.CheckpointRecord)
+	}
+	if existing, ok := a.namedCheckpoints[name]; ok {
+		return map[string]any{
+			"count":       existing.Count,
+			"description": existing.Description,
+			"created_by":  existing.CreatedBy,
+		}
+	}
+	a.namedCheckpoints[name] = metadata.CheckpointRecord{
+		Count:       count,
+		Description: description,
+		CreatedBy:   createdBy,
+	}
+	if a.Role() == atschema.TeamRoleLeader {
+		a.mergeCheckpointsIntoSession()
+	}
+	return nil
+}
+
+// mergeCheckpointsIntoSession 把当前索引表全量镜像进 bound team session 的
+// per-team 命名空间（TEAM_CHECKPOINTS_KEY）。走 persistTeamDbState 同款通道。
+// Python: _merge_checkpoints_into_session (team_agent.py:1799-1813)
+func (a *TeamAgent) mergeCheckpointsIntoSession() {
+	teamSession := a.sessionManager.TeamSession()
+	teamName := a.TeamName()
+	if teamSession == nil || teamName == "" {
+		return
+	}
+	snapshot := a.checkpointsSnapshot()
+	metadata.MergeTeamCheckpoints(teamSession, teamName, snapshot)
+}
+
+// checkpointsSnapshot 返回索引表的只读快照（RLock 拷贝）。
+// 作为 TeamBackend.listCheckpointFn 回调注入（Python: set_checkpoint_list_fn）。
+func (a *TeamAgent) checkpointsSnapshot() map[string]metadata.CheckpointRecord {
+	a.namedCheckpointsMu.RLock()
+	defer a.namedCheckpointsMu.RUnlock()
+	out := make(map[string]metadata.CheckpointRecord, len(a.namedCheckpoints))
+	for name, rec := range a.namedCheckpoints {
+		out[name] = rec
+	}
+	return out
+}
+
+// checkpointNamesSnapshot 返回索引表名字快照（通知 leader 时列 available 用）。
+func (a *TeamAgent) checkpointNamesSnapshot() []string {
+	snapshot := a.checkpointsSnapshot()
+	names := make([]string, 0, len(snapshot))
+	for name := range snapshot {
+		names = append(names, name)
+	}
+	return names
+}
+
+// setCheckpointsFrom 整表覆盖索引表（冷恢复还原 / share 用）。
+// Python: set_checkpoints_from (team_agent.py:1815-1822)
+func (a *TeamAgent) setCheckpointsFrom(source map[string]metadata.CheckpointRecord) {
+	a.namedCheckpointsMu.Lock()
+	defer a.namedCheckpointsMu.Unlock()
+	a.namedCheckpoints = make(map[string]metadata.CheckpointRecord, len(source))
+	for name, rec := range source {
+		a.namedCheckpoints[name] = rec
+	}
+}
+
+// ShareCheckpointsWith 把 leader 的索引表共享给另一个 TeamAgent（in-process
+// 队友复用同一份权威映射）。
+// Python: share_checkpoints_with (team_agent.py:1699-1701)
+func (a *TeamAgent) ShareCheckpointsWith(other *TeamAgent) {
+	if other == nil {
+		return
+	}
+	other.setCheckpointsFrom(a.checkpointsSnapshot())
 }
 
 // onTeammateCreated 队友创建回调。

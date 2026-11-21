@@ -726,6 +726,18 @@ type storeCheckpointRecord struct {
 // Python: TeamBackend._store_checkpoint_fn。
 type storeCheckpointFn = func(name string, count int, description, createdBy string) map[string]any
 
+// SetStoreCheckpointFn 注册命名 checkpoint 存储回调（写 leader 权威命名空间）。
+// Python: set_store_checkpoint_fn (team.py:584-589)
+func (tb *TeamBackend) SetStoreCheckpointFn(fn func(name string, count int, description, createdBy string) map[string]any) {
+	tb.storeCheckpointFn = fn
+}
+
+// SetCheckpointListFn 注册权威索引表读取回调（list_checkpoints 工具消费）。
+// Python: set_checkpoint_list_fn (team.py:597-599)
+func (tb *TeamBackend) SetCheckpointListFn(fn func() map[string]map[string]any) {
+	tb.listCheckpointFn = fn
+}
+
 // ForkEnabled 该团队的上下文继承（fork）是否开放。
 //
 // Python: fork_enabled (team.py:505-517)——bool(spec.enable_fork)。
