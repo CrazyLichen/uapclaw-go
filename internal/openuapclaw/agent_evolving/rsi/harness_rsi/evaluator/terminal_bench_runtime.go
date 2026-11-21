@@ -185,7 +185,7 @@ var errTBDeadline = errors.New("terminal-bench command deadline exceeded")
 // terminalBenchRun Python subprocess.run 的 Go 注入点（run_docker / git apply /
 // 容器命令执行共用同一变量；测试替换，对齐 Python monkeypatch subprocess.run）。
 var terminalBenchRun = func(name string, args []string, timeoutSec float64, input []byte) (tbRunResult, error) {
-	return tbRunProcess(name, args, timeoutSec, input)
+	return subprocessRunWithCwd(name, args, timeoutSec, input, "")
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -517,8 +517,10 @@ func runDocker(command []string, check bool, timeoutSec int) (tbRunResult, error
 	return result, nil
 }
 
-// tbRunProcess subprocess.run 的 Go 实现：capture 输出 + 超时（timeoutSec<=0 不限时）。
-func tbRunProcess(name string, args []string, timeoutSec float64, input []byte) (tbRunResult, error) {
+// subprocessRunWithCwd subprocess.run 的 Go 实现：capture 输出 + 超时 + 可选
+// cwd/stdin（timeoutSec<=0 不限时；terminal_bench 与 swebench 两个 runtime 的
+// subprocess 注入点共用本实现，对齐 Python 两模块共用 subprocess.run 的语义）。
+func subprocessRunWithCwd(name string, args []string, timeoutSec float64, input []byte, cwd string) (tbRunResult, error) {
 	ctx := context.Background()
 	if timeoutSec > 0 {
 		var cancel context.CancelFunc
@@ -526,6 +528,9 @@ func tbRunProcess(name string, args []string, timeoutSec float64, input []byte) 
 		defer cancel()
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
 	stdoutBuf := &bytes.Buffer{}
 	stderrBuf := &bytes.Buffer{}
 	cmd.Stdout = stdoutBuf
@@ -650,7 +655,12 @@ func tbSafeSegment(value string) string {
 
 // isAlnumASCII 是否 ASCII 字母/数字（Python str.isalnum 对 ASCII 子集等价）。
 func isAlnumASCII(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
+	return isASCIILetter(ch) || (ch >= '0' && ch <= '9')
+}
+
+// isASCIILetter 是否 ASCII 字母（swebench WSL 盘符解析共用）。
+func isASCIILetter(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 
 // tbTimeoutStream Python _timeout_stream L521-526（Go 侧输入恒为 string，直返）。
@@ -680,3 +690,6 @@ func max64(a, b float64) float64 {
 	}
 	return b
 }
+
+// strPtr string → *string（Python Optional[str] 语义）。
+func strPtr(v string) *string { return &v }
