@@ -261,6 +261,8 @@ func TestRunCLI_verify模式_真实覆盖通过(t *testing.T) {
 		"-min-call-span", "3",
 		"-verify",
 		"-verify-workdir", t.TempDir(),
+		// -no-cache：单测跑在真实仓库根上，默认缓存会与真实审计运行发生键碰撞（缓存键=仓库指纹+目录），fakeRunner 被短路
+		"-no-cache",
 		"-exempt-file", exemptPath,
 	})
 	assert.Equal(t, 0, code)
@@ -287,6 +289,8 @@ func TestRunCLI_verify模式_JSON输出(t *testing.T) {
 		"-min-call-span", "3",
 		"-verify",
 		"-verify-workdir", t.TempDir(),
+		// -no-cache：与共享缓存隔离（键碰撞会短路 fakeRunner）
+		"-no-cache",
 		"-exempt-file", exemptPath,
 		"-json",
 	})

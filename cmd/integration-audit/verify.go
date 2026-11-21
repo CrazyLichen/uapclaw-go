@@ -39,6 +39,15 @@ type VerifyConfig struct {
 	Runner GoTestRunner
 	// WorkDir 覆盖档案输出目录（空则使用临时目录）
 	WorkDir string
+	// CacheDir 覆盖档案缓存目录（空 = 禁用缓存，每次真实重跑）
+	CacheDir string
+	// KeySalt 缓存键盐（写入构建标签等运行参数，参数变则键变）
+	KeySalt string
+	// ChangedDirs 本次改动的集成测试目录集合（nil = 全量验证；-only-changed 时传入，
+	// 未命中的灰区目录跳过运行且不判罚——CI 全量兜底）
+	ChangedDirs map[string]bool
+	// FingerprintFn 源码指纹函数（测试可注入替身；nil 用默认实现）
+	FingerprintFn func() (string, error)
 }
 
 // DirVerify 单目录覆盖验证结果。
@@ -57,6 +66,8 @@ type DirVerify struct {
 	Passed bool `json:"passed"`
 	// Reason 判定说明
 	Reason string `json:"reason"`
+	// Cached 覆盖档案是否命中缓存（免重跑 go test）
+	Cached bool `json:"cached,omitempty"`
 }
 
 // VerifyResult 覆盖验证整体结果。
@@ -116,6 +127,22 @@ func VerifyCoverage(cfg *VerifyConfig, audit *AuditResult) (*VerifyResult, error
 		runner = r
 	}
 
+	// 内容寻址缓存：键含全量源码指纹，任何相关源码变动即失效重跑
+	var cache *ProfileCache
+	var fingerprint string
+	if cfg.CacheDir != "" {
+		fpFn := cfg.FingerprintFn
+		if fpFn == nil {
+			fpFn = func() (string, error) { return sourceFingerprintFn(cfg.RepoRoot) }
+		}
+		fp, err := fpFn()
+		if err != nil {
+			return nil, fmt.Errorf("计算源码指纹失败: %w", err)
+		}
+		fingerprint = fp
+		cache = NewProfileCache(cfg.CacheDir)
+	}
+
 	workDir := cfg.WorkDir
 	if workDir == "" {
 		tmp, err := os.MkdirTemp("", "integration-verify-")
@@ -144,7 +171,18 @@ func VerifyCoverage(cfg *VerifyConfig, audit *AuditResult) (*VerifyResult, error
 			vr.Passed = false
 			continue
 		}
-		dv := verifyDir(cfg, runner, workDir, d)
+		// -only-changed 本地降级：未改动的灰区目录跳过运行且不判罚（CI 全量兜底）
+		if cfg.ChangedDirs != nil && !DirChanged(cfg.ChangedDirs, d.Dir) {
+			vr.Dirs = append(vr.Dirs, &DirVerify{
+				Dir:            d.Dir,
+				Skipped:        true,
+				SkipReason:     "本地未改动，跳过覆盖验证（CI 全量兜底）",
+				SubsystemLines: map[string]int{},
+				Passed:         true,
+			})
+			continue
+		}
+		dv := verifyDir(cfg, runner, workDir, d, cache, fingerprint)
 		vr.Dirs = append(vr.Dirs, dv)
 		if !dv.Passed {
 			vr.Passed = false
@@ -155,16 +193,31 @@ func VerifyCoverage(cfg *VerifyConfig, audit *AuditResult) (*VerifyResult, error
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// verifyDir 验证单个灰区目录：运行测试 → 解析档案 → 套门禁。
-func verifyDir(cfg *VerifyConfig, runner GoTestRunner, workDir string, d *DirAudit) *DirVerify {
+// verifyDir 验证单个灰区目录：查缓存 →（未命中）运行测试并存缓存 → 解析档案 → 套门禁。
+func verifyDir(cfg *VerifyConfig, runner GoTestRunner, workDir string, d *DirAudit, cache *ProfileCache, fingerprint string) *DirVerify {
 	dv := &DirVerify{Dir: d.Dir, SubsystemLines: map[string]int{}}
 
 	profilePath := filepath.Join(workDir, slugProfileName(d.Dir))
-	if err := runner.RunGoTest(d.Dir, profilePath); err != nil {
-		dv.Skipped = true
-		dv.SkipReason = fmt.Sprintf("go test 执行失败: %v", err)
-		dv.Passed = false
-		return dv
+	if cache != nil {
+		key := CacheKey(fingerprint, cfg.KeySalt, "", "", d.Dir)
+		if data := cache.Load(key); data != nil {
+			if err := os.WriteFile(profilePath, data, 0o644); err == nil {
+				dv.Cached = true
+			}
+		}
+	}
+	if !dv.Cached {
+		if err := runner.RunGoTest(d.Dir, profilePath); err != nil {
+			dv.Skipped = true
+			dv.SkipReason = fmt.Sprintf("go test 执行失败: %v", err)
+			dv.Passed = false
+			return dv
+		}
+		if cache != nil {
+			if data, err := os.ReadFile(profilePath); err == nil {
+				cache.Store(CacheKey(fingerprint, cfg.KeySalt, "", "", d.Dir), data)
+			}
+		}
 	}
 
 	subLines, err := parseProfileSubsystemLines(profilePath)

@@ -89,3 +89,16 @@ func WorktreePathFor(baseDir, slug string) string {
 func WorktreesDir(baseDir string) string {
 	return filepath.Join(baseDir, ".worktrees")
 }
+
+// DirectWorktreePathFor 在显式指定的 worktrees 目录下直接计算 worktree 路径。
+// Python: direct_worktree_path_for(worktrees_parent, slug) (slug.py:91-99)
+//
+// 供已拥有专用 worktrees 目录的调用方使用，不需要通用 .worktrees 子目录。
+// slug 非法时返回空串。
+func DirectWorktreePathFor(worktreesParent, slug string) string {
+	flat, ok := flattenSlug(slug)
+	if !ok {
+		return ""
+	}
+	return filepath.Join(worktreesParent, flat)
+}

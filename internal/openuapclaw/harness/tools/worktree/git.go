@@ -438,3 +438,132 @@ func resolveCommonDir(gitDir, raw string) (string, error) {
 	}
 	return common, nil
 }
+
+// createEmptyInitialCommit 创建空初始提交且不触碰索引。
+// Python: git.py create_empty_initial_commit(cwd) (:175-203)
+//
+// `git commit --allow-empty` 会把未出生仓库里已暂存的用户文件一并提交；
+// 改用 plumbing 命令，worktree 初始化不吞用户的待提交改动。
+//
+// 返回创建的提交 SHA；git 失败返回 GitError。
+func createEmptyInitialCommit(ctx context.Context, cwd string) (string, error) {
+	tree := runGit(ctx, []string{"mktree"}, cwd)
+	if !tree.OK() {
+		return "", &GitError{Command: "mktree", ReturnCode: tree.ReturnCode, Stderr: tree.Stderr}
+	}
+	commit := runGit(ctx, []string{
+		"-c", "user.name=OpenJiuwen",
+		"-c", "user.email=openjiuwen@example.invalid",
+		"commit-tree", tree.Stdout,
+		"-m", "chore: initialize repository for worktrees",
+	}, cwd)
+	if !commit.OK() {
+		return "", &GitError{Command: "commit-tree", ReturnCode: commit.ReturnCode, Stderr: commit.Stderr}
+	}
+	update := runGit(ctx, []string{"update-ref", "HEAD", commit.Stdout}, cwd)
+	if !update.OK() {
+		return "", &GitError{Command: "update-ref", ReturnCode: update.ReturnCode, Stderr: update.Stderr}
+	}
+	return commit.Stdout, nil
+}
+
+// setLongpaths 在 repo_root 上设置 core.longpaths 以绕过 Windows MAX_PATH。
+// Python: git.py set_longpaths(repo_root, *, enabled) (:380-398)
+//
+// git worktree add 会把源仓库内容检出到新 worktree；Windows 上超过 260 字符
+// 的路径检出失败 rc=128——深层嵌套仓库的主要失败形态。core.longpaths=true
+// 使 git 使用扩展长度 Windows 路径前缀绕过 Win32 限制，不改变源仓库目录结构。
+//
+// config 写失败（如 bare 仓库、只读 .git）返回 GitError。
+func setLongpaths(ctx context.Context, repoRoot string, enabled bool) error {
+	value := "true"
+	if !enabled {
+		value = "false"
+	}
+	r := runGit(ctx, []string{"config", "core.longpaths", value}, repoRoot)
+	if !r.OK() {
+		return &GitError{Command: "git config core.longpaths", ReturnCode: r.ReturnCode, Stderr: r.Stderr}
+	}
+	return nil
+}
+
+// isRefAncestor 返回一个 ref 是否可达自另一个 ref。
+// Python: git.py is_ref_ancestor(ancestor_ref, descendant_ref, cwd) (:445-471)
+//
+// 返回值三态：true=祖先关系成立；false=两 ref 有效但无该关系；
+// nil=git 无法验证（如 ref 不存在）。
+func isRefAncestor(ctx context.Context, ancestorRef, descendantRef, cwd string) *bool {
+	r := runGit(ctx, []string{"merge-base", "--is-ancestor", ancestorRef, descendantRef}, cwd)
+	if r.ReturnCode == 0 {
+		t := true
+		return &t
+	}
+	if r.ReturnCode == 1 {
+		f := false
+		return &f
+	}
+	return nil
+}
+
+// mergeBase 返回两个 ref 的最佳公共祖先 SHA；git 无法判定时返回空串。
+// Python: git.py merge_base(first_ref, second_ref, cwd) (:473-493)
+func mergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
+	r := runGit(ctx, []string{"merge-base", firstRef, secondRef}, cwd)
+	if r.OK() && r.Stdout != "" {
+		return r.Stdout
+	}
+	return ""
+}
+
+// ──────────────────────────── 导出函数（跨包消费面） ────────────────────────────
+// Python git.py 的函数均为模块级导出；Go 侧这些小写符号需要被 agent_teams/worktree
+// 等包消费，以下导出包装为可见性转换（非新增逻辑，规则 9 对齐 Python 导出面）。
+
+// FindCanonicalGitRoot 返回规范 git 仓库根；无仓库返回空串。
+// Python: git.py find_canonical_git_root(cwd) (:228)
+func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
+	return findCanonicalGitRoot(ctx, cwd)
+}
+
+// RevParse 解析 ref/SHA 到提交 SHA；失败返回空串。
+// Python: git.py rev_parse(ref, cwd) (:161)
+func RevParse(ctx context.Context, ref, cwd string) (string, error) {
+	return revParse(ctx, ref, cwd)
+}
+
+// IsRefAncestor 判断祖先关系；nil 表示无法验证。
+// Python: git.py is_ref_ancestor(ancestor_ref, descendant_ref, cwd) (:445)
+func IsRefAncestor(ctx context.Context, ancestorRef, descendantRef, cwd string) *bool {
+	return isRefAncestor(ctx, ancestorRef, descendantRef, cwd)
+}
+
+// MergeBase 返回两 ref 的公共祖先 SHA；无法判定返回空串。
+// Python: git.py merge_base(first_ref, second_ref, cwd) (:473)
+func MergeBase(ctx context.Context, firstRef, secondRef, cwd string) string {
+	return mergeBase(ctx, firstRef, secondRef, cwd)
+}
+
+// StatusPorcelain 返回 git status --porcelain 行列表。
+// Python: git.py status_porcelain(cwd) (:404)
+func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
+	return statusPorcelain(ctx, cwd)
+}
+
+// GetDefaultBranch 返回仓库默认分支名（main/master/develop 探测）。
+// Python: git.py get_default_branch(cwd) (:127)
+func GetDefaultBranch(ctx context.Context, cwd string) string {
+	return getDefaultBranch(ctx, cwd)
+}
+
+// FetchRef 从 origin 拉取指定分支；成功返回 true。
+// Python: git.py fetch_ref(repo_root, ref) (:339)
+func FetchRef(ctx context.Context, repoRoot, ref string) bool {
+	return fetchRef(ctx, repoRoot, ref)
+}
+
+// RunGit 执行 git 命令并返回结构化结果。
+// Python: git.py _run_git(args, cwd=..., check=...) 的非 check 面（check 语义由
+// 调用方判定 GitResult.OK()，Python worktree_remote.py:222-226 同款）。
+func RunGit(ctx context.Context, args []string, cwd string) GitResult {
+	return runGit(ctx, args, cwd)
+}

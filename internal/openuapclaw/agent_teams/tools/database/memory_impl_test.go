@@ -1589,3 +1589,50 @@ func TestResetPausedMemberExecutionStatus_只复位暂停成员(t *testing.T) {
 		t.Errorf("carol execution_status = %q, want running（未暂停不应复位）", carol.ExecutionStatus)
 	}
 }
+
+// TestInMemory_ReassignTask 内存实现原子换手：状态保留、交接清理字段同 SQL。
+// Python: reassign_task（task_dao.py L971-1018）
+func TestInMemory_ReassignTask(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	old := "alice"
+	summary, note := "s", "n"
+	if ok, err := db.CreateTask(ctx, &TeamTaskBase{
+		TaskID: "t1", TeamName: "team1", Title: "T", Status: fsm.TaskStatusInProgress,
+		Assignee: &old, Summary: &summary, Note: &note, ResumePending: true, Revision: 5,
+	}); err != nil || !ok {
+		t.Fatalf("CreateTask: ok=%v err=%v", ok, err)
+	}
+	swapped, err := db.ReassignTask(ctx, "t1", "alice", "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !swapped {
+		t.Fatal("换手应成功")
+	}
+	got := db.tasks["t1"]
+	if *got.Assignee != "bob" {
+		t.Errorf("assignee = %q, want bob", *got.Assignee)
+	}
+	if got.Status != fsm.TaskStatusInProgress {
+		t.Errorf("status = %q, 应原位保留 in_progress", got.Status)
+	}
+	if got.Summary != nil || got.Note != nil {
+		t.Errorf("summary/note 应清空: %v/%v", got.Summary, got.Note)
+	}
+	if got.ResumePending {
+		t.Error("resume_pending 应被换手消费")
+	}
+	if got.ObservedRevision != 5 {
+		t.Errorf("observed_revision = %d, want 5", got.ObservedRevision)
+	}
+
+	// 旧 owner 不符：false。
+	swapped2, err2 := db.ReassignTask(ctx, "t1", "alice", "carol")
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if swapped2 {
+		t.Error("旧 owner 不符应返回 false")
+	}
+}

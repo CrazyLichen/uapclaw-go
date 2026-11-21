@@ -40,6 +40,11 @@ const (
 	InnerEventTypePollMailbox InnerEventType = "coordination_poll_mailbox"
 	// InnerEventTypePollTask 任务轮询事件
 	InnerEventTypePollTask InnerEventType = "coordination_poll_task"
+	// InnerEventTypeInitialPollTask 启动一次性板面普查（F_69）：成员刚起来时
+	// 立刻做一次板面巡视——宕机期间被派活的成员唯一的得知途径。leader 排除
+	// （leader 的板面普查渲染整板或 all-done 提示，不是 leader 起来该拿的）。
+	// Python: event_bus.py L54 INITIAL_POLL_TASK
+	InnerEventTypeInitialPollTask InnerEventType = "coordination_initial_poll_task"
 	// InnerEventTypeSchedulerScan 调度器扫描 echo（F_62）：kernel 把 leader
 	// 自发布的任务变更转成该内部事件，保证 leader 本地改板也触发扫描。
 	// Python: event_bus.py L56 SCHEDULER_SCAN

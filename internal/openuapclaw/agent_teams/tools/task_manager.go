@@ -451,6 +451,15 @@ func (tm *TeamTaskManager) StartTask(ctx context.Context, taskID string) (schema
 	}
 	// 3. 防御性 owner 校验（陈旧/手工行的护栏；常规 create/assign 路径更早校验）。
 	// Python: owner_result = await self._validate_task_owner(member_name)
+	ownerResult, err := tm.validateTaskOwner(ctx, memberName)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !ownerResult.OK {
+		return ownerResult, nil
+	}
+	// 3.1 plan gate 需要成员 mode（validateTaskOwner 只回答存在性/leader 排除）。
+	// Python: member = await self.db.member.get_member(member_name, self.team_name)
 	member, err := tm.db.Member().GetMember(ctx, memberName, tm.teamName)
 	if err != nil {
 		return schema.TaskOpResult{}, err
@@ -497,6 +506,120 @@ func (tm *TeamTaskManager) StartTask(ctx context.Context, taskID string) (schema
 		MemberName:       memberName,
 	})
 	return schema.TaskOpResult{}.Success(), nil
+}
+
+// validateTaskOwner 校验任务 owner 存在且不是 team leader。
+// Python: TeamTaskManager._validate_task_owner (task_manager.py L167-181)
+func (tm *TeamTaskManager) validateTaskOwner(ctx context.Context, memberName string) (schema.TaskOpResult, error) {
+	owner := strings.TrimSpace(memberName)
+	if owner == "" {
+		return schema.TaskOpResult{}.Success(), nil
+	}
+	leaderMemberName := tm.resolveLeaderMemberName(ctx)
+	if leaderMemberName != "" && owner == leaderMemberName {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+			"Member %s is the team leader and cannot be assigned team tasks; "+
+				"assign the task to a non-leader member", owner)), nil
+	}
+	member, err := tm.db.Member().GetMember(ctx, owner, tm.teamName)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if member == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Member %s not found in team %s", owner, tm.teamName)), nil
+	}
+	return schema.TaskOpResult{}.Success(), nil
+}
+
+// Reassign 原子换手：把已归属任务从当前 owner 移交给另一成员。
+// **状态原位保留**——绝不弹回 PENDING，因此不产生伪 TASK_RELEASED、
+// 不给 idle teammate 留可认领池竞态窗口。跨可改派三态（PENDING/BLOCKED/
+// IN_PROGRESS）工作；尚未启动的已指派票（scheduled 模式的静止态）恰是
+// 换手成本最低的时刻——没有在飞的推理可丢。恰好发两个定向事件：
+// TASK_REVOKED 让前任 owner 从陌生任务上 steer 开，TASK_CLAIMED 告诉新
+// owner 票已是他的。前任的其他认领与在飞轮次不受影响——只动这一张票。
+// 新成员在换手**之前**校验，坏目标不会扰动任务本身。
+// Python: TeamTaskManager.reassign (task_manager.py L1858-1920)
+func (tm *TeamTaskManager) Reassign(ctx context.Context, taskID, newAssignee string) (schema.TaskOpResult, error) {
+	// 1. 任务存在（Python: task = await self.get(task_id)）
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if task == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s not found", taskID)), nil
+	}
+
+	// 2. 新 owner 校验（Python: owner_result = await self._validate_task_owner(new_assignee)）
+	ownerResult, err := tm.validateTaskOwner(ctx, newAssignee)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !ownerResult.OK {
+		return ownerResult, nil
+	}
+
+	// 3. 无旧 owner 拒绝（Python: L1894）
+	oldAssignee := ""
+	if task.Assignee != nil {
+		oldAssignee = *task.Assignee
+	}
+	if oldAssignee == "" {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s has no current assignee to reassign from", taskID)), nil
+	}
+
+	// 4. F_82：等子任务的 BLOCKED 挂起父任务算半成品，工作在当前 owner 手上
+	//（F_128）——与两道闸不可换手同理。普通 BLOCKED 从未启动，可换手。
+	// Python: L1898-1902（open_subtask_ids 非空则拒）
+	if task.Status == fsm.TaskStatusBlocked {
+		openSubtask, subErr := tm.hasOpenSubtask(ctx, taskID)
+		if subErr != nil {
+			return schema.TaskOpResult{}, subErr
+		}
+		if openSubtask {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+				"Task %s is suspended while its subtasks run under %s; "+
+					"wait for the subtasks to finish, or cancel them first", taskID, oldAssignee)), nil
+		}
+	}
+
+	// 5. CAS 换手（Python: swapped = await self.db.task.reassign_task(...)）
+	swapped, err := tm.db.Task().ReassignTask(ctx, taskID, oldAssignee, newAssignee)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !swapped {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+			"Task %s could not be reassigned; it is either no longer held by "+
+				"%s, or its status (%s) does not allow handing it over", taskID, oldAssignee, task.Status)), nil
+	}
+
+	// 6. 定向事件序：先 REVOKED(前任) 再 CLAIMED(新任)
+	//（Python: L1910-1916 两连发）
+	tm.publishTaskEvent(ctx, events.TaskRevokedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: oldAssignee},
+		TaskID:           taskID,
+	})
+	tm.publishTaskEvent(ctx, events.TaskClaimedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: newAssignee},
+		TaskID:           taskID,
+	})
+	return schema.TaskOpResult{}.Success(), nil
+}
+
+// hasOpenSubtask 是否存在非终态直接子任务（F_128）。
+// Python: TeamTaskManager.open_subtask_ids (task_manager.py L1753-1756) 的存在式收窄。
+func (tm *TeamTaskManager) hasOpenSubtask(ctx context.Context, taskID string) (bool, error) {
+	subtasks, err := tm.db.Task().GetSubtasks(ctx, tm.teamName, taskID)
+	if err != nil {
+		return false, err
+	}
+	for _, sub := range subtasks {
+		if !fsm.IsTaskTerminal(sub.Status) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetClaimableTasks 获取可认领任务（PENDING + 无未解决依赖）。
@@ -595,7 +718,17 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 不存在", taskID)), nil
 	}
 
-	// 2. 检查被分配者是否是团队成员（对齐 Python: member = await self.db.member.get_member(assignee, ...)）
+	// 2. owner 校验（Python: owner_result = await self._validate_task_owner(assignee)，
+	// task_manager.py L483——leader 不可被指派团队任务）
+	ownerResult, err := tm.validateTaskOwner(ctx, assignee)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if !ownerResult.OK {
+		return ownerResult, nil
+	}
+
+	// 3. 检查被分配者是否是团队成员（对齐 Python: member = await self.db.member.get_member(assignee, ...)）
 	member, err := tm.db.Member().GetMember(ctx, assignee, tm.teamName)
 	if err != nil {
 		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询成员失败: %s", err.Error())), nil
@@ -789,13 +922,33 @@ func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []s
 
 // Reset 重置任务（CLAIMED→PENDING）。对齐 Python: TeamTaskManager.reset()
 func (tm *TeamTaskManager) Reset(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
+	// Python: existing = await self.db.task.get_task(task_id)
+	existing, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	if existing == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("Task %s not found", taskID)), nil
+	}
+
 	ok, err := tm.db.Task().ResetTask(ctx, taskID)
 	if err != nil {
 		return schema.TaskOpResult{}, err
 	}
 	if !ok {
-		return schema.TaskOpResult{}.Fail(fmt.Sprintf("重置任务失败: 任务不存在或状态不允许重置 %s", taskID)), nil
+		// Python: L1716-1719（只有 planning / in-progress / in-review 可 reset）
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf(
+			"Task %s cannot be reset from status '%s'; "+
+				"only planning / in-progress / in-review tasks can be reset", taskID, existing.Status)), nil
 	}
+
+	// 发布 TASK_RELEASED：idle teammate 得知票重新可认领（与 TASK_UNBLOCKED
+	// 同款下游 nudge）。（Python: L1724-1727）
+	logger.Info(logComponent).Str("task_id", taskID).Msg("Task reset successfully")
+	tm.publishTaskEvent(ctx, events.TaskReleasedEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
+	})
 	return schema.TaskOpResult{}.Success(), nil
 }
 
@@ -1457,7 +1610,13 @@ func (tm *TeamTaskManager) checkTaskListDrained(ctx context.Context) bool {
 }
 
 // writePlanIndex 写入或创建 index.json。
+// plansDir 为空时拒绝写盘：空 plansDir 会使路径退化为相对路径，落到测试进程
+// CWD 污染仓库文件（tools/index.json 曾因此被测试假数据污染，2026-11-21 清理）。
+// Python: plans_dir 为构造必填参数。
 func (tm *TeamTaskManager) writePlanIndex(record *PlanRecord) error {
+	if tm.plansDir == "" {
+		return fmt.Errorf("plansDir 未配置，拒绝写入计划索引")
+	}
 	indexPath := filepath.Join(tm.plansDir, tm.teamPlanID, "index.json")
 	index, err := tm.loadPlanIndex()
 	if err != nil {
@@ -1513,6 +1672,10 @@ func (tm *TeamTaskManager) updatePlanIndex(planID string, record *PlanRecord) er
 
 // loadPlanIndex 加载 index.json。
 func (tm *TeamTaskManager) loadPlanIndex() (*PlanIndex, error) {
+	// plansDir 为空时视作无索引（不读相对路径文件，防 CWD 污染）。
+	if tm.plansDir == "" {
+		return nil, os.ErrNotExist
+	}
 	indexPath := filepath.Join(tm.plansDir, tm.teamPlanID, "index.json")
 	data, err := os.ReadFile(indexPath)
 	if err != nil {

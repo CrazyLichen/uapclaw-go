@@ -427,6 +427,22 @@ func (db *InMemoryTeamDatabase) UpdateMemberServedModel(_ context.Context, membe
 	return true
 }
 
+// UpdateMemberWorktree 更新成员的 worktree 隔离元数据（内存实现）。
+// Python: update_member_worktree (member_dao.py:755-782)
+func (db *InMemoryTeamDatabase) UpdateMemberWorktree(_ context.Context, memberName, teamName string, worktree *MemberWorktreeOptions, isolation, worktreePath string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists {
+		// Python: member not found → error 日志 + False
+		return false
+	}
+	member.Options = SetMemberWorktreeOptions(member.Options, worktree, isolation, worktreePath)
+	member.UpdatedAt = GetCurrentTime()
+	return true
+}
+
 // PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用（内存实现）。
 // Python: promote_member_fallback_model (member_dao.py:844-868)
 func (db *InMemoryTeamDatabase) PromoteMemberFallbackModel(_ context.Context, memberName, teamName string) bool {
@@ -874,6 +890,32 @@ func (db *InMemoryTeamDatabase) StartTaskCAS(_ context.Context, taskID, memberNa
 	}
 	task.Status = toStatus
 	task.ResumePending = false
+	task.UpdatedAt = GetCurrentTime()
+	return true, nil
+}
+
+// ReassignTask 内存实现：状态原位保留的原子换手（与 SQL 同语义）。
+// summary/note 清空（F_119）、resume_pending 消费（F_128）、observed_revision
+// 追平 revision（F_129）。
+// Python: reassign_task (task_dao.py L971-1018)
+func (db *InMemoryTeamDatabase) ReassignTask(_ context.Context, taskID, fromAssignee, toAssignee string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists {
+		return false, nil
+	}
+	if task.Assignee == nil || *task.Assignee != fromAssignee {
+		return false, nil
+	}
+	if !fsm.TaskReassignableStatuses[task.Status] {
+		return false, nil
+	}
+	task.Assignee = &toAssignee
+	task.Summary = nil
+	task.Note = nil
+	task.ResumePending = false
+	task.ObservedRevision = task.Revision
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }

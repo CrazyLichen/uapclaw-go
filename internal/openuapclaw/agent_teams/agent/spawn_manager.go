@@ -1,6 +1,7 @@
 package agent
 
 import (
+	awt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,9 @@ type SpawnManager struct {
 	state *TeamAgentState
 	// configurator Agent 配置器
 	configurator *AgentConfigurator
+	// worktreeLifecycle 团队 worktree 管家（25.7 T5；Python spawn_manager.py:87
+	// self.worktree_lifecycle = TeammateWorktreeLifecycle(configurator)）
+	worktreeLifecycle *awt.TeammateWorktreeLifecycle
 	// getTeamAgent 获取当前 TeamAgent 实例的闭包
 	getTeamAgent func() *TeamAgent
 	// baseCtx 基础上下文，用于替代 context.Background()
@@ -74,9 +78,10 @@ func NewSpawnManager(
 		ctx = context.Background()
 	}
 	return &SpawnManager{
-		state:          state,
-		configurator:   configurator,
-		getTeamAgent:   teamAgentGetter,
+		state:             state,
+		configurator:      configurator,
+		worktreeLifecycle: newTeammateWorktreeLifecycle(configurator),
+		getTeamAgent:      teamAgentGetter,
 		baseCtx:        ctx,
 		spawnedHandles: make(map[string]spawn.SpawnHandle),
 		recoveryCancel: make(map[string]context.CancelFunc),
@@ -102,6 +107,12 @@ func (m *SpawnManager) SpawnTeammate(
 		Str("member_name", memberName).
 		Str("spawn_mode", spawnMode).
 		Msg("spawning teammate")
+
+	// worktree 隔离：非关闭中成员 ensure 当前会话 worktree
+	// （Python spawn_manager.py:479-481 worktree_path = ensure_member_worktree(...)）
+	if werr := m.ensureMemberWorktree(ctx, &runtimeCtx); werr != nil {
+		return fmt.Errorf("生成 teammate %s 失败: %w", memberName, werr)
+	}
 
 	var handle spawn.SpawnHandle
 	var err error
@@ -720,4 +731,49 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 	logger.Info(logComponent).
 		Str("member_name", m.getTeamAgent().MemberName()).
 		Msg("chunk forward observer registered")
+}
+
+// ──────────────────────────── worktree 隔离（25.7 T5） ────────────────────────────
+
+// newTeammateWorktreeLifecycle 构造 lifecycle（configurator 为 nil 时返回 nil）。
+// Python: spawn_manager.py:87 TeammateWorktreeLifecycle(configurator)
+func newTeammateWorktreeLifecycle(configurator *AgentConfigurator) *awt.TeammateWorktreeLifecycle {
+	if configurator == nil {
+		return nil
+	}
+	return awt.NewTeammateWorktreeLifecycle(worktreeLifecycleProvider{c: configurator})
+}
+
+// ensureMemberWorktree 成员非关闭中状态时 ensure 当前会话 worktree 并把
+// worktree_path 写入运行时上下文。
+// Python: spawn_manager.py:479-481（status 门）+ :565（worktree_path=worktree_path 注入 ctx）
+func (m *SpawnManager) ensureMemberWorktree(ctx context.Context, runtimeCtx *atschema.TeamRuntimeContext) error {
+	if m.worktreeLifecycle == nil {
+		return nil
+	}
+	status := ""
+	if m.configurator != nil && m.configurator.TeamBackend() != nil {
+		member, err := m.configurator.TeamBackend().DB().Member().GetMember(ctx, runtimeCtx.MemberName, m.configurator.TeamName())
+		if err != nil {
+			return err
+		}
+		if member != nil {
+			status = member.Status
+		}
+	}
+	// 成员状态非关闭中才 ensure（Python :479-481 的集合判定）；
+	// 状态值MemberStatusShutdownRequested/ShutDown 对齐 Python
+	// MemberStatus.SHUTDOWN_REQUESTED / MemberStatus.SHUTDOWN
+	if status == string(atschema.MemberStatusShutdownRequested) ||
+		status == string(atschema.MemberStatusShutdown) {
+		return nil
+	}
+	path, err := m.worktreeLifecycle.EnsureMemberWorktree(ctx, runtimeCtx.MemberName, runtimeCtx.Role, status)
+	if err != nil {
+		return err
+	}
+	if path != "" {
+		runtimeCtx.WorktreePath = path
+	}
+	return nil
 }

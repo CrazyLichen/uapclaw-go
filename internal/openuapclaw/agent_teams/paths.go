@@ -1,7 +1,13 @@
 package agent_teams
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -12,6 +18,11 @@ const (
 	// agentTeamsSubDir openjiuwen home 下的 agent_teams 子目录
 	agentTeamsSubDir = ".agent_teams"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// taskHomeCtxKey 任务级 home 的 context 键（Python ContextVar 私有承载的对应物）。
+type taskHomeCtxKey struct{}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -40,10 +51,32 @@ func ResetHome() {
 // configure_openjiuwen_home(get_user_workspace_dir()) 的效果。
 // Python: get_openjiuwen_home()
 func GetHome() string {
+	return GetHomeWithContext(context.Background())
+}
+
+// GetHomeWithContext 返回 openjiuwen 本地状态的根目录（ctx 感知变体）。
+// 解析序对齐 Python get_openjiuwen_home（paths.py:52-77）：任务级绑定
+// （SetTaskOpenuapclawHome 写入的 ctx value）→ 进程级 ConfigureHome
+// 覆盖 → 数据根 WorkspaceDir()。Python 的 OPENJIWEN_HOME 环境变量
+// 分支 Go 侧不承载（spawn 子进程经 OpenuapclawHomeEnv 注入，见
+// external/descriptor.go）。
+func GetHomeWithContext(ctx context.Context) string {
+	if taskHome, ok := ctx.Value(taskHomeCtxKey{}).(string); ok && taskHome != "" {
+		return taskHome
+	}
 	if configuredHome != "" {
 		return configuredHome
 	}
 	return workspace.WorkspaceDir()
+}
+
+// SetTaskOpenuapclawHome 把 case 级运行时 home 绑进当前任务的 ctx。
+// Python: set_task_openjiuwen_home(path)（paths.py:26-29）。
+// Go ctx 不可变：还原（Python reset_task_openjiuwen_home 的 token 语义）
+// 表现为调用方在作用域结束后改用外层 ctx——对齐 rsi/usage.go
+// ModelUsageStage 的 spec P1 口径，故不提供带 token 的 Reset 函数。
+func SetTaskOpenuapclawHome(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, taskHomeCtxKey{}, dir)
 }
 
 // GetAgentTeamsHome 返回 agent_teams 状态的根目录。
@@ -147,4 +180,90 @@ func MemberSkillVisibilityPath(teamName, memberName string) string {
 // 布局：{TeamHome(teamName)}/team-workspace/skills-visibility.json
 func TeamSkillVisibilityPath(teamName string) string {
 	return filepath.Join(TeamWorkspaceDir(teamName), SKILL_VISIBILITY_FILENAME)
+}
+
+// ──────────────────────────── 导出函数（25.7 T1 新增段） ────────────────────────────
+
+// SafePathSegment 返回不受信字符串的规范文件系统安全形式。
+// Python: paths.py safe_path_segment(value, fallback="_") (:272-274)
+func SafePathSegment(value string, fallback string) string {
+	return safeSegment(value, fallback)
+}
+
+// TeamSessionsDir 返回保存团队全部会话状态目录的父目录。
+// Python: paths.py team_sessions_dir(team_name) (:277-282)
+//
+// 布局：{team_home}/sessions/
+func TeamSessionsDir(teamName string) string {
+	return filepath.Join(TeamHome(teamName), "sessions")
+}
+
+// TeamSessionDir 返回团队下的单会话目录。
+// Python: paths.py team_session_dir(team_name, session_id) (:285-296)
+//
+// 布局：{team_home}/sessions/{session_id}/（session_id 净化为单段路径）。
+func TeamSessionDir(teamName string, sessionID string) string {
+	return filepath.Join(TeamSessionsDir(teamName), SafePathSegment(sessionID, "_"))
+}
+
+// TeamSessionWorktreesDir 返回团队会话拥有的 worktree 根目录。
+// Python: paths.py team_session_worktrees_dir(team_name, session_id) (:340-352)
+//
+// 布局：{team_home}/sessions/{session_id}/worktrees/
+func TeamSessionWorktreesDir(teamName string, sessionID string) string {
+	return filepath.Join(TeamSessionDir(teamName, sessionID), "worktrees")
+}
+
+// ProjectWorktreeHash 返回会话级 worktree 的稳定项目哈希段。
+// Python: paths.py project_worktree_hash(project_dir) (:317-329)
+//
+// 路径必须已存在。团队托管的 worktree 隔离锚定到显式项目目录；
+// 该值缺失时调用方不得静默用 cwd 或 workspace 替代。
+// 偏差 D-25.7-h：Python realpath→Go Abs+EvalSymlinks 组合（D-15.12-a 同款）。
+func ProjectWorktreeHash(projectDir string) (string, error) {
+	resolved, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", err
+	}
+	if r, err2 := filepath.EvalSymlinks(resolved); err2 == nil {
+		resolved = r
+	}
+	st, err := os.Stat(resolved)
+	if err != nil || !st.IsDir() {
+		return "", fmt.Errorf("project_dir does not exist: %s", projectDir)
+	}
+	digest := sha256.Sum256([]byte(resolved))
+	return hex.EncodeToString(digest[:])[:12], nil
+}
+
+// ──────────────────────────── 非导出函数（25.7 T1 新增段） ────────────────────────────
+
+// safeSegment 把不受信字符串净化为单段安全路径。
+// Python: paths.py _safe_segment(value, fallback="_") (:249-270)
+//
+// 把 [A-Za-z0-9_.-] 之外的字符替换为 _ 并剥掉首尾分隔符，结果永不逃逸
+// 父目录（无 /、无 ..）。用于来自不受信输入的路径段（session id 等）。
+func safeSegment(value string, fallback string) string {
+	if fallback == "" {
+		fallback = "_"
+	}
+	normalized := strings.TrimSpace(value)
+	var b strings.Builder
+	for _, r := range normalized {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') ||
+			r == '_' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	normalized = strings.Trim(b.String(), "._-")
+	runes := []rune(normalized)
+	if len(runes) > 96 {
+		normalized = string(runes[:96])
+	}
+	if normalized == "" {
+		return fallback
+	}
+	return normalized
 }

@@ -123,15 +123,22 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 	}
 
 	start := time.Now()
+	// 仓库锁串行化创建 + post setup 关键段（Python manager.py:169-174）
+	release, lockErr := RepoLock(repoRoot, m.config.RepoLockTimeout, m.config.RepoLock)
+	if lockErr != nil {
+		return nil, lockErr
+	}
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
 	if err != nil {
+		release()
 		return nil, fmt.Errorf("创建 worktree 失败: %w", err)
 	}
-	durationMs := time.Since(start).Seconds() * 1000
 
 	if !result.Existed {
 		m.postCreationSetup(ctx, repoRoot, result.WorktreePath)
 	}
+	release()
+	durationMs := time.Since(start).Seconds() * 1000
 
 	session := &WorktreeSession{
 		OriginalCWD:        originalCwd,
@@ -243,7 +250,8 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 
 	// action 为 "remove"
 	if repoRoot != "" {
-		m.removeWorktreeInternal(ctx, session.WorktreePath, repoRoot)
+		// Python exit: _remove_worktree(force=discard_changes)（manager.py:237）
+		m.removeWorktreeInternal(ctx, session.WorktreePath, repoRoot, discardChanges)
 	}
 
 	SetCurrentSession(ctx, nil)
@@ -276,26 +284,40 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 // Python: WorktreeManager.create_owner_worktree(slug)
 //
 // 与 Enter 不同，不修改 ContextVar session 或更改进程 CWD。
-func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) (*WorktreeCreateResult, error) {
+func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string, sourceDir ...string) (*WorktreeCreateResult, error) {
 	if err := ValidateSlug(slug); err != nil {
 		return nil, err
 	}
 
-	currentCwd, cwdErr := cwd.GetCwd(ctx)
-	if cwdErr != nil {
-		return nil, cwdErr
+	// source_dir 可选：省略时回退当前 agent CWD（Python manager.py:339-341）
+	resolveRoot := ""
+	if len(sourceDir) > 0 && sourceDir[0] != "" {
+		resolveRoot = sourceDir[0]
+	} else {
+		currentCwd, cwdErr := cwd.GetCwd(ctx)
+		if cwdErr != nil {
+			return nil, cwdErr
+		}
+		resolveRoot = currentCwd
 	}
-	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
+	repoRoot, err := findCanonicalGitRoot(ctx, resolveRoot)
 	if err != nil || repoRoot == "" {
-		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
+		return nil, fmt.Errorf("Cannot create owner worktree: not in a git repository. " +
+			"Select a project directory for this session before using worktree isolation")
 	}
 
 	targetPath, err := m.resolveTargetPath(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
+	// 仓库锁串行化创建 + post setup 关键段（Python manager.py:363-366）
+	release, lockErr := RepoLock(repoRoot, m.config.RepoLockTimeout, m.config.RepoLock)
+	if lockErr != nil {
+		return nil, lockErr
+	}
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
 	if err != nil {
+		release()
 		return nil, err
 	}
 
@@ -306,6 +328,7 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 		now := time.Now()
 		_ = os.Chtimes(result.WorktreePath, now, now)
 	}
+	release()
 
 	return result, nil
 }
@@ -432,7 +455,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 			}
 		}
 
-		if m.removeWorktreeInternal(ctx, wtPath, repoRoot) {
+		if m.removeWorktreeInternal(ctx, wtPath, repoRoot, force) {
 			removed = append(removed, wtPath)
 			if m.eventHandler != nil {
 				_ = m.eventHandler(ctx, &WorktreeRemovedEvent{
@@ -459,7 +482,13 @@ func (m *WorktreeManager) CleanupTeamWorktrees(ctx context.Context, teamName str
 // RemoveWorktree 删除单个 worktree。
 // Python: WorktreeManager.remove_worktree(worktree_path, repo_root)
 func (m *WorktreeManager) RemoveWorktree(ctx context.Context, worktreePath, repoRoot string) bool {
-	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot)
+	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot, false)
+}
+
+// RemoveWorktreeForce 以 force 删除（容忍未提交变更）。
+// Python: manager.remove_worktree(worktree_path, repo_root, force=True)（调用方传 force）
+func (m *WorktreeManager) RemoveWorktreeForce(ctx context.Context, worktreePath, repoRoot string) bool {
+	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot, true)
 }
 
 // resolveTargetPath 计算 worktree 文件系统路径。
@@ -467,6 +496,27 @@ func (m *WorktreeManager) RemoveWorktree(ctx context.Context, worktreePath, repo
 //
 // workspace 为空时直接返回 error，对齐 Python 抛 RuntimeError。
 func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) (string, error) {
+	// 分支 1：显式 base_dir（Python manager.py:730-736）
+	// 团队路径经 with_worktrees_dir 视图把会话 worktrees 目录直接作为根
+	if m.config.BaseDir != "" {
+		baseDir, err := filepath.EvalSymlinks(m.config.BaseDir)
+		if err != nil {
+			baseDir = m.config.BaseDir
+		}
+		baseDir, _ = filepath.Abs(baseDir) // Python os.path.realpath 的等价
+		var target string
+		if m.config.BaseDirIsWorktreesDir {
+			target = DirectWorktreePathFor(baseDir, slug)
+		} else {
+			target = WorktreePathFor(baseDir, slug)
+		}
+		if target == "" {
+			return "", fmt.Errorf("无效的 worktree 名称: %q", slug)
+		}
+		return target, nil
+	}
+
+	// 分支 2：DeepAgent workspace（Python manager.py:738-744）
 	workspace := cwd.GetWorkspace(ctx)
 	if workspace == "" {
 		return "", fmt.Errorf("workspace 未设置，无法解析 worktree 目标路径")
@@ -478,6 +528,46 @@ func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) (s
 		return "", fmt.Errorf("无效的 worktree 名称: %q", slug)
 	}
 	return target, nil
+}
+
+// WithBaseDir 返回钉在显式 worktree 根上的 manager 视图。
+// Python: WorktreeManager.with_base_dir(base_dir) (manager.py:108-117)
+//
+// 视图共享 backend/事件/rails，仅配置不同（Python model_copy 语义）。
+func (m *WorktreeManager) WithBaseDir(baseDir string) (*WorktreeManager, error) {
+	if baseDir == "" {
+		return nil, fmt.Errorf("base_dir is required")
+	}
+	cfg := m.config
+	cfg.BaseDir = baseDir
+	return &WorktreeManager{
+		config:         cfg,
+		backend:        m.backend,
+		eventHandler:   m.eventHandler,
+		lifecycleRails: m.lifecycleRails,
+		sessionState:   m.sessionState,
+	}, nil
+}
+
+// WithWorktreesDir 返回钉在显式 worktrees 目录上的 manager 视图。
+// Python: WorktreeManager.with_worktrees_dir(managed_worktrees_dir) (manager.py:119-130)
+//
+// 与 WithBaseDir 的区别：BaseDirIsWorktreesDir=true，目录本身就是 worktrees 父，
+// 不再拼 .worktrees 子目录（团队会话 worktrees 目录专用）。
+func (m *WorktreeManager) WithWorktreesDir(managedWorktreesDir string) (*WorktreeManager, error) {
+	if managedWorktreesDir == "" {
+		return nil, fmt.Errorf("worktrees_dir is required")
+	}
+	cfg := m.config
+	cfg.BaseDir = managedWorktreesDir
+	cfg.BaseDirIsWorktreesDir = true
+	return &WorktreeManager{
+		config:         cfg,
+		backend:        m.backend,
+		eventHandler:   m.eventHandler,
+		lifecycleRails: m.lifecycleRails,
+		sessionState:   m.sessionState,
+	}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -619,8 +709,16 @@ func (m *WorktreeManager) checkChanges(ctx context.Context, wtPath string) *Work
 
 // removeWorktreeInternal 通过后端删除 worktree。
 // Python: WorktreeManager._remove_worktree(wt_path, repo_root)
-func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, repoRoot string) bool {
-	return m.backend.Remove(ctx, wtPath, repoRoot)
+func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, repoRoot string, force bool) bool {
+	// 仓库锁串行化删除关键段（Python manager.py:402-405 _remove_worktree）
+	release, lockErr := RepoLock(repoRoot, m.config.RepoLockTimeout, m.config.RepoLock)
+	if lockErr != nil {
+		logger.Warn(logComponent).Str("repo_root", repoRoot).Err(lockErr).
+			Msg("repo lock acquisition failed, skipping worktree removal")
+		return false
+	}
+	defer release()
+	return m.backend.Remove(ctx, wtPath, repoRoot, force)
 }
 
 // postCreationSetup 新 worktree 的后置设置。

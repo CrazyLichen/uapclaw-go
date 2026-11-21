@@ -21,7 +21,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	manifest "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
+	agentworktree "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
+	"regexp"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -447,6 +450,18 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 用户声明的 rails 在前，团队 rails 在后，保持既有挂载顺序语义。
 	agentSpec.Rails = append(agentSpec.Rails, teamSpecs...)
 
+	// 团队 worktree shell guard（Python agent_configurator.py:934-941）：
+	// 协调角色成员的 rails 合并 git worktree 生命周期命令拒绝模式
+	guardEnabled := ctx.Role == atschema.TeamRoleLeader ||
+		ctx.Role == atschema.TeamRoleTeammate ||
+		ctx.Role == atschema.TeamRoleExternalCLI
+	agentSpec.Rails = applyTeamWorktreeShellGuard(agentSpec.Rails, guardEnabled)
+	if guardEnabled && !hasTeamWorktreeShellGuard(agentSpec.Rails) {
+		logger.Warn(logComponent).
+			Str("member_name", ctx.MemberName).
+			Msg("Team-managed worktree shell guard was not applied for member because core.sys_operation is absent")
+	}
+
 	// 15. 构建团队线束
 	// ⤴️ 9.68 回填完成：Rail 实例传入
 	// 上游 TeamHarness.build（team_harness.py:982-988）6 参数：
@@ -566,6 +581,12 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 		tools.WithMaxSubtaskDepth(spec.MaxSubtaskDepth),
 		tools.WithSpecEnableTaskVerification(spec.EnableTaskVerification),
 	)
+
+	// worktree 隔离校验器注入（Python agent_configurator.py:1189-1223
+	// validate_worktree_isolation 闭包装配）
+	tbOpts = append(tbOpts, tools.WithWorktreeValidator(func(memberName string) error {
+		return c.validateMemberWorktreeIsolation(context.Background(), memberName)
+	}))
 
 	tb := tools.NewTeamBackend(teamName, currentMemberName, isLeader, db, msg, tbOpts...)
 
@@ -1089,3 +1110,142 @@ func resolveTeamMode(spec atschema.TeamAgentSpec) string {
 	}
 	return "default"
 }
+
+// ──────────────────────────── 团队 worktree shell guard（25.7 T5） ────────────────────────────
+
+// teamWorktreeBashDenyPatterns 团队管理的 worktree shell 拒绝模式：
+// 禁成员手工执行 git worktree 生命周期子命令（worktree 是 leader 托管受管资产，
+// 手工 add 产生台账外"野生"worktree、绕过 repo_lock、remove/prune 可删别的成员
+// 的 live checkout）。不禁 list/普通 git 操作。
+// Python: agent_configurator.py _TEAM_WORKTREE_BASH_DENY_PATTERNS (:85-88)，正则逐字保留
+var teamWorktreeBashDenyPatterns = []string{
+	`\bgit(?:\s+(?:-[A-Za-z](?:\s+\S+)?|--[^\s;&|]+(?:=\S+)?))*\s+worktree\s+` +
+		`(?:add|remove|prune|move|repair|lock|unlock)\b`,
+}
+
+// applyTeamWorktreeShellGuard 把团队管理的 worktree shell guard 合并进 rails。
+// Python: agent_configurator.py _apply_team_worktree_shell_guard(rails, *, enabled) (:107-135)
+//
+// 找到 core.sys_operation 类型的 RailSpec，合并 params["bash_deny_patterns"]；
+// 无 sys_operation rail 时追加一条 RailSpec（对齐 Python :125-135）。
+func applyTeamWorktreeShellGuard(railSpecs []hschema.RailSpec, enabled bool) []hschema.RailSpec {
+	if !enabled {
+		return railSpecs
+	}
+	const sysOp = manifest.SysOperation // core.sys_operation
+	guarded := make([]hschema.RailSpec, 0, len(railSpecs)+1)
+	found := false
+	for _, rail := range railSpecs {
+		if rail.Type != sysOp {
+			guarded = append(guarded, rail)
+			continue
+		}
+		found = true
+		params := rail.Params
+		if params == nil {
+			params = map[string]any{}
+		}
+		// 合并既有 deny patterns，逐 pattern 去重
+		//（Python :118-122 "if pattern not in deny_patterns: append"）
+		existing := []string{}
+		if cur, ok := params["bash_deny_patterns"].([]string); ok {
+			existing = append(existing, cur...)
+		} else if raw, ok := params["bash_deny_patterns"].([]any); ok {
+			for _, item := range raw {
+				if str, ok := item.(string); ok {
+					existing = append(existing, str)
+				}
+			}
+		}
+		for _, pattern := range teamWorktreeBashDenyPatterns {
+			found := false
+			for _, cur := range existing {
+				if cur == pattern {
+					found = true
+					break
+				}
+			}
+			if !found {
+				existing = append(existing, pattern)
+			}
+		}
+		params["bash_deny_patterns"] = existing
+		rail.Params = params
+		guarded = append(guarded, rail)
+	}
+	if !found {
+		guarded = append(guarded, hschema.RailSpec{
+			Type:   sysOp,
+			Params: map[string]any{"bash_deny_patterns": append([]string{}, teamWorktreeBashDenyPatterns...)},
+		})
+	}
+	return guarded
+}
+
+// hasTeamWorktreeShellGuard 幂等判定：rails 是否已含完整 guard 模式集。
+// Python: agent_configurator.py _has_team_worktree_shell_guard (:137-146)
+func hasTeamWorktreeShellGuard(railSpecs []hschema.RailSpec) bool {
+	const sysOp = manifest.SysOperation
+	for _, rail := range railSpecs {
+		if rail.Type != sysOp {
+			continue
+		}
+		raw, ok := rail.Params["bash_deny_patterns"].([]string)
+		if !ok {
+			if rawAny, ok2 := rail.Params["bash_deny_patterns"].([]any); ok2 {
+				raw = make([]string, 0, len(rawAny))
+				for _, item := range rawAny {
+					if str, ok3 := item.(string); ok3 {
+						raw = append(raw, str)
+					}
+				}
+			} else {
+				continue
+			}
+		}
+		have := map[string]bool{}
+		for _, p := range raw {
+			have[p] = true
+		}
+		all := true
+		for _, p := range teamWorktreeBashDenyPatterns {
+			if !have[p] {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// compileTeamWorktreeDenyPatterns 编译期正则验证（RE2 兼容性哨兵）。
+func compileTeamWorktreeDenyPatterns() {
+	for _, p := range teamWorktreeBashDenyPatterns {
+		if _, err := regexp.Compile(p); err != nil {
+			panic("team worktree bash deny pattern 不兼容 RE2: " + err.Error())
+		}
+	}
+}
+
+// validateMemberWorktreeIsolation 校验成员 worktree scope 与 git 仓库。
+// Python: agent_configurator.py validate_worktree_isolation 闭包 (:1189-1191) +
+// _validate_member_worktree_isolation (:68-84)。
+func (c *AgentConfigurator) validateMemberWorktreeIsolation(ctx context.Context, memberName string) error {
+	return agentworktree.ValidateMemberWorktreeIsolation(ctx, c.Spec(), c.TeamName(), memberName)
+}
+
+// worktreeLifecycleProvider AgentConfigurator → worktree.LifecycleProvider 适配器
+// （D-25.7-i：TeamBackend() 返回 *tools.TeamBackend 结构性满足 TeamBackendAccess）。
+type worktreeLifecycleProvider struct {
+	c *AgentConfigurator
+}
+
+func (w worktreeLifecycleProvider) TeamBackend() agentworktree.TeamBackendAccess { return w.c.TeamBackend() }
+func (w worktreeLifecycleProvider) TeamName() string                            { return w.c.TeamName() }
+func (w worktreeLifecycleProvider) Spec() *atschema.TeamAgentSpec               { return w.c.Spec() }
+func (w worktreeLifecycleProvider) WorktreeManager() *worktree.WorktreeManager  { return w.c.WorktreeManager() }
+
+var _ agentworktree.LifecycleProvider = worktreeLifecycleProvider{}

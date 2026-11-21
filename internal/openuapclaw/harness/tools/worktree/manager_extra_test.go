@@ -42,7 +42,7 @@ func (b *recordingBackend) Create(_ context.Context, slug, _, _ string) (*Worktr
 }
 
 // Remove 记录删除路径。
-func (b *recordingBackend) Remove(_ context.Context, wtPath, _ string) bool {
+func (b *recordingBackend) Remove(_ context.Context, wtPath, _ string, _ bool) bool {
 	b.removedPaths = append(b.removedPaths, wtPath)
 	return b.removeResult
 }
@@ -189,7 +189,7 @@ func TestCreateOwnerWorktree_不在git仓库(t *testing.T) {
 	mgr := NewWorktreeManager(NewWorktreeConfig(), &recordingBackend{})
 	_, err := mgr.CreateOwnerWorktree(worktreeCtx(t, dir, t.TempDir()), "owner-3")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "不在 git 仓库中")
+	assert.Contains(t, err.Error(), "not in a git repository")
 }
 
 // TestCreateOwnerWorktree_后端失败 后端报错原样传播。

@@ -259,7 +259,7 @@ func (s *WorktreeManagerSuite) TestGitBackend_创建和移除() {
 	s.NoError(err, ".git 文件应存在")
 
 	// Remove 删除
-	removed := backend.Remove(ctx, targetPath, repoRoot)
+	removed := backend.Remove(ctx, targetPath, repoRoot, true)
 	s.True(removed, "Remove 应返回 true")
 
 	// 验证目录已删除

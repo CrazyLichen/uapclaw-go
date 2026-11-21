@@ -179,15 +179,24 @@ func TestTaskBoardHandler_GetCallbacks_事件映射(t *testing.T) {
 	h := NewTaskBoardHandler(&fakeHost{}, &fakeBP{role: schema.TeamRoleLeader}, nil, &fakePollCtrl{})
 	cb := h.GetCallbacks()
 
+	// 对齐 Python TaskBoardHandler.EVENT_METHOD_MAP 全集（task_board.py L44-64）
+	// + F_69 initial poll（25.4 补齐七事件后 16 项）。
 	expected := map[string]bool{
-		events.TeamEventTaskClaimed:      true,
-		events.TeamEventTaskCreated:      true,
-		events.TeamEventTaskPlanRequest:  true,
-		events.TeamEventTaskPlanResponse: true,
-		events.TeamEventTaskUpdated:      true,
-		events.TeamEventTaskCompleted:    true,
-		events.TeamEventTaskCancelled:    true,
-		events.TeamEventTaskUnblocked:    true,
+		string(types.InnerEventTypeInitialPollTask): true,
+		events.TeamEventTaskClaimed:                 true,
+		events.TeamEventTaskRevoked:                 true,
+		events.TeamEventTaskCancelled:               true,
+		events.TeamEventTaskUpdated:                 true,
+		events.TeamEventTaskSubmittedForReview:      true,
+		events.TeamEventTaskVerified:                true,
+		events.TeamEventTaskRevisionRequested:       true,
+		events.TeamEventTaskCreated:                 true,
+		events.TeamEventTaskPlanRequest:             true,
+		events.TeamEventTaskPlanResponse:            true,
+		events.TeamEventTaskStarted:                 true,
+		events.TeamEventTaskCompleted:               true,
+		events.TeamEventTaskUnblocked:               true,
+		events.TeamEventTaskReleased:                true,
 	}
 
 	if len(cb) != len(expected) {

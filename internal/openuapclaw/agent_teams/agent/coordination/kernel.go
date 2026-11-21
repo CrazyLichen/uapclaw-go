@@ -681,20 +681,25 @@ func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Conte
 	_ = ctx
 }
 
-// EnqueueInitialTaskPoll 启动时的一次性任务板普查。
+// EnqueueInitialTaskPoll 启动时的一次性任务板普查（F_69）。
 //
-// 上游 kernel.py:714-730 / team_agent.py:975：不等 30s 周期 tick，
-// 立刻投一个 POLL_TASK，让 TeamCompletionHandler 有机会在首次流里
-// 判定完成（否则空团队只能等周期轮询，流永不结束）。
-//
-// Python: CoordinationKernel.enqueue_initial_task_poll
+// Python kernel.py:714-740 enqueue_initial_task_poll：mailbox 扫描的对偶——
+// 信箱清扫拾取成员宕机期间发给它的消息，本普查拾取宕机期间**派给它的活**。
+// 建队时指派的任务只由一次性的 TASK_CLAIMED 事件宣告，尚未启动的成员永远
+// 收不到——不普查就只能等 stale-claim 窗口过期。leader 排除（理由同信箱
+// poll）：leader 的板面普查渲染整板（或空板 all-done 提示），不是刚起来的
+// leader 该拿的东西。排在 mailbox poll 之后：先读消息、再看板。
+// 事件类型为 INITIAL_POLL_TASK（非周期 POLL_TASK）。
 func (k *CoordinationKernel) EnqueueInitialTaskPoll(ctx context.Context) {
 	if k.eventBus == nil {
 		return
 	}
+	if k.host != nil && k.host.Role() == schema.TeamRoleLeader {
+		return
+	}
 	k.eventBus.Enqueue(types.CoordinationEvent{
 		Inner: &types.InnerEventMessage{
-			EventType: types.InnerEventTypePollTask,
+			EventType: types.InnerEventTypeInitialPollTask,
 		},
 	})
 	_ = ctx

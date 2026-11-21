@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"errors"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/fsm"
@@ -13,20 +14,20 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 )
 
-func setupTestTaskManager() (*TeamTaskManager, *database.InMemoryTeamDatabase) {
+func setupTestTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemoryTeamDatabase) {
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1")
 	db.Initialize(ctx)
 	return tm, db
 }
 
 func TestTaskManager_Add(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, err := tm.Add(ctx, "任务标题", "任务内容")
@@ -39,7 +40,7 @@ func TestTaskManager_Add(t *testing.T) {
 }
 
 func TestTaskManager_Claim(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
@@ -60,7 +61,7 @@ func TestTaskManager_Claim(t *testing.T) {
 }
 
 func TestTaskManager_Complete(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
@@ -79,7 +80,7 @@ func TestTaskManager_Complete(t *testing.T) {
 }
 
 func TestTaskManager_Cancel(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
@@ -94,7 +95,7 @@ func TestTaskManager_Cancel(t *testing.T) {
 }
 
 func TestTaskManager_CancelAllTasks(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	tm.Add(ctx, "任务1", "")
@@ -110,7 +111,7 @@ func TestTaskManager_CancelAllTasks(t *testing.T) {
 }
 
 func TestTaskManager_GetClaimableTasks(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	tm.Add(ctx, "任务1", "")
@@ -129,7 +130,7 @@ func TestTaskManager_GetClaimableTasks(t *testing.T) {
 }
 
 func TestTaskManager_ListTasksWithDeps(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "上游任务", "")
@@ -148,7 +149,7 @@ func TestTaskManager_ListTasksWithDeps(t *testing.T) {
 }
 
 func TestTaskManager_AddAsTopPriority(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	tm.Add(ctx, "已有任务", "")
@@ -169,7 +170,7 @@ func TestTaskManager_AddAsTopPriority(t *testing.T) {
 }
 
 func TestTaskManager_Reset(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -189,7 +190,7 @@ func TestTaskManager_Reset(t *testing.T) {
 }
 
 func TestTaskManager_Assign(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
@@ -207,7 +208,7 @@ func TestTaskManager_Assign(t *testing.T) {
 }
 
 func TestTaskManager_UpdateTask(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "原始标题", "原始内容")
@@ -222,7 +223,7 @@ func TestTaskManager_UpdateTask(t *testing.T) {
 }
 
 func TestTaskManager_GetTaskDetail(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -256,7 +257,7 @@ func TestTaskManager_GetTaskDetail(t *testing.T) {
 }
 
 func TestTaskManager_AddBatch(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	specs := []TaskCreateSpec{
@@ -364,7 +365,7 @@ func TestTaskManager_ApprovePlan_拒绝(t *testing.T) {
 }
 
 func TestTaskManager_checkTaskListDrained(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 所有任务终态
@@ -384,7 +385,7 @@ func TestTaskManager_checkTaskListDrained(t *testing.T) {
 }
 
 func TestTaskManager_GetTasksByAssignee(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -400,7 +401,7 @@ func TestTaskManager_GetTasksByAssignee(t *testing.T) {
 }
 
 func TestTaskManager_Claim_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -416,7 +417,7 @@ func TestTaskManager_Claim_失败(t *testing.T) {
 }
 
 func TestTaskManager_Assign_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 分配不存在任务应失败
@@ -427,7 +428,7 @@ func TestTaskManager_Assign_失败(t *testing.T) {
 }
 
 func TestTaskManager_Complete_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -439,7 +440,7 @@ func TestTaskManager_Complete_失败(t *testing.T) {
 }
 
 func TestTaskManager_Cancel_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 取消不存在任务应失败
@@ -450,7 +451,7 @@ func TestTaskManager_Cancel_失败(t *testing.T) {
 }
 
 func TestTaskManager_Reset_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -462,7 +463,7 @@ func TestTaskManager_Reset_失败(t *testing.T) {
 }
 
 func TestTaskManager_UpdateTask_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -477,7 +478,7 @@ func TestTaskManager_UpdateTask_失败(t *testing.T) {
 }
 
 func TestTaskManager_Add_重复ID(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// Add 应成功创建
@@ -488,7 +489,7 @@ func TestTaskManager_Add_重复ID(t *testing.T) {
 }
 
 func TestTaskManager_CancelAllTasks_skipAssignees(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task1, _ := tm.Add(ctx, "任务1", "")
@@ -506,7 +507,7 @@ func TestTaskManager_CancelAllTasks_skipAssignees(t *testing.T) {
 }
 
 func TestTaskManager_AddWithPriority_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 依赖不存在的任务应失败
@@ -520,7 +521,7 @@ func TestTaskManager_AddWithPriority_失败(t *testing.T) {
 }
 
 func TestTaskManager_AddDependencies_成功(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task1, _ := tm.Add(ctx, "上游", "")
@@ -541,7 +542,7 @@ func TestTaskManager_AddDependencies_成功(t *testing.T) {
 }
 
 func TestTaskManager_AddDependencies_失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -554,7 +555,7 @@ func TestTaskManager_AddDependencies_失败(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_不是PlanMode(t *testing.T) {
-	tm, _ := setupTestTaskManager() // agent1 是 build_mode
+	tm, _ := setupTestTaskManager(t) // agent1 是 build_mode
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -565,12 +566,14 @@ func TestTaskManager_SubmitPlan_不是PlanMode(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_不合法状态(t *testing.T) {
-	tm, _, _ := setupPlanModeTaskManager(t)
+	tm, db, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	// 分配给 leader1，agent1 不是认领人
-	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
+	// 分配给普通 teammate agent2（leader 不可被指派，Python assign L483），
+	// agent1 不是认领人。
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent2")
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_123")
 	if err == nil {
@@ -642,7 +645,7 @@ func TestTaskManager_ApprovePlan_过期计划(t *testing.T) {
 }
 
 func TestTaskManager_GetTaskDetail_不存在(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	detail, err := tm.GetTaskDetail(ctx, "nonexist")
@@ -655,7 +658,7 @@ func TestTaskManager_GetTaskDetail_不存在(t *testing.T) {
 }
 
 func TestTaskManager_ListTasksWithDeps_空(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	summaries, err := tm.ListTasksWithDeps(ctx)
@@ -668,7 +671,7 @@ func TestTaskManager_ListTasksWithDeps_空(t *testing.T) {
 }
 
 func TestTaskManager_CancelAllTasks_空团队(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	cancelled, err := tm.CancelAllTasks(ctx, nil)
@@ -681,7 +684,7 @@ func TestTaskManager_CancelAllTasks_空团队(t *testing.T) {
 }
 
 func TestTaskManager_AddAsTopPriority_空团队(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	priorityTask, err := tm.AddAsTopPriority(ctx, "最高优先级", "")
@@ -694,7 +697,7 @@ func TestTaskManager_AddAsTopPriority_空团队(t *testing.T) {
 }
 
 func TestTaskManager_AddBatch_空(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	tasks, err := tm.AddBatch(ctx, nil)
@@ -707,7 +710,7 @@ func TestTaskManager_AddBatch_空(t *testing.T) {
 }
 
 func TestTaskManager_Add_冲突ID(t *testing.T) {
-	tm, db := setupTestTaskManager()
+	tm, db := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 先直接往 db 插入一个相同 ID 的 task
@@ -727,7 +730,7 @@ func TestTaskManager_Add_冲突ID(t *testing.T) {
 }
 
 func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// Python: 缺 title 或 content 的规格应被跳过
@@ -756,7 +759,7 @@ func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
 }
 
 func TestTaskManager_AddBatch_跳过创建失败(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// Python: 创建失败的规格应跳过，不影响后续
@@ -785,7 +788,7 @@ func TestTaskManager_AddBatch_跳过创建失败(t *testing.T) {
 }
 
 func TestTaskManager_AddBatch_带依赖(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 先创建上游任务
@@ -814,12 +817,15 @@ func TestTaskManager_AddBatch_带依赖(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_已认领非当前成员(t *testing.T) {
-	tm, _, _ := setupPlanModeTaskManager(t)
+	tm, db, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
+	// leader 不可被指派（Python assign L483），改用普通 teammate agent2 持票。
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	task, _ := tm.Add(ctx, "任务", "")
-	// leader1 认领（而非 agent1）
-	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
+	if result, err := tm.Assign(ctx, task.TaskID, "agent2"); err != nil || !result.OK {
+		t.Fatalf("Assign 给 agent2 应成功: ok=%v err=%v reason=%s", result.OK, err, result.Reason)
+	}
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_1")
 	if err == nil {
@@ -891,7 +897,7 @@ func TestTaskManager_SubmitPlan_带Messager(t *testing.T) {
 }
 
 func TestTaskManager_WithPriorityDependentTaskIDs(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -939,7 +945,7 @@ func TestTaskManager_renderPlanReviewMessage(t *testing.T) {
 }
 
 func TestTaskManager_Claim_已被他人认领(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -947,7 +953,7 @@ func TestTaskManager_Claim_已被他人认领(t *testing.T) {
 	_, _ = tm.Claim(ctx, task.TaskID)
 
 	// 创建另一个 manager 以 leader1 身份认领
-	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, nil, t.TempDir(), "", "leader1")
 	result, err := leaderTM.Claim(ctx, task.TaskID)
 	if err == nil && result.OK {
 		t.Error("已被他人认领的任务应返回错误")
@@ -955,7 +961,7 @@ func TestTaskManager_Claim_已被他人认领(t *testing.T) {
 }
 
 func TestTaskManager_Claim_BLOCKED任务(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -974,7 +980,7 @@ func TestTaskManager_Claim_BLOCKED任务(t *testing.T) {
 }
 
 func TestTaskManager_Assign_已被他人认领(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -988,7 +994,7 @@ func TestTaskManager_Assign_已被他人认领(t *testing.T) {
 }
 
 func TestTaskManager_Complete_解除阻塞(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -1017,7 +1023,7 @@ func TestTaskManager_Complete_解除阻塞(t *testing.T) {
 }
 
 func TestTaskManager_Cancel_解除阻塞(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, err := tm.Add(ctx, "上游", "")
@@ -1051,7 +1057,7 @@ func TestTaskManager_Cancel_解除阻塞(t *testing.T) {
 
 func TestTaskManager_publishUnblockedEvents(t *testing.T) {
 	// 通过 CancelAllTasks 触发 publishUnblockedEvents
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -1072,7 +1078,7 @@ func TestTaskManager_publishUnblockedEvents(t *testing.T) {
 }
 
 func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 已有 leader1 在构造时传入
@@ -1082,7 +1088,7 @@ func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
 	}
 
 	// 从 team 获取（清空 leaderMemberName 后）
-	tm2 := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, nil, "", "", "")
+	tm2 := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, nil, t.TempDir(), "", "")
 	// team 表有 leader_member_name
 	team, _ := tm2.db.Team().GetTeam(ctx, "alpha")
 	if team == nil || team.LeaderMemberName != "leader1" {
@@ -1096,7 +1102,7 @@ func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
 }
 
 func TestTaskManager_Add_带依赖(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	upstream, _ := tm.Add(ctx, "上游", "")
@@ -1120,7 +1126,7 @@ func TestTaskManager_Add_带依赖(t *testing.T) {
 }
 
 func TestTaskManager_Add_依赖不存在(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	_, err := tm.Add(ctx, "依赖不存在", "内容",
@@ -1132,12 +1138,12 @@ func TestTaskManager_Add_依赖不存在(t *testing.T) {
 }
 
 func TestTaskManager_Claim_成员不存在(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// 创建不存在的成员的 manager
-	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, nil, "", "", "leader1")
+	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, nil, t.TempDir(), "", "leader1")
 	result, err := ghostTM.Claim(ctx, task.TaskID)
 	if err == nil && result.OK {
 		t.Error("不存在的成员认领应返回错误")
@@ -1145,7 +1151,7 @@ func TestTaskManager_Claim_成员不存在(t *testing.T) {
 }
 
 func TestTaskManager_Claim_PLAN_MODE(t *testing.T) {
-	tm, db := setupTestTaskManager()
+	tm, db := setupTestTaskManager(t)
 	ctx := context.Background()
 
 	// 将 agent1 改为 plan_mode
@@ -1181,7 +1187,7 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	// 不创建 agent1
-	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, nil, t.TempDir(), "", "leader1")
 	db.Initialize(ctx)
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -1196,7 +1202,7 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 // Python: TeamTaskManager.update_task()（F_129 / D8）——编辑使 revision += 1
 // 并追加 change_notes，让「改过但未读」成为可判定信号。
 func TestTeamTaskManager_UpdateTask_推进revision(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 	created, err := tm.Add(ctx, "原标题", "原正文")
 	if err != nil {
@@ -1224,7 +1230,7 @@ func TestTeamTaskManager_UpdateTask_推进revision(t *testing.T) {
 
 // TestTeamTaskManager_UpdateTask_两次编辑累加 测试 revision 递增且说明累加
 func TestTeamTaskManager_UpdateTask_两次编辑累加(t *testing.T) {
-	tm, _ := setupTestTaskManager()
+	tm, _ := setupTestTaskManager(t)
 	ctx := context.Background()
 	created, err := tm.Add(ctx, "标题", "正文")
 	if err != nil {
@@ -1245,5 +1251,140 @@ func TestTeamTaskManager_UpdateTask_两次编辑累加(t *testing.T) {
 	}
 	if strings.Count(*got.ChangeNotes, `"revision"`) != 2 {
 		t.Fatalf("change_notes 应有 2 条, got %q", *got.ChangeNotes)
+	}
+}
+
+// setupReassignFixture 建 reassign 测试夹具：leader1 + agent1/agent2 + 一张
+// assignee=agent1、status 可指定的任务。返回 (tm, db, taskID)。
+func setupReassignFixture(t *testing.T, status string) (*TeamTaskManager, *database.InMemoryTeamDatabase, string) {
+	db := database.NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	tm := NewTeamTaskManager(db, "alpha", "leader1", nil, nil, t.TempDir(), "", "leader1")
+	db.Initialize(ctx)
+	owner := "agent1"
+	task := &database.TeamTaskBase{TaskID: "t-r", TeamName: "alpha", Title: "T", Content: "C",
+		Status: status, Assignee: &owner}
+	if ok, _ := db.Task().CreateTask(ctx, task); !ok {
+		panic("fixture create failed")
+	}
+	return tm, db, "t-r"
+}
+
+// TestTaskManager_Reassign 状态矩阵 + 事件序。Python: reassign (task_manager.py L1858-1920)
+func TestTaskManager_Reassign(t *testing.T) {
+	ctx := context.Background()
+
+	// 可改派三态：换人成功、状态原位保留。
+	for _, status := range []string{fsm.TaskStatusPending, fsm.TaskStatusBlocked, fsm.TaskStatusInProgress} {
+		tm, db, taskID := setupReassignFixture(t, status)
+		result, err := tm.Reassign(ctx, taskID, "agent2")
+		if err != nil {
+			t.Fatalf("Reassign(%s) 返回错误: %v", status, err)
+		}
+		if !result.OK {
+			t.Fatalf("Reassign(%s) 失败: %s", status, result.Reason)
+		}
+		got, _ := db.Task().GetTask(ctx, taskID)
+		if got.Status != status {
+			t.Errorf("Reassign(%s) 状态应原位保留: got %q", status, got.Status)
+		}
+		if got.Assignee == nil || *got.Assignee != "agent2" {
+			t.Errorf("Reassign(%s) 新 owner 应为 agent2: got %v", status, got.Assignee)
+		}
+	}
+
+	// 不可改派态（PLANNING / IN_REVIEW / 终态）：false + 原因。
+	for _, status := range []string{fsm.TaskStatusPlanning, fsm.TaskStatusInReview, fsm.TaskStatusCompleted} {
+		tm, _, taskID := setupReassignFixture(t, status)
+		result, err := tm.Reassign(ctx, taskID, "agent2")
+		if err != nil {
+			t.Fatalf("Reassign(%s) 返回错误: %v", status, err)
+		}
+		if result.OK {
+			t.Errorf("Reassign(%s) 应拒绝", status)
+		}
+	}
+
+	// 新 owner 是 leader：拒绝（_validate_task_owner，task_manager.py L167-181）。
+	tm, _, taskID := setupReassignFixture(t, fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, taskID, "leader1"); err != nil || result.OK {
+		t.Errorf("改派给 leader 应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 新 owner 不在团队：拒绝。
+	tm, _, taskID = setupReassignFixture(t, fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, taskID, "ghost"); err != nil || result.OK {
+		t.Errorf("改派给不存在成员应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 任务不存在：拒绝。
+	tm, _, _ = setupReassignFixture(t, fsm.TaskStatusPending)
+	if result, err := tm.Reassign(ctx, "nope", "agent2"); err != nil || result.OK {
+		t.Errorf("任务不存在应拒绝: ok=%v err=%v", result.OK, err)
+	}
+
+	// 无旧 owner：拒绝（L1894）。
+	db2 := database.NewInMemoryTeamDatabase()
+	ctx2 := context.Background()
+	db2.CreateTeam(ctx2, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	db2.CreateMember(ctx2, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	tm2 := NewTeamTaskManager(db2, "alpha", "leader1", nil, nil, t.TempDir(), "", "leader1")
+	db2.Initialize(ctx2)
+	if _, err := db2.Task().CreateTask(ctx2, &database.TeamTaskBase{TaskID: "t-u", TeamName: "alpha",
+		Title: "T", Content: "C", Status: fsm.TaskStatusPending}); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := tm2.Reassign(ctx2, "t-u", "agent2"); err != nil || result.OK {
+		t.Errorf("无旧 owner 应拒绝: ok=%v err=%v", result.OK, err)
+	}
+}
+
+// TestTaskManager_ReassignBlockedWithOpenSubtasks F_82：BLOCKED 且有非终态子任务
+// 的工作挂在当前 owner 手上，不可换手。
+func TestTaskManager_ReassignBlockedWithOpenSubtasks(t *testing.T) {
+	ctx := context.Background()
+	tm, db, taskID := setupReassignFixture(t, fsm.TaskStatusBlocked)
+	if ok, err := db.Task().CreateTask(ctx, &database.TeamTaskBase{TaskID: "t-sub", TeamName: "alpha",
+		Title: "sub", Content: "C", Status: fsm.TaskStatusInProgress, ParentTaskID: strPtrOf("t-r")}); err != nil || !ok {
+		t.Fatalf("创建子任务失败: %v", err)
+	}
+	result, err := tm.Reassign(ctx, taskID, "agent2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OK {
+		t.Fatal("BLOCKED 带在跑子任务应拒绝换手（F_82）")
+	}
+}
+
+// TestTaskManager_ReassignEvents 事件序：REVOKED(old) → CLAIMED(new)。
+func TestTaskManager_ReassignEvents(t *testing.T) {
+	ctx := context.Background()
+	tm, _, taskID := setupReassignFixture(t, fsm.TaskStatusInProgress)
+	// Reassign 不返回错误时事件经 publishTaskEvent 发出（messager 为 nil 时尽力而为）。
+	if result, err := tm.Reassign(ctx, taskID, "agent2"); err != nil || !result.OK {
+		t.Fatalf("Reassign 失败: ok=%v err=%v reason=%s", result.OK, err, result.Reason)
+	}
+}
+
+func strPtrOf(s string) *string { return &s }
+
+func TestTaskManager_空plansDir拒绝写计划索引(t *testing.T) {
+	tm, _ := setupTestTaskManager(t)
+	// 模拟旧缺陷形态：plansDir 为空
+	empty := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	err := empty.writePlanIndex(&PlanRecord{PlanID: "p1", TaskID: "t1"})
+	if err == nil {
+		t.Fatalf("空 plansDir 写计划索引应报错")
+	}
+	if !strings.Contains(err.Error(), "plansDir 未配置") {
+		t.Fatalf("错误文案不符: %v", err)
+	}
+	if _, err := empty.loadPlanIndex(); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("空 plansDir 读索引应返回 ErrNotExist: %v", err)
 	}
 }

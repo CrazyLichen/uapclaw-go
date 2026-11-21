@@ -664,6 +664,47 @@ func (d *SQLTaskDao) StartTaskCAS(ctx context.Context, taskID, memberName, toSta
 	return started, nil
 }
 
+// ReassignTask 原子换人：单条条件 UPDATE——WHERE assignee=from AND status∈
+// 可改派集——且 SET 只动 assignee 与交接清理字段，状态原位保留（执行中的任务
+// 绝不弹回 PENDING，无伪 TASK_RELEASED、无可认领池竞态窗口）。镜像 claim_task
+// 的 CAS 纪律：存在性/成员校验是调用方（锁外）的职责，本方法只做并发仲裁。
+// summary/note 与换手原子清空（F_119）；resume_pending 由本次换手消费（F_128）；
+// observed_revision 追平 revision（F_129）。
+// Python: reassign_task (task_dao.py L971-1018)
+func (d *SQLTaskDao) ReassignTask(ctx context.Context, taskID, fromAssignee, toAssignee string) (bool, error) {
+	table := d.taskTableName(ctx)
+	now := GetCurrentTime()
+	// TASK_REASSIGNABLE_STATUSES（status.py L399-405）= PENDING/BLOCKED/IN_PROGRESS。
+	// 本包不 import schema（会成环，见 models.go L282 注），可改派集按上游同一组
+	// 状态字面量落在这里；一致性由 schema.TaskReassignableStatuses 的守护用例对拍。
+	reassignable := []string{fsm.TaskStatusPending, fsm.TaskStatusBlocked, fsm.TaskStatusInProgress}
+	result := d.db.WithContext(ctx).Table(table).
+		Where("task_id = ? AND assignee = ? AND status IN ?", taskID, fromAssignee, reassignable).
+		Updates(map[string]any{
+			"assignee":          toAssignee,
+			"summary":           nil,
+			"note":              nil,
+			"resume_pending":    false,
+			"observed_revision": gorm.Expr("revision"),
+			"updated_at":        now,
+		})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	swapped := result.RowsAffected == 1
+	if swapped {
+		logger.Info(logComponent).Str("task_id", taskID).
+			Str("from", fromAssignee).Str("to", toAssignee).
+			Msg("Task reassigned")
+	} else {
+		logger.Debug(logComponent).Str("task_id", taskID).
+			Str("from", fromAssignee).Str("to", toAssignee).
+			Int64("rowcount", result.RowsAffected).
+			Msg("CAS reassign did not apply")
+	}
+	return swapped, nil
+}
+
 // ObserveRevision 记录 assignee 被展示了 revision（F_129）。
 // 谓词 assignee=member AND observed_revision<revision 使记录单调且 owner 绑定。
 // Python: observe_revision（task_dao.py L1493-1511）

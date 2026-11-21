@@ -112,7 +112,7 @@ func (s *DshProviderSuite) TestProvider路_端点映射与fallback丢弃() {
 	env, ok := normalized["env"].(map[string]any)
 	s.Require().True(ok, "env 公共键形状: %T", normalized["env"])
 	s.NotEmpty(env[external.TeamJoinEnv], "join 描述符经 OPENJIUWEN_TEAM_JOIN 注入 provider env")
-	s.NotEmpty(env[external.OpenjiuwenHomeEnv], "OPENJIUWEN_HOME 注入 provider env")
+	s.NotEmpty(env[external.OpenuapclawHomeEnv], "OPENJIUWEN_HOME 注入 provider env")
 
 	// SDKOptions 读回：真实 dsh harness 的配置面（Python _sdk_options 测试面）
 	dshHarness, ok := harnessRT.Harness().(*dsh.DshHarness)

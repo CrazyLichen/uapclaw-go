@@ -69,7 +69,7 @@ func setupReviewTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemoryT
 	db.CreateMember(ctx, "reviewer1", "alpha", "Reviewer1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "inspector1", "alpha", "Inspector1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	task := setupReviewTask(t, db)
-	tm := NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, t.TempDir(), "", "leader1")
 	return tm, db, task
 }
 
@@ -225,7 +225,7 @@ func TestVerifyTask_身份守卫(t *testing.T) {
 	_, db, _ := setupReviewTaskManager(t)
 	ctx := context.Background()
 	// 非验收人。
-	other := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	other := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1")
 	result, _ := other.VerifyTask(ctx, "task-review-1", "pass", "")
 	if result.OK {
 		t.Fatal("non-reviewer must be rejected")
@@ -252,7 +252,7 @@ func TestVerifyTask_inspector带分数(t *testing.T) {
 		Reviewer: database.StringPtr(reviewerJSON), Summary: &summary, Note: &note,
 	})
 	_, _ = db.SubmitForReview(ctx, "task-insp", "", "")
-	tm := NewTeamTaskManager(db, "alpha", "inspector1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "inspector1", nil, nil, t.TempDir(), "", "leader1")
 	// 越界分数拒绝。
 	result, _ := tm.VerifyTask(ctx, "task-insp", "1.5", "")
 	if result.OK {
@@ -319,7 +319,7 @@ func TestGetReviewTasks_过滤作者(t *testing.T) {
 		t.Fatalf("review tasks = %v", tasks)
 	}
 	// 作者本人查询自己的任务 → 空（作者不审自己）。
-	author := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	author := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1")
 	own, err := author.GetReviewTasks(ctx, "agent1")
 	if err != nil {
 		t.Fatal(err)
@@ -336,7 +336,7 @@ func TestGetReviewTasks_过滤作者(t *testing.T) {
 func TestViewTaskTool_inReviewAction(t *testing.T) {
 	_, db, _ := setupReviewTaskManager(t)
 	ctx := context.Background()
-	tool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, "", "", "leader1"), locales.MakeTranslator("cn"))
+	tool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, t.TempDir(), "", "leader1"), locales.MakeTranslator("cn"))
 
 	out, err := tool.Invoke(ctx, map[string]any{"action": "in_review"})
 	if err != nil {
@@ -347,7 +347,7 @@ func TestViewTaskTool_inReviewAction(t *testing.T) {
 		t.Fatalf("in_review = %v", tasks)
 	}
 	// 作者视角 → 空（不审自己）。
-	authorTool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1"), locales.MakeTranslator("cn"))
+	authorTool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1"), locales.MakeTranslator("cn"))
 	out, err = authorTool.Invoke(ctx, map[string]any{"action": "in_review"})
 	if err != nil {
 		t.Fatal(err)
@@ -363,7 +363,7 @@ func TestViewTaskTool_inReviewAction(t *testing.T) {
 func TestViewTaskTool_noteAction(t *testing.T) {
 	_, db, _ := setupReviewTaskManager(t)
 	ctx := context.Background()
-	tool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, "", "", "leader1"), locales.MakeTranslator("cn"))
+	tool := newViewTaskTool(NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, t.TempDir(), "", "leader1"), locales.MakeTranslator("cn"))
 
 	out, err := tool.Invoke(ctx, map[string]any{"action": "note", "task_id": "task-review-1"})
 	if err != nil {
@@ -429,7 +429,7 @@ func TestVerifyTaskTool_autonomous直接结算(t *testing.T) {
 		Reviewer: database.StringPtr(`[{"type":"verifier","reviewer_id":"reviewer1"}]`), Summary: &summary, Note: &note,
 	})
 	_, _ = db.SubmitForReview(ctx, "task-auto", "", "")
-	tm := NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "reviewer1", nil, nil, t.TempDir(), "", "leader1")
 	tool := newVerifyTaskTool(tm, locales.MakeTranslator("cn"), "verify_task")
 
 	out, err := tool.Invoke(ctx, map[string]any{"task_id": "task-auto", "decision": "pass"})
@@ -460,7 +460,7 @@ func TestComplete_带验收人进评审门(t *testing.T) {
 		Status: fsm.TaskStatusInProgress, Assignee: database.StringPtr("agent1"),
 		Reviewer: database.StringPtr(`[{"type":"verifier","reviewer_id":"reviewer1"}]`), Summary: &summary, Note: &note,
 	})
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1")
 
 	result, err := tm.Complete(ctx, "task-gate")
 	if err != nil || !result.OK {
@@ -488,7 +488,7 @@ func TestComplete_无验收人直接完成(t *testing.T) {
 		Status: fsm.TaskStatusInProgress, Assignee: database.StringPtr("agent1"),
 		Summary: &summary, Note: &note,
 	})
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, t.TempDir(), "", "leader1")
 
 	result, err := tm.Complete(ctx, "task-plain")
 	if err != nil || !result.OK {

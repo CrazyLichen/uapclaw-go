@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,7 +87,7 @@ func TestGitBackend_Remove_删除worktree与分支(t *testing.T) {
 	_, err := backend.Create(context.Background(), "feature-d", repo, target)
 	require.NoError(t, err)
 
-	assert.True(t, backend.Remove(context.Background(), target, repo))
+	assert.True(t, backend.Remove(context.Background(), target, repo, true))
 	assert.NoDirExists(t, target)
 
 	branches := exec.Command("git", "-C", repo, "branch", "--list", "worktree-feature-d")
@@ -108,19 +109,27 @@ func TestGitBackend_Exists_存在性检查(t *testing.T) {
 	assert.True(t, backend.Exists(context.Background(), target))
 }
 
-// TestGitBackend_ResolveBase_无origin回退HEAD 无远程时基准回退当前 HEAD。
-func TestGitBackend_ResolveBase_无origin回退HEAD(t *testing.T) {
+// TestGitBackend_ResolveBase_本地分支优先 本地存在检出的分支时优先用本地分支名。
+// Python: _resolve_base "local state first"（backend.py:225-262），本地分支
+// 优先于 origin ref（含未推送提交）；无 origin 时也不做 fetch。
+func TestGitBackend_ResolveBase_本地分支优先(t *testing.T) {
 	repo := t.TempDir()
 	initGitRepoAt(t, repo)
 
 	backend := newGitBackend(t)
 	branch, sha := backend.resolveBase(context.Background(), repo)
-	assert.Equal(t, "HEAD", branch)
 	assert.NotEmpty(t, sha)
+	// 本地检出的分支名（refs/heads/<branch>^commit 命中），不再回退 "HEAD"
+	assert.NotEqual(t, "HEAD", branch)
+	current, err := getCurrentBranch(context.Background(), repo)
+	require.NoError(t, err)
+	assert.Equal(t, current, branch)
 }
 
-// TestGitBackend_ResolveBase_有origin引用 存在 origin/<default> 时直接使用该引用。
-func TestGitBackend_ResolveBase_有origin引用(t *testing.T) {
+// TestGitBackend_ResolveBase_有origin引用仍本地优先 存在 origin/<default> 时
+// 本地检出的分支仍优先（Python _resolve_base 候选序：refs/heads 先于 refs/remotes）。
+// fetch 只发生在 RemoteBase=true 的远端节点路径。
+func TestGitBackend_ResolveBase_有origin引用仍本地优先(t *testing.T) {
 	origin := filepath.Join(t.TempDir(), "origin.git")
 	require.NoError(t, exec.Command("git", "init", "--bare", origin).Run())
 
@@ -137,5 +146,57 @@ func TestGitBackend_ResolveBase_有origin引用(t *testing.T) {
 	backend := newGitBackend(t)
 	branch, sha := backend.resolveBase(context.Background(), repo)
 	assert.NotEmpty(t, sha)
-	assert.Contains(t, branch, "origin/")
+	assert.NotEqual(t, "HEAD", branch)
+	current, err := getCurrentBranch(context.Background(), repo)
+	require.NoError(t, err)
+	assert.Equal(t, current, branch)
+}
+
+// TestGitBackend_ResolveBase_远端模式用origin RemoteBase=true 时走远端节点路径：
+// origin-first + fetch，命中 origin/<default>。
+// Python: _resolve_remote_base（backend.py:264-301）
+func TestGitBackend_ResolveBase_远端模式用origin(t *testing.T) {
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	require.NoError(t, exec.Command("git", "init", "--bare", origin).Run())
+
+	repo := filepath.Join(t.TempDir(), "repo")
+	require.NoError(t, exec.Command("git", "clone", origin, repo).Run())
+	_ = exec.Command("git", "-C", repo, "config", "user.email", "test@test.com").Run()
+	_ = exec.Command("git", "-C", repo, "config", "user.name", "Test").Run()
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "a.txt"), []byte("x"), 0o644))
+	_ = exec.Command("git", "-C", repo, "add", ".").Run()
+	_ = exec.Command("git", "-C", repo, "commit", "-m", "init").Run()
+	require.NoError(t, exec.Command("git", "-C", repo, "push", "origin", "HEAD:main").Run())
+	require.NoError(t, exec.Command("git", "-C", repo, "fetch", "origin").Run())
+
+	backend := newGitBackend(t)
+	backend.RemoteBase = true
+	branch, sha := backend.resolveBase(context.Background(), repo)
+	assert.NotEmpty(t, sha)
+	assert.Equal(t, "origin/main", branch)
+}
+
+// TestGitBackend_ResolveBase_未出生仓库建空初始提交 未出生仓库（无任何提交）
+// 时应经 plumbing 建空初始提交，不吞用户暂存文件。
+// Python: backend.py:258-262 create_empty_initial_commit
+func TestGitBackend_ResolveBase_未出生仓库建空初始提交(t *testing.T) {
+	repo := t.TempDir()
+	require.NoError(t, exec.Command("git", "init", repo).Run())
+	_ = exec.Command("git", "-C", repo, "config", "user.email", "test@test.com").Run()
+	_ = exec.Command("git", "-C", repo, "config", "user.name", "Test").Run()
+	// 用户已暂存但未提交的文件——空初始提交不得吞掉
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "staged.txt"), []byte("x"), 0o644))
+	require.NoError(t, exec.Command("git", "-C", repo, "add", ".").Run())
+
+	backend := newGitBackend(t)
+	branch, sha := backend.resolveBase(context.Background(), repo)
+	assert.Equal(t, "HEAD", branch)
+	assert.NotEmpty(t, sha)
+	// HEAD 已指向空初始提交
+	out, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	assert.Equal(t, sha, strings.TrimSpace(string(out)))
+	// 暂存文件仍在
+	_, err = os.Stat(filepath.Join(repo, "staged.txt"))
+	require.NoError(t, err)
 }

@@ -114,6 +114,12 @@ type MemberDao interface {
 	// 发生在 build_team 写入成员行之前）。
 	// Python: update_member_served_model (member_dao.py:807)
 	UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool
+	// UpdateMemberWorktree 更新成员的 worktree 隔离元数据。
+	// worktree 非 nil 时整段替换；否则按 isolation/worktreePath 增量写
+	//（二者皆空时清空 worktree 段，对齐 Python 调用方传 isolation-only 的复用场景）。
+	// 返回行是否存在。
+	// Python: MemberDao.update_member_worktree (member_dao.py:755-782)
+	UpdateMemberWorktree(ctx context.Context, memberName, teamName string, worktree *MemberWorktreeOptions, isolation, worktreePath string) bool
 	// PromoteMemberFallbackModel 把成员持久化的兜底模型提为当前模型引用。
 	// Python: MemberDao.promote_member_fallback_model (member_dao.py:844-868)
 	PromoteMemberFallbackModel(ctx context.Context, memberName, teamName string) bool
@@ -205,6 +211,15 @@ type TaskDao interface {
 	// owner 启动任务，不（重）指派。resume_pending 由本次 start 消费（F_128）。
 	// Python: start_task（task_dao.py L855-905）
 	StartTaskCAS(ctx context.Context, taskID, memberName, toStatus string) (bool, error)
+	// ReassignTask 原子地把任务从当前 owner 换给新 owner：单条条件 UPDATE——
+	// WHERE assignee=from AND status∈可改派集——且 SET 只动 assignee 与交接
+	// 清理字段，**状态原位保留**（执行中的任务绝不弹回 PENDING，无伪
+	// TASK_RELEASED、无可认领池竞态窗口）。summary/note 与换手原子清空
+	// （F_119：完成文本描述的是前任交付物）；resume_pending 由本次换手消费
+	// （F_128：新 owner 从未挂起过）；observed_revision 追平 revision（F_129：
+	// 新 owner 的 start handoff 展示当前修订号）。
+	// Python: reassign_task (task_dao.py L971-1018)
+	ReassignTask(ctx context.Context, taskID, fromAssignee, toAssignee string) (bool, error)
 	// ObserveRevision 记录 member（任务 assignee）被展示了 revision（F_129）。
 	// 单调（永不回退）且绑定 owner：投给不再持有任务的人不记账。
 	// Python: observe_revision（task_dao.py L1493-1511）

@@ -12,6 +12,9 @@
 //	├── events.go        # harness 层事件类型 + WorktreeEventHandler
 //	├── session.go       # WorktreeSessionState（context.Value 指针模式）
 //	├── git.go           # Git 命令同步封装
+//	├── lock.go         # repo_lock 仓库锁（进程内 + 跨进程双层，Python lock.py）
+//	├── flock_unix.go   # flock 跨进程锁 POSIX 侧（build tag !windows）
+//	├── flock_windows.go# flock 跨进程锁 Windows 侧（LockFileEx）
 //	├── backend.go       # WorktreeBackend 接口 + GitBackend + 注册表
 //	├── manager.go       # WorktreeManager 核心逻辑
 //	├── notice.go        # BuildWorktreeNotice 上下文提示

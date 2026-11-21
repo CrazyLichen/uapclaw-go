@@ -25,6 +25,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	inboundtags "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/inboundtags"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/taskrender"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
@@ -421,7 +422,7 @@ func (c *ExternalTeamClient) ReadInbox(ctx context.Context, markRead bool) (stri
 		}
 		parts = append(parts, messagesText)
 	}
-	board, err := RenderTaskBoard(
+	board, err := taskrender.RenderTaskBoard(
 		toTaskLikes(view.Tasks), c.IsLeader(), nowMs, c.MemberName(),
 	)
 	if err != nil {
@@ -541,9 +542,9 @@ func toMessageLikes(rows []*database.TeamMessageBase) []MessageLike {
 	return out
 }
 
-// toTaskLikes 把数据库任务行适配成 format 包的结构化视图。
-func toTaskLikes(rows []*database.TeamTaskBase) []TaskLike {
-	out := make([]TaskLike, 0, len(rows))
+// toTaskLikes 把数据库任务行适配成 taskrender 包的结构化视图。
+func toTaskLikes(rows []*database.TeamTaskBase) []taskrender.TaskLike {
+	out := make([]taskrender.TaskLike, 0, len(rows))
 	for _, r := range rows {
 		row := r
 		out = append(out, &teamTaskLike{row: row})
@@ -571,7 +572,7 @@ func (a *teamMessageLike) Broadcast() bool { return a.row.Broadcast }
 // TimestampMs 毫秒 UTC epoch 发送时间。
 func (a *teamMessageLike) TimestampMs() int64 { return a.row.Timestamp }
 
-// teamTaskLike 数据库任务行的 format.TaskLike 适配。
+// teamTaskLike 数据库任务行的 taskrender.TaskLike 适配。
 type teamTaskLike struct {
 	row *database.TeamTaskBase
 }

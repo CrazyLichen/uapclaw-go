@@ -79,13 +79,13 @@ func (s *TaskNoticesSuite) createTaskWithReviewer(taskID string) {
 // meta_task_revised；二次扫描幂等。
 func (s *TaskNoticesSuite) TestTaskNotices_I8_调度器修订推送() {
 	ctx := context.Background()
-	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.Require().True(s.db.Task().CreateTask(ctx, &database.TeamTaskBase{
 		TaskID: "i8a", TeamName: "alpha", Title: "甲", Content: "v1",
 		Status: "in_progress", Assignee: s.strPtr("bob"), Revision: 1,
 	}))
 	sender := &schedFakeSender{rows: map[string][]*database.TeamMessageBase{}}
-	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1"), &schedFakeBackend{shutdown: map[string]bool{}}, sender, 3, 3600, "alpha", "cn")
+	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1"), &schedFakeBackend{shutdown: map[string]bool{}}, sender, 3, 3600, "alpha", "cn")
 	// 第一轮扫描：B_06 兜底给 bob 补 start handoff（渲染当前 revision 并记录已读）。
 	sched.Activate(context.Background())
 
@@ -110,7 +110,7 @@ func (s *TaskNoticesSuite) TestTaskNotices_I8_调度器修订推送() {
 // meta_subtask_review（父任务挂起等子任务，按新内容核对而非续跑）。
 func (s *TaskNoticesSuite) TestTaskNotices_I8b_阻塞挂恢复评审() {
 	ctx := context.Background()
-	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.Require().True(s.db.Task().CreateTask(ctx, &database.TeamTaskBase{
 		TaskID: "i8b", TeamName: "alpha", Title: "父", Content: "v1",
 		Status: "blocked", Assignee: s.strPtr("bob"), Revision: 1, ResumePending: true,
@@ -118,7 +118,7 @@ func (s *TaskNoticesSuite) TestTaskNotices_I8b_阻塞挂恢复评审() {
 	s.Require().NoError(leaderTM.UpdateTask(ctx, "i8b", "父", "v2"))
 
 	sender := &schedFakeSender{rows: map[string][]*database.TeamMessageBase{}}
-	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1"), &schedFakeBackend{shutdown: map[string]bool{}}, sender, 3, 3600, "alpha", "cn")
+	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1"), &schedFakeBackend{shutdown: map[string]bool{}}, sender, 3, 3600, "alpha", "cn")
 	sched.Activate(context.Background())
 
 	tpl := s.mailTemplateOf(sender.rows["bob"], "scheduler_subtask_review")
@@ -131,11 +131,11 @@ func (s *TaskNoticesSuite) TestTaskNotices_I9_评审结果折叠() {
 	ctx := context.Background()
 	s.createTaskWithReviewer("i9")
 	// 作者完成 → 评审门；验收人 pass。
-	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "bob", nil, nil, "", "", "leader1")
+	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "bob", nil, nil, s.T().TempDir(), "", "leader1")
 	result, err := authorTM.Complete(ctx, "i9")
 	s.Require().NoError(err)
 	s.Require().True(result.OK)
-	reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", "reviewer1", nil, nil, "", "", "leader1")
+	reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", "reviewer1", nil, nil, s.T().TempDir(), "", "leader1")
 	vote, voteErr := reviewerTM.VerifyTask(ctx, "i9", "pass", "")
 	s.Require().NoError(voteErr)
 	s.Require().True(vote.OK)
@@ -143,7 +143,7 @@ func (s *TaskNoticesSuite) TestTaskNotices_I9_评审结果折叠() {
 	// scheduled 模式：结算在调度器——扫票 → settle pass → 任务 completed。
 	settleBackend := &schedFakeBackend{shutdown: map[string]bool{}, verificationEnabled: true}
 	sender := &schedFakeSender{rows: map[string][]*database.TeamMessageBase{}}
-	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1"), settleBackend, sender, 3, 3600, "alpha", "cn")
+	sched := scheduling.NewTeamScheduler(&schedFakeHost{}, tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1"), settleBackend, sender, 3, 3600, "alpha", "cn")
 	sched.Activate(context.Background())
 	time.Sleep(400 * time.Millisecond)
 	sched.Activate(context.Background())
@@ -177,7 +177,7 @@ func (s *TaskNoticesSuite) TestTaskNotices_I9_评审结果折叠() {
 // claim 渲染 → WAKES=true announce 独立投递 → 二次 no-op。
 func (s *TaskNoticesSuite) TestTaskNotices_I10_编辑通知推送() {
 	ctx := context.Background()
-	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	leaderTM := tools.NewTeamTaskManager(s.db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.Require().True(s.db.Task().CreateTask(ctx, &database.TeamTaskBase{
 		TaskID: "i10", TeamName: "alpha", Title: "乙", Content: "v1",
 		Status: "in_progress", Assignee: s.strPtr("bob"), Revision: 1,

@@ -456,3 +456,69 @@ func TestSQLTaskDao_AppendChangeNote_任务不存在(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+// TestSQLTaskDao_ReassignTask 原子换人：状态原位保留、完成文本随交接清空。
+// Python: reassign_task（task_dao.py L971-1018）
+func TestSQLTaskDao_ReassignTask(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "reassign-1")
+	ctx := newTestCtx("reassign-1")
+	dao := db.Task()
+
+	summary := "delivered in /tmp/a"
+	note := "see note"
+	old := "alice"
+	task := &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T", Status: fsm.TaskStatusInProgress,
+		Assignee: &old, Summary: &summary, Note: &note, ResumePending: true, Revision: 3, ObservedRevision: 1}
+	createOk, createErr := dao.CreateTask(ctx, task)
+	require.NoError(t, createErr)
+	assert.True(t, createOk)
+
+	// 成功换人：assignee 变更、状态保持 IN_PROGRESS、summary/note/resume_pending 清空、
+	// observed_revision 追平 revision（F_119/F_128/F_129）。
+	swapped, err := dao.ReassignTask(ctx, "t1", "alice", "bob")
+	require.NoError(t, err)
+	assert.True(t, swapped)
+
+	got, gerr := dao.GetTask(ctx, "t1")
+	require.NoError(t, gerr)
+	require.NotNil(t, got)
+	assert.Equal(t, "bob", *got.Assignee)
+	assert.Equal(t, fsm.TaskStatusInProgress, got.Status)
+	assert.Nil(t, got.Summary)
+	assert.Nil(t, got.Note)
+	assert.False(t, got.ResumePending)
+	assert.Equal(t, int64(3), got.ObservedRevision)
+
+	// 旧 owner 不符：false（CAS 拒绝）。
+	swapped2, err2 := dao.ReassignTask(ctx, "t1", "alice", "carol")
+	require.NoError(t, err2)
+	assert.False(t, swapped2)
+
+	// 不可改派态（IN_REVIEW 不在 TASK_REASSIGNABLE_STATUSES）：先落 IN_REVIEW 再试。
+	statusOk, statusErr := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusInReview)
+	require.NoError(t, statusErr)
+	assert.True(t, statusOk)
+	swapped3, err3 := dao.ReassignTask(ctx, "t1", "bob", "carol")
+	require.NoError(t, err3)
+	assert.False(t, swapped3)
+}
+
+// TestSQLTaskDao_ReassignTaskBlockedParent 可改派态含 BLOCKED（无在跑子任务的普通挂起票可换手）。
+func TestSQLTaskDao_ReassignTaskBlockedParent(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "reassign-2")
+	ctx := newTestCtx("reassign-2")
+	dao := db.Task()
+	old := "alice"
+	task := &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T", Status: fsm.TaskStatusBlocked, Assignee: &old}
+	ok, err := dao.CreateTask(ctx, task)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	swapped, err := dao.ReassignTask(ctx, "t2", "alice", "bob")
+	require.NoError(t, err)
+	assert.True(t, swapped)
+	got, gerr := dao.GetTask(ctx, "t2")
+	require.NoError(t, gerr)
+	assert.Equal(t, "bob", *got.Assignee)
+	assert.Equal(t, fsm.TaskStatusBlocked, got.Status)
+}

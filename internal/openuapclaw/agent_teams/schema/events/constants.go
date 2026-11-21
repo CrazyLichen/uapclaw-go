@@ -34,6 +34,15 @@ const (
 	TeamEventTaskPlanResponse = "task_plan_response"
 	TeamEventTaskUpdated      = "task_updated"
 	TeamEventTaskClaimed      = "task_claimed"
+	// TeamEventTaskRevoked 改派撤回事件：成员名下任务被 leader 原子换手给别人。
+	// payload.member_name = 前任 assignee（定向通知，非成员级广播）；与
+	// TASK_RELEASED（票回到可认领池的看板唤醒）语义不同。
+	// Python: TeamEvent.TASK_REVOKED = "task_revoked"（schema/events.py L166）
+	TeamEventTaskRevoked = "task_revoked"
+	// TeamEventTaskReleased 释放事件：任务被 reset 回 PENDING 重新进入可认领池，
+	// 唤醒 idle teammate（与 TASK_UNBLOCKED 同款下游 nudge）。
+	// Python: TeamEvent.TASK_RELEASED = "task_released"（schema/events.py L165）
+	TeamEventTaskReleased = "task_released"
 	// TeamEventTaskStarted scheduled 派发启动事件（F_62）。
 	// Python: TeamEvent.TASK_STARTED = "task_started"（schema/events.py L161）
 	TeamEventTaskStarted   = "task_started"
