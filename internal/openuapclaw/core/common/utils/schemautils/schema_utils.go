@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -160,10 +161,42 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 		}
 	}
 
-	// 保留额外字段（不在 properties 中的）
-	for k, v := range data {
-		if _, ok := result[k]; !ok {
-			result[k] = v
+	// 额外字段（不在 properties 中的）按 additionalProperties 语义处置
+	// （Python _create_model_from_schema：get("additionalProperties", False) →
+	// extra_config：True=allow / False=forbid / 其他值=ignore；动态模型
+	// model_validate 遇 forbid 额外键抛 ValidationError → format_with_schema
+	// 包装 SCHEMA_FORMAT_INVALID。Go 等价承载。2026-11-21 用户拍板
+	// 「保持和 Python 一致」，收紧原无条件保留行为）
+	additionalProperties, hasAP := schemaMap["additionalProperties"]
+	apAllow := false
+	switch {
+	case !hasAP:
+		apAllow = false // 缺省 False → forbid
+	case hasAP:
+		if b, isBool := additionalProperties.(bool); isBool {
+			apAllow = b // True=allow / False=forbid
+		} else {
+			apAllow = true // 非 bool 其他值 → ignore（放行）
+		}
+	}
+	extras := []string{}
+	for k := range data {
+		if _, declared := properties[k]; !declared {
+			extras = append(extras, k)
+		}
+	}
+	if len(extras) > 0 {
+		if !apAllow {
+			sort.Strings(extras)
+			return nil, exception.BuildError(
+				exception.StatusSchemaFormatInvalid,
+				exception.WithParam("reason", fmt.Sprintf("extra fields not allowed by schema (additionalProperties=%v): %v", additionalProperties, extras)),
+			)
+		}
+		for k, v := range data {
+			if _, ok := result[k]; !ok {
+				result[k] = v
+			}
 		}
 	}
 

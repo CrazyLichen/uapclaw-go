@@ -134,8 +134,10 @@ func TestValidateInputs_合法输入通过(t *testing.T) {
 	}
 }
 
-// TestValidateInputs_skip透传 skip_inputs_validate=true 跳过校验
-// （workflow.py:749 skip_validate=kwargs.get("skip_inputs_validate")）
+// TestValidateInputs_skip透传 skip_inputs_validate=true 跳过 jsonschema 约束级
+// 校验（workflow.py:749 skip_validate=kwargs.get("skip_inputs_validate")）——
+// Python 语义：skip 只跳过 validate_with_schema 段，动态模型 model_validate
+// 仍执行（required/额外字段仍拒），故此用例以合法结构输入验证透传不报错
 func TestValidateInputs_skip透传(t *testing.T) {
 	w := NewWorkflow(nil)
 	w.card.InputParams = map[string]any{
@@ -143,9 +145,14 @@ func TestValidateInputs_skip透传(t *testing.T) {
 		"properties": map[string]any{"name": map[string]any{"type": "string"}},
 		"required":   []any{"name"},
 	}
-	if err := w.validateInputs(map[string]any{"other": 1},
+	if err := w.validateInputs(map[string]any{"name": "x"},
 		map[string]any{"skip_inputs_validate": true}); err != nil {
-		t.Fatalf("skip_inputs_validate 应跳过校验：%v", err)
+		t.Fatalf("skip_inputs_validate + 合法输入应通过：%v", err)
+	}
+	// 结构性违规（额外字段）即便 skip 也拒绝——Python 动态模型 forbid 语义
+	if err := w.validateInputs(map[string]any{"other": 1},
+		map[string]any{"skip_inputs_validate": true}); err == nil {
+		t.Fatal("skip 下额外字段仍应拒绝（Python model_validate 不受 skip_validate 影响）")
 	}
 }
 
