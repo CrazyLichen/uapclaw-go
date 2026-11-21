@@ -110,11 +110,11 @@ func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyTeamMcp() {
 	// 入团描述符：sqlite 落盘库（连接成功的可观测产物）+ inprocess transport
 	dbPath := filepath.Join(dir, "team.db")
 	descriptor := external.TeamJoinDescriptor{
-		SessionID:   "e2e-mcp-session",
-		TeamName:    "e2e-mcp-team",
-		MemberName:  "worker",
-		Role:        "teammate",
-		Scope:       "member",
+		SessionID:  "e2e-mcp-session",
+		TeamName:   "e2e-mcp-team",
+		MemberName: "worker",
+		Role:       "teammate",
+		Scope:      "member",
 		DBConfig: database.DatabaseConfig{DBType: database.DatabaseTypeSQLite,
 			ConnectionString: dbPath, DBTimeout: 30, DBEnableWAL: true},
 		TransportConfig: &schema.MessagerTransportConfig{Backend: "inprocess"},
