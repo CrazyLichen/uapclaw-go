@@ -255,6 +255,56 @@ func (s *HarnessSuite) TestResume_args含resume() {
 	s.Require().NoError(h.Stop(context.Background()))
 }
 
+// TestMcpServers_上下文翻译成mcpConfig 宿主 MCP server（HarnessContext.
+// McpServers）翻译成 --mcp-config 内联 JSON；Python 契约：宿主放 context、
+// provider 负责翻译（对齐 member_runtime.py:492-506 的宿主侧契约）。
+func (s *HarnessSuite) TestMcpServers_上下文翻译成mcpConfig() {
+	var captured TransportOptions
+	factory := func(options TransportOptions) (Transport, error) {
+		captured = options
+		fake := &fakeTransport{frames: []WireFrame{}}
+		frame, err := parseFrame(json.RawMessage(`{"type":"system","subtype":"init","session_id":"sess-mcp"}`))
+		s.Require().NoError(err)
+		fake.frames = append(fake.frames, frame)
+		return fake, nil
+	}
+	h := s.newHarness(factory)
+	url := "http://127.0.0.1:9/mcp"
+	s.Require().NoError(h.Start(context.Background(), harnessprotocol.HarnessContext{
+		AgentName: "e2e", AgentID: "e2e", HostSessionID: "host-1",
+		ProtocolVersion: harnessprotocol.ProtocolVersion,
+		McpServers: []harnessprotocol.McpServerConfig{
+			{Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+				Command: []string{"uapclawmcpserver"}},
+			{Name: "remote", Transport: harnessprotocol.McpTransportHTTP, URL: &url},
+		},
+	}))
+	args := strings.Join(captured.Args, "\x00")
+	s.Contains(args, "--mcp-config")
+	s.Contains(args, `"openjiuwen-team"`)
+	s.Contains(args, `"uapclawmcpserver"`)
+	s.Contains(args, `"remote"`)
+	s.Contains(args, "http://127.0.0.1:9/mcp")
+	s.Require().NoError(h.Stop(context.Background()))
+}
+
+// TestMcpServers_空上下文不加flag 无宿主 server 时不追加 --mcp-config。
+func (s *HarnessSuite) TestMcpServers_空上下文不加flag() {
+	var captured TransportOptions
+	factory := func(options TransportOptions) (Transport, error) {
+		captured = options
+		return &fakeTransport{frames: []WireFrame{}}, nil
+	}
+	h := s.newHarness(factory)
+	s.Require().NoError(h.Start(context.Background(), harnessprotocol.HarnessContext{
+		AgentName: "e2e", AgentID: "e2e", HostSessionID: "host-1",
+		ProtocolVersion: harnessprotocol.ProtocolVersion,
+	}))
+	// 只允许 config 自带的 mcp_config（本用例未配置）——断言 --mcp-config 不出现
+	s.NotContains(strings.Join(captured.Args, "\x00"), "--mcp-config")
+	s.Require().NoError(h.Stop(context.Background()))
+}
+
 // Test超时_inactivity fake 挂起 → 轮按单轮超时失败（终态 FAILED）。
 func (s *HarnessSuite) Test超时_inactivity() {
 	harness, err := NewCodebuddyHarnessWithFactory(CodebuddyConfig{TurnTimeoutSeconds: 1},

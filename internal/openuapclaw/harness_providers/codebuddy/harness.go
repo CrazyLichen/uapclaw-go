@@ -2,6 +2,7 @@ package codebuddy
 
 import (
 	"context"
+	"encoding/json"
 
 	"fmt"
 	"time"
@@ -195,6 +196,15 @@ func (h *CodebuddyHarness) OpenSession(_ context.Context, harnessContext harness
 	}
 	if h.config.McpConfig != "" {
 		args = append(args, "--mcp-config", h.config.McpConfig)
+	}
+	// 步骤 3.5：宿主 MCP server（HarnessContext.McpServers）翻译成 CLI 配置。
+	// Python 契约：宿主把 server 清单放进 context，provider 负责翻译成自己的
+	// CLI 形态（dsh 经 SDK options，codebuddy 经 --mcp-config 内联 JSON）。
+	// 团队工具注入的源头是成员 spawn 的 BindMCPServers（spawn.go:546-560），
+	// 经 member_runtime 的 mergeHostMcpServers 合并进 context（对齐
+	// member_runtime.py:492-506）。
+	if payload := mcpConfigPayload(harnessContext.McpServers); payload != "" {
+		args = append(args, "--mcp-config", payload)
 	}
 	if h.resumeSessionID != "" {
 		args = append(args, "--resume", h.resumeSessionID)
@@ -442,6 +452,53 @@ func strPtr(value string) *string { return &value }
 
 // newSessionID 生成会话/检查点标识。
 func newSessionID() string { return uuid.NewString() }
+
+// mcpConfigPayload 把宿主 MCP server 清单翻译成 CLI --mcp-config 的内联
+// JSON 载荷（Claude Code 同款 mcpServers 对象形态；Python 无对应物，
+// 偏差 D-15.22-c）。stdio → command/args/env；http → type:url/headers；
+// in_process 宿主侧实例无法跨进程传递，跳过（CLI 拿不到）。空清单返回空串。
+func mcpConfigPayload(servers []harnessprotocol.McpServerConfig) string {
+	if len(servers) == 0 {
+		return ""
+	}
+	entries := map[string]any{}
+	for _, server := range servers {
+		switch server.Transport {
+		case harnessprotocol.McpTransportHTTP:
+			entry := map[string]any{"type": "http"}
+			if server.URL != nil {
+				entry["url"] = *server.URL
+			}
+			if len(server.Headers) > 0 {
+				entry["headers"] = server.Headers
+			}
+			entries[server.Name] = entry
+		case harnessprotocol.McpTransportStdio:
+			entry := map[string]any{"type": "stdio"}
+			if len(server.Command) > 0 {
+				entry["command"] = server.Command[0]
+				if len(server.Command) > 1 {
+					entry["args"] = server.Command[1:]
+				}
+			}
+			if len(server.Env) > 0 {
+				entry["env"] = server.Env
+			}
+			entries[server.Name] = entry
+		default:
+			// in_process：宿主进程内实例，跨进程不可传递，跳过
+		}
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+	payload, err := json.Marshal(map[string]any{"mcpServers": entries})
+	if err != nil {
+		// map[string]any 编码不会失败；兜底防御
+		return ""
+	}
+	return string(payload)
+}
 
 // 编译期兜底：CodebuddyHarness 必须满足完整协议面。
 var _ harnessprotocol.HarnessProtocol = (*CodebuddyHarness)(nil)

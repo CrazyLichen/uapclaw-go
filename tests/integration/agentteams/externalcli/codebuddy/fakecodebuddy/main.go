@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"strings"
 	"os"
 )
 
@@ -38,6 +39,10 @@ func main() {
 	crashAfter := flag.Int("crash-after", 0, "写 N 帧后 exit 1（0 = 不注入）")
 	authFail := flag.Bool("auth-fail", false, "回放 init + result error（鉴权失败）")
 	hang := flag.Bool("hang", false, "读完 stdin 后挂起")
+	// --echo-mcp：解析 harness 传入的 --mcp-config 内联 JSON，把 server 名回显
+	// 进 result 文本（端到端验证 context.McpServers → argv → CLI 进程链路）
+	echoMcp := flag.Bool("echo-mcp", false, "把 --mcp-config 里的 server 名回显进 result")
+	mcpConfig := flag.String("mcp-config", "", "CLI MCP 配置（JSON 或文件路径）")
 	// 真 CLI 启动参数面（harness 固定追加，声明以容忍解析）
 	_ = flag.Bool("p", false, "")
 	_ = flag.String("output-format", "text", "")
@@ -74,6 +79,11 @@ func main() {
 	}
 
 	// 步骤 2b：按脚本回放帧序列
+	// --echo-mcp：把 --mcp-config 里的 server 名注入 result 文本
+	echoSuffix := ""
+	if *echoMcp && *mcpConfig != "" {
+		echoSuffix = "\n[mcp-servers: " + mcpServerNames(*mcpConfig) + "]"
+	}
 	written := 0
 	if *scriptPath != "" {
 		script, err := os.ReadFile(*scriptPath)
@@ -87,6 +97,23 @@ func main() {
 				fmt.Fprintln(os.Stderr, "fakecodebuddy: bad script line:", err)
 				os.Exit(2)
 			}
+			if echoSuffix != "" {
+				if text, ok := frame["result"].(string); ok {
+					frame["result"] = text + echoSuffix
+				}
+				// assistant 帧的 text 块同步回显（集成断言拼的是 answer 文本）
+				if message, ok := frame["message"].(map[string]any); ok {
+					if blocks, ok := message["content"].([]any); ok {
+						for _, block := range blocks {
+							if entry, ok := block.(map[string]any); ok && entry["type"] == "text" {
+								if text, ok := entry["text"].(string); ok {
+									entry["text"] = text + echoSuffix
+								}
+							}
+						}
+					}
+				}
+			}
 			writeFrame(stdout, frame)
 			written++
 			_ = stdout.Flush()
@@ -96,6 +123,23 @@ func main() {
 		}
 	}
 	_ = stdout.Flush()
+}
+
+// mcpServerNames 从 --mcp-config 内联 JSON 提取 server 名（逗号连接）。
+// 非 JSON 载荷（文件路径形态）返回原串。
+func mcpServerNames(payload string) string {
+	var doc struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(payload), &doc); err != nil || doc.McpServers == nil {
+		return payload
+	}
+	names := make([]string, 0, len(doc.McpServers))
+	for name := range doc.McpServers {
+		names = append(names, name)
+	}
+	// map 迭代序不稳定；测试只断言包含，不需稳定序
+	return strings.Join(names, ",")
 }
 
 // writeFrame 写一帧 JSONL。

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/inboundtags"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
@@ -27,15 +28,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
-	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harness_protocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -621,6 +621,12 @@ func (r *ExternalHarnessMemberRuntime) Start(teamSession any) error {
 	if err != nil {
 		return err
 	}
+	// Python: context = self._host_context(context)（:449）的 mcp 半区
+	// （member_runtime.py:492-495）：bind_mcp_servers 注入的团队 server 合并
+	// 进下发 context 并声明宿主 MCP_SERVERS 能力。checkpoint/resume/tools
+	// 半区在 Go 侧由 writeSeedCheckpoint / ResumeExternalBackend 等位点承担。
+	// 此前 extraMCPServers 只存不读（偏差补齐），provider 成员拿不到团队工具。
+	hctx = r.mergeHostMcpServers(hctx)
 	// Python: self._member_name/_member_agent_id = context...（:442-443）
 	r.mu.Lock()
 	r.memberName = hctx.AgentName
@@ -946,6 +952,30 @@ func (r *ExternalHarnessMemberRuntime) Resume(query any) error {
 // Python: _resolve_context (member_runtime.py:933)
 func (r *ExternalHarnessMemberRuntime) resolveContext(teamSession any) (*harness_protocol.HarnessContext, error) {
 	return r.contextSource(teamSession)
+}
+
+// mergeHostMcpServers 把 BindMCPServers 追加的团队 server 合并进下发
+// context（Python: _host_context 的 mcp 半区，member_runtime.py:492-506）：
+// mcp_servers = context.mcp_servers + extraMCPServers；非空即声明宿主
+// HostCapability.MCP_SERVERS。provider 据此把 server 翻译成自己的
+// CLI 配置（如 codebuddy 的 --mcp-config）。
+func (r *ExternalHarnessMemberRuntime) mergeHostMcpServers(
+	hctx *harness_protocol.HarnessContext) *harness_protocol.HarnessContext {
+	r.mu.Lock()
+	extra := append([]harness_protocol.McpServerConfig(nil), r.extraMCPServers...)
+	r.mu.Unlock()
+	if len(extra) == 0 {
+		return hctx
+	}
+	servers := append(append([]harness_protocol.McpServerConfig(nil), hctx.McpServers...), extra...)
+	hctx.McpServers = servers
+	capabilities := hctx.HostCapabilities
+	if capabilities == nil {
+		capabilities = map[harness_protocol.HostCapability]bool{}
+	}
+	capabilities[harness_protocol.HostCapabilityMcpServers] = true
+	hctx.HostCapabilities = capabilities
+	return hctx
 }
 
 // ensureMemberSession 打开本成员的稳定子 AgentSession（一次）。

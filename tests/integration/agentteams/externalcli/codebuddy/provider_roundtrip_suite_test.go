@@ -104,6 +104,39 @@ func (s *ProviderRoundtripSuite) TestRealRoundTrip_toolUse帧() {
 	s.Equal(2, toolItems, "tool item 应有 STARTED + COMPLETED 两条")
 }
 
+// TestRealRoundTrip_mcpContext到进程 MCP 注入端到端：HarnessContext.McpServers
+// → harness 翻译成 --mcp-config → 假 CLI 进程解析并回显 server 名（验证
+// context→argv→进程全链路；member_runtime 侧合并由 mergeHostMcpServers
+// 单测覆盖）。fakecodebuddy 需 --echo-mcp 开关。
+func (s *ProviderRoundtripSuite) TestRealRoundTrip_mcpContext到进程() {
+	s.writeScript("mcp.jsonl", []string{
+		`{"type":"assistant","session_id":"fake-session-1","message":{"content":[{"type":"text","text":"PONG"}]}}`,
+		`{"type":"result","subtype":"success","is_error":false,"result":"PONG","duration_ms":100}`,
+	})
+	path := filepath.Join(s.scriptsDir, "mcp.jsonl")
+	harness, err := codebuddy.NewCodebuddyHarnessWithFactory(
+		codebuddy.CodebuddyConfig{CliPath: s.fakeBin, TurnTimeoutSeconds: 30},
+		func(options codebuddy.TransportOptions) (codebuddy.Transport, error) {
+			options.Args = append(options.Args, "--script", path, "--echo-mcp")
+			return codebuddy.NewProcessTransport(options)
+		})
+	s.Require().NoError(err)
+	defer func() { _ = harness.Stop(context.Background()) }()
+	hctx := s.newContext()
+	hctx.McpServers = []harnessprotocol.McpServerConfig{{
+		Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+		Command: []string{"uapclawmcpserver"},
+	}}
+	s.Require().NoError(harness.Start(context.Background(), hctx))
+	receipt, err := harness.Send(context.Background(),
+		harnessprotocol.HarnessInput{Content: "hi"}, harnessprotocol.DeliveryModeAuto)
+	s.Require().NoError(err)
+	events := s.collectTurnEvents(harness, receipt.TurnID)
+	s.assertTurnInvariants(events, receipt.TurnID)
+	_, answer := s.terminalAndAnswer(events)
+	s.Contains(answer, "openjiuwen-team", "假 CLI 应收到 --mcp-config 并回显 server 名")
+}
+
 // TestRealRoundTrip_清单工厂路径 清单 → CreateHarness → provider 全链路；
 // 假 CLI 无脚本时读完输入即退出 → 进程退出路径归 FAILED（最小失败分类）。
 func (s *ProviderRoundtripSuite) TestRealRoundTrip_清单工厂路径() {
