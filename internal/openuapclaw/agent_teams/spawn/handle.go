@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -36,24 +37,13 @@ type SpawnHandle interface {
 // 仅暴露 InProcessSpawnHandle 消费者所需操作，不包含运行方法——运行由 Runner 层负责。
 // Python: InProcessSpawnHandle.agent_ref 的 Any 类型，
 // Go 中用接口替代以保留最小类型安全，同时避免 spawn/ 包 import agent/ 包。
+// ForkDeep 返回成员的内层 DeepAgent（25.5 fork 半区）：注入/压缩以具体类型
+// 向下调用 harness——harness 不 import spawn，方向合法。nil = 非 in-process
+// 成员（外部 CLI 等），fork 继承跳过。
+// Python: agent_ref.resources.harness.get_deep_agent()（鸭子调用）。
 type SpawnableAgent interface {
 	// AgentCard 返回 Agent 身份卡片
 	AgentCard() *agentschema.AgentCard
-}
-
-// ForkContextSource fork 继承的源上下文读取面。
-// Python agent_ref 的 resources.harness.get_deep_agent().get_current_context(...)
-// 窄化——spawn 包不 import harness 包，源读取经此窄接口（依赖倒置）。
-// Python: _resolve_fork_native (team_agent.py:1644-1661) 的读取半区。
-type ForkContextSource interface {
-	// GetCurrentContext 返回当前上下文消息
-	GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error)
-}
-
-// ForkTarget fork 继承的注入目标写入面（新成员 context engine 创建）。
-// Python: native.create_new_context_engine(session_id=..., messages=...)
-// （inprocess_spawn.py:105-108）。
-type ForkTarget interface {
-	// CreateNewContextEngine 以 messages 为种子创建新的上下文引擎
-	CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error)
+	// ForkDeep 返回内层 DeepAgent；非 in-process 实现返回 nil
+	ForkDeep() *harness.DeepAgent
 }

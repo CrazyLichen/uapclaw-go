@@ -9,6 +9,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -244,13 +245,15 @@ func (h *InProcessSpawnHandle) AgentRef() SpawnableAgent {
 	return h.agentRef
 }
 
-// ForkSource 返回 fork 继承的源上下文读取面（agentRef 断言 ForkContextSource）。
-// 断言失败（外部 CLI 成员等非 in-process 源）返回 nil——fork 继承整体跳过。
+// ForkDeep 返回成员内层 DeepAgent（agentRef 经 SpawnableAgent.ForkDeep 转发）。
+// nil = 非 in-process 成员（外部 CLI 等源）——fork 继承整体跳过。
 // Python: InProcessSpawnHandle.agent_ref 的 hasattr(agent, "resources") 分支
 // （team_agent.py:1651-1657）。
-func (h *InProcessSpawnHandle) ForkSource() ForkContextSource {
-	src, _ := h.agentRef.(ForkContextSource)
-	return src
+func (h *InProcessSpawnHandle) ForkDeep() *harness.DeepAgent {
+	if h.agentRef == nil {
+		return nil
+	}
+	return h.agentRef.ForkDeep()
 }
 
 // ChunkForward 返回 chunk 转发观察者引用。

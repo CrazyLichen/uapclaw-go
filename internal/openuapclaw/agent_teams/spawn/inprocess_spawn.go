@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -82,7 +83,7 @@ func InProcessSpawn(
 	// 让它继承先前的理解。空 fork 上下文（抓取没拿到消息）不注入。
 	// Python: inprocess_spawn.py:100-124——create_new_context_engine +
 	// compact_context（CompactContext 已接线，fork_compact.go 一比一）。
-	injectForkContext(ctx, teammate, runtimeCtx, sessionID, forkFrom)
+	injectForkContext(ctx, teammate.ForkDeep(), runtimeCtx, sessionID, forkFrom)
 
 	// 2. 准备输入
 	query := initialMessage
@@ -182,7 +183,7 @@ func InProcessSpawn(
 // compact_context（fork_compact.go CompactContext 一比一）。
 func injectForkContext(
 	ctx context.Context,
-	teammate SpawnableAgent,
+	deep *harness.DeepAgent,
 	runtimeCtx atschema.TeamRuntimeContext,
 	sessionID string,
 	forkFrom *agentteams.ForkContext,
@@ -194,14 +195,13 @@ func injectForkContext(
 			Msg("[fork] inprocess_spawn: NO fork injection")
 		return
 	}
-	target, ok := teammate.(ForkTarget)
-	if !ok {
+	if deep == nil {
 		logger.Warn(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
-			Msg("[fork] teammate does not implement ForkTarget; injection skipped")
+			Msg("[fork] teammate has no in-process DeepAgent; injection skipped")
 		return
 	}
-	if _, err := target.CreateNewContextEngine(ctx, sessionID, forkFrom.ToForkMessages()); err != nil {
+	if _, err := deep.CreateNewContextEngine(ctx, sessionID, forkFrom.ToForkMessages()); err != nil {
 		logger.Warn(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Err(err).
@@ -226,12 +226,6 @@ func injectForkContext(
 		if direction == "" {
 			direction = "before"
 		}
-		if target, ok := teammate.(agentteams.CompactContextTarget); ok {
-			agentteams.CompactContext(ctx, target, *forkFrom.CompactSplit, sessionID, direction)
-		} else {
-			logger.Warn(logComponent).
-				Str("member_name", runtimeCtx.MemberName).
-				Msg("[fork] teammate does not implement CompactContextTarget; fork context stays uncompacted")
-		}
+		agentteams.CompactContext(ctx, deep, *forkFrom.CompactSplit, sessionID, direction)
 	}
 }
