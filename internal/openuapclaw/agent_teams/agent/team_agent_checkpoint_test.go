@@ -110,3 +110,26 @@ func TestTeamAgent_SetCheckpoint_回调往返(t *testing.T) {
 	require.NotNil(t, conflict)
 	require.Equal(t, 5, conflict["count"])
 }
+
+// TestTeamAgent_冷恢复还原索引表后重名冲突仍生效 验证冷恢复还原契约：
+// ReadTeamCheckpoints 读出的表经 setCheckpointsFrom 还原后，SetCheckpoint 的
+// 团队全局唯一名语义不被破坏（还原记录与存量同 view）。
+// Python: recover_from_session 内 read_team_checkpoints → set_checkpoints_from
+// (team_agent.py:2175-2179)；运行时链路由集成用例覆盖（fork_checkpoint_test.go）。
+func TestTeamAgent_冷恢复还原索引表后重名冲突仍生效(t *testing.T) {
+	a := newTestTeamAgent(t)
+	// 模拟冷恢复：持久化表（MergeTeamCheckpoints 落盘形态）还原进索引
+	persisted := map[string]metadata.CheckpointRecord{
+		"code-ready": {Count: 12, Description: "编码就绪", CreatedBy: "alice"},
+	}
+	a.setCheckpointsFrom(persisted)
+	// 还原后重名冲突生效
+	conflict := a.SetCheckpoint("code-ready", 99, "其他", "bob")
+	require.NotNil(t, conflict)
+	require.Equal(t, 12, conflict["count"])
+	require.Equal(t, "alice", conflict["created_by"])
+	// 表内容保持还原态
+	snapshot := a.checkpointsSnapshot()
+	require.Len(t, snapshot, 1)
+	require.Equal(t, persisted["code-ready"], snapshot["code-ready"])
+}
