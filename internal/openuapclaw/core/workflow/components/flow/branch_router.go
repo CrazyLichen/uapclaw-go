@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
@@ -158,19 +157,13 @@ func (r *BranchRouter) Call(ctx context.Context) ([]string, error) {
 		exception.WithParam("reason", "branch meeting the condition was not found"))
 }
 
-// Dispatch 实现 pregel.Router（Python 经 ConditionalRouter 包装 __call__ 后产出
-// TriggerMessage；Go 侧 BranchRouter 直挂 Router 接口，消息产出对齐 router.py:47）。
-// sourceNode 即发起节点名；error 原样上抛（8.3b FIRST_EXCEPTION 分类依赖 errors.As）。
-func (r *BranchRouter) Dispatch(ctx context.Context, sourceNode string) ([]pregel.Message, error) {
-	targets, err := r.Call(ctx)
-	if err != nil {
-		return nil, err
-	}
-	msgs := make([]pregel.Message, 0, len(targets))
-	for _, to := range targets {
-		msgs = append(msgs, pregel.NewTriggerMessage(sourceNode, to))
-	}
-	return msgs, nil
+// Select 实现 graph.Router（= pregel.Selector，Python 经 ConditionalRouter 包装
+// __call__；Go 侧 BranchRouter 直挂 Selector 接口）。
+// state 恒传 nil 不读（8.5 D2 惯例：Python selector 形参唯一取值 None，session
+// 走实例字段捕获）；error 原样上抛（8.3b FIRST_EXCEPTION 分类依赖 errors.As）。
+// 消息产出（TriggerMessage）由 ConditionalRouter.dispatch 承载（router.py:47 同形）。
+func (r *BranchRouter) Select(_ context.Context, _ any) ([]string, error) {
+	return r.Call(context.Background())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
