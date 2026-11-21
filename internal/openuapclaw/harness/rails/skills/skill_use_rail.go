@@ -291,6 +291,12 @@ func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 	return result
 }
 
+// SetListSkillModel 设置 list_skill 路由模型（Python list_skill_model 属性赋值等价）。
+func (r *SkillUseRail) SetListSkillModel(model *llm.Model) { r.listSkillModel = model }
+
+// SetIncludeTools 设置是否注册技能工具（Python include_tools 属性赋值等价）。
+func (r *SkillUseRail) SetIncludeTools(enabled bool) { r.includeTools = enabled }
+
 // SkillModeName 返回技能暴露模式（RSI 适配器跨包读取）。
 func (r *SkillUseRail) SkillModeName() string { return r.skillMode }
 

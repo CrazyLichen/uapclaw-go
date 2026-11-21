@@ -17,6 +17,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -632,6 +633,14 @@ func (r *RSISkillUseRail) loadTaskStartSkill(cbc *agentinterfaces.AgentCallbackC
 	evidence["reason"] = "loaded"
 	logger.Info(logComponent).Str("skill_name", skillName).
 		Msg("[RSISkillUseRail] task-start Skill loaded")
+}
+
+// SetTriggerAtTaskStart 设置任务启动触发开关（Python 属性赋值等价）。
+func (r *RSISkillUseRail) SetTriggerAtTaskStart(value bool) { r.triggerAtTaskStart = value }
+
+// SetListSkillModel 设置路由模型（Python 属性赋值等价；委托基座字段）。
+func (r *RSISkillUseRail) SetListSkillModel(model *llm.Model) {
+	r.SkillUseRail.SetListSkillModel(model)
 }
 
 // TaskTriggerEvidence 任务触发证据快照。

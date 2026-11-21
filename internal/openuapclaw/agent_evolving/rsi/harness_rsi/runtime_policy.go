@@ -41,6 +41,16 @@ type HarnessRuntimePolicy struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidateRuntimePolicy 只校验两个受支持的包配置字段（对齐 validate_runtime_policy）
+// ToDict 运行时策略字典化（Python to_dict = asdict(self)）。
+func (p HarnessRuntimePolicy) ToDict() map[string]any {
+	return map[string]any{
+		"max_iterations":            p.MaxIterations,
+		"on_max_iterations":         p.OnMaxIterations,
+		"max_iterations_hard_limit": p.MaxIterationsHardLimit,
+		"source":                    p.Source,
+	}
+}
+
 func ValidateRuntimePolicy(data any, hardLimit int) (map[string]any, error) {
 	mapping, ok := data.(map[string]any)
 	if !ok {
