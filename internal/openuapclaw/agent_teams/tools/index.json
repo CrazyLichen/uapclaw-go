@@ -175,6 +175,13 @@
       "latest_plan_id": "plan_task_test-team_07e6dffb-b9c0-452b-927a-55820f0bc42c_1794291083337_82",
       "status": "plan_approved"
     },
+    "task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04": {
+      "plan_ids": [
+        "plan_task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04_1795215060975_876"
+      ],
+      "latest_plan_id": "plan_task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04_1795215060975_876",
+      "status": "in_progress"
+    },
     "task_test-team_083df09e-ca5f-47f3-b83d-d2adda10a5f6": {
       "plan_ids": [
         "plan_task_test-team_083df09e-ca5f-47f3-b83d-d2adda10a5f6_1791041425284_734"
@@ -334,6 +341,13 @@
         "plan_task_test-team_12733354-7758-426f-9bf8-28f10bd73836_1795152118045_644"
       ],
       "latest_plan_id": "plan_task_test-team_12733354-7758-426f-9bf8-28f10bd73836_1795152118045_644",
+      "status": "in_progress"
+    },
+    "task_test-team_12824d37-08dd-42a0-86c8-72812f874a44": {
+      "plan_ids": [
+        "plan_task_test-team_12824d37-08dd-42a0-86c8-72812f874a44_1795215939251_835"
+      ],
+      "latest_plan_id": "plan_task_test-team_12824d37-08dd-42a0-86c8-72812f874a44_1795215939251_835",
       "status": "in_progress"
     },
     "task_test-team_12abffc5-5a8e-4239-bbba-a9bdd8f7ec73": {
@@ -525,6 +539,13 @@
       "latest_plan_id": "plan_task_test-team_1f423683-990c-4be1-bbbc-eab69a53518d_1795141412308_256",
       "status": "in_progress"
     },
+    "task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096": {
+      "plan_ids": [
+        "plan_task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096_1795215232960_513"
+      ],
+      "latest_plan_id": "plan_task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096_1795215232960_513",
+      "status": "in_progress"
+    },
     "task_test-team_1fd5c7db-1568-404c-84ec-96cc02dca132": {
       "plan_ids": [
         "plan_task_test-team_1fd5c7db-1568-404c-84ec-96cc02dca132_1794109929943_380"
@@ -670,6 +691,13 @@
         "plan_task_test-team_2725c6aa-87cb-4459-af9e-5fd7dbe2d022_1795190725982_430"
       ],
       "latest_plan_id": "plan_task_test-team_2725c6aa-87cb-4459-af9e-5fd7dbe2d022_1795190725982_430",
+      "status": "in_progress"
+    },
+    "task_test-team_27434384-f949-4ab6-97e6-6d22af7434df": {
+      "plan_ids": [
+        "plan_task_test-team_27434384-f949-4ab6-97e6-6d22af7434df_1795215003944_354"
+      ],
+      "latest_plan_id": "plan_task_test-team_27434384-f949-4ab6-97e6-6d22af7434df_1795215003944_354",
       "status": "in_progress"
     },
     "task_test-team_27e4e6c6-8699-4fd0-a0c3-2b6a88ba0caa": {
@@ -1498,6 +1526,13 @@
       "latest_plan_id": "plan_task_test-team_5f6e10e7-2f29-494a-bdc8-9d9e9417d60e_1795058600326_744",
       "status": "in_progress"
     },
+    "task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186": {
+      "plan_ids": [
+        "plan_task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186_1795216637357_89"
+      ],
+      "latest_plan_id": "plan_task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186_1795216637357_89",
+      "status": "in_progress"
+    },
     "task_test-team_6193d42f-f66d-4f9c-9f53-b4379e35d039": {
       "plan_ids": [
         "plan_task_test-team_6193d42f-f66d-4f9c-9f53-b4379e35d039_1793409368753_925"
@@ -1735,6 +1770,13 @@
       ],
       "latest_plan_id": "plan_task_test-team_7341b876-5293-47ac-9bd3-8f4757706f23_1794103872757_594",
       "status": "plan_approved"
+    },
+    "task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab": {
+      "plan_ids": [
+        "plan_task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab_1795215030104_539"
+      ],
+      "latest_plan_id": "plan_task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab_1795215030104_539",
+      "status": "in_progress"
     },
     "task_test-team_74c13c6c-b853-4bf5-89db-f0fa8d6a6230": {
       "plan_ids": [
@@ -2064,6 +2106,13 @@
       ],
       "latest_plan_id": "plan_task_test-team_88ed1219-f6ef-4b36-8be6-f0a41f7eb015_1795017157844_95",
       "status": "plan_approved"
+    },
+    "task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf": {
+      "plan_ids": [
+        "plan_task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf_1795215900567_840"
+      ],
+      "latest_plan_id": "plan_task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf_1795215900567_840",
+      "status": "in_progress"
     },
     "task_test-team_89447da6-4436-47d1-ad20-d167ca7adf98": {
       "plan_ids": [
@@ -2422,6 +2471,13 @@
       "latest_plan_id": "plan_task_test-team_a2b89fb2-0c21-479c-9bcc-9cad9cc37719_1792805642126_465",
       "status": "plan_approved"
     },
+    "task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4": {
+      "plan_ids": [
+        "plan_task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4_1795216702912_425"
+      ],
+      "latest_plan_id": "plan_task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4_1795216702912_425",
+      "status": "in_progress"
+    },
     "task_test-team_a3979fec-aecf-42a7-9657-730bb8aa715b": {
       "plan_ids": [
         "plan_task_test-team_a3979fec-aecf-42a7-9657-730bb8aa715b_1791223614347_163"
@@ -2434,6 +2490,13 @@
         "plan_task_test-team_a3b1742d-73c9-44b6-9bfc-8e219d1de929_1795104900051_345"
       ],
       "latest_plan_id": "plan_task_test-team_a3b1742d-73c9-44b6-9bfc-8e219d1de929_1795104900051_345",
+      "status": "in_progress"
+    },
+    "task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296": {
+      "plan_ids": [
+        "plan_task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296_1795216654645_145"
+      ],
+      "latest_plan_id": "plan_task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296_1795216654645_145",
       "status": "in_progress"
     },
     "task_test-team_a4afce59-5ee0-4209-807c-02b9904e5c00": {
@@ -2568,6 +2631,13 @@
       ],
       "latest_plan_id": "plan_task_test-team_aad0da8c-de7e-46b6-a050-ac9cfc70ec61_1792456348879_443",
       "status": "plan_approved"
+    },
+    "task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e": {
+      "plan_ids": [
+        "plan_task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e_1795215038793_867"
+      ],
+      "latest_plan_id": "plan_task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e_1795215038793_867",
+      "status": "in_progress"
     },
     "task_test-team_ac134cfc-ad8a-4a65-ab85-23ba0115814b": {
       "plan_ids": [
@@ -2870,6 +2940,13 @@
       "latest_plan_id": "plan_task_test-team_c09a2319-1fa4-47d7-933b-7c2022335c3e_1793623507941_852",
       "status": "plan_approved"
     },
+    "task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358": {
+      "plan_ids": [
+        "plan_task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358_1795216611156_768"
+      ],
+      "latest_plan_id": "plan_task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358_1795216611156_768",
+      "status": "in_progress"
+    },
     "task_test-team_c18827bf-3f52-48cc-9e9b-cdc7f9a1262c": {
       "plan_ids": [
         "plan_task_test-team_c18827bf-3f52-48cc-9e9b-cdc7f9a1262c_1793983390037_601"
@@ -3143,6 +3220,13 @@
       "latest_plan_id": "plan_task_test-team_d364861d-cd26-401c-9ada-d87226ec14fe_1794840683870_587",
       "status": "plan_approved"
     },
+    "task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda": {
+      "plan_ids": [
+        "plan_task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda_1795214390191_952"
+      ],
+      "latest_plan_id": "plan_task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda_1795214390191_952",
+      "status": "in_progress"
+    },
     "task_test-team_d47398ea-ad4b-4c13-ad05-f99bed1f0a30": {
       "plan_ids": [
         "plan_task_test-team_d47398ea-ad4b-4c13-ad05-f99bed1f0a30_1794224443706_883"
@@ -3282,6 +3366,13 @@
       ],
       "latest_plan_id": "plan_task_test-team_dbd461e1-255c-461b-9dc0-bc6be17fc2d3_1793068848587_79",
       "status": "plan_approved"
+    },
+    "task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5": {
+      "plan_ids": [
+        "plan_task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5_1795215301156_92"
+      ],
+      "latest_plan_id": "plan_task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5_1795215301156_92",
+      "status": "in_progress"
     },
     "task_test-team_dd6763e0-7265-4f3e-8335-fd7bc25efee3": {
       "plan_ids": [
@@ -3653,6 +3744,13 @@
       ],
       "latest_plan_id": "plan_task_test-team_f3ce2f99-fa51-439f-afeb-3868c2582fb6_1795017380417_159",
       "status": "plan_approved"
+    },
+    "task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433": {
+      "plan_ids": [
+        "plan_task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433_1795215129575_977"
+      ],
+      "latest_plan_id": "plan_task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433_1795215129575_977",
+      "status": "in_progress"
     },
     "task_test-team_f56987b6-68e9-4ff0-a843-58420b3fe619": {
       "plan_ids": [
@@ -4152,6 +4250,18 @@
       "decided_at": "2026-11-10T14:11:23+08:00",
       "updated_at": "2026-11-10T14:11:23+08:00"
     },
+    "plan_task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04_1795215060975_876": {
+      "plan_id": "plan_task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04_1795215060975_876",
+      "task_id": "task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04/plans/plan_task_test-team_082aa1c7-2774-4be9-8566-0f9b99fd0d04_1795215060975_876.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend224519087/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:51:01+08:00",
+      "decided_at": "2026-11-21T06:51:01+08:00",
+      "updated_at": "2026-11-21T06:51:01+08:00"
+    },
     "plan_task_test-team_083df09e-ca5f-47f3-b83d-d2adda10a5f6_1791041425284_734": {
       "plan_id": "plan_task_test-team_083df09e-ca5f-47f3-b83d-d2adda10a5f6_1791041425284_734",
       "task_id": "task_test-team_083df09e-ca5f-47f3-b83d-d2adda10a5f6",
@@ -4427,6 +4537,18 @@
       "submitted_at": "2026-11-20T13:21:58+08:00",
       "decided_at": "2026-11-20T13:21:58+08:00",
       "updated_at": "2026-11-20T13:21:58+08:00"
+    },
+    "plan_task_test-team_12824d37-08dd-42a0-86c8-72812f874a44_1795215939251_835": {
+      "plan_id": "plan_task_test-team_12824d37-08dd-42a0-86c8-72812f874a44_1795215939251_835",
+      "task_id": "task_test-team_12824d37-08dd-42a0-86c8-72812f874a44",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_12824d37-08dd-42a0-86c8-72812f874a44/plans/plan_task_test-team_12824d37-08dd-42a0-86c8-72812f874a44_1795215939251_835.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend974530946/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:05:39+08:00",
+      "decided_at": "2026-11-21T07:05:39+08:00",
+      "updated_at": "2026-11-21T07:05:39+08:00"
     },
     "plan_task_test-team_12abffc5-5a8e-4239-bbba-a9bdd8f7ec73_1793409423192_598": {
       "plan_id": "plan_task_test-team_12abffc5-5a8e-4239-bbba-a9bdd8f7ec73_1793409423192_598",
@@ -4752,6 +4874,18 @@
       "decided_at": "2026-11-20T10:23:32+08:00",
       "updated_at": "2026-11-20T10:23:32+08:00"
     },
+    "plan_task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096_1795215232960_513": {
+      "plan_id": "plan_task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096_1795215232960_513",
+      "task_id": "task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096/plans/plan_task_test-team_1f7ba23b-3a6c-4ca7-b795-890183f85096_1795215232960_513.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend952096774/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:53:52+08:00",
+      "decided_at": "2026-11-21T06:53:53+08:00",
+      "updated_at": "2026-11-21T06:53:53+08:00"
+    },
     "plan_task_test-team_1fd5c7db-1568-404c-84ec-96cc02dca132_1794109929943_380": {
       "plan_id": "plan_task_test-team_1fd5c7db-1568-404c-84ec-96cc02dca132_1794109929943_380",
       "task_id": "task_test-team_1fd5c7db-1568-404c-84ec-96cc02dca132",
@@ -5003,6 +5137,18 @@
       "submitted_at": "2026-11-21T00:05:25+08:00",
       "decided_at": "2026-11-21T00:05:26+08:00",
       "updated_at": "2026-11-21T00:05:26+08:00"
+    },
+    "plan_task_test-team_27434384-f949-4ab6-97e6-6d22af7434df_1795215003944_354": {
+      "plan_id": "plan_task_test-team_27434384-f949-4ab6-97e6-6d22af7434df_1795215003944_354",
+      "task_id": "task_test-team_27434384-f949-4ab6-97e6-6d22af7434df",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_27434384-f949-4ab6-97e6-6d22af7434df/plans/plan_task_test-team_27434384-f949-4ab6-97e6-6d22af7434df_1795215003944_354.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend616801462/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:50:03+08:00",
+      "decided_at": "2026-11-21T06:50:04+08:00",
+      "updated_at": "2026-11-21T06:50:04+08:00"
     },
     "plan_task_test-team_27e4e6c6-8699-4fd0-a0c3-2b6a88ba0caa_1794213572768_474": {
       "plan_id": "plan_task_test-team_27e4e6c6-8699-4fd0-a0c3-2b6a88ba0caa_1794213572768_474",
@@ -6420,6 +6566,18 @@
       "decided_at": "2026-11-19T11:23:20+08:00",
       "updated_at": "2026-11-19T11:23:20+08:00"
     },
+    "plan_task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186_1795216637357_89": {
+      "plan_id": "plan_task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186_1795216637357_89",
+      "task_id": "task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186/plans/plan_task_test-team_608dc0c4-59cc-4652-9c87-b2e6803ae186_1795216637357_89.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3551990090/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:17:17+08:00",
+      "decided_at": "2026-11-21T07:17:17+08:00",
+      "updated_at": "2026-11-21T07:17:17+08:00"
+    },
     "plan_task_test-team_6193d42f-f66d-4f9c-9f53-b4379e35d039_1793409368753_925": {
       "plan_id": "plan_task_test-team_6193d42f-f66d-4f9c-9f53-b4379e35d039_1793409368753_925",
       "task_id": "task_test-team_6193d42f-f66d-4f9c-9f53-b4379e35d039",
@@ -6827,6 +6985,18 @@
       "submitted_at": "2026-11-08T10:11:12+08:00",
       "decided_at": "2026-11-08T10:11:12+08:00",
       "updated_at": "2026-11-08T10:11:12+08:00"
+    },
+    "plan_task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab_1795215030104_539": {
+      "plan_id": "plan_task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab_1795215030104_539",
+      "task_id": "task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab/plans/plan_task_test-team_742c0d24-084c-4815-ad7f-5d9a389602ab_1795215030104_539.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend236764077/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:50:30+08:00",
+      "decided_at": "2026-11-21T06:50:30+08:00",
+      "updated_at": "2026-11-21T06:50:30+08:00"
     },
     "plan_task_test-team_74c13c6c-b853-4bf5-89db-f0fa8d6a6230_1792330156274_214": {
       "plan_id": "plan_task_test-team_74c13c6c-b853-4bf5-89db-f0fa8d6a6230_1792330156274_214",
@@ -7391,6 +7561,18 @@
       "submitted_at": "2026-11-18T23:52:37+08:00",
       "decided_at": "2026-11-18T23:52:37+08:00",
       "updated_at": "2026-11-18T23:52:37+08:00"
+    },
+    "plan_task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf_1795215900567_840": {
+      "plan_id": "plan_task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf_1795215900567_840",
+      "task_id": "task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf/plans/plan_task_test-team_89404a94-fbd0-422d-a8c1-783f617593cf_1795215900567_840.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3458579958/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:05:00+08:00",
+      "decided_at": "2026-11-21T07:05:00+08:00",
+      "updated_at": "2026-11-21T07:05:00+08:00"
     },
     "plan_task_test-team_89447da6-4436-47d1-ad20-d167ca7adf98_1793761969519_252": {
       "plan_id": "plan_task_test-team_89447da6-4436-47d1-ad20-d167ca7adf98_1793761969519_252",
@@ -8004,6 +8186,18 @@
       "decided_at": "2026-10-24T09:34:02+08:00",
       "updated_at": "2026-10-24T09:34:02+08:00"
     },
+    "plan_task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4_1795216702912_425": {
+      "plan_id": "plan_task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4_1795216702912_425",
+      "task_id": "task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4/plans/plan_task_test-team_a2c057a6-646b-4d33-9fb0-68461e6580b4_1795216702912_425.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend2029958045/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:18:22+08:00",
+      "decided_at": "2026-11-21T07:18:22+08:00",
+      "updated_at": "2026-11-21T07:18:22+08:00"
+    },
     "plan_task_test-team_a3979fec-aecf-42a7-9657-730bb8aa715b_1791223614347_163": {
       "plan_id": "plan_task_test-team_a3979fec-aecf-42a7-9657-730bb8aa715b_1791223614347_163",
       "task_id": "task_test-team_a3979fec-aecf-42a7-9657-730bb8aa715b",
@@ -8027,6 +8221,18 @@
       "submitted_at": "2026-11-20T00:15:00+08:00",
       "decided_at": "2026-11-20T00:15:00+08:00",
       "updated_at": "2026-11-20T00:15:00+08:00"
+    },
+    "plan_task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296_1795216654645_145": {
+      "plan_id": "plan_task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296_1795216654645_145",
+      "task_id": "task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296/plans/plan_task_test-team_a3d0ce7c-974a-46d8-b04b-ba7ed6a97296_1795216654645_145.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend4213851418/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:17:34+08:00",
+      "decided_at": "2026-11-21T07:17:34+08:00",
+      "updated_at": "2026-11-21T07:17:34+08:00"
     },
     "plan_task_test-team_a4afce59-5ee0-4209-807c-02b9904e5c00_1793770886220_208": {
       "plan_id": "plan_task_test-team_a4afce59-5ee0-4209-807c-02b9904e5c00_1793770886220_208",
@@ -8255,6 +8461,18 @@
       "submitted_at": "2026-10-20T08:32:28+08:00",
       "decided_at": "2026-10-20T08:32:28+08:00",
       "updated_at": "2026-10-20T08:32:28+08:00"
+    },
+    "plan_task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e_1795215038793_867": {
+      "plan_id": "plan_task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e_1795215038793_867",
+      "task_id": "task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e/plans/plan_task_test-team_ab252803-8830-4caa-9b00-1c3a53bcd74e_1795215038793_867.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend1770289957/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:50:38+08:00",
+      "decided_at": "2026-11-21T06:50:38+08:00",
+      "updated_at": "2026-11-21T06:50:38+08:00"
     },
     "plan_task_test-team_ac134cfc-ad8a-4a65-ab85-23ba0115814b_1792296716785_647": {
       "plan_id": "plan_task_test-team_ac134cfc-ad8a-4a65-ab85-23ba0115814b_1792296716785_647",
@@ -8772,6 +8990,18 @@
       "decided_at": "2026-11-02T20:45:07+08:00",
       "updated_at": "2026-11-02T20:45:07+08:00"
     },
+    "plan_task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358_1795216611156_768": {
+      "plan_id": "plan_task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358_1795216611156_768",
+      "task_id": "task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358/plans/plan_task_test-team_c0bdcbef-2559-40d6-822e-7fff72064358_1795216611156_768.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3727516493/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T07:16:51+08:00",
+      "decided_at": "2026-11-21T07:16:51+08:00",
+      "updated_at": "2026-11-21T07:16:51+08:00"
+    },
     "plan_task_test-team_c18827bf-3f52-48cc-9e9b-cdc7f9a1262c_1793983390037_601": {
       "plan_id": "plan_task_test-team_c18827bf-3f52-48cc-9e9b-cdc7f9a1262c_1793983390037_601",
       "task_id": "task_test-team_c18827bf-3f52-48cc-9e9b-cdc7f9a1262c",
@@ -9240,6 +9470,18 @@
       "decided_at": "2026-11-16T22:51:23+08:00",
       "updated_at": "2026-11-16T22:51:23+08:00"
     },
+    "plan_task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda_1795214390191_952": {
+      "plan_id": "plan_task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda_1795214390191_952",
+      "task_id": "task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda/plans/plan_task_test-team_d421c880-a1c1-4c72-92f2-f82511c2cdda_1795214390191_952.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3521089150/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:39:50+08:00",
+      "decided_at": "2026-11-21T06:39:50+08:00",
+      "updated_at": "2026-11-21T06:39:50+08:00"
+    },
     "plan_task_test-team_d47398ea-ad4b-4c13-ad05-f99bed1f0a30_1794224443706_883": {
       "plan_id": "plan_task_test-team_d47398ea-ad4b-4c13-ad05-f99bed1f0a30_1794224443706_883",
       "task_id": "task_test-team_d47398ea-ad4b-4c13-ad05-f99bed1f0a30",
@@ -9479,6 +9721,18 @@
       "submitted_at": "2026-10-27T10:40:48+08:00",
       "decided_at": "2026-10-27T10:40:48+08:00",
       "updated_at": "2026-10-27T10:40:48+08:00"
+    },
+    "plan_task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5_1795215301156_92": {
+      "plan_id": "plan_task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5_1795215301156_92",
+      "task_id": "task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5/plans/plan_task_test-team_dc15ea0d-bd43-4fdf-b050-c80ced6a13f5_1795215301156_92.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend2838799702/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:55:01+08:00",
+      "decided_at": "2026-11-21T06:55:01+08:00",
+      "updated_at": "2026-11-21T06:55:01+08:00"
     },
     "plan_task_test-team_dd6763e0-7265-4f3e-8335-fd7bc25efee3_1794417260722_457": {
       "plan_id": "plan_task_test-team_dd6763e0-7265-4f3e-8335-fd7bc25efee3_1794417260722_457",
@@ -10115,6 +10369,18 @@
       "submitted_at": "2026-11-18T23:56:20+08:00",
       "decided_at": "2026-11-18T23:56:20+08:00",
       "updated_at": "2026-11-18T23:56:20+08:00"
+    },
+    "plan_task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433_1795215129575_977": {
+      "plan_id": "plan_task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433_1795215129575_977",
+      "task_id": "task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433",
+      "member_name": "teammate1",
+      "status": "in_progress",
+      "member_plan_md": "tasks/task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433/plans/plan_task_test-team_f3d379eb-2047-47c9-848f-ad84c6995433_1795215129575_977.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3331362641/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-11-21T06:52:09+08:00",
+      "decided_at": "2026-11-21T06:52:09+08:00",
+      "updated_at": "2026-11-21T06:52:09+08:00"
     },
     "plan_task_test-team_f56987b6-68e9-4ff0-a843-58420b3fe619_1793596384218_5": {
       "plan_id": "plan_task_test-team_f56987b6-68e9-4ff0-a843-58420b3fe619_1793596384218_5",

@@ -61,6 +61,18 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_direct":    "单播消息",
 		"dispatcher.msg_received":       "[收到{msg_type}] message_id={message_id}, 来自: {sender}\n内容: {content}\n提示: 如果对方在提问或等待回复，请务必通过 send_message 工具回复 {sender}",
 		// scheduled 派发：无可认领池，下一个任务以 start 通知到达（task_board.py L726-728）
+		// agent/coordination/handlers/task_board.py — 任务被改派离开本成员（基类，autonomous）
+		"dispatcher.task_revoked_from_self": "[任务撤回] 任务 [{task_id}] 已被转交给其他成员。请立即停止该任务的工作，并通过 view_task 查看是否有新的可认领任务。",
+		"dispatcher.task_cancelled_to_self": "[任务取消] 你正在执行的任务 [{task_id}] 已被取消。请立即停止该任务的工作，并通过 view_task 查看是否有新的可认领任务。",
+		// agent/coordination/handlers/task_board.py — verify gate（F_59，基类 autonomous steer）
+		"dispatcher.task_submitted_for_review_to_reviewer": "[待验证] 任务 [{task_id}] 已由 {author} 提交验证，你是该任务的验证者。请通过 view_task(action=get) 查看产出，然后用 verify_task(decision='pass'|'fail') 给出验证结论。",
+		"dispatcher.task_revision_requested_to_self": "[验证打回] 你的任务 [{task_id}] 未通过验证，已退回让你返工。请根据反馈修改后，用 member_complete_task / claim_task(status='completed') 重新提交。反馈：{feedback}",
+		"dispatcher.task_verified_to_self": "[验证通过] 你的任务 [{task_id}] 已通过验证并标记完成。请通过 view_task 查看是否有新的可认领任务。",
+		// task_board.py _just_completed_block（F_120）：leader nudge 中刚完成的任务，先于看板/all-done 提示
+		"dispatcher.leader_just_completed": "刚完成：",
+		"dispatcher.leader_just_completed_line": "- [{task_id}] {title} → {assignee}",
+		"dispatcher.leader_just_completed_summary": "：{summary}",
+		"dispatcher.leader_just_completed_note_hint": "  详细完成说明用 view_task(action='note', task_id='{task_id}') 查看。",
 		"dispatcher.task_revoked_from_self_scheduled": "[任务撤回] 任务 [{task_id}] 已被转交给其他成员。请立即停止该任务的工作，不要再为它提交结果；新任务指派给你时会另行通知开工，无需轮询看板。",
 		"dispatcher.task_cancelled_to_self_scheduled": "[任务取消] 你正在执行的任务 [{task_id}] 已被取消。请立即停止该任务的工作，不要再为它提交结果；新任务指派给你时会另行通知开工，无需轮询看板。",
 		// ── 25.2a：调度半区 leader 侧 digest / escalation（i18n.py L260-308 逐字复制）──
@@ -204,6 +216,18 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_direct":    "direct message",
 		"dispatcher.msg_received":       "[Received {msg_type}] message_id={message_id}, from: {sender}\ncontent: {content}\ntip: If the sender is asking or waiting for a reply, make sure to reply to {sender} via send_message",
 		// Scheduled dispatch: no claimable pool, the next task arrives as a start notice
+		// agent/coordination/handlers/task_board.py — task reassigned away (base class, autonomous)
+		"dispatcher.task_revoked_from_self": "[Task Revoked] Task [{task_id}] has been reassigned to another member. Stop working on it now and call view_task to find your next available task.",
+		"dispatcher.task_cancelled_to_self": "[Task Cancelled] Task [{task_id}] you were working on has been cancelled. Stop working on it now and call view_task to find your next available task.",
+		// agent/coordination/handlers/task_board.py — verify gate (F_59, base-class autonomous steer)
+		"dispatcher.task_submitted_for_review_to_reviewer": "[Awaiting Review] {author} submitted task [{task_id}] for verification and you are a reviewer. Inspect the deliverable via view_task(action=get), then call verify_task(decision='pass'|'fail') with your verdict.",
+		"dispatcher.task_revision_requested_to_self": "[Revision Requested] Your task [{task_id}] failed verification and was sent back for rework. Revise per the feedback and resubmit via member_complete_task / claim_task(status='completed'). Feedback: {feedback}",
+		"dispatcher.task_verified_to_self": "[Verified] Your task [{task_id}] passed verification and is now completed. Call view_task to find your next available task.",
+		// task_board.py _just_completed_block (F_120): the task that just finished, ahead of the board / all-done prompt
+		"dispatcher.leader_just_completed": "Just completed:",
+		"dispatcher.leader_just_completed_line": "- [{task_id}] {title} → {assignee}",
+		"dispatcher.leader_just_completed_summary": ": {summary}",
+		"dispatcher.leader_just_completed_note_hint": "  For the full completion note, call view_task(action='note', task_id='{task_id}').",
 		"dispatcher.task_revoked_from_self_scheduled": "[Task Revoked] Task [{task_id}] has been reassigned to another member. Stop working on it now and do not submit results for it; a new task assigned to you arrives with its own start notice, so there is no need to poll the board.",
 		"dispatcher.task_cancelled_to_self_scheduled": "[Task Cancelled] Task [{task_id}] you were working on has been cancelled. Stop working on it now and do not submit results for it; a new task assigned to you arrives with its own start notice, so there is no need to poll the board.",
 		// ── 25.2a: scheduler half leader-side digests / escalations（i18n.py L786-838 逐字复制）──
