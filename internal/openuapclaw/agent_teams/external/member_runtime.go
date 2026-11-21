@@ -42,7 +42,7 @@ import (
 
 // 团队 MCP server 的逻辑名（cli_agent/__init__.py:24）。
 // Python: TEAM_MCP_SERVER_NAME
-const TeamMCPServerName = "openjiuwen-team"
+const TeamMCPServerName = "openuapclaw-team"
 
 const (
 	// harness 私有事件主题 + 命名空间（member_runtime.py:88-90）。

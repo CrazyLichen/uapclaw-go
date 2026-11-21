@@ -274,14 +274,14 @@ func (s *HarnessSuite) TestMcpServers_上下文翻译成mcpConfig() {
 		AgentName: "e2e", AgentID: "e2e", HostSessionID: "host-1",
 		ProtocolVersion: harnessprotocol.ProtocolVersion,
 		McpServers: []harnessprotocol.McpServerConfig{
-			{Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+			{Name: "openuapclaw-team", Transport: harnessprotocol.McpTransportStdio,
 				Command: []string{"uapclawmcpserver"}},
 			{Name: "remote", Transport: harnessprotocol.McpTransportHTTP, URL: &url},
 		},
 	}))
 	args := strings.Join(captured.Args, "\x00")
 	s.Contains(args, "--mcp-config")
-	s.Contains(args, `"openjiuwen-team"`)
+	s.Contains(args, `"openuapclaw-team"`)
 	s.Contains(args, `"uapclawmcpserver"`)
 	s.Contains(args, `"remote"`)
 	s.Contains(args, "http://127.0.0.1:9/mcp")

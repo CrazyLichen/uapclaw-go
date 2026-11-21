@@ -13,7 +13,7 @@ func TestMergeHostMcpServers_合并与能力声明(t *testing.T) {
 	runtime := &ExternalHarnessMemberRuntime{}
 	url := "http://127.0.0.1:9/mcp"
 	runtime.BindMCPServers([]harnessprotocol.McpServerConfig{
-		{Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+		{Name: "openuapclaw-team", Transport: harnessprotocol.McpTransportStdio,
 			Command: []string{"uapclawmcpserver"}},
 	})
 	hctx := &harnessprotocol.HarnessContext{
@@ -26,7 +26,7 @@ func TestMergeHostMcpServers_合并与能力声明(t *testing.T) {
 	if len(merged.McpServers) != 2 {
 		t.Fatalf("应合并为 2 个 server: %+v", merged.McpServers)
 	}
-	if merged.McpServers[0].Name != "remote" || merged.McpServers[1].Name != "openjiuwen-team" {
+	if merged.McpServers[0].Name != "remote" || merged.McpServers[1].Name != "openuapclaw-team" {
 		t.Fatalf("context 在前 extra 在后: %+v", merged.McpServers)
 	}
 	if !merged.HostCapabilities[harnessprotocol.HostCapabilityMcpServers] {

@@ -84,7 +84,7 @@ func (c DatabaseConfig) GetConnectionString() string { return c.ConnectionString
 // 联合面的 JSON 反序列化入口）。encodingjson 无法把对象装回非空接口，
 // 联合面反序列化必须显式分派——对齐 Python pydantic 联合
 // DatabaseConfigProvider 的自动分派语义（TeamJoinDescriptor 跨进程经
-// OPENJIWEN_TEAM_JOIN env 往返依赖本分派）。
+// OPENUAPCLAW_TEAM_JOIN env 往返依赖本分派）。
 // 未知/缺失 db_type 报错（对齐 pydantic union 无匹配报 ValidationError）。
 func UnmarshalDBConfig(data []byte) (DBConfigProvider, error) {
 	probe := struct {

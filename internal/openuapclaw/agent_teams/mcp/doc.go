@@ -3,7 +3,7 @@
 //
 // member scope 暴露真 teammate TeamTool 实例（外部成员与进程内成员同一批
 // 工具面）；operator scope 经 ExternalTeamClient 操作团队（任务板/消息/名册）。
-// 入团凭据从 OPENJIWEN_TEAM_JOIN 环境变量读取；server 由 CLI 子进程拉起、
+// 入团凭据从 OPENUAPCLAW_TEAM_JOIN 环境变量读取；server 由 CLI 子进程拉起、
 // 随 stdio 断开退出，宿主零监控负担。
 //
 // 文件目录：

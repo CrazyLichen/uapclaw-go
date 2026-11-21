@@ -14,7 +14,7 @@
 //     拉取工具。
 //
 // 入口名 uapclawmcpserver（用户拍板品牌改名，沿 D-tel-3 先例）。
-// 描述符经 OPENJIWEN_TEAM_JOIN 环境变量读取；session_id / 语言上下文在每次
+// 描述符经 OPENUAPCLAW_TEAM_JOIN 环境变量读取；session_id / 语言上下文在每次
 // 工具调用前重绑（每次调用独立运行）。
 //
 // 归包偏差 D-15.16-b5：Python 基于 mcp lowlevel Server；Go 用
@@ -47,8 +47,8 @@ const logComponent = logger.ComponentTeam
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ServerName MCP server 标识。
-// Python: SERVER_NAME = "openjiuwen-team-member"（server.py:43）
-const ServerName = "openjiuwen-team-member"
+// Python: SERVER_NAME = "openuapclaw-team-member"（server.py:43）
+const ServerName = "openuapclaw-team-member"
 
 // operatorInstructions operator scope 的 server 级 instructions——
 // 非成员界面驱动团队的控制工作流。（member scope 不带 instructions：
@@ -74,7 +74,7 @@ type ClientFactory func(ctx context.Context) (*external.ExternalTeamClient, erro
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ConnectFromEnv 从 OPENJIWEN_TEAM_JOIN 环境变量构建并连接客户端。
+// ConnectFromEnv 从 OPENUAPCLAW_TEAM_JOIN 环境变量构建并连接客户端。
 // Python: connect_from_env (server.py:60-64)
 func ConnectFromEnv(ctx context.Context) (*external.ExternalTeamClient, error) {
 	descriptor, err := external.TeamJoinDescriptorFromEnv(nil)

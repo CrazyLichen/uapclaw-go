@@ -80,7 +80,7 @@ func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyTextTurn() {
 }
 
 // TestRealLLM_codebuddyTeamMcp 真 CLI 拉起真 team MCP server 的端到端验证：
-// 入团描述符（OPENJIWEN_TEAM_JOIN env，sqlite 落盘库 + inprocess transport）
+// 入团描述符（OPENUAPCLAW_TEAM_JOIN env，sqlite 落盘库 + inprocess transport）
 // → harness 翻译成 --mcp-config → 真 codebuddy 子进程拉起真 uapclawmcpserver
 // → server 急切 Connect（库 schema 落盘）。断言打确定性事实：轮次协议不变量
 // + 团队库文件被 server 真实创建（连接成功的产物），不断言模型行为。
@@ -135,7 +135,7 @@ func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyTeamMcp() {
 		HostSessionID:   "e2e-host-session-mcp",
 		ProtocolVersion: harnessprotocol.ProtocolVersion,
 		McpServers: []harnessprotocol.McpServerConfig{{
-			Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+			Name: "openuapclaw-team", Transport: harnessprotocol.McpTransportStdio,
 			Command: []string{serverBin},
 		}},
 	}

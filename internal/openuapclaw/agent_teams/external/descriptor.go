@@ -76,11 +76,11 @@ const (
 	// Python: TEAM_JOIN_ENV (external/descriptor.py:26)
 	TeamJoinEnv = "OPENJIUWEN_TEAM_JOIN"
 
-	// OpenjiuwenHomeEnv 覆盖运行时 home 的环境变量。spawn 的子进程（Codex 的
+	// OpenuapclawHomeEnv 覆盖运行时 home 的环境变量。spawn 的子进程（Codex 的
 	// MCP server）无法继承 host 平台内存中的 configure_openjiuwen_home 覆盖，
 	// home 必须经 env 传播以对齐 session 文件 spill/deref 路径。
 	// Python: OPENJIUWEN_HOME_ENV (external/descriptor.py:31)
-	OpenjiuwenHomeEnv = "OPENJIUWEN_HOME"
+	OpenuapclawHomeEnv = "OPENJIUWEN_HOME"
 )
 
 // MCPServerEnvVars Codex MCP server 子进程必须从其 Codex App Server 父进程
@@ -89,7 +89,7 @@ const (
 // 会话根解析所需变量都必须出现在这里。
 //
 // Python: MCP_SERVER_ENV_VARS (external/descriptor.py:37)
-var MCPServerEnvVars = []string{TeamJoinEnv, OpenjiuwenHomeEnv}
+var MCPServerEnvVars = []string{TeamJoinEnv, OpenuapclawHomeEnv}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -285,8 +285,8 @@ func DescriptorFromContext(ctx context.Context, rtc *schema.TeamRuntimeContext) 
 //
 // Python: _with_home_env (spawn/external_cli_spawn.py:63-76)；setdefault 语义
 func WithHomeEnv(env map[string]string) map[string]string {
-	if _, ok := env[OpenjiuwenHomeEnv]; !ok {
-		env[OpenjiuwenHomeEnv] = agentteams.GetHome()
+	if _, ok := env[OpenuapclawHomeEnv]; !ok {
+		env[OpenuapclawHomeEnv] = agentteams.GetHome()
 	}
 	return env
 }

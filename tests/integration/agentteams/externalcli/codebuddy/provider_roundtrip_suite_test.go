@@ -124,7 +124,7 @@ func (s *ProviderRoundtripSuite) TestRealRoundTrip_mcpContext到进程() {
 	defer func() { _ = harness.Stop(context.Background()) }()
 	hctx := s.newContext()
 	hctx.McpServers = []harnessprotocol.McpServerConfig{{
-		Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
+		Name: "openuapclaw-team", Transport: harnessprotocol.McpTransportStdio,
 		Command: []string{"uapclawmcpserver"},
 	}}
 	s.Require().NoError(harness.Start(context.Background(), hctx))
@@ -134,7 +134,7 @@ func (s *ProviderRoundtripSuite) TestRealRoundTrip_mcpContext到进程() {
 	events := s.collectTurnEvents(harness, receipt.TurnID)
 	s.assertTurnInvariants(events, receipt.TurnID)
 	_, answer := s.terminalAndAnswer(events)
-	s.Contains(answer, "openjiuwen-team", "假 CLI 应收到 --mcp-config 并回显 server 名")
+	s.Contains(answer, "openuapclaw-team", "假 CLI 应收到 --mcp-config 并回显 server 名")
 }
 
 // TestRealRoundTrip_清单工厂路径 清单 → CreateHarness → provider 全链路；
