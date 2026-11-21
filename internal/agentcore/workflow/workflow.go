@@ -408,7 +408,6 @@ func (w *Workflow) subStream(ctx context.Context, inputs any, sess sessioninterf
 		if _, err = compiled.Invoke(ctx, map[string]any{graph.InputsKey: inputs, graph.ConfigKey: kwargs[graph.ConfigKey]}, subWS); err != nil {
 			return
 		}
-		println("PROBE-DEBUG subStream child isStreaming=", w.isStreaming)
 		if !w.isStreaming { // Python :634 流式分支才收帧
 			return
 		}
@@ -447,7 +446,6 @@ func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.Inn
 	var messages []WorkflowChunk
 	for streamAbilityCount > 0 {
 		frame, rerr := subStreamQ.Receive(context.Background(), streamTimeout)
-		println("PROBE-DEBUG drain frame=", fmt.Sprint(frame), "type=", fmt.Sprintf("%T", frame), "eq=", fmt.Sprint(frame == constants.StreamEmitterEndFrame), "count=", streamAbilityCount)
 		if rerr != nil {
 			continue // Python frame is None → continue
 		}
