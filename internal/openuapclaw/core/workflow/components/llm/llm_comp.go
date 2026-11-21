@@ -10,8 +10,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
@@ -164,8 +164,8 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 		return nil, err
 	}
 	return &LLMExecutable{
-		cfg:     componentConfig,
-		state:   newLLMExecutableState(),
+		cfg:   componentConfig,
+		state: newLLMExecutableState(),
 	}, nil
 }
 

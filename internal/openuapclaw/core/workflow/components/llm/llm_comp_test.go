@@ -3,10 +3,10 @@ package llm
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 测试助手 ────────────────────────────
