@@ -4,6 +4,7 @@ import (
 	"context"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/vcs"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
@@ -84,21 +85,60 @@ func ForkContextFromMessages(msgs []llmschema.BaseMessage, checkpoint *int, keep
 	}
 }
 
-// ForkContextFromAgent 从源 DeepAgent 抓快照（内存读取半区）。
+// ForkContextFromAgent 从源 DeepAgent 抓快照（含持久化兜底，一比一）。
 //
-// 持久化兜底（Python from_agent 的 except 分支，fork.py:57-64）在调用方
-// TeamAgent.buildForkContext 内联执行——兜底读的是源成员 TeamAgent 绑定
-// session 的 state（DeepAgent 上没有），按调用关系下沉到 agent 包。
-// 内存读取失败且无兜底时返回 error，调用方 recover 收敛为「无继承 spawn」。
+// 内存上下文读取失败（源被 pause/resume/restart 重建、context pool 尚未懒加载）
+// 时，回落读源绑定 loop session 持久化的消息——fork 继承依然生效。兜底也无果
+// 时返回原错误，调用方（TeamAgent.buildForkContext 的 defer/recover）收敛为
+// 「无继承继续 spawn」。
 //
-// Python: ForkContext.from_agent (fork.py:52-117) 的读取半区。
+// Python: ForkContext.from_agent (fork.py:52-117)
 func ForkContextFromAgent(ctx context.Context, source *harness.DeepAgent, sessionID string, checkpoint *int, keep string) (*ForkContext, error) {
 	msgs, err := source.GetCurrentContext(ctx, sessionID, "default_context_id")
 	if err != nil {
-		// Python: raise exc（fork.py:65）——兜底由调用方执行
+		// Python: except Exception → cls._read_persisted_messages(agent)（fork.py:57-64）
+		if persisted := readPersistedMessages(source); persisted != nil {
+			return ForkContextFromMessages(persisted, checkpoint, keep), nil
+		}
+		// Python: raise exc（fork.py:65）——由调用方 except 兜底
 		return nil, err
 	}
 	return ForkContextFromMessages(msgs, checkpoint, keep), nil
+}
+
+// readPersistedMessages 从源 DeepAgent 绑定的 loop session 读持久化消息。
+//
+// context engine 每轮把 ModelContext.save_state()（含 messages）持久化进
+// agent 的子 AgentSession state 的 state["context"][context_id]["messages"]；
+// 该 state 在 pre_run 被 checkpoint 还原——即使内存池为空它也在，是 fork
+// 抓取的持久源。无绑定会话/无已存 context 时返回 nil，调用方重抛原错误。
+//
+// Python: _read_persisted_messages (fork.py:118-148)
+func readPersistedMessages(source *harness.DeepAgent) []llmschema.BaseMessage {
+	sess := source.LoopSession()
+	if sess == nil {
+		return nil
+	}
+	states, err := sess.GetState(state.StringKey("context"))
+	if err != nil {
+		// Python: except → return None（防御性读取可选状态）
+		return nil
+	}
+	statesMap, ok := states.(map[string]any)
+	if !ok {
+		return nil
+	}
+	ctxState, ok := statesMap["default_context_id"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	messages, ok := ctxState["messages"].([]any)
+	if !ok {
+		return nil
+	}
+	// Python: cls.normalize_messages(messages)（BaseMessage 直收/dict decode/
+	// 畸形整体退化）——NormalizeForkMessageValues 同语义
+	return NormalizeForkMessageValues(messages)
 }
 
 // NormalizeForkMessages 返回消息列表原样（BaseMessage 直收分支）。
