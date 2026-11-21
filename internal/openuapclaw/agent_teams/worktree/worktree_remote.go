@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -206,12 +207,15 @@ func (b *RemoteWorktreeBackend) sendAndWait(ctx context.Context, request *Worktr
 		Str("action", request.Action).
 		Str("node_id", b.nodeID).
 		Msg("Sending worktree request to node")
-	payload := worktreeRequestToMap(request)
+	payload, err := requestToPayload(request)
+	if err != nil {
+		return nil, err
+	}
 	responseData, err := b.messager.SendAndWait(ctx, b.nodeID, payload)
 	if err != nil {
 		return nil, err
 	}
-	return worktreeResponseFromMap(responseData)
+	return responseFromPayload(responseData)
 }
 
 // repoURL 解析本地仓库的 origin 远端 URL。
@@ -296,40 +300,32 @@ func (h *WorktreeRemoteHandler) ensureRepo(ctx context.Context, repoURL string) 
 	return localPath, nil
 }
 
-// worktreeRequestToMap 请求序列化为 Messager 载荷（Python model_dump）。
-func worktreeRequestToMap(r *WorktreeRemoteRequest) map[string]any {
-	return map[string]any{
-		"action":        r.Action,
-		"slug":          r.Slug,
-		"repo_url":      r.RepoURL,
-		"base_branch":   r.BaseBranch,
-		"worktree_path": r.WorktreePath,
-		"config":        r.Config,
+// requestToPayload 请求序列化为 Messager 载荷（Python model_dump）。
+// 序列化经 struct json tag 直走 encoding/json（不自写字段映射层）；类型不符
+// 显式报错，不做鸭子式静默零值回退（Python model_validate strict 语义）。
+func requestToPayload(r *WorktreeRemoteRequest) (map[string]any, error) {
+	raw, err := json.Marshal(r)
+	if err != nil {
+		return nil, fmt.Errorf("marshal worktree remote request: %w", err)
 	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal worktree remote request payload: %w", err)
+	}
+	return payload, nil
 }
 
-// worktreeResponseFromMap 响应反序列化（Python model_validate）。
-func worktreeResponseFromMap(data map[string]any) (*WorktreeRemoteResponse, error) {
+// responseFromPayload 响应反序列化（Python model_validate）。
+// 经 json tag 往返：键缺失/类型不符显式报错，不静默吞空。
+func responseFromPayload(data map[string]any) (*WorktreeRemoteResponse, error) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("marshal worktree remote response payload: %w", err)
+	}
 	resp := &WorktreeRemoteResponse{}
-	getStr := func(key string) string {
-		if v, ok := data[key].(string); ok {
-			return v
-		}
-		return ""
+	if err := json.Unmarshal(raw, resp); err != nil {
+		return nil, fmt.Errorf("unmarshal worktree remote response: %w", err)
 	}
-	getBool := func(key string) bool {
-		if v, ok := data[key].(bool); ok {
-			return v
-		}
-		return false
-	}
-	resp.Success = getBool("success")
-	resp.WorktreePath = getStr("worktree_path")
-	resp.WorktreeBranch = getStr("worktree_branch")
-	resp.HeadCommit = getStr("head_commit")
-	resp.Existed = getBool("existed")
-	resp.Exists = getBool("exists")
-	resp.Error = getStr("error")
 	return resp, nil
 }
 

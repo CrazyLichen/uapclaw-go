@@ -283,7 +283,7 @@ func runGitOrigin(t *testing.T, repo string) { t.Helper() }
 
 // TestWorktreeResponseFromMap_字段缺省 响应反序列化缺键安全。
 func TestWorktreeResponseFromMap_字段缺省(t *testing.T) {
-	resp, err := worktreeResponseFromMap(map[string]any{"success": true})
+	resp, err := responseFromPayload(map[string]any{"success": true})
 	require.NoError(t, err)
 	assert.True(t, resp.Success)
 	assert.Empty(t, resp.WorktreePath)
