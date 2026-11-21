@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 )
 
 // ──────────────────────────── 测试助手 ────────────────────────────
@@ -239,7 +241,7 @@ func TestGenerateJSONSchema(t *testing.T) {
 		"meta": map[string]any{"type": "object", "properties": map[string]any{"k": map[string]any{"type": "string"}}},
 		"opt":  map[string]any{"type": "string", "required": false},
 	})
-	assert.Equal(t, []string{"name", "tags", "meta"}, schema["required"])
+	assert.Equal(t, []string{"meta", "name", "tags"}, schema["required"], "D-18-6：Go map 无序 → required 排序")
 	props := schema["properties"].(map[string]any)
 	assert.Contains(t, props["tags"], "items")
 	assert.Contains(t, props["meta"], "properties")
@@ -450,22 +452,15 @@ func (f *fakeModelClient) Stream(ctx context.Context, messages modelclients.Mess
 }
 
 // newTestExecutable 构造带 fake 模型的执行体（WithModelResolver 注入缝）
-func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake *fakeModelClient) *LLMExecutable {
+func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake llModelInvoker) *LLMExecutable {
 	t.Helper()
 	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
-	require.NoError(t, fakeInit(e, fake))
-	return e
-}
-
-// fakeInit 直填懒初始化字段（绕过 createLLMInstance 走 fake）
-func fakeInit(e *LLMExecutable, fake *fakeModelClient) error {
-	if fake == nil {
-		return nil
+	if fake != nil {
+		e.llModel = fake
+		e.initialized = true
 	}
-	e.llModel = fake
-	e.initialized = true
-	return nil
+	return e
 }
 
 // TestInvoke_全链 懒初始化→日志→上下文写回→格式化（llm_comp.py:524-572 十步）
@@ -584,4 +579,124 @@ func (f *fakeModelContext) GetMessages(size int, withHistory bool) ([]llmschema.
 func (f *fakeModelContext) AddMessages(ctx context.Context, messages []llmschema.BaseMessage, opts ...iface.Option) ([]llmschema.BaseMessage, error) {
 	f.messages = append(f.messages, messages...)
 	return f.messages, nil
+}
+
+// ──────────────────────────── Task7 stream 链 ────────────────────────────
+
+// fakeStreamClient 逐 chunk 可控的流式桩
+type fakeStreamClient struct {
+	chunks    []string
+	streamErr error
+}
+
+func (f *fakeStreamClient) Invoke(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return llmschema.NewAssistantMessage(strings.Join(f.chunks, "")), nil
+}
+
+func (f *fakeStreamClient) Stream(ctx context.Context, messages modelclients.MessagesParam, opts ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	if f.streamErr != nil {
+		return nil, f.streamErr
+	}
+	ch := make(chan *llmschema.AssistantMessageChunk)
+	go func() {
+		defer close(ch)
+		for _, c := range f.chunks {
+			ch <- llmschema.NewAssistantMessageChunk(c)
+		}
+		// 末尾哨兵：流中断错误（foundation/llm StreamError 契约）
+	}()
+	return ch, nil
+}
+
+// drainFrames 消费全部帧
+func drainFrames(t *testing.T, ch <-chan graphexe.StreamChunk[any]) ([]any, error) {
+	t.Helper()
+	var vals []any
+	for f := range ch {
+		if f.Err != nil {
+			return vals, f.Err
+		}
+		vals = append(vals, f.Val)
+	}
+	return vals, nil
+}
+
+// TestStream_json格式_一次性帧 json 分支整体 Invoke 后单帧（:582-584,707-731）
+func TestStream_json格式_一次性帧(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.ResponseFormat = map[string]any{"type": "json"}
+	cfg.OutputConfig = map[string]any{"name": map[string]any{"type": "string", "required": true}}
+	e := newTestExecutable(t, cfg, &fakeStreamClient{chunks: []string{"{\"name\": \"ok\"}"}})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	frames, ferr := drainFrames(t, ch)
+	require.NoError(t, ferr)
+	require.Len(t, frames, 1)
+	assert.Equal(t, "ok", frames[0].(map[string]any)["name"])
+}
+
+// TestStream_逐chunk格式化 text 分支每 chunk 一帧（:733-747）
+func TestStream_逐chunk格式化(t *testing.T) {
+	e := newTestExecutable(t, llmTestConfig(), &fakeStreamClient{chunks: []string{"你", "好"}})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	frames, ferr := drainFrames(t, ch)
+	require.NoError(t, ferr)
+	require.Len(t, frames, 2)
+	// 每 chunk 单独过格式化器（Python :744-747 同为 dict 帧）
+	assert.Equal(t, map[string]any{"answer": "你"}, frames[0])
+}
+
+// TestStream_cacheStream_出错清状态（:748-751,588-600）
+func TestStream_cacheStream_出错清状态(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.CacheStream = true
+	e := newTestExecutable(t, cfg, &fakeStreamClient{streamErr: errors.New("mid")})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	_, ferr := drainFrames(t, ch)
+	require.Error(t, ferr)
+	assertLLMCode(t, ferr, exception.StatusComponentLLMInvokeCallFailed)
+	assert.Equal(t, "", e.state.accumulatedContent)
+}
+
+// TestStream_getStreamOutput 空结果 nil、累积后取回（:602-610）
+func TestStream_getStreamOutput(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.CacheStream = true
+	e := newTestExecutable(t, cfg, &fakeStreamClient{chunks: []string{"ab"}})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	assert.Nil(t, e.getStreamOutput(), "空累积 → nil（Python output=None）")
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	_, ferr := drainFrames(t, ch)
+	require.NoError(t, ferr)
+	out := e.getStreamOutput()
+	require.NotNil(t, out)
+	assert.Equal(t, "ab", out["answer"])
+}
+
+// TestStream_cacheStream_成功累积 json 分支累积后 getStreamOutput 可取格式化结果
+func TestStream_cacheStream_成功累积(t *testing.T) {
+	cfg := llmTestConfig()
+	cfg.CacheStream = true
+	cfg.ResponseFormat = map[string]any{"type": "json"}
+	cfg.OutputConfig = map[string]any{"name": map[string]any{"type": "string", "required": true}}
+	e := newTestExecutable(t, cfg, &fakeStreamClient{chunks: []string{"{\"name\": \"ok\"}"}})
+	sess := newTestNodeSession(t)
+	e.setSession(sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	require.NoError(t, err)
+	_, ferr := drainFrames(t, ch)
+	require.NoError(t, ferr)
+	out := e.getStreamOutput()
+	require.NotNil(t, out)
+	assert.Equal(t, "ok", out["name"])
 }

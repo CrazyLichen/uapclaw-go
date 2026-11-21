@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -184,8 +185,9 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 	// 保存基座钩子（方法遮蔽后转调）
 	e.baseInvoke = e.WorkflowComponent.OnInvoke
 	e.baseStream = e.WorkflowComponent.OnStream
-	// 四槽装配：invoke 槽（stream 槽 Task 7 装配）
+	// 四槽装配：invoke + stream 槽
 	e.InvokeFn = e.invokeEntry
+	e.StreamFn = e.streamEntry
 	return e, nil
 }
 
@@ -607,6 +609,9 @@ func extractConfiguredFields(parsedJSON map[string]any, outputsConfig map[string
 	}
 
 	if len(missingKeys) > 0 {
+		// D-18-6：Python dict 保序 → Go map 无序，missing 顺序不可复刻；
+		// 取排序保确定性行为（错误文案字段顺序可能与 Python 不同）
+		sort.Strings(missingKeys)
 		if security.IsSensitive() {
 			panic(exception.BuildError(exception.StatusComponentLLMConfigInvalid,
 				exception.WithMsg("missing required fields.")))
@@ -782,6 +787,8 @@ func generateJSONSchema(outputsConfig map[string]any) map[string]any {
 		}
 	}
 
+	// D-18-6：required 顺序排序保确定性（Python 插入序不可复刻）
+	sort.Strings(required)
 	return map[string]any{
 		"type":       "object",
 		"properties": properties,
@@ -1180,4 +1187,180 @@ func (e *LLMExecutable) createOutput(llmOutput string) (out map[string]any) {
 		panic(be)
 	}()
 	return formatResponse(llmOutput, e.cfg.ResponseFormat, e.cfg.OutputConfig)
+}
+
+// ──────────────────────────── LLMExecutable stream 链（llm_comp.py:574-752） ────────────────────────────
+
+// streamEntry 批入流出槽函数（Python stream :574-600 外层 + :707-752 双分支一比一）
+func (e *LLMExecutable) streamEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+	// Python stream 是 async generator——入口先执行的部分（:575-580 + 分派）同步，
+	// 产出经 channel；入口错误走第二返回值（流式签名 A'，8.2 spec）
+	e.setSession(sess)
+	// Reset state for new stream（:577-579）
+	if e.cfg.CacheStream {
+		e.state.Clear()
+	}
+	responseFormatType, _ := e.cfg.ResponseFormat[typeKey].(string)
+	out := make(chan graphexe.StreamChunk[any])
+	go func() {
+		defer close(out)
+		streamErr := func() error {
+			defer func() {
+				// except 分支：cache_stream 清状态重抛（:588-600 + :748-751）
+				if r := recover(); r != nil {
+					if be, ok := r.(*exception.BaseError); ok {
+						if e.cfg.CacheStream {
+							e.state.Clear()
+						}
+						panic(be)
+					}
+					panic(r)
+				}
+			}()
+			if responseFormatType == string(ResponseTypeJSON) {
+				return e.invokeForJSONFormat(ctx, inputs, out)
+			}
+			return e.streamWithChunks(ctx, inputs, out)
+		}()
+		if streamErr != nil {
+			// 外层异常包装 101003（敏感 "failed to stream" vs str(e)，:588-600）
+			msg := streamErr.Error()
+			if security.IsSensitive() {
+				msg = "failed to stream"
+			}
+			out <- graphexe.StreamChunk[any]{Err: exception.BuildError(exception.StatusComponentLLMInvokeCallFailed,
+				exception.WithMsg(msg), exception.WithCause(streamErr))}
+		}
+	}()
+	return out, nil
+}
+
+// getStreamOutput 流式缓存产物（Python get_stream_output :602-610 一比一：
+// cache_stream 且 session 非空才产出；空结果返 nil）
+func (e *LLMExecutable) getStreamOutput() map[string]any {
+	output := map[string]any(nil)
+	if e.cfg.CacheStream && e.session != nil {
+		finalResult := e.state.BuildFinalResult(e.cfg.ResponseFormat, e.cfg.OutputConfig)
+		if len(finalResult) > 0 {
+			output = finalResult
+		}
+	}
+	return output
+}
+
+// invokeForJSONFormat json 格式流式分支（Python _invoke_for_json_format :707-731
+// 一比一：整体 Invoke 后单帧 yield）
+func (e *LLMExecutable) invokeForJSONFormat(ctx context.Context, inputs map[string]any, out chan<- graphexe.StreamChunk[any]) error {
+	modelInputs, err := e.prepareModelInputs(ctx, inputs)
+	if err != nil {
+		return err
+	}
+	// START 日志（response_format:"json"，:709-720）
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_START").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "LLMComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Str("response_format", "json").
+		Bool("has_inputs", len(modelInputs) > 0).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("LLM component JSON format invoke started")
+	e.writeUserMessageToContext(ctx, modelInputs)
+	// 整体 Invoke（:722-723）
+	llmResponse, invokeErr := e.llModel.Invoke(ctx, modelclients.NewMessagesParam(modelInputs...))
+	if invokeErr != nil {
+		return invokeErr
+	}
+	llmOutputContent := llmResponse.Content.String()
+	// cache_stream 累积（:725-726）
+	if e.cfg.CacheStream {
+		e.state.AccumulateContent(llmOutputContent)
+	}
+	// 写 assistant 消息（:728）
+	e.writeAssistantMessageToContext(ctx, llmOutputContent)
+	// 格式化后单帧 yield（:729-731；createOutput 的 101007→101004 转换同 invoke 链）
+	output, oErr := e.createOutputAsResult(llmOutputContent)
+	if oErr != nil {
+		return oErr
+	}
+	out <- graphexe.StreamChunk[any]{Val: output}
+	return nil
+}
+
+// streamWithChunks 逐 chunk 流式分支（Python _stream_with_chunks :733-752 一比一）
+func (e *LLMExecutable) streamWithChunks(ctx context.Context, inputs map[string]any, out chan<- graphexe.StreamChunk[any]) error {
+	modelInputs, err := e.prepareModelInputs(ctx, inputs)
+	if err != nil {
+		return err
+	}
+	e.writeUserMessageToContext(ctx, modelInputs)
+	accumulatedContent := ""
+	chunkCh, streamStartErr := e.llModel.Stream(ctx, modelclients.NewMessagesParam(modelInputs...))
+	if streamStartErr != nil {
+		if e.cfg.CacheStream {
+			e.state.Clear()
+		}
+		return streamStartErr
+	}
+	for chunk := range chunkCh {
+		// StreamError 哨兵：流读取中断（foundation/llm 契约，Python 生成器 raise 等价）
+		if chunk != nil && chunk.StreamError != nil {
+			if e.cfg.CacheStream {
+				e.state.Clear()
+			}
+			return chunk.StreamError
+		}
+		content := extractContent(chunk)
+		if content == "" {
+			continue
+		}
+		if e.cfg.CacheStream {
+			e.state.AccumulateContent(content)
+		}
+		accumulatedContent += content
+		// 每 chunk 单独过格式化器（:744-747；text/markdown 单字段包装逐帧可行）
+		formatted, fErr := func() (m map[string]any, ferr error) {
+			defer func() {
+				if r := recover(); r != nil {
+					be, ok := r.(*exception.BaseError)
+					if !ok {
+						panic(r)
+					}
+					ferr = be
+				}
+			}()
+			return formatResponse(content, e.cfg.ResponseFormat, e.cfg.OutputConfig), nil
+		}()
+		if fErr != nil {
+			if e.cfg.CacheStream {
+				e.state.Clear()
+			}
+			return fErr
+		}
+		out <- graphexe.StreamChunk[any]{Val: formatted}
+	}
+	// 成功收尾写 assistant 消息（:752）
+	e.writeAssistantMessageToContext(ctx, accumulatedContent)
+	return nil
+}
+
+// extractContent 响应内容提取（Python WorkflowLLMUtils.extract_content :64-65 一比一：
+// has content 属性取之，否则 str() 兜底——AssistantMessageChunk 取 Content，其他 fmt 转串）
+func extractContent(response any) string {
+	switch r := response.(type) {
+	case *llmschema.AssistantMessageChunk:
+		if r == nil {
+			return ""
+		}
+		return r.Content.String()
+	case *llmschema.AssistantMessage:
+		if r == nil {
+			return ""
+		}
+		return r.Content.String()
+	case string:
+		return r
+	default:
+		return fmt.Sprintf("%v", response)
+	}
 }
