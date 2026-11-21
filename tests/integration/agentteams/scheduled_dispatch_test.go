@@ -124,7 +124,7 @@ func (s *TeamScheduledDispatchSuite) SetupSuite() {
 	s.Require().True(s.db.Member().CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", ""))
 	s.Require().True(s.db.Member().CreateMember(ctx, "bob", "alpha", "Bob", "{}", "ready", "teammate", "", "", "build_mode", "", ""))
 	s.Require().NoError(s.db.Initialize(ctx))
-	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.mm = tools.NewTeamMessageManager(db, "alpha", "leader1", nil)
 	s.host = &schedFakeHost{}
 	s.backend = &schedFakeBackend{shutdown: map[string]bool{}}

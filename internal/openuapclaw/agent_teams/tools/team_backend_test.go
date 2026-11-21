@@ -991,7 +991,8 @@ func TestCancelTask_有Assignee(t *testing.T) {
 
 // TestApprovePlan_通过Backend 测试通过 TeamBackend 审批计划
 func TestApprovePlan_通过Backend(t *testing.T) {
-	tb := newTestTeamBackend()
+	// 计划提交流需真实 plansDir（空 plansDir 已被 writePlanIndex 守卫拒绝）
+	tb := newTestTeamBackendWithOptions(WithPlanStorageDir(t.TempDir()))
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)

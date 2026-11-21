@@ -122,7 +122,7 @@ func (s *ReviewEvolutionE2ESuite) SetupSuite() {
 		s.Require().True(db.Member().CreateMember(ctx, member, "alpha", member, "{}", "ready", role, "", "", "build_mode", "", ""))
 	}
 	s.Require().NoError(db.Initialize(ctx))
-	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.backend = &schedFakeBackend{shutdown: map[string]bool{}, verificationEnabled: true}
 	s.sender = &schedFakeSender{rows: map[string][]*database.TeamMessageBase{}}
 	s.host = &schedFakeHost{}
@@ -204,7 +204,7 @@ func (s *ReviewEvolutionE2ESuite) createE2ETask(taskID string) {
 		Status: "in_progress", Assignee: s.strPtr("agent1"),
 		Reviewer: s.strPtr(`[{"type":"verifier","reviewer_id":"reviewer1"}]`),
 	}))
-	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, err := authorTM.Complete(ctx, taskID)
 	s.Require().NoError(err)
 	s.Require().True(result.OK, "complete must pass the review gate")
@@ -218,7 +218,7 @@ func (s *ReviewEvolutionE2ESuite) createE2ETask(taskID string) {
 // harness 的 verify_task 调用——MockLLM 编排在工具层等效）。
 func (s *ReviewEvolutionE2ESuite) injectVote(decision, feedback string) {
 	s.sched.SetReviewerRunner(func(_ context.Context, reviewer string, task *database.TeamTaskBase) bool {
-		reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", reviewer, nil, nil, "", "", "leader1")
+		reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", reviewer, nil, nil, s.T().TempDir(), "", "leader1")
 		result, err := reviewerTM.VerifyTask(context.Background(), task.TaskID, decision, feedback)
 		if err != nil || !result.OK {
 			return false
@@ -299,7 +299,7 @@ func (s *ReviewEvolutionE2ESuite) TestE2E_E1_主链() {
 	s.Require().Equal("scheduler_rework", e2eTemplateOf(mail, "scheduler_rework"), "F_63 rework mail")
 
 	// ② 作者按返工重做 → 再过评审门（round2）→ pass → 结算 completed + leader digest。
-	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, err := authorTM.Complete(context.Background(), taskID)
 	s.Require().NoError(err)
 	s.Require().True(result.OK, "rework completion re-enters review gate (round 2)")
@@ -394,7 +394,7 @@ func (s *ReviewEvolutionE2ESuite) TestE2E_E3_升级链不阻断演化() {
 	s.createE2ETask(taskID)
 	s.injectVote("fail", "第一轮缺陷")
 	s.scanTwice()
-	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, err := authorTM.Complete(context.Background(), taskID)
 	s.Require().NoError(err)
 	s.Require().True(result.OK, "rework completion re-enters review gate (round 2)")

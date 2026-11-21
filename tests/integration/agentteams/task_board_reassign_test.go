@@ -135,7 +135,7 @@ func (s *TaskBoardReassignSuite) newMemberSide(member string, role schema.TeamRo
 
 // memberTaskManager 成员视角的任务管理器。
 func (s *TaskBoardReassignSuite) memberTaskManager(member string, msgr messager.Messager) *tools.TeamTaskManager {
-	return tools.NewTeamTaskManager(s.db, "alpha", member, msgr, nil, "", "", "leader1")
+	return tools.NewTeamTaskManager(s.db, "alpha", member, msgr, nil, s.T().TempDir(), "", "leader1")
 }
 
 // ──────────────────────────── 用例 ────────────────────────────

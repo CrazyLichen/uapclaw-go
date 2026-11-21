@@ -60,7 +60,7 @@ func (s *TeamScheduledReviewSuite) SetupSuite() {
 		s.Require().True(db.Member().CreateMember(ctx, member, "alpha", member, "{}", "ready", role, "", "", "build_mode", "", ""))
 	}
 	s.Require().NoError(db.Initialize(ctx))
-	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	s.tm = tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.host = &schedFakeHost{}
 	s.backend = &schedFakeBackend{shutdown: map[string]bool{}, verificationEnabled: true}
 	s.sender = &schedFakeSender{rows: map[string][]*database.TeamMessageBase{}}
@@ -96,7 +96,7 @@ func (s *TeamScheduledReviewSuite) createReviewTask(taskID string) *database.Tea
 		Reviewer: s.strPtr(`[{"type":"verifier","reviewer_id":"reviewer1"}]`),
 	}))
 	// 作者完成 → 评审门（F_62）：IN_REVIEW 而非 COMPLETED。
-	tm := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	tm := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, err := tm.Complete(ctx, taskID)
 	s.Require().NoError(err)
 	s.Require().True(result.OK, "complete must pass the review gate")
@@ -112,7 +112,7 @@ func (s *TeamScheduledReviewSuite) createReviewTask(taskID string) *database.Tea
 // reviewer harness 的 verify_task 调用——MockLLM 编排在工具层等效）。
 func (s *TeamScheduledReviewSuite) injectVerifierVote(decision, feedback string) {
 	s.sched.SetReviewerRunner(func(_ context.Context, reviewer string, task *database.TeamTaskBase) bool {
-		reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", reviewer, nil, nil, "", "", "leader1")
+		reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", reviewer, nil, nil, s.T().TempDir(), "", "leader1")
 		result, err := reviewerTM.VerifyTask(context.Background(), task.TaskID, decision, feedback)
 		if err != nil || !result.OK {
 			return false
@@ -169,7 +169,7 @@ func (s *TeamScheduledReviewSuite) TestScheduledReview_I4_超限升级() {
 	s.createReviewTask("i4-ceiling")
 	// 真实链推到最后一轮（max_review_rounds=2）：round1 fail → 返工 →
 	// 作者再次完成（评审门 round2）→ fail → 超限。
-	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	authorTM := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	s.injectVerifierVote("fail", "第一轮缺陷")
 	s.sched.Activate(context.Background())
 	time.Sleep(400 * time.Millisecond)
@@ -203,16 +203,16 @@ func (s *TeamScheduledReviewSuite) TestScheduledReview_I4_计票矩阵() {
 		Status: "in_progress", Assignee: s.strPtr("agent1"),
 		Reviewer: s.strPtr(`[{"type":"verifier","reviewer_id":"reviewer1"},{"type":"inspector","reviewer_id":"inspector1"}]`),
 	}))
-	tm := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, "", "", "leader1")
+	tm := tools.NewTeamTaskManager(s.db, "alpha", "agent1", nil, nil, s.T().TempDir(), "", "leader1")
 	_, _ = tm.Complete(ctx, "i4-tally")
 	row, _ := s.db.Task().GetTask(ctx, "i4-tally")
 	s.Require().NotNil(row)
 
 	// verifier1 pass + inspector1 分数票。
-	reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", "reviewer1", nil, nil, "", "", "leader1")
+	reviewerTM := tools.NewTeamTaskManager(s.db, "alpha", "reviewer1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, _ := reviewerTM.VerifyTask(ctx, "i4-tally", "pass", "")
 	s.Require().True(result.OK)
-	inspectorTM := tools.NewTeamTaskManager(s.db, "alpha", "inspector1", nil, nil, "", "", "leader1")
+	inspectorTM := tools.NewTeamTaskManager(s.db, "alpha", "inspector1", nil, nil, s.T().TempDir(), "", "leader1")
 	result, _ = inspectorTM.VerifyTask(ctx, "i4-tally", "0.9", "")
 	s.Require().True(result.OK, "inspector score vote must be accepted")
 

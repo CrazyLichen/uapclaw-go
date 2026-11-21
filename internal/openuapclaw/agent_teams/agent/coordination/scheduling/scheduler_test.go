@@ -129,7 +129,7 @@ func setupScheduler(t *testing.T) *fixture {
 	db.CreateMember(ctx, "bob", "alpha", "Bob", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "planner", "alpha", "P", "{}", fsm.MemberStatusReady, "teammate", "", "", "plan_mode", "", "")
 	db.Initialize(ctx)
-	tm := tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, "", "", "leader1")
+	tm := tools.NewTeamTaskManager(db, "alpha", "leader1", nil, nil, t.TempDir(), "", "leader1")
 	host := &fakeHost{}
 	backend := &fakeBackend{shutdown: map[string]bool{}}
 	sender := &fakeSender{rows: map[string][]*database.TeamMessageBase{}}

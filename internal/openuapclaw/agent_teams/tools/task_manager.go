@@ -1610,7 +1610,13 @@ func (tm *TeamTaskManager) checkTaskListDrained(ctx context.Context) bool {
 }
 
 // writePlanIndex 写入或创建 index.json。
+// plansDir 为空时拒绝写盘：空 plansDir 会使路径退化为相对路径，落到测试进程
+// CWD 污染仓库文件（tools/index.json 曾因此被测试假数据污染，2026-11-21 清理）。
+// Python: plans_dir 为构造必填参数。
 func (tm *TeamTaskManager) writePlanIndex(record *PlanRecord) error {
+	if tm.plansDir == "" {
+		return fmt.Errorf("plansDir 未配置，拒绝写入计划索引")
+	}
 	indexPath := filepath.Join(tm.plansDir, tm.teamPlanID, "index.json")
 	index, err := tm.loadPlanIndex()
 	if err != nil {
@@ -1666,6 +1672,10 @@ func (tm *TeamTaskManager) updatePlanIndex(planID string, record *PlanRecord) er
 
 // loadPlanIndex 加载 index.json。
 func (tm *TeamTaskManager) loadPlanIndex() (*PlanIndex, error) {
+	// plansDir 为空时视作无索引（不读相对路径文件，防 CWD 污染）。
+	if tm.plansDir == "" {
+		return nil, os.ErrNotExist
+	}
 	indexPath := filepath.Join(tm.plansDir, tm.teamPlanID, "index.json")
 	data, err := os.ReadFile(indexPath)
 	if err != nil {

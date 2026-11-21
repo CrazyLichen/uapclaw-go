@@ -353,7 +353,7 @@ func (h *TaskBoardHandler) OnTaskSubmittedForReview(ctx context.Context, event t
 		return
 	}
 	em := event.Transport
-	if !memberInList(em.Payload["reviewer"], memberName) {
+	if !memberInList(payloadMemberList(em.Payload["reviewer"]), memberName) {
 		h.OnTaskBoardEvent(ctx, event)
 		return
 	}
@@ -740,22 +740,32 @@ func justCompletedBlock(ctx context.Context, allTasks []*database.TeamTaskBase, 
 	return []string{strings.Join(lines, "\n")}
 }
 
-// memberInList 判断 member 是否出现在 payload 列表值中；兼容 []string 与
-// JSON 往返的 []any（消息载荷跨进程序列化后为 []any）。
-// Python: member_name not in reviewers（payload.reviewer or []）。
-func memberInList(v any, member string) bool {
+// payloadMemberList 从事件 payload 中取成员列表并归一为 []string。
+// wire 载荷跨进程序列化后为 []any，进程内为 []string（既有双形态坑）。
+// Python: payload.reviewer or []。
+func payloadMemberList(v any) []string {
 	switch list := v.(type) {
 	case []string:
-		for _, m := range list {
-			if m == member {
-				return true
+		return list
+	case []any:
+		out := make([]string, 0, len(list))
+		for _, item := range list {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
 			}
 		}
-	case []any:
-		for _, item := range list {
-			if s, ok := item.(string); ok && s == member {
-				return true
-			}
+		return out
+	default:
+		return nil
+	}
+}
+
+// memberInList 判断 member 是否出现在成员列表中。
+// Python: member_name not in reviewers。
+func memberInList(reviewers []string, member string) bool {
+	for _, m := range reviewers {
+		if m == member {
+			return true
 		}
 	}
 	return false
