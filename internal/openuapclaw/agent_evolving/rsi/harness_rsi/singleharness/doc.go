@@ -16,7 +16,9 @@
 //	├── candidate_feedback.go   # 候选反馈 cohort 构建与排序（candidate_feedback.py）
 //	├── behavior_check.go       # 候选行为核查与反馈路由（behavior_check.py）
 //	├── events_translate.go     # epoch 树事件翻译（events_translate.py）
-//	├── source_evidence.go      # 评估来源证据与材料指纹（source_evidence.py）
+//	├── source_evidence.go      # 评估来源证据（source_evidence.py 余件；身份计算
+//	│                              闭包 _digest/read_mapping/_material_identity/
+//	│                              _harness_identity 已下沉 source_evidence 子包）
 //	├── runtime_evidence.go     # 能力不可判定用例收集（runtime_evidence.py）
 //	└── evaluator_seam.go      # evaluator fake 注入缝（对齐 17.4f 桩签名）
 //

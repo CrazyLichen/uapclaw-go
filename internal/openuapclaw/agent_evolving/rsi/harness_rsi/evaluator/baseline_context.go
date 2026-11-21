@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -326,10 +325,6 @@ func expandUserB(path string) string {
 }
 
 // evalToString 任意值转字符串。
-// evalAnyEqual 深度相等。
-func evalAnyEqual(left, right any) bool {
-	return reflect.DeepEqual(left, right)
-}
 
 func evalToString(value any) string {
 	switch v := value.(type) {

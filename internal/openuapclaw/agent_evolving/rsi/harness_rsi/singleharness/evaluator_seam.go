@@ -38,13 +38,6 @@ func NewEvaluatorInvoker(cfg harnessconfig.EvaluatorConfig) (EvaluatorInvoker, e
 	return evaluator.NewTeamEvaluator(cfg)
 }
 
-func init() {
-	// 材料身份反转缝注册（evaluator 指纹消费 singleharness.MaterialIdentity；
-	// Python team_evaluator.py:301 内联 import 的 Go 等价）。
-	evaluator.RegisterMaterialIdentity(func(value any) any {
-		return MaterialIdentity(value, cwdOrDot(), nil)
-	})
-}
 
 // AnalyzerInvoker 编排器依赖的诊断分析面（Python 构造器 analyzer: Any 注入点）。
 // 真身 *analyzerpkg.EvaluationResultAnalyzer（17.4b）；测试注入 fake。

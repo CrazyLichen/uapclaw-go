@@ -29,6 +29,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	sourceEvidence "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/source_evidence"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -138,13 +140,6 @@ const evaluationInputFile = "evaluation_input.json"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// materialIdentityFn 材料身份计算反转缝（singleharness.MaterialIdentity 经
-// init 注册）。Python: team_evaluator.py:301 函数体内联 import
-// single_harness.source_evidence._material_identity；Go 包树不可环
-// （singleharness → evaluator 已有依赖），经函数值缝注入（judger
-// reverse_seams.go 同款决策）。
-var materialIdentityFn func(value any) any
-
 // buildBackendFn / buildJudgerFn 构造函数测试缝（函数值承载，反转缝同款惯例）：
 // 生产路径指向 BuildBackend / judger.BuildJudger；真身单测替换为 fake 构造器。
 var (
@@ -153,24 +148,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// RegisterMaterialIdentity 由 singleharness 包在 init 时注册材料身份计算。
-func RegisterMaterialIdentity(fn func(value any) any) {
-	materialIdentityFn = fn
-}
-
-// callMaterialIdentity 经缝调用材料身份；未注册时退化为规范化 JSON 字符串
-// （不影响指纹稳定性，仅损失深层资产解析）。
-func callMaterialIdentity(value any) any {
-	if materialIdentityFn != nil {
-		return materialIdentityFn(value)
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		return ""
-	}
-	return string(data)
-}
 
 // NewTeamEvaluator 构造评估门面（对齐 Python __init__：config + MetricsCollector
 // + _make_case_runner）。
@@ -496,7 +473,7 @@ func (te *TeamEvaluator) makeCaseRunner() (*CaseRunner, error) {
 // prepareEvalDir 展开用户目录并创建评估根目录。
 // Python: team_evaluator.py:262-265 _prepare_eval_dir。
 func prepareEvalDir(outputDir string) (string, error) {
-	evalDir, err := filepath.Abs(expandHome(outputDir))
+	evalDir, err := filepath.Abs(pathutil.ExpandHome(outputDir))
 	if err != nil {
 		return "", err
 	}
@@ -512,7 +489,7 @@ func evaluationName(skillRefPath string) string {
 	if strings.TrimSpace(skillRefPath) == "" {
 		return "single_harness"
 	}
-	path := expandHome(skillRefPath)
+	path := pathutil.ExpandHome(skillRefPath)
 	if strings.ToLower(filepath.Base(path)) == "skill.md" {
 		return filepath.Base(filepath.Dir(path))
 	}
@@ -565,7 +542,7 @@ func evaluationInputFingerprint(params fingerprintParams) (string, error) {
 			}
 		}
 		for role, packagePath := range loadedRefs {
-			packageAbs, err := filepath.Abs(expandHome(packagePath))
+			packageAbs, err := filepath.Abs(pathutil.ExpandHome(packagePath))
 			if err != nil {
 				return "", err
 			}
@@ -578,8 +555,12 @@ func evaluationInputFingerprint(params fingerprintParams) (string, error) {
 	payload["harness_packages"] = packages
 	method := ""
 	if params.evaluatorConfig != nil {
-		payload["evaluator"] = callMaterialIdentity(
-			config.EvaluatorProtocolConfig(*params.evaluatorConfig))
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			cwd = "."
+		}
+		payload["evaluator"] = sourceEvidence.MaterialIdentity(
+			config.EvaluatorProtocolConfig(*params.evaluatorConfig), cwd, nil)
 		method = strings.ToLower(strings.ReplaceAll(
 			strings.TrimSpace(params.evaluatorConfig.EvaluationMethod), "-", "_"))
 	}
@@ -606,7 +587,7 @@ func pathIdentity(pathValue string) map[string]string {
 	if strings.TrimSpace(pathValue) == "" {
 		return map[string]string{"path": "", "sha256": ""}
 	}
-	path, err := filepath.Abs(expandHome(pathValue))
+	path, err := filepath.Abs(pathutil.ExpandHome(pathValue))
 	if err != nil {
 		return map[string]string{"path": pathValue, "sha256": ""}
 	}
@@ -680,6 +661,10 @@ func loadCompletedCaseRef(caseOutputDir, caseID string) *harnessrsi.EvaluationCa
 	if evaluation == nil {
 		evaluation = map[string]any{}
 	}
+	var caseScore *float64
+	if score, ok := result["score"].(float64); ok {
+		caseScore = &score
+	}
 	if judger.IsExecutionOnlyEvaluation(evaluation) {
 		return nil
 	}
@@ -687,19 +672,20 @@ func loadCompletedCaseRef(caseOutputDir, caseID string) *harnessrsi.EvaluationCa
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
+	passed, _ := evaluation["passed"].(bool)
 	return &harnessrsi.EvaluationCaseTraceRef{
 		CaseID:     caseID,
 		CasePath:   evalToString(metadata["case_path"]),
 		TracePath:  tracePath,
 		ResultPath: resultPath,
 		Status:     status,
-		Score:      numberOfField(result["score"]),
+		Score:      caseScore,
 		Metadata: map[string]any{
 			"session_id":        evalToString(result["session_id"]),
 			"team_name":         evalToString(metadata["team_name"]),
 			"execution_status":  evalToString(result["execution_status"]),
 			"evaluation_method": evalToString(evaluation["method"]),
-			"evaluation_passed": evalToBool(evaluation["passed"]),
+			"evaluation_passed": passed,
 			"resumed":           true,
 		},
 	}
@@ -746,7 +732,7 @@ func caseDirName(caseID string, caseIndex int) string {
 func loadDatasetCases(datasetFiles []string) ([]map[string]any, error) {
 	var cases []map[string]any
 	for _, datasetFile := range datasetFiles {
-		path, err := filepath.Abs(expandHome(datasetFile))
+		path, err := filepath.Abs(pathutil.ExpandHome(datasetFile))
 		if err != nil {
 			return nil, err
 		}
@@ -769,7 +755,7 @@ func loadDatasetCases(datasetFiles []string) ([]map[string]any, error) {
 // MemberOptimizer 兼容的 {"harness_refs": {role: path}, "roles": [...]}；
 // 兼容旧版顶层 {role: path} 映射。
 func loadHarnessRefs(harnessRefsPath string) (map[string]string, error) {
-	path, err := filepath.Abs(expandHome(harnessRefsPath))
+	path, err := filepath.Abs(pathutil.ExpandHome(harnessRefsPath))
 	if err != nil {
 		return nil, err
 	}
@@ -893,26 +879,6 @@ func backoffDelay(attempt int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-// evalToBool map 字段取布尔（nil 安全，缺省 false）。
-func evalToBool(value any) bool {
-	if b, ok := value.(bool); ok {
-		return b
-	}
-	return false
-}
-
-// numberOfField map 字段取分数引用（非数值返回 nil）。
-func numberOfField(value any) *float64 {
-	switch v := value.(type) {
-	case float64:
-		return &v
-	case *float64:
-		return v
-	default:
-		return nil
-	}
-}
-
 // toAnyMap string 映射转 any 映射（深拷贝入参需要）。
 func toAnyMap(source map[string]string) map[string]any {
 	result := make(map[string]any, len(source))
@@ -933,20 +899,6 @@ func toStringMap(source map[string]any) map[string]string {
 	return result
 }
 
-// expandHome 展开 ~ 前缀（对齐 Python Path.expanduser）。
-func expandHome(path string) string {
-	if path == "~" {
-		if home, err := os.UserHomeDir(); err == nil {
-			return home
-		}
-	}
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
-}
 
 // isFile 判断常规文件。
 func isFile(path string) bool {

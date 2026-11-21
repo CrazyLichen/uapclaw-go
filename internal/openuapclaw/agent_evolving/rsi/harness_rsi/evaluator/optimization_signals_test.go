@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"os"
 	"path/filepath"
 	"strings"
@@ -357,8 +358,8 @@ func TestBaselineValidate_错误分支矩阵(t *testing.T) {
 	if evalToString(42) == "" {
 		t.Fatalf("evalToString 数字")
 	}
-	if !evalAnyEqual(map[string]any{"a": 1}, map[string]any{"a": 1}) {
-		t.Fatalf("evalAnyEqual")
+	if !pythonsem.PyDeepEqual(map[string]any{"a": 1}, map[string]any{"a": 1}) {
+		t.Fatalf("PyDeepEqual")
 	}
 	if expandUserB("~/x") == "~/x" {
 		t.Fatalf("应展开 ~")

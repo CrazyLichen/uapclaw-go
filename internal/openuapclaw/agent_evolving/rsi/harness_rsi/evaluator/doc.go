@@ -25,6 +25,7 @@
 //	├── trajectory_usage.go              # 轨迹用量归集
 //	├── errors.go                        # EvaluationInfrastructureError
 //	├── team_evaluator.go                # TeamEvaluator 评估门面真身（17.6c，Python team_evaluator.py 501 行）
+//	│                                      （指纹经 source_evidence.MaterialIdentity 正向依赖，原 RegisterMaterialIdentity 反转缝已删）
 //	└── judger/                          # 17.6a 裁判组子包（评分五件+提示词 embed+判分器工厂）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluator/
