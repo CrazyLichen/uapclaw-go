@@ -1,5 +1,11 @@
 package database
 
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DBConfigProvider 数据库配置提供者接口。
@@ -73,6 +79,39 @@ func (c DatabaseConfig) GetDBType() DatabaseType { return c.DBType }
 
 // GetConnectionString 返回连接字符串。实现 DBConfigProvider 接口。
 func (c DatabaseConfig) GetConnectionString() string { return c.ConnectionString }
+
+// UnmarshalDBConfig 按 db_type 分派构造 DBConfigProvider（DBConfigProvider
+// 联合面的 JSON 反序列化入口）。encodingjson 无法把对象装回非空接口，
+// 联合面反序列化必须显式分派——对齐 Python pydantic 联合
+// DatabaseConfigProvider 的自动分派语义（TeamJoinDescriptor 跨进程经
+// OPENJIWEN_TEAM_JOIN env 往返依赖本分派）。
+// 未知/缺失 db_type 报错（对齐 pydantic union 无匹配报 ValidationError）。
+func UnmarshalDBConfig(data []byte) (DBConfigProvider, error) {
+	probe := struct {
+		DBType DatabaseType `json:"db_type"`
+	}{}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("malformed db_config: %w", err)
+	}
+	switch probe.DBType {
+	case DatabaseTypeSQLite, DatabaseTypePostgreSQL, DatabaseTypeMySQL:
+		config := NewDatabaseConfig()
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, fmt.Errorf("malformed db_config: %w", err)
+		}
+		return config, nil
+	case DatabaseTypeMemory:
+		config := NewMemoryDatabaseConfig()
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, fmt.Errorf("malformed db_config: %w", err)
+		}
+		return config, nil
+	case "":
+		return nil, errors.New("malformed db_config: db_type: Field required")
+	default:
+		return nil, fmt.Errorf("malformed db_config: unknown db_type %q", probe.DBType)
+	}
+}
 
 // GetDBType 返回数据库类型。实现 DBConfigProvider 接口。
 func (c MemoryDatabaseConfig) GetDBType() DatabaseType { return c.DBType }

@@ -12,6 +12,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/codebuddy"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/dsh"
@@ -76,11 +79,12 @@ func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyTextTurn() {
 	s.runTextTurn(harness, "codebuddy")
 }
 
-// TestRealLLM_codebuddyMcpLoad 真 CLI 加载宿主 MCP server 的端到端验证：
-// context.McpServers → harness 翻译成 --mcp-config → 真 codebuddy 子进程
-// 真实拉起 MCP server（python3 极简 JSON-RPC server 落盘 initialize 日志）。
-// 断言打确定性事实（日志文件出现 initialize 请求），不断言模型行为。
-func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyMcpLoad() {
+// TestRealLLM_codebuddyTeamMcp 真 CLI 拉起真 team MCP server 的端到端验证：
+// 入团描述符（OPENJIWEN_TEAM_JOIN env，sqlite 落盘库 + inprocess transport）
+// → harness 翻译成 --mcp-config → 真 codebuddy 子进程拉起真 uapclawmcpserver
+// → server 急切 Connect（库 schema 落盘）。断言打确定性事实：轮次协议不变量
+// + 团队库文件被 server 真实创建（连接成功的产物），不断言模型行为。
+func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyTeamMcp() {
 	cliPath := os.Getenv("CODEBUDDY_CLI_PATH")
 	if cliPath == "" {
 		cliPath = "codebuddy"
@@ -88,42 +92,39 @@ func (s *HarnessProviderTextTurnSuite) TestRealLLM_codebuddyMcpLoad() {
 	if _, err := exec.LookPath(cliPath); err != nil {
 		s.T().Skip("codebuddy CLI 不在 PATH，跳过真跑")
 	}
-	if _, err := exec.LookPath("python3"); err != nil {
-		s.T().Skip("python3 不在 PATH，跳过 MCP 加载验证")
-	}
 	model := os.Getenv("CODEBUDDY_MODEL")
 	if model == "" {
 		model = "hy4flash-free"
 	}
 	dir := s.T().TempDir()
-	logFile := filepath.Join(dir, "mcp-server.log")
-	serverScript := filepath.Join(dir, "fake_mcp_server.py")
-	// 极简 stdio MCP server：收到 JSON-RPC initialize 即落盘日志并应答
-	script := `import json,sys
-log = open('` + logFile + `','a')
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        req = json.loads(line)
-    except Exception:
-        continue
-    if req.get("method") == "initialize":
-        log.write("initialize\n")
-        log.flush()
-        resp = {"jsonrpc":"2.0","id":req.get("id"),"result":{"protocolVersion":"2024-11-05","capabilities":{},"serverInfo":{"name":"fake-team","version":"0.0.1"}}}
-        print(json.dumps(resp), flush=True)
-    elif req.get("method") == "notifications/initialized":
-        pass
-`
-	s.Require().NoError(os.WriteFile(serverScript, []byte(script), 0o600))
+	serverBin := filepath.Join(dir, "uapclawmcpserver")
+	// 从仓库根构建真 team MCP server 二进制
+	workRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	s.Require().NoError(err)
+	build := exec.Command("go", "build", "-o", serverBin, "./cmd/uapclawmcpserver")
+	build.Dir = workRoot
+	if output, buildErr := build.CombinedOutput(); buildErr != nil {
+		s.Require().NoError(buildErr, "构建 uapclawmcpserver 失败: %s", output)
+	}
+
+	// 入团描述符：sqlite 落盘库（连接成功的可观测产物）+ inprocess transport
+	dbPath := filepath.Join(dir, "team.db")
+	descriptor := external.TeamJoinDescriptor{
+		SessionID:   "e2e-mcp-session",
+		TeamName:    "e2e-mcp-team",
+		MemberName:  "worker",
+		Role:        "teammate",
+		Scope:       "member",
+		DBConfig: database.DatabaseConfig{DBType: database.DatabaseTypeSQLite,
+			ConnectionString: dbPath, DBTimeout: 30, DBEnableWAL: true},
+		TransportConfig: &schema.MessagerTransportConfig{Backend: "inprocess"},
+	}
 	harness, err := codebuddy.NewCodebuddyHarnessWithFactory(codebuddy.CodebuddyConfig{
 		CliPath:            cliPath,
 		Model:              model,
 		TurnTimeoutSeconds: 180,
+		Env:                descriptor.ToEnv(),
 	}, func(options codebuddy.TransportOptions) (codebuddy.Transport, error) {
-		s.T().Logf("transport argv: %s", strings.Join(options.Args, " "))
 		return codebuddy.NewProcessTransport(options)
 	})
 	s.Require().NoError(err)
@@ -135,7 +136,7 @@ for line in sys.stdin:
 		ProtocolVersion: harnessprotocol.ProtocolVersion,
 		McpServers: []harnessprotocol.McpServerConfig{{
 			Name: "openjiuwen-team", Transport: harnessprotocol.McpTransportStdio,
-			Command: []string{"python3", serverScript},
+			Command: []string{serverBin},
 		}},
 	}
 	s.Require().NoError(harness.Start(ctx, hctx))
@@ -148,10 +149,10 @@ for line in sys.stdin:
 	terminal, _ := harnessTerminalAndAnswer(events)
 	s.Require().Equal(harnessprotocol.TurnEventKindFinished, terminal, "MCP 验证轮未正常完成")
 	s.Require().NoError(harness.Stop(ctx))
-	// 确定性事实：真 CLI 真的拉起了 MCP server（initialize 握手落盘）
-	logged, readErr := os.ReadFile(logFile)
-	s.Require().NoError(readErr, "MCP server 日志未产生——CLI 未加载 --mcp-config")
-	s.Require().Contains(string(logged), "initialize", "MCP server 未收到 initialize 握手")
+	// 确定性事实：真 team server 被拉起且 Connect 成功（库 schema 落盘）
+	info, statErr := os.Stat(dbPath)
+	s.Require().NoError(statErr, "团队库未创建——team MCP server 未被 CLI 拉起或连接失败")
+	s.Require().Greater(info.Size(), int64(0), "团队库为空——server 未完成 Initialize")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

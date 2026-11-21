@@ -10,9 +10,15 @@
 package main
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/spawn"
 )
 
 func main() {
+	// 共享 DB 工厂接线：ExternalTeamClient.Connect 依赖它打开团队库；
+	// 独立二进制不走 runtime 包的装配（external_cli_spawn_wiring.go），
+	// 必须在此自接（复用 spawn.GetSharedDB 的按连接串缓存与 memory 分支）。
+	external.SetSharedDBFactory(spawn.GetSharedDB)
 	mcp.MainFromEnv()
 }
