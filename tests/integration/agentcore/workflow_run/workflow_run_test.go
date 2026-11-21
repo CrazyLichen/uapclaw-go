@@ -57,8 +57,10 @@ func (s *WorkflowRunSuite) TestInvoke_流式真实链() {
 		map[string]any{"name": "u1"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, out.State)
-	chunks, ok := out.Result.([]workflow.WorkflowChunk)
+	wo, ok := out.(*workflow.WorkflowOutput)
+	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
+	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	chunks, ok := wo.Result.([]workflow.WorkflowChunk)
 	s.Require().True(ok, "流式工作流 result 应为 chunks")
 	s.Require().NotEmpty(chunks)
 	// 帧类型断言：End 流叶帧（END_NODE_STREAM 信封，Python workflow.py:546 逐帧 yield）
@@ -84,9 +86,11 @@ func (s *WorkflowRunSuite) TestInvoke_非流式真实链() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"name": "u2"}, sess, nil, nil)
 	s.Require().NoError(err)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, out.State)
+	wo, ok := out.(*workflow.WorkflowOutput)
+	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
+	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
 	// 非 streaming：result = get_outputs(end)（Python workflow.py:382）
-	s.NotNil(out.Result)
+	s.NotNil(wo.Result)
 }
 
 // TestStream_帧序列真实链 流式入口逐帧转发 + 通道关闭收尾。

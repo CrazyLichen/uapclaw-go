@@ -1415,7 +1415,7 @@ func (v *Vertex) preStream(ctx context.Context, ability compability.ComponentAbi
 }
 
 // postStream 流入产出收尾（Python _post_stream，vertex.py:590-628 步骤一比一）
-func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[map[string]any], ability compability.ComponentAbility) {
+func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[any], ability compability.ComponentAbility) {
 	// ① 形态标记（vertex.py:591-593）
 	isSubGraph := v.nodeSession.ParentID() != ""
 	am := v.nodeSession.ActorManager()
@@ -1442,14 +1442,20 @@ func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[
 			panic(chunk.Err)
 		}
 		var message any
-		if outputTransformer == nil {
-			if len(outputSchema) > 0 {
-				message = am.StreamTransform().GetByDefaultTransformer(chunk.Val, outputSchema)
+		// chunk.Val 为 any（D-8 延伸：组件可产任意帧形态）；transformer 契约输入为
+		// map（Python workflow_state.py:127），非 map 帧对齐 .get 宽容语义跳过转换
+		if frameMap, isMap := chunk.Val.(map[string]any); isMap {
+			if outputTransformer == nil {
+				if len(outputSchema) > 0 {
+					message = am.StreamTransform().GetByDefaultTransformer(frameMap, outputSchema)
+				} else {
+					message = frameMap
+				}
 			} else {
-				message = chunk.Val
+				message = am.StreamTransform().GetByDefinedTransformer(frameMap, outputTransformer)
 			}
 		} else {
-			message = am.StreamTransform().GetByDefinedTransformer(chunk.Val, outputTransformer)
+			message = chunk.Val
 		}
 		_ = outputSchema
 		logger.Debug(logComponent).
@@ -1468,7 +1474,15 @@ func (v *Vertex) postStream(ctx context.Context, resultsIter <-chan StreamChunk[
 	// ④ 收口分流（vertex.py:613-616）：End+子图 → 子图流发 END_FRAME；否则 end_message
 	if v.isEndNode && isSubGraph {
 		if q, err := am.SubWorkflowStream(); err == nil {
-			q.Close(ctx, 0) // Go close 信号等价 END_FRAME（session/stream D-哨兵决策）
+			// Python vertex.py:614 send(StreamEmitter.END_FRAME)——哨兵入队，队列
+			// 由子会话关闭时收尾；close 等价会在无消费者时 forceClear 丢帧（8.14b 实证）
+			if serr := q.Send(ctx, constants.StreamEmitterEndFrame, 0, 1); serr != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "GRAPH_VERTEX_ABILITY_RUNNING").
+					Str("node_id", v.nodeID).
+					Err(serr).
+					Msg("Failed to send sub workflow END_FRAME sentinel")
+			}
 		}
 	} else {
 		_ = am.EndMessage(ctx, v.nodeID, ability)
@@ -1523,10 +1537,24 @@ func (v *Vertex) processChunk(ctx context.Context, message any, isEndNode bool, 
 			_ = writer.Write(ctx, messageStreamData)
 		}
 	case isEndNode && isSubGraph:
-		// End 子图（vertex.py:647-650）：OutputSchema 取 payload 直发子图流
+		// End 子图（vertex.py:647-650）：OutputSchema 取 payload 直发子图流。
+		// Python chunk 即 OutputSchema 对象，chunk.payload 为纯 dict；Go 组件经
+		// StreamFn 槽产出 {"frame": OutputSchema} 承载信封（D-17-1），须同点剥离，
+		// 否则信封残骸进入子图流队列，下游「节点.字段」路径提取失败且 END 帧
+		// 因 sourcePathMap 空不投 EndFrame → 流入读取器永不关 → 挂死
+		//（Python 官方流式组件产出普通 dict，本分支语义即还原该形态）
 		messageStreamData := message
-		if os, ok := message.(*stream.OutputSchema); ok {
-			messageStreamData = os.Payload
+		switch msg := message.(type) {
+		case *stream.OutputSchema:
+			messageStreamData = msg.Payload
+		case stream.OutputSchema:
+			messageStreamData = msg.Payload
+		case map[string]any:
+			if os, ok := msg["frame"].(*stream.OutputSchema); ok {
+				messageStreamData = os.Payload
+			} else if os, ok := msg["frame"].(stream.OutputSchema); ok {
+				messageStreamData = os.Payload
+			}
 		}
 		v.traceComponentStreamOutput(ctx, messageStreamData)
 		if q, err := v.nodeSession.ActorManager().SubWorkflowStream(); err == nil {

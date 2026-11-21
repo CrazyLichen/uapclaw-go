@@ -29,7 +29,7 @@ SubWorkflowComponent 是**子工作流嵌套的唯一入口**：把一个完整 
 | 1 | 8.14 审查遗留 ⤵️8.14b 三项回填本批收口：元类装饰四事件对断言、callback 触发序列集成断言、12.4 方法对照表 |
 | 2 | `build_final_result` 合并语义忠实复刻（str 拼接/数字求和/map 并集/异类型对齐 TypeError） |
 | 3 | **不加锁**：happens-before 由「生产侧 append 先于 channel send，消费侧通道耗尽后才读」的通道序保证；invoke 腿与 stream 腿同 goroutine 串行 |
-| 4 | **修 Quirk A（偏差）**：Python workflow_comp.py:81-84 空缓存返回 `{}`（非 None）触发 `cached is not None` 短路 → 批入腿永不真正执行子工作流，属上游缺陷；Go 修复为"空缓存不短路、非空短路保留"，回收条件=上游修复后跟齐 |
+| 4 | **复刻 Quirk A（用户 2026-11-21 二次拍板：「对齐要按照上游真实实现来」，撤销此前修复决定）**：Python workflow_comp.py:81-84 空缓存返回 `{}`（非 None）触发短路 → cache_stream 开启时批入腿永不执行子工作流——上游真实行为逐字承载，含 build_final_result 异类型 TypeError 直接上抛（:81 调用点无捕获） |
 | 5 | **复刻 Quirk B（已知行为）**：中断恢复后 invoke 返回中断前已累积帧的部分合并结果（不全）——机制是组件实例字段生存期跨单次调用，恢复时实例仍存活 |
 | 6 | 实施序维持 8.14b → 8.18-8.26，无换序（依赖 8.14/8.15/8.16/8.17 全就绪，无缺失前置件） |
 
@@ -108,10 +108,12 @@ for frame := range ch:
 
 | 编号 | 性质 | 内容 | 回收条件 |
 |---|---|---|---|
-| D-14b-1 | 偏差（修复上游缺陷） | Quirk A：空缓存不短路（Python 空缓存 `{}` 触发短路跳过批入腿，workflow_comp.py:81-84） | 上游修复后跟齐 |
+| D-14b-1 | 已知行为（复刻，用户 2026-11-21 拍板撤销修复） | Quirk A：空缓存 `{}` 短路 → cache_stream 开启时批入腿不执行子工作流（workflow_comp.py:81-84 逐字承载；异类型 TypeError 上抛） | 上游修复后跟齐 |
 | D-14b-2 | 已知行为（复刻） | Quirk B：中断恢复返回部分合并缓存（workflow_comp.py:41-48 + 组件实例字段跨调用生存期） | 不回收（对齐上游） |
 | D-14b-3 | 已知限制（复刻） | 定义复用 + 并发 Invoke 缓存混淆；取消僵尸生产者理论窗口 | 不回收（与 Python 一致） |
 | D-14b-4 | 结构承载 | Python keyword-only 参数 → Go 变参选项；方法遮蔽三钩子（GraphInvoker/ComponentType）+ 两槽赋值（invoke/stream） | 终态 |
+| D-14b-5 | 已知行为（复刻，Python 同为死路径） | 嵌套流式 + 流式引用子图帧内部字段（`${sub.response}`）：Python payload 为 OutputSchema 对象、pydantic 无 `__getitem__` → 路径提取 None → 同样断链挂死；上游无嵌套流式测试故从未暴露。Go 以 dict 载荷形态走通（见 D-14b-6） | 不回收（Go 比 Python 健壮，登记防误判为回归） |
+| D-14b-6 | 有意偏差（Go 槽承载约束） | 转发/缓存形态分离：转发取 Schema 载荷 dict（对齐官方 StreamCompNode 产出形态，流边路径提取可用）；缓存累积原始 Schema 帧（isinstance-dict 过滤语义对齐 Python，缓存保持空 → Quirk A 短路行为一致）。Python 两腿同为 chunk 对象；另 END_FRAME 恢复入队哨兵（撤 8.14 D-14-3 close 等价，close 会 forceClear 丢帧）+ AsyncStreamQueue closed 先排空缓冲 + 流式槽帧元素 any 化（D-8 延伸：Executable/ExecutableGraph/组件槽 StreamChunk[O]→StreamChunk[any]，2026-11-21 用户拍板「返回类型不能固定死」——Python stream/transform 的 AsyncIterator 注解形式统一但实质任意，Go 泛型强制故解耦；invoke/collect 输出保持 map 锁死对齐其实际恒 dict 形态） | D-17-1 信封在单层 end 出口的承载保留（8.17 已验收形态）；若后续撤封按本节五层断裂链逐出口核对 |
 
 ## 8. 测试要求（用户明确要求：讨论过的点全部有覆盖，中断恢复场景必须真实输入输出）
 
@@ -148,3 +150,23 @@ for frame := range ch:
 - workflow 包与 components/flow 包覆盖率 ≥85%；
 - 集成审计两层门禁通过；
 - 推送 main（规则 6/11：不追踪远端 CI）。
+
+## §12 方法对照表（12.4 回填③，实施后实测行号）
+
+| Python workflow_comp.py | Go sub_workflow_comp.go | 一致性 |
+|---|---|---|
+| SUB_WORKFLOW_COMPONENT (:19) | SubWorkflowComponentType (:59) | ✅ |
+| SubWorkflowStreamState（状态字段 :23-25） | SubWorkflowStreamState 结构体 (:25) | ✅ |
+| .accumulate (:27-29) | Accumulate (:244) | ✅（累积原始帧，isinstance-dict 过滤对齐） |
+| .build_final_result (:31-60) | BuildFinalResult (:251) | ✅（合并四态 + 异类型 TypeError 上抛） |
+| .clear (:62-65) | Clear (:285) | ✅ |
+| SubWorkflowComponent.__init__ (:66-75) | NewSubWorkflowComponent (:65) | ✅（D-14b-1 已知行为登记） |
+| .invoke (:78-84) | InvokeFn 槽 (:142) + invokeSubWorkflow (:213) | ✅（短路/转调双态；CONFIG_KEY 透传修复） |
+| .stream (:76-81) | StreamFn 槽 (:148) | ✅（累积原始帧 + 转发载荷 dict，D-14b-6） |
+| .get_stream_output (:83-85) | GetStreamOutput (:105) | ✅ |
+| .graph_invoker (:87-88) | GraphInvoker (:76) | ✅ |
+| .component_type (:90-91) | ComponentType (:98) | ✅ |
+| .sub_workflow property (:93-94) | SubWorkflow 访问器 (:101) | ✅ |
+| （上游无）ToExecutable/AddComponent override | (:82-95 一带) | Go 静态解析必需（Python self 动态分派等价物），偏差 D-14b-4 延伸 |
+
+实施期超额修复（Python 源码实证的移植缺陷 + 嵌套流式数据断裂，均已提交）：createParentID 对 *SubWorkflowSession 断言失效、subInvoke/subStream CONFIG_KEY 透传缺失、DefaultGraphInvoke 信封 config 双形态、AsyncStreamQueue closed 丢缓冲帧 + END_FRAME 入队哨兵恢复（撤 D-14-3）、end-sub 分支槽信封剥离、流式槽帧元素 any 化。

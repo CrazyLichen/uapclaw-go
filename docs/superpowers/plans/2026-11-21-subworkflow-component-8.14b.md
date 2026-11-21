@@ -339,7 +339,7 @@ func TestSubWorkflowComponent_三override(t *testing.T) {
 	}
 }
 
-// TestSubWorkflowComponent_Invoke_空缓存不短路 Quirk A 修复锁定（D-14b-1）
+// TestSubWorkflowComponent_Invoke_空缓存短路 Quirk A 逐字复刻锁定（D-14b-1 已知行为）
 func TestSubWorkflowComponent_Invoke_空缓存不短路(t *testing.T) {
 	fw := &fakeWorkflow{}
 	comp, _ := newSubWorkflowComponentForTest(fw, true) // cacheStream=true
@@ -353,7 +353,7 @@ func TestSubWorkflowComponent_Invoke_空缓存不短路(t *testing.T) {
 		t.Fatalf("期望真实转调, got err %v", err)
 	}
 	if fw.invokeCalled != 1 {
-		t.Fatalf("空缓存必须转调子工作流（D-14b-1）, invokeCalled=%d", fw.invokeCalled)
+		t.Fatalf("Quirk A 复刻：空缓存即短路, 不应转调子工作流, invokeCalled=%d", fw.invokeCalled)
 	}
 	if out == nil {
 		t.Fatal("期望有输出")
@@ -517,7 +517,7 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
 		return subWorkflow.Stream(ctx, inputs, sess, modelContext, streamModes, kwargs)
 	}
-	// InvokeFn 槽绑定（Python invoke :78-84，含 Quirk A 修复 D-14b-1）
+	// InvokeFn 槽绑定（Python invoke :78-84，Quirk A 逐字复刻 D-14b-1 已知行为）
 	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
 		sess *session.NodeSessionFacade) (map[string]any, error) {
 		// Quirk A 修复：Python workflow_comp.py:81-84 空缓存 build_final_result 返回 {}
@@ -965,7 +965,7 @@ git commit -m "test(8.14b): 集成 cache 短路 + 中断恢复真实输入输出
 | .accumulate (:27-29) | Accumulate (:xx) | ✅ |
 | .build_final_result (:31-60) | BuildFinalResult (:xx) | ✅（Quirk A 修复联动） |
 | .clear (:62-65) | Clear (:xx) | ✅ |
-| SubWorkflowComponent.__init__ (:66-75) | NewSubWorkflowComponent (:xx) | ✅（D-14b-1 修复登记） |
+| SubWorkflowComponent.__init__ (:66-75) | NewSubWorkflowComponent (:xx) | ✅（D-14b-1 已知行为登记） |
 | .invoke (:78-84) | InvokeFn 槽 (:xx) | ✅ |
 | .stream (:76-81) | StreamFn 槽 (:xx) | ✅（D-17-1 延伸信封） |
 | .get_stream_output (:83-85) | GetStreamOutput (:xx) | ✅ |
