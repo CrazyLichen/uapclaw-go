@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
@@ -120,24 +122,23 @@ func TestNewRSISysOperationRail_选项透传(t *testing.T) {
 
 // ──────────────────────────── RSITrajectoryRail / recovery（17.6a） ────────────────────────────
 
-// stubInvokeContext 构造 invoke 上下文（零值 extraMuPtr 会 panic）。
-func stubInvokeContext() *agentinterfaces.AgentCallbackContext {
-	cbc := &agentinterfaces.AgentCallbackContext{}
-	cbc.SetInputs(&agentinterfaces.InvokeInputs{ConversationID: "sess-rsi-traj"})
+// stubContext 构造回调上下文（必须经构造器：零值 extra map 为 nil，SetExtra 会 panic）。
+func stubContext(inputs agentinterfaces.EventInputs) *agentinterfaces.AgentCallbackContext {
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	cbc.SetInputs(inputs)
 	return cbc
 }
 
-// stubModelContext / stubToolContext 构造模型/工具回调上下文（基类按 inputs 类型分派）。
+func stubInvokeContext() *agentinterfaces.AgentCallbackContext {
+	return stubContext(&agentinterfaces.InvokeInputs{ConversationID: "sess-rsi-traj"})
+}
+
 func stubModelContext() *agentinterfaces.AgentCallbackContext {
-	cbc := &agentinterfaces.AgentCallbackContext{}
-	cbc.SetInputs(&agentinterfaces.ModelCallInputs{})
-	return cbc
+	return stubContext(&agentinterfaces.ModelCallInputs{})
 }
 
 func stubToolContext() *agentinterfaces.AgentCallbackContext {
-	cbc := &agentinterfaces.AgentCallbackContext{}
-	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "t"})
-	return cbc
+	return stubContext(&agentinterfaces.ToolCallInputs{ToolName: "t"})
 }
 
 // recordRSIToolSpan 直接注入 builder tool span（不经过 AfterToolCall 消费）。
@@ -422,4 +423,105 @@ func TestRSISkillUseRail_AfterToolCall_附件协议(t *testing.T) {
 	if err := rail.AfterToolCall(context.Background(), cbc); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// ──────────────────────────── ControlledSkillTreatmentRail / HarnessInputRail ────────────────────────────
+
+// TestControlledSkillTreatmentRail_守卫与改写 对齐 before_tool_call 拦截/改写分支。
+func TestControlledSkillTreatmentRail_守卫与改写(t *testing.T) {
+	rail, err := NewControlledSkillTreatmentRail("my-skill")
+	require.NoError(t, err)
+	// 空 skill 名构造报错。
+	if _, err := NewControlledSkillTreatmentRail("  "); err == nil {
+		t.Fatal("空技能名应报错")
+	}
+	// 非 skill 工具 → 拦截。
+	cbc := stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "bash", ToolArgs: map[string]any{}})
+	require.NoError(t, rail.BeforeToolCall(context.Background(), cbc))
+	if ev := rail.Evidence(); ev["first_requested_tool_name"] != "bash" {
+		t.Fatalf("首个请求工具应登记: %v", ev)
+	}
+	// skill 工具但技能名不符 → 改写。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs: map[string]any{"skill_name": "other"}})
+	require.NoError(t, rail.BeforeToolCall(context.Background(), cbc))
+	ev := rail.Evidence()
+	if ev["rewritten_skill_names"].([]string)[0] != "other" {
+		t.Fatalf("改写应登记: %v", ev)
+	}
+	// 技能名匹配 → 不改写。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs: map[string]any{"skill_name": "my-skill"}})
+	require.NoError(t, rail.BeforeToolCall(context.Background(), cbc))
+}
+
+// TestControlledSkillTreatmentRail_AfterToolCall交付 对齐 delivered 语义。
+func TestControlledSkillTreatmentRail_AfterToolCall交付(t *testing.T) {
+	rail, _ := NewControlledSkillTreatmentRail("my-skill")
+	if rail.Priority() != -100 {
+		t.Fatalf("priority 应为 -100: %d", rail.Priority())
+	}
+	// 失败结果不交付。
+	cbc := stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs:   map[string]any{"skill_name": "my-skill"},
+		ToolResult: map[string]any{"success": false}})
+	require.NoError(t, rail.AfterToolCall(context.Background(), cbc))
+	if rail.Evidence()["delivered"] != false {
+		t.Fatal("失败结果不应交付")
+	}
+	// 成功结果交付。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs:   map[string]any{"skill_name": "my-skill"},
+		ToolResult: map[string]any{"success": true, "data": map[string]any{}}})
+	require.NoError(t, rail.AfterToolCall(context.Background(), cbc))
+	if rail.Evidence()["delivered"] != true {
+		t.Fatal("成功结果应交付")
+	}
+	// delivered 后 BeforeToolCall 放行一切。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "bash", ToolArgs: map[string]any{}})
+	require.NoError(t, rail.BeforeToolCall(context.Background(), cbc))
+	// Python: if self.delivered: return——delivered 后不再拦截（清单保持空）。
+	if len(rail.Evidence()["blocked_tool_names"].([]string)) != 0 {
+		t.Fatalf("delivered 后不应再拦截: %v", rail.Evidence())
+	}
+}
+
+// TestToolResultSucceeded_三形态 对齐 Python _tool_result_succeeded。
+func TestToolResultSucceeded_三形态(t *testing.T) {
+	if toolResultSucceeded(nil) {
+		t.Fatal("nil 应失败")
+	}
+	if toolResultSucceeded(map[string]any{"success": false}) {
+		t.Fatal("success=false 应失败")
+	}
+	if toolResultSucceeded(map[string]any{"error": "boom"}) {
+		t.Fatal("error 应失败")
+	}
+	if toolResultSucceeded(map[string]any{"status": "skipped"}) {
+		t.Fatal("status=skipped 应失败")
+	}
+	if !toolResultSucceeded(map[string]any{"success": true}) {
+		t.Fatal("success=true 应成功")
+	}
+	if toolResultSucceeded("error: boom") {
+		t.Fatal("error 前缀字符串应失败")
+	}
+	if !toolResultSucceeded("all good") {
+		t.Fatal("普通字符串应成功")
+	}
+	if !toolResultSucceeded(42) {
+		t.Fatal("其他形态默认成功")
+	}
+}
+
+// TestCanonicalToolName_与既有助手一致 复用 trajectory_usage 助手。
+func TestCanonicalToolName_与既有助手一致(t *testing.T) {
+	assert.Equal(t, "skill", canonicalToolName("Skill-Tool"))
+	assert.Equal(t, "list_skill", canonicalToolName("list_skill"))
 }
