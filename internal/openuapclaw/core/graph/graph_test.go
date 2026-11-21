@@ -36,13 +36,13 @@ type fakeExec struct {
 func (f *fakeExec) OnInvoke(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
 	return map[string]any{}, nil
 }
-func (f *fakeExec) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+func (f *fakeExec) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, nil
 }
 func (f *fakeExec) OnCollect(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
 	return map[string]any{}, nil
 }
-func (f *fakeExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+func (f *fakeExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, nil
 }
 
@@ -453,13 +453,13 @@ type cancelExec struct {
 func (f *cancelExec) OnInvoke(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
 	return nil, context.Canceled
 }
-func (f *cancelExec) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+func (f *cancelExec) OnStream(_ context.Context, _ map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, nil
 }
 func (f *cancelExec) OnCollect(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (map[string]any, error) {
 	return map[string]any{}, nil
 }
-func (f *cancelExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[map[string]any], error) {
+func (f *cancelExec) OnTransform(_ context.Context, _ <-chan map[string]any, _ session.BaseSession, _ map[string]any) (<-chan StreamChunk[any], error) {
 	return nil, nil
 }
 

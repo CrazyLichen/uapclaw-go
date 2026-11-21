@@ -34,6 +34,11 @@ const (
 	WorkflowStreamFrameTimeoutKey = "_stream_frame_timeout"
 	// WorkflowStreamFirstFrameTimeoutKey 工作流首帧超时
 	WorkflowStreamFirstFrameTimeoutKey = "_stream_first_frame_timeout"
+
+	// StreamEmitterEndFrame 子图流收尾哨兵（Python emitter.py:141 StreamEmitter.END_FRAME
+	// 一比一；End+子图收口投递本哨兵，drain 按计数消费——撤销 D-14-3 的 close 等价，
+	// close 会在无消费者时 forceClear 丢帧，实证 Python 哨兵才是真实形态）
+	StreamEmitterEndFrame = "all streaming outputs finish"
 	// CompStreamCallTimeoutKey 组件流调用超时
 	CompStreamCallTimeoutKey = "_comp_stream_call_timeout"
 	// StreamInputGenTimeoutKey 流输入生成器超时

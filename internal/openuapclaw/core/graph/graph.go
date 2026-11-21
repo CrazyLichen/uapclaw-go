@@ -549,7 +549,7 @@ func (c *CompiledGraph) Invoke(ctx context.Context, inputs map[string]any, sess 
 }
 
 // Stream pass 占位（Python graph.py:396-397）
-func (c *CompiledGraph) Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+func (c *CompiledGraph) Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[any], error) {
 	return DefaultGraphStream[any, map[string]any](c, ctx, inputs, sess)
 }
 
@@ -559,7 +559,7 @@ func (c *CompiledGraph) Collect(ctx context.Context, inputs <-chan any, sess ses
 }
 
 // Transform pass 占位（Python 未覆写 transform，继承 base.py:22-23）
-func (c *CompiledGraph) Transform(ctx context.Context, inputs <-chan any, sess session.BaseSession) (<-chan StreamChunk[map[string]any], error) {
+func (c *CompiledGraph) Transform(ctx context.Context, inputs <-chan any, sess session.BaseSession) (<-chan StreamChunk[any], error) {
 	return DefaultGraphTransform[any, map[string]any](c, ctx, inputs, sess)
 }
 

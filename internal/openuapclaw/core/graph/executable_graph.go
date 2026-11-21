@@ -40,11 +40,14 @@ type ExecutableGraph[I, O any] interface {
 	// 默认实现见 DefaultGraphInvoke
 	Invoke(ctx context.Context, inputs map[string]any, sess session.BaseSession) (O, error)
 	// Stream 流式执行（Python stream，base.py:16-17 默认 pass）；默认实现见 DefaultGraphStream
-	Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[O], error)
+	// 帧元素类型 any（2026-11-21 用户拍板，D-8 延伸）：Python AsyncIterator 无元素类型
+	// 约束，组件产出 OutputSchema/dict 等异构帧；绑 O 会迫使组件装箱信封（D-17-1）
+	// 并在边界出口反复拆封（8.14b 嵌套流式五层断裂链实证）
+	Stream(ctx context.Context, inputs map[string]any, sess session.BaseSession) (<-chan StreamChunk[any], error)
 	// Collect 聚合执行（Python collect，base.py:19-20 默认 pass）；默认实现见 DefaultGraphCollect
 	Collect(ctx context.Context, inputs <-chan I, sess session.BaseSession) (O, error)
 	// Transform 流式变换（Python transform，base.py:22-23 默认 pass）；默认实现见 DefaultGraphTransform
-	Transform(ctx context.Context, inputs <-chan I, sess session.BaseSession) (<-chan StreamChunk[O], error)
+	Transform(ctx context.Context, inputs <-chan I, sess session.BaseSession) (<-chan StreamChunk[any], error)
 	// Interrupt 中断图执行（Python interrupt，base.py:25-26 默认 pass）；默认实现见 DefaultGraphInterrupt
 	Interrupt(ctx context.Context, message map[string]any) error
 	// Invoke_ 拆信封后的抽象执行入口（Python 抽象方法 _invoke，base.py:28-30；
@@ -66,16 +69,30 @@ func DefaultGraphInvoke[I, O any](g ExecutableGraph[I, O], ctx context.Context, 
 	if raw, ok := envelope[InputsKey].(I); ok {
 		inputs = raw
 	}
-	// config 收窄 *PregelConfig（D-8）：断言失败（含缺失）即 nil，对齐 .get 宽容
-	cfg, _ := envelope[ConfigKey].(*pregel.PregelConfig)
+	// config 判定对齐 Python is_main = config is None：信封 config 可为
+	// *PregelConfig（顶层 Invoke 直调）或 *InnerPregelConfig（子图嵌套——父图
+	// task 层创建的节点级 config 经 SubWorkflowComponent 信封透传，Python
+	// workflow.py:600 CONFIG_KEY 透传使子图 isMain=False 跳过 pre_workflow_execute，
+	// 由引擎自 graph_store 自动恢复快照；原 D-8 单形态断言使嵌套恢复被
+	// checkpointer 拒绝，实测 Python 官方嵌套恢复测试后修正）。
+	var cfg *pregel.PregelConfig
+	switch c := envelope[ConfigKey].(type) {
+	case *pregel.PregelConfig:
+		cfg = c
+	case *pregel.InnerPregelConfig:
+		cfg = &c.PregelConfig
+	case pregel.InnerPregelConfig:
+		// 值形态：task 层 NodeInput.Config 以值注入（task.go:294），经信封原样透传
+		cfg = &c.PregelConfig
+	}
 	return g.Invoke_(ctx, inputs, sess, cfg)
 }
 
 // DefaultGraphStream Python stream 的默认实现（base.py:16-17）：
 // 返回已关闭的空 channel + nil error（偏差 D5）。
 // 实现者实现 Stream 时一行转手本函数即沿用默认 pass。
-func DefaultGraphStream[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ map[string]any, _ session.BaseSession) (<-chan StreamChunk[O], error) {
-	ch := make(chan StreamChunk[O])
+func DefaultGraphStream[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ map[string]any, _ session.BaseSession) (<-chan StreamChunk[any], error) {
+	ch := make(chan StreamChunk[any])
 	close(ch)
 	return ch, nil
 }
@@ -88,8 +105,8 @@ func DefaultGraphCollect[I, O any](_ ExecutableGraph[I, O], _ context.Context, _
 
 // DefaultGraphTransform Python transform 的默认实现（base.py:22-23）：
 // 返回已关闭的空 channel + nil error（偏差 D5）。
-func DefaultGraphTransform[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ <-chan I, _ session.BaseSession) (<-chan StreamChunk[O], error) {
-	ch := make(chan StreamChunk[O])
+func DefaultGraphTransform[I, O any](_ ExecutableGraph[I, O], _ context.Context, _ <-chan I, _ session.BaseSession) (<-chan StreamChunk[any], error) {
+	ch := make(chan StreamChunk[any])
 	close(ch)
 	return ch, nil
 }
