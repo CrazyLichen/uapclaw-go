@@ -81,6 +81,21 @@ func registerCoreRailProviders() {
 	// core.sys_operation → SysOperationRail
 	// Python: SysOperationRail
 	hschema.RegisterRailProvider("core.sys_operation", func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
+		// Python: builder=SysOperationRail 经 param_field 注入 bash_deny_patterns
+		//（builtin_elements.py:149-154 + sys_operation_rail.py:43-74）
+		var deny []string
+		if raw, ok := params["bash_deny_patterns"].([]string); ok {
+			deny = raw
+		} else if rawAny, ok := params["bash_deny_patterns"].([]any); ok {
+			for _, item := range rawAny {
+				if str, ok := item.(string); ok {
+					deny = append(deny, str)
+				}
+			}
+		}
+		if len(deny) > 0 {
+			return rails.NewSysOperationRail(rails.WithDenyPatterns(deny)), nil
+		}
 		return rails.NewSysOperationRail(), nil
 	})
 	// core.ask_user → AskUserRail（HITL 用户交互）

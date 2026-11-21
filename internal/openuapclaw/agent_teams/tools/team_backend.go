@@ -39,6 +39,9 @@ type OnInbound func(ctx context.Context, memberName string, payload any) error
 // 文件清理、任务操作、跨域组合操作。
 // HITT 缓存由独立 hittMu 保护，DB 操作靠 DAO 层并发安全。
 type TeamBackend struct {
+	// worktreeValidator worktree 隔离校验器（25.7 T5 注入；Python
+	// TeamBackend.validate_worktree_isolation，tools/team.py:351）
+	worktreeValidator func(memberName string) error
 	// ── 必填字段 ──
 	// teamName 团队名称
 	teamName string
@@ -440,6 +443,13 @@ func WithAllocation(a *models.Allocation) SpawnMemberOption {
 // WithFallbackAllocation 设置认证兜底分配（对齐 Python: spawn_member(fallback_allocation=...)）。
 func WithFallbackAllocation(a *models.Allocation) SpawnMemberOption {
 	return func(c *spawnMemberConfig) { c.fallbackAllocation = a }
+}
+
+// WithWorktreeValidator 注入 worktree 隔离校验器。
+// Python: tools/team.py TeamBackend(validate_worktree_isolation=...)（:351，
+// agent_configurator.py:1223 装配）
+func WithWorktreeValidator(v func(memberName string) error) TeamBackendOption {
+	return func(c *TeamBackend) { c.worktreeValidator = v }
 }
 
 // WithIsolation 设置隔离模式（对齐 Python: spawn_member(isolation=...)）。
@@ -928,6 +938,20 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 			Msg("SpawnMember: member already exists")
 		return atschema.NewMemberOpResultFail("成员 " + memberName + " 已存在于团队 " + tb.teamName)
 	}
+	// 步骤 1.5: worktree 隔离声明校验（Python tools/team.py:871-884）
+	if cfg.isolation != "" && cfg.isolation != "worktree" {
+		return atschema.NewMemberOpResultFail("Invalid isolation: expected 'worktree' or None")
+	}
+	if cfg.isolation == "worktree" {
+		if tb.worktreeValidator == nil {
+			return atschema.NewMemberOpResultFail(
+				"Team worktree isolation is unavailable: no worktree validator was configured")
+		}
+		if verr := tb.worktreeValidator(memberName); verr != nil {
+			return atschema.NewMemberOpResultFail(verr.Error())
+		}
+	}
+
 	// 步骤 2: 模型分配 + options 构造
 	// Python: options = build_member_options(model_ref=allocation.to_db_ref() if ... else None, ...)
 	allocation := cfg.allocation
