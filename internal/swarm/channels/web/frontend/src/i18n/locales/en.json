@@ -1107,6 +1107,17 @@
       "external_cli_agent_codex_cli_path": {
         "title": "Codex CLI path"
       },
+      "external_cli_agent_codebuddy_enabled": {
+        "title": "Enable CodeBuddy",
+        "description": "Allow a Team Leader to spawn a CodeBuddy agent. No dependency install needed; the CLI ships with the app."
+      },
+      "external_cli_agent_codebuddy_use_builtin": {
+        "title": "Use built-in CodeBuddy CLI",
+        "description": "Do not specify a local CLI path; use the app's bundled CLI lookup."
+      },
+      "external_cli_agent_codebuddy_cli_path": {
+        "title": "CodeBuddy CLI path"
+      },
       "proactive_recommendation_enabled": {
         "title": "Enable proactive recommendations",
         "description": "Allow recommendations to be sent when their conditions are met."
