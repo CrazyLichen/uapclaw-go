@@ -1,4 +1,4 @@
-package agent
+package agent_teams
 
 import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
