@@ -38,12 +38,12 @@ func (s *BranchCompSuite) newEnd(tmpl string) *flow.End {
 func (s *BranchCompSuite) newBranch(withNoMatch bool) *flow.BranchComponent {
 	b := flow.NewBranchComponent()
 	if withNoMatch {
-		s.Require().NoError(b.AddBranch("${amount} > 999999", "end_a", "high"))
-		s.Require().NoError(b.AddBranch("${amount} < -999999", "end_b", "low"))
+		s.Require().NoError(b.AddBranch("${amount} > 999999", []string{"end_a"}, "high"))
+		s.Require().NoError(b.AddBranch("${amount} < -999999", []string{"end_b"}, "low"))
 		return b
 	}
-	s.Require().NoError(b.AddBranch("${amount} > 100", "end_a", "high"))
-	s.Require().NoError(b.AddBranch(conditionpkg.NewAlwaysTrue(), "end_b", "low"))
+	s.Require().NoError(b.AddBranch("${amount} > 100", []string{"end_a"}, "high"))
+	s.Require().NoError(b.AddBranch(conditionpkg.NewAlwaysTrue(), []string{"end_b"}, "low"))
 	return b
 }
 

@@ -335,26 +335,6 @@ func (a *TeamAgent) Harness() *harness.TeamHarness {
 	return nil
 }
 
-// GetCurrentContext 返回本成员 DeepAgent 当前上下文消息。
-// fork 继承的源读取面（spawn.ForkContextSource 窄接口由 *TeamAgent 满足）。
-// Python: agent.resources.harness.get_deep_agent().get_current_context(session_id=...)
-func (a *TeamAgent) GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error) {
-	h := a.Harness()
-	if h == nil || h.Native() == nil || h.Native().DeepAgent() == nil {
-		return nil, fmt.Errorf("harness 未装配，无法读取上下文")
-	}
-	return h.Native().DeepAgent().GetCurrentContext(ctx, sessionID, contextID)
-}
-
-// CreateNewContextEngine 以 messages 为种子创建新的上下文引擎（fork 注入面）。
-// Python: native.create_new_context_engine(session_id=..., messages=...)
-func (a *TeamAgent) CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error) {
-	h := a.Harness()
-	if h == nil || h.Native() == nil || h.Native().DeepAgent() == nil {
-		return "", fmt.Errorf("harness 未装配，无法创建上下文引擎")
-	}
-	return h.Native().DeepAgent().CreateNewContextEngine(ctx, sessionID, messages)
-}
 
 // MemberRuntime 返回外部成员运行时（external CLI 成员）；nil 表示 DeepAgent 路。
 // Python: TeamAgent.harness property（team_agent.py:325-333）——
@@ -2379,7 +2359,8 @@ func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) er
 	// Python: team_agent.py:1492-1622——五模式分派构造 ForkContext
 	var forkCtx *agentteams.ForkContext
 	if forkInfo != nil {
-		forkCtx = a.buildForkContext(ctx, teammateID, forkInfo)
+		reader := a.resolveForkSource(forkInfo.Source)
+		forkCtx = a.buildForkContext(ctx, teammateID, forkInfo, reader)
 	}
 
 	runtimeCtx, err := a.spawnManager.BuildContextFromDB(ctx, teammateID)
@@ -2405,9 +2386,10 @@ func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) er
 }
 
 // buildForkContext 按 fork_info 构造继承上下文（五模式分派）。
+// reader 由调用方（onTeammateCreated → resolveForkSource）解析传入；
 // 整段异常兜底：warning + nil（无继承继续 spawn）——fork 抓取失败绝不阻塞 spawn。
 // Python: team_agent.py:1494-1622
-func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, forkInfo *tools.ForkInfo) (forkCtx *agentteams.ForkContext) {
+func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, forkInfo *tools.ForkInfo, reader *forkContextReader) (forkCtx *agentteams.ForkContext) {
 	// Python: try: ... except Exception: warning + fork_ctx = None（:1618-1622）
 	defer func() {
 		if r := recover(); r != nil {
@@ -2419,13 +2401,25 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 		}
 	}()
 
-	native := a.resolveForkSource(forkInfo.Source)
 	logger.Debug(logComponent).
 		Str("source", forkInfo.Source).
-		Bool("native_resolved", native != nil).
+		Bool("reader_resolved", reader != nil).
 		Msg("[fork] resolve_fork_source")
-	if native == nil {
+	if reader == nil {
 		return nil
+	}
+	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）的读取半区——
+	// try 内存上下文 → except 回落持久化消息（fork.py:57-64）→ 兜底也无果
+	// 重抛（raise exc，:65）由本函数 recover 收敛。
+	forkFromReader := func(ckpt *int, keep string) *agentteams.ForkContext {
+		msgs, err := reader.read(ctx)
+		if err != nil {
+			if persisted := reader.persisted(); persisted != nil {
+				return agentteams.ForkContextFromMessages(persisted, ckpt, keep)
+			}
+			panic(err)
+		}
+		return agentteams.ForkContextFromMessages(msgs, ckpt, keep)
 	}
 
 	forkValue := forkInfo.Fork
@@ -2482,7 +2476,7 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 
 	// Python: fork_ctx = ForkContext.from_agent(native)（:1549）——模式分支前
 	// 先全量抓取；compact 模式靠 compact_split 让 split 下标对齐注入上下文。
-	forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", nil, "before")
+	forkCtx = forkFromReader(nil, "before")
 
 	if !isNamed {
 		// live fork：唯一有意义的 mode 是 full
@@ -2507,9 +2501,9 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 		// Python: :1571-1596
 		switch forkMode {
 		case "before":
-			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "before")
+			forkCtx = forkFromReader(ckptIdx, "before")
 		case "after":
-			forkCtx = agentteams.ForkContextFromAgent(ctx, native, "", ckptIdx, "after")
+			forkCtx = forkFromReader(ckptIdx, "after")
 		case "keep_before_compact_after":
 			// Python: fork_ctx.compact_split=ckpt_idx; compact_direction="after"
 			forkCtx.CompactSplit = ckptIdx
@@ -2538,15 +2532,50 @@ func (a *TeamAgent) buildForkContext(ctx context.Context, teammateID string, for
 	return forkCtx
 }
 
-// resolveForkSource 返回源成员的上下文读取面；nil=无法解析（跳过继承）。
+// forkContextReader fork 源的读取缝（具体闭包结构体，非接口——测试注入 fake
+// 读取函数，生产由 resolveForkSource 从源 TeamAgent 的 delegate 构造）。
+// Python: from_agent 鸭子调用 agent.get_current_context / loop_session。
+type forkContextReader struct {
+	// read 读源成员当前内存上下文（sessionID 恒空串=绑定会话默认 context）
+	read func(ctx context.Context) ([]llmschema.BaseMessage, error)
+	// persisted 兜底：读源成员绑定会话持久化的消息；无则返回 nil
+	// Python: _read_persisted_messages (fork.py:120-148)
+	persisted func() []llmschema.BaseMessage
+}
+
+// forkReader 构造本成员的读取缝（TeamAgent delegate → DeepAgent）。
+func (a *TeamAgent) forkReader() *forkContextReader {
+	return &forkContextReader{
+		read: func(ctx context.Context) ([]llmschema.BaseMessage, error) {
+			h := a.Harness()
+			if h == nil || h.Native() == nil || h.Native().DeepAgent() == nil {
+				return nil, fmt.Errorf("harness 未装配，无法读取上下文")
+			}
+			return h.Native().DeepAgent().GetCurrentContext(ctx, "", "default_context_id")
+		},
+		persisted: a.PersistedContextMessages,
+	}
+}
+
+// ForkDeep 返回本成员内层 DeepAgent（SpawnableAgent.ForkDeep 实现）。
+// 非 in-process / harness 未装配返回 nil。
+func (a *TeamAgent) ForkDeep() *agentcoreharness.DeepAgent {
+	h := a.Harness()
+	if h == nil || h.Native() == nil {
+		return nil
+	}
+	return h.Native().DeepAgent()
+}
+
+// resolveForkSource 返回源成员的读取缝；nil=无法解析（跳过继承）。
 //   - source 为空/等于自己 → 本 agent（leader 视角）
-//   - spawned_handles[source] 命中 → 队友的 DeepAgent 读取面
+//   - spawned_handles[source] 命中 → 队友（断言 *TeamAgent）
 //   - 未命中/非 in-process（外部 CLI）→ warning + nil，继承整体跳过
 //
 // Python: _resolve_fork_native (team_agent.py:1644-1661)
-func (a *TeamAgent) resolveForkSource(sourceName string) spawnpkg.ForkContextSource {
+func (a *TeamAgent) resolveForkSource(sourceName string) *forkContextReader {
 	if sourceName == "" || sourceName == a.MemberName() {
-		return a
+		return a.forkReader()
 	}
 	handleAny := a.spawnManager.SpawnedHandles()[sourceName]
 	handle, ok := handleAny.(*spawnpkg.InProcessSpawnHandle)
@@ -2558,15 +2587,16 @@ func (a *TeamAgent) resolveForkSource(sourceName string) spawnpkg.ForkContextSou
 			Msg("[fork] fork source not found or not in-process; fork inheritance will be SKIPPED")
 		return nil
 	}
-	src := handle.ForkSource()
-	if src == nil {
+	ta, isTA := handle.AgentRef().(*TeamAgent)
+	if !isTA || ta.ForkDeep() == nil {
 		logger.Warn(logComponent).
 			Str("fork_source", sourceName).
 			Str("leader", a.MemberName()).
 			Str("spawned", strings.Join(a.spawnManager.SpawnedHandleNames(), ",")).
 			Msg("[fork] fork source not found or not in-process; fork inheritance will be SKIPPED")
+		return nil
 	}
-	return src
+	return ta.forkReader()
 }
 
 // notifyForkNameNotFound 把错误的 fork checkpoint 名告知 leader。

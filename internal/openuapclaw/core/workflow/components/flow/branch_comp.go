@@ -36,28 +36,22 @@ func NewBranchComponent() *BranchComponent {
 
 // AddBranch 登记分支（Python add_branch：condition/target falsy 校验 + list 空项
 // 逐项校验 → 转调 router.add_branch；错误码 COMPONENT_BRANCH_PARAM_INVALID）。
-func (c *BranchComponent) AddBranch(cond any, target any, branchID string) error {
+// 偏差 D-19-4：target 收窄为 []string（Python Union[str, list[str]] 的 str 归一
+// `[target] if isinstance(target, str)` 上移到调用方——用户拍板调用层自己转，
+// 单目标调用点以 []string{"x"} 形态传入）。
+func (c *BranchComponent) AddBranch(cond any, target []string, branchID string) error {
 	if cond == nil {
 		return errBranchParam("condition is None or empty")
 	}
-	var targets []string
-	switch t := target.(type) {
-	case string:
-		targets = []string{t}
-	case []string:
-		targets = t
-	default:
+	if len(target) == 0 {
 		return errBranchParam("target is None or empty")
 	}
-	if len(targets) == 0 {
-		return errBranchParam("target is None or empty")
-	}
-	for idx, item := range targets {
+	for idx, item := range target {
 		if item == "" {
 			return errBranchParam(fmt.Sprintf("empty item at index %d in target list", idx))
 		}
 	}
-	return c.router.AddBranch(cond, targets, branchID)
+	return c.router.AddBranch(cond, target, branchID)
 }
 
 // Router 返回路由器（Python router()）。

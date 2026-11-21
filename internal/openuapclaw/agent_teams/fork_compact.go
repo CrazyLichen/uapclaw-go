@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
@@ -43,35 +44,37 @@ const compactionMaxTokens = 4096
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// CompactContextTarget compact_context 的目标窄接口——Python duck-typing
-// deep_agent 的收窄（agent_teams 根包不能 import harness 包，依赖倒置）。
-// Python: compact_context(deep_agent, ...) 直接调 deep_agent 的三个属性。
-type CompactContextTarget interface {
-	// GetCurrentContext 读取当前上下文消息
-	// Python: deep_agent.get_current_context(session_id)
-	GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error)
-	// ContextEngineForCheckpoint 取目标 context engine（回写压缩结果）。
-	// 复用 25.1f checkpoint 捕获的既有访问器（Python: react.context_engine）。
-	ContextEngineForCheckpoint() ceinterface.ContextEngine
-	// CompactionModel 摘要模型（Python: deep_agent.deep_config.model）。
-	CompactionModel() *llm.Model
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CompactContext 把 fork 上下文在 splitAt 处的一侧压缩成摘要。
 //
 // direction="before"（默认）：压缩头部 msgs[:splitAt] 成摘要、尾部逐字保留；
 // direction="after"：头部逐字保留、压缩尾部 msgs[splitAt:]。
-// 压缩前剥掉全部 SystemMessage。
+// 压缩前剥掉全部 SystemMessage。deepAgent 为注入目标（新成员），直收具体
+// 类型——harness 不反向 import 本包，依赖方向合法（见 fork.go 铁律注释）。
 //
 // Python: compact_context (fork_compact.py:36-95)
-func CompactContext(ctx context.Context, target CompactContextTarget, splitAt int, sessionID string, direction string) {
+func CompactContext(ctx context.Context, deepAgent *harness.DeepAgent, splitAt int, sessionID string, direction string) {
 	// Python: msgs = deep_agent.get_current_context(session_id=session_id)
-	msgs, err := target.GetCurrentContext(ctx, sessionID, "default_context_id")
+	msgs, err := deepAgent.GetCurrentContext(ctx, sessionID, "default_context_id")
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
+			Msg("[fork] compact_context: read current context failed")
+		return
+	}
+	compactInto(ctx, msgs, err, splitAt, sessionID, direction,
+		deepAgent.ContextEngineForCheckpoint(), compactionModel(deepAgent))
+}
+
+// compactInto compact_context 的可测核心（读缝已由 CompactContext 从 DeepAgent
+// 取齐：消息/回写引擎/摘要模型）。
+func compactInto(ctx context.Context, msgs []llmschema.BaseMessage, readErr error,
+	splitAt int, sessionID string, direction string,
+	engine ceinterface.ContextEngine, model *llm.Model) {
+	if readErr != nil {
+		logger.Warn(logComponent).
+			Err(readErr).
 			Msg("[fork] compact_context: read current context failed")
 		return
 	}
@@ -117,7 +120,7 @@ func CompactContext(ctx context.Context, target CompactContextTarget, splitAt in
 		Int("keeping", len(keptMsgs)).
 		Msg("[fork] compact_context: compressing")
 
-	summary := runCompaction(ctx, target, toCompress)
+	summary := runCompaction(ctx, model, toCompress)
 	summaryMsg := llmschema.NewUserMessage(fmt.Sprintf(
 		"[Compacted context — earlier conversation summarised]\n\n%s", summary))
 
@@ -132,7 +135,6 @@ func CompactContext(ctx context.Context, target CompactContextTarget, splitAt in
 	// 一个 Session，其 get_state() 返回 None，_load_state_from_session 会静默
 	// 跳过新消息，所以必须原地回写。
 	// Python: fork_compact.py:88-98（react.context_engine.get_context(...).set_messages）
-	engine := target.ContextEngineForCheckpoint()
 	if engine != nil {
 		resolvedSession := sessionID
 		if resolvedSession == "" {
@@ -153,11 +155,19 @@ func CompactContext(ctx context.Context, target CompactContextTarget, splitAt in
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// compactionModel 摘要模型（Python: deep_agent.deep_config.model）。
+func compactionModel(deepAgent *harness.DeepAgent) *llm.Model {
+	cfg := deepAgent.DeepConfig()
+	if cfg == nil {
+		return nil
+	}
+	return cfg.Model
+}
+
 // runCompaction 用 agent 自身模型跑单轮摘要。
 // 模型 KV cache 里仍有 fork 上下文，摘要调用只付出输出 token 成本。
 // Python: _run_compaction (fork_compact.py:116-137)
-func runCompaction(ctx context.Context, target CompactContextTarget, oldMsgs []llmschema.BaseMessage) string {
-	model := target.CompactionModel()
+func runCompaction(ctx context.Context, model *llm.Model, oldMsgs []llmschema.BaseMessage) string {
 	if model == nil {
 		// Python: config is None or config.model is None → "[compaction skipped: no model available]"
 		return "[compaction skipped: no model available]"

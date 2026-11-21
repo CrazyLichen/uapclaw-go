@@ -2137,17 +2137,6 @@ func (d *DeepAgent) ContextEngineForCheckpoint() ceinterface.ContextEngine {
 	return nil
 }
 
-// CompactionModel 返回摘要压缩用的模型（25.5 fork_compact 消费）。
-// 只加只读 getter。Python: compact_context 读 deep_agent.deep_config.model
-// （fork_compact.py:121-123）；nil = 无模型可用（返回 skipped 文案）。
-func (d *DeepAgent) CompactionModel() *llm.Model {
-	cfg := d.DeepConfig()
-	if cfg == nil {
-		return nil
-	}
-	return cfg.Model
-}
-
 // Python: DeepAgent._goal_prompt_language (deep_agent.py L518)
 func (d *DeepAgent) goalPromptLanguage() string {
 	d.configMu.RLock()

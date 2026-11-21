@@ -7,6 +7,7 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -15,6 +16,8 @@ import (
 type fakeSpawnable struct{}
 
 // AgentCard 返回占位身份卡。
+func (f *fakeSpawnable) ForkDeep() *harness.DeepAgent      { return nil }
+
 func (f *fakeSpawnable) AgentCard() *agentschema.AgentCard {
 	return agentschema.NewAgentCard(agentschema.WithAgentID("fake"), agentschema.WithAgentName("fake"))
 }

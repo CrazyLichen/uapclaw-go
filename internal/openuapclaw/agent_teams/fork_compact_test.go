@@ -11,28 +11,11 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // ──────────────────────────── 测试 ────────────────────────────
-
-// fakeCompactTarget CompactContextTarget 测试替身：GetCurrentContext 返回
-// 预置消息，SetMessages 经 fakeModelContext 记录回写结果；model 为 nil 时走
-// skipped 分支。
-type fakeCompactTarget struct {
-	msgs   []llmschema.BaseMessage
-	engine ceinterface.ContextEngine
-}
-
-func (f *fakeCompactTarget) GetCurrentContext(_ context.Context, _ string, _ string) ([]llmschema.BaseMessage, error) {
-	return f.msgs, nil
-}
-
-func (f *fakeCompactTarget) ContextEngineForCheckpoint() ceinterface.ContextEngine { return f.engine }
-
-func (f *fakeCompactTarget) CompactionModel() *llm.Model { return nil }
 
 // fakeModelContext 最小 ModelContext 替身：只记录 SetMessages，其余为 no-op。
 type fakeModelContext struct {
@@ -116,8 +99,7 @@ func mkMsgs(n int) []llmschema.BaseMessage {
 func TestCompactContext_Split越界Skip(t *testing.T) {
 	for _, split := range []int{0, -1, 4, 100} {
 		mc := &fakeModelContext{}
-		target := &fakeCompactTarget{msgs: mkMsgs(4), engine: &fakeCompactEngine{mc: mc}}
-		CompactContext(context.Background(), target, split, "", "before")
+		compactInto(context.Background(), mkMsgs(4), nil, split, "", "before", &fakeCompactEngine{mc: mc}, nil)
 		require.Nil(t, mc.lastSet, "split=%d 越界不应回写", split)
 	}
 }
@@ -126,8 +108,7 @@ func TestCompactContext_Split越界Skip(t *testing.T) {
 // Python: fork_compact.py:80-83 + else 分支（kept=tail, compress=head）
 func TestCompactContext_Before压缩头部(t *testing.T) {
 	mc := &fakeModelContext{}
-	target := &fakeCompactTarget{msgs: mkMsgs(4), engine: &fakeCompactEngine{mc: mc}}
-	CompactContext(context.Background(), target, 2, "", "before")
+	compactInto(context.Background(), mkMsgs(4), nil, 2, "", "before", &fakeCompactEngine{mc: mc}, nil)
 	require.NotNil(t, mc.lastSet)
 	// 无模型 → 摘要为 skipped 文案；结果 = [summary, msgs[2], msgs[3]]
 	require.Len(t, mc.lastSet, 3)
@@ -152,8 +133,7 @@ func TestCompactContext_After压缩尾部保留头部(t *testing.T) {
 		llmschema.NewUserMessage("u2"),
 	}
 	mc := &fakeModelContext{}
-	target := &fakeCompactTarget{msgs: msgs, engine: &fakeCompactEngine{mc: mc}}
-	CompactContext(context.Background(), target, 2, "", "after")
+	compactInto(context.Background(), msgs, nil, 2, "", "after", &fakeCompactEngine{mc: mc}, nil)
 	require.NotNil(t, mc.lastSet)
 	// 头部延伸过 ToolMessage 块：u1,a1,t1,t2 保留；t2 之后压缩成摘要置尾。
 	require.Len(t, mc.lastSet, 5)
@@ -171,9 +151,8 @@ func TestCompactContext_剥SystemMessage(t *testing.T) {
 	msgs := append([]llmschema.BaseMessage{llmschema.NewSystemMessage("sys")},
 		mkMsgs(4)...)
 	mc := &fakeModelContext{}
-	target := &fakeCompactTarget{msgs: msgs, engine: &fakeCompactEngine{mc: mc}}
-	// split=2 按剥除后的列表计（u,aa,uuu,aaaa 中 split=2 → 压缩 u,aa）
-	CompactContext(context.Background(), target, 2, "", "before")
+	// split=2 按剥除后的列表计（剥 SystemMessage 后 u,aa,uuu,aaaa 中 split=2 → 压缩 u,aa）
+	compactInto(context.Background(), msgs, nil, 2, "", "before", &fakeCompactEngine{mc: mc}, nil)
 	require.Len(t, mc.lastSet, 3) // summary + uuu + aaaa
 	require.Equal(t, "uuu", mc.lastSet[1].GetContent().Text())
 }
