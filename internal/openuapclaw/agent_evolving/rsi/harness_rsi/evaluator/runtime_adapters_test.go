@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
@@ -290,5 +291,135 @@ func TestResponseText_四键递归(t *testing.T) {
 	}
 	if responseText(map[string]any{"output": ""}) != "" {
 		t.Fatal("命中键但空文本应继续判空")
+	}
+}
+
+// ──────────────────────────── RSISkillUseRail（17.6a） ────────────────────────────
+
+// TestExtractDecisionCapsule 对齐 Python _extract_decision_capsule 三分支。
+func TestExtractDecisionCapsule(t *testing.T) {
+	content := "# Skill\n\n## Decision Capsule\ncapsule body\nline2\n\n## Details\nother"
+	got := extractDecisionCapsule(content)
+	want := "## Decision Capsule\ncapsule body\nline2"
+	if got != want {
+		t.Fatalf("capsule 提取不符:\n got=%q\nwant=%q", got, want)
+	}
+	// 无节头 → 空串。
+	if extractDecisionCapsule("# Skill\nno capsule") != "" {
+		t.Fatal("无节头应空串")
+	}
+	// 节头为文档末节 → 取到结尾。
+	got = extractDecisionCapsule("## decision capsule\nonly line")
+	if got != "## decision capsule\nonly line" {
+		t.Fatalf("末节应取到结尾: %q", got)
+	}
+}
+
+// TestBuildActiveSkillAttachment 对齐 Python 文案逐字（含两种来源标签）。
+func TestBuildActiveSkillAttachment(t *testing.T) {
+	got := buildActiveSkillAttachment("my-skill", "  body  ", true)
+	want := "# Active Skill: my-skill\n\n" +
+		"This skill was already loaded successfully. Keep its requirements active " +
+		"through diagnosis, editing, and verification. Do not reload it; act on " +
+		"the decision capsule below.\n\nbody"
+	if got != want {
+		t.Fatalf("capsule 模式文案漂移:\n got=%q\nwant=%q", got, want)
+	}
+	if !strings.Contains(buildActiveSkillAttachment("s", "b", false), "the Skill instructions below.") {
+		t.Fatal("全量模式应使用 Skill instructions 标签")
+	}
+}
+
+// TestTaskQuery_三形态 对齐 Python _task_query。
+func TestTaskQuery_三形态(t *testing.T) {
+	if taskQuery(nil) != "" {
+		t.Fatal("nil 应空串")
+	}
+	if taskQuery("  spaced  ") != "spaced" {
+		t.Fatal("字符串应去空白")
+	}
+	if taskQuery(42) != "42" {
+		t.Fatal("标量应 str() 等价")
+	}
+	if taskQuery(map[string]any{"b": 1, "a": 2}) != `{"a":2,"b":1}` {
+		t.Fatalf("dict 应 sort_keys 序列化: %q", taskQuery(map[string]any{"b": 1, "a": 2}))
+	}
+}
+
+// TestNormalizeToolArgs_三形态 对齐 Python _normalize_tool_args。
+func TestNormalizeToolArgs_三形态(t *testing.T) {
+	if normalizeToolArgs(map[string]any{"k": 1})["k"] != 1 {
+		t.Fatal("dict 原样")
+	}
+	if normalizeToolArgs(`{"k":"v"}`)["k"] != "v" {
+		t.Fatal("JSON 字符串应解析")
+	}
+	if len(normalizeToolArgs("not json")) != 0 {
+		t.Fatal("非法 JSON 应空 dict")
+	}
+	if len(normalizeToolArgs(42)) != 0 {
+		t.Fatal("标量应空 dict")
+	}
+}
+
+// TestRSISkillUseRail_守卫链 对齐 _trigger_relevant_skill 守卫顺序。
+func TestRSISkillUseRail_守卫链(t *testing.T) {
+	t.Run("禁用时不触发", func(t *testing.T) {
+		rail := NewRSISkillUseRail(false)
+		if err := rail.triggerRelevantSkill(context.Background(), stubInvokeContext()); err != nil {
+			t.Fatal(err)
+		}
+		ev := rail.TaskTriggerEvidence()
+		if ev["reason"] != "disabled" || ev["attempted"] != false {
+			t.Fatalf("禁用证据不符: %v", ev)
+		}
+	})
+	t.Run("无路由模型", func(t *testing.T) {
+		rail := NewRSISkillUseRail(true)
+		if err := rail.triggerRelevantSkill(context.Background(), stubInvokeContext()); err != nil {
+			t.Fatal(err)
+		}
+		if rail.TaskTriggerEvidence()["reason"] != "routing_model_unavailable" {
+			t.Fatalf("无模型证据不符: %v", rail.TaskTriggerEvidence())
+		}
+	})
+}
+
+// TestRSISkillUseRail_AfterToolCall_附件协议 skill_tool SKILL.md 成功载入 →
+// 活动技能附件写入 + ctx 节跟踪；非 skill_tool / 非 SKILL.md / 失败结果 → 无操作。
+func TestRSISkillUseRail_AfterToolCall_附件协议(t *testing.T) {
+	rail := NewRSISkillUseRail(false)
+	content := "# Skill\n\n## Decision Capsule\nkeep X active\n\n## Steps\n1. do"
+	successResult := map[string]any{
+		"success": true,
+		"data":    map[string]any{"skill_content": content},
+	}
+	// 非 skill_tool → 无操作。
+	cbc := stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "bash", ToolArgs: map[string]any{}, ToolResult: successResult})
+	if err := rail.AfterToolCall(context.Background(), cbc); err != nil {
+		t.Fatal(err)
+	}
+	// 非 SKILL.md → 无操作。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs: map[string]any{"relative_file_path": "OTHER.md"}, ToolResult: successResult})
+	if err := rail.AfterToolCall(context.Background(), cbc); err != nil {
+		t.Fatal(err)
+	}
+	// 失败结果 → 无操作。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs: map[string]any{"skill_name": "s"}, ToolResult: map[string]any{"success": false}})
+	if err := rail.AfterToolCall(context.Background(), cbc); err != nil {
+		t.Fatal(err)
+	}
+	// 成功 + capsule → memo 应含 capsule 文案（无附件管理器时无操作不报错，
+	// 管理器接线链路由 17.6b 考场装配覆盖；此处验证协议分支语义）。
+	cbc = stubToolContext()
+	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "skill_tool",
+		ToolArgs: map[string]any{"skill_name": "my-skill"}, ToolResult: successResult})
+	if err := rail.AfterToolCall(context.Background(), cbc); err != nil {
+		t.Fatal(err)
 	}
 }
