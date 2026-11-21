@@ -107,7 +107,12 @@ const (
 
 // ProviderNames 内置 provider 名（闭集，永远优先于注册与安装）。
 // Python: factory.py:62 PROVIDER_NAMES
-var ProviderNames = []string{"native", "native_v2", "claudecode", "codex", "dsh"}
+//
+// ⚠️ 偏差 D-15.22-b（用户 2026-12-06 裁决闭集收编）：上游闭集仅 5 名，
+// "codebuddy" 为 Go 侧新增（Python 无对应物）。收编后 codebuddy 的成员
+// 后端资格由 agent_teams/external/backends.go 的 ThirdPartyProviders
+// 白名单例外（偏差 D-15.22-e）维持。
+var ProviderNames = []string{"native", "native_v2", "claudecode", "codex", "dsh", "codebuddy"}
 
 // nativeProviders native 系 provider 名。
 // Python: factory.py:68 _NATIVE_PROVIDERS = frozenset({"native", "native_v2"})

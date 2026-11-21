@@ -35,8 +35,12 @@ func ExternalCliAgentKey(cliAgent, suffix string) string {
 
 // ExternalCliAgentKinds 返回 claude/codex 与注册表中全部自定义 agent。
 // Python: external_cli_agent_kinds (external_cli_read.py:24-28)
+//
+// ⚠️ 偏差 D-15.22-b："codebuddy" 为 Go 侧新增内置 kind（Python 无对应物，
+// 用户 2026-12-06 裁决）；依赖门控只对 claude/codex 生效，codebuddy 与
+// 自定义 agent 同样零安装步骤（CLI 为产品自带）。
 func ExternalCliAgentKinds() []string {
-	kinds := []string{"claude", "codex"}
+	kinds := []string{"claude", "codex", "codebuddy"}
 	kinds = append(kinds, CustomAgentNames()...)
 	return kinds
 }

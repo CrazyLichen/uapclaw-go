@@ -45,7 +45,7 @@ func (s *ProviderSuite) TestModelConfig_映射与fallback拒绝() {
 	s.Require().Error(err)
 }
 
-// TestRegister_工厂可取 init 注册经 ResolveProvider 可取用（第三方缝）。
+// TestRegister_工厂可取 init 注册（RegisterBuiltinProvider，D-15.22-b 收编）经 ResolveProvider 可取用。
 func (s *ProviderSuite) TestRegister_工厂可取() {
 	resolved, err := providers.ResolveProvider("codebuddy")
 	s.Require().NoError(err)

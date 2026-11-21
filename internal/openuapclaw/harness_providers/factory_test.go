@@ -77,7 +77,7 @@ func TestRegisterHarnessProvider_空名报错(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty or built-in name")
 }
 
-// TestRegisterHarnessProvider_内置名报错 五个内置名都不可注册。
+// TestRegisterHarnessProvider_内置名报错 全部内置名（含收编的 codebuddy，D-15.22-b）都不可注册。
 func TestRegisterHarnessProvider_内置名报错(t *testing.T) {
 	for _, name := range ProviderNames {
 		err := RegisterHarnessProvider(name, func() (harnessprotocol.HarnessProvider, error) {
@@ -93,8 +93,8 @@ func TestUnregisterHarnessProvider_未知名忽略(t *testing.T) {
 	UnregisterHarnessProvider("never-registered") // 不 panic 即通过
 }
 
-// TestAvailableProviders_含五个内置名 对齐 factory.py:103-109。
-func TestAvailableProviders_含五个内置名(t *testing.T) {
+// TestAvailableProviders_含全部内置名 对齐 factory.py:103-109（含收编的 codebuddy）。
+func TestAvailableProviders_含全部内置名(t *testing.T) {
 	available := AvailableProviders()
 	for _, name := range ProviderNames {
 		assert.Contains(t, available, name)

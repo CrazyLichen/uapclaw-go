@@ -161,13 +161,30 @@ func BackendFor(name string) *ExternalCliBackend {
 	return nil
 }
 
+// builtinMemberBackendProviders 收编进 ProviderNames 闭集、但保留成员后端
+// 资格的 provider 名（偏差 D-15.22-e）。
+//
+// Python: backends.py:78-79 明确 "Built-in providers are not member
+// backends"，third_party_providers 排除闭集全部名字。Go 侧唯一例外是
+// codebuddy：用户 2026-12-06 裁决它既进闭集（D-15.22-b）又保持
+// cli_agent 成员后端可用。回收条件：上游若提供内置成员后端机制则迁移。
+var builtinMemberBackendProviders = map[string]bool{"codebuddy": true}
+
 // ThirdPartyProviders 返回非内置的 harness provider 名。
 //
 // Python: third_party_providers (backends.py:114)
+//
+// ⚠️ 偏差 D-15.22-e：builtinMemberBackendProviders 白名单内的闭集名不排除
+// （否则 BackendFor/AvailableBackends 解析不到 codebuddy，成员 spawn 与
+// 清单双双失效）。
 func ThirdPartyProviders() []string {
 	names := harness_providers.AvailableProviders()
 	out := make([]string, 0, len(names))
 	for _, name := range names {
+		if builtinMemberBackendProviders[name] {
+			out = append(out, name)
+			continue
+		}
 		if !slices.Contains(harness_providers.ProviderNames, name) {
 			out = append(out, name)
 		}

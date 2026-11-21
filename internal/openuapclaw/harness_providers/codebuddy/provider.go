@@ -1,8 +1,6 @@
 package codebuddy
 
 import (
-	"fmt"
-
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	providers "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 )
@@ -68,12 +66,12 @@ func (p *CodebuddyProvider) ModelConfig(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// init 编译期注册：走第三方进程内注册缝（factory.go:137
-// RegisterHarnessProvider），不改 ProviderNames 闭集（偏差 D-15.22-b）。
+// init 编译期注册：走内置 provider 通道（factory.go:159
+// RegisterBuiltinProvider，绕过内置名守卫，对齐 dsh 的注册形态）。
+// "codebuddy" 已收编进 ProviderNames 闭集（偏差 D-15.22-b，用户
+// 2026-12-06 裁决）；RegisterHarnessProvider 对内置名返回错误，不可再用。
 func init() {
-	if err := providers.RegisterHarnessProvider("codebuddy", func() (harnessprotocol.HarnessProvider, error) {
+	providers.RegisterBuiltinProvider("codebuddy", func() (harnessprotocol.HarnessProvider, error) {
 		return &CodebuddyProvider{}, nil
-	}); err != nil {
-		panic(fmt.Sprintf("codebuddy provider 注册失败: %v", err))
-	}
+	})
 }
