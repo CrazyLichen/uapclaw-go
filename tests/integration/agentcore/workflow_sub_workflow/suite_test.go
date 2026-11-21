@@ -275,14 +275,16 @@ func (s *SubWorkflowSuite) TestCacheStream_流后批式短路不重跑() {
 	s.Require().Greater(firstRound, int32(0), "流式运行应触发子 End 组件事件")
 
 	// ② 批式 invoke：vertex.call 双腿循环（INVOKE→STREAM，vertex.py:669-673）——
-	// INVOKE 腿被 Quirk A 短路（cache_stream 开启即短路，含空缓存 {} 形态），
-	// STREAM 腿照常重跑子图（Python 同款双腿语义，短路只护批入腿）
+	// INVOKE 腿缓存命中短路（①的流帧为 dict 帧已被合并，缓存非空），只有 STREAM
+	// 腿重跑子图 → 事件增量恰为 +1；短路返回 {"output": merged}，父 End 渲染
+	// ${sub.response} 落空 → 输出不含子内容（Quirk A 复刻 workflow_comp.py:81-84）
 	out, err := parent.Invoke(context.Background(), map[string]any{"name": "u5"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	s.Greater(childEndEvents.Load(), firstRound, "STREAM 腿照常重跑子图（对齐 Python 双腿循环）")
+	s.Equal(firstRound+1, childEndEvents.Load(),
+		"缓存命中短路：INVOKE 腿不再调子工作流，事件增量恰为 STREAM 腿一条")
 	s.NotContains(fmt.Sprint(out), "child:u5",
-		"Quirk A 复刻：INVOKE 腿短路返回空缓存合并结果 {}，父 End 批式渲染不含真实子输出（上游 workflow_comp.py:81-84 真实行为）")
+		`Quirk A 复刻：短路返回 {"output": merged}，父 End 批式渲染不含真实子输出`)
 }
 
 // TestInterruptResume_真实输入输出 恢复全链（对齐上游 test_workflow_with_interrupt.py

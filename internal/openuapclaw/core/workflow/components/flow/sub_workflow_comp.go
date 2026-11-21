@@ -50,7 +50,7 @@ type SubWorkflowComponent struct {
 	// subWorkflowStreamFn 子工作流流式调用缝（生产=闭包转 subWorkflow.Stream）
 	subWorkflowStreamFn func(ctx context.Context, inputs any,
 		sess sessioninterfaces.SessionFacade, modelContext any, streamModes []stream.StreamMode,
-		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error)
+		kwargs map[string]any) (<-chan any, error)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -133,9 +133,10 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (any, error) {
 		return subWorkflow.Invoke(ctx, inputs, sess, modelContext, kwargs)
 	}
+	// 帧元素 any（D-14b-6 延伸）：Python stream 返回队列原样帧（dict/Schema 混流）
 	c.subWorkflowStreamFn = func(ctx context.Context, inputs any,
 		sess sessioninterfaces.SessionFacade, modelContext any, streamModes []stream.StreamMode,
-		kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
+		kwargs map[string]any) (<-chan any, error) {
 		return subWorkflow.Stream(ctx, inputs, sess, modelContext, streamModes, kwargs)
 	}
 	// InvokeFn 槽绑定（Python invoke :78-84；Quirk A 空缓存短路逐字复刻，D-14b-1 已知行为）
@@ -156,52 +157,20 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 		go func() {
 			defer close(out)
 			for frame := range subCh {
+				// Python stream :77-78 accumulate(value) / yield value 均为队列原样帧——
+				// dict 帧进缓存（isinstance-dict 合并），Schema 帧/信封帧被过滤；
+				// 转发原样直通：子图 end-sub 分支已还原 payload dict（流边路径提取可用，
+				// D-14b-6 历史：{"frame": schema} 信封会使路径提取 nil 且 END 帧
+				// sourcePathMap 空不投 EndFrame → StreamReader 永不关 → transform 挂死）
 				if c.cacheStream {
-					// 累积原始 Schema 帧：BuildFinalResult 只认 dict 帧（Python isinstance(output, dict)
-					// 对 OutputSchema 模型帧跳过），缓存语义与此对齐
 					c.streamState.Accumulate(frame)
 				}
-				// 转发形态取 Schema 的载荷 dict（D-14b-6）：下游流式消费方经流边 actor 按
-				// "节点.字段" 路径从 payload 提取值（Python 官方流式组件 StreamCompNode 产出
-				// 普通 dict 即此形态）；{"frame": schema} 信封会使路径提取 nil 且 END 帧因
-				// sourcePathMap 空不投 EndFrame → StreamReader 永不关 → transform 挂死
-				//（Python 同链路 OutputSchema 对象无 __getitem__ 同样断裂，属上游死路径，
-				// Go 以 Payload dict 对齐官方流式组件产出形态承载）
-				out <- graphexe.StreamChunk[any]{Val: schemaPayloadMap(frame)}
+				out <- graphexe.StreamChunk[any]{Val: frame}
 			}
 		}()
 		return out, nil
 	}
 	return c, nil
-}
-
-// schemaPayloadMap 从流帧 Schema 提取载荷 dict（D-14b-6 转发形态）：
-// OutputSchema/TraceSchema 取 Payload、CustomSchema 取 Data；载荷非 dict 时
-// 退回 {"frame": schema} 信封承载（非 dict 载荷本就无字段引用语义）。
-func schemaPayloadMap(frame workflow.WorkflowChunk) map[string]any {
-	switch s := frame.(type) {
-	case *stream.OutputSchema:
-		if m, ok := s.Payload.(map[string]any); ok {
-			return m
-		}
-	case stream.OutputSchema:
-		if m, ok := s.Payload.(map[string]any); ok {
-			return m
-		}
-	case *stream.CustomSchema:
-		return s.Data
-	case stream.CustomSchema:
-		return s.Data
-	case *stream.TraceSchema:
-		if m, ok := s.Payload.(map[string]any); ok {
-			return m
-		}
-	case stream.TraceSchema:
-		if m, ok := s.Payload.(map[string]any); ok {
-			return m
-		}
-	}
-	return map[string]any{"frame": frame}
 }
 
 // invokeSubWorkflow 批式调用逻辑（Python invoke :78-84 步骤一比一）：

@@ -173,7 +173,11 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 		var chunks []WorkflowChunk
 		ch, chErr := w.streamInternal(ctx, inputs, ws, kwargs)
 		for chunk := range ch {
-			chunks = append(chunks, chunk)
+			// 顶层工作流帧恒 Schema（writer 产出 OutputSchema）；any 化后断言收集
+			// 保持 Result 类型闭集（is_sub 的 dict 帧只出现在嵌套路径，不经此处）
+			if sc, ok := chunk.(stream.Schema); ok {
+				chunks = append(chunks, sc)
+			}
 		}
 		bgErr, ok := <-chErr
 		if ok && bgErr != nil {
@@ -206,8 +210,10 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 
 // Stream 流式执行门面（workflow.py:410-469；A' 签名：启动错误走第二返回值）。
 // inputs 闭集同 Invoke（map[string]any | *interaction.InteractiveInput）。
+// 返回帧元素 any（D-14b-6 延伸）：Python stream 返回 AsyncIterator 无元素约束，
+// is_sub 分流的子图帧为队列原样（dict/Schema 混流）
 func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
-	modelContext any, streamModes []stream.StreamMode, kwargs map[string]any) (<-chan WorkflowChunk, error) {
+	modelContext any, streamModes []stream.StreamMode, kwargs map[string]any) (<-chan any, error) {
 	if kwBool(kwargs, "is_sub") {
 		return w.subStream(ctx, inputs, sess, modelContext, kwargs)
 	}
@@ -247,8 +253,8 @@ func (w *Workflow) Draw(title, outputFormat string, expandSubgraph bool, enableA
 // streamInternal 内部流循环（workflow.py:501-592 步骤一比一；
 // 主循环中转禁直透——spec §10：转发层承载 workflow_final 补帧/取消事件/逐帧日志）。
 func (w *Workflow) streamInternal(ctx context.Context, inputs any,
-	ws sessioninterfaces.InnerSession, kwargs map[string]any) (<-chan WorkflowChunk, <-chan error) {
-	out := make(chan WorkflowChunk)
+	ws sessioninterfaces.InnerSession, kwargs map[string]any) (<-chan any, <-chan error) {
+	out := make(chan any)
 	errCh := make(chan error, 1)
 	go func() { // 转发协程（spec §10 注记 3；Python _stream 协程）
 		defer close(errCh) // 成功路径零写入：关闭承载「无错误」语义
@@ -393,10 +399,13 @@ func (w *Workflow) subInvoke(ctx context.Context, inputs any, sess sessioninterf
 }
 
 // subStream 子工作流流式（workflow.py:628-651 一比一）。
+// 帧元素 any（D-14b-6 延伸）：Python _sub_stream yield 的 messages 为队列原样帧
+//（dict/OutputSchema 混流），WorkflowChunk 接口约束会迫使 drain 包装 dict 帧，
+// 破坏 accumulate 的 isinstance-dict 合并语义（缓存恒空，与 Python 分叉）
 func (w *Workflow) subStream(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
-	modelContext any, kwargs map[string]any) (<-chan WorkflowChunk, error) {
+	modelContext any, kwargs map[string]any) (<-chan any, error) {
 	subWS := w.createWorkflowSession(sess, nil, true)
-	out := make(chan WorkflowChunk)
+	out := make(chan any)
 	go func() {
 		defer close(out)
 		defer w.cleanup(subWS)
@@ -425,7 +434,7 @@ func (w *Workflow) subStream(ctx context.Context, inputs any, sess sessioninterf
 // 偏差 D-14-3：Python 按 END_ 哨兵减能力计数（workflow.py:607-617），Go 侧 8.12
 // 已消除 END_FRAME（Emitter.Close → 队列关闭承载），故循环改为收帧直至队列关闭。
 func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.InnerSession,
-	streamTimeout time.Duration) []WorkflowChunk {
+	streamTimeout time.Duration) []any {
 	subStreamQ, err := subWS.ActorManager().SubWorkflowStream()
 	if err != nil {
 		return nil
@@ -443,7 +452,7 @@ func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.Inn
 	}
 	// workflow.py:607-617 一比一：frame==None → continue；frame==END_FRAME → 计数减；
 	// 其余入 messages；计数归零退出（哨兵消费语义，撤销 D-14-3 close 等价）
-	var messages []WorkflowChunk
+	var messages []any
 	for streamAbilityCount > 0 {
 		frame, rerr := subStreamQ.Receive(context.Background(), streamTimeout)
 		if rerr != nil {
@@ -453,12 +462,9 @@ func (w *Workflow) drainSubWorkflowStreamWithTimeout(subWS sessioninterfaces.Inn
 			streamAbilityCount--
 			continue
 		}
-		if sc, ok := frame.(stream.Schema); ok {
-			messages = append(messages, sc)
-		} else {
-			// 非 Schema 帧（Python yield 任意帧 → Go 以 OutputSchema 信封承载）
-			messages = append(messages, &stream.OutputSchema{Payload: frame})
-		}
+		// Python workflow.py:617 messages.append(frame) 原样直通（dict/Schema 混流）——
+		// 包装 OutputSchema 信封会破坏下游 accumulate 的 isinstance-dict 合并语义
+		messages = append(messages, frame)
 	}
 	return messages
 }

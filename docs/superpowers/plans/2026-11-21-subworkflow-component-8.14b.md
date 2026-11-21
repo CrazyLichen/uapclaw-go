@@ -575,7 +575,7 @@ git commit -m "feat(8.14b): SubWorkflowComponent 构造+三override+invoke 槽�
 
 ---
 
-### Task 3: stream 槽（逐帧累积 + 信封转发）+ get_stream_output 用例
+### Task 3: stream 槽（逐帧累积 + 队列原样帧转发，D-14b-6 修订）+ get_stream_output 用例
 
 **Files:**
 - Modify: `internal/agentcore/workflow/components/flow/sub_workflow_comp.go`
@@ -740,7 +740,7 @@ Expected: 全 PASS（含 Task 1/2 用例）
 
 ```bash
 git add internal/agentcore/workflow/components/flow/sub_workflow_comp.go internal/agentcore/workflow/components/flow/sub_workflow_comp_test.go
-git commit -m "feat(8.14b): stream 槽逐帧累积+信封转发、get_stream_output 两态（Quirk B 机制锚点）"
+git commit -m "feat(8.14b): stream 槽逐帧累积+原样帧转发、get_stream_output 两态（Quirk B 机制锚点）"
 ```
 
 ---

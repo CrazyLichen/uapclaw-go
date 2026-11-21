@@ -21,7 +21,7 @@ type fakeWorkflow struct {
 	invokeKwargs map[string]any
 	invokeOut    any
 	invokeErr    error
-	streamFrames []workflow.WorkflowChunk
+	streamFrames []any
 }
 
 func (f *fakeWorkflow) Invoke(ctx context.Context, inputs any,
@@ -252,8 +252,8 @@ func TestSubWorkflowComponent_Invoke_关缓存恒转调(t *testing.T) {
 // fakeWorkflow.Stream 流式替身（返回预置帧序列）
 func (f *fakeWorkflow) Stream(ctx context.Context, inputs any,
 	sess sessioninterfaces.SessionFacade, modelContext any, streamModes []sessionStream.StreamMode,
-	kwargs map[string]any) (<-chan workflow.WorkflowChunk, error) {
-	out := make(chan workflow.WorkflowChunk)
+	kwargs map[string]any) (<-chan any, error) {
+	out := make(chan any)
 	go func() {
 		defer close(out)
 		for _, fr := range f.streamFrames {
@@ -265,7 +265,7 @@ func (f *fakeWorkflow) Stream(ctx context.Context, inputs any,
 
 // TestSubWorkflowComponent_Stream_逐帧累积并转发 cache_stream=true（Python stream :76-81）
 func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
-	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+	fw := &fakeWorkflow{streamFrames: []any{
 		&sessionStream.OutputSchema{Type: "message", Index: 0, Payload: map[string]any{"out": "a"}},
 		&sessionStream.OutputSchema{Type: "message", Index: 1, Payload: map[string]any{"out": "b"}},
 	}}
@@ -282,20 +282,71 @@ func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
 	if len(got) != 2 || got[0].Err != nil {
 		t.Fatalf("期望两帧无错误, got %v", got)
 	}
-	// 转发形态：Schema 载荷 dict（D-14b-6，流边路径提取可用形态）
-	if got[0].Val.(map[string]any)["out"] != "a" {
-		t.Fatalf("期望帧承载载荷 dict, got %v", got[0].Val)
+	// 转发原样直通（Python yield value 原样——Schema 帧原样透传，不再拆载荷）
+	os0, ok := got[0].Val.(*sessionStream.OutputSchema)
+	if !ok || os0.Payload.(map[string]any)["out"] != "a" {
+		t.Fatalf("期望帧原样透传 Schema, got %v", got[0].Val)
 	}
-	// 累积的是原始帧值：Schema 帧 BuildFinalResult 跳过（对齐 Python isinstance dict）
+	// 累积的是原始帧：Schema 帧 BuildFinalResult 跳过（对齐 Python isinstance dict）
 	merged, _ := comp.streamState.BuildFinalResult()
 	if len(merged) != 0 {
 		t.Fatalf("Schema 帧应被合并过滤, got %v", merged)
 	}
 }
 
+// TestSubWorkflowComponent_Stream_dict帧合并缓存 dict 帧进缓存（Python isinstance dict
+// 合并）+ 转发原样——Quirk B 部分合并的机制面锁定（D-14b-2）。
+func TestSubWorkflowComponent_Stream_dict帧合并缓存(t *testing.T) {
+	fw := &fakeWorkflow{streamFrames: []any{
+		map[string]any{"response": "part1"},
+		map[string]any{"response": "part2"},
+	}}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
+	ch, err := comp.StreamFn(context.Background(), env, nil)
+	if err != nil {
+		t.Fatalf("流启动失败: %v", err)
+	}
+	var got []graphexe.StreamChunk[any]
+	for c := range ch {
+		got = append(got, c)
+	}
+	if len(got) != 2 || got[0].Err != nil {
+		t.Fatalf("期望两帧无错误, got %v", got)
+	}
+	if got[0].Val.(map[string]any)["response"] != "part1" {
+		t.Fatalf("dict 帧应原样透传, got %v", got[0].Val)
+	}
+	merged, _ := comp.streamState.BuildFinalResult()
+	if merged["response"] != "part1part2" { // 同键 str 拼接（build_final_result 合并四态）
+		t.Fatalf("dict 帧应合并进缓存（Quirk B 机制面）, got %v", merged)
+	}
+}
+
+// TestSubWorkflowComponent_Invoke_非空缓存短路 非空缓存命中返回 {"output": merged}
+//（Python workflow_comp.py:81-83 逐字复刻；Quirk B 恢复场景的缓存命中形态）。
+func TestSubWorkflowComponent_Invoke_非空缓存短路(t *testing.T) {
+	fw := &fakeWorkflow{invokeOut: map[string]any{"should": "not-called"}}
+	comp, _ := newSubWorkflowComponentForTest(fw, true)
+	comp.streamState.Accumulate(map[string]any{"response": "cached-part1"})
+	comp.streamState.Accumulate(map[string]any{"response": "cached-part2"})
+	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
+	out, err := comp.InvokeFn(context.Background(), env, nil)
+	if err != nil {
+		t.Fatalf("invoke 失败: %v", err)
+	}
+	if fw.invokeCalled != 0 {
+		t.Fatalf("非空缓存必须短路, 不应转调子工作流, invokeCalled=%d", fw.invokeCalled)
+	}
+	inner, ok := out["output"].(map[string]any)
+	if !ok || inner["response"] != "cached-part1cached-part2" {
+		t.Fatalf(`应返回 {"output": 部分合并缓存}（Quirk B 机制）, got %v`, out)
+	}
+}
+
 // TestSubWorkflowComponent_Stream_关缓存不累积 cache_stream=false
 func TestSubWorkflowComponent_Stream_关缓存不累积(t *testing.T) {
-	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+	fw := &fakeWorkflow{streamFrames: []any{
 		&sessionStream.CustomSchema{Type: "out", Data: map[string]any{"output": map[string]any{"out": "x"}}},
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, false)
@@ -314,7 +365,7 @@ func TestSubWorkflowComponent_Stream_dict帧累积命中短路(t *testing.T) {
 	// Schema 帧经累积后被合并过滤（对齐 Python isinstance dict），缓存为空 {}；
 	// Quirk A 复刻：cache_stream 开启时空缓存 {} 仍短路（cached 非 None），
 	// 流后批式 invoke 同样不转调子工作流。
-	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+	fw := &fakeWorkflow{streamFrames: []any{
 		&sessionStream.CustomSchema{Type: "out", Data: map[string]any{"output": map[string]any{"out": "x"}}},
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, true)
@@ -354,7 +405,7 @@ func TestGetStreamOutput_两态(t *testing.T) {
 // __init_subclass__ 装饰序（D-17-5 等价承载）在本组件经 OnInvoke/OnStream 时
 // ComponentBatchInput/ComponentBatchOutput 成对、ComponentStreamOutput 逐帧触发。
 func TestSubWorkflowComponent_元类装饰四事件对断言(t *testing.T) {
-	fw := &fakeWorkflow{streamFrames: []workflow.WorkflowChunk{
+	fw := &fakeWorkflow{streamFrames: []any{
 		&sessionStream.OutputSchema{Type: "message", Index: 0, Payload: "f0"},
 		&sessionStream.OutputSchema{Type: "message", Index: 1, Payload: "f1"},
 	}}

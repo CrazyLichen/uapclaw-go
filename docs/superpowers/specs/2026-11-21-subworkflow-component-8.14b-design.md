@@ -114,6 +114,8 @@ for frame := range ch:
 | D-14b-4 | 结构承载 | Python keyword-only 参数 → Go 变参选项；方法遮蔽三钩子（GraphInvoker/ComponentType）+ 两槽赋值（invoke/stream） | 终态 |
 | D-14b-5 | 已知行为（复刻，Python 同为死路径） | 嵌套流式 + 流式引用子图帧内部字段（`${sub.response}`）：Python payload 为 OutputSchema 对象、pydantic 无 `__getitem__` → 路径提取 None → 同样断链挂死；上游无嵌套流式测试故从未暴露。Go 以 dict 载荷形态走通（见 D-14b-6） | 不回收（Go 比 Python 健壮，登记防误判为回归） |
 | D-14b-6 | 有意偏差（Go 槽承载约束） | 转发/缓存形态分离：转发取 Schema 载荷 dict（对齐官方 StreamCompNode 产出形态，流边路径提取可用）；缓存累积原始 Schema 帧（isinstance-dict 过滤语义对齐 Python，缓存保持空 → Quirk A 短路行为一致）。Python 两腿同为 chunk 对象；另 END_FRAME 恢复入队哨兵（撤 8.14 D-14-3 close 等价，close 会 forceClear 丢帧）+ AsyncStreamQueue closed 先排空缓冲 + 流式槽帧元素 any 化（D-8 延伸：Executable/ExecutableGraph/组件槽 StreamChunk[O]→StreamChunk[any]，2026-11-21 用户拍板「返回类型不能固定死」——Python stream/transform 的 AsyncIterator 注解形式统一但实质任意，Go 泛型强制故解耦；invoke/collect 输出保持 map 锁死对齐其实际恒 dict 形态） | D-17-1 信封在单层 end 出口的承载保留（8.17 已验收形态）；若后续撤封按本节五层断裂链逐出口核对 |
+| D-14b-7 | 待确认语义缺口（登记） | postStream 对非 map 帧跳过 transformer（GetByDefaultTransformer/DefinedTransformer 契约输入为 map）：Schema 帧（如 OutputSchema）不经过组件级 stream outputs 转换。Python transform_io 对任意对象帧的行为未深查，若上游存在 Schema 帧过 transformer 的用例需补齐 | 上游出现 Schema 帧 + stream_outputs_schema 组合用例时核对补齐 |
+| D-14b-8 | 纪律登记（2026-11-21 审查拍板） | **StreamChunk[any] 禁止作破环后门**：any 化的正当性仅是 Python AsyncIterator 实质任意语义对齐；任何包不得借 any 槽塞跨包类型绕开 import 环（如借帧塞 workflow 包类型绕开 flow→workflow 单向依赖）——帧类型必须来自数据契约（Python 上游真实产出形态），违者按规则 12.3 处理 | 长期有效 |
 
 ## 8. 测试要求（用户明确要求：讨论过的点全部有覆盖，中断恢复场景必须真实输入输出）
 
