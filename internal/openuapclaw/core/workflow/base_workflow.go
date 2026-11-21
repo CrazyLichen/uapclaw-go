@@ -279,7 +279,10 @@ func (w *BaseWorkflow) Compile(sess session.BaseSession, context any) (ec graph.
 	}
 	// Python _workflow.py:310：self._session.set_session(session)
 	w.session.SetSession(sess)
-	return w.graph.Compile(sess, nil), nil
+	// Python _workflow.py:312：self._graph.compile(session, context=context)
+	//——D-18-7 修正：context（ModelContext）经 kwargs["context"] 下发至各 Vertex.Init，
+	// 原实现传 nil 致 ModelContext 全链丢失
+	return w.graph.Compile(sess, map[string]any{"context": context}), nil
 }
 
 // Reset 复位（Python _workflow.py:337-339）。
@@ -708,9 +711,10 @@ func ExecuteSingleComponent(ctx context.Context, componentID string, sess sessio
 	// 3. Create Vertex（:81-82）
 	exec := executor.ToExecutable()
 	vertex := graph.NewVertex(componentID, exec)
-	// 4. Initialize Vertex（:86）
 	// 4. Initialize Vertex（:86；context 为 nil 时仍可正常初始化）
-	vertex.Init(innerNode, nil)
+	// Python :86 vertex.init(node_session, context=context)——D-18-7 修正：
+	// modelContext（ModelContext）经 kwargs 下发，原实现传 nil 丢失
+	vertex.Init(innerNode, map[string]any{"context": modelContext})
 	// 5. 直设 node config（:90-106 SimpleNodeConfig）——Go 以 config 注册面承载：
 	// 注册单条 WorkflowConfig，NodeConfig() 即从此取（偏差注记：Python 直设属性）
 	spec := NewWorkflowSpec()
