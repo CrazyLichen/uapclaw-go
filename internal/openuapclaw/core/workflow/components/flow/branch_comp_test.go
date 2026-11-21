@@ -18,7 +18,7 @@ func TestBranchComponent_AddBranch_三段校验(t *testing.T) {
 	assert.Contains(t, c.AddBranch("a>1", []string{}, "").Error(), "target is None or empty")
 	require.Error(t, c.AddBranch("a>1", []string{"x", ""}, ""))
 	assert.Contains(t, c.AddBranch("a>1", []string{"x", ""}, "").Error(), "empty item at index 1")
-	require.NoError(t, c.AddBranch("${a} > 1", "x", "b1"))
+	require.NoError(t, c.AddBranch("${a} > 1", []string{"x"}, "b1"))
 	assert.Equal(t, map[string]struct{}{"x": {}}, c.Router().AllTargets())
 }
 
@@ -26,14 +26,14 @@ func TestBranchComponent_AddBranch_三段校验(t *testing.T) {
 func TestBranchComponent_AddComponent_CNF登记守卫(t *testing.T) {
 	g := graph.NewPregelGraph()
 	c := NewBranchComponent()
-	require.NoError(t, c.AddBranch("true", "e1", "b1")) // 单目标：不登记
+	require.NoError(t, c.AddBranch("true", []string{"e1"}, "b1")) // 单目标：不登记
 	c.AddComponent(g, "br", false)
 	assert.Empty(t, g.BranchTargets("br"))
 
 	g2 := graph.NewPregelGraph()
 	c2 := NewBranchComponent()
-	require.NoError(t, c2.AddBranch("true", "e1", "b1"))
-	require.NoError(t, c2.AddBranch("false", "e2", "b2"))
+	require.NoError(t, c2.AddBranch("true", []string{"e1"}, "b1"))
+	require.NoError(t, c2.AddBranch("false", []string{"e2"}, "b2"))
 	c2.AddComponent(g2, "br", false) // 双目标：登记
 	assert.Len(t, g2.BranchTargets("br"), 2)
 }

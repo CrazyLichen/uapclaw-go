@@ -72,21 +72,21 @@ func NewBranchRouter(reportTrace bool) *BranchRouter {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// AddBranch 登记分支（Python add_branch：nil 校验 → str target 归一 → 构造 Branch；
+// AddBranch 登记分支（Python add_branch：nil 校验 → 构造 Branch；
 // branch_router.py:58-64 drawable 填充段按 D-19-1 跳过）。
-func (r *BranchRouter) AddBranch(cond any, target any, branchID string) error {
+// 偏差 D-19-4：target 收窄为 []string（Python Union[str, list[str]] 的 str 归一
+// `[target] if isinstance(target, str)` 上移到调用方——用户拍板调用层自己转，
+// 边界 any 只保留 cond 的三态归一）。
+func (r *BranchRouter) AddBranch(cond any, target []string, branchID string) error {
 	if cond == nil || target == nil {
 		return exception.BuildError(exception.StatusComponentBranchParamInvalid,
 			exception.WithParam("reason", "condition is None or target is None"))
 	}
-	var targets []string
-	switch t := target.(type) {
-	case string:
-		targets = []string{t}
-	case []string:
-		targets = t
+	if len(target) == 0 {
+		return exception.BuildError(exception.StatusComponentBranchParamInvalid,
+			exception.WithParam("reason", "target is None or empty"))
 	}
-	b, err := NewBranch(cond, targets, branchID)
+	b, err := NewBranch(cond, target, branchID)
 	if err != nil {
 		return err
 	}

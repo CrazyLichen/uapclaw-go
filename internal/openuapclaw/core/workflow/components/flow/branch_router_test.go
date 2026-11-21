@@ -120,7 +120,7 @@ func TestBranchRouter_AddBranch_校验与归一(t *testing.T) {
 	r := NewBranchRouter(false)
 	require.Error(t, r.AddBranch(nil, []string{"x"}, ""))
 	require.Error(t, r.AddBranch("a>1", nil, ""))
-	require.NoError(t, r.AddBranch("a>1", "x", ""))
+	require.NoError(t, r.AddBranch("a>1", []string{"x"}, ""))
 	assert.Equal(t, map[string]struct{}{"x": {}}, r.AllTargets())
 }
 
@@ -128,15 +128,15 @@ func TestBranchRouter_AddBranch_校验与归一(t *testing.T) {
 func TestBranchRouter_AllTargets_去重(t *testing.T) {
 	r := NewBranchRouter(false)
 	require.NoError(t, r.AddBranch("true", []string{"x", "y"}, "b1"))
-	require.NoError(t, r.AddBranch("false", "x", "b2"))
+	require.NoError(t, r.AddBranch("false", []string{"x"}, "b2"))
 	assert.Equal(t, map[string]struct{}{"x": {}, "y": {}}, r.AllTargets())
 }
 
 // TestBranchRouter_Call_首命中返回 对齐 __call__ 顺序评估首个命中即返回
 func TestBranchRouter_Call_首命中返回(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("${a} > 100", "end_a", "high"))
-	require.NoError(t, r.AddBranch(newAlwaysTargetCond(), "end_b", "default"))
+	require.NoError(t, r.AddBranch("${a} > 100", []string{"end_a"}, "high"))
+	require.NoError(t, r.AddBranch(newAlwaysTargetCond(), []string{"end_b"}, "default"))
 	require.NoError(t, r.SetSession(mustBranchSessionWithGlobals(t, map[string]any{"a": 150})))
 	targets, err := r.Call(context.Background())
 	require.NoError(t, err)
@@ -146,8 +146,8 @@ func TestBranchRouter_Call_首命中返回(t *testing.T) {
 // TestBranchRouter_Call_命中序_前者不命中走后者
 func TestBranchRouter_Call_命中序_前者不命中走后者(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("${a} > 100", "end_a", "high"))
-	require.NoError(t, r.AddBranch(newAlwaysTargetCond(), "end_b", "default"))
+	require.NoError(t, r.AddBranch("${a} > 100", []string{"end_a"}, "high"))
+	require.NoError(t, r.AddBranch(newAlwaysTargetCond(), []string{"end_b"}, "default"))
 	require.NoError(t, r.SetSession(mustBranchSessionWithGlobals(t, map[string]any{"a": 1})))
 	targets, err := r.Call(context.Background())
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestBranchRouter_Call_命中序_前者不命中走后者(t *testing.T) {
 // TestBranchRouter_Call_全不命中报错 对齐 101021
 func TestBranchRouter_Call_全不命中报错(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("${a} > 999", "x", "high"))
+	require.NoError(t, r.AddBranch("${a} > 999", []string{"x"}, "high"))
 	require.NoError(t, r.SetSession(mustBranchSessionWithGlobals(t, map[string]any{"a": 1})))
 	_, err := r.Call(context.Background())
 	require.Error(t, err)
@@ -175,7 +175,7 @@ func TestBranchRouter_SetSession_双类型(t *testing.T) {
 // TestBranchRouter_Call_条件求值错误上抛 对齐 evaluate 错误不吞
 func TestBranchRouter_Call_条件求值错误上抛(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("${a} +", "x", "b1"))
+	require.NoError(t, r.AddBranch("${a} +", []string{"x"}, "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
 	_, err := r.Call(context.Background())
 	require.Error(t, err)
@@ -184,7 +184,7 @@ func TestBranchRouter_Call_条件求值错误上抛(t *testing.T) {
 // TestBranchRouter_Select_命中返回目标 对齐 graph.Router（=pregel.Selector）契约
 func TestBranchRouter_Select_命中返回目标(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("true", "end_a", "b1"))
+	require.NoError(t, r.AddBranch("true", []string{"end_a"}, "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
 	targets, err := r.Select(context.Background(), nil) // state 恒 nil（8.5 D2 惯例）
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestBranchRouter_Select_命中返回目标(t *testing.T) {
 // TestBranchRouter_Select_错误上抛 对齐 error 不包装（8.3b errors.As 依赖）
 func TestBranchRouter_Select_错误上抛(t *testing.T) {
 	r := NewBranchRouter(false)
-	require.NoError(t, r.AddBranch("nope == 1", "x", "b1"))
+	require.NoError(t, r.AddBranch("nope == 1", []string{"x"}, "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
 	_, err := r.Select(context.Background(), nil)
 	require.Error(t, err)
@@ -203,7 +203,7 @@ func TestBranchRouter_Select_错误上抛(t *testing.T) {
 // TestBranchRouter_reportTrace_无NodeSession形态不panic 接缝守卫
 func TestBranchRouter_reportTrace_无NodeSession形态不panic(t *testing.T) {
 	r := NewBranchRouter(true)
-	require.NoError(t, r.AddBranch("true", "x", "b1"))
+	require.NoError(t, r.AddBranch("true", []string{"x"}, "b1"))
 	require.NoError(t, r.SetSession(mustBranchSession(t)))
 	targets, err := r.Call(context.Background())
 	require.NoError(t, err)
