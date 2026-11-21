@@ -5,25 +5,14 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/vcs"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// 依赖铁律：harness 不 import agent_teams 根包/agent/spawn（实测 2026-11-21，
+// 仅引用 agent_teams/observability 子包），故根包可安全直引 harness 以具体
+// 类型调用 DeepAgent——Python 侧为鸭子调用无 import，Go 静态类型的等价形态。
+// 若未来 harness 需要反向引用本包，此依赖图塌方，必须先走 spec 裁决。
 
-// AgentContextReader fork 源上下文读取面（spawn.ForkContextSource 的同构镜像——
-// fork.go 在 agent_teams 根包，不能 import spawn 子包，故本地声明同款窄接口）。
-type AgentContextReader interface {
-	// GetCurrentContext 返回当前上下文消息
-	GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error)
-}
-
-// AgentSessionContextReader 带持久化兜底的 fork 源读取面。
-// Python: agent.loop_session.get_state("context") 读取路径的窄接口化。
-type AgentSessionContextReader interface {
-	AgentContextReader
-	// PersistedContextMessages 读取源成员绑定会话持久化的上下文消息；
-	// 无可用状态返回 nil（调用方重抛原错误）。
-	PersistedContextMessages() []llmschema.BaseMessage
-}
 
 // ForkContext 可序列化的 fork 上下文快照（json-native，可跨进程传输）。
 // 抓取源成员的完整对话历史注入新成员的 context engine；SystemMessage 全程
@@ -95,27 +84,21 @@ func ForkContextFromMessages(msgs []llmschema.BaseMessage, checkpoint *int, keep
 	}
 }
 
-// ForkContextFromAgent 从源 agent 抓快照（含持久化兜底）。
+// ForkContextFromAgent 从源 DeepAgent 抓快照（内存读取半区）。
 //
-// 内存上下文读取失败（源 native 被 pause/resume/restart 重建、context pool
-// 尚未懒加载）时，回落读源成员绑定会话持久化的消息——fork 继承依然生效。
-// 兜底也无果时以 panic 上抛，由调用方（TeamAgent.buildForkContext 的
-// defer/recover）收敛为「无继承继续 spawn」。
+// 持久化兜底（Python from_agent 的 except 分支，fork.py:57-64）在调用方
+// TeamAgent.buildForkContext 内联执行——兜底读的是源成员 TeamAgent 绑定
+// session 的 state（DeepAgent 上没有），按调用关系下沉到 agent 包。
+// 内存读取失败且无兜底时返回 error，调用方 recover 收敛为「无继承 spawn」。
 //
-// Python: ForkContext.from_agent (fork.py:52-117)
-func ForkContextFromAgent(ctx context.Context, source AgentContextReader, sessionID string, checkpoint *int, keep string) *ForkContext {
+// Python: ForkContext.from_agent (fork.py:52-117) 的读取半区。
+func ForkContextFromAgent(ctx context.Context, source *harness.DeepAgent, sessionID string, checkpoint *int, keep string) (*ForkContext, error) {
 	msgs, err := source.GetCurrentContext(ctx, sessionID, "default_context_id")
 	if err != nil {
-		// Python: except Exception → cls._read_persisted_messages(agent)（fork.py:57-64）
-		if sr, ok := source.(AgentSessionContextReader); ok {
-			if persisted := sr.PersistedContextMessages(); persisted != nil {
-				return ForkContextFromMessages(persisted, checkpoint, keep)
-			}
-		}
-		// Python: raise exc（fork.py:65）——由调用方 except 兜底
-		panic(err)
+		// Python: raise exc（fork.py:65）——兜底由调用方执行
+		return nil, err
 	}
-	return ForkContextFromMessages(msgs, checkpoint, keep)
+	return ForkContextFromMessages(msgs, checkpoint, keep), nil
 }
 
 // NormalizeForkMessages 返回消息列表原样（BaseMessage 直收分支）。

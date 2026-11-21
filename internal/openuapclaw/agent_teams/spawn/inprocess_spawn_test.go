@@ -9,6 +9,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // stubSpawnableAgent 测试用 Agent 桩
@@ -19,6 +20,8 @@ type stubSpawnableAgent struct {
 func (a *stubSpawnableAgent) AgentCard() *agentschema.AgentCard {
 	return a.card
 }
+
+func (a *stubSpawnableAgent) ForkDeep() *harness.DeepAgent { return nil }
 
 // TestInProcessSpawn_基本流程 测试基本的 inprocess spawn 流程。
 func TestInProcessSpawn_基本流程(t *testing.T) {

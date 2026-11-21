@@ -27,6 +27,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // logComponent 组件常量。
@@ -102,6 +103,15 @@ type ExternalCliBackendView struct {
 }
 
 // ExternalCliTeamAgent 外部成员 TeamAgent 壳的最小面（由 *agent.TeamAgent 满足）。
+// externalCliAgentAdapter 让 ExternalCliTeamAgent 满足 SpawnableAgent：
+// 外部 CLI 成员无 in-process DeepAgent，ForkDeep 恒 nil——fork 继承跳过。
+type externalCliAgentAdapter struct{ ExternalCliTeamAgent }
+
+// ForkDeep 外部 CLI 成员无内层 DeepAgent，恒 nil。
+// Python: 外部成员 agent_ref 无 resources.harness（_resolve_fork_native 走
+// not in-process 分支，team_agent.py:1658-1660）。
+func (a externalCliAgentAdapter) ForkDeep() *harness.DeepAgent { return nil }
+
 type ExternalCliTeamAgent interface {
 	// AgentCard 返回身份卡片（SpawnableAgent 子面，句柄构造用）
 	AgentCard() *agentschema.AgentCard
@@ -301,7 +311,7 @@ func ExternalCliSpawn(
 
 	// Python 步骤 10：task + handle（:746-774）——contextvars.copy_context()
 	// → task；Go 以 per-goroutine ctx 注入 session id（D-15.13-f 同源）。
-	handle := NewInProcessExternalHandle(fmt.Sprintf("extcli-%s", memberName), teammate)
+	handle := NewInProcessExternalHandle(fmt.Sprintf("extcli-%s", memberName), externalCliAgentAdapter{teammate})
 	go func() {
 		execCtx := sessionctx.WithSessionState(ctx, func() *sessionctx.SessionState {
 			state := sessionctx.InitSessionState()

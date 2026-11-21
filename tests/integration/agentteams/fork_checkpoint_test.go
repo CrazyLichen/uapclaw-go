@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -158,10 +159,13 @@ func (s *ForkCheckpointSuite) TestForkCheckpoint_IT2_ForkBefore截断继承() {
 	sessID, err := da.CreateNewContextEngine(ctx, "", msgs)
 	s.Require().NoError(err)
 
-	// ForkContextFromAgent 经窄接口读真 DeepAgent 上下文，checkpoint=2（下标
-	// 在带 tool_calls 的 assistant 之后、其 ToolMessage 之前——工具调用时
-	// len(messages) 的记录点）→ before 模式闭合 ToolMessage 块跨边界携带
-	forkCtx := agent_teams.ForkContextFromAgent(ctx, da, sessID, intPtr(2), "before")
+	// ForkContextFromAgent 直收 *harness.DeepAgent（读真 context engine），
+	// checkpoint=2（下标在带 tool_calls 的 assistant 之后、其 ToolMessage 之前
+	// ——工具调用时 len(messages) 的记录点）→ before 模式闭合 ToolMessage 块
+	// 跨边界携带
+	daConcrete := da.(*harness.DeepAgent)
+	forkCtx, err := agent_teams.ForkContextFromAgent(ctx, daConcrete, sessID, intPtr(2), "before")
+	s.Require().NoError(err)
 	s.Require().NotNil(forkCtx)
 	s.Require().False(forkCtx.IsEmpty())
 	// SystemMessage 剥除后 4 条（user, assistant, tool, user）：checkpoint=2
@@ -243,7 +247,9 @@ func (s *ForkCheckpointSuite) TestForkCheckpoint_IT4_未知名降级与list工�
 	s.Require().Equal(4, list["code-ready"]["count"])
 
 	// fork 上下文从源成员真上下文全量抓取（full 模式降级路径的输入）
-	forkCtx := agent_teams.ForkContextFromAgent(ctx, da, sessID, nil, "before")
+	daConcrete := da.(*harness.DeepAgent)
+	forkCtx, err := agent_teams.ForkContextFromAgent(ctx, daConcrete, sessID, nil, "before")
+	s.Require().NoError(err)
 	s.Require().Len(forkCtx.Messages, 4)
 	s.Require().True(strings.Contains(forkCtx.Messages[0]["content"].(string), "帮我读一下") ||
 		strings.Contains(forkCtx.Messages[0]["role"].(string), "user"))

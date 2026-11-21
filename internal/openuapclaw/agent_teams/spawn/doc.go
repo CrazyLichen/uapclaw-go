@@ -1,7 +1,7 @@
 // Package spawn 提供进程内生成（inprocess spawn）和进程级共享资源。
 // 本包是团队 Agent 生成机制的独立子包，与 agentcore/runner/spawn/（通用子进程基础设施）
 // 形成分层：agentcore/runner/spawn/ 不感知 TeamAgent，本包知道 TeamAgent 概念。
-// 循环依赖处理：本包不 import agent/ 包，通过 SpawnableAgent 最小接口
+// 循环依赖处理：本包不 import agent/ 包（SpawnableAgent 最小接口，含 ForkDeep() 返回 *harness.DeepAgent 具体类型——harness 不反向 import 本包，方向合法，见 fork.go 铁律注释）；
 // 和 AgentFactory 工厂函数解耦。
 // 文件目录：
 //
