@@ -1,8 +1,8 @@
 // runtime_adapters.go 提供 RSI 对 Agent Core 与 Harness 公共 API 的自有适配器。
 // Python: openjiuwen/rsi/harness_rsi/evaluator/runtime_adapters.py（495 行）。
-// 已落地：RSIBashTool/RSISysOperationRail（17.4b1）、RSITrajectoryRail（25.2b
-// 兑现）、run_agent_with_empty_response_recovery（17.6a）；RSISkillUseRail ⤴️
-// 17.6a 后续批次（协议体量大，单独一批）。
+// 已全量落地：RSIBashTool/RSISysOperationRail（17.4b1）、RSITrajectoryRail（25.2b
+// 兑现）、run_agent_with_empty_response_recovery（17.6a）、RSISkillUseRail（17.6a
+// 全量兑现——任务启动路由触发 + 活动技能附件协议 + 触发证据）。
 
 package evaluator
 
