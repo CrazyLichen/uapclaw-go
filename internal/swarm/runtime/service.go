@@ -148,6 +148,11 @@ type AgentRuntime struct {
 	// sessionMessageServiceRef mailbox 服务引用（25.6，SetSessionMessageService 注入）
 	// Python: service.py set_session_message_service
 	sessionMessageServiceRef any
+	// sessionRuntimeLifecycle 团队会话生命周期端缓存（25.6 批二归还，渠道维度）
+	// Python: service.py:374 self._session_runtime_lifecycle（单例；Go 因
+	// GetTeamManager(channelID) 渠道粒度既定差异改为渠道维度缓存，spec 附录 A）
+	sessionRuntimeLifecycleMu sync.Mutex
+	sessionRuntimeLifecycle   map[string]SessionRuntimeLifecyclePort
 	// provisioner 会话开通器（创建/切换/分叉/删除的唯一出口）
 	// Python: service.py:403-409 self._session_provisioner = RuntimeSessionProvisioner(...)
 	//

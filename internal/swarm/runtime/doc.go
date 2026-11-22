@@ -15,6 +15,7 @@
 //	├── interrupt_helpers.go    # 中断恢复载荷判定
 //	├── interaction.go          # 交互回答的类型化输入（InteractionAnswerInput）
 //	├── session_provisioner.go  # 会话创建/删除/切换事务（RuntimeSessionProvisioner）
+//	├── session_lifecycle.go     # 会话生命周期端口（SessionRuntimeLifecyclePort/RuntimeResourceLease，25.6 批二归还）
 //	├── team_session_lifecycle.go # 团队会话生命周期适配（TeamSessionLifecycleAdapter）
 //	├── agent_definition.go     # 声明式 root-Agent 定义/执行体/指纹（RuntimeAgentDefinition）
 //	├── mode_catalog.go         # 单 Agent 模式目录与解析（含遗留别名折叠）
