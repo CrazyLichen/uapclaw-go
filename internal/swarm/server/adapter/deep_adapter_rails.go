@@ -7,9 +7,15 @@ import (
 	"sort"
 	"strings"
 
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
@@ -18,12 +24,6 @@ import (
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
@@ -138,6 +138,14 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	if hb != nil {
 		d.heartbeatRail = hb
 		railsList = append(railsList, hb)
+	}
+
+	// 步骤 9.5: sessionMessagingRouteRail — Python: _session_messaging_route_rail
+	// Python: interface_deep.py:11537-11540（heartbeat 之后、circuit_breaker 之前）
+	sm := d.buildSessionMessagingRouteRail()
+	if sm != nil {
+		d.sessionMessagingRouteRail = sm
+		railsList = append(railsList, sm)
 	}
 
 	// 步骤 10: avatarRail — Python: _avatar_rail
@@ -267,6 +275,12 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 // Python: _build_heartbeat_rail() (line 1632-1648)
 func (d *DeepAdapter) buildHeartbeatRail() *rails.HeartbeatRail {
 	return rails.NewHeartbeatRail()
+}
+
+// buildSessionMessagingRouteRail 构建 Session messaging 路由护栏。
+// Python: _build_session_messaging_route_rail() (interface_deep.py:11094-11096)
+func (d *DeepAdapter) buildSessionMessagingRouteRail() *swarmtools.SessionMessagingRouteRail {
+	return swarmtools.NewSessionMessagingRouteRail()
 }
 
 // buildTaskPlanningRail 构建任务规划护栏。
@@ -1030,6 +1044,8 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 // Python: _update_agent_rails（interface_deep.py:13981-14075）。合并后不再按子模式分叉：
 // 任务规划/子代理/演进 rail 恒在，记忆固定读 modes.agent，上下文 rail 统一 agent 实例。
 func (d *DeepAdapter) UpdateAgentRails(ctx context.Context, sessionID, mode string) {
+	// Python: _update_agent_mode_rails 首行 self._last_mode = mode（:13856）
+	d.lastMode = mode
 	d.ensureTaskPlanningRail(ctx)
 	d.ensureSubagentRail(ctx)
 	d.syncMultiSessionTools(sschema.IsPlanMode(mode))

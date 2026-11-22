@@ -497,8 +497,9 @@ func (s *AgentServer) InstallSessionMessageService(ctx context.Context) {
 			Msg("session message service start failed")
 	}
 	// Python: self._runtime.set_session_message_service(service)——
-	// Go 侧 runtime 经回调访问（见 AgentRuntime.SetSessionMessageService）
-	s.agentRuntime.SetSessionMessageService(s.sessionMessageService)
+	// Go 侧注入 port 适配器（tools.SessionMessagingServicePort 实现），
+	// adapter 注入链经 provider 闭包直读。
+	s.agentRuntime.SetSessionMessageService(NewSessionMessagingServicePort(s.sessionMessageService))
 }
 
 // pushSessionMessageStatus 状态推送（WS 帧）。

@@ -340,10 +340,17 @@ func (s *SessionMessageServiceSuite) TestWorker_Steer被拒自动defer() {
 	// 对齐 Python：被拒 → defer 重排队；task 道重试时执行放行。
 	var calls int
 	var mu sync.Mutex
+	// secondInputMode 第二次执行（task 道放行）收到的 input_mode——
+	// defer 归一化的确定性锚点（queued 中间态会被 worker 立即 claim，
+	// 轮询该瞬态会在负载下假红，改从执行回调捕获）。
+	secondInputMode := "unset"
 	flip := func(record *SessionMessageRecord) (SessionMessageExecutionResult, error) {
 		mu.Lock()
 		calls++
 		first := calls == 1
+		if !first {
+			secondInputMode = record.InputMode
+		}
 		mu.Unlock()
 		if first {
 			return SessionMessageExecutionResult{Status: StatusFailed,
@@ -359,16 +366,14 @@ func (s *SessionMessageServiceSuite) TestWorker_Steer被拒自动defer() {
 	out, err := s.svc.SendMessage(context.Background(), s.source(), "sess-B", "hi", "steer")
 	s.Require().NoError(err)
 	msgID := out["message_id"].(string)
-	// 被拒 → defer 回 task 道排队（input_mode=''，仍 queued）
-	waitCond(s.T(), 5*time.Second, func() bool {
-		rec, _ := s.store.Get(msgID)
-		return rec != nil && rec.InputMode == "" && rec.Status == StatusQueued
-	}, "steer 应 defer 归一化")
-	// task 道重试放行 → 送达
+	// task 道重试放行 → 送达（终态；中间 queued/claimed 态不再断言，防竞态假红）
 	waitCond(s.T(), 5*time.Second, func() bool {
 		rec, _ := s.store.Get(msgID)
 		return rec != nil && rec.Status == StatusDelivered
 	}, "defer 后应送达")
+	mu.Lock()
+	defer mu.Unlock()
+	s.Equal("", secondInputMode, "defer 归一化：task 道执行时 input_mode 应已置空")
 }
 
 // TestWorker_Unknown不自动降级 unknown 结果绝不 defer（矩阵 #12）。

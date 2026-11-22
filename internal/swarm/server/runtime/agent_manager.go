@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
@@ -85,6 +85,8 @@ type AgentRuntimeHandle interface {
 	Coordinator() swsession.CoordinatorPort
 	// ActiveExecutions 是否有活跃执行（清理前判定）
 	ActiveExecutions() bool
+	// SessionMessageService 读 mailbox 服务引用（nil=未装配；25.6 adapter 注入链）
+	SessionMessageService() any
 }
 
 // agentEntry Agent 实例条目，记录元数据。

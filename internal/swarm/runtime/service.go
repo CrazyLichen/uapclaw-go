@@ -1858,8 +1858,12 @@ func (r *AgentRuntime) SessionMessageBlocked(sessionID string) bool { return fal
 
 // SetSessionMessageService 注入 mailbox 服务引用（对齐 Python
 // self._runtime.set_session_message_service(service)）。
-// [Go 偏差] Runtime 当前仅保存引用，消费点（成员侧 pending_context 提示等）
-// 随批二 roster 接线；登记 spec §5。
 func (r *AgentRuntime) SetSessionMessageService(service any) {
 	r.sessionMessageServiceRef = service
+}
+
+// SessionMessageService 读 mailbox 服务引用（nil=未装配）。
+// Python: interface_deep.py:14252 getattr(runtime, "session_message_service", None)
+func (r *AgentRuntime) SessionMessageService() any {
+	return r.sessionMessageServiceRef
 }

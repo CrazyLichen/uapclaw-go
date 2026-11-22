@@ -12,12 +12,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
@@ -28,17 +39,6 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -250,6 +250,18 @@ type DeepAdapter struct {
 	externalMemoryRailRegistered bool
 	// heartbeatRail 心跳护栏
 	heartbeatRail *rails.HeartbeatRail
+	// sessionMessagingRouteRail Session messaging 路由护栏（25.6）
+	// Python: interface_deep.py:2243 _session_messaging_route_rail
+	sessionMessagingRouteRail *swarmtools.SessionMessagingRouteRail
+	// sessionMessagingToolkit Session messaging 工具族（懒建，对齐 :2242）
+	// Python: interface_deep.py:2242 _session_messaging_toolkit
+	sessionMessagingToolkit *swarmtools.SessionMessagingToolkit
+	// sessionMessageServiceProvider mailbox 服务提供方（门面 ensureAdapter 注入）
+	// Python: get_current_runtime().session_message_service 的注入等价物
+	sessionMessageServiceProvider func() any
+	// lastMode 最近一次 rails 装配的模式（nil→空串）
+	// Python: interface_deep.py:2048 _last_mode
+	lastMode string
 	// skillEvolutionRail 技能演进护栏
 	// ✅ 已回填：SkillEvolutionRail（对齐 Python: _skill_evolution_rail: SkillEvolutionRail | None）
 	skillEvolutionRail *evolution.SkillEvolutionRail
@@ -1124,6 +1136,13 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		defer unbind()
 	}
 
+	// 25.6: session messaging 路由绑定（宿主信任标记 → ctx + inputs wire）
+	// Python: :18319-18324 bind_session_messaging_route + finally 复位；
+	// :18363-18364 inputs = with_session_messaging_route(inputs, ...)
+	boundCtx, resetSessionMessagingRoute := bindSessionMessagingRouteForRequest(ctx, req, inputs)
+	ctx = boundCtx
+	defer resetSessionMessagingRoute()
+
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
@@ -1408,6 +1427,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	} else if unbind != nil {
 		defer unbind()
 	}
+
+	// 25.6: session messaging 路由绑定（流式站点）
+	// Python: :19570-19575 bind_session_messaging_route + finally 复位；
+	// :19617-19618 inputs = with_session_messaging_route(inputs, ...)
+	boundCtx, resetSessionMessagingRoute := bindSessionMessagingRouteForRequest(ctx, req, inputs)
+	ctx = boundCtx
+	defer resetSessionMessagingRoute()
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
