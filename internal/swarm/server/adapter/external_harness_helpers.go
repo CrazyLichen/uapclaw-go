@@ -6,24 +6,32 @@
 package adapter
 
 import (
-	"strconv"
 	"context"
+	stderrors "errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
-	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	claudecode "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/claudecode"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
-	equipmentpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/equipment"
+	workspacepkg "github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	interaction "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	stream "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	hresources "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
+	claudecode "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/claudecode"
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
+	schema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	equipmentpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/equipment"
+	session "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	streamutils "github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -248,9 +256,9 @@ func PersistExternalHarnessBinding(sessionID string, binding *ResolvedExternalHa
 	}
 	updateSessionMetadataFields(sessionID, map[string]any{
 		sessionRuntimeBindingKey: map[string]any{
-			"kind":               externalHarnessKind,
+			"kind":                externalHarnessKind,
 			"agent_template_name": agentTemplateName,
-			"provider_name":      providerName,
+			"provider_name":       providerName,
 		},
 	})
 	return nil
@@ -809,4 +817,531 @@ func toPositiveFloat(raw any) (float64, error) {
 	default:
 		return 0, fmt.Errorf("invalid number: %v", raw)
 	}
+}
+
+// ──────────────────────────── 常量：流面/中断面 ────────────────────────────
+
+const (
+	// interactionChunkType 交互块类型。
+	// Python: :599/:745 chunk.type == INTERACTION（openjiuwen INTERACTION 常量）
+	interactionChunkType = "__interaction__"
+	// externalWorkspaceInputsKey inputs 中 project_dir 键。
+	// Python: :629-630 inputs.get("project_dir")
+	externalWorkspaceInputsKey = "project_dir"
+)
+
+// terminalLifecycleKinds 轮终态 kind 集。
+// Python: :51 _TERMINAL_KINDS = {"finished", "failed", "aborted"}
+var terminalLifecycleKinds = map[string]bool{
+	"finished": true, "failed": true, "aborted": true,
+}
+
+// ──────────────────────────── 结构体：会话运行态 ────────────────────────────
+
+// ExternalHarnessSessionState 会话子适配器上的 External Harness 运行态。
+// Python: interface_deep.py adapter 字段 _external_harness_binding / _external_harness /
+// _project_dir / _parent_session_id（鸭子 getattr → Go 具体类型，偏差 D-18-5）。
+type ExternalHarnessSessionState struct {
+	// Binding 已解析绑定（Task 3 面）
+	Binding *ResolvedExternalHarnessBinding
+	// IO 会话私有 IOAdapter（懒启动，nil=未启动）
+	IO *harnessproviders.HarnessIOAdapter
+	// ParentSessionID 父会话标识
+	ParentSessionID string
+	// ProjectDir 对话项目目录（一次采纳）
+	ProjectDir string
+	// ResolveLanguage 运行时语言解析（nil 回 "zh"；Python _resolve_runtime_language）
+	ResolveLanguage func() string
+	// Converter 交互 payload 转换函数（透传 utils.ParseStreamChunk）
+	Converter streamutils.InteractionConverterFunc
+}
+
+// ──────────────────────────── 导出函数：流面 ────────────────────────────
+
+// StreamTurnOutput 只投递当前请求边界内的有序输出。
+// Python: :573-598 stream_turn_output。步骤对齐：own 初值=resume；turn_lifecycle
+// started 圈定本轮 turn_id；own 且终态 → yield 并收口；非 own 帧跳过；
+// INTERACTION 帧 yield 后收口。
+func StreamTurnOutput(ctx context.Context, io *harnessproviders.HarnessIOAdapter,
+	receiptTurnID string, resume bool) <-chan stream.OutputSchema {
+	out := make(chan stream.OutputSchema)
+	go func() {
+		defer close(out)
+		iterator := io.Outputs()
+		own := resume
+		for {
+			item, ok := iterator.Next(ctx)
+			if !ok {
+				return
+			}
+			chunk, ok := item.(stream.OutputSchema)
+			if !ok {
+				continue
+			}
+			if chunk.Type == harnessproviders.TurnLifecycleChunkType {
+				payload := payloadToMap(chunk.Payload)
+				kind := storedString(payload, "kind")
+				if kind == "started" {
+					own = storedString(payload, "turn_id") == receiptTurnID
+					continue
+				}
+				if own && terminalLifecycleKinds[kind] {
+					out <- chunk
+					return
+				}
+				// 非本轮生命周期标记跳过（Python debug 日志同义）
+				continue
+			}
+			if !own {
+				continue
+			}
+			out <- chunk
+			if chunk.Type == interactionChunkType {
+				return
+			}
+		}
+	}()
+	return out
+}
+
+// ProcessExternalHarnessStream 运行一个 External Harness 请求并投影聊天流。
+// Python: :784-952 process_external_harness_stream（async generator → channel；
+// 步骤逐条对齐：绑定工作区 → 懒启动 → resume/RUNNING 门卫 → send →
+// turn 边界流 → 终态三分支/交互挂起 → 异常收口 → 提前关闭收口）。
+// 偏差（登记 D-18-10）：Python AgentResponseChunk 携带 request.metadata；
+// Go chunk schema 无 metadata 字段（internal/swarm/schema/agent.go:81），
+// 元数据不透传，登记 schema 形态差异。
+func (d *DeepAdapter) ProcessExternalHarnessStream(ctx context.Context,
+	state *ExternalHarnessSessionState, request *schema.AgentRequest,
+	inputs map[string]any) <-chan *schema.AgentResponseChunk {
+	out := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(out)
+		responseChunk := func(payload map[string]any, complete bool, runtimeCompletion string) *schema.AgentResponseChunk {
+			// Python: :603-617 _response_chunk（metadata 透传见 D-18-10）
+			chunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, payload)
+			chunk.IsComplete = complete
+			chunk.RuntimeCompletion = runtimeCompletion
+			return chunk
+		}
+
+		// 1. 采纳对话项目（一次）
+		bindExternalWorkspace(state, inputs)
+		// 2. 懒启动
+		io, err := d.ensureExternalHarness(ctx, state, request)
+		if err != nil {
+			logger.Warn(logComponent).Str("session_id", requestSessionID(request)).
+				Str("detail", visibleError(err, "startup failed")).
+				Msg("External Harness startup failed")
+			out <- responseChunk(map[string]any{
+				"event_type": "chat.error",
+				"error":      visibleError(err, errorText("startup_failed", nil)),
+			}, true, "")
+			return
+		}
+
+		// 3. resume/RUNNING 门卫
+		query := inputs["query"]
+		resumeInput, resume := query.(*interaction.InteractiveInput)
+		if resume && !io.IsPendingInterruptResumeValid(resumeInput) {
+			out <- responseChunk(map[string]any{
+				"event_type": "chat.error",
+				"error":      errorText("no_pending_interaction", nil),
+			}, true, "")
+			return
+		}
+		if !resume && io.State() == harnessprotocol.HarnessStateRunning {
+			message := errorText("task_running", nil)
+			if io.HasPendingInterrupt() {
+				message = errorText("waiting_for_interaction", nil)
+			}
+			out <- responseChunk(map[string]any{
+				"event_type": "chat.error",
+				"error":      message,
+			}, true, "")
+			return
+		}
+
+		// 4. send
+		receipt, err := io.Send(ctx, query, false)
+		if err != nil {
+			logger.Warn(logComponent).Str("session_id", requestSessionID(request)).
+				Str("detail", visibleError(err, "input rejected")).
+				Msg("External Harness input was rejected")
+			out <- responseChunk(map[string]any{
+				"event_type": "chat.error",
+				"error":      visibleError(err, errorText("input_rejected", nil)),
+			}, true, "")
+			return
+		}
+		if !resume && receipt == nil {
+			out <- responseChunk(map[string]any{
+				"event_type": "chat.error",
+				"error":      errorText("turn_not_accepted", nil),
+			}, true, "")
+			return
+		}
+
+		// 5. turn 边界流
+		receiptTurnID := ""
+		if receipt != nil {
+			receiptTurnID = receipt.TurnID
+		}
+		st := newStreamParseState()
+		for chunk := range StreamTurnOutput(ctx, io, receiptTurnID, resume) {
+			// 5a. 终态：persist checkpoint + 收口（三分支）
+			if chunk.Type == harnessproviders.TurnLifecycleChunkType {
+				payload := payloadToMap(chunk.Payload)
+				kind := storedString(payload, "kind")
+				PersistExternalHarnessCheckpoint(ctx, state.Binding, io, requestSessionID(request))
+				if kind == "finished" {
+					finalOutput, _ := payload["final_output"].(string)
+					out <- responseChunk(map[string]any{
+						"event_type": "chat.final",
+						"content":    finalOutput,
+					}, true, "completed")
+				} else if kind == "failed" {
+					out <- responseChunk(map[string]any{
+						"event_type": "chat.error",
+						"error":      visibleErrorStr(storedString(payload, "error_message"), errorText("turn_failed", nil)),
+					}, true, "completed")
+				} else {
+					out <- responseChunk(map[string]any{
+						"event_type": "chat.final",
+						"content":    "",
+					}, true, "completed")
+				}
+				return
+			}
+			// 5b. 逐块投影
+			parsed := d.parseExternalChunk(chunk, st)
+			if parsed == nil {
+				continue
+			}
+			if chunk.Type == "llm_output" && storedString(parsed, "event_type") == "chat.delta" {
+				st.hasStreamedContent = true
+			}
+			isInteraction := chunk.Type == interactionChunkType
+			runtimeCompletion := ""
+			if isInteraction {
+				runtimeCompletion = "suspended"
+			}
+			out <- responseChunk(parsed, isInteraction, runtimeCompletion)
+			if isInteraction {
+				return
+			}
+		}
+
+		// 6. 流在本轮完成前关闭
+		out <- responseChunk(map[string]any{
+			"event_type": "chat.error",
+			"error":      errorText("stream_closed", nil),
+		}, true, "")
+	}()
+	return out
+}
+
+// parseExternalChunk external 侧逐块投影。
+// Python: :769-781 _parse_external_chunk —— user_input 中断先投影 ask_user 卡片，
+// 其余走复用解析链。三类跨块累加块经 parseAccumulatingChunk（Task 6 提取），
+// 其余走 utils.ParseStreamChunk；llm_output 的 delta 帧置位 has_streamed_answer。
+func (d *DeepAdapter) parseExternalChunk(chunk stream.OutputSchema, st *streamParseState) map[string]any {
+	if projected := projectExternalUserInput(chunk); projected != nil {
+		return projected
+	}
+	if frames, handled := parseAccumulatingChunk(&chunk, st, ""); handled {
+		for _, frame := range frames {
+			// Python: 空内容帧经 _stream_text_payload 返回 None 跳过（:20765）
+			if storedString(frame, "content") == "" &&
+				(storedString(frame, "event_type") == "chat.delta" ||
+					storedString(frame, "event_type") == "chat.reasoning") {
+				continue
+			}
+			return frame
+		}
+		return nil
+	}
+	return streamutils.ParseStreamChunk(&chunk, st.usage, st.emittedAskUserIDs, d.interactionConverter,
+		st.hasStreamedContent)
+}
+
+// projectExternalUserInput 把 harness user_input 中断投影成 ask_user 卡片。
+// Python: :743-766 _project_external_user_input。payload 双形态（对象 id/value 属性
+// 或 dict 键）；value.kind == "user_input" 才投影。
+func projectExternalUserInput(chunk stream.OutputSchema) map[string]any {
+	if chunk.Type != interactionChunkType {
+		return nil
+	}
+	// Python :748-755 的「对象带 id/value 属性」分支在 Go 侧不可达——interactionChunk
+	// 投影的 payload 恒为 dict（偏差登记 D-18-5）；只走 dict 路径。
+	payload := payloadToMap(chunk.Payload)
+	if payload == nil {
+		return nil
+	}
+	requestID := storedString(payload, "id")
+	value := payload["value"]
+	valueMap, ok := value.(map[string]any)
+	if !ok || storedString(valueMap, "kind") != "user_input" {
+		return nil
+	}
+	return map[string]any{
+		"event_type":   "chat.ask_user_question",
+		"request_id":   requestID,
+		"questions":    externalAskQuestions(valueMap),
+		"source":       "ask_user_interrupt",
+		"interrupt_id": requestID,
+		"kind":         saschema.InterruptKindAskUser,
+	}
+}
+
+// externalQuestionOptions 归一化问题选项并追加 Other 兜底项。
+// Python: :676-693 _external_question_options。
+func externalQuestionOptions(rawOptions any) []map[string]string {
+	list, ok := rawOptions.([]any)
+	if !ok {
+		return nil
+	}
+	var options []map[string]string
+	for _, item := range list {
+		mapping, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		label := strings.TrimSpace(storedString(mapping, "label"))
+		if label == "" {
+			continue
+		}
+		normalized := map[string]string{"label": label}
+		if description := strings.TrimSpace(storedString(mapping, "description")); description != "" {
+			normalized["description"] = description
+		}
+		options = append(options, normalized)
+	}
+	if len(options) > 0 {
+		options = append(options, map[string]string{"label": "Other", "description": "Custom input"})
+	}
+	return options
+}
+
+// externalAskQuestions 归一化 user_input 值的问题列表；无 questions 时回退 prompt+choices。
+// Python: :696-740 _external_ask_questions。
+func externalAskQuestions(value map[string]any) []map[string]any {
+	var rawQuestions any
+	if providerData, ok := value["provider_data"].(map[string]any); ok {
+		rawQuestions = providerData["questions"]
+		if _, isList := rawQuestions.([]any); !isList {
+			if toolInput, ok := providerData["input"].(map[string]any); ok {
+				rawQuestions = toolInput["questions"]
+			}
+		}
+	}
+	questions := []map[string]any{}
+	if list, ok := rawQuestions.([]any); ok {
+		for _, item := range list {
+			mapping, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			text := strings.TrimSpace(storedString(mapping, "question"))
+			if text == "" {
+				continue
+			}
+			multiSelect := false
+			switch typed := mapping["multi_select"].(type) {
+			case bool:
+				multiSelect = typed
+			case nil:
+				if ms, ok := mapping["multiSelect"].(bool); ok {
+					multiSelect = ms
+				}
+			}
+			header := strings.TrimSpace(storedString(mapping, "header"))
+			if header == "" {
+				header = "Question"
+			}
+			questions = append(questions, map[string]any{
+				"question":     text,
+				"header":       header,
+				"options":      externalQuestionOptions(mapping["options"]),
+				"multi_select": multiSelect,
+			})
+		}
+	}
+	if len(questions) > 0 {
+		return questions
+	}
+	// 回退 prompt + choices
+	prompt := strings.TrimSpace(storedString(value, "prompt"))
+	if prompt == "" {
+		prompt = "需要你的回答"
+	}
+	options := []map[string]string{}
+	if choices, ok := value["choices"].([]any); ok {
+		for _, choice := range choices {
+			if text, ok := choice.(string); ok {
+				if label := strings.TrimSpace(text); label != "" {
+					options = append(options, map[string]string{"label": label})
+				}
+			}
+		}
+	}
+	return []map[string]any{{
+		"question":     prompt,
+		"header":       "需要你的回答",
+		"options":      options,
+		"multi_select": false,
+	}}
+}
+
+// ──────────────────────────── 导出函数：中断/工作区面 ────────────────────────────
+
+// ProcessExternalHarnessInterrupt 把 External Harness 取消请求映射为优雅中止。
+// Python: :975-1020 process_external_harness_interrupt。五分支对齐：
+// 非 cancel 意图拒绝 / 无任务 / 不支持取消 / 失败 / 已请求。
+func (d *DeepAdapter) ProcessExternalHarnessInterrupt(ctx context.Context,
+	state *ExternalHarnessSessionState, request *schema.AgentRequest) *schema.AgentResponse {
+	interruptResponse := func(success bool, message string) *schema.AgentResponse {
+		response := schema.NewAgentResponse(request.RequestID, request.ChannelID)
+		response.Payload = map[string]any{
+			"event_type": "chat.interrupt_result",
+			"intent":     "cancel",
+			"success":    success,
+			"message":    message,
+		}
+		response.Metadata = request.Metadata
+		return response
+	}
+
+	params := parseParams(request.Params)
+	intent := strings.TrimSpace(storedString(params, "intent"))
+	if intent == "" {
+		intent = "cancel"
+	}
+	if intent != "cancel" {
+		return interruptResponse(false, errorText("unsupported_intent", map[string]string{"intent": intent}))
+	}
+
+	io := state.IO
+	if io == nil || io.State() != harnessprotocol.HarnessStateRunning {
+		return interruptResponse(true, errorText("nothing_to_cancel", nil))
+	}
+	if err := io.Abort(ctx, false); err != nil {
+		var unsupported *harnessprotocol.UnsupportedHarnessCapabilityError
+		if errorsAs(err, &unsupported) {
+			return interruptResponse(false, errorText("cancel_unsupported", nil))
+		}
+		logger.Warn(logComponent).Str("session_id", requestSessionID(request)).
+			Str("detail", visibleError(err, "abort failed")).
+			Msg("External Harness graceful abort failed")
+		return interruptResponse(false, visibleError(err, errorText("cancel_failed", nil)))
+	}
+	return interruptResponse(true, errorText("cancel_requested", nil))
+}
+
+// BindExternalWorkspace 采纳对话项目目录（一次；已有会话根不动）。
+// Python: :625-634 _bind_external_workspace。
+func BindExternalWorkspace(state *ExternalHarnessSessionState, inputs map[string]any) {
+	bindExternalWorkspace(state, inputs)
+}
+
+// bindExternalWorkspace 内部实现。
+func bindExternalWorkspace(state *ExternalHarnessSessionState, inputs map[string]any) {
+	if strings.TrimSpace(state.ProjectDir) != "" {
+		return
+	}
+	selected, ok := inputs[externalWorkspaceInputsKey].(string)
+	if !ok {
+		return
+	}
+	if selected = strings.TrimSpace(selected); selected != "" {
+		state.ProjectDir = selected
+	}
+}
+
+// ExternalWorkspace external harness 的 cwd 选择：项目目录优先，否则默认会话工作区。
+// Python: :637-641 _external_workspace（expanduser + resolve(strict=False)；
+// Go: Abs 近似，无 strict 语义——D-15.12-a 既有口径）。
+func ExternalWorkspace(state *ExternalHarnessSessionState, sessionID string) (string, error) {
+	projectDir := strings.TrimSpace(state.ProjectDir)
+	if projectDir != "" {
+		return filepath.Abs(projectDir)
+	}
+	return workspacepkg.DefaultProjectSessionWorkspaceDir(sessionID)
+}
+
+// ensureExternalHarness 取会话私有 IOAdapter，未启动则懒启动。
+// Python: :644-673 _ensure_external_harness。步骤对齐：已有 → 返回；binding 缺失 →
+// binding_missing；session_id 三级回退；语言解析回退 zh；启动后挂回 state。
+func (d *DeepAdapter) ensureExternalHarness(ctx context.Context,
+	state *ExternalHarnessSessionState, request *schema.AgentRequest) (*harnessproviders.HarnessIOAdapter, error) {
+	if state.IO != nil {
+		return state.IO, nil
+	}
+	if state.Binding == nil {
+		return nil, fmt.Errorf("%s", errorText("binding_missing", nil))
+	}
+	sessionID := state.ParentSessionID
+	if sessionID == "" && request.SessionID != nil && *request.SessionID != "" {
+		sessionID = *request.SessionID
+	}
+	if sessionID == "" {
+		sessionID = "default"
+	}
+	language := "zh"
+	if state.ResolveLanguage != nil {
+		language = state.ResolveLanguage()
+	}
+	io, err := StartExternalHarness(ctx, sessionID,
+		state.Binding.AgentTemplateName, state.Binding.ProviderName,
+		state.Binding, language,
+		mustExternalWorkspace(state, sessionID), environMap())
+	if err != nil {
+		return nil, err
+	}
+	state.IO = io
+	return io, nil
+}
+
+// mustExternalWorkspace cwd 解析失败回退空串（Python resolve 失败抛错——
+// Go 磁盘错误登记 Warn 语义由调用方错误链承载；空 cwd 交 provider 默认）。
+func mustExternalWorkspace(state *ExternalHarnessSessionState, sessionID string) string {
+	cwd, err := ExternalWorkspace(state, sessionID)
+	if err != nil {
+		return ""
+	}
+	return cwd
+}
+
+// requestSessionID 请求会话标识（nil→空串）。
+func requestSessionID(request *schema.AgentRequest) string {
+	if request.SessionID == nil {
+		return ""
+	}
+	return *request.SessionID
+}
+
+// environMap os.environ → map（Python dict(os.environ)）。
+func environMap() map[string]string {
+	env := make(map[string]string)
+	for _, item := range os.Environ() {
+		if idx := strings.IndexByte(item, '='); idx > 0 {
+			env[item[:idx]] = item[idx+1:]
+		}
+	}
+	return env
+}
+
+// errorsAs 标准库 errors.As 薄包装（保持本文件 import 面集中）。
+func errorsAs(err error, target any) bool {
+	return stderrors.As(err, target)
+}
+
+// visibleErrorStr 字符串版对外错误文案（error_message payload 字段）。
+// Python: :895-898 _visible_error(payload.get("error_message"), fallback)。
+func visibleErrorStr(message, fallback string) string {
+	masked := strings.TrimSpace(utils.MaskSensitive(message))
+	if masked == "" {
+		return fallback
+	}
+	return masked
 }
