@@ -209,8 +209,10 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 		s.cancelStreamTask(sessionID)
 	}
 
-	// 2. 复用既有 Runtime agent 取消（三级 fallback 已上移到 runtime.CancelRequest）
-	resp, err := swruntime.CancelRequest(ctx, s.agentManager, request, false)
+	// 2. 经 Runtime 取消（team 分支 + fallback + 协调器取消 + 暂停完成，
+	//    对齐 Python AgentRuntime.cancel_request service.py:1299-1493；
+	//    25.6 批二：RPC→真实控制入口切换）
+	resp, err := s.agentRuntime.CancelRequestWithIntent(ctx, request)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).

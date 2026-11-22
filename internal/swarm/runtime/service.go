@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -153,6 +154,8 @@ type AgentRuntime struct {
 	// GetTeamManager(channelID) 渠道粒度既定差异改为渠道维度缓存，spec 附录 A）
 	sessionRuntimeLifecycleMu sync.Mutex
 	sessionRuntimeLifecycle   map[string]SessionRuntimeLifecyclePort
+	// interactionPendingClearer 交互 pending 清理缝（可选；nil=缺席，spec 附录 A）
+	interactionPendingClearer any
 	// provisioner 会话开通器（创建/切换/分叉/删除的唯一出口）
 	// Python: service.py:403-409 self._session_provisioner = RuntimeSessionProvisioner(...)
 	//
@@ -1926,4 +1929,402 @@ func sessionIDOr(req *schema.AgentRequest, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(*req.SessionID)
+}
+
+// interactionPendingClearer 交互 pending 清理窄缝（可选注入）。
+// Python: admission_controller.clear_interaction_pending（:573-578 duck-typing
+// 调用，可缺席）；Go 无该域，字段 nil 时跳过（缺口登记 spec 附录 A）。
+type interactionPendingClearer interface {
+	ClearInteractionPending(sessionID string, requestID *string) error
+}
+
+// clearPendingInteraction 清理挂起交互（可选注入缝，nil 时跳过）。
+// Python: service.py:570-579 _clear_pending_interaction
+func (r *AgentRuntime) clearPendingInteraction(sessionID string, requestID *string) {
+	if clearer, ok := any(r.interactionPendingClearer).(interactionPendingClearer); ok && clearer != nil {
+		_ = clearer.ClearInteractionPending(sessionID, requestID)
+	}
+}
+
+// publishTeamPauseCompleted 业务流退出后发布暂停完成（保留观察者）。
+// Python: service.py:1493-1520 _publish_team_pause_completed
+func (r *AgentRuntime) publishTeamPauseCompleted(ctx context.Context, request *schema.AgentRequest, generation *int) {
+	sessionID := sessionIDOr(request, "default")
+	current := r.coordinator.SnapshotSession(sessionID)
+	var currentGeneration int
+	stateClosed := false
+	hasCurrent := current != nil
+	if hasCurrent {
+		currentGeneration = current.Generation
+		stateClosed = current.State == sessionpkg.RuntimeSessionStateClosed
+	}
+	// stale 守卫（Python :1506-1512：current_generation != generation 或
+	// state is CLOSED → warning + return）
+	if !hasCurrent ||
+		(generation != nil && *generation != currentGeneration) ||
+		stateClosed {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("event_type", "TEAM_PAUSE_STALE_SKIP").
+			Str("session_id", sessionID).
+			Str("generation", intPtrText(generation)).
+			Str("current_generation", intPtrTextOf(currentGeneration, hasCurrent)).
+			Msg("Skipped stale Team pause completion")
+		return
+	}
+	// Python :1515-1520：业务 waiter 已退出，保留的观察订阅持有投递，
+	// 沿用 Team manager 既有的无 waiter fallback。
+	if err := r.teamLifecycle(request.ChannelID).PublishPauseCompleted(
+		ctx, sessionID, generation, request.ChannelID); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("event_type", "TEAM_PAUSE_PUBLISH_FAILED").
+			Str("session_id", sessionID).
+			Err(err).
+			Msg("Team pause completion publication failed")
+	}
+}
+
+// intPtrTextOf int 与存在性 → 日志文本（nil/不存在 → "none"）。
+func intPtrTextOf(v int, ok bool) string {
+	if !ok {
+		return "none"
+	}
+	return intPtrText(&v)
+}
+
+// cancelIntentParam 取取消意图（缺省 cancel）。
+// Python: service.py:1313-1315 intent = str(params.get("intent") or "cancel").strip().lower()
+func cancelIntentParam(params map[string]any) string {
+	intent := "cancel"
+	if raw, ok := params["intent"].(string); ok {
+		trimmed := strings.ToLower(strings.TrimSpace(raw))
+		if trimmed != "" {
+			intent = trimmed
+		}
+	}
+	return intent
+}
+
+// webCronFenceStopped web cron 围栏分支的 team 停止判定（Python :1358-1362）。
+// targets 非空且 team 请求 → stop_session_runtime("cron request cancellation",
+// generation, expected_request_id=target_request_id)。
+func (r *AgentRuntime) webCronFenceStopped(ctx context.Context, request *schema.AgentRequest, snapshot *sessionpkg.RuntimeSessionSnapshot, targets []*sessionpkg.SessionExecutionSnapshot, targetRequestID string) bool {
+	if len(targets) == 0 || !requestTargetsTeam(request, parseRequestParams(request)) {
+		return true
+	}
+	gen := snapshot.Generation
+	stopped, err := teamharness.GetTeamManager(request.ChannelID).StopSessionRuntime(
+		ctx, sessionIDOr(request, "default"), "cron request cancellation", true, &gen, targetRequestID)
+	if err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("event_type", "TEAM_CRON_FENCE_STOP_FAILED").
+			Str("session_id", sessionIDOr(request, "default")).
+			Err(err).
+			Msg("cron fence stop_session_runtime failed")
+		return false
+	}
+	return stopped
+}
+
+// CancelRequestWithIntent 取消/中断意图处理（team 分支 + fallback + 协调器取消 +
+// 暂停完成发布）。
+// Python: AgentRuntime.cancel_request (service.py:1299-1493)，十段结构逐段对齐，
+// 段边界与短路顺序不得调整（规则 9/12）。
+func (r *AgentRuntime) CancelRequestWithIntent(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// ① lifecycle 守卫（Python :1300-1312）：cancel 路径不 force start
+	// （Go AgentRuntime.Start 幂等；closed 检查随 Close 语义既有承载）。
+	if err := r.Start(); err != nil {
+		return nil, err
+	}
+	request = NormalizeRequest(request)
+	params := parseRequestParams(request)
+
+	// ② intent 解析（Python :1313-1318）
+	intent := cancelIntentParam(params)
+	// ③ snapshot + team 判定（Python :1319-1323）
+	var snapshot *sessionpkg.RuntimeSessionSnapshot
+	if request.SessionID != nil && strings.TrimSpace(*request.SessionID) != "" {
+		snapshot = r.coordinator.SnapshotSession(sessionIDOr(request, "default"))
+	}
+	isTeamRequest := requestTargetsTeam(request, params)
+	teamPaused := false
+	targetRequestID := strings.TrimSpace(stringParam(params, "target_request_id"))
+
+	// ⑤ web cron fence 分支（Python :1327-1414）：仅 web 渠道围栏特定执行
+	if targetRequestID != "" && request.ChannelID == "web" {
+		resp, fenceErr := r.cancelWebCronFence(ctx, request, params, snapshot, isTeamRequest, targetRequestID)
+		return resp, fenceErr
+	}
+
+	// ⑥ team 分支 pause/stop（Python :1415-1431）
+	if isTeamRequest && snapshot != nil {
+		lifecycleCtx := sessionpkg.SessionLifecycleContext{
+			SessionID:  snapshot.SessionID,
+			Generation: snapshot.Generation,
+		}
+		if intent == "pause" {
+			paused, err := r.teamLifecycle(request.ChannelID).PauseSession(
+				ctx, lifecycleCtx, string(sessionpkg.ExecutionCancelCauseUserPause), request.ChannelID)
+			if err != nil {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("event_type", "TEAM_PAUSE_FAILED").
+					Str("session_id", lifecycleCtx.SessionID).
+					Err(err).
+					Msg("team pause_session failed")
+			}
+			teamPaused = paused
+		} else if intent == "cancel" || intent == "stop" {
+			if err := r.teamLifecycle(request.ChannelID).StopSession(
+				ctx, lifecycleCtx, string(sessionpkg.ExecutionCancelCauseUserCancel)); err != nil {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("event_type", "TEAM_STOP_FAILED").
+					Str("session_id", lifecycleCtx.SessionID).
+					Err(err).
+					Msg("team stop_session failed")
+			}
+		}
+	}
+
+	// ⑦ fallback（Python :1437-1439 cancel_request → request.py 三级 fallback）
+	response, err := CancelRequest(ctx, r.manager, request, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// ⑧ pause 未中二次判定（Python :1443-1448）：adapter 可能已成功暂停，
+	// 即使 generation-aware lifecycle 未找到匹配 Team runtime。
+	if isTeamRequest && intent == "pause" && !teamPaused {
+		teamPaused = response.OK &&
+			responseSuccessTrue(response)
+	}
+
+	// ⑨ cancel|supplement 成功 → 清挂起交互（Python :1452-1460）
+	if response.OK && (intent == "cancel" || intent == "supplement") &&
+		!responseSuccessFalse(response) {
+		r.clearPendingInteraction(sessionIDOr(request, "default"), nil)
+	}
+
+	// ⑩ 协调器取消（Python :1462-1477）：pause 排除观察订阅执行
+	cancellationDrained := true
+	if request.SessionID != nil && strings.TrimSpace(*request.SessionID) != "" && r.coordinator.SnapshotSession(sessionIDOr(request, "default")) != nil {
+		targetReqID := strings.TrimSpace(stringParam(params, "target_request_id"))
+		var excludedExecutionIDs []string
+		gen := snapshotGeneration(snapshot)
+		if isTeamRequest && intent == "pause" && snapshot != nil {
+			current := r.coordinator.SnapshotSession(sessionIDOr(request, "default"))
+			if current != nil {
+				for i := range current.Executions {
+					item := &current.Executions[i]
+					if item.Team != nil && item.Team.ObservationOnly {
+						excludedExecutionIDs = append(excludedExecutionIDs, item.ExecutionID)
+					}
+				}
+			}
+		}
+		cancellation, cancelErr := r.coordinator.CancelExecution(sessionIDOr(request, "default"),
+			sessionpkg.CancelExecutionOptions{
+				RequestID:            strPtrOrNil(targetReqID),
+				Generation:           gen,
+				ExcludedExecutionIDs: excludedExecutionIDs,
+			})
+		if cancelErr != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event_type", "TEAM_CANCEL_EXECUTION_FAILED").
+				Str("session_id", sessionIDOr(request, "default")).
+				Err(cancelErr).
+				Msg("coordinator cancel_execution failed")
+		} else {
+			cancellationDrained = len(cancellation.TimedOut) == 0
+			// ⑩b（Python :1479-1488）：team 暂停成功但取消超时 → warning
+			if teamPaused && !cancellationDrained {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("event_type", "TEAM_PAUSE_CANCEL_TIMEOUT").
+					Str("session_id", sessionIDOr(request, "default")).
+					Str("generation", intPtrText(gen)).
+					Msg("Team pause completion skipped after cancellation timeout")
+			}
+		}
+		// ⑩c（Python :1479-1492）：team 暂停成功且排空 → 发布暂停完成
+		if teamPaused && cancellationDrained {
+			r.publishTeamPauseCompleted(ctx, request, gen)
+		}
+	}
+	return response, nil
+}
+
+// responseSuccessTrue 响应 payload.success 是否为 true。
+func responseSuccessTrue(resp *schema.AgentResponse) bool {
+	success, _ := resp.Payload["success"].(bool)
+	return success
+}
+
+// responseSuccessFalse 响应 payload.success 是否显式 false。
+func responseSuccessFalse(resp *schema.AgentResponse) bool {
+	success, _ := resp.Payload["success"].(bool)
+	return !success
+}
+
+// snapshotGeneration snapshot → 代次指针（nil 安全）。
+func snapshotGeneration(snapshot *sessionpkg.RuntimeSessionSnapshot) *int {
+	if snapshot == nil {
+		return nil
+	}
+	gen := snapshot.Generation
+	return &gen
+}
+
+// strPtrOrNil 空串 → nil。
+func strPtrOrNil(v string) *string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	trimmed := strings.TrimSpace(v)
+	return &trimmed
+}
+
+// cancelWebCronFence web cron 围栏分支（Python :1327-1414 提前 return 段）。
+// expected_execution_id/root descendants 闭包 → team 停止 → 逐 target 取消 →
+// waiting_control_ids 清挂起 → interrupt_result 响应。
+func (r *AgentRuntime) cancelWebCronFence(
+	ctx context.Context,
+	request *schema.AgentRequest,
+	params map[string]any,
+	snapshot *sessionpkg.RuntimeSessionSnapshot,
+	isTeamRequest bool,
+	targetRequestID string,
+) (*schema.AgentResponse, error) {
+	expectedID := strings.TrimSpace(stringParam(params, "expected_execution_id"))
+	var owners []*sessionpkg.SessionExecutionSnapshot
+	if snapshot != nil {
+		for i := range snapshot.Executions {
+			item := &snapshot.Executions[i]
+			if item.RequestID != targetRequestID {
+				continue
+			}
+			if expectedID != "" && item.ExecutionID != expectedID {
+				continue
+			}
+			owners = append(owners, item)
+		}
+	}
+	ownedIDs := map[string]struct{}{}
+	for _, item := range owners {
+		ownedIDs[item.ExecutionID] = struct{}{}
+	}
+	if snapshot != nil {
+		// 完成响应的 owner 可能仍有存活控制/补充子执行：保留围栏追子（Python :1370-1380）
+		if expectedID == "" {
+			for i := range snapshot.Executions {
+				item := &snapshot.Executions[i]
+				if item.RootRequestID == targetRequestID {
+					ownedIDs[item.ExecutionID] = struct{}{}
+				}
+			}
+		}
+		for {
+			descendants := map[string]struct{}{}
+			for i := range snapshot.Executions {
+				item := &snapshot.Executions[i]
+				if _, hit := ownedIDs[item.ParentExecutionID]; hit {
+					if _, self := ownedIDs[item.ExecutionID]; !self {
+						descendants[item.ExecutionID] = struct{}{}
+					}
+				}
+			}
+			subset := true
+			for id := range descendants {
+				if _, hit := ownedIDs[id]; !hit {
+					subset = false
+					break
+				}
+			}
+			if subset {
+				break
+			}
+			for id := range descendants {
+				ownedIDs[id] = struct{}{}
+			}
+		}
+	}
+	var targets []*sessionpkg.SessionExecutionSnapshot
+	if snapshot != nil {
+		for i := range snapshot.Executions {
+			item := &snapshot.Executions[i]
+			if _, hit := ownedIDs[item.ExecutionID]; !hit || item.State.Terminal() {
+				continue
+			}
+			targets = append(targets, item)
+		}
+	}
+	producerStopped := r.webCronFenceStopped(ctx, request, snapshot, targets, targetRequestID)
+	var result *sessionpkg.CancelExecutionResult
+	if len(targets) > 0 {
+		matched, cancelled := 0, 0
+		var timedOut []string
+		gen := snapshotGeneration(snapshot)
+		for _, target := range targets {
+			execID := target.ExecutionID
+			cancel, err := r.coordinator.CancelExecution(sessionIDOr(request, "default"),
+				sessionpkg.CancelExecutionOptions{ExecutionID: &execID, Generation: gen})
+			if err != nil {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("event_type", "TEAM_CRON_FENCE_CANCEL_FAILED").
+					Str("execution_id", execID).
+					Err(err).
+					Msg("cron fence cancel_execution failed")
+				continue
+			}
+			matched += cancel.Matched
+			cancelled += cancel.Cancelled
+			timedOut = append(timedOut, cancel.TimedOut...)
+		}
+		result = &sessionpkg.CancelExecutionResult{Matched: matched, Cancelled: cancelled, TimedOut: timedOut}
+		// Admission 记录的是 control ID 而非外层 chat request ID（Python :1391-1401）：
+		// 从取消前快照捕获，超时执行仍存活故其 prompt 保留有效
+		if result != nil {
+			timedOutSet := map[string]struct{}{}
+			for _, id := range result.TimedOut {
+				timedOutSet[id] = struct{}{}
+			}
+			for i := range snapshot.Executions {
+				item := &snapshot.Executions[i]
+				if len(item.WaitingControlIDs) == 0 {
+					continue
+				}
+				if _, hit := ownedIDs[item.ExecutionID]; !hit {
+					continue
+				}
+				if _, out := timedOutSet[item.ExecutionID]; out {
+					continue
+				}
+				for controlID := range item.WaitingControlIDs {
+					id := controlID
+					r.clearPendingInteraction(sessionIDOr(request, "default"), &id)
+				}
+			}
+		}
+	}
+	stopConfirmed := producerStopped
+	if result != nil {
+		stopConfirmed = producerStopped && len(result.TimedOut) == 0
+	} else {
+		stopConfirmed = len(owners) > 0
+	}
+	// Python :1403-1413 interrupt_result 响应
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(true),
+		schema.WithPayload(map[string]any{
+			"event_type":        "chat.interrupt_result",
+			"success":           stopConfirmed,
+			"matched":           resultMatched(result),
+			"stop_confirmed":    stopConfirmed,
+			"target_request_id": targetRequestID,
+		})), nil
+}
+
+// resultMatched result → matched 数（nil → 0）。
+func resultMatched(result *sessionpkg.CancelExecutionResult) int {
+	if result == nil {
+		return 0
+	}
+	return result.Matched
 }

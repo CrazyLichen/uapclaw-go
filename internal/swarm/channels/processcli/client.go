@@ -376,7 +376,12 @@ func (c *InProcessRuntimeClient) Cancel(ctx context.Context, request *schema.Age
 		return fmt.Errorf("runtime manager is nil")
 	}
 	// Python: runtime.cancel_request(request) 默认 allow_create=False
-	_, err := swruntime.CancelRequest(ctx, mgr, request, false)
+	// （25.6 批二：走 AgentRuntime 方法对齐 service.py:1299-1493；mgr 保留
+	// 供 nil 守卫语义）
+	if mgr == nil || c.runtime == nil {
+		return fmt.Errorf("runtime manager is nil")
+	}
+	_, err := c.runtime.CancelRequestWithIntent(ctx, request)
 	return err
 }
 

@@ -49,7 +49,7 @@ func (f *fakeTeamLifecycleManager) PauseSessionRuntime(_ context.Context, sessio
 }
 
 // StopSessionRuntime 已实现。
-func (f *fakeTeamLifecycleManager) StopSessionRuntime(_ context.Context, sessionID, reason string, stopRunner bool, generation *int) (bool, error) {
+func (f *fakeTeamLifecycleManager) StopSessionRuntime(_ context.Context, sessionID, reason string, stopRunner bool, generation *int, expectedRequestID string) (bool, error) {
 	f.events = append(f.events, "stop")
 	return true, nil
 }
