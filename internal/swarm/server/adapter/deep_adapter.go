@@ -1614,15 +1614,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			})
 		}()
 
-		// usage 累加器
-		usage := &utils.UsageAccumulator{}
-		// askUser 去重集合
-		emittedAskUserIDs := make(map[string]bool)
-		// Python: has_streamed_content = False
-		hasStreamedContent := false
-		// 累积文本/reasoning
-		accumulatedText := ""
-		accumulatedReasoning := ""
+		// 跨块累加状态（15.18 从本循环提取为 streamParseState，与 external
+		// harness 投影共用；见 deep_adapter_parse_stream_chunk.go）：
+		// usage 累加器 / askUser 去重集合 / has_streamed_content / 累积文本与推理。
+		st := newStreamParseState()
 
 		for raw := range rawCh {
 			// 值/指针双分支（对齐 deep_adapter_team.go T-01 遗留点 C 的修复模式）：
@@ -1674,69 +1669,36 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 
 			switch chunkType {
-			case "llm_usage":
-				// 累加 usage → yield chat.usage_metadata
-				utils.AccumulateUsage(usage, payload)
-				usagePayload := map[string]any{
-					"event_type":    "chat.usage_metadata",
-					"input_tokens":  usage.InputTokens,
-					"output_tokens": usage.OutputTokens,
-					"total_tokens":  usage.TotalTokens,
-					"input_cost":    usage.InputCost,
-					"output_cost":   usage.OutputCost,
-					"total_cost":    usage.TotalCost,
+			case "llm_usage", "llm_reasoning", "llm_output":
+				// 三类跨块累加块：15.18 提取至 parseAccumulatingChunk（deep_adapter_parse_stream_chunk.go），
+				// 与 external harness 投影共用；步骤逐行搬移，行为不变。
+				for _, frame := range func() []map[string]any {
+					frames, _ := parseAccumulatingChunk(output, st, sessionID)
+					return frames
+				}() {
+					if frame["event_type"] == "chat.delta" {
+						text, _ := frame["content"].(string)
+						d.noteRoundVisibleText(text)
+					}
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, frame)
 				}
-				// Python: metadata 和 session_id 字段
-				if metadata, ok := payload["metadata"]; ok {
-					usagePayload["metadata"] = metadata
-				}
-				if sessionID != "" {
-					usagePayload["session_id"] = sessionID
-				}
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usagePayload)
-
-			case "llm_reasoning":
-				// 待实现：产出推理内容 yield chat.reasoning
-				reasoningContent := extractReasoningContent(payload)
-				accumulatedReasoning += reasoningContent
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-					"event_type": "chat.reasoning",
-					"content":    reasoningContent,
-				})
-
-			case "llm_output":
-				// 先 flush reasoning，再 yield chat.delta
-				if accumulatedReasoning != "" {
-					accumulatedReasoning = ""
-				}
-				textContent := extractTextContent(payload)
-				// M-02: 对齐 Python — llm_output 直接 yield + continue，不累加 accumulated_text
-				// Python: if chunk_type == "llm_output": yield ... ; continue
-				hasStreamedContent = true
-				d.noteRoundVisibleText(textContent)
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-					"event_type": "chat.delta",
-					"content":    textContent,
-				})
 
 			case "answer":
 				// Python: if chunk_type == "answer": 先 flush 累积，再调用 _parse_stream_chunk
-				if accumulatedText != "" {
+				if text, ok := st.flushAccumulatedText(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.delta",
-						"content":    accumulatedText,
+						"content":    text,
 					})
-					accumulatedText = ""
 				}
-				if accumulatedReasoning != "" {
+				if reasoning, ok := st.flushAccumulatedReasoning(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.reasoning",
-						"content":    accumulatedReasoning,
+						"content":    reasoning,
 					})
-					accumulatedReasoning = ""
 				}
 				// Python: if has_streamed_content: parsed = self._parse_stream_chunk(chunk, _has_streamed_content=True)
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
+				parsed := utils.ParseStreamChunk(output, st.usage, st.emittedAskUserIDs, d.interactionConverter, st.hasStreamedContent)
 				if parsed != nil {
 					if text, ok := parsed["content"].(string); ok {
 						d.noteRoundVisibleText(text)
@@ -1778,23 +1740,21 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 			default:
 				// flush 累积（对齐 Python: 先 emit 再置空）
-				if accumulatedText != "" {
+				if text, ok := st.flushAccumulatedText(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.delta",
-						"content":    accumulatedText,
+						"content":    text,
 					})
-					accumulatedText = ""
 				}
-				if accumulatedReasoning != "" {
+				if reasoning, ok := st.flushAccumulatedReasoning(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.reasoning",
-						"content":    accumulatedReasoning,
+						"content":    reasoning,
 					})
-					accumulatedReasoning = ""
 				}
 				// ParseStreamChunk 处理其他类型
 				// Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
+				parsed := utils.ParseStreamChunk(output, st.usage, st.emittedAskUserIDs, d.interactionConverter, st.hasStreamedContent)
 				if parsed != nil {
 					if text, ok := parsed["content"].(string); ok {
 						d.noteRoundVisibleText(text)
@@ -1837,30 +1797,30 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		}
 
 		// flush 残留 accumulatedText/accumulatedReasoning
-		if accumulatedText != "" {
+		if text, ok := st.flushAccumulatedText(); ok {
 			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 				"event_type": "chat.final",
-				"content":    accumulatedText,
+				"content":    text,
 			})
 		}
 
 		// 用量摘要
 		// Python: interface_deep._parse_stream_chunk L4906-4972
-		if usage.TotalTokens > 0 {
+		if st.usage.TotalTokens > 0 {
 			// 对齐 Python: usage 子对象（仅 token 字段 + 条件 cost 字段）
 			usageSubObj := map[string]any{
-				"input_tokens":  usage.InputTokens,
-				"output_tokens": usage.OutputTokens,
-				"total_tokens":  usage.TotalTokens,
+				"input_tokens":  st.usage.InputTokens,
+				"output_tokens": st.usage.OutputTokens,
+				"total_tokens":  st.usage.TotalTokens,
 			}
-			if usage.InputCost > 0 {
-				usageSubObj["input_cost"] = usage.InputCost
+			if st.usage.InputCost > 0 {
+				usageSubObj["input_cost"] = st.usage.InputCost
 			}
-			if usage.OutputCost > 0 {
-				usageSubObj["output_cost"] = usage.OutputCost
+			if st.usage.OutputCost > 0 {
+				usageSubObj["output_cost"] = st.usage.OutputCost
 			}
-			if usage.TotalCost > 0 {
-				usageSubObj["total_cost"] = usage.TotalCost
+			if st.usage.TotalCost > 0 {
+				usageSubObj["total_cost"] = st.usage.TotalCost
 			}
 
 			usageSummary := map[string]any{
