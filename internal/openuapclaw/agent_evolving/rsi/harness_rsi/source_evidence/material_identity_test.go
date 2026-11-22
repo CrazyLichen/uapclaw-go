@@ -100,4 +100,3 @@ func TestHarnessIdentity(t *testing.T) {
 		t.Fatalf("非目录应回退材料身份: %v", got)
 	}
 }
-

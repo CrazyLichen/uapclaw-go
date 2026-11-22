@@ -17,9 +17,9 @@ import (
 	"github.com/tamnd/gopapy/v2/parser2"
 	"gopkg.in/yaml.v3"
 
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	harnessresources "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
