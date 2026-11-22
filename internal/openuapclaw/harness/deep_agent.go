@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
@@ -27,21 +30,6 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/goal"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	securityrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
-	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	hsecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/web_tools"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
@@ -59,9 +47,21 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/goal"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	hsecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/web_tools"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -2667,6 +2667,21 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	agent.SetPromptAttachmentManager(d.attachments)
 
 	return agent
+}
+
+// RebindCwdState 覆盖 agent 级 CwdState（执行路径重绑缝）。
+// Python: init_cwd(execution_cwd, project_root, workspace) 在轮次任务内设置
+// ContextVar，使本轮后续派生的工具任务继承请求 cwd
+// （runtime_prompt_rail.py:251-269 bind_execution_paths；interface_deep
+// _seed_runtime_cwd 同机制）。Go 的 context.Value 不跨调用传播，
+// attachRunContexts 在每次调用入口把 d.cwdState 挂进 ctx——覆盖本字段
+// 即对后续所有轮次生效，语义等价。
+// 调用方 ctx 已带 CwdState 时不覆盖（attachRunContexts 守卫），与 Python
+// 「子 agent 自己 init_cwd 优先」一致。
+func (d *DeepAgent) RebindCwdState(state *cwd.CwdState) {
+	d.configMu.Lock()
+	d.cwdState = state
+	d.configMu.Unlock()
 }
 
 // attachRunContexts 给「已初始化」的后续调用重新注入 agent 级 Context 值。

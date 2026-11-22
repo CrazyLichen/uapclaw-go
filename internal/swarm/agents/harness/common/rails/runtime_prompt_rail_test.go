@@ -20,6 +20,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	cwd "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
@@ -265,23 +266,36 @@ func TestSetExecutionPaths_Revision(t *testing.T) {
 	assert.False(t, rail.usesRoundExecutionPaths())
 }
 
-// TestBindExecutionPaths_RevisionGuard 对齐 Python ContextVar revision 判定。
+// bindRecorder 记录 RebindCwdState 调用的测试 agent。
+type bindRecorder struct {
+	*simplePromptAgent
+	states []*cwd.CwdState
+}
+
+func (f *bindRecorder) RebindCwdState(state *cwd.CwdState) { f.states = append(f.states, state) }
+
+// TestBindExecutionPaths_RevisionGuard 对齐 Python ContextVar revision 判定；
+// rebind 经 DeepAgent.RebindCwdState 缝（2026-12-22 接线）。
 func TestBindExecutionPaths_RevisionGuard(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "agent.work.normal")
+	recorder := &bindRecorder{simplePromptAgent: &simplePromptAgent{builder: saprompt.NewSystemPromptBuilder()}}
+	rail.mu.Lock()
+	rail.agent = recorder
+	rail.mu.Unlock()
+
 	// 三路径不全 → 不绑定
 	rail.bindExecutionPaths()
-	assert.Nil(t, rail.executionCwdState)
+	assert.Empty(t, recorder.states)
 
 	dir := t.TempDir()
 	rail.SetExecutionPaths(dir, dir, dir)
 	rail.bindExecutionPaths()
-	require.NotNil(t, rail.executionCwdState)
-	assert.Equal(t, rail.executionPathsRevision, rail.boundExecutionPathsRevision)
+	require.Len(t, recorder.states, 1)
+	assert.Equal(t, dir, recorder.states[0].GetWorkspace())
 
 	// revision 未变 → 不重复绑定
-	state := rail.executionCwdState
 	rail.bindExecutionPaths()
-	assert.Same(t, state, rail.executionCwdState)
+	assert.Len(t, recorder.states, 1)
 }
 
 // TestResolveCurrentMode 对齐 Python code 模式 live 覆盖。
@@ -465,14 +479,17 @@ func TestGetCallbacks_注册两个事件(t *testing.T) {
 	assert.Contains(t, callbacks, agentinterfaces.CallbackBeforeModelCall)
 }
 
-// TestExecutionCwdState 访问器。
+// TestExecutionCwdState 缝已删除（2026-12-22 接线 RebindCwdState）。
 func TestExecutionCwdState(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
-	assert.Nil(t, rail.ExecutionCwdState())
+	recorder := &bindRecorder{simplePromptAgent: &simplePromptAgent{builder: saprompt.NewSystemPromptBuilder()}}
+	rail.mu.Lock()
+	rail.agent = recorder
+	rail.mu.Unlock()
 	dir := t.TempDir()
 	rail.SetExecutionPaths(dir, dir, dir)
 	rail.bindExecutionPaths()
-	assert.NotNil(t, rail.ExecutionCwdState())
+	require.Len(t, recorder.states, 1)
 }
 
 // TestSetRequestMetadata_与A4pAuthorizer setter。

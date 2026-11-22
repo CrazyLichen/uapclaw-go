@@ -156,11 +156,10 @@ type RuntimePromptRail struct {
 	executionPathsRevision int
 	// boundExecutionPathsRevision 已绑定到执行上下文的版本号
 	// Python: ContextVar _bound_execution_paths_revision（default -1）。
-	// 偏差：Go 无 ContextVar，以 rail 字段承载；rebind 产生 cwd.InitCwd 结果，
-	// 经 ExecutionCwdState 暴露供 runtime 轮次 ctx 写入点消费（⤴️runtime 轮次链路）。
+	// 偏差收窄（2026-12-22）：rebind 经 DeepAgent.RebindCwdState 覆盖 agent 级
+	// cwdState（attachRunContexts 注入链），Python ContextVar 全局语义等价；
+	// 本字段仅保留 revision 判定。
 	boundExecutionPathsRevision int
-	// executionCwdState 最近一次 rebind 构造的 CwdState（偏差缝载体）
-	executionCwdState *cwd.CwdState
 	// modelName 每次请求的模型名称（YAML 读取失败时的 fallback）
 	modelName string
 	// mode 每次请求的运行模式（YAML 读取失败时的 fallback）
@@ -490,13 +489,6 @@ func (r *RuntimePromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEven
 	return callbacks
 }
 
-// ExecutionCwdState 返回最近一次执行路径绑定产生的 CwdState（偏差缝，见字段注释）。
-func (r *RuntimePromptRail) ExecutionCwdState() *cwd.CwdState {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.executionCwdState
-}
-
 // RuntimeStatePath 返回按 session 隔离的 runtime_state 文件路径。
 // Python: get_runtime_state_path(session_id)（utils.py:1758-1766）——
 // 每个 session 独占一份文件，避免心跳/定时/并发 session 共用单文件互相覆盖；
@@ -608,22 +600,32 @@ func FirstNonEmpty(vals ...string) string {
 
 // bindExecutionPaths 在执行当前轮次的任务内绑定请求路径。
 //
-// Python: RuntimePromptRail._bind_execution_paths (runtime_prompt_rail.py:251-269)
-// 偏差：Python init_cwd 设置任务 ContextVar；Go 以 cwd.InitCwd 构造状态存入
-// executionCwdState（ExecutionCwdState 缝），跨任务 ctx 写入点 ⤴️runtime 轮次链路。
+// Python: RuntimePromptRail._bind_execution_paths (runtime_prompt_rail.py:251-269)。
+// init_cwd 设置 ContextVar → Go 经 DeepAgent.RebindCwdState 覆盖 agent 级
+// cwdState（attachRunContexts 注入链，Python ContextVar 全局语义等价，
+// 2026-12-22 接线）。agent 非 DeepAgent 时静默跳过（与 Python getattr
+// 守卫同语义）。
 func (r *RuntimePromptRail) bindExecutionPaths() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.executionCwd == "" || r.executionProjectRoot == "" || r.executionWorkspace == "" {
+	execCwd, projectRoot, workspace := r.executionCwd, r.executionProjectRoot, r.executionWorkspace
+	agent := r.agent
+	needsBind := r.boundExecutionPathsRevision != r.executionPathsRevision
+	if needsBind {
+		r.boundExecutionPathsRevision = r.executionPathsRevision
+	}
+	r.mu.Unlock()
+	if !needsBind || execCwd == "" || projectRoot == "" || workspace == "" {
 		return
 	}
-	if r.boundExecutionPathsRevision == r.executionPathsRevision {
+	rebinder, ok := agent.(interface {
+		RebindCwdState(state *cwd.CwdState)
+	})
+	if !ok {
 		return
 	}
-	r.executionCwdState = cwd.InitCwd(r.executionCwd,
-		cwd.WithProjectRoot(r.executionProjectRoot),
-		cwd.WithWorkspace(r.executionWorkspace))
-	r.boundExecutionPathsRevision = r.executionPathsRevision
+	rebinder.RebindCwdState(cwd.InitCwd(execCwd,
+		cwd.WithProjectRoot(projectRoot),
+		cwd.WithWorkspace(workspace)))
 }
 
 // usesRoundExecutionPaths 返回 Agent/Code 轮次是否需要请求路径重绑。
