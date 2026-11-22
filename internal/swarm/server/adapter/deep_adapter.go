@@ -1070,22 +1070,19 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18171-18180）。
+		// External Harness 绑定：读章，缺失时兜底解析并盖章（Python: :18164-18184）。
 		// 冲突/类型错误 → ok=False error 响应（Python _equipment_error_response）。
-		var externalBindingMap map[string]any
-		if req.ReqMethod == schema.ReqMethodChatSend {
-			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
-			if resolveErr != nil {
+		if req.ReqMethod == schema.ReqMethodChatSend && req.TrustedRuntimeBinding == nil {
+			if _, resolveErr := resolveRuntimeBindingForRequest(req, sid); resolveErr != nil {
 				return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 					schema.WithResponseOK(false),
 					schema.WithPayload(map[string]any{"error": resolveErr.Error()}),
 				), nil
 			}
-			externalBindingMap = bindingToMap(resolved)
 		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
 			ReserveActivity:        !isAttachOnlySubscription(req.Params),
-			ExternalHarnessBinding: externalBindingMap,
+			ExternalHarnessBinding: req.TrustedRuntimeBinding,
 		})
 		if err != nil {
 			return nil, err
@@ -1340,11 +1337,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18947-18960 请求前置步）。
-		var externalBindingMap map[string]any
-		if req.ReqMethod == schema.ReqMethodChatSend {
-			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
-			if resolveErr != nil {
+		// External Harness 绑定：读章，缺失时兜底解析并盖章（Python: :18943-18960）。
+		if req.ReqMethod == schema.ReqMethodChatSend && req.TrustedRuntimeBinding == nil {
+			if _, resolveErr := resolveRuntimeBindingForRequest(req, sid); resolveErr != nil {
 				ch := make(chan *schema.AgentResponseChunk, 1)
 				ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 					"event_type": "chat.error",
@@ -1353,11 +1348,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				close(ch)
 				return ch, nil
 			}
-			externalBindingMap = bindingToMap(resolved)
 		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
 			ReserveActivity:        !isAttachOnlySubscription(req.Params),
-			ExternalHarnessBinding: externalBindingMap,
+			ExternalHarnessBinding: req.TrustedRuntimeBinding,
 		})
 		if err != nil {
 			ch := make(chan *schema.AgentResponseChunk)
