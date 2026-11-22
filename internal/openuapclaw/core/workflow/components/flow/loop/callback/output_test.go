@@ -19,10 +19,10 @@ func TestOutputCallback_轮次累积与收割(t *testing.T) {
 	c := NewOutputCallback(map[string]any{"results": "${loop_1.result}"}, "", "")
 
 	lt := 1
-	require.NoError(t, c.Call(context.Background(), StageFirstLoop, sess, nil))           // state["round"]=[]
-	require.NoError(t, c.Call(context.Background(), StageEndRound, sess, &lt))            // append inputs
-	require.NoError(t, c.Call(context.Background(), StageEndRound, sess, &lt))            // len>=loop_times 跳过
-	require.NoError(t, c.Call(context.Background(), StageOutLoop, sess, nil))             // 收割(set_outputs)
+	require.NoError(t, c.Call(context.Background(), StageFirstLoop, sess, nil)) // state["round"]=[]
+	require.NoError(t, c.Call(context.Background(), StageEndRound, sess, &lt))  // append inputs
+	require.NoError(t, c.Call(context.Background(), StageEndRound, sess, &lt))  // len>=loop_times 跳过
+	require.NoError(t, c.Call(context.Background(), StageOutLoop, sess, nil))   // 收割(set_outputs)
 
 	// round 数组有 1 条（end_round 经 state.update 累积，不走 set_outputs）
 	assert.Len(t, st.values[state.StringKey("round")].([]any), 1)

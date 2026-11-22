@@ -2,17 +2,18 @@ package loop
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/constants"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
@@ -24,9 +25,21 @@ import (
 type fakeLoopState struct {
 	state.SessionState
 	state.WorkflowState
-	values     map[state.StateKey]any
-	globals    map[string]any
-	setOutputs []any
+	values         map[state.StateKey]any
+	globals        map[string]any
+	setOutputs     []any
+	wfStateValues  map[string]any
+	workflowCommit func(map[string]any)
+	ioSnapshot     map[string]any
+}
+
+// SetWorkflowCommitStateForTest 嵌入的 WorkflowState 置 nil 以启用本桩的覆写方法
+// （嵌入接口非 nil 时方法集解析到接口——显式遮蔽）
+func (s *fakeLoopState) SetWorkflowCommitStateForTest() {}
+
+// GetState 快照承载（ioStateSnapshot 消费面）
+func (s *fakeLoopState) GetState() map[string]any {
+	return map[string]any{state.IOStateKey: s.ioSnapshot}
 }
 
 func (s *fakeLoopState) CommitCmp() {}
@@ -35,7 +48,19 @@ func (s *fakeLoopState) SetOutputs(data map[string]any) {
 	s.setOutputs = append(s.setOutputs, data)
 }
 func (s *fakeLoopState) GetInputs(_ state.StateKey) any { return map[string]any{} }
-func (s *fakeLoopState) Get(key state.StateKey) any     { return s.values[key] }
+
+// workflowCommit / wfStateValues：UpdateAndCommitWorkflowState/GetWorkflowState 承载面
+var _ = fmt.Sprintf
+
+func (s *fakeLoopState) GetWorkflowState(key state.StateKey) any {
+	return s.wfStateValues[key.String()]
+}
+func (s *fakeLoopState) UpdateAndCommitWorkflowState(data map[string]any) {
+	if s.workflowCommit != nil {
+		s.workflowCommit(data)
+	}
+}
+func (s *fakeLoopState) Get(key state.StateKey) any { return s.values[key] }
 func (s *fakeLoopState) GetGlobal(key state.StateKey) any {
 	return s.globals[key.String()]
 }
@@ -48,11 +73,19 @@ func (s *fakeLoopState) Update(data map[string]any) error {
 
 type fakeLoopSession struct {
 	session.BaseSession
-	st state.SessionState
+	st         state.SessionState
+	noParentID bool
 }
 
-func (s *fakeLoopSession) State() state.SessionState        { return s.st }
-func (s *fakeLoopSession) ExecutableID() string             { return "loop_1" }
+func (s *fakeLoopSession) State() state.SessionState { return s.st }
+func (s *fakeLoopSession) ExecutableID() string      { return "loop_1" }
+func (s *fakeLoopSession) ParentID() string {
+	if s.noParentID {
+		return ""
+	}
+	return "parent_node"
+}
+func (s *fakeLoopSession) Parent() session.BaseSession { return nil }
 
 func newLoopSession(values map[state.StateKey]any, globals map[string]any) (session.BaseSession, *fakeLoopState) {
 	st := &fakeLoopState{values: values, globals: globals}
@@ -236,6 +269,7 @@ func Test错误码存在(t *testing.T) {
 type fakeInnerSess struct {
 	cfg config.SessionConfig
 	id  string
+	cp  interfaces.Checkpointer
 }
 
 func (f *fakeInnerSess) Config() config.SessionConfig                     { return f.cfg }
@@ -243,7 +277,7 @@ func (f *fakeInnerSess) State() state.SessionState                        { retu
 func (f *fakeInnerSess) Tracer() *tracer.Tracer                           { return nil }
 func (f *fakeInnerSess) StreamWriterManager() *stream.StreamWriterManager { return nil }
 func (f *fakeInnerSess) SessionID() string                                { return f.id }
-func (f *fakeInnerSess) Checkpointer() interfaces.Checkpointer            { return nil }
+func (f *fakeInnerSess) Checkpointer() interfaces.Checkpointer            { return f.cp }
 func (f *fakeInnerSess) ActorManager() *stream_actor.ActorManager         { return nil }
 func (f *fakeInnerSess) Close() error                                     { return nil }
 
@@ -251,6 +285,12 @@ func (f *fakeInnerSess) Close() error                                     { retu
 func newFakeVertexSession(t *testing.T, nodeID, nodeType string) session.WorkflowVertexSession {
 	t.Helper()
 	parent := &fakeInnerSess{cfg: config.NewSessionConfig(context.Background()), id: "s1"}
+	return newFakeVertexSessionWithParent(t, parent, nodeID, nodeType)
+}
+
+// newFakeVertexSessionWithParent 以指定根会话构造顶点会话（全链单测共享 checkpointer）
+func newFakeVertexSessionWithParent(t *testing.T, parent *fakeInnerSess, nodeID, nodeType string) session.WorkflowVertexSession {
+	t.Helper()
 	return session.NewWorkflowVertexSession(parent, nodeID, nodeType, false)
 }
 
@@ -270,4 +310,9 @@ func newFakeVertexSessionInner(t *testing.T) session.BaseSession {
 	t.Helper()
 	parent := &fakeInnerSess{cfg: config.NewSessionConfig(context.Background()), id: "root"}
 	return session.NewWorkflowVertexSession(parent, "root", "", false)
+}
+
+// nonCommitLoopState 不可断言 WorkflowState 的桩（nodeStateOf 失败分支）
+type nonCommitLoopState struct {
+	state.SessionState
 }

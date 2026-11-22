@@ -525,9 +525,15 @@ func (a *AdvancedLoopComponent) conditionInvoke(sess session.BaseSession) ([]str
 		finishIndex = index - 1
 	}
 	// Python: if finish_index == index: {INDEX: index+1} update + set_outputs（无 commit）
+	// 偏差 D-20-6：Python 该 staged 写经节点 PostCommit/commit_cmp 时序在条件求值前
+	// 已对外可见（upstream test_loop_number 断言 12 轮 distinct 实证）；Go CommitState
+	// staged 更新对 Get 不可见，需显式提交对齐可观测行为
 	if finishIndex == index {
 		_ = st.Update(map[string]any{constants.Index: index + 1})
 		ws.SetOutputs(map[string]any{constants.Index: index + 1})
+		if ws2, ok := st.(state.WorkflowState); ok {
+			ws2.CommitCmp()
+		}
 	}
 
 	// Python: continue_loop = False if self.is_broken() else self._condition(session=session)

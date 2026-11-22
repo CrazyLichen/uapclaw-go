@@ -100,9 +100,9 @@ func (c *OutputCallback) generateOutput(sess session.BaseSession, results []any,
 		refStr := sessionutils.ExtractOriginKey(s)
 		path := strings.Split(refStr, sessionutils.NestedPathSplit)
 		nodeID := ""
-	if ep, ok := sess.(sessioninterfaces.ExecutableIDProvider); ok {
-		nodeID = ep.ExecutableID() // Python: session.node_id() → Go ExecutableIDProvider 面
-	}
+		if ep, ok := sess.(sessioninterfaces.ExecutableIDProvider); ok {
+			nodeID = ep.ExecutableID() // Python: session.node_id() → Go ExecutableIDProvider 面
+		}
 		if path[0] == nodeID {
 			// Python: if len(results) == 0: return None
 			if len(results) == 0 {

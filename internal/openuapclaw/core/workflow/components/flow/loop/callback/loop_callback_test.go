@@ -22,8 +22,8 @@ type fakeCbState struct {
 	setOutputs []any
 }
 
-func (s *fakeCbState) CommitCmp() {}
-func (s *fakeCbState) Commit()      {}
+func (s *fakeCbState) CommitCmp()                     {}
+func (s *fakeCbState) Commit()                        {}
 func (s *fakeCbState) GetInputs(_ state.StateKey) any { return s.inputs }
 func (s *fakeCbState) SetOutputs(data map[string]any) { s.setOutputs = append(s.setOutputs, data) }
 func (s *fakeCbState) Get(key state.StateKey) any     { return s.values[key] }
@@ -58,7 +58,10 @@ func newFakeLoopCallback() *fakeLoopCallback {
 	f.LoopCallback = NewLoopCallback(
 		func(_ session.BaseSession) (any, error) { f.calls = append(f.calls, StageFirstLoop); return nil, nil },
 		func(_ session.BaseSession) (any, error) { f.calls = append(f.calls, StageStartRound); return nil, nil },
-		func(_ session.BaseSession, _ int) (any, error) { f.calls = append(f.calls, StageEndRound); return nil, nil },
+		func(_ session.BaseSession, _ int) (any, error) {
+			f.calls = append(f.calls, StageEndRound)
+			return nil, nil
+		},
 		func(_ session.BaseSession) (any, error) { f.calls = append(f.calls, StageOutLoop); return nil, nil },
 	)
 	return f

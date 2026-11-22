@@ -143,6 +143,8 @@ func (s *LoopCompSuite) TestLoopNumber_真实链() {
 		s.Contains(res, fmt.Sprint(v), "l_out1 数组应含 %d", v)
 	}
 	s.Contains(res, "117", "user_num 复利加 10×12 轮应达 117")
+	s.NotContains(res, "127", "不得多跑一轮（D-20-6：INDEX 增量须在条件求值前可见）")
+	s.NotContains(res, "22", "l_out1 末位应为 21（12 轮 distinct），不得出现第 13 轮的 22")
 }
 
 // ──────────────────────────── 2. array 循环 ────────────────────────────

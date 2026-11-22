@@ -79,10 +79,22 @@ type recordingCb struct {
 func newRecordingCb() *recordingCb {
 	r := &recordingCb{}
 	r.LoopCallback = callbackpkg.NewLoopCallback(
-		func(_ session.BaseSession) (any, error) { r.calls = append(r.calls, callbackpkg.StageFirstLoop); return nil, nil },
-		func(_ session.BaseSession) (any, error) { r.calls = append(r.calls, callbackpkg.StageStartRound); return nil, nil },
-		func(_ session.BaseSession, _ int) (any, error) { r.calls = append(r.calls, callbackpkg.StageEndRound); return nil, nil },
-		func(_ session.BaseSession) (any, error) { r.calls = append(r.calls, callbackpkg.StageOutLoop); return nil, nil },
+		func(_ session.BaseSession) (any, error) {
+			r.calls = append(r.calls, callbackpkg.StageFirstLoop)
+			return nil, nil
+		},
+		func(_ session.BaseSession) (any, error) {
+			r.calls = append(r.calls, callbackpkg.StageStartRound)
+			return nil, nil
+		},
+		func(_ session.BaseSession, _ int) (any, error) {
+			r.calls = append(r.calls, callbackpkg.StageEndRound)
+			return nil, nil
+		},
+		func(_ session.BaseSession) (any, error) {
+			r.calls = append(r.calls, callbackpkg.StageOutLoop)
+			return nil, nil
+		},
 	)
 	return r
 }
