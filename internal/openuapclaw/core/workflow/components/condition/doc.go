@@ -6,14 +6,18 @@
 // 使用手写词法 + 递归下降求值器，对齐 Python expression.py 的 DSL 语义
 // （Python ast.parse 只是上游实现载体，Go 复刻的是可观测语义，见 8.19 spec §3 拍板①）。
 //
-// number.py/array.py（NumberCondition/ArrayCondition）留 8.20 与 LoopComp 一起实施。
+// number.py/array.py 已于 8.20 随 LoopComp 一起实施（NumberCondition/
+// NumberConditionInSession/ArrayCondition/ArrayConditionInSession，其中非
+// InSession 两类为 Python 死代码按拍板复刻）。
 //
 // 文件目录：
 //
 //	condition/
 //	├── doc.go           # 包文档
 //	├── condition.go     # Condition 接口 + BaseCondition + FuncCondition + AlwaysTrue
-//	└── expression.go   # ExpressionCondition + convertCondition + parser + evaluator
+//	├── expression.go    # ExpressionCondition + convertCondition + parser + evaluator
+//	├── array.go         # ArrayCondition/ArrayConditionInSession（array.py 一比一）
+//	└── number.go        # NumberCondition/NumberConditionInSession（number.py 一比一）
 //
 // 对应 Python 代码：openjiuwen/core/workflow/components/condition/
 package condition

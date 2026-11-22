@@ -28,19 +28,20 @@ type Condition interface {
 // BaseCondition 条件基座：嵌入 8.10 AtomicNode 承载 atomic_invoke 四步链
 // （Python 继承 AtomicNode → Go 嵌入）。invokeImpl 由各子类供应（Python 子类
 // invoke 方法 → Go 构造期回调槽，AtomicNode 偏差 D3 同款）。
-// 偏差 D-19-2：_atomic_invoke 的元组分支（isinstance(result, tuple) → set_outputs）
-// 生产者 ArrayCondition 属 8.20，本节不落，回收条件挂 8.20。
+// 偏差 D-19-2 已于 8.20 回收（偏差 D-20-3）：Python _atomic_invoke 元组分支
+// （isinstance(result, tuple) → set_outputs(result[1]) → result=result[0]）由
+// invokeImpl 第三返回值 map[string]any 承载——nil ≙ Python 裸 bool 返回。
+// inputSchema 非空时 invoke 前按 schema 取 inputs（condition.py:19；8.20 ArrayCondition 启用）。
 type BaseCondition struct {
 	graph.AtomicNode
-	// inputSchema 输入模式（Python __init__(input_schema=None)；本节三子类恒 nil，
-	// 8.20 ArrayCondition 传 schema 时启用）
+	// inputSchema 输入模式（Python __init__(input_schema=None)）
 	inputSchema any
 }
 
 // NewBaseCondition 构造条件基座。invokeImpl 为 nil 时 panic（Python 抽象方法
 // invoke 必须实现，AtomicNode 偏差 D3 同款）。
 func NewBaseCondition(
-	invokeImpl func(ctx context.Context, inputs map[string]any, sess session.BaseSession) (bool, error),
+	invokeImpl func(ctx context.Context, inputs map[string]any, sess session.BaseSession) (bool, map[string]any, error),
 	inputSchema any,
 ) BaseCondition {
 	if invokeImpl == nil {
@@ -61,9 +62,19 @@ func NewBaseCondition(
 			}
 			inputs, _ = ws.GetInputs(b.inputSchema.(state.StateKey)).(map[string]any)
 		}
-		// Python: result = self.invoke(inputs=inputs, session=session)
-		// 元组分支（result[1] → set_outputs）属 D-19-2，挂 8.20
-		return invokeImpl(ctx, inputs, sess)
+		// Python condition.py:21-23：result = self.invoke(inputs=inputs, session=session)
+		// 元组分支：isinstance(result, tuple) → set_outputs(result[1]) → result = result[0]
+		// （偏差 D-20-3：Python tuple → Go 第三返回值 map[string]any）
+		flag, updates, err := invokeImpl(ctx, inputs, sess)
+		if err != nil {
+			return nil, err
+		}
+		if updates != nil {
+			if ws, ok := sess.State().(state.WorkflowState); ok {
+				ws.SetOutputs(updates) // 随 AtomicInvoke 尾步 CommitCmp 原子提交
+			}
+		}
+		return flag, nil
 	})
 	return b
 }
@@ -89,12 +100,13 @@ type FuncCondition struct {
 	fn func() bool
 }
 
-// NewFuncCondition 构造函数条件。
+// NewFuncCondition 构造函数条件。Python invoke 返回裸 bool（非 tuple），
+// 第三返回值恒 nil 不触发 set_outputs。
 func NewFuncCondition(fn func() bool) *FuncCondition {
 	c := &FuncCondition{fn: fn}
 	c.BaseCondition = NewBaseCondition(
-		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, error) {
-			return c.fn(), nil
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return c.fn(), nil, nil
 		}, nil)
 	return c
 }
@@ -115,12 +127,13 @@ type AlwaysTrue struct {
 	BaseCondition
 }
 
-// NewAlwaysTrue 构造恒真条件。
+// NewAlwaysTrue 构造恒真条件。Python invoke 返回裸 bool（非 tuple），
+// 第三返回值恒 nil 不触发 set_outputs。
 func NewAlwaysTrue() *AlwaysTrue {
 	c := &AlwaysTrue{}
 	c.BaseCondition = NewBaseCondition(
-		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, error) {
-			return true, nil
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return true, nil, nil
 		}, nil)
 	return c
 }

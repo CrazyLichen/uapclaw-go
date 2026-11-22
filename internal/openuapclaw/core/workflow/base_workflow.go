@@ -813,3 +813,12 @@ func isGraphInvoker(exec graph.GeneralExecutor) bool {
 func executorTypeName(executor components.ComponentComposable) string {
 	return reflect.TypeOf(executor).Elem().Name()
 }
+
+// Graph 返回构图图（Python _graph 属性访问；8.20 LoopGroup checkValidate/构图消费）
+func (w *BaseWorkflow) Graph() *graph.PregelGraph { return w.graph }
+
+// Spec 返回工作流规格（Python _workflow_spec 属性访问；8.20 LoopGroup on_invoke 消费）
+func (w *BaseWorkflow) Spec() *WorkflowSpec { return w.workflowSpec }
+
+// StreamGraph 访问器（Python _stream_actor 属性访问；8.20 LoopGroup on_invoke 消费）
+func (w *BaseWorkflow) StreamGraph() *stream_actor.StreamGraph { return w.streamActor }

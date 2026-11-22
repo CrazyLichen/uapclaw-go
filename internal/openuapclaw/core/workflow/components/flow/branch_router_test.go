@@ -58,8 +58,8 @@ type alwaysTargetCond struct {
 func newAlwaysTargetCond() *alwaysTargetCond {
 	c := &alwaysTargetCond{}
 	c.BaseCondition = condition.NewBaseCondition(
-		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, error) {
-			return true, nil
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return true, nil, nil
 		}, nil)
 	return c
 }

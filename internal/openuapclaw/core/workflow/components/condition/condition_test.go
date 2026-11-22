@@ -18,12 +18,38 @@ import (
 type fakeCondState struct {
 	state.SessionState
 	state.WorkflowState
-	globals map[string]any
+	globals      map[string]any
+	values       map[state.StateKey]any
+	inputs       map[string]any
+	onSetOutputs func(any)
+	setOutputs   []any
 }
 
 func (s *fakeCondState) CommitCmp() {}
 
 func (s *fakeCondState) GetGlobal(key state.StateKey) any { return s.globals[key.String()] }
+
+// GetInputs 按 schema 取输入（io_state 面；fake 以 inputs 字段承载）
+func (s *fakeCondState) GetInputs(_ state.StateKey) any { return s.inputs }
+
+// Get 键值取值（Task1+ 起消费：state().get(key)）
+func (s *fakeCondState) Get(key state.StateKey) any { return s.values[key] }
+
+// Update 键值写入（D-19-2 元组分支前的 updates 写入面）
+func (s *fakeCondState) Update(data map[string]any) error {
+	for k, v := range data {
+		s.values[state.StringKey(k)] = v
+	}
+	return nil
+}
+
+// SetOutputs 输出写入（condition.go 元组分支 set_outputs 承载面）
+func (s *fakeCondState) SetOutputs(data map[string]any) {
+	s.setOutputs = append(s.setOutputs, data)
+	if s.onSetOutputs != nil {
+		s.onSetOutputs(data)
+	}
+}
 
 // nonCommitState 不可提交状态：只嵌入 SessionState，不实现 WorkflowState。
 type nonCommitState struct {
@@ -42,6 +68,13 @@ func (s *fakeCondSession) State() state.SessionState { return s.st }
 func mustWorkflowSession(t *testing.T) session.BaseSession {
 	t.Helper()
 	return &fakeCondSession{st: &fakeCondState{globals: map[string]any{}}}
+}
+
+// mustWorkflowSessionWithState 构造带可提交状态与预置键值的会话（返回状态以便断言）。
+func mustWorkflowSessionWithState(t *testing.T, values map[state.StateKey]any) (session.BaseSession, *fakeCondState) {
+	t.Helper()
+	st := &fakeCondState{globals: map[string]any{}, values: values}
+	return &fakeCondSession{st: st}, st
 }
 
 // mustWorkflowSessionWithGlobals 构造带全局状态的会话。
@@ -112,4 +145,50 @@ func TestCondition_Call_状态非WorkflowCommitState_报错(t *testing.T) {
 // TestNewBaseCondition_Nil实现panic 对齐 Python 抽象方法必须实现（D3 同款）
 func TestNewBaseCondition_Nil实现panic(t *testing.T) {
 	assert.Panics(t, func() { NewBaseCondition(nil, nil) })
+}
+
+// TestNewBaseCondition_元组分支updates落outputs 验证 D-19-2 回收：
+// Python condition.py:21-23 isinstance(result, tuple) → set_outputs(result[1]) → 返回 result[0]
+func TestNewBaseCondition_元组分支updates落outputs(t *testing.T) {
+	sess, st := mustWorkflowSessionWithState(t, map[state.StateKey]any{})
+
+	cond := NewBaseCondition(
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return true, map[string]any{"texts": "你好"}, nil
+		}, nil)
+
+	flag, err := cond.Call(context.Background(), sess)
+	require.NoError(t, err)
+	assert.True(t, flag)
+	require.Len(t, st.setOutputs, 1)
+	assert.Equal(t, map[string]any{"texts": "你好"}, st.setOutputs[0])
+}
+
+// TestNewBaseCondition_裸bool不触发set_outputs（Python Func/AlwaysTrue 返回裸 bool 非 tuple）
+func TestNewBaseCondition_裸bool不触发set_outputs(t *testing.T) {
+	sess, st := mustWorkflowSessionWithState(t, map[state.StateKey]any{})
+
+	cond := NewBaseCondition(
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return false, nil, nil
+		}, nil)
+
+	flag, err := cond.Call(context.Background(), sess)
+	require.NoError(t, err)
+	assert.False(t, flag)
+	assert.Empty(t, st.setOutputs)
+}
+
+// TestNewBaseCondition_impl报错不落outputs（错误原样上抛，AtomicNode 链任一步失败不提交）
+func TestNewBaseCondition_impl报错不落outputs(t *testing.T) {
+	sess, st := mustWorkflowSessionWithState(t, map[state.StateKey]any{})
+
+	cond := NewBaseCondition(
+		func(_ context.Context, _ map[string]any, _ session.BaseSession) (bool, map[string]any, error) {
+			return false, nil, assert.AnError
+		}, nil)
+
+	_, err := cond.Call(context.Background(), sess)
+	require.ErrorIs(t, err, assert.AnError)
+	assert.Empty(t, st.setOutputs)
 }
