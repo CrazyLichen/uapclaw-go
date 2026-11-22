@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/constants"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 )
@@ -155,18 +156,7 @@ func conditionIndex(sess session.BaseSession) (int, error) {
 	if v == nil {
 		return 0, fmt.Errorf("loop index is not initialized (None cannot compare with int in Python)")
 	}
-	return loopIndexToInt(v)
-}
-
-// loopIndexToInt INDEX 数值归一（编码适配非 Python 语义助手——topic_audit D-6
-// 先例：checkpoint JSON 往返把 int 变 float64，整值还原）
-func loopIndexToInt(v any) (int, error) {
-	switch n := v.(type) {
-	case int:
-		return n, nil
-	case float64:
-		return int(n), nil
-	default:
-		return 0, fmt.Errorf("loop index is not int, got %T", v)
-	}
+	// 编码适配：checkpoint JSON 往返把 int 变 float64（topic_audit D-6 先例）——
+	// 复用 utils.PyInt（Python int() 构造语义：float 截断）单点，禁包内私抄
+	return utils.PyInt(v)
 }

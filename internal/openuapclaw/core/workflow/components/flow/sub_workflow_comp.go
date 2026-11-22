@@ -75,24 +75,9 @@ func WithCacheStream(enabled bool) SubWorkflowOption {
 // _workflow.py:109 据此给 Vertex 递 InnerPregelConfig 形成 ns 嵌套）
 func (c *SubWorkflowComponent) GraphInvoker() bool { return true }
 
-// ToExecutable 产出可执行体（Python to_executable 继承默认返回 self）。
-// 必须显式 override：Go 嵌入方法提升为静态解析，基座 WorkflowComponent.ToExecutable
-// 返回的是内层基座自身（GraphInvoker=false、无组件类型标签），不自定义则
-// _workflow.py:109 的 graph_invoker 探测与 Vertex 信封路径全部失效。
-func (c *SubWorkflowComponent) ToExecutable() graphexe.GeneralExecutor { return c }
-
-// AddComponent 将自身注册进图（Python add_component 继承 mixin 默认实现）。
-// 必须显式 override：基座 AddComponent 内部经静态解析调基座 ToExecutable
-// （返回内层），注册产物丢失外层三钩子；此处改为注册外层自身
-// （≙ Python self.to_executable() 动态分派返回 self 的语义）。
-func (c *SubWorkflowComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
-	opts := []graph.AddNodeOption{}
-	if waitForAll {
-		opts = append(opts, graph.WithWaitForAll())
-	}
-	g.AddNode(nodeID, c.ToExecutable(), opts...)
-	return nil
-}
+// ToExecutable/AddComponent 无需 override：基座已改槽优先，构造期 ToExecutableFn
+// 注入外层自身即完成 Python to_executable 动态分派语义（原成对 override 及其
+// "静态解析丢失钩子"注释由基座单点收口删除，规则 8；2026-11-22 8.20 收口）。
 
 // ComponentType 组件类型标签（Python :90-91）
 func (c *SubWorkflowComponent) ComponentType() string { return SubWorkflowComponentType }
@@ -128,6 +113,10 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 	for _, opt := range opts {
 		opt(c)
 	}
+	// 槽注入（基座 ToExecutable/AddComponent 已改槽优先，D-17-1 先例贯彻）：
+	// Python to_executable 动态分派返回 self → 注入外层自身（原成对 override
+	// 由基座单点收口，规则 8）。
+	c.ToExecutableFn = func() graphexe.GeneralExecutor { return c }
 	// 生产调用缝（Python invoke :79-83 直接调 self._sub_workflow.invoke 的等价承载）
 	c.subWorkflowInvokeFn = func(ctx context.Context, inputs any,
 		sess sessioninterfaces.SessionFacade, modelContext any, kwargs map[string]any) (any, error) {

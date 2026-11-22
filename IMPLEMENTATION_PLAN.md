@@ -582,6 +582,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 > **8.x 实施顺序（2026-11-21 十八次记录）**：8.19 一次收口（三拍板：范围 A——number.py/array.py 留 8.20 与 LoopComp 一起；表达式求值器方案①手写 parser 语义一比一；drawable 段跳过 D-19-1 ⤴️8.13 回填）；8.10 D1 回收兑现（Condition 走 AtomicInvoke 链）；8.14 AddConditionalConnection BranchRouter ⤴️ 钩子回填（D-19-3 结构等价破环）；下一节 8.20（含 number.py/array.py），8.13 继续压后并标注 drawable 缝待回填。原注记保留。
 
 > **8.x 实施顺序（2026-11-22 十九次记录）**：8.20 一次收口（worktree-worktree-8.20-loopcomp 分支；三回填一次兑现：8.19 D-19-2 元组分支/number.py+array.py 四类/8.2 D5 信封硬错；实施暴露 ToExecutable 丢外层动态类型缝（8.14b D-14b 同款 override 修复）+INDEX checkpoint float64 归一+D-20-6 staged 可见性偏差；8.13 drawable 缝继续压后）；下一节 8.21-8.26 按编号，8.13 继续压后。原注记保留。
+>
+> **8.x 实施顺序（2026-11-22 二十次记录）**：8.20 实施后审查收口（用户拍板方案 A）：① 基座 WorkflowComponent.ToExecutable/AddComponent 改槽优先（D-17-1 先例贯彻），8.14b SubWorkflowComponent + 8.20 LoopComponent 成对 override 删除改 ToExecutableFn 注入（Python to_executable 动态分派单点承载）；② INDEX/FINISH_INDEX float64 归一三处收敛 utils.PyInt 复用（删 loopIndexToInt，topic_audit D-6 先例单点化）；③ globalStateGetter 窄接口保留定案（Python 静态方法鸭子参数忠实翻译，撤销删接口初判）；④ BaseWorkflow 补 Graph()/Spec()/StreamGraph() 只读访问器（D-20-6，Python 属性访问 → Go 访问器）；spec 偏差表补 D-20-6/7。原注记保留。
 
 ---
 

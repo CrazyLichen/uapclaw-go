@@ -63,20 +63,29 @@ type WorkflowComponent struct {
 // ──────────────────────────── WorkflowComponent 方法 ────────────────────────────
 
 // ToExecutable 产出可执行体（Python component.py:263-283 to_executable）：
-// WorkflowComponent 自身即 Executable（嵌入 BaseExecutable），≙ isinstance 恒真返回 self。
+// 槽优先——ToExecutableFn 已设（子类注入 self）→ 返回槽产物（保住外层类型与
+// GraphInvoker 等钩子，D-17-1"基座永远只调槽"先例贯彻）；未设 → 返回基座自身
+// （向后兼容：Python isinstance(self, Executable) 恒真语义）。
 func (c *WorkflowComponent) ToExecutable() graphexe.GeneralExecutor {
+	if c.ToExecutableFn != nil {
+		return c.ToExecutableFn()
+	}
 	return c
 }
 
-// AddComponent 将自身注册进图（Python component.py:248-260 默认实现落于合成体，
-// ≙ WorkflowComponent 继承 mixin 默认 add_component 并经 self.to_executable 取产物；
-// 外层再定义同名方法即可遮蔽，≙ Python override，8.14b SubWorkflowComponent 用）。
+// AddComponent 将自身注册进图（Python component.py:248-260 默认实现落于合成体）。
+// 槽优先同 ToExecutable：子类注入 ToExecutableFn=self 后无需 override 本方法与
+// ToExecutable（8.14b/8.20 成对 override 惯例由本改动收口为单点槽注入）。
 func (c *WorkflowComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	prod := c.ToExecutable
+	if c.ToExecutableFn != nil {
+		prod = c.ToExecutableFn
+	}
 	opts := []graph.AddNodeOption{}
 	if waitForAll {
 		opts = append(opts, graph.WithWaitForAll())
 	}
-	g.AddNode(nodeID, c.ToExecutable(), opts...)
+	g.AddNode(nodeID, prod(), opts...)
 	return nil
 }
 

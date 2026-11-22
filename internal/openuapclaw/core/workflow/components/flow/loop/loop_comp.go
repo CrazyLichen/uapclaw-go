@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/uapclaw/uapclaw-go/internal/common/constants"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
@@ -207,10 +208,9 @@ func (p *PostLoopBody) OnInvoke(_ context.Context, _ map[string]any, sess sessio
 	}
 	// Python: finish_index = session.state().get(FINISH_INDEX)
 	if v := sess.State().Get(state.StringKey(finishKey)); v != nil {
-		// 编码适配：checkpoint JSON 往返 int→float64（topic_audit D-6 先例）
-		if n, isFloat := v.(float64); isFloat {
-			p.finishIndex = int(n)
-		} else if n, isInt := v.(int); isInt {
+		// 编码适配：checkpoint JSON 往返 int→float64——复用 utils.PyInt（Python
+		// int() 构造语义）单点（topic_audit D-6 先例收敛，禁包内私抄）
+		if n, err := utils.PyInt(v); err == nil {
 			p.finishIndex = n
 		}
 	}
@@ -248,8 +248,11 @@ func NewLoopSetVariableComponent(variableMapping map[string]any) (*LoopSetVariab
 	return c, nil
 }
 
-// globalStateGetter get_global_state 面（Python session.get_global_state；
-// NodeSessionFacade 天然满足，测试以最小替身承载）。
+// globalStateGetter get_global_state 面（Python session.get_global_state）。
+// ≙ Python 静态方法 generate_value(session, value) 的鸭子参数翻译：Python 侧
+// 任何有 get_global_state 的对象都可传，Go 以最小能力接口承载同一鸭子面
+// （NodeSessionFacade 天然满足）；收窄成具体 *NodeSessionFacade 反而会缩窄
+// Python 的鸭子参数面（规则 12），故保留接口形态（2026-11-22 审查定案）。
 type globalStateGetter interface {
 	GetGlobalState(key state.StateKey) (any, error)
 }
@@ -502,12 +505,11 @@ func (a *AdvancedLoopComponent) conditionInvoke(sess session.BaseSession) ([]str
 	// Python: index = session.state().get(INDEX)
 	index := 0
 	if v := st.Get(state.StringKey(constants.Index)); v != nil {
-		// 编码适配：checkpoint JSON 往返 int→float64（topic_audit D-6 先例）
-		switch n := v.(type) {
-		case int:
+		// 编码适配：checkpoint JSON 往返 int→float64——复用 utils.PyInt 单点
+		// （topic_audit D-6 先例收敛，禁包内私抄）；非数值回退 0 ≙ Python None
+		// 之外类型比较失败的宽容路径维持不变
+		if n, err := utils.PyInt(v); err == nil {
 			index = n
-		case float64:
-			index = int(n)
 		}
 	} else {
 		// Python: index is None → {BROKEN:False, INDEX:0} update + set_outputs + commit
@@ -860,27 +862,19 @@ func NewLoopComponent(loopGroup *LoopGroup, outputSchema map[string]any) (*LoopC
 	}
 	c := &LoopComponent{loopGroup: loopGroup, outputSchema: outputSchema}
 	c.InvokeFn = c.invoke
+	// 槽注入（基座 ToExecutable/AddComponent 已改槽优先，D-17-1 先例贯彻）：
+	// Python to_executable 动态分派返回 self → 注入外层自身，保住 GraphInvoker
+	// 钩子与 Vertex 信封路径（原成对 override 由基座单点收口，8.14b D-14b 同缝）。
+	c.ToExecutableFn = func() graphexe.GeneralExecutor { return c }
 	return c, nil
 }
 
 // GraphInvoker 子图递归入口（loop_comp.py:222-223）。
 func (c *LoopComponent) GraphInvoker() bool { return true }
 
-// ToExecutable 产出可执行体（Python to_executable 动态分派返回 self）。
-// 必须显式 override（8.14b D-14b 同缝）：基座 ToExecutable 静态解析返回内层
-// 基座，注册产物丢失外层 GraphInvoker 钩子 → 信封不装。
-func (c *LoopComponent) ToExecutable() graphexe.GeneralExecutor { return c }
-
-// AddComponent 将自身注册进图（Python add_component 继承 mixin 默认实现；
-// 8.14b D-14b 同款 override，注册外层自身保住 GraphInvoker 动态分派）。
-func (c *LoopComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
-	opts := []graph.AddNodeOption{}
-	if waitForAll {
-		opts = append(opts, graph.WithWaitForAll())
-	}
-	g.AddNode(nodeID, c.ToExecutable(), opts...)
-	return nil
-}
+// ToExecutable/AddComponent 无需 override：基座已改槽优先，构造期 ToExecutableFn
+// 注入外层自身即完成 Python to_executable 动态分派语义（原成对 override 删除，
+// 规则 8 收口）。
 
 // LoopGroup 访问器（loop_comp.py:225-227 property loop_group）。
 func (c *LoopComponent) LoopGroup() *LoopGroup { return c.loopGroup }
