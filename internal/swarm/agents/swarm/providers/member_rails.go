@@ -40,6 +40,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	teamrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/rails"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
@@ -103,22 +104,19 @@ func buildOrganizationOwnerInboxRail(params map[string]any, view *buildctx.Swarm
 }
 
 // buildOrganizationModelRail 组织专家 Team 持久模型选择应用。
-// 基座 OrganizationModelRail Go 未实施 ⤴️15.20。
+// 基座 OrganizationModelRail 已随 15.20 ⑤半区落地（backend 注入缝 ⤴️25.9）。
 // Python: _build_organization_model_rail (member_rails.py:97-103)
 func buildOrganizationModelRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	_ = view.TeamID
-	_ = view.SessionID
-	_ = view.Role
-	return nil, nil
+	return teamrails.NewOrganizationModelRail(view.TeamID, view.SessionID, view.Role, nil), nil
 }
 
 // buildOrganizationAvailabilityRail 组织 leader 的 AgentGroup 可用性暴露。
-// 基座 OrganizationAvailabilityRail Go 未实施 ⤴️15.20。
+// 基座 OrganizationAvailabilityRail 已随 15.20 ⑤半区落地（backend 注入缝 ⤴️25.9）。
 // Python: _build_organization_availability_rail (member_rails.py:108-112)
 func buildOrganizationAvailabilityRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
-	return nil, nil
+	return teamrails.NewOrganizationAvailabilityRail(view.TeamID, view.SessionID, nil), nil
 }
 
 // buildSessionMessagingRouteRail 仅 Team leader 挂载 Session messaging 路由。
@@ -190,8 +188,8 @@ func buildHeartbeatRail(params map[string]any, view *buildctx.SwarmBuildContext)
 
 // buildPersonalContextRail 个人上下文 rail（disabled 时也挂载，让活成员
 // 观察到后续开关变化）。
-// 基座 PersonalContextRail（harness/rails/personal_context.py 360 行）Go
-// 未实施 ⤴️15.20。
+// 基座 PersonalContextRail 整件 ⤴️24.1（依赖 harness/personal_context 18k 行，
+// 用户裁决随 24.1 回填；「禁用态也挂载」语义随批承接）。
 // Python: _build_personal_context_rail (member_rails.py:201-212)
 func buildPersonalContextRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
@@ -219,7 +217,7 @@ func buildSkillRetrievalPromptRail(params map[string]any, view *buildctx.SwarmBu
 	}
 	// Python: toolkit = skill_retrieval_toolkit_for_context(context);
 	// SkillRetrievalPromptRail(toolkit=..., session_scope=..., config_base=...)
-	// 基座 ⤴️9.11b。
+	// rail 582 + toolkit 651 两前置件整件 ⤴️9.11b（用户裁决，须同批）。
 	return nil, nil
 }
 
@@ -299,21 +297,20 @@ func buildTeamSkillStoragePolicyRail(params map[string]any, view *buildctx.Swarm
 	if view.GlobalSkillsDir == "" {
 		return nil, nil
 	}
-	// Python: TeamSkillStoragePolicyRail(global_skills_dir=..., team_workspace_root=...,
-	//   team_skill_visibility_file=...)——基座 ⤴️15.20
-	return nil, nil
+	return teamrails.NewTeamSkillStoragePolicyRail(
+		view.GlobalSkillsDir, view.TeamWsRoot, view.TeamSkillVisibilityPath), nil
 }
 
 // buildTeamSkillLibraryReloadRail Skill 库写入后重载成员 Skill 视图。
-// 基座 TeamSkillLibraryReloadRail（team_skill_library_reload_rail.py 147 行）
-// Go 未实施 ⤴️15.20。
-// Python: _build_team_skill_library_reload_rail (member_rails.py:483-495)
+// 基座 TeamSkillLibraryReloadRail 已随 15.20 ④ 落地。
+// Python: _build_team_skill_library_reload_rail (member_rails.py:483-495)——
+// 构造注入 reload_skill_views=team_member_skill_evolution 钩子，随 15.21 缝接线。
 func buildTeamSkillLibraryReloadRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	if view.GlobalSkillsDir == "" {
 		return nil, nil
 	}
-	return nil, nil
+	return teamrails.NewTeamSkillLibraryReloadRail(view.GlobalSkillsDir, nil), nil
 }
 
 // buildTeamWorkspaceReportPathRail 团队工作区报告路径重写 rail。
@@ -384,14 +381,15 @@ func buildModelAnomalyDetectionRail(params map[string]any, view *buildctx.SwarmB
 }
 
 // buildPluginRails 用户注册的扩展 rail：每个已注册 rail 扩展一个新实例。
-// 基座 rail_manager（common/plugins/rail_manager.py）Go 未实施 ⤴️15.20
-// （扩展包管理 D-e12 同域）。
+// rail_manager 整件 ⤴️15.23（用户裁决：importlib 动态加载属语言边界 S-19
+// 归档桶，rail_manager 管理面与加载机制随 15.23 一并落地）。
 // Python: _build_plugin_rails (member_rails.py:671-698)
 func buildPluginRails(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	_ = view
 	// Python: get_rail_manager().get_registered_rail_names() 逐个
 	// load_rail_instance_without_enabled_check，失败 warn 跳过。
+	// ⤴️15.23：Go 原生扩展注册表立项后切换真实构造。
 	return []agentinterfaces.AgentRail{}, nil
 }
 
@@ -407,10 +405,9 @@ func buildTeamPermissionPolicyRail(params map[string]any, view *buildctx.SwarmBu
 	if enabled, _ := permissionsConfig["enabled"].(bool); !enabled {
 		return nil, nil
 	}
-	// Python: TeamPermissionPolicyRail(permissions_config=..., language=...)
-	// ——基座 ⤴️15.20
-	_ = stringFieldOrEmpty(view.Language, "cn")
-	return nil, nil
+	// Python: TeamPermissionPolicyRail(permissions_config=..., language=...)——
+	// 15.20 ⑥半区基座已落地（narrowing + policy rail）
+	return teamrails.NewTeamPermissionPolicyRail(permissionsConfig, stringFieldOrEmpty(view.Language, "cn")), nil
 }
 
 // buildTeamPermissionRail 团队权限护栏（backend + messager + 权限开启门控）。

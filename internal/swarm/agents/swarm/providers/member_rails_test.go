@@ -12,6 +12,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	teamrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/rails"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
@@ -396,4 +397,107 @@ func TestBrowserKeyOf(t *testing.T) {
 	assert.Empty(t, providers.BrowserKeyOf("", "", ""))
 	assert.Equal(t, "leader", providers.BrowserKeyOf("", "", "leader"))
 	assert.Equal(t, "sess-1-browser-x", providers.BrowserKeyOf("sess-1", "browser-x", "teammate"))
+}
+
+// TestBuildOrganizationModelAvailability_Rail切换 ⑤半区工厂闭合断言。
+func TestBuildOrganizationModelAvailability_Rail切换(t *testing.T) {
+	providers.RegisterMemberRailProviders()
+	provider, ok := hschema.LookupRailProvider("swarm.organization_model")
+	require.True(t, ok)
+	view := newTestView()
+	view.TeamID = "team-1"
+	view.SessionID = "sess-1"
+	view.Role = "leader"
+	out, err := provider(nil, view)
+	require.NoError(t, err)
+	require.NotNil(t, out, "基座已随 15.20 ⑤落地（backend 缝 nil ⤴️25.9）")
+	_, isModelRail := out.(*teamrails.OrganizationModelRail)
+	assert.True(t, isModelRail)
+
+	provider2, _ := hschema.LookupRailProvider("swarm.organization_availability")
+	out2, err2 := provider2(nil, view)
+	require.NoError(t, err2)
+	require.NotNil(t, out2)
+	_, isAvailRail := out2.(*teamrails.OrganizationAvailabilityRail)
+	assert.True(t, isAvailRail)
+}
+
+// TestBuildTeamSkillStoragePolicy_Rail切换 ④工厂闭合断言。
+func TestBuildTeamSkillStoragePolicy_Rail切换(t *testing.T) {
+	providers.RegisterMemberRailProviders()
+	provider, ok := hschema.LookupRailProvider("swarm.team_skill_storage_policy")
+	require.True(t, ok)
+	view := newTestView()
+	view.GlobalSkillsDir = "/global/skills"
+	view.TeamWsRoot = "/team/ws"
+	view.TeamSkillVisibilityPath = "/team/ws/skills-visibility.json"
+	out, err := provider(nil, view)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	_, isPolicyRail := out.(*teamrails.TeamSkillStoragePolicyRail)
+	assert.True(t, isPolicyRail)
+
+	// Skill 库未知 → nil（Python 门控）
+	view2 := newTestView()
+	out2, err2 := provider(nil, view2)
+	require.NoError(t, err2)
+	assert.Nil(t, out2)
+
+	// library_reload
+	provider3, _ := hschema.LookupRailProvider("swarm.team_skill_library_reload")
+	out3, err3 := provider3(nil, view)
+	require.NoError(t, err3)
+	require.NotNil(t, out3)
+	_, isReloadRail := out3.(*teamrails.TeamSkillLibraryReloadRail)
+	assert.True(t, isReloadRail)
+}
+
+// TestBuildTeamPermissionPolicy_Rail切换 ⑥半区工厂闭合断言。
+func TestBuildTeamPermissionPolicy_Rail切换(t *testing.T) {
+	providers.RegisterMemberRailProviders()
+	provider, ok := hschema.LookupRailProvider("swarm.team_permission_policy")
+	require.True(t, ok)
+	view := newTestView()
+	view.Language = "cn"
+	params := map[string]any{
+		"permissions_config": map[string]any{
+			"enabled": true,
+			"tools":   map[string]any{"bash": "allow"},
+		},
+	}
+	out, err := provider(params, view)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	_, isPolicyRail := out.(*teamrails.TeamPermissionPolicyRail)
+	assert.True(t, isPolicyRail)
+
+	// enabled=false → nil
+	params2 := map[string]any{"permissions_config": map[string]any{"enabled": false}}
+	out2, err2 := provider(params2, view)
+	require.NoError(t, err2)
+	assert.Nil(t, out2)
+}
+
+// TestBuildHeartbeatRail_ToolContext形状 对齐 Python :183-196 tool_context。
+func TestBuildHeartbeatRail_ToolContext形状(t *testing.T) {
+	providers.RegisterMemberRailProviders()
+	provider, ok := hschema.LookupRailProvider("swarm.heartbeat")
+	require.True(t, ok)
+	view := newTestView()
+	view.HeartbeatJobService = fakeHeartbeatService{}
+	view.SessionID = "sess-hb"
+	view.ChannelID = "web"
+	view.UserID = "u1"
+	view.Mode = "team"
+	view.RequestMetadata = map[string]any{"member_card_id": "mc-9"}
+	out, err := provider(nil, view)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	hb := out.(*coderails.HeartbeatRail)
+	tc := hb.ToolContext()
+	assert.Equal(t, "web", tc["channel_id"])
+	assert.Equal(t, "sess-hb", tc["session_id"])
+	assert.Equal(t, "u1", tc["user_id"])
+	assert.Equal(t, "team", tc["mode"])
+	assert.Equal(t, "team_member_mc-9", tc["tool_scope"])
 }
