@@ -3466,7 +3466,10 @@ func (o *SingleHarnessIterativeOptimizationOrchestrator) Run(
 	}()
 	result, err = o.run(observeCtx, request, onEvent)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		// Python: catch asyncio.CancelledError 置 cancelled=True——取消既可能来自
+		// 本任务被 cancel（ctx.Err() != nil），也可能从子协程/内部检查点冒上来
+		// （ErrTaskCancelled 哨兵，iterative.py:221-226 分支）。两者都算取消，不算失败。
+		if ctx.Err() != nil || errors.Is(err, harnessrsi.ErrTaskCancelled) {
 			cancelled = true
 		} else {
 			failed = true
