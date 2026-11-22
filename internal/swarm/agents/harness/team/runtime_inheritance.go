@@ -484,7 +484,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	// 10. team_ws_root 非空 → TeamWorkspaceReportPathRail
 	if teamWsRoot != "" {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
-			rail := NewTeamWorkspaceReportPathRail(teamWsRoot, teamID, language)
+			rail := NewTeamWorkspaceReportPathRail(teamWsRoot, "", "", teamID, language)
 			logger.Info(logComponent).Str("root_dir", teamWsRoot).
 				Msg("[TeamRuntime] TeamWorkspaceReportPathRail created")
 			return rail, nil

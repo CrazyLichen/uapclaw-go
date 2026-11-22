@@ -6,13 +6,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
-		"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
 
 // newTestView 构造最小平台上下文（buildctx 叶包具体类型；内嵌
@@ -156,7 +157,12 @@ func TestBuildHeartbeatRail_门控矩阵(t *testing.T) {
 	view7.ChannelID = "web"
 	out7, err7 := provider(nil, view7)
 	require.NoError(t, err7)
-	assert.Nil(t, out7, "基座 service 绑定段未实施，返回 nil（15.20 回收点）")
+	// 15.20 ⑫：骨架已回填——正常渠道返回 rail（工具注册缝 ⤴️9.11b）
+	require.NotNil(t, out7, "service/context 绑定段已随 15.20 ⑫ 回填")
+	hb := out7.(*coderails.HeartbeatRail)
+	assert.Equal(t, "web", hb.ToolContext()["channel_id"])
+	assert.Equal(t, "sess-1", hb.ToolContext()["session_id"])
+	assert.Empty(t, hb.RegisteredToolNames(), "Bridge 缺省降级：无工具注册")
 }
 
 // fakeHeartbeatService 心跳服务占位（any 别名）。

@@ -29,6 +29,7 @@
 package providers
 
 import (
+	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	"os"
 	"path/filepath"
 
@@ -167,10 +168,24 @@ func buildHeartbeatRail(params map[string]any, view *buildctx.SwarmBuildContext)
 		logHeartbeatSkip("channel without heartbeat support", sessionID)
 		return nil, nil
 	}
-	// Python: HeartbeatRail(service=service, context=tool_context)——
-	// Go HeartbeatRail 构造期 service/context 绑定段 ⤴️15.20（对齐 :183-196
-	// 的 SimpleNamespace tool_context 形状），本批仅保留门控逻辑。
-	return nil, nil
+	// Python: tool_context = SimpleNamespace(channel_id/session_id/metadata/
+	// user_id/mode/tool_scope)（:183-196）——15.20 ⑫ 已回填骨架
+	// （HeartbeatRuntimeBridge ⤴️9.11b）。
+	memberCardID := ""
+	if v, ok := metadata["member_card_id"].(string); ok {
+		memberCardID = v
+	} else {
+		memberCardID = "unknown"
+	}
+	toolContext := map[string]any{
+		"channel_id": orEmpty(view.ChannelID, "web"),
+		"session_id": sessionID,
+		"metadata":   metadata,
+		"user_id":    view.UserID,
+		"mode":       orEmpty(view.Mode, "team"),
+		"tool_scope": "team_member_" + memberCardID,
+	}
+	return coderails.NewHeartbeatRailForSwarm(service, toolContext), nil
 }
 
 // buildPersonalContextRail 个人上下文 rail（disabled 时也挂载，让活成员
@@ -315,9 +330,12 @@ func buildTeamWorkspaceReportPathRail(params map[string]any, view *buildctx.Swar
 	if workspaceReportPathCtor == nil {
 		return nil, nil
 	}
-	rail := workspaceReportPathCtor(view.TeamWsRoot, view.TeamID, stringFieldOrEmpty(view.Language, "cn"))
-	// Python: rail.bind_swarm_context(context)——基座缺 ⤴️15.20
-	_ = rail
+	// Python 构造形参已随 15.20 ⑨ 回填（team_workspace_report_path_rail.py:30-46）。
+	rail := workspaceReportPathCtor(view.TeamWsRoot, view.ProjectDir, view.TeamOutputsDir, view.TeamID, stringFieldOrEmpty(view.Language, "cn"))
+	// Python: rail.bind_swarm_context(context)（:48-52）——上下文经 BindSwarmContext 注入
+	if binder, ok := rail.(interface{ BindSwarmContext(any) }); ok {
+		binder.BindSwarmContext(view)
+	}
 	return rail, nil
 }
 
@@ -432,7 +450,8 @@ var (
 	// 落点仍是 RailProvider 的 any 契约，此处不再放大 any）。
 	contextProcessorRailBuilder func(config map[string]any) agentinterfaces.AgentRail
 	// workspaceReportPathCtor 团队工作区报告路径 rail 构造（同上）。
-	workspaceReportPathCtor func(rootDir, teamID, language string) agentinterfaces.AgentRail
+	// 15.20 ⑨：扩参 rootDir/projectDir/outputsDir/teamID/language（Python :30-46）。
+	workspaceReportPathCtor func(rootDir, projectDir, outputsDir, teamID, language string) agentinterfaces.AgentRail
 )
 
 // SetContextProcessorRailBuilder 注入上下文压缩 rail 构造（父包注册段调用；
@@ -442,7 +461,7 @@ func SetContextProcessorRailBuilder(fn func(config map[string]any) agentinterfac
 }
 
 // SetWorkspaceReportPathCtor 注入团队工作区报告路径 rail 构造。
-func SetWorkspaceReportPathCtor(fn func(rootDir, teamID, language string) agentinterfaces.AgentRail) {
+func SetWorkspaceReportPathCtor(fn func(rootDir, projectDir, outputsDir, teamID, language string) agentinterfaces.AgentRail) {
 	workspaceReportPathCtor = fn
 }
 
