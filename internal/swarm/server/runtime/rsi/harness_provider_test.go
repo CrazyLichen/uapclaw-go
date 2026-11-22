@@ -117,9 +117,9 @@ func TestVerifyTaskMaterials_哈希一致放行(t *testing.T) {
 	req.HarnessRefsPath = refs
 	store := NewTaskStore(root, nil)
 	if err := store.MergeConfig(taskID, map[string]any{"rsi_materials": map[string]any{
-		"input_snapshot": map[string]any{"sha256": shaFile(t, dataset)},
+		"input_snapshot":   map[string]any{"sha256": shaFile(t, dataset)},
 		"harness_snapshot": map[string]any{"sha256": shaFile(t, refs)},
-		"profile":        map[string]any{"sha256": shaFile(t, profile)},
+		"profile":          map[string]any{"sha256": shaFile(t, profile)},
 	}}); err != nil {
 		t.Fatal(err)
 	}

@@ -154,6 +154,11 @@ func BuildHarnessEngineRequest(task RsiTaskView, resume bool) (HarnessEngineRequ
 	}, nil
 }
 
+// BuildRequest 任务视图 → 引擎请求（worker 契约方法）。
+func (a *HarnessEngineAdapter) BuildRequest(task RsiTaskView, resume bool) (HarnessEngineRequest, error) {
+	return BuildHarnessEngineRequest(task, resume)
+}
+
 // ValidateInput 场景守卫 + provider 校验结果归一（对齐 Python validate_input）。
 func (a *HarnessEngineAdapter) ValidateInput(path *string, scenario string, artifactType *string) (RsiDatasetResult, error) {
 	if strings.ToUpper(strings.TrimSpace(scenario)) != "HARNESS" {
