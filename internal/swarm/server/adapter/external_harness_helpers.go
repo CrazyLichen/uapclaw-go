@@ -6,13 +6,16 @@
 package adapter
 
 import (
+	"strconv"
 	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	claudecode "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers/claudecode"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -562,4 +565,248 @@ func visibleError(err error, fallback string) string {
 		return fallback
 	}
 	return message
+}
+
+// ──────────────────────────── 常量：启动面 ────────────────────────────
+
+// providerToCliAgent provider 名 → 面板 cli_agent 名。
+// Python: :52-55 _PROVIDER_TO_CLI_AGENT = {claudecode→claude, codex→codex}；
+// 偏差 D-18-1：codebuddy 为 Go 扩面（15.22 收编口径）。
+var providerToCliAgent = map[string]string{
+	"claudecode": "claude",
+	"codex":      "codex",
+	"codebuddy":  "codebuddy",
+}
+
+// cliAgentLabels 面板 cli_agent 名 → 展示名。
+// Python: :56-59 _CLI_AGENT_LABELS；codebuddy 同 D-18-1。
+var cliAgentLabels = map[string]string{
+	"claude":    "Claude",
+	"codex":     "Codex",
+	"codebuddy": "Codebuddy",
+}
+
+// codexDefaultTurnIdleTimeout codex 默认轮空闲超时（秒）。
+// Python: :351 turn_idle_timeout_s = 300.0
+const codexDefaultTurnIdleTimeout = 300.0
+
+// ──────────────────────────── 导出函数：启动面 ────────────────────────────
+
+// MergeHostExternalCliConfig 把面板 external_cli_agent_* 配置合入 provider config。
+// Python: :331-380 _merge_host_external_cli_config。步骤对齐：映射无此 provider →
+// 原样返回；面板 entry 缺失 → cli_not_enabled；codex/claudecode 各自 setdefault
+// （manifest 键优先，含显式 false/null）；cli_path 合入 + 保留路径翻译。
+// activate_external_cli_runtime_paths()（:343-345）为桌面打包版专属，D-d7 已裁决
+// 不移植，此处结构性省略。
+func MergeHostExternalCliConfig(providerName string, packageConfig map[string]any) (map[string]any, error) {
+	cliAgent, ok := providerToCliAgent[providerName]
+	if !ok {
+		return packageConfig, nil
+	}
+	entry := hostCliAgentEntry(cliAgent)
+	if entry == nil {
+		return nil, fmt.Errorf("%s", errorText("cli_not_enabled",
+			map[string]string{"label": cliAgentLabels[cliAgent]}))
+	}
+	merged := make(map[string]any, len(packageConfig)+4)
+	for key, value := range packageConfig {
+		merged[key] = value
+	}
+	// manifest 键优先，含显式 false/null（setdefault 语义）。
+	if providerName == "codex" {
+		setDefault(merged, "bypass_approvals_and_sandbox", true)
+		setDefault(merged, "system_prompt_mode", "replace")
+		turnIdleTimeout := codexDefaultTurnIdleTimeout
+		if raw, present := entry["codex_turn_idle_timeout_s"]; present && raw != nil {
+			parsed, parseErr := toPositiveFloat(raw)
+			if parseErr != nil || parsed <= 0 {
+				logger.Warn(logComponent).
+					Str("raw", fmt.Sprintf("%v", raw)).
+					Msg("Invalid codex_turn_idle_timeout_s in external_cli_agents; using 300s")
+			} else {
+				turnIdleTimeout = parsed
+			}
+		}
+		setDefault(merged, "turn_idle_timeout_s", turnIdleTimeout)
+	} else if providerName == "claudecode" {
+		setDefault(merged, "permission_mode", "bypassPermissions")
+		setDefault(merged, "system_prompt_mode", "append")
+		setDefault(merged, "max_buffer_size", claudecode.DefaultClaudeMaxBufferSize)
+	}
+	// codebuddy（D-18-1）：无默认注入分支，仅走下方 cli_path 合入与保留路径翻译。
+	if cliPath := strings.TrimSpace(storedString(entry, "cli_path")); cliPath != "" {
+		setDefault(merged, "cli_path", cliPath)
+	}
+	fields := []string{"cli_path"}
+	if providerName == "codex" {
+		fields = append(fields, "codex_bin")
+	}
+	for _, field := range fields {
+		if text, _ := merged[field].(string); text != "" {
+			merged[field] = swarmcommon.ResolvePreservedCLIPath(text)
+		}
+	}
+	return merged, nil
+}
+
+// StartExternalHarness 创建并启动一个会话私有的 External Harness 适配器。
+// Python: :509-558 start_external_harness。步骤对齐：面板配置合入 → create_harness
+// （ValueError→invalid_runtime_config 包装）→ checkpoint 恢复（能力门卫）→
+// build_harness_context（agent_id 约定 + ResumePolicy 分支）→ IOAdapter 启动
+// （EmitTurnLifecycle=true）。
+// 偏差（登记 D-18-8）：Python create_harness(manifest=package_path) 在工厂内部整包
+// 解析；Go CreateHarness 吃已加载 spec，故在此处 LoadAgentTemplatePackage 一次
+// （Python 注释「parsed in full once, inside create_harness」语义等价）。
+func StartExternalHarness(ctx context.Context, sessionID, agentTemplateName, providerName string,
+	binding *ResolvedExternalHarnessBinding, language, cwd string, env map[string]string,
+) (*harnessproviders.HarnessIOAdapter, error) {
+	packageConfig := runtimeConfigOf(binding)
+	config, err := MergeHostExternalCliConfig(providerName, packageConfig)
+	if err != nil {
+		return nil, err
+	}
+	manifestPath := filepath.Join(binding.PackagePath, "manifest.json")
+	spec, err := hresources.LoadAgentTemplatePackage(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("%s", errorText("invalid_runtime_config",
+			map[string]string{"detail": visibleError(err, "invalid manifest")}))
+	}
+	harness, err := harnessproviders.CreateHarness(spec, harnessproviders.CreateHarnessOptions{
+		Provider: providerName,
+		Config:   config,
+		Language: language,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s", errorText("invalid_runtime_config",
+			map[string]string{"detail": visibleError(err, "invalid runtime config")}))
+	}
+	var checkpoint *harnessprotocol.HarnessCheckpoint
+	if SupportsCheckpoint(harness) {
+		checkpoint = LoadExternalHarnessCheckpoint(sessionID, agentTemplateName, providerName)
+	}
+	resumePolicy := harnessprotocol.ResumePolicyNew
+	if checkpoint != nil {
+		resumePolicy = harnessprotocol.ResumePolicyResumeIfAvailable
+	}
+	harnessContext, err := harnessproviders.BuildHarnessContext(spec, harnessproviders.BuildHarnessContextOptions{
+		Provider:      providerName,
+		HostSessionID: sessionID,
+		AgentID:       expectedExternalHarnessAgentID(providerName, agentTemplateName),
+		AgentName:     agentTemplateName,
+		Language:      language,
+		Cwd:           cwd,
+		Env:           env,
+		ResumePolicy:  resumePolicy,
+		Checkpoint:    checkpoint,
+	})
+	if err != nil {
+		return nil, err
+	}
+	io := harnessproviders.NewHarnessIOAdapter(harness, harnessproviders.HarnessIOAdapterOptions{
+		EmitTurnLifecycle: true,
+	})
+	if err := io.Start(ctx, harnessContext); err != nil {
+		return nil, err
+	}
+	return io, nil
+}
+
+// StopExternalHarness 停止并摘除一个会话私有的 External Harness 适配器。
+// Python: :561-570 stop_external_harness。步骤对齐：无 io → no-op；有 session_id →
+// 先持久化 checkpoint → io.Stop。Python 的 adapter._external_harness = None 归属
+// 会话子适配器状态（Task 9 接线点④），此处由调用方管理引用。
+func StopExternalHarness(ctx context.Context, binding *ResolvedExternalHarnessBinding,
+	io *harnessproviders.HarnessIOAdapter, sessionID string) error {
+	if io == nil {
+		return nil
+	}
+	if sessionID != "" {
+		PersistExternalHarnessCheckpoint(ctx, binding, io, sessionID)
+	}
+	return io.Stop(ctx)
+}
+
+// ──────────────────────────── 非导出函数：启动面 ────────────────────────────
+
+// runtimeConfigOf 绑定中 runtime.config 的拷贝。
+// Python: :304-308 _runtime_config（RuntimeSpec 分支）；
+// 偏差（登记 D-18-5 同条）：鸭子 Mapping 分支不可达，Go 只收具体类型。
+func runtimeConfigOf(binding *ResolvedExternalHarnessBinding) map[string]any {
+	if binding == nil || binding.Runtime == nil {
+		return map[string]any{}
+	}
+	config := make(map[string]any, len(binding.Runtime.Config))
+	for key, value := range binding.Runtime.Config {
+		config[key] = value
+	}
+	return config
+}
+
+// hostExternalCliAgents 读面板 external_cli_agents 配置列表。
+// Python: :311-319 _host_external_cli_agents（沿 EXTERNAL_CLI_AGENTS_CONFIG_PATH
+// = modes.team.jiuwen_team.external_cli_agents 逐段取值；非映射/非列表归空）。
+func hostExternalCliAgents() []any {
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	if err != nil {
+		return nil
+	}
+	raw, err := cfg.Load()
+	if err != nil {
+		return nil
+	}
+	var current any = raw
+	for _, segment := range []string{"modes", "team", "jiuwen_team", "external_cli_agents"} {
+		mapping, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = mapping[segment]
+	}
+	list, ok := current.([]any)
+	if !ok {
+		return nil
+	}
+	return list
+}
+
+// hostCliAgentEntry 在面板配置中找指定 cli_agent 的 entry。
+// Python: :322-328 _host_cli_agent_entry（字符串项 → {"cli_agent": name}；
+// dict 项按 cli_agent 字段匹配）。
+func hostCliAgentEntry(cliAgent string) map[string]any {
+	for _, item := range hostExternalCliAgents() {
+		if text, ok := item.(string); ok && text == cliAgent {
+			return map[string]any{"cli_agent": cliAgent}
+		}
+		if mapping, ok := item.(map[string]any); ok &&
+			storedString(mapping, "cli_agent") == cliAgent {
+			return mapping
+		}
+	}
+	return nil
+}
+
+// setDefault 键缺失时写入（Python dict.setdefault 等价；manifest 显式键优先）。
+func setDefault(target map[string]any, key string, value any) {
+	if _, present := target[key]; !present {
+		target[key] = value
+	}
+}
+
+// toPositiveFloat 面板超时值解析（int/float64/json.Number/字符串数字）。
+// Python: :354-358 float(raw) + try/except。
+func toPositiveFloat(raw any) (float64, error) {
+	switch value := raw.(type) {
+	case int:
+		return float64(value), nil
+	case float64:
+		return value, nil
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("invalid number: %v", raw)
+	}
 }

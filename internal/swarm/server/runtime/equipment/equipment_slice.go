@@ -35,6 +35,15 @@ const agentTemplateKindLabel = "agent_template"
 // 偏差 D-18-1：codebuddy 为 Go 侧新增（Python 无对应物），对齐 15.22 收编口径（用户 12-07 拍板）。
 var agentTemplateRuntimeProviders = []string{"claudecode", "codex", "dsh", "codebuddy"}
 
+// SetAgentTemplateRuntimeProvidersForTest 仅供测试注入 provider 闭集变体
+// （集成测试以 fake provider 名走全链路时使用）；生产代码不得调用。
+// 对齐 Python 侧测试对 _EXTERNAL_HARNESS_PROVIDERS 的 monkeypatch 语义。
+func SetAgentTemplateRuntimeProvidersForTest(names []string) func() {
+	previous := agentTemplateRuntimeProviders
+	agentTemplateRuntimeProviders = names
+	return func() { agentTemplateRuntimeProviders = previous }
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AgentTemplateRuntime 校验专家卡片的 runtime 声明并规范化。

@@ -40,13 +40,29 @@ func (f *checkpointFakeHarness) Start(ctx context.Context, c harnessprotocol.Har
 // Stop 恒 nil（桩）。
 func (f *checkpointFakeHarness) Stop(ctx context.Context) error { return nil }
 
-// Events 恒 nil（桩）。
-func (f *checkpointFakeHarness) Events() harnessprotocol.HarnessEventCursor { return nil }
-
-// TurnEvents 恒 nil（桩）。
-func (f *checkpointFakeHarness) TurnEvents(turnID *string) harnessprotocol.HarnessEventCursor {
-	return nil
+// Events 返回已耗尽游标（桩：无事件）。
+func (f *checkpointFakeHarness) Events() harnessprotocol.HarnessEventCursor {
+	return &closedEventCursor{}
 }
+
+// TurnEvents 返回已耗尽游标（桩：无事件）。
+func (f *checkpointFakeHarness) TurnEvents(turnID *string) harnessprotocol.HarnessEventCursor {
+	return &closedEventCursor{}
+}
+
+// closedEventCursor 立即耗尽的事件游标（桩用）。
+type closedEventCursor struct{}
+
+// Iter 返回自身。
+func (c *closedEventCursor) Iter() harnessprotocol.HarnessEventCursor { return c }
+
+// Next 立即返回耗尽哨兵。
+func (c *closedEventCursor) Next(ctx context.Context) (*harnessprotocol.HarnessEvent, error) {
+	return nil, harnessprotocol.ErrEventStreamDone
+}
+
+// Close 无操作。
+func (c *closedEventCursor) Close(ctx context.Context) error { return nil }
 
 // Send 零值（桩）。
 func (f *checkpointFakeHarness) Send(ctx context.Context, content harnessprotocol.HarnessInput,
