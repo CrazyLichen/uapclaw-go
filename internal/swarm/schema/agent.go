@@ -43,6 +43,12 @@ type AgentRequest struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableMemory 是否启用记忆（三态：nil/true/false，对齐 Python bool | None）
 	EnableMemory *bool `json:"enable_memory,omitempty"`
+	// TrustedRuntimeBinding 根适配器解析出的会话运行时绑定（不可变，类型化盖章）。
+	// Python: interface.py:5915-5933 request.trusted_runtime_binding——chat.send
+	// 在根入口解析绑定后盖章（非 chat.send 盖 None/"章缺失"），child 派发从该章
+	// 读取，避免重复解析。15.18 对齐复核（用户裁决）：章与 sessionAdapterOptions
+	// 参数缝统一类型化，禁 map/any 载体。
+	TrustedRuntimeBinding *ExternalHarnessBinding `json:"trusted_runtime_binding,omitempty"`
 	//
 	// 9.90e：原 PermissionContext 字段及其 Option 已删除（规则 8）。
 	// Python 的 AgentRequest 不含该字段——权限上下文只从 metadata 构建后注入

@@ -63,7 +63,7 @@ type sessionAdapterOptions struct {
 	RequestID string
 	// ExternalHarnessBinding 外部 harness 绑定（非 nil 时走 external_harness 分支）
 	// Python: :3829-3837 external_harness_binding
-	ExternalHarnessBinding map[string]any
+	ExternalHarnessBinding *ResolvedExternalHarnessBinding
 	// HostExternalInput 宿主外部输入（安全边界发布路径）
 	// Python: :3878 host_external_input=True
 	HostExternalInput bool
@@ -204,19 +204,19 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 	if externalBinding == nil && existing == nil {
 		if persisted, loadErr := LoadPersistedExternalHarnessBinding(sid); loadErr == nil &&
 			persisted != nil && persisted.Kind == externalHarnessKind {
-			externalBinding = bindingToMap(persisted)
-			opts.ExternalHarnessBinding = externalBinding
+			externalBinding = persisted
+			opts.ExternalHarnessBinding = persisted
 		}
 	}
-	if existing != nil && bindingKind(externalBinding) != "" {
+	if existing != nil && externalBinding != nil {
 		current := externalBindingOfChild(existing)
-		requestedKind := bindingKind(externalBinding)
+		requestedKind := externalBinding.Kind
 		if requestedKind == deepAgentKind && current == nil {
 			// Python: :3993-3994 pass
 		} else if requestedKind == externalHarnessKind &&
 			current != nil &&
-			current.AgentTemplateName == storedString(externalBinding, "agent_template_name") &&
-			current.ProviderName == storedString(externalBinding, "provider_name") {
+			current.AgentTemplateName == externalBinding.AgentTemplateName &&
+			current.ProviderName == externalBinding.ProviderName {
 			// Python: :3995-3996 binding_unchanged pass
 		} else if requestedKind == externalHarnessKind && current == nil &&
 			!d.isSessionActive(sid) {
@@ -264,12 +264,12 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 	// Python: :4310 await adapter.create_instance(config, mode=..., sub_mode=...)
 	// R-2 回填（15.18）：external_harness 分支（Python :4254-4282）——只装 binding
 	// 不建 instance，随后持久化不可变绑定；与普通 CreateInstance 互斥。
-	if bindingKind(opts.ExternalHarnessBinding) == externalHarnessKind {
+	if opts.ExternalHarnessBinding != nil && opts.ExternalHarnessBinding.Kind == externalHarnessKind {
 		typedChild, ok := child.(*DeepAdapter)
 		if !ok {
 			return nil, fmt.Errorf("external harness 会话子适配器类型不符: %T", child)
 		}
-		typed := bindingFromMap(opts.ExternalHarnessBinding)
+		typed := opts.ExternalHarnessBinding
 		typedChild.externalHarnessBinding = typed
 		typedChild.externalHarnessState = &ExternalHarnessSessionState{
 			Binding:         typed,

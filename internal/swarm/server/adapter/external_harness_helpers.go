@@ -47,21 +47,10 @@ type ExternalHarnessBindingError struct {
 func (e *ExternalHarnessBindingError) Error() string { return e.Message }
 
 // ResolvedExternalHarnessBinding 一次绑定解析的结果。
-// Python: resolve_external_harness_binding 返回 dict（kind/agent_template_name/
-// provider_name/runtime/package_path）；deep_agent 结果仅含 kind。
-// 偏差（登记 D-18-5）：Python 鸭子 dict → Go 具体类型，wire 键名由 json tag 承担。
-type ResolvedExternalHarnessBinding struct {
-	// Kind 绑定种类：external_harness / deep_agent
-	Kind string `json:"kind"`
-	// AgentTemplateName 专家模板名
-	AgentTemplateName string `json:"agent_template_name,omitempty"`
-	// ProviderName provider 名
-	ProviderName string `json:"provider_name,omitempty"`
-	// Runtime 专家包声明的 runtime（deep_agent 为 nil）
-	Runtime *hschema.AgentRuntimeSpec `json:"-"`
-	// PackagePath 专家包目录
-	PackagePath string `json:"-"`
-}
+// Python: resolve_external_harness_binding 返回 dict；deep_agent 结果仅含 kind。
+// 15.18 对齐复核（用户裁决）：DTO 收归 swarm/schema.ExternalHarnessBinding
+// 类型化承载（request 章 + sessionAdapterOptions 缝共用），此处仅别名。
+type ResolvedExternalHarnessBinding = schema.ExternalHarnessBinding
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -1310,35 +1299,22 @@ func requestSessionID(request *schema.AgentRequest) string {
 	return *request.SessionID
 }
 
-// bindingToMap 绑定 → 线格式 map（会话调度缝 sessionAdapterOptions 的载体）。
-// Python: :226-232/:241-250 dict 形态直传；runtime/package_path 经 any 携带。
-func bindingToMap(binding *ResolvedExternalHarnessBinding) map[string]any {
-	return map[string]any{
-		"kind":                binding.Kind,
-		"agent_template_name": binding.AgentTemplateName,
-		"provider_name":       binding.ProviderName,
-		"runtime":             binding.Runtime,
-		"package_path":        binding.PackagePath,
+// resolveRuntimeBindingForRequest 在任何会话子端副作用前解析一次本次会话的运行时绑定并盖章。
+// Python: interface.py:5915-5933 _resolve_runtime_binding_for_request（staticmethod）。
+// 非 CHAT_SEND → 清章（"Stamp absence so deep-adapter paths can getattr safely"）；
+// CHAT_SEND → 解析 → 盖章 → 返回。
+func resolveRuntimeBindingForRequest(req *schema.AgentRequest, sessionID string) (*ResolvedExternalHarnessBinding, error) {
+	if req.ReqMethod != schema.ReqMethodChatSend {
+		req.TrustedRuntimeBinding = nil
+		return nil, nil
 	}
-}
-
-// bindingFromMap 线格式 map → 绑定（runtime 类型断言失败归 nil）。
-func bindingFromMap(raw map[string]any) *ResolvedExternalHarnessBinding {
-	if raw == nil {
-		return nil
+	resolved, err := ResolveExternalHarnessBinding(sessionID, parseParams(req.Params))
+	if err != nil {
+		req.TrustedRuntimeBinding = nil
+		return nil, err
 	}
-	binding := &ResolvedExternalHarnessBinding{
-		Kind:              storedString(raw, "kind"),
-		AgentTemplateName: storedString(raw, "agent_template_name"),
-		ProviderName:      storedString(raw, "provider_name"),
-	}
-	if runtime, ok := raw["runtime"].(*hschema.AgentRuntimeSpec); ok {
-		binding.Runtime = runtime
-	}
-	if path, ok := raw["package_path"].(string); ok {
-		binding.PackagePath = path
-	}
-	return binding
+	req.TrustedRuntimeBinding = resolved
+	return resolved, nil
 }
 
 // externalBindingOfChild 读子适配器上的 External 绑定（非 DeepAdapter 归 nil）。

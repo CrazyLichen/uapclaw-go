@@ -13,6 +13,7 @@
 //	├── mode_matrix.go   # 运行模式别名表与归一化函数（CanonicalizeMode/DeprecateMode/ResolvedMode）
 //	├── message.go       # MessageType 枚举 + Message 模型 + 工厂函数 + Validate
 //	├── agent.go         # AgentRequest/AgentResponse/AgentResponseChunk 模型 + 工厂函数 + Validate + IsTerminal/NewTerminalChunk
+//	├── external_harness_binding.go # ExternalHarnessBinding 会话运行时绑定 DTO（15.18，类型化章载体）
 //	├── event_base.go    # HookEventBase 钩子事件基类 + BuildEventName/ParseEventName
 //	├── agent_port.go    # ChatAgentPort/PlanStateAccessor 执行能力契约 + PlanState
 //	├── interrupt_payload.go # 工具策略提示与中断续答载荷判定（无状态纯函数）

@@ -18,7 +18,7 @@ type sessionAdapterRequestOptions struct {
 	// ReserveActivity 是否为本次请求保留活动名额
 	ReserveActivity bool
 	// ExternalHarnessBinding 外部 harness 绑定（非 nil 时走 external_harness 分支）
-	ExternalHarnessBinding map[string]any
+	ExternalHarnessBinding *ResolvedExternalHarnessBinding
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -93,7 +93,7 @@ func (d *DeepAdapter) getSessionAdapterForRequest(
 
 	// 步骤 1: external harness 分支
 	// Python: :3827-3837
-	if bindingKind(opts.ExternalHarnessBinding) == "external_harness" {
+	if opts.ExternalHarnessBinding != nil && opts.ExternalHarnessBinding.Kind == externalHarnessKind {
 		return d.getOrCreateSessionAdapter(ctx, sessionID, sessionAdapterOptions{
 			ReserveActivity:        opts.ReserveActivity,
 			RequestID:              requestID,
@@ -176,17 +176,6 @@ func (d *DeepAdapter) coordinatesSmartPermissionLifecycle(sessionID string) bool
 func (d *DeepAdapter) cachedSessionAutoPermissionEnabled() bool {
 	return permissionmode.IsAutoPermissionEnabled(
 		permissionsrails.DeepCopyPermissionConfig(d.instanceOverridesSnapshot()))
-}
-
-// bindingKind 取 external harness 绑定的 kind 字段。
-func bindingKind(binding map[string]any) string {
-	if binding == nil {
-		return ""
-	}
-	if v, ok := binding["kind"].(string); ok {
-		return v
-	}
-	return ""
 }
 
 // paramString 安全取 params 里的字符串。
