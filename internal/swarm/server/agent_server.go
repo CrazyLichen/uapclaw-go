@@ -18,6 +18,7 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -177,6 +178,27 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	// 服务体（HeartbeatRailRuntime）⤴️15.20——装配点保留、暂传 nil（buildctx
 	// Get 返回 nil，member_rails 心跳门控走既有跳过路径）。
 	server.agentManager.SetHeartbeatService(nil)
+	// 无 waiter 终态帧 push fallback 装配（Python team_manager.py:879-910
+	// _push_event_without_waiter → AgentWebSocketServer.send_push；Go 经
+	// SetPushFallback 回调注入防 team→server 反向依赖）。web/tui 双渠道
+	// manager 各装配（GetTeamManager 渠道粒度既定差异）。
+	for _, channel := range []string{"web", "tui"} {
+		channelID := channel
+		teamharness.GetTeamManager(channelID).SetPushFallback(
+			func(pushChannelID, pushSessionID string, payload map[string]any) {
+				if pushErr := server.SendPush(context.Background(), map[string]any{
+					"channel_id": pushChannelID,
+					"session_id": pushSessionID,
+					"payload":    payload,
+				}); pushErr != nil {
+					logger.Warn(logComponent).
+						Str("channel_id", pushChannelID).
+						Str("session_id", pushSessionID).
+						Err(pushErr).
+						Msg("waiter-less terminal push failed")
+				}
+			})
+	}
 	return server
 }
 
