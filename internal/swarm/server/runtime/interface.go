@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
@@ -91,7 +91,6 @@ type roundStateRounds interface {
 	MarkSessionWaitingForInput(sessionID string, generation int)
 	ResumeWaitingForInput(sessionID string, generation int)
 }
-
 
 // agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
 // 避免 adapter 直接导入 runtime 包造成循环依赖。
@@ -176,6 +175,15 @@ func (uc *UapClawSwarm) currentAgentRuntime() agentRuntimeHandle {
 	uc.agentRuntimeMu.RLock()
 	defer uc.agentRuntimeMu.RUnlock()
 	return uc.agentRuntime
+}
+
+// currentSessionMessageService 读 mailbox 服务引用（nil=未装配）。
+// Python: get_current_runtime().session_message_service 的 Go 注入等价物。
+func (uc *UapClawSwarm) currentSessionMessageService() any {
+	if rt := uc.currentAgentRuntime(); rt != nil {
+		return rt.SessionMessageService()
+	}
+	return nil
 }
 
 // executionCoordinator 返回执行账本（经 Runtime，未注入时退回自身字段）。
@@ -1075,6 +1083,15 @@ func (uc *UapClawSwarm) ensureAdapter(mode string) (adapter.AgentAdapter, error)
 		SetConfigLister(adapter.AgentConfigLister)
 	}); ok {
 		setter.SetConfigLister(&agentConfigListerBridge{svc: uc.agentConfigService})
+	}
+	// 若 adapter 有 SetSessionMessageServiceProvider 方法，注入 mailbox 服务
+	// 提供方（25.6；Python adapter 经 get_current_runtime() 取
+	// runtime.session_message_service，Go 无等价任务级访问手段，改构造后
+	// 注入 provider——AgentManager runtimeProvider 同款姿势，spec §5）。
+	if setter, ok := a.(interface {
+		SetSessionMessageServiceProvider(func() any)
+	}); ok {
+		setter.SetSessionMessageServiceProvider(uc.currentSessionMessageService)
 	}
 	// 注册 SkillNet 安装完成后的回调（对齐 Python: interface.py:288-289）
 	uc.skillManager.SetSkillnetInstallCompleteHook(func(ctx context.Context) error {

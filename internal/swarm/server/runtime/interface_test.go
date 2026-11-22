@@ -12,10 +12,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -573,6 +573,9 @@ func (h *testRuntimeHandle) Coordinator() swsession.CoordinatorPort { return h.c
 
 // ActiveExecutions 是否有活跃执行。
 func (h *testRuntimeHandle) ActiveExecutions() bool { return false }
+
+// SessionMessageService 读 mailbox 服务引用（测试替身恒 nil）。
+func (h *testRuntimeHandle) SessionMessageService() any { return nil }
 
 // newTestRuntimeHandle 构造带真实协调器的替身（门面用例需要可用账本）。
 func newTestRuntimeHandle() *testRuntimeHandle {

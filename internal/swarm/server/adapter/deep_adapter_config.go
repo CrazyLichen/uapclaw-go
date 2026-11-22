@@ -9,18 +9,18 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
@@ -491,6 +491,8 @@ func (d *DeepAdapter) updateSessionTools(ctx context.Context, config *runtimeCon
 	if config == nil {
 		return
 	}
+	// ── session messaging 块（Python _update_session_tools 首块 :14311）──
+	d.ensureSessionMessageToolsRegistered(ctx, config)
 	// ── cron 块（守卫仅包此处，Python L2974）──
 	d.registerSessionCronTools(ctx, config)
 	// ── send_file 块（对齐 Python L2989-3021）──
