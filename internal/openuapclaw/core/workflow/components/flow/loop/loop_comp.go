@@ -11,10 +11,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	sessionconstants "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/constants"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	sessionutils "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	conditionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
 	callbackpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow/loop/callback"
@@ -640,3 +643,361 @@ func nodeStateOf(sess session.BaseSession) state.WorkflowState {
 
 // graphexeAlias GeneralExecutor 基座别名（executable.BaseExecutable[dict,dict]）
 type graphexeAlias = graphexe.BaseExecutable[map[string]any, map[string]any]
+
+// ──────────────────────────── LoopGroup ────────────────────────────
+
+// LoopGroup 循环体子工作流（loop_comp.py:46 LoopGroup(BaseWorkflow, Executable) →
+// Go 组合：嵌入 BaseWorkflow（构图面）+ graphexeAlias（可执行基座）+ 覆写四钩子）。
+type LoopGroup struct {
+	workflow.BaseWorkflow
+	graphexeAlias
+	// breakComponents 中断组件收集（Python self._break_components）
+	breakComponents []*LoopBreakComponent
+	// startNodeIDs 起始节点记录（Python self._start_nodes）
+	startNodeIDs []string
+	// endNodeIDs 结束节点记录（Python self._end_nodes）
+	endNodeIDs []string
+	// nodeIDs 全部节点记录（Python self._node_ids）
+	nodeIDs []string
+}
+
+// NewLoopGroup 构造（Python __init__: super().__init__() + 空集；graph/config nil 兜底
+// 由 NewBaseWorkflow 承载）。
+func NewLoopGroup() *LoopGroup {
+	return &LoopGroup{BaseWorkflow: *workflow.NewBaseWorkflow(nil, nil)}
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// AddWorkflowComp 添加循环体组件（loop_comp.py:57-85 一比一）：
+// 禁嵌套 LoopComponent（101030）→ super 转发 → LoopBreakComponent 收集 →
+// drawable.set_break_node 属 D-20-2 跳过（⤴️8.13）→ node_ids 记录。
+func (g *LoopGroup) AddWorkflowComp(
+	compID string,
+	workflowComp components.ComponentComposable,
+	waitForAll *bool,
+	inputsSchema, outputsSchema any,
+	streamInputsSchema, streamOutputsSchema any,
+	compAbility []components.ComponentAbility,
+	maxRetries int,
+	timeout float64,
+	exceptionConfig *workflow.ExceptionConfig,
+	name *string,
+) error {
+	// Python: if isinstance(workflow_comp, LoopComponent): raise 101030
+	if lc, ok := workflowComp.(*LoopComponent); ok {
+		_ = lc
+		return exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
+			exception.WithParam("reason", "cannot add 'LoopComponent' to a loop group."))
+	}
+	// Python: super().add_workflow_comp(...)
+	if err := g.BaseWorkflow.AddWorkflowComp(compID, workflowComp, waitForAll, inputsSchema, outputsSchema,
+		streamInputsSchema, streamOutputsSchema, compAbility, maxRetries, timeout, exceptionConfig, name); err != nil {
+		return err
+	}
+	// Python: if isinstance(workflow_comp, LoopBreakComponent): self._break_components.append(...)
+	if bc, ok := workflowComp.(*LoopBreakComponent); ok {
+		g.breakComponents = append(g.breakComponents, bc)
+	}
+	// Python 83-84: if self._drawable and isinstance(...): set_break_node —— D-20-2
+	// drawable 缝 ⤴️8.13 回填（与 BranchRouter drawable 分支一并）
+	// Python: self._node_ids.append(comp_id)
+	g.nodeIDs = append(g.nodeIDs, compID)
+	return nil
+}
+
+// StartNodes 批量登记起始（loop_comp.py:87-91 一比一）。
+func (g *LoopGroup) StartNodes(nodes []string) error {
+	for _, node := range nodes {
+		if err := g.StartComp(node); err != nil {
+			return err
+		}
+	}
+	g.startNodeIDs = nodes
+	return nil
+}
+
+// StartComp 登记起始（loop_comp.py:93-98 一比一：BaseWorkflow API 直调也记录）。
+func (g *LoopGroup) StartComp(startCompID string) error {
+	if err := g.BaseWorkflow.StartComp(startCompID); err != nil {
+		return err
+	}
+	for _, id := range g.startNodeIDs {
+		if id == startCompID {
+			return nil
+		}
+	}
+	g.startNodeIDs = append(g.startNodeIDs, startCompID)
+	return nil
+}
+
+// EndNodes 批量登记结束（loop_comp.py:100-108 一比一）。
+func (g *LoopGroup) EndNodes(nodes any) error {
+	if s, ok := nodes.(string); ok {
+		if err := g.EndComp(s); err != nil {
+			return err
+		}
+		g.endNodeIDs = append(g.endNodeIDs, s)
+		return nil
+	}
+	if list, ok := nodes.([]string); ok {
+		for _, node := range list {
+			if err := g.EndComp(node); err != nil {
+				return err
+			}
+		}
+		g.endNodeIDs = list
+		return nil
+	}
+	return fmt.Errorf("end_nodes expects str or list[str], got %T", nodes)
+}
+
+// EndComp 登记结束（loop_comp.py:110-115 一比一：BaseWorkflow API 直调也记录）。
+func (g *LoopGroup) EndComp(endCompID string) error {
+	if err := g.BaseWorkflow.EndComp(endCompID); err != nil {
+		return err
+	}
+	for _, id := range g.endNodeIDs {
+		if id == endCompID {
+			return nil
+		}
+	}
+	g.endNodeIDs = append(g.endNodeIDs, endCompID)
+	return nil
+}
+
+// OnInvoke 执行循环体子工作流（loop_comp.py:117-130 一比一）。
+func (g *LoopGroup) OnInvoke(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
+	// Python: self.auto_complete_abilities()
+	g.AutoCompleteAbilities()
+	// Python: actor_manager = ActorManager(self._workflow_spec, self._stream_actor, sub_graph=True, session=session)
+	am, err := stream_actor.NewActorManager(ctx, g.Spec(), g.StreamGraph(), true, actorSessionOf(sess))
+	if err != nil {
+		return nil, err
+	}
+	// Python: loop_session = SubWorkflowSession(session.parent(), self._workflow_config.card.id, actor_manager)
+	parent := parentSessionOf(sess)
+	if pp, ok := parent.(sessioninterfaces.ParentProvider); ok {
+		parent = pp.Parent()
+	}
+	loopSession := session.NewSubWorkflowSessionFacade(parent, g.Config().Card.ID, am)
+	if loopSession == nil {
+		return nil, exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
+			exception.WithParam("reason", "SubWorkflowSession requires parent to be a NodeSession"))
+	}
+	// Python: loop_session.config().add_workflow_config(workflow_id=..., workflow_config=...)
+	loopSession.Config().AddWorkflowConfig(g.Config().Card.ID, g.Config())
+	// Python: self.compiled_graph = self.compile(loop_session, context=kwargs.get("context"))
+	compiled, err := g.Compile(loopSession, kwargs["context"])
+	if err != nil {
+		return nil, err
+	}
+	// Python: await self.compiled_graph.invoke(inputs, loop_session)
+	if _, err := compiled.Invoke(ctx, inputs, loopSession); err != nil {
+		return nil, err
+	}
+	// Python 125-129: finished_stream_nodes 清理（移除本循环体节点后写回并提交）
+	g.cleanupFinishedStreamNodes(sess)
+	return nil, nil // Python: return None
+}
+
+// SkipTrace 跳过埋点（loop_comp.py:132-133）。
+func (g *LoopGroup) SkipTrace() bool { return true }
+
+// GraphInvoker 子图递归入口（loop_comp.py:135-136）。
+func (g *LoopGroup) GraphInvoker() bool { return true }
+
+// BreakComponents 访问器（loop_comp.py:138-140 property break_components）。
+func (g *LoopGroup) BreakComponents() []*LoopBreakComponent { return g.breakComponents }
+
+// CheckValidate 构造期校验（loop_comp.py:142-156 一比一三段，101030 reason 逐字）。
+func (g *LoopGroup) CheckValidate() error {
+	// Python: if not self._start_nodes: raise "missing start_nodes in loop group"
+	if len(g.startNodeIDs) == 0 {
+		return exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
+			exception.WithParam("reason", "missing start_nodes in loop group"))
+	}
+	// Python: if not self._end_nodes: raise "missing end_nodes in loop group"
+	if len(g.endNodeIDs) == 0 {
+		return exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
+			exception.WithParam("reason", "missing end_nodes in loop group"))
+	}
+	// Python: nodes = self._graph.get_nodes(); if len(nodes) == 0: raise "loop group is empty..."
+	if len(g.Graph().GetNodes()) == 0 {
+		return exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
+			exception.WithParam("reason", "loop group is empty (contains no nodes)"))
+	}
+	return nil
+}
+
+// ──────────────────────────── LoopComponent ────────────────────────────
+
+// LoopComponent 循环组件装配厂（loop_comp.py:159 LoopComponent(WorkflowComponent) →
+// Go 嵌 8.17 WorkflowComponent 槽位，InvokeFn 承载 invoke）。
+type LoopComponent struct {
+	components.WorkflowComponent
+	// loopGroup 循环体（Python self._loop_group，构造期持有）
+	loopGroup *LoopGroup
+	// outputSchema 输出格式（Python self._output_schema，构造期持有）
+	outputSchema map[string]any
+}
+
+// NewLoopComponent 构造（loop_comp.py:160-164 一比一：存引用 + check_validate）。
+func NewLoopComponent(loopGroup *LoopGroup, outputSchema map[string]any) (*LoopComponent, error) {
+	if err := loopGroup.CheckValidate(); err != nil {
+		return nil, err
+	}
+	c := &LoopComponent{loopGroup: loopGroup, outputSchema: outputSchema}
+	c.InvokeFn = c.invoke
+	return c, nil
+}
+
+// GraphInvoker 子图递归入口（loop_comp.py:222-223）。
+func (c *LoopComponent) GraphInvoker() bool { return true }
+
+// LoopGroup 访问器（loop_comp.py:225-227 property loop_group）。
+func (c *LoopComponent) LoopGroup() *LoopGroup { return c.loopGroup }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// invoke 循环执行（loop_comp.py:166-220 十步一比一；D-20-1：getattr(session, "_inner")
+// → InnerNodeSession()）。
+func (c *LoopComponent) invoke(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	// Python 167-220 整体 try：GraphInterrupt/BaseError 透传，其余包装 101040。
+	// Go 错误分类在 defer 内承载（等价 except 链）。
+	result, err := c.invokeInner(ctx, inputs, sess)
+	if err == nil {
+		return result, nil
+	}
+	// Python: except GraphInterrupt: raise / except BaseError: raise
+	var gi *pregel.GraphInterrupt
+	if errors.As(err, &gi) {
+		return nil, err
+	}
+	var be *exception.BaseError
+	if errors.As(err, &be) {
+		return nil, err
+	}
+	// Python: except Exception as e: raise build_error(101040, cause=e, comp=..., reason=str(e))
+	return nil, exception.BuildError(exception.StatusComponentLoopExecutionError,
+		exception.WithParam("reason", err.Error()),
+		exception.WithParam("comp", sess.GetComponentDescription()))
+}
+
+// invokeInner invoke 主体（Python try 块内步骤一比一）。
+func (c *LoopComponent) invokeInner(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	// Python 168-169: if not isinstance(inputs, dict): raise KeyError
+	// （Go InvokeFn 入参恒 map，形状校验以 nil 防御承载）
+	if inputs == nil {
+		return nil, fmt.Errorf("inputs must be a dict, but got NoneType")
+	}
+	// Python 171-172: if INPUTS_KEY not in inputs: raise KeyError —— 8.2 D5 兑现
+	raw, ok := inputs[graph.InputsKey]
+	if !ok {
+		return nil, fmt.Errorf("missing required key %s", graph.InputsKey)
+	}
+	// Python 174: loop_input = LoopInput.model_validate(inputs.get(INPUTS_KEY))
+	loopInput, err := ValidateLoopInput(raw)
+	if err != nil {
+		return nil, err
+	}
+	// Python 175-200: 四态选 condition
+	var cond conditionpkg.Condition
+	switch loopInput.LoopType {
+	case LoopTypeArray:
+		// Python 177: condition = ArrayConditionInSession(loop_input.loop_array)
+		ac, acErr := conditionpkg.NewArrayConditionInSession(loopInput.LoopArray)
+		if acErr != nil {
+			return nil, acErr
+		}
+		cond = ac
+	case LoopTypeNumber:
+		// Python 179: max_loop_limit = session.get_env(LOOP_NUMBER_MAX_LIMIT_KEY) or DEFAULT
+		maxLimit := sessionconstants.LoopNumberMaxLimitDefault
+		if v := sess.GetEnv(sessionconstants.LoopNumberMaxLimitKey); v != nil {
+			if n, isInt := v.(int); isInt {
+				maxLimit = n
+			}
+		}
+		// Python 180-183: int(max_loop_limit) 失败回默认（Go 类型断言失败即回默认，同语义）
+		// Python 185-186: if loop_input.loop_number is None: raise ValueError
+		if loopInput.LoopNumber == nil {
+			return nil, fmt.Errorf("loop_number variable not found or is None")
+		}
+		// Python 188-189: if loop_input.loop_number > max_loop_limit: raise ValueError
+		if *loopInput.LoopNumber > maxLimit {
+			return nil, fmt.Errorf("loop_number exceeds maximum limit %d", maxLimit)
+		}
+		cond = conditionpkg.NewNumberConditionInSession(*loopInput.LoopNumber)
+	case LoopTypeAlwaysTrue:
+		// Python 192-193: condition = AlwaysTrue()
+		cond = conditionpkg.NewAlwaysTrue()
+	case LoopTypeExpression:
+		// Python 194-198: bool 字面量 → FuncCondition；否则 ExpressionCondition
+		if b, isBool := loopInput.BoolExpression.(bool); isBool {
+			cond = conditionpkg.NewFuncCondition(func() bool { return b })
+		} else {
+			expr, _ := loopInput.BoolExpression.(string)
+			ec, ecErr := conditionpkg.NewExpressionCondition(expr)
+			if ecErr != nil {
+				return nil, ecErr
+			}
+			cond = ec
+		}
+	default:
+		// Python 199-200: raise ValueError(f"invalid loop type '{...}' for LoopComponent")
+		return nil, fmt.Errorf("invalid loop type '%s' for LoopComponent", loopInput.LoopType)
+	}
+	// Python 201-204: output_callback + 可选 intermediate_var callback
+	cbs := []callbackpkg.LoopCallback{callbackpkg.NewOutputCallback(c.outputSchema, "", "").LoopCallback}
+	if len(loopInput.IntermediateVar) > 0 {
+		cbs = append(cbs, callbackpkg.NewIntermediateLoopVarCallback(loopInput.IntermediateVar, "").LoopCallback)
+	}
+	// Python 206-207: loop_component = AdvancedLoopComponent(loop_group, condition,
+	//                break_components, callbacks)
+	alc, err := NewAdvancedLoopComponent(c.loopGroup, cond, c.loopGroup.BreakComponents(), cbs)
+	if err != nil {
+		return nil, err
+	}
+	// Python 208-209: return await loop_component.on_invoke({INPUTS_KEY: {}, CONFIG_KEY: ...},
+	//                getattr(session, "_inner")) —— D-20-1：_inner → InnerNodeSession()
+	return alc.OnInvoke(ctx, map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: inputs[graph.ConfigKey]},
+		sess.InnerNodeSession(), nil)
+}
+
+// cleanupFinishedStreamNodes finished_stream_nodes 清理（loop_comp.py:125-129 一比一）。
+func (g *LoopGroup) cleanupFinishedStreamNodes(sess session.BaseSession) {
+	ws, ok := sess.State().(state.WorkflowState)
+	if !ok {
+		return
+	}
+	// Python: finished_stream_nodes = session.state().get_workflow_state("finished_stream_nodes") or []
+	raw := ws.GetWorkflowState(state.StringKey("finished_stream_nodes"))
+	list, _ := raw.([]any)
+	// Python: for node_id in self._node_ids: if node_id in finished: remove
+	cleaned := make([]any, 0, len(list))
+	for _, item := range list {
+		s, _ := item.(string)
+		removed := false
+		for _, id := range g.nodeIDs {
+			if s == id {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			cleaned = append(cleaned, item)
+		}
+	}
+	// Python: session.state().update_and_commit_workflow_state({"finished_stream_nodes": cleaned})
+	ws.UpdateAndCommitWorkflowState(map[string]any{"finished_stream_nodes": cleaned})
+}
+
+// actorSessionOf ActorSession 能力断言（Python ActorManager(session=session) 消费
+// get_env/workflow_state 面；Go 以接口断言承载，不满足时 nil ≙ Python 鸭子缺省）。
+func actorSessionOf(sess session.BaseSession) stream_actor.ActorSession {
+	if as, ok := sess.(stream_actor.ActorSession); ok {
+		return as
+	}
+	return nil
+}
