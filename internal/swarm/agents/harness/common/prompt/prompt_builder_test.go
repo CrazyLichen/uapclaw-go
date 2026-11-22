@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
@@ -147,4 +148,51 @@ func containsSubstr(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestInputPrompt_双语 对齐 Python _input_prompt（prompt_builder.py:92-156）。
+func TestInputPrompt_双语(t *testing.T) {
+	cn := InputPrompt("cn")
+	assert.Equal(t, "input", cn.Name)
+	assert.Equal(t, 60, cn.Priority)
+	assert.Contains(t, cn.Content["cn"], "# 输入说明")
+	assert.Contains(t, cn.Content["cn"], "## 用户消息")
+	assert.Contains(t, cn.Content["cn"], "系统消息类型说明")
+	assert.Contains(t, cn.Content["cn"], "- cron：定时任务")
+	assert.Contains(t, cn.Content["cn"], "- notify：系统通知")
+	// cn 模式 en 键也填中文（Python content={language: content}）
+	assert.Equal(t, cn.Content["cn"], cn.Content["cn"])
+
+	en := InputPrompt("en")
+	assert.Equal(t, 60, en.Priority)
+	assert.Contains(t, en.Content["en"], "# Input Instructions")
+	assert.Contains(t, en.Content["en"], "System message types")
+	assert.NotContains(t, en.Content["en"], "输入说明")
+}
+
+// TestOutputPrompt_文件投递分叉 对齐 Python _output_prompt send_file_enabled 分支。
+func TestOutputPrompt_文件投递分叉(t *testing.T) {
+	// cn + 开启：含 send_file_to_user 规则与 SVG 围栏
+	cnOn := OutputPrompt("cn", true)
+	assert.Equal(t, "output", cnOn.Name)
+	assert.Equal(t, 65, cnOn.Priority)
+	assert.Contains(t, cnOn.Content["cn"], "# 输出规则")
+	assert.Contains(t, cnOn.Content["cn"], "send_file_to_user")
+	assert.Contains(t, cnOn.Content["cn"], "SVG 卡片源码须在**最后一条无工具调用的消息**里")
+	assert.Contains(t, cnOn.Content["cn"], "同一产物不要既内联又发文件")
+
+	// cn + 关闭：禁止承诺发文件
+	cnOff := OutputPrompt("cn", false)
+	assert.Contains(t, cnOff.Content["cn"], "当前渠道不支持文件投递")
+	assert.NotContains(t, cnOff.Content["cn"], "send_file_to_user`")
+	assert.Contains(t, cnOff.Content["cn"], "不要为该产物生成附件或承诺文件投递")
+	assert.Contains(t, cnOff.Content["cn"], "## 模型名称回答")
+
+	// en + 开启 / 关闭
+	enOn := OutputPrompt("en", true)
+	assert.Contains(t, enOn.Content["en"], "# Output Rules")
+	assert.Contains(t, enOn.Content["en"], "send_file_to_user")
+	enOff := OutputPrompt("en", false)
+	assert.Contains(t, enOff.Content["en"], "This channel cannot deliver files")
+	assert.Contains(t, enOff.Content["en"], "## Model Name Answers")
 }

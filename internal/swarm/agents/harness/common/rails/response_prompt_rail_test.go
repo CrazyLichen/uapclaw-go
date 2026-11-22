@@ -9,6 +9,7 @@ import (
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	tools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -165,4 +166,105 @@ func TestResponsePromptRail_GetCallbacks_Invocable(t *testing.T) {
 	// 新版注入 input/output 双节（response 旧节废弃清除）
 	require.NotNil(t, builder.GetSection("input"))
 	require.NotNil(t, builder.GetSection("output"))
+}
+
+// TestResolveChannel_四级回退 对齐 Python _resolve_channel（:135-161）：
+// inputs → run_context.extra → ctx.extra → runtime_channel。
+func TestResolveChannel_四级回退(t *testing.T) {
+	rail := NewResponsePromptRail()
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
+
+	// 1) inputs.Extra["channel"]
+	cbc.SetInputs(&agentinterfaces.InvokeInputs{Extra: map[string]any{"channel": "feishu"}})
+	assert.Equal(t, "feishu", rail.resolveChannel(cbc))
+
+	// 2) run_context.extra（inputs 缺 channel 时）
+	cbc2 := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{
+		Extra: map[string]any{"run_context": map[string]any{
+			"extra": map[string]any{"jiuwenswarm_channel": "ws_client"},
+		}},
+	}, nil)
+	assert.Equal(t, "ws_client", rail.resolveChannel(cbc2))
+
+	// 3) ctx.extra
+	cbc3 := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
+	cbc3.SetExtra("jiuwenswarm_channel", "tui")
+	assert.Equal(t, "tui", rail.resolveChannel(cbc3))
+
+	// 4) runtime_channel 兜底：无任何标记的上下文（SetChannel 注入）
+	rail.SetChannel("process_cli")
+	assert.Equal(t, "process_cli", rail.resolveChannel(agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)))
+	// 全空 → 空串（Python None）
+	rail2 := NewResponsePromptRail()
+	assert.Equal(t, "", rail2.resolveChannel(agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)))
+}
+
+// TestResolveContextValue_与BrowserWorkflow 对齐 _resolve_context_value/:190-197。
+func TestResolveContextValue_与BrowserWorkflow(t *testing.T) {
+	rail := NewResponsePromptRail()
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{
+		Extra: map[string]any{"request_id": "req-1", "conversation_id": "conv-9"},
+	}, nil)
+	cbc.SetExtra("session_id", "sess-7")
+	assert.Equal(t, "req-1", rail.resolveContextValue(cbc, "request_id"))
+	assert.Equal(t, "conv-9", rail.resolveContextValue(cbc, "conversation_id"))
+	// conversation_id 与 session_id 双取（orString 语义）
+	assert.Equal(t, "conv-9", orString(rail.resolveContextValue(cbc, "conversation_id"), rail.resolveContextValue(cbc, "session_id")))
+	// 缺失 → 空
+	assert.Equal(t, "", rail.resolveContextValue(cbc, "nonexistent"))
+
+	// isBrowserWorkflow：extra 标记优先
+	cbc.SetExtra(a2uiBrowserWorkflowContextKey, true)
+	assert.True(t, rail.isBrowserWorkflow(cbc))
+	// 无标记 → 判定函数缝 false
+	assert.False(t, rail.isBrowserWorkflow(agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)))
+}
+
+// TestShouldSkipA2UI_多来源 对齐 _should_skip_a2ui（:115-133）四来源。
+func TestShouldSkipA2UI_多来源(t *testing.T) {
+	rail := NewResponsePromptRail()
+
+	// InvokeInputs.Extra 标记
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{
+		Extra: map[string]any{"jiuwenswarm_skip_a2ui": true},
+	}, nil)
+	assert.True(t, rail.shouldSkipA2UI(cbc))
+
+	// ctx.extra 标记
+	cbc2 := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
+	cbc2.SetExtra("jiuwenswarm_skip_a2ui", true)
+	assert.True(t, rail.shouldSkipA2UI(cbc2))
+
+	// run_context.extra 标记
+	cbc3 := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{
+		Extra: map[string]any{"run_context": map[string]any{
+			"extra": map[string]any{"jiuwenswarm_skip_a2ui": true},
+		}},
+	}, nil)
+	assert.True(t, rail.shouldSkipA2UI(cbc3))
+
+	// 无标记 → false
+	assert.False(t, rail.shouldSkipA2UI(agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)))
+}
+
+// TestIsSendFileEnabled_Xiaoyi与PolicyChannel 对齐 file_delivery_policy.py 全分支。
+func TestIsSendFileEnabled_Xiaoyi与PolicyChannel(t *testing.T) {
+	config := map[string]any{"channels": map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	}}
+	// xiaoyi 前缀 → 恒 false（渠道能力限制）
+	assert.False(t, tools.IsSendFileEnabled(config, "xiaoyi_app"))
+	// 显式 allowed
+	assert.True(t, tools.IsSendFileEnabled(config, "web"))
+	// video_tool → 策略渠道回退 web
+	assert.True(t, tools.IsSendFileEnabled(config, "video_tool"))
+	// 缺失且非 web → false
+	assert.False(t, tools.IsSendFileEnabled(config, "unknown_channel"))
+	// 显式 false
+	config2 := map[string]any{"channels": map[string]any{
+		"web": map[string]any{"send_file_allowed": false},
+	}}
+	assert.False(t, tools.IsSendFileEnabled(config2, "web"))
+	// 空配置 + web → true（policy_channel == "web" 兜底）
+	assert.True(t, tools.IsSendFileEnabled(map[string]any{}, "web"))
 }

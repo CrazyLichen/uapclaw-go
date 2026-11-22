@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	tools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
@@ -227,10 +227,15 @@ func (r *ResponsePromptRail) resolveRunContextExtra(cbc *agentinterfaces.AgentCa
 // resolveContextValue 从 inputs / extra 依次取非空字符串值。
 // Python: _resolve_context_value (response_prompt_rail.py:182-188)
 func (r *ResponsePromptRail) resolveContextValue(cbc *agentinterfaces.AgentCallbackContext, key string) string {
+	// Python: inputs.get(key) / extra.get(key)——Go 对应 MapInputs.Data、
+	// InvokeInputs.Extra、ctx.extra 三态。
 	for _, source := range []func() (map[string]any, bool){
 		func() (map[string]any, bool) {
 			if inputs, ok := cbc.Inputs().(*agentinterfaces.MapInputs); ok && inputs != nil {
 				return inputs.Data, true
+			}
+			if inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok && inputs != nil {
+				return inputs.Extra, true
 			}
 			return nil, false
 		},
