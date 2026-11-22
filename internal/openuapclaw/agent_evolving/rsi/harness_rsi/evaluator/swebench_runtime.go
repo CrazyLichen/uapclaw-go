@@ -31,6 +31,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	judger "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
 
@@ -44,7 +45,7 @@ const logComponentSweb = logger.ComponentAgentCore
 // EvaluationInfrastructureError)）。
 type SWEbenchInfrastructureError struct {
 	// EvaluationInfrastructureError 基类（Go 无继承，嵌入承载）
-	*EvaluationInfrastructureError
+	*evalerrors.EvaluationInfrastructureError
 }
 
 // PrepareSwebenchParams PrepareSwebenchWorkspace 参数
@@ -245,7 +246,7 @@ func CollectModelPatch(workspaceDir string) (string, error) {
 		return "", err
 	}
 	if result.ExitCode != 0 {
-		return "", &SWEbenchInfrastructureError{NewEvaluationInfrastructureError(
+		return "", &SWEbenchInfrastructureError{evalerrors.NewEvaluationInfrastructureError(
 			fmt.Sprintf("failed to collect SWE-bench patch: %s", result.Stderr))}
 	}
 	return result.Stdout, nil
@@ -391,7 +392,7 @@ func RunOfficialSwebenchEvaluation(params RunOfficialParams) (map[string]any, er
 		if failureDetail != "" {
 			detailSuffix = "; detail=" + failureDetail
 		}
-		return nil, &SWEbenchInfrastructureError{NewEvaluationInfrastructureError(fmt.Sprintf(
+		return nil, &SWEbenchInfrastructureError{evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf(
 			"SWE-bench verifier infrastructure failed for %s: %s; test_output=%s%s",
 			instanceID, infrastructureReason, testOutputPath, detailSuffix))}
 	}

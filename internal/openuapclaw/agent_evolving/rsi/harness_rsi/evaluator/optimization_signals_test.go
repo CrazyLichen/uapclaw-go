@@ -4,11 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 )
 
 func TestOptimizationSignalsContract_归一化(t *testing.T) {

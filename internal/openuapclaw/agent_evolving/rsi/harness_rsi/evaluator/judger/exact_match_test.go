@@ -3,6 +3,8 @@ package judger
 import (
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 )
 
 // ──────────────────────────── build_judger 工厂 ────────────────────────────
@@ -268,7 +270,7 @@ type stubVerifier struct {
 
 func (s stubVerifier) CollectModelPatch(workspaceDir string) (string, error) {
 	if s.infraErr {
-		return "", NewEvaluationInfrastructureError("infra failure")
+		return "", evalerrors.NewEvaluationInfrastructureError("infra failure")
 	}
 	if s.plainErr != "" {
 		return "", assertNotInfra(s.plainErr)
@@ -278,7 +280,7 @@ func (s stubVerifier) CollectModelPatch(workspaceDir string) (string, error) {
 
 func (s stubVerifier) RunOfficialEvaluation(caseMapping map[string]any, modelPatch, outputDir string) (map[string]any, error) {
 	if s.infraErr {
-		return nil, NewEvaluationInfrastructureError("infra failure")
+		return nil, evalerrors.NewEvaluationInfrastructureError("infra failure")
 	}
 	if s.plainErr != "" {
 		return nil, assertNotInfra(s.plainErr)

@@ -12,9 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"gopkg.in/yaml.v3"
-
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 )
 
 // EPSILON 非回归判定的绝对容差（Python EPSILON）。
@@ -61,7 +60,7 @@ func PackageFingerprint(refsPath string) (string, error) {
 		root = filepath.Clean(root)
 		info, err := os.Stat(root)
 		if err != nil || !info.IsDir() {
-			return "", evaluator.NewEvaluationInfrastructureError("Harness package directory is unavailable")
+			return "", evalerrors.NewEvaluationInfrastructureError("Harness package directory is unavailable")
 		}
 		files := map[string]any{}
 		var paths []string
@@ -94,7 +93,7 @@ func PackageFingerprint(refsPath string) (string, error) {
 				return "", resErr
 			}
 			if !withinDir(resolved, root) {
-				return "", evaluator.NewEvaluationInfrastructureError("Harness package links outside its snapshot")
+				return "", evalerrors.NewEvaluationInfrastructureError("Harness package links outside its snapshot")
 			}
 			content, readErr := os.ReadFile(path)
 			if readErr != nil {
@@ -106,7 +105,7 @@ func PackageFingerprint(refsPath string) (string, error) {
 		roles[role] = files
 	}
 	if len(roles) == 0 {
-		return "", evaluator.NewEvaluationInfrastructureError("Harness refs contain no packages")
+		return "", evalerrors.NewEvaluationInfrastructureError("Harness refs contain no packages")
 	}
 	return Digest(roles), nil
 }
@@ -139,7 +138,7 @@ func CompleteScores(evalRefPath string, expectedCaseIDs map[string]bool) (map[st
 		score, _ := row["score"]
 		_, duplicate := scores[caseID]
 		if duplicate || caseID == "" {
-			return nil, evaluator.NewEvaluationInfrastructureError("Evaluation contains duplicate or missing case identities")
+			return nil, evalerrors.NewEvaluationInfrastructureError("Evaluation contains duplicate or missing case identities")
 		}
 		numeric := isJSONNumber(score) && !isBoolValue(score)
 		finite := numeric && isFiniteNumber(score)
@@ -151,7 +150,7 @@ func CompleteScores(evalRefPath string, expectedCaseIDs map[string]bool) (map[st
 		}
 		skipped, _ := metadata["infrastructure_skip"].(bool)
 		if !inRange || !statusOK || skipped {
-			return nil, evaluator.NewEvaluationInfrastructureError(fmt.Sprintf("Invalid correctness score for %s", caseID))
+			return nil, evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf("Invalid correctness score for %s", caseID))
 		}
 		resultPath := filepath.Clean(fmt.Sprint(row["result_path"]))
 		if !filepath.IsAbs(resultPath) {
@@ -177,7 +176,7 @@ func CompleteScores(evalRefPath string, expectedCaseIDs map[string]bool) (map[st
 		if executionStatus == "error" ||
 			(status != "passed" && status != "failed") ||
 			!numberEquals(result["score"], score) {
-			return nil, evaluator.NewEvaluationInfrastructureError(fmt.Sprintf("Inconsistent or failed execution for %s", caseID))
+			return nil, evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf("Inconsistent or failed execution for %s", caseID))
 		}
 		method, _ := evaluation["method"].(string)
 		judgeMethod := method == "llm_as_judge"
@@ -188,12 +187,12 @@ func CompleteScores(evalRefPath string, expectedCaseIDs map[string]bool) (map[st
 		scoreMode, _ := evalMetadata["score_mode"].(string)
 		continuous := scoreMode == "continuous"
 		if judgeMethod && !continuous {
-			return nil, evaluator.NewEvaluationInfrastructureError("Binary LLM grades cannot enter a continuous promotion run")
+			return nil, evalerrors.NewEvaluationInfrastructureError("Binary LLM grades cannot enter a continuous promotion run")
 		}
 		scores[caseID] = asFloat(score)
 	}
 	if len(scores) == 0 || !sameKeys(scores, expectedCaseIDs) {
-		return nil, evaluator.NewEvaluationInfrastructureError("Evaluation does not exactly cover its frozen case set")
+		return nil, evalerrors.NewEvaluationInfrastructureError("Evaluation does not exactly cover its frozen case set")
 	}
 	return scores, nil
 }
@@ -201,7 +200,7 @@ func CompleteScores(evalRefPath string, expectedCaseIDs map[string]bool) (map[st
 // MeanScore 对已验证的非空连续分数集求平均（Python mean_score）。
 func MeanScore(scores map[string]float64) (float64, error) {
 	if len(scores) == 0 {
-		return 0, evaluator.NewEvaluationInfrastructureError("Cannot score an empty evaluation")
+		return 0, evalerrors.NewEvaluationInfrastructureError("Cannot score an empty evaluation")
 	}
 	total := 0.0
 	for _, score := range scores {
@@ -246,10 +245,10 @@ func FullEvaluationDecision(scores, baseline map[string]float64, targets map[str
 	proofDigest, _ := proof["baseline_scores_digest"].(string)
 	digestMatches := proofDigest == Digest(baseline)
 	if !sameCases || !targetsKnown || !proofMatches {
-		return nil, evaluator.NewEvaluationInfrastructureError("Full evaluation lacks its matching target improvement proof")
+		return nil, evalerrors.NewEvaluationInfrastructureError("Full evaluation lacks its matching target improvement proof")
 	}
 	if !targetsMatch || !digestMatches {
-		return nil, evaluator.NewEvaluationInfrastructureError("Full evaluation lacks its matching target improvement proof")
+		return nil, evalerrors.NewEvaluationInfrastructureError("Full evaluation lacks its matching target improvement proof")
 	}
 	var failedTargets []string
 	for caseID := range targets {

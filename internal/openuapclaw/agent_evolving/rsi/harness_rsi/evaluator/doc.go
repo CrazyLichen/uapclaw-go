@@ -26,7 +26,7 @@
 //	├── transport.go                     # 瞬态传输错误注册（反转缝）
 //	├── trajectory_paths.go              # 角色轨迹路径与 RoleFileTrajectoryStore
 //	├── trajectory_usage.go              # 轨迹用量归集
-//	├── errors.go                        # EvaluationInfrastructureError
+//	├── evalerrors/                      # EvaluationInfrastructureError 单一真身（下沉子包，层级偏差已登记）
 //	├── swebench_runtime.go              # SWE-bench 镜像/考场准备/官方验证收卷（17.6d，Python 833 行）
 //	├── terminal_bench_runtime.go        # Terminal-Bench 容器运行时（录音/patch sync/容器启停，17.6d，Python 533 行）
 //	├── resource/

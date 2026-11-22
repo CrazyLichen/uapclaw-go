@@ -5,6 +5,8 @@
 
 package judger
 
+import "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // transientTransportErrorFn 瞬态传输错误判定函数（evaluator.TransientTransportError 注册）。
@@ -69,7 +71,7 @@ func RegisterSwebenchVerifier(view SwebenchVerifierView) {
 // callCollectModelPatch 经缝调用 patch 收集；未注册时报基建错误。
 func callCollectModelPatch(workspaceDir string) (string, error) {
 	if swebenchVerifierFn == nil {
-		return "", NewEvaluationInfrastructureError("swebench verifier not registered")
+		return "", evalerrors.NewEvaluationInfrastructureError("swebench verifier not registered")
 	}
 	return swebenchVerifierFn.CollectModelPatch(workspaceDir)
 }
@@ -77,7 +79,7 @@ func callCollectModelPatch(workspaceDir string) (string, error) {
 // callRunOfficialSwebenchEvaluation 经缝调用官方验证；未注册时报基建错误。
 func callRunOfficialSwebenchEvaluation(caseMapping map[string]any, modelPatch, outputDir string) (map[string]any, error) {
 	if swebenchVerifierFn == nil {
-		return nil, NewEvaluationInfrastructureError("swebench verifier not registered")
+		return nil, evalerrors.NewEvaluationInfrastructureError("swebench verifier not registered")
 	}
 	return swebenchVerifierFn.RunOfficialEvaluation(caseMapping, modelPatch, outputDir)
 }

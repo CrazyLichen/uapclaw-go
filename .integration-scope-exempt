@@ -79,3 +79,10 @@ tests/integration/agentcore/harness/rails/tools
 # Swarm 记忆提示词：从真实配置文件读取 + 中文输出验证，
 # 覆盖集中于 swarm/agents 单子系统（约 68 行）
 tests/integration/swarm/memory
+tests/integration/agentcore/workflow_sub_workflow
+# 理由（C. 单模块深度测试）：8.14b SubWorkflowComponent 全链嵌套集成（两层
+# Workflow Invoke/Stream/信封/缓存短路/中断恢复），真实覆盖 3110 行集中于
+# openuapclaw/core 单一二级子系统（workflow→graph→session→flow 链路本身
+# 全在 core 下，结构上不可能达 ≥3 二级子系统）；测试深度真实，保留为集成
+# 深度用例。2026-11-22 17.6d 审查时按规则 7 豁免机制登记（原 probe 探针
+# 无 suite.Run 判违规，已转正为 suite 用例并清退探针）。

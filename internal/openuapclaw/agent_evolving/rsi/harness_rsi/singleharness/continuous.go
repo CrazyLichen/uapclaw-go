@@ -12,6 +12,7 @@ import (
 	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	"gopkg.in/yaml.v3"
 )
@@ -132,7 +133,7 @@ func runContinuousLoop(
 	}
 	if !anyEqual(baselinePayload["evaluation_context"],
 		owner.evaluationContext(allCases, toString(state["source_harness_refs_path"]), nil)) {
-		return IterativeSingleHarnessResult{}, &evaluatorpkg.EvaluationInfrastructureError{
+		return IterativeSingleHarnessResult{}, &evalerrors.EvaluationInfrastructureError{
 			Msg: "Initial continuous baseline protocol or dataset does not match"}
 	}
 	setDefaultString(state, "best_reference_eval_ref_path", toString(state["baseline_eval_ref_path"]))
@@ -251,7 +252,7 @@ func runContinuousLoop(
 			currentContext := owner.evaluationContext(allCases, parentRefs, nil)
 			for _, field := range []string{"signature", "cases"} {
 				if !anyEqual(recordedContext[field], currentContext[field]) {
-					return IterativeSingleHarnessResult{}, &evaluatorpkg.EvaluationInfrastructureError{
+					return IterativeSingleHarnessResult{}, &evalerrors.EvaluationInfrastructureError{
 						Msg: "Comparison parent no longer matches its recorded full evaluation"}
 				}
 			}
@@ -277,7 +278,7 @@ func runContinuousLoop(
 				}
 			}
 			if existing, ok := frozenBatch["baseline_contexts"]; ok && !anyEqual(existing, fingerprints) {
-				return IterativeSingleHarnessResult{}, &evaluatorpkg.EvaluationInfrastructureError{
+				return IterativeSingleHarnessResult{}, &evalerrors.EvaluationInfrastructureError{
 					Msg: "Frozen batch baseline evidence changed during recovery"}
 			}
 			frozenBatch["baseline_contexts"] = fingerprints
@@ -593,7 +594,7 @@ func runContinuousLoop(
 					}
 				} else if priorTrial, ok := priorTrialRaw.(map[string]any); ok {
 					if !truthy(priorTrial["done"]) && toString(priorTrial["attempt_key"]) != key {
-						return IterativeSingleHarnessResult{}, &evaluatorpkg.EvaluationInfrastructureError{
+						return IterativeSingleHarnessResult{}, &evalerrors.EvaluationInfrastructureError{
 							Msg: "Resume the original unfinished candidate trial"}
 					}
 				}
@@ -667,7 +668,7 @@ func runContinuousLoop(
 						}
 						trial := trialRaw.(map[string]any)
 						if toString(trial["attempt_key"]) != key {
-							return &evaluatorpkg.EvaluationInfrastructureError{
+							return &evalerrors.EvaluationInfrastructureError{
 								Msg: "Resume the original unfinished candidate trial"}
 						}
 						if err := save(); err != nil {
@@ -689,7 +690,7 @@ func runContinuousLoop(
 						storedCtxNorm := yamlNormalize(targetPayload["evaluation_context"])
 						nowCtxNorm := yamlNormalize(owner.evaluationContext(targetCases, candidateRefs, contextsTyped))
 						if !anyEqual(storedCtxNorm, nowCtxNorm) {
-							return &evaluatorpkg.EvaluationInfrastructureError{
+							return &evalerrors.EvaluationInfrastructureError{
 								Msg: "Target evaluation does not match the frozen candidate and baseline"}
 						}
 						targetIDsBool := map[string]bool{}
@@ -732,11 +733,11 @@ func runContinuousLoop(
 						targetsOK := stringSetEqual(toStringSet(proof["target_case_ids"]), targetIDs)
 						qualified := truthy(proof["qualified"])
 						if !identityOK || !targetDigestOK || !baselineDigestOK {
-							return &evaluatorpkg.EvaluationInfrastructureError{
+							return &evalerrors.EvaluationInfrastructureError{
 								Msg: "Frozen candidate or baseline identity changed"}
 						}
 						if !targetsOK || !qualified {
-							return &evaluatorpkg.EvaluationInfrastructureError{
+							return &evalerrors.EvaluationInfrastructureError{
 								Msg: "Frozen candidate or baseline identity changed"}
 						}
 						gate["improvement_proof"] = proof
@@ -774,7 +775,7 @@ func runContinuousLoop(
 						if recheckPackage != packageFingerprint ||
 							Digest(recheckTarget) != toString(proof["target_scores_digest"]) ||
 							Digest(recheckBaseline) != toString(proof["baseline_scores_digest"]) {
-							return &evaluatorpkg.EvaluationInfrastructureError{
+							return &evalerrors.EvaluationInfrastructureError{
 								Msg: "Candidate or frozen score evidence changed during full evaluation"}
 						}
 						checks, err := FullEvaluationDecision(fullScores, scores, targetIDsBool,
@@ -824,7 +825,7 @@ func runContinuousLoop(
 						return nil
 					}()
 					if err != nil {
-						var infraErr *evaluatorpkg.EvaluationInfrastructureError
+						var infraErr *evalerrors.EvaluationInfrastructureError
 						if errors.As(err, &infraErr) {
 							gate["accepted"] = false
 							gate["status"] = "inconclusive"

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
 
@@ -41,7 +42,7 @@ func (f *fakeBackend) Execute(_ context.Context, params ExecuteParams) (*CaseExe
 	f.executedCases = append(f.executedCases, copied)
 	if behavior, ok := f.behaviors[caseID]; ok {
 		if strings.HasPrefix(behavior, "infra:") {
-			return nil, NewEvaluationInfrastructureError(strings.TrimPrefix(behavior, "infra:"))
+			return nil, evalerrors.NewEvaluationInfrastructureError(strings.TrimPrefix(behavior, "infra:"))
 		}
 		return &CaseExecutionResult{
 			Response:        "answer",
