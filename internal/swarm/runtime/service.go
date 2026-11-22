@@ -458,6 +458,13 @@ func (r *AgentRuntime) Stream(
 			break
 		}
 	}
+	// 流收尾：team 系工作种类移除持久响应等待者（Python :2465-2477 generator
+	// finally：work_kind ∈ {TEAM_REQUEST, TEAM_CONTROL, TEAM_BACKGROUND} →
+	// _remove_team_response_waiter(cause=CONSUMER_CLOSED)）
+	if wk := SessionWorkKind(req, false); wk != nil && (*wk == sessionpkg.SessionWorkKindTeamRequest ||
+		*wk == sessionpkg.SessionWorkKindTeamControl || *wk == sessionpkg.SessionWorkKindTeamBackground) {
+		r.removeTeamResponseWaiter(req, sessionpkg.ExecutionCancelCauseConsumerClosed)
+	}
 	// 流结束：退出事件在 channel 关闭前发出（对齐 Python generator finally 里的 yield）
 	if r.shouldCheckPlanExit(req) {
 		r.checkPlanExit(ctx, req, subMode, agent)
@@ -1871,4 +1878,52 @@ func (r *AgentRuntime) SetSessionMessageService(service any) {
 // Python: interface_deep.py:14252 getattr(runtime, "session_message_service", None)
 func (r *AgentRuntime) SessionMessageService() any {
 	return r.sessionMessageServiceRef
+}
+
+// removeTeamResponseWaiter 流收尾时移除 team 持久响应等待者。
+// Python: service.py:4033-4073 _remove_team_response_waiter
+// （逆序扫描 executions 取首个 request_id 匹配、team.waiter_kind=PERSISTENT
+// 且非终态的执行 → ExecutionLifecycleContext → adapter.remove_response_waiter）
+func (r *AgentRuntime) removeTeamResponseWaiter(req *schema.AgentRequest, cause sessionpkg.ExecutionCancelCause) {
+	snapshot := r.coordinator.SnapshotSession(sessionIDOr(req, "default"))
+	if snapshot == nil {
+		return
+	}
+	var execution *sessionpkg.SessionExecutionSnapshot
+	for i := len(snapshot.Executions) - 1; i >= 0; i-- {
+		item := &snapshot.Executions[i]
+		if req.RequestID == "" || item.RequestID != req.RequestID {
+			continue
+		}
+		if item.Team == nil || item.Team.WaiterKind != sessionpkg.TeamWaiterKindPersistent || item.State.Terminal() {
+			continue
+		}
+		execution = item
+		break
+	}
+	if execution == nil {
+		return
+	}
+	ctx := sessionpkg.SessionLifecycleContext{
+		SessionID:  snapshot.SessionID,
+		Generation: snapshot.Generation,
+	}
+	lcCtx := sessionpkg.ExecutionLifecycleContext{
+		Session:     ctx,
+		ExecutionID: execution.ExecutionID,
+		RequestID:   execution.RequestID,
+		WorkKind:    execution.WorkKind,
+		ChannelID:   execution.ChannelID,
+	}
+	_ = r.teamLifecycle(execution.ChannelID).RemoveResponseWaiter(
+		context.Background(), lcCtx, string(cause))
+}
+
+// sessionIDOr 取会话 ID（空回退默认值）。
+// Python: request.session_id or "default"
+func sessionIDOr(req *schema.AgentRequest, fallback string) string {
+	if req == nil || req.SessionID == nil || strings.TrimSpace(*req.SessionID) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(*req.SessionID)
 }
