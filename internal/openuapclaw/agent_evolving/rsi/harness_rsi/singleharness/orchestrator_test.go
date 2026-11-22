@@ -633,6 +633,81 @@ func TestRun_取消传播(t *testing.T) {
 	}
 }
 
+// fakeSentinelEvaluator 测试用评估注入面：无条件返回取消哨兵，模拟 Python
+// "子协程被取消、CancelledError 从内部冒上来而本任务 cancelling() 计数为 0"
+// 的形态（iterative.py:221-226 catch 分支）——ctx 未取消但 err 是哨兵。
+type fakeSentinelEvaluator struct{}
+
+func (f *fakeSentinelEvaluator) Evaluate(ctx context.Context, dataset harnessrsi.DatasetArtifact,
+	teamSkillRefPath, harnessRefsPath, outputDir string) (string, error) {
+	return "", harnessrsi.ErrTaskCancelled
+}
+
+func (f *fakeSentinelEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]any,
+	teamSkillRefPath, harnessRefsPath, outputDir string,
+	dataset *harnessrsi.DatasetArtifact,
+	onCaseStage func(evaluatorpkg.EvaluationStageEvent) error,
+	caseConcurrency int,
+	baselineContexts map[string]*evaluatorpkg.BaselineJudgeContext) (string, error) {
+	return "", harnessrsi.ErrTaskCancelled
+}
+
+// TestRun_内部哨兵取消_无ctx取消 钉住 Run 分类段的 ErrTaskCancelled 分支：
+// ctx 全程未取消、取消哨兵从注入面冒上来时仍必须判 cancelled（而非 failed），
+// 收尾落盘 terminated 并 emit 终止事件。17.9 取消触发链接线前此分支仅由
+// 本测试驱动（spec 2026-11-22-rsi-17.7 §5 D-17.7-1）。
+func TestRun_内部哨兵取消_无ctx取消(t *testing.T) {
+	dir := t.TempDir()
+	cfg := buildTestConfig(dir)
+	evaluator := &fakeSentinelEvaluator{}
+	orchestrator, err := NewSingleHarnessIterativeOptimizationOrchestrator(
+		cfg, evaluator, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("构造: %v", err)
+	}
+	var events []rsi.EngineEvent
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	refsPath := filepath.Join(dir, "refs.yaml")
+	writeTestYAML(t, refsPath, "harness_refs:\n  coder: "+dir+"\n")
+	dsPath := filepath.Join(dir, "ds.json")
+	writeTestYAML(t, dsPath, `[{"case_id":"c1","input":"task"}]`)
+	request, err := NewIterativeSingleHarnessRequest(
+		[]string{dsPath}, refsPath, filepath.Join(dir, "run"), "ds1", false, "", false, "", nil)
+	if err != nil {
+		t.Fatalf("构造: %v", err)
+	}
+	_, err = orchestrator.Run(ctx, request, func(_ context.Context, event rsi.EngineEvent) error {
+		events = append(events, event)
+		return nil
+	})
+	// 关键前提：ctx 全程未取消，取消只来自内部哨兵冒泡。
+	if ctx.Err() != nil {
+		t.Fatalf("ctx 不应被取消，得到 %v", ctx.Err())
+	}
+	if !errors.Is(err, harnessrsi.ErrTaskCancelled) {
+		t.Fatalf("内部哨兵取消应返回 ErrTaskCancelled，得到 %v", err)
+	}
+	// 分类必须走 cancelled 而非 failed：state 落盘 status=terminated。
+	statePayload, readErr := readYAMLFile(filepath.Join(dir, "run", "single_harness_state.yaml"))
+	if readErr != nil {
+		t.Fatalf("state 落盘缺失: %v", readErr)
+	}
+	if toString(statePayload["status"]) != "terminated" {
+		t.Fatalf("state status 应 terminated，得到 %q", toString(statePayload["status"]))
+	}
+	foundTerminated := false
+	for _, event := range events {
+		if statusEvent, ok := event.(*rsi.EventStatus); ok && statusEvent.Status() == rsi.RsiStatusTerminated {
+			foundTerminated = true
+			break
+		}
+	}
+	if !foundTerminated {
+		t.Fatalf("取消后应 emit terminated 事件，实际 %d 个事件", len(events))
+	}
+}
+
 // fakeLoopAnalyzer 测试用分析注入面：写含可执行问题的 analysis_ref。
 type fakeLoopAnalyzer struct {
 	dir              string
