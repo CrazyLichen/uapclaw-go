@@ -43,8 +43,8 @@ func InjectSwarmProviderBases() {
 	providers.SetContextProcessorRailBuilder(func(config map[string]any) agentinterfaces.AgentRail {
 		return teamrt.BuildContextProcessorRail(config)
 	})
-	providers.SetWorkspaceReportPathCtor(func(rootDir, teamID, language string) agentinterfaces.AgentRail {
-		return teamrt.NewTeamWorkspaceReportPathRail(rootDir, teamID, language)
+	providers.SetWorkspaceReportPathCtor(func(rootDir, projectDir, outputsDir, teamID, language string) agentinterfaces.AgentRail {
+		return teamrt.NewTeamWorkspaceReportPathRail(rootDir, projectDir, outputsDir, teamID, language)
 	})
 	providers.SetMemberSkillToolkitRailCtor(func(workspaceDir string) agentinterfaces.AgentRail {
 		return teamrt.NewMemberSkillToolkitRail(workspaceDir)

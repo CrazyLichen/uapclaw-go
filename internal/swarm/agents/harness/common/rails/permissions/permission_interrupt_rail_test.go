@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 

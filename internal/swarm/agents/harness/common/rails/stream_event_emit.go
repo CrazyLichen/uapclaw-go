@@ -7,18 +7,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/usage"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

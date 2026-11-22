@@ -3,18 +3,19 @@ package rails
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	interruptrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,6 +39,11 @@ type JiuClawStreamEventRail struct {
 
 	// deepAgent 持有当前 DeepAgent 引用，用于获取 prompt language 等
 	deepAgent sainterfaces.BaseAgent
+
+	// memberName 成员名（团队模式泳道标识，Python: self._member_name）
+	memberName string
+	// role 成员角色（小写归一，Python: self._role）
+	role string
 
 	// ── 每会话暂停/终止状态 ──
 	// Key: session_id (conversation_id)；共享适配器实例服务多个并发会话，
@@ -138,7 +144,22 @@ type InterruptionProjectionDeps struct {
 
 // NewJiuClawStreamEventRail 创建 StreamEvent Rail 实例
 func NewJiuClawStreamEventRail() *JiuClawStreamEventRail {
-	return &JiuClawStreamEventRail{
+	return newJiuClawStreamEventRailWith("", "")
+}
+
+// NewJiuClawStreamEventRailWithIdentity 创建带成员身份的流事件 rail。
+//
+// Python: JiuSwarmStreamEventRail.__init__ (stream_event_rail.py:288-300)
+// keyword-only member_name/role（团队模式标识成员泳道）。role 归一为小写；
+// 消费点（llm_call 信号 payload、token usage fallback_role、leader ask_user
+// 门卫）随 stream_event_rail.py 对应段移植时接入。
+func NewJiuClawStreamEventRailWithIdentity(memberName, role string) *JiuClawStreamEventRail {
+	return newJiuClawStreamEventRailWith(memberName, role)
+}
+
+// newJiuClawStreamEventRailWith 内部构造。
+func newJiuClawStreamEventRailWith(memberName, role string) *JiuClawStreamEventRail {
+	r := &JiuClawStreamEventRail{
 		abortRequested:       make(map[string]bool),
 		pauseConds:           make(map[string]*pauseCond),
 		conversationIDs:      make(map[string]string),
@@ -146,7 +167,10 @@ func NewJiuClawStreamEventRail() *JiuClawStreamEventRail {
 		inflightToolCalls:    make(map[string]inflightToolCallInfo),
 		cancelledToolResults: make(map[string][]map[string]any),
 		quarantinedSessions:  make(map[string]bool),
+		memberName:           strings.TrimSpace(memberName),
+		role:                 strings.ToLower(strings.TrimSpace(role)),
 	}
+	return r
 }
 
 // SetRootPermissionQueue 注入根权限队列（装配期调用）。

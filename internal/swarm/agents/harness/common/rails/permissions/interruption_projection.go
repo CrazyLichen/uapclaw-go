@@ -24,11 +24,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )

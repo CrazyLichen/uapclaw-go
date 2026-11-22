@@ -10,7 +10,6 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -270,8 +269,8 @@ func TestCodeAdapter_UpdateRuntimeConfig_ForceEnglish(t *testing.T) {
 	c.updateRuntimeConfig(ctx, config)
 
 	// 验证 runtime_state.yaml 被写入
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 session 文件）
+	yamlPath := commrails.RuntimeStatePath("acp_s1")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// Channel 应来自 sessionID 前缀
@@ -304,8 +303,8 @@ func TestCodeAdapter_UpdateRuntimeConfig_OutputLanguage(t *testing.T) {
 	c.updateRuntimeConfig(ctx, config)
 
 	// 验证 YAML 中 language 来自 resolveOutputLanguage（"cn"）而非 resolveRuntimeLanguage（"en"）
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 session 文件）
+	yamlPath := commrails.RuntimeStatePath("acp_s1")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	if v, _ := raw["language"].(string); v != "cn" {

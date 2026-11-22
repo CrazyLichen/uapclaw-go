@@ -107,6 +107,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: self._write_runtime_state(mode=..., language=..., channel=..., project_dir=...)
 	d.writeRuntimeStateYAML(
 		ctx,
+		"",
 		config.Mode,
 		resolvedLanguage,
 		resolvedChannel,
@@ -120,7 +121,8 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 		d.runtimePromptRail.SetForceEnglish(config.ForceEnglish)
 		d.runtimePromptRail.SetChannel(resolvedChannel)
 		d.runtimePromptRail.SetTrustedDirs(config.TrustedDirs)
-		d.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir)
+		d.runtimePromptRail.SetSessionID(config.SessionID)
+		d.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir, "", "", "", "")
 		d.runtimePromptRail.SetModelName(d.resolveModelName())
 		d.runtimePromptRail.SetMode(config.Mode)
 	}
@@ -347,9 +349,10 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 
 // writeRuntimeStateYAML 将运行时状态写入 config 目录下的 runtime_state.yaml。
 // Python: _write_runtime_state() (interface_deep.py L756-821)
-func (d *DeepAdapter) writeRuntimeStateYAML(ctx context.Context, mode, language, channel, projectDir string) {
+func (d *DeepAdapter) writeRuntimeStateYAML(ctx context.Context, sessionID, mode, language, channel, projectDir string) {
 	commrails.WriteRuntimeStateYAML(
 		ctx,
+		sessionID,
 		d.resolveModelName(),
 		mode,
 		language,

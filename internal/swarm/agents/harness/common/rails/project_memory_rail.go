@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 )

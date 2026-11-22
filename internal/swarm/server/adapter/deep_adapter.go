@@ -1494,7 +1494,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// Python: self._write_runtime_state(mode=..., language=..., channel=...,
 		//   project_dir=inputs.get("project_dir") or self._project_dir or self._workspace_dir)
 		d.writeRuntimeStateYAML(
-			ctx, mode, resolvedLanguage, resolvedChannel,
+			ctx, sessionID, mode, resolvedLanguage, resolvedChannel,
 			commrails.FirstNonEmpty(
 				paramsString(inputs, "project_dir", ""),
 				d.projectDir,
@@ -2783,7 +2783,7 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 //   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
 //
 // Python: workspace_root = workspaceDir or projectDir or os.Getwd()
-func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
+func (d *DeepAdapter) seedRuntimeCwd(_ context.Context, cwdArg string) {
 	// Python: workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
 	workspaceRoot := d.workspaceDir
 	if workspaceRoot == "" {
@@ -2803,16 +2803,24 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 		runtimeCwd = workspaceRoot
 	}
 
-	// Python: init_cwd(runtime_cwd, workspace=workspace_root)
-	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
-	ctx = cwd.WithCwdState(ctx, cwdState)
+	// Python: init_cwd(runtime_cwd, workspace=workspace_root) 设置 ContextVar
+	// 全局生效——Go 经 RebindCwdState 覆盖 agent 级 cwdState，由
+	// attachRunContexts 在后续调用入口注入（2026-12-22 修正：原实现返回带
+	// CwdState 的 ctx，但全部调用点丢弃返回值，请求级 cwd 实际从未生效）。
+	if d.instance == nil {
+		// 实例未创建（测试/早期阶段）：跳过 rebind，保持日志可观测
+		logger.Info(logComponent).
+			Str("runtime_cwd", runtimeCwd).
+			Str("workspace_root", workspaceRoot).
+			Msg("CWD seed skipped: instance not created")
+		return
+	}
+	d.instance.RebindCwdState(cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot)))
 
 	logger.Info(logComponent).
 		Str("runtime_cwd", runtimeCwd).
 		Str("workspace_root", workspaceRoot).
 		Msg("CWD initialized from runtime seed")
-
-	return ctx
 }
 
 // isDir 检查路径是否为有效目录。

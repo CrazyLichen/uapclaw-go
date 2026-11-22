@@ -19,7 +19,6 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,10 +57,10 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 	d.modelRequestConfig = llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-max"))
 	d.agentName = "test_agent"
 
-	d.writeRuntimeStateYAML(t.Context(), "agent.work.plan", "cn", "web", "/tmp/project")
+	d.writeRuntimeStateYAML(t.Context(), "", "agent.work.plan", "cn", "web", "/tmp/project")
 
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 "" → default 文件）
+	yamlPath := commrails.RuntimeStatePath("")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// 验证关键字段
@@ -112,8 +111,8 @@ func TestUpdateRuntimeConfig_全部字段(t *testing.T) {
 	d.updateRuntimeConfig(ctx, config)
 
 	// 验证 runtime_state.yaml 被写入
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 "" → default 文件）
+	yamlPath := commrails.RuntimeStatePath("")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// Channel 应来自 ChannelID（优先级高于 sessionID 前缀解析）
@@ -145,8 +144,8 @@ func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 	d.updateRuntimeConfig(ctx, config)
 
 	// 验证 channel 来自 sessionID 前缀
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 "" → default 文件）
+	yamlPath := commrails.RuntimeStatePath("")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	if v, _ := raw["channel"].(string); v != "acp" {
@@ -176,8 +175,8 @@ func TestUpdateRuntimeConfig_RuntimePromptRailSetter(t *testing.T) {
 	// rail 的 channel 应为 "web"（无 ChannelID，无 SessionID → fallback "web"）
 	// rail 的 mode 应为 "agent.work.plan"
 	// 注：字段未导出，无法直接断言，通过 runtime_state.yaml 间接验证
-	configDir := workspace.ConfigDir()
-	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	// 15.20 ⑧：runtime_state 按 session 隔离（writer 传 "" → default 文件）
+	yamlPath := commrails.RuntimeStatePath("")
 	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 	if v, _ := raw["language"].(string); v != "en" {
 		t.Errorf("language = %q, want %q", v, "en")

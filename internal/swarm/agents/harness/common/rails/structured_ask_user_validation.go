@@ -26,10 +26,10 @@ import (
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

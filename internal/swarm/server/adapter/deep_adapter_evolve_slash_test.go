@@ -987,8 +987,8 @@ func TestProcessMessageStreamImpl_team分支6步(t *testing.T) {
 		t.Error("team 分支应完成 applyModelToReactAgent（S-07 步骤 1-2）")
 	}
 
-	// 步骤 6 断言：runtime_state.yaml 已写入
-	yamlPath := filepath.Join(workspace.ConfigDir(), "runtime_state.yaml")
+	// 步骤 6 断言：runtime_state.yaml 已写入（15.20 ⑧：按 session 隔离）
+	yamlPath := commrails.RuntimeStatePath(sessionID)
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("runtime_state.yaml 应已写入（S-07 步骤 6）: %v", err)

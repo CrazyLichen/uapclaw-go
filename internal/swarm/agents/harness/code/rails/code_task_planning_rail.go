@@ -8,13 +8,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	codetools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/tools"
 )
 

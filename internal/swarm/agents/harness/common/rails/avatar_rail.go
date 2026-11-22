@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

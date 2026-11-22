@@ -116,7 +116,7 @@ func containsAll(content string, subs ...string) bool {
 // TestTeamWorkspaceReportPathRail_内容构建 验证 BeforeModelCall 注入 section。
 func TestTeamWorkspaceReportPathRail_内容构建(t *testing.T) {
 	root := t.TempDir()
-	rail := NewTeamWorkspaceReportPathRail(root, "t1", "cn")
+	rail := NewTeamWorkspaceReportPathRail(root, "", "", "t1", "cn")
 	if rail.Priority() != 5 {
 		t.Fatalf("priority = %d, want 5", rail.Priority())
 	}
@@ -137,7 +137,7 @@ func TestTeamWorkspaceReportPathRail_内容构建(t *testing.T) {
 		t.Fatalf("section priority = %d, want 67", section.Priority)
 	}
 	content := section.Content["en"]
-	if !containsAll(content, ".team/t1/", root, "prd-review-memo.md") {
+	if !containsAll(content, "# Project and Team Workspace File Policy", root, "deliverables") {
 		t.Fatalf("content missing key parts: %q", content)
 	}
 
@@ -185,3 +185,64 @@ func TestMemberSkillToolkitRail_InitUninit(t *testing.T) {
 
 // TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
 func (f *fakeAbilityMgrForFilter) TeardownTools() {}
+
+// TestTeamWorkspaceReportPathRail_项目与Projectless分支 对齐 Python deliverables 三分支。
+func TestTeamWorkspaceReportPathRail_项目与Projectless分支(t *testing.T) {
+	root := t.TempDir()
+	// 绑定项目 → deliverables 留在项目内
+	rail := NewTeamWorkspaceReportPathRail(root, "/proj", "", "t1", "cn")
+	agent := newFakeAgentWithPromptBuilder()
+	if err := rail.Init(context.Background(), agent); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if err := rail.BeforeModelCall(context.Background(), nil); err != nil {
+		t.Fatalf("BeforeModelCall failed: %v", err)
+	}
+	section := agent.promptBuilder.GetSection("team_workspace_report_paths")
+	if section == nil {
+		t.Fatalf("section not injected")
+	}
+	if !strings.Contains(section.Content["en"], "User project root: `/proj`") {
+		t.Fatalf("project 分支缺失: %s", section.Content["en"])
+	}
+
+	// projectless → 共享 outputs 目录
+	rail2 := NewTeamWorkspaceReportPathRail(root, "", "/team/outputs", "t1", "en")
+	agent2 := newFakeAgentWithPromptBuilder()
+	_ = rail2.Init(context.Background(), agent2)
+	_ = rail2.BeforeModelCall(context.Background(), nil)
+	section2 := agent2.promptBuilder.GetSection("team_workspace_report_paths")
+	if section2 == nil || !strings.Contains(section2.Content["en"], "Final deliverables directory: `/team/outputs`") {
+		t.Fatalf("projectless 分支缺失")
+	}
+
+	// 双缺 → 需先确认目的地
+	rail3 := NewTeamWorkspaceReportPathRail(root, "", "", "t1", "en")
+	agent3 := newFakeAgentWithPromptBuilder()
+	_ = rail3.Init(context.Background(), agent3)
+	_ = rail3.BeforeModelCall(context.Background(), nil)
+	section3 := agent3.promptBuilder.GetSection("team_workspace_report_paths")
+	if section3 == nil || !strings.Contains(section3.Content["en"], "do not silently drop them") {
+		t.Fatalf("双缺分支缺失")
+	}
+}
+
+// TestTeamWorkspaceReportPathRail_BindSwarmContext 对齐 bind_swarm_context 捕获。
+func TestTeamWorkspaceReportPathRail_BindSwarmContext(t *testing.T) {
+	rail := NewTeamWorkspaceReportPathRail(t.TempDir(), "", "", "t1", "cn")
+	if rail.swarmContext != nil {
+		t.Fatalf("初始 swarmContext 应为 nil")
+	}
+	rail.BindSwarmContext(map[string]any{"role": "leader"})
+	if rail.swarmContext == nil {
+		t.Fatalf("BindSwarmContext 后应捕获上下文")
+	}
+	// Uninit 移除节
+	agent := newFakeAgentWithPromptBuilder()
+	_ = rail.Init(context.Background(), agent)
+	_ = rail.BeforeModelCall(context.Background(), nil)
+	_ = rail.Uninit(agent)
+	if agent.promptBuilder.GetSection("team_workspace_report_paths") != nil {
+		t.Fatalf("Uninit 后应移除 section")
+	}
+}
