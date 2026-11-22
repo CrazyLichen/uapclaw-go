@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // newTestModel 构造测试用空 Model（仅占位，契约层不调用其方法）。

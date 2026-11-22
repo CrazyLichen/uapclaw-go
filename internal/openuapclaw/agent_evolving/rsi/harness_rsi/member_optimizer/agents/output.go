@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	agentface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/agentface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"gopkg.in/yaml.v3"
 )
 

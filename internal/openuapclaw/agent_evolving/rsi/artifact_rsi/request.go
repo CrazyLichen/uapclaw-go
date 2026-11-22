@@ -3,8 +3,8 @@ package artifactrsi
 import (
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

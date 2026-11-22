@@ -14,11 +14,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // TestPackageWriteAllowed_声明路径 对齐 Python package_write_allowed 非 repair 分支。

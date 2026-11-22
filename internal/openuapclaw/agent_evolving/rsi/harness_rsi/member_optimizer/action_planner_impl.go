@@ -19,12 +19,12 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/action_groups"
 	agentface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/agentface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"gopkg.in/yaml.v3"
 )
 

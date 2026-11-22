@@ -7,9 +7,9 @@ import (
 	"context"
 	"strings"
 
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -12,9 +12,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	"gopkg.in/yaml.v3"
 )
 

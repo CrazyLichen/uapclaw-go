@@ -17,18 +17,18 @@ import (
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 
 	"github.com/google/uuid"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	configpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	evaluatorpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
@@ -590,6 +591,7 @@ func TestRun_取消传播(t *testing.T) {
 	if err != nil {
 		t.Fatalf("构造: %v", err)
 	}
+	var events []rsi.EngineEvent
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	refsPath := filepath.Join(dir, "refs.yaml")
@@ -601,12 +603,34 @@ func TestRun_取消传播(t *testing.T) {
 	if err != nil {
 		t.Fatalf("构造: %v", err)
 	}
-	_, err = orchestrator.Run(ctx, request, nil)
-	if err == nil && ctx.Err() == nil {
-		t.Fatalf("取消应传播")
+	_, err = orchestrator.Run(ctx, request, func(_ context.Context, event rsi.EngineEvent) error {
+		events = append(events, event)
+		return nil
+	})
+	// 取消必须以 ErrTaskCancelled 哨兵冒泡（Python CancelledError 等价物），
+	// 不得被吞掉、也不得伪装成普通 failed。
+	if !errors.Is(err, harnessrsi.ErrTaskCancelled) {
+		t.Fatalf("取消应返回 ErrTaskCancelled，得到 %v", err)
 	}
-	// 取消不是 failed 状态（Run 收尾处理）
-	_ = errors.Is
+	// 收尾账本必须落盘且状态为 terminated（取消不是 failed）。
+	statePayload, readErr := readYAMLFile(filepath.Join(dir, "run", "single_harness_state.yaml"))
+	if readErr != nil {
+		t.Fatalf("state 落盘缺失: %v", readErr)
+	}
+	if toString(statePayload["status"]) != "terminated" {
+		t.Fatalf("state status 应 terminated，得到 %q", toString(statePayload["status"]))
+	}
+	// 必须投递 terminated 事件（Python iterative.py:256 emit EventStatus(status="terminated")）。
+	foundTerminated := false
+	for _, event := range events {
+		if statusEvent, ok := event.(*rsi.EventStatus); ok && statusEvent.Status() == rsi.RsiStatusTerminated {
+			foundTerminated = true
+			break
+		}
+	}
+	if !foundTerminated {
+		t.Fatalf("取消后应 emit terminated 事件，实际 %d 个事件", len(events))
+	}
 }
 
 // fakeLoopAnalyzer 测试用分析注入面：写含可执行问题的 analysis_ref。

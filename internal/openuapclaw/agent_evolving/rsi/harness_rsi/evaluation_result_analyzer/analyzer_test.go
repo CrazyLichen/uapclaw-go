@@ -14,12 +14,12 @@ import (
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	rsiconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	singleagentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestTruncateText 截断标记文案（Python _truncate_text）
