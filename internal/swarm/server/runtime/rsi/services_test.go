@@ -230,8 +230,13 @@ func TestInstaller_Rollback门禁(t *testing.T) {
 	if _, err := store.Create(task); err != nil {
 		t.Fatal(err)
 	}
-	inst := NewHarnessInstaller(store, nil, nil, NewHarnessActivationStore(store.TasksRoot()))
-	if _, err := inst.Rollback("whatever"); err == nil ||
+	activation := NewHarnessActivationStore(store.TasksRoot())
+	inst := NewHarnessInstaller(store, nil, nil, activation)
+	// Python 顺序：未知 ID 先报 NotFound，再进门禁。
+	vDir := filepath.Join(store.TasksRoot(), "v")
+	_ = os.MkdirAll(vDir, 0o755)
+	_ = activation.Commit(map[string]any{"installation_id": "inst-1", "runtime_path": vDir, "sha256": strings.Repeat("a", 64)})
+	if _, err := inst.Rollback("inst-1"); err == nil ||
 		!strings.Contains(err.Error(), "不能回退") {
 		t.Fatalf("门禁漂移: %v", err)
 	}
