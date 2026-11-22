@@ -264,3 +264,10 @@ func (f *nilFacade) GetGlobalState(key state.StateKey) (any, error) {
 	}
 	return nil, nil
 }
+
+// newFakeVertexSessionInner 构造真实 NodeSession 的根会话（State 为 InMemory WorkflowState）
+func newFakeVertexSessionInner(t *testing.T) session.BaseSession {
+	t.Helper()
+	parent := &fakeInnerSess{cfg: config.NewSessionConfig(context.Background()), id: "root"}
+	return session.NewWorkflowVertexSession(parent, "root", "", false)
+}

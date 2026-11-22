@@ -33,7 +33,7 @@ func (c *IntermediateLoopVarCallback) firstInLoop(sess session.BaseSession) (any
 	// Python: local_vars = session.state().get_inputs(self.intermediate_loop_var)
 	var localVars map[string]any
 	if ws, ok := sess.State().(state.WorkflowState); ok {
-		raw := ws.GetInputs(state.StringKey(""))
+		raw := ws.GetInputs(schemaKeyOf(c.intermediateLoopVar))
 		if m, isMap := raw.(map[string]any); isMap {
 			localVars = m
 		}

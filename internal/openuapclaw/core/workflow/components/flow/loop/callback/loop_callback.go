@@ -102,6 +102,14 @@ func NewLoopCallback(
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// schemaKeyOf dict schema → SchemaKey（引用解析面）；nil/空 → 零值 StringKey。
+func schemaKeyOf(m map[string]any) state.StateKey {
+	if len(m) > 0 {
+		return state.SchemaKey(m)
+	}
+	return state.StringKey("")
+}
+
 // Call 触发回调（Python __call__(loop_stage, session, loop_times=None) → atomic_invoke）。
 func (l *LoopCallback) Call(ctx context.Context, stage string, sess session.BaseSession, loopTimes *int) error {
 	kwargs := map[string]any{"loop_stage": stage, "session": sess}

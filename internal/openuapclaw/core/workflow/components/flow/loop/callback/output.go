@@ -67,7 +67,8 @@ func (c *OutputCallback) endRound(sess session.BaseSession, loopTimes int) (any,
 	// Python: results.append(session.state().get_inputs(self._outputs_format))
 	var inputs any
 	if ws, ok := sess.State().(state.WorkflowState); ok {
-		inputs = ws.GetInputs(state.StringKey(""))
+		// Python: get_inputs(self._outputs_format)——dict schema 走 SchemaKey 引用解析
+		inputs = ws.GetInputs(schemaKeyOf(c.outputsFormat))
 	}
 	appendResult(inputs, &results)
 	// Python: session.state().update({root: results})

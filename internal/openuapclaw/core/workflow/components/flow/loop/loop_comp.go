@@ -207,7 +207,10 @@ func (p *PostLoopBody) OnInvoke(_ context.Context, _ map[string]any, sess sessio
 	}
 	// Python: finish_index = session.state().get(FINISH_INDEX)
 	if v := sess.State().Get(state.StringKey(finishKey)); v != nil {
-		if n, isInt := v.(int); isInt {
+		// 编码适配：checkpoint JSON 往返 int→float64（topic_audit D-6 先例）
+		if n, isFloat := v.(float64); isFloat {
+			p.finishIndex = int(n)
+		} else if n, isInt := v.(int); isInt {
 			p.finishIndex = n
 		}
 	}
@@ -499,8 +502,12 @@ func (a *AdvancedLoopComponent) conditionInvoke(sess session.BaseSession) ([]str
 	// Python: index = session.state().get(INDEX)
 	index := 0
 	if v := st.Get(state.StringKey(constants.Index)); v != nil {
-		if n, ok := v.(int); ok {
+		// 编码适配：checkpoint JSON 往返 int→float64（topic_audit D-6 先例）
+		switch n := v.(type) {
+		case int:
 			index = n
+		case float64:
+			index = int(n)
 		}
 	} else {
 		// Python: index is None → {BROKEN:False, INDEX:0} update + set_outputs + commit
@@ -776,10 +783,8 @@ func (g *LoopGroup) OnInvoke(ctx context.Context, inputs map[string]any, sess se
 		return nil, err
 	}
 	// Python: loop_session = SubWorkflowSession(session.parent(), self._workflow_config.card.id, actor_manager)
+	// parent() 一步到位（NodeSession.Parent() 返回父 NodeSession，勿二次解包）
 	parent := parentSessionOf(sess)
-	if pp, ok := parent.(sessioninterfaces.ParentProvider); ok {
-		parent = pp.Parent()
-	}
 	loopSession := session.NewSubWorkflowSessionFacade(parent, g.Config().Card.ID, am)
 	if loopSession == nil {
 		return nil, exception.BuildError(exception.StatusComponentLoopGroupParamInvalid,
@@ -854,6 +859,22 @@ func NewLoopComponent(loopGroup *LoopGroup, outputSchema map[string]any) (*LoopC
 
 // GraphInvoker 子图递归入口（loop_comp.py:222-223）。
 func (c *LoopComponent) GraphInvoker() bool { return true }
+
+// ToExecutable 产出可执行体（Python to_executable 动态分派返回 self）。
+// 必须显式 override（8.14b D-14b 同缝）：基座 ToExecutable 静态解析返回内层
+// 基座，注册产物丢失外层 GraphInvoker 钩子 → 信封不装。
+func (c *LoopComponent) ToExecutable() graphexe.GeneralExecutor { return c }
+
+// AddComponent 将自身注册进图（Python add_component 继承 mixin 默认实现；
+// 8.14b D-14b 同款 override，注册外层自身保住 GraphInvoker 动态分派）。
+func (c *LoopComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
+	opts := []graph.AddNodeOption{}
+	if waitForAll {
+		opts = append(opts, graph.WithWaitForAll())
+	}
+	g.AddNode(nodeID, c.ToExecutable(), opts...)
+	return nil
+}
 
 // LoopGroup 访问器（loop_comp.py:225-227 property loop_group）。
 func (c *LoopComponent) LoopGroup() *LoopGroup { return c.loopGroup }
