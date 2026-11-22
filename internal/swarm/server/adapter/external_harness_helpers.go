@@ -1320,6 +1320,45 @@ func requestSessionID(request *schema.AgentRequest) string {
 	return *request.SessionID
 }
 
+// bindingToMap 绑定 → 线格式 map（会话调度缝 sessionAdapterOptions 的载体）。
+// Python: :226-232/:241-250 dict 形态直传；runtime/package_path 经 any 携带。
+func bindingToMap(binding *ResolvedExternalHarnessBinding) map[string]any {
+	return map[string]any{
+		"kind":                binding.Kind,
+		"agent_template_name": binding.AgentTemplateName,
+		"provider_name":       binding.ProviderName,
+		"runtime":             binding.Runtime,
+		"package_path":        binding.PackagePath,
+	}
+}
+
+// bindingFromMap 线格式 map → 绑定（runtime 类型断言失败归 nil）。
+func bindingFromMap(raw map[string]any) *ResolvedExternalHarnessBinding {
+	if raw == nil {
+		return nil
+	}
+	binding := &ResolvedExternalHarnessBinding{
+		Kind:              storedString(raw, "kind"),
+		AgentTemplateName: storedString(raw, "agent_template_name"),
+		ProviderName:      storedString(raw, "provider_name"),
+	}
+	if runtime, ok := raw["runtime"].(*hschema.AgentRuntimeSpec); ok {
+		binding.Runtime = runtime
+	}
+	if path, ok := raw["package_path"].(string); ok {
+		binding.PackagePath = path
+	}
+	return binding
+}
+
+// externalBindingOfChild 读子适配器上的 External 绑定（非 DeepAdapter 归 nil）。
+func externalBindingOfChild(child AgentAdapter) *ResolvedExternalHarnessBinding {
+	if typed, ok := child.(*DeepAdapter); ok {
+		return typed.externalHarnessBinding
+	}
+	return nil
+}
+
 // environMap os.environ → map（Python dict(os.environ)）。
 func environMap() map[string]string {
 	env := make(map[string]string)

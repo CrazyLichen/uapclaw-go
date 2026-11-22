@@ -119,6 +119,12 @@ type DeepAdapter struct {
 	// parentSessionID 子适配器所属的会话标识（仅 isSessionScoped 为真时有意义）。
 	// Python: interface_deep.py _parent_session_id
 	parentSessionID string
+	// externalHarnessBinding External Harness 不可变绑定（child 专属）。
+	// Python: interface_deep.py _external_harness_binding（:1960）
+	externalHarnessBinding *ResolvedExternalHarnessBinding
+	// externalHarnessState 会话私有 External Harness 运行态（懒启动的 IOAdapter 等）。
+	// Python: _external_harness（:1961）
+	externalHarnessState *ExternalHarnessSessionState
 	// sessionChildFactory 造一个与原适配器同类的新适配器。
 	// Python: type(self)()（_new_session_scoped_adapter :2680）
 	//
@@ -1064,8 +1070,22 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
+		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18171-18180）。
+		// 冲突/类型错误 → ok=False error 响应（Python _equipment_error_response）。
+		var externalBindingMap map[string]any
+		if req.ReqMethod == schema.ReqMethodChatSend {
+			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
+			if resolveErr != nil {
+				return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+					schema.WithResponseOK(false),
+					schema.WithPayload(map[string]any{"error": resolveErr.Error()}),
+				), nil
+			}
+			externalBindingMap = bindingToMap(resolved)
+		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
-			ReserveActivity: !isAttachOnlySubscription(req.Params),
+			ReserveActivity:        !isAttachOnlySubscription(req.Params),
+			ExternalHarnessBinding: externalBindingMap,
 		})
 		if err != nil {
 			return nil, err
@@ -1084,6 +1104,16 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+	}
+
+	// External Harness 会话（Python: :18193-18198）——非流式拒绝。
+	if d.externalHarnessBinding != nil {
+		return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "External Harness currently requires a streaming request",
+			}),
+		), nil
 	}
 
 	// 23.9 复审批2 后半: 受管语音任务绑定（对齐 interface_deep.py:18918-18921
@@ -1310,8 +1340,24 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
+		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18947-18960 请求前置步）。
+		var externalBindingMap map[string]any
+		if req.ReqMethod == schema.ReqMethodChatSend {
+			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
+			if resolveErr != nil {
+				ch := make(chan *schema.AgentResponseChunk, 1)
+				ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+					"event_type": "chat.error",
+					"error":      resolveErr.Error(),
+				}, schema.WithChunkIsComplete(true))
+				close(ch)
+				return ch, nil
+			}
+			externalBindingMap = bindingToMap(resolved)
+		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
-			ReserveActivity: !isAttachOnlySubscription(req.Params),
+			ReserveActivity:        !isAttachOnlySubscription(req.Params),
+			ExternalHarnessBinding: externalBindingMap,
 		})
 		if err != nil {
 			ch := make(chan *schema.AgentResponseChunk)
@@ -1331,6 +1377,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 			return child.ProcessMessageStreamImpl(ctx, req, inputs)
 		})
+	}
+
+	// External Harness 会话分流（Python: :19001-19068；15.18 接线：child 流式入口）。
+	// _ensure_chat_extensions 门卫为 equipment 扩展半区（D-e12 ⤴️扩展包管理），
+	// Go 侧结构性跳过，登记偏差 D-18-12。
+	if d.externalHarnessBinding != nil {
+		return d.ProcessExternalHarnessStream(ctx, d.externalHarnessState, req, inputs), nil
 	}
 
 	// 步骤 1: 实例 nil 检查
@@ -1930,6 +1983,11 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			defer d.evictIdleSessionAdapters(ctx)
 			return child.ProcessInterrupt(ctx, req)
 		}
+	}
+
+	// External Harness 会话（Python: :16365-16376；15.18 接线：child 中断入口）。
+	if d.externalHarnessBinding != nil {
+		return d.ProcessExternalHarnessInterrupt(ctx, d.externalHarnessState, req), nil
 	}
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx（Python: interface_deep.py :19684，D-23.8-1）
