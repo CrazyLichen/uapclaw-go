@@ -162,6 +162,11 @@ func TestBuildHeartbeatRail_门控矩阵(t *testing.T) {
 // fakeHeartbeatService 心跳服务占位（any 别名）。
 type fakeHeartbeatService struct{}
 
+// HandleOperation 窄面实现（25.6 批二接口收窄连带）。
+func (fakeHeartbeatService) HandleOperation(string, map[string]any, string, string, string, string) (map[string]any, error) {
+	return nil, nil
+}
+
 // TestBuildTeamPermissionRail_门控 backend/messager/权限开关三重门控。
 //
 // Python: _build_team_permission_rail (member_rails.py:813-819)。
