@@ -3,7 +3,10 @@
 // :1302-1305 / resolve_equipment_runtime_id :3269-3274）及其直接依赖的路径助手；
 // Hub 市场/下载/安装/卸载/预览半区（~4600 行）不移植，挂账 ⤴️扩展包管理章节回收
 // （15.18a 等待回填）。专家包来源=内置目录或手工放置 local 目录，无在线下载。
-package runtime
+//
+// 偏差（登记 D-18-a-4）：Python 切片函数位于 server/runtime 包内，Go 侧因 runtime 包
+// 反向依赖 adapter（image_modality_warmup）构成 import cycle，下沉为叶子子包 equipment。
+package equipment
 
 import (
 	"encoding/json"
