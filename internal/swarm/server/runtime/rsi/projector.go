@@ -50,6 +50,46 @@ func NewProjector(tasksRoot string) *Projector {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// OnProviderNode Provider 完整节点投影（对齐 Python on_provider_node）：
+// 不重编号保留原 ID，仅 provider 任务根 ID 归一为服务侧 ROOT。
+// ⚠️ D-9-1 连带：Python 先经 artifact_adapter.provider_node_to_dict 转换
+// （ARTIFACT 轨裁剪）；Go 侧 provider 节点已为 dict 形态直接投影。
+func (p *Projector) OnProviderNode(taskID string, raw map[string]any) *RsiTreeNode {
+	rawNodeID := valueToString(raw["node_id"])
+	if rawNodeID == "" {
+		return nil
+	}
+	nodeID := normalizeProviderNodeID(taskID, rawNodeID)
+	node := &RsiTreeNode{
+		NodeID:             nodeID,
+		Iteration:          safeInt(raw["iteration"]),
+		Type:               strings.ToUpper(firstNonEmpty(valueToString(raw["type"]), "REJECTED")),
+		Adopted:            boolValue(raw["adopted"]),
+		Score:              safeFloat(raw["score"]),
+		Description:        optAnyStr(raw["description"]),
+		SnapshotArtifactID: optAnyStr(raw["snapshot_artifact_id"]),
+		FailureReason:      optAnyStr(raw["failure_reason"]),
+		FailureClass:       optAnyStr(raw["failure_class"]),
+	}
+	if raw["parent_id"] != nil {
+		pid := normalizeProviderNodeID(taskID, valueToString(raw["parent_id"]))
+		node.ParentID = &pid
+	}
+	if changes, ok := raw["changes"].([]any); ok {
+		node.Changes = toStringMaps(changes)
+	}
+	if extra, ok := raw["extra"].(map[string]any); ok {
+		node.Extra = extra
+	}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	p.ensureNodesLocked(taskID)[nodeID] = *node
+	p.refIndex[taskID][nodeID] = nodeID
+	p.refIndex[taskID][rawNodeID] = nodeID
+	p.persistLocked(taskID)
+	return node
+}
+
 // RegisterRoot 注册根节点（服务侧在任务创建/首跑时调用）。
 func (p *Projector) RegisterRoot(taskID string, baseline *float64, description string) {
 	p.lock.Lock()
