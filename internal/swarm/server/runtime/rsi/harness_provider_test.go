@@ -111,9 +111,14 @@ func TestVerifyTaskMaterials_哈希一致放行(t *testing.T) {
 		OrchestratorConfigPath: &profile,
 	}
 	// 写入正确材料快照。
+	// Python 语义：三角色缺 hash 或文件缺失即拒——补齐 harness refs 文件与快照。
+	refs := filepath.Join(root, taskID, "refs.yaml")
+	_ = os.WriteFile(refs, []byte("harness_refs:\n  role: "+profile+"\n"), 0o644)
+	req.HarnessRefsPath = refs
 	store := NewTaskStore(root, nil)
 	if err := store.MergeConfig(taskID, map[string]any{"rsi_materials": map[string]any{
 		"input_snapshot": map[string]any{"sha256": shaFile(t, dataset)},
+		"harness_snapshot": map[string]any{"sha256": shaFile(t, refs)},
 		"profile":        map[string]any{"sha256": shaFile(t, profile)},
 	}}); err != nil {
 		t.Fatal(err)
