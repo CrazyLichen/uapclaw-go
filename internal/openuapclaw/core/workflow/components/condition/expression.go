@@ -187,11 +187,12 @@ func (c *ExpressionCondition) TraceInfo(sess session.BaseSession) any {
 
 // invokeImpl 基座回调槽（≙ Python invoke；原子链经 NewBaseCondition 接入，
 // 虽然 ExpressionCondition.Call 已覆写不走此链，但 Invoke 直调面保持一致）。
-func (c *ExpressionCondition) invokeImpl(_ context.Context, _ map[string]any, sess session.BaseSession) (bool, error) {
+func (c *ExpressionCondition) invokeImpl(_ context.Context, _ map[string]any, sess session.BaseSession) (bool, map[string]any, error) {
 	if len(c.expression) == 0 {
-		return true, nil
+		return true, nil, nil
 	}
-	return c.evaluateExpression(c.expression, c.getInputs(sess))
+	flag, err := c.evaluateExpression(c.expression, c.getInputs(sess))
+	return flag, nil, err // Python invoke 返回裸 bool，无 tuple
 }
 
 // getInputs 变量取值（Python _get_inputs，expression.py:48-54：空表达式或
