@@ -41,6 +41,10 @@ type agentRuntimeHandle = AgentRuntimeHandle
 // （session 队列、Skills 路由、heartbeat、流式包装）。
 // Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
 type UapClawSwarm struct {
+	// rsiHarnessMu / rsiHarnessLoad RSI Harness 热加载状态（Task 17.9c）。
+	rsiHarnessMu   sync.Mutex
+	rsiHarnessLoad *rsiHarnessLoadState
+
 	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
 	adapter adapter.AgentAdapter
 
