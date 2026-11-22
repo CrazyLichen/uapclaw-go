@@ -236,6 +236,10 @@ func TestInstaller_Rollback门禁(t *testing.T) {
 	vDir := filepath.Join(store.TasksRoot(), "v")
 	_ = os.MkdirAll(vDir, 0o755)
 	_ = activation.Commit(map[string]any{"installation_id": "inst-1", "runtime_path": vDir, "sha256": strings.Repeat("a", 64)})
+	v2Dir := filepath.Join(store.TasksRoot(), "v2")
+	_ = os.MkdirAll(v2Dir, 0o755)
+	// 激活版本为 inst-2，回退目标 inst-1 才会走到门禁（inst-1 已激活则幂等返回）。
+	_ = activation.Commit(map[string]any{"installation_id": "inst-2", "runtime_path": v2Dir, "sha256": strings.Repeat("b", 64)})
 	if _, err := inst.Rollback("inst-1"); err == nil ||
 		!strings.Contains(err.Error(), "不能回退") {
 		t.Fatalf("门禁漂移: %v", err)
