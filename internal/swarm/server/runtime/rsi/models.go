@@ -148,7 +148,7 @@ func (t *RsiTask) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ListProjection ``rsi.task.list`` 六字段投影（web §6.2）。
+// ListProjection “rsi.task.list“ 六字段投影（web §6.2）。
 func (t *RsiTask) ListProjection() map[string]any {
 	return map[string]any{
 		"task_id":       t.TaskID,
@@ -160,7 +160,7 @@ func (t *RsiTask) ListProjection() map[string]any {
 	}
 }
 
-// GetProjection ``rsi.task.get`` 出参（web §6.3）。
+// GetProjection “rsi.task.get“ 出参（web §6.3）。
 // progress/usage/bestArtifact 由调用方注入（对齐 Python 可空参数）。
 func (t *RsiTask) GetProjection(progress, usage, bestArtifact map[string]any) map[string]any {
 	config := map[string]any{
@@ -168,10 +168,10 @@ func (t *RsiTask) GetProjection(progress, usage, bestArtifact map[string]any) ma
 			"optimizer": t.ModelRefs["optimizer"],
 			"tester":    t.ModelRefs["tester"],
 		},
-		"input_file":              nullableAny(t.InputFile),
-		"max_iterations":          t.MaxIterations,
+		"input_file":               nullableAny(t.InputFile),
+		"max_iterations":           t.MaxIterations,
 		"optimization_instruction": nullableAny(t.OptimizationInstruction),
-		"artifact_path":           nullableAny(t.ArtifactPath),
+		"artifact_path":            nullableAny(t.ArtifactPath),
 		// URL 可能含代理凭据：只返回是否配置了任务级代理。
 		"web_proxy_configured": t.Config["web_proxy"] != nil,
 	}
@@ -266,7 +266,7 @@ type RsiTaskView struct {
 	ArtifactPath *string
 }
 
-// RsiDatasetResult ``rsi.dataset.validate`` 出参（adapter validate_input）。
+// RsiDatasetResult “rsi.dataset.validate“ 出参（adapter validate_input）。
 type RsiDatasetResult struct {
 	// Valid 是否有效。
 	Valid bool `json:"valid"`
@@ -284,7 +284,7 @@ func (r RsiDatasetResult) ToDict() map[string]any {
 	return map[string]any{"valid": r.Valid, "sample_count": nullableAny(r.SampleCount), "errors": r.Errors}
 }
 
-// RsiArtifactPath ``node.created.artifacts[]`` 元素（内部 v3 §4.5）。
+// RsiArtifactPath “node.created.artifacts[]“ 元素（内部 v3 §4.5）。
 type RsiArtifactPath struct {
 	// Role 角色名。
 	Role string `json:"role"`
@@ -411,7 +411,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GenerateTaskID 生成 ``rsi-<uuid8>`` 任务 ID（内部 v3 §4.1）。
+// GenerateTaskID 生成 “rsi-<uuid8>“ 任务 ID（内部 v3 §4.1）。
 func GenerateTaskID() string {
 	return fmt.Sprintf("%s%s", TaskIDPrefix, newUUID8())
 }
