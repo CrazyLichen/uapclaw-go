@@ -35,6 +35,8 @@
 //	├── factory.go                # CreateAdapter 工厂 + ResolveSDKChoice
 //	├── model_entry.go            # BuildModelFromEntry：单个模型条目 → 模型客户端实例
 //	├── deep_adapter.go           # DeepAdapter 核心结构体 + 8 接口方法 + 模型构建 + CWD 种子
+//	├── deep_adapter_parse_stream_chunk.go # 15.18：流式投影跨块累加状态与逐块解析（循环/external 共用）
+//	├── external_harness_helpers.go # 15.18：单会话 External Harness 全链（绑定/启动/流/中断/checkpoint）
 //	├── deep_adapter_sessions.go  # 会话分身：child 工厂 + 缓存/锁/TTL 淘汰 + 清理 + 根 instance 惰建 + 分流辅助
 //	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + 幂等 UpdateAgentRails
 //	├── deep_adapter_plan.go      # plan 状态机接入（EnsureState/check_post_process_exit/控制事件）
