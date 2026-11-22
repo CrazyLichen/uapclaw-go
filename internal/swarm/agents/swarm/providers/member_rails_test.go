@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 		"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
 
@@ -253,7 +254,10 @@ func TestBuildSessionMessagingRoute_leaderOnly(t *testing.T) {
 	view.Role = "leader"
 	out2, err2 := provider(nil, view)
 	require.NoError(t, err2)
-	assert.Nil(t, out2, "leader 命中但群聊基座未实施（F2 ⤴️25.6）")
+	// 25.6 批一 T5：缝已填体（对齐 member_rails.py:132 返回 SessionMessagingRouteRail()）
+	assert.NotNil(t, out2, "leader 应返回 SessionMessagingRouteRail")
+	_, isRail := out2.(*sessionmtools.SessionMessagingRouteRail)
+	assert.True(t, isRail, "返回类型应为 SessionMessagingRouteRail")
 }
 
 // TestBuildSymphonyOrchestration_leaderOnly leader-only 门控（领域十六缝）。
