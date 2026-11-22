@@ -149,6 +149,26 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 		return map[string]any{"event_type": "chat.delta", "content": content}
 
+	case "llm_output":
+		// Python: interface_deep.py:21161-21164（_parse_stream_chunk 的 parse 路径
+		// 分支，供循环外消费方使用；循环内联版在 :20290 有跨块 flush 语义）
+		content := ExtractStringFromPayload(payload, "content")
+		if content == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.delta", "content": content}
+
+	case "llm_reasoning":
+		// Python: interface_deep.py:21166-21172（content 或 output 字段）
+		content := ExtractStringFromPayload(payload, "content")
+		if content == "" {
+			content = ExtractStringFromPayload(payload, "output")
+		}
+		if content == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.reasoning", "content": content}
+
 	case "answer":
 		// Python: interface_deep._parse_stream_chunk L5041-5066
 		if payload["result_type"] == "error" {

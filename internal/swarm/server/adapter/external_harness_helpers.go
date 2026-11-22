@@ -1043,23 +1043,13 @@ func (d *DeepAdapter) ProcessExternalHarnessStream(ctx context.Context,
 
 // parseExternalChunk external 侧逐块投影。
 // Python: :769-781 _parse_external_chunk —— user_input 中断先投影 ask_user 卡片，
-// 其余走复用解析链。三类跨块累加块经 parseAccumulatingChunk（Task 6 提取），
-// 其余走 utils.ParseStreamChunk；llm_output 的 delta 帧置位 has_streamed_answer。
+// 其余全走 parse_stream_chunk（run_stream_parser）。对齐后 utils.ParseStreamChunk
+// 已含 llm_output/llm_reasoning parse 路径分支（stream_utils.go，Python :21161），
+// 不再经循环侧的 parseAccumulatingChunk；llm_usage 在 parse 路径无分支 → nil 跳过
+// （Python 同义）。has_streamed_answer 由调用方按 delta 帧置位。
 func (d *DeepAdapter) parseExternalChunk(chunk stream.OutputSchema, st *streamParseState) map[string]any {
 	if projected := projectExternalUserInput(chunk); projected != nil {
 		return projected
-	}
-	if frames, handled := parseAccumulatingChunk(&chunk, st, ""); handled {
-		for _, frame := range frames {
-			// Python: 空内容帧经 _stream_text_payload 返回 None 跳过（:20765）
-			if storedString(frame, "content") == "" &&
-				(storedString(frame, "event_type") == "chat.delta" ||
-					storedString(frame, "event_type") == "chat.reasoning") {
-				continue
-			}
-			return frame
-		}
-		return nil
 	}
 	return streamutils.ParseStreamChunk(&chunk, st.usage, st.emittedAskUserIDs, d.interactionConverter,
 		st.hasStreamedContent)

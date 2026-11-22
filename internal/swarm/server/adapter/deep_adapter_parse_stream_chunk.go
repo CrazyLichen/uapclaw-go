@@ -74,25 +74,34 @@ func parseAccumulatingChunk(output *stream.OutputSchema, st *streamParseState, s
 		}
 		return []map[string]any{usagePayload}, true
 	case "llm_reasoning":
-		// 循环既有语义：累积 + 恒产出（外部投影层按 _stream_text_payload 过滤空帧）。
+		// Python: :20260-20285 — 空内容跳过（_stream_text_payload :20765），直转发不累加。
+		// 修正（2026-11-22 对齐复核）：Python 循环从不累加（accumulated_reasoning 在
+		// :18926 函数内 write-never，flush 块为上游死代码）；Go 原实现的累加属移植期
+		// 多余逻辑，会造成 answer/default flush 重复发 reasoning，随本对齐删除。
 		reasoningContent := extractReasoningContent(payload)
-		st.accumulatedReasoning += reasoningContent
-		return []map[string]any{{
-			"event_type": "chat.reasoning",
-			"content":    reasoningContent,
-		}}, true
+		if frame := streamTextPayload("chat.reasoning", reasoningContent); frame != nil {
+			return []map[string]any{frame}, true
+		}
+		return nil, true
 	case "llm_output":
-		// 循环既有语义（M-02 注释）：直接产出 chat.delta、置位 has_streamed_content、
-		// 不累加 accumulated_text、静默清空 accumulated_reasoning。
+		// Python: :20290-20327 — flush 累积 reasoning（emit 后清空；恒空无操作）→
+		// 发 chat.delta；置位 has_streamed_content；不累加 accumulated_text。
 		textContent := extractTextContent(payload)
 		st.hasStreamedContent = true
-		if st.accumulatedReasoning != "" {
-			st.accumulatedReasoning = ""
+		var frames []map[string]any
+		if reasoning, ok := st.flushAccumulatedReasoning(); ok {
+			frames = append(frames, map[string]any{
+				"event_type": "chat.reasoning",
+				"content":    reasoning,
+			})
 		}
-		return []map[string]any{{
-			"event_type": "chat.delta",
-			"content":    textContent,
-		}}, true
+		if frame := streamTextPayload("chat.delta", textContent); frame != nil {
+			frames = append(frames, frame)
+		}
+		if frames == nil {
+			return nil, true
+		}
+		return frames, true
 	default:
 		return nil, false
 	}
