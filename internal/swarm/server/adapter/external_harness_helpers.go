@@ -6,16 +6,21 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	equipmentpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/equipment"
 	hresources "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -386,4 +391,175 @@ func updateSessionMetadataFields(sessionID string, fields map[string]any) {
 func storedString(stored map[string]any, key string) string {
 	text, _ := stored[key].(string)
 	return text
+}
+
+// sessionHarnessCheckpointKey 会话元数据中 checkpoint 键。
+// Python: :395/:490 metadata["session_harness_checkpoint"]
+const sessionHarnessCheckpointKey = "session_harness_checkpoint"
+
+// ──────────────────────────── 导出函数：checkpoint 半区 ────────────────────────────
+
+// SupportsCheckpoint 判断 harness 是否声明 CHECKPOINT 能力。
+// Python: :383-386 _supports_checkpoint（card.supports callable 探测）。
+func SupportsCheckpoint(harness harnessprotocol.HarnessProtocol) bool {
+	card := harness.Card()
+	return card.Supports(harnessprotocol.HarnessCapabilityCheckpoint)
+}
+
+// LoadExternalHarnessCheckpoint 从会话元数据加载 External Harness checkpoint。
+// Python: :389-437 _load_external_harness_checkpoint。步骤对齐：键缺失/模板或
+// provider 不符 → nil；payload 构造失败 → Warn 丢弃；agent_id/host_session_id
+// 越界 → Warn 丢弃。
+func LoadExternalHarnessCheckpoint(sessionID, agentTemplateName, providerName string) *harnessprotocol.HarnessCheckpoint {
+	metadata := freshSessionMetadata(sessionID)
+	stored, _ := metadata[sessionHarnessCheckpointKey].(map[string]any)
+	if stored == nil ||
+		storedString(stored, "agent_template_name") != agentTemplateName ||
+		storedString(stored, "provider_name") != providerName {
+		return nil
+	}
+	payload, _ := stored["checkpoint"].(map[string]any)
+	if payload == nil {
+		return nil
+	}
+	checkpoint, err := harnessCheckpointFromPayload(payload)
+	if err != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Str("detail", visibleError(err, "invalid checkpoint")).
+			Msg("Ignoring invalid External Harness checkpoint")
+		return nil
+	}
+	expectedAgentID := expectedExternalHarnessAgentID(providerName, agentTemplateName)
+	if checkpoint.AgentID != expectedAgentID || checkpoint.HostSessionID != sessionID {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Msg("Ignoring out-of-scope External Harness checkpoint")
+		return nil
+	}
+	return checkpoint
+}
+
+// harnessCheckpointFromPayload 从元数据 payload 构造 HarnessCheckpoint。
+// Python: :407-417 HarnessCheckpoint(...)（KeyError/TypeError/ValueError→异常）。
+// sequence 兼容 int/float64/json.Number（JSON round-trip 数字形态，见覆盖率门禁记忆）。
+func harnessCheckpointFromPayload(payload map[string]any) (*harnessprotocol.HarnessCheckpoint, error) {
+	provider := storedString(payload, "provider")
+	schemaVersion := storedString(payload, "schema_version")
+	agentID := storedString(payload, "agent_id")
+	hostSessionID := storedString(payload, "host_session_id")
+	checkpointID := storedString(payload, "checkpoint_id")
+	if provider == "" || schemaVersion == "" || agentID == "" || hostSessionID == "" || checkpointID == "" {
+		return nil, fmt.Errorf("missing required checkpoint field")
+	}
+	sequence := 0
+	switch value := payload["sequence"].(type) {
+	case int:
+		sequence = value
+	case float64:
+		sequence = int(value)
+	case fmt.Stringer:
+		// 不可达：JSON 解析只产生 int/float64
+	default:
+		return nil, fmt.Errorf("invalid sequence %v", payload["sequence"])
+	}
+	data := JsonObjectOf(payload["data"])
+	var providerSessionID *string
+	if text, ok := payload["provider_session_id"].(string); ok {
+		providerSessionID = &text
+	}
+	var revision *string
+	if text, ok := payload["revision"].(string); ok {
+		revision = &text
+	}
+	return &harnessprotocol.HarnessCheckpoint{
+		Provider:          provider,
+		SchemaVersion:     schemaVersion,
+		AgentID:           agentID,
+		HostSessionID:     hostSessionID,
+		CheckpointID:      checkpointID,
+		Sequence:          sequence,
+		Data:              data,
+		ProviderSessionID: providerSessionID,
+		Revision:          revision,
+	}, nil
+}
+
+// JsonObjectOf 任意值→JsonObject（非 dict 归空 dict，对齐 Python `if isinstance(payload.get("data"), dict) else {}`）。
+func JsonObjectOf(value any) harnessprotocol.JsonObject {
+	if typed, ok := value.(harnessprotocol.JsonObject); ok {
+		return typed
+	}
+	if typed, ok := value.(map[string]any); ok {
+		return harnessprotocol.JsonObject(typed)
+	}
+	return harnessprotocol.JsonObject{}
+}
+
+// CheckpointMetadata checkpoint 落盘形态（模板/provider 外层 + checkpoint payload）。
+// Python: :440-460 _checkpoint_metadata；data 经 json_value_to_builtin。
+func CheckpointMetadata(checkpoint *harnessprotocol.HarnessCheckpoint, agentTemplateName, providerName string) map[string]any {
+	return map[string]any{
+		"agent_template_name": agentTemplateName,
+		"provider_name":       providerName,
+		"checkpoint": map[string]any{
+			"provider":            checkpoint.Provider,
+			"schema_version":      checkpoint.SchemaVersion,
+			"agent_id":            checkpoint.AgentID,
+			"host_session_id":     checkpoint.HostSessionID,
+			"checkpoint_id":       checkpoint.CheckpointID,
+			"sequence":            checkpoint.Sequence,
+			"data":                harnessprotocol.JsonValueToBuiltin(checkpoint.Data),
+			"provider_session_id": checkpoint.ProviderSessionID,
+			"revision":            checkpoint.Revision,
+		},
+	}
+}
+
+// PersistExternalHarnessCheckpoint 导出并持久化一个 External Harness checkpoint。
+// Python: :463-506 _persist_external_harness_checkpoint。
+// 偏差（登记 D-18-5）：Python 经 getattr(adapter, "_external_harness_binding") 取绑定——
+// Go 侧改构造期传参（binding），鸭子探测不可达。
+// 步骤对齐：能力不支持/无绑定 → 跳过；导出 nil → 跳过；越界 → Warn 跳过；
+// 异常 → Warn 不上抛。
+func PersistExternalHarnessCheckpoint(ctx context.Context, binding *ResolvedExternalHarnessBinding, io *harnessproviders.HarnessIOAdapter, sessionID string) {
+	harness := io.Harness()
+	if binding == nil || !SupportsCheckpoint(harness) {
+		return
+	}
+	checkpoint, err := harness.ExportCheckpoint(ctx)
+	if err != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Str("detail", visibleError(err, "checkpoint export failed")).
+			Msg("External Harness checkpoint export failed")
+		return
+	}
+	if checkpoint == nil {
+		return
+	}
+	agentTemplateName := binding.AgentTemplateName
+	providerName := binding.ProviderName
+	expectedAgentID := expectedExternalHarnessAgentID(providerName, agentTemplateName)
+	if checkpoint.AgentID != expectedAgentID || checkpoint.HostSessionID != sessionID {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Msg("Skipping out-of-scope External Harness checkpoint")
+		return
+	}
+	updateSessionMetadataFields(sessionID, map[string]any{
+		sessionHarnessCheckpointKey: CheckpointMetadata(checkpoint, agentTemplateName, providerName),
+	})
+}
+
+// expectedExternalHarnessAgentID External Harness 的 agent 标识约定。
+// Python: :425-427/:478-480 f"external_harness:{provider}:{template}"。
+func expectedExternalHarnessAgentID(providerName, agentTemplateName string) string {
+	return "external_harness:" + providerName + ":" + agentTemplateName
+}
+
+// visibleError 对外可见错误文案：脱敏 + 去空白 + 空回退。
+// Python: :620-622 _visible_error（mask_sensitive(str(error))）。
+func visibleError(err error, fallback string) string {
+	message := strings.TrimSpace(utils.MaskSensitive(err.Error()))
+	if message == "" {
+		return fallback
+	}
+	return message
 }
