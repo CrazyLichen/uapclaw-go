@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 )
 
 // stubExecution 用例执行结果桩（CaseExecutionView）。
@@ -213,7 +214,7 @@ func TestLlmAsJudge_缺少输出目录(t *testing.T) {
 	_, j, caseMapping, _ := buildJudgeCase(t, "")
 	_, err := j.Judge(context.Background(), caseMapping,
 		&stubExecution{response: "x", status: "passed"}, "", nil)
-	var infra *EvaluationInfrastructureError
+	var infra *evalerrors.EvaluationInfrastructureError
 	if err == nil || !errorsAs(err, &infra) {
 		t.Fatalf("应报基础设施错误: %v", err)
 	}
@@ -224,16 +225,16 @@ func TestLlmAsJudge_基线关闭却传上下文(t *testing.T) {
 	_, j, caseMapping, caseDir := buildJudgeCase(t, "")
 	_, err := j.Judge(context.Background(), caseMapping,
 		&stubExecution{response: "x", status: "passed"}, caseDir, stubBaseline{})
-	var infra *EvaluationInfrastructureError
+	var infra *evalerrors.EvaluationInfrastructureError
 	if err == nil || !errorsAs(err, &infra) {
 		t.Fatalf("应报基础设施错误: %v", err)
 	}
 }
 
 // errorsAs errors.As 的局部替身（避免测试文件引 errors 包名冲突）。
-func errorsAs(err error, target **EvaluationInfrastructureError) bool {
+func errorsAs(err error, target **evalerrors.EvaluationInfrastructureError) bool {
 	for e := err; e != nil; {
-		if v, ok := e.(*EvaluationInfrastructureError); ok {
+		if v, ok := e.(*evalerrors.EvaluationInfrastructureError); ok {
 			*target = v
 			return true
 		}

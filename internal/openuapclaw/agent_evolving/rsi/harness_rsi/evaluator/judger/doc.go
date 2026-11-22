@@ -18,7 +18,6 @@
 //	├── script_based.go       # 脚本结果判分器 + SWE-bench 官方判分分支（script_based.py 全量）
 //	├── llm_as_judge.go       # LLM 裁判门面：评估循环/修复链/基线对比/留档（llm_as_judge.py 全量）
 //	├── reverse_seams.go      # 对父包 evaluator 能力的注册缝（transport/optimization_signals）
-//	├── errors.go             # 评估基础设施错误（包内反转缝，语义同父包 evaluator/errors.py）
 //	├── judge_prompt.md       # 连续判分模式裁判提示词（Python 原文件逐字）
 //	├── judge_prompt.legacy.md# 二元判分模式裁判提示词（Python 原文件逐字）
 //	└── fs_helpers.go         # 包内文件系统小助手（Go 侧共用，非 Python 对应）

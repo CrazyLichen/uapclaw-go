@@ -17,6 +17,7 @@ import (
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -87,7 +88,7 @@ func (j *LlmAsJudgeJudger) MethodName() string { return "llm_as_judge" }
 // Python: llm_as_judge.py:103 validate_case。
 func (j *LlmAsJudgeJudger) ValidateCase(caseMapping map[string]any) error {
 	if _, _, err := ScoringContract(caseMapping); err != nil {
-		return NewEvaluationInfrastructureError(err.Error())
+		return evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	return nil
 }
@@ -102,29 +103,29 @@ func (j *LlmAsJudgeJudger) Judge(ctx context.Context, caseMapping map[string]any
 	}
 	// Python: if baseline_context is not None and not self._config.judge_baseline_comparison:
 	if baselineContext != nil && !j.cfg.JudgeBaselineComparison {
-		return nil, NewEvaluationInfrastructureError("Baseline comparison is disabled for this evaluator")
+		return nil, evalerrors.NewEvaluationInfrastructureError("Baseline comparison is disabled for this evaluator")
 	}
 	normalized, err := dataloader.NormalizeGradingCase(caseMapping)
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	// Python: if execution_result.execution_status != "passed": return self._execution_failure_result(...)
 	if executionResult.ExecutionStatusView() != "passed" {
 		return j.executionFailureResult(executionResult.ErrorView()), nil
 	}
 	if outputDir == "" {
-		return nil, NewEvaluationInfrastructureError("llm_as_judge requires a case output directory")
+		return nil, evalerrors.NewEvaluationInfrastructureError("llm_as_judge requires a case output directory")
 	}
 	caseDir, err := filepath.Abs(outputDir)
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	// Python: judge_dir = case_dir / "judge" / f"evaluation_{uuid.uuid4().hex[:12]}"
 	judgeDir := filepath.Join(caseDir, "judge", fmt.Sprintf("evaluation_%s", uuid.NewString()[:12]))
 	workspace := filepath.Join(judgeDir, "evidence")
 	behaviors, forbidden, err := ScoringContract(normalized)
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	// Python: reference.get("penalty_mode", "ceiling")
 	penaltyMode := "ceiling"
@@ -139,7 +140,7 @@ func (j *LlmAsJudgeJudger) Judge(ctx context.Context, caseMapping map[string]any
 		Behaviors: behaviors, Forbidden: forbidden,
 		BaselineContext: baselineContext, ScoreMode: j.cfg.ScoreMode,
 	}); err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	result, err := j.evaluate(ctx, workspace, judgeDir, behaviors, forbidden, penaltyMode)
 	if err != nil {
@@ -152,7 +153,7 @@ func (j *LlmAsJudgeJudger) Judge(ctx context.Context, caseMapping map[string]any
 	}
 	if baselineContext != nil {
 		if _, err := baselineContext.Validate(normalized); err != nil {
-			return nil, NewEvaluationInfrastructureError(err.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 		}
 		result.Metadata["baseline_context_fingerprint"] = baselineContext.Fingerprint()
 	}
@@ -190,7 +191,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 	behaviors, forbidden []map[string]any, penaltyMode string) (*JudgeResult, error) {
 	resolvedWorkspace, err := filepath.Abs(workspace)
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	// Python: prompt = f"Evidence workspace: {...}. Read this exact request file: {...}. ..."
 	prompt := fmt.Sprintf(
@@ -212,7 +213,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 		"behavior_ids": behaviorIDs, "forbidden_ids": forbiddenIDs,
 	})
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	outputContract := "\nFINAL OUTPUT CONTRACT (applies after reading evidence):\n" +
 		"Return exactly one JSON object using the system schema, without surrounding text " +
@@ -279,7 +280,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 				fmt.Sprintf("response_%d.json", assessmentAttempts)),
 				map[string]any{"raw_output": raw, "recovery": recovery}); err != nil {
 				done()
-				return nil, NewEvaluationInfrastructureError(err.Error())
+				return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 			}
 			if lastFinishReasonTruncated(calls.Items) {
 				done()
@@ -334,7 +335,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 			// Python finally: diagnostics_N.json 落盘（成功路径同样落盘）。
 			if err := WriteJudgeJSON(filepath.Join(judgeDir,
 				fmt.Sprintf("diagnostics_%d.json", assessmentAttempts)), diagnosticsSnapshot); err != nil {
-				return nil, NewEvaluationInfrastructureError(err.Error())
+				return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 			}
 			break
 		}
@@ -342,7 +343,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 		var unusable *unusableJudgeAssessmentError
 		if !errors.As(invokeErr, &unusable) {
 			done()
-			return nil, NewEvaluationInfrastructureError(invokeErr.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(invokeErr.Error())
 		}
 		if unwrapErr := j.recordUnusableAssessment(judgeDir, assessmentAttempts,
 			unusable, diagCtx, recovery); unwrapErr != nil {
@@ -351,7 +352,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 		}
 		if assessmentAttempts >= maxAssessments {
 			done()
-			return nil, NewEvaluationInfrastructureError(fmt.Sprintf(
+			return nil, evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf(
 				"Unusable LLM evaluation after %d attempts (%s): %s; inspect %s",
 				assessmentAttempts, unusable.failureKind, unusable.Error(), judgeDir))
 		}
@@ -359,7 +360,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 		done()
 		if err := WriteJudgeJSON(filepath.Join(judgeDir,
 			fmt.Sprintf("diagnostics_%d.json", assessmentAttempts)), diagnosticsSnapshot); err != nil {
-			return nil, NewEvaluationInfrastructureError(err.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 		}
 	}
 	// Python: request.json 的 baseline 段 → normalized["baseline_comparison"]（数值差由调用方计算）。
@@ -406,7 +407,7 @@ func (j *LlmAsJudgeJudger) evaluate(ctx context.Context, workspace, judgeDir str
 		}
 	}
 	if err := WriteJudgeJSON(filepath.Join(judgeDir, "assessment.json"), normalized); err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	passed := score >= j.cfg.JudgeSuccessScore
 	finalScore := score
@@ -454,11 +455,11 @@ func (j *LlmAsJudgeJudger) parseWithFormatRepair(ctx context.Context, judgeDir s
 	defer cancel()
 	repaired, repairErr := RepairJudgeJSON(ctxTimeout, j.cfg, output, parseErr.Error())
 	if repairErr != nil {
-		return nil, NewEvaluationInfrastructureError(repairErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(repairErr.Error())
 	}
 	if err := WriteJudgeJSON(filepath.Join(judgeDir,
 		fmt.Sprintf("format_repair_%d.json", attempt)), map[string]any{"raw_output": repaired}); err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	if lastFinishReasonTruncated(modelCalls) {
 		return nil, &unusableJudgeAssessmentError{
@@ -491,7 +492,7 @@ func (j *LlmAsJudgeJudger) recordUnusableAssessment(judgeDir string, assessmentA
 		"failure_kind":    exc.failureKind,
 		"raw_output_path": fmt.Sprintf("response_%d.json", assessmentAttempts),
 	}); err != nil {
-		return NewEvaluationInfrastructureError(err.Error())
+		return evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	return nil
 }

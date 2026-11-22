@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 )
@@ -168,7 +169,7 @@ func TestExecute_错误路径写错误件(t *testing.T) {
 
 func TestExecute_基建错误上抛(t *testing.T) {
 	dir := t.TempDir()
-	backend := &fakeCaseBackend{err: NewEvaluationInfrastructureError("no judger")}
+	backend := &fakeCaseBackend{err: evalerrors.NewEvaluationInfrastructureError("no judger")}
 	runner, _ := NewCaseRunner(backend, nil)
 	ref, err := runner.Execute(context.Background(), CaseRunnerParams{
 		Case: map[string]any{"case_id": "infra"}, OutputDir: filepath.Join(dir, "case"),

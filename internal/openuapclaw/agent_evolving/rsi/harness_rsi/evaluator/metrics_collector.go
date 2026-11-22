@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 )
 
@@ -55,7 +56,7 @@ func (c *MetricsCollector) Collect(caseResultsDir, outputPath string) (string, e
 		result := results[index(resultFiles, path)]
 		evaluation, ok := result["evaluation"].(map[string]any)
 		if ok && judger.IsExecutionOnlyEvaluation(evaluation) {
-			return "", NewEvaluationInfrastructureError(
+			return "", evalerrors.NewEvaluationInfrastructureError(
 				fmt.Sprintf("Cannot aggregate a legacy completion-only grade; reevaluate with a real judger: %s", path))
 		}
 	}

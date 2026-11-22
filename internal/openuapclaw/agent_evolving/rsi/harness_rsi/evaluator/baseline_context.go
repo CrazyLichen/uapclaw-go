@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,32 +48,32 @@ func (c *BaselineJudgeContext) Fingerprint() string {
 // Python: baseline_context.py BaselineJudgeContext.validate。
 func (c *BaselineJudgeContext) Validate(caseMapping map[string]any) (map[string]any, error) {
 	if evalToString(caseMapping["case_id"]) != c.CaseID {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline task or rubric does not match the candidate"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline task or rubric does not match the candidate"}
 	}
 	identity, err := CaseIdentity(caseMapping)
 	if err != nil {
 		return nil, err
 	}
 	if identity != c.TaskIdentity {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline task or rubric does not match the candidate"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline task or rubric does not match the candidate"}
 	}
 	digest, err := evidenceDigest(filepath.Dir(c.ResultPath))
 	if err != nil {
 		return nil, err
 	}
 	if digest != c.EvidenceDigest {
-		return nil, &EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
 	}
 	raw, err := os.ReadFile(c.ResultPath)
 	if err != nil {
-		return nil, &EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
 	}
 	var data map[string]any
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return nil, &EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Frozen baseline evidence changed or is missing"}
 	}
 	if evalToString(data["case_id"]) != c.CaseID {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline result belongs to a different case"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline result belongs to a different case"}
 	}
 	artifactsDir := filepath.Join(filepath.Dir(c.ResultPath), "artifacts")
 	harvested := evalToAnySlice(evalMappingOrNil(evalMappingOrNil(data["artifacts"]))["harvested"])
@@ -81,11 +82,11 @@ func (c *BaselineJudgeContext) Validate(caseMapping map[string]any) (map[string]
 		evidence := filepath.Join(artifactsDir, name)
 		resolved, err := filepath.EvalSymlinks(evidence)
 		if err != nil {
-			return nil, &EvaluationInfrastructureError{Msg: "A recorded baseline deliverable is missing"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "A recorded baseline deliverable is missing"}
 		}
 		artifactsAbs, _ := filepath.Abs(artifactsDir)
 		if !strings.HasPrefix(resolved, artifactsAbs+string(filepath.Separator)) || !fileExistsB(resolved) {
-			return nil, &EvaluationInfrastructureError{Msg: "A recorded baseline deliverable is missing"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "A recorded baseline deliverable is missing"}
 		}
 	}
 	evaluation := evalMappingOrNil(data["evaluation"])
@@ -94,15 +95,15 @@ func (c *BaselineJudgeContext) Validate(caseMapping map[string]any) (map[string]
 		judgeName := filepath.Base(evalToString(metadata["judge_dir"]))
 		manifestPath := filepath.Join(filepath.Dir(c.ResultPath), "judge", judgeName, "artifact_manifest.json")
 		if !fileExistsB(manifestPath) {
-			return nil, &EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
 		}
 		manifestRaw, err := os.ReadFile(manifestPath)
 		if err != nil {
-			return nil, &EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
 		}
 		var manifest map[string]any
 		if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
-			return nil, &EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline is missing its original judged-artifact manifest"}
 		}
 		expected, _ := manifest["files"].(map[string]any)
 		actual := map[string]any{}
@@ -125,7 +126,7 @@ func (c *BaselineJudgeContext) Validate(caseMapping map[string]any) (map[string]
 		expectedJSON, _ := json.Marshal(expected)
 		actualJSON, _ := json.Marshal(actual)
 		if string(expectedJSON) != string(actualJSON) {
-			return nil, &EvaluationInfrastructureError{Msg: "Baseline deliverables differ from the evidence originally judged"}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline deliverables differ from the evidence originally judged"}
 		}
 	}
 	score := data["score"]
@@ -147,7 +148,7 @@ func (c *BaselineJudgeContext) Validate(caseMapping map[string]any) (map[string]
 	statusOK := evalToString(data["status"]) == "passed" || evalToString(data["status"]) == "failed"
 	executionOK := evalToString(data["execution_status"]) != "error"
 	if !inRange || !statusOK || !executionOK {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline does not contain a valid correctness grade"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline does not contain a valid correctness grade"}
 	}
 	return data, nil
 }
@@ -161,15 +162,15 @@ func BaselineContexts(evalRefPath string, cases []map[string]any) (map[string]*B
 	}
 	raw, err := os.ReadFile(source)
 	if err != nil {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
 	}
 	var parsed any
 	if err := yaml.Unmarshal(raw, &parsed); err != nil {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
 	}
 	payload, ok := parsed.(map[string]any)
 	if !ok {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline evaluation is not a mapping"}
 	}
 	rows := evalToAnySlice(payload["cases"])
 	index := map[string]map[string]any{}
@@ -181,14 +182,14 @@ func BaselineContexts(evalRefPath string, cases []map[string]any) (map[string]*B
 		index[evalToString(row["case_id"])] = row
 	}
 	if len(index) != len(rows) {
-		return nil, &EvaluationInfrastructureError{Msg: "Baseline contains duplicate case identities"}
+		return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline contains duplicate case identities"}
 	}
 	result := map[string]*BaselineJudgeContext{}
 	for _, caseMapping := range cases {
 		caseID := evalToString(caseMapping["case_id"])
 		row, ok := index[caseID]
 		if !ok {
-			return nil, &EvaluationInfrastructureError{Msg: "Baseline does not cover case " + caseID}
+			return nil, &evalerrors.EvaluationInfrastructureError{Msg: "Baseline does not cover case " + caseID}
 		}
 		path := expandUserB(evalToString(row["result_path"]))
 		if !filepath.IsAbs(path) {
@@ -247,10 +248,10 @@ func evidenceDigest(caseDir string) (string, error) {
 			resolved = path
 		}
 		if !strings.HasPrefix(resolved, caseDirAbs+string(filepath.Separator)) {
-			return "", &EvaluationInfrastructureError{Msg: "Baseline evidence escapes its case directory"}
+			return "", &evalerrors.EvaluationInfrastructureError{Msg: "Baseline evidence escapes its case directory"}
 		}
 		if !fileExistsB(path) {
-			return "", &EvaluationInfrastructureError{Msg: "Baseline evidence is missing: " + filepath.Base(path)}
+			return "", &evalerrors.EvaluationInfrastructureError{Msg: "Baseline evidence is missing: " + filepath.Base(path)}
 		}
 		rel, err := filepath.Rel(caseDir, path)
 		if err != nil {

@@ -3,7 +3,11 @@
 
 package judger
 
-import "context"
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -29,11 +33,11 @@ func (j *ExactMatchJudger) ValidateCase(caseMapping map[string]any) error {
 	_, hasFiles := reference["files"]
 	_, hasSwebench := caseMapping["swebench"]
 	if hasRubric || hasFiles || hasSwebench {
-		return NewEvaluationInfrastructureError(
+		return evalerrors.NewEvaluationInfrastructureError(
 			"exact_match only supports reference answers, not rubric or file grading")
 	}
 	if ReferenceAnswer(caseMapping) == nil {
-		return NewEvaluationInfrastructureError(
+		return evalerrors.NewEvaluationInfrastructureError(
 			"exact_match cannot score this case: a reference answer is required")
 	}
 	return nil

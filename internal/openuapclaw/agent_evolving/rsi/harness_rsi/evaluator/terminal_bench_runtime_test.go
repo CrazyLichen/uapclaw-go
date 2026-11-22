@@ -14,7 +14,6 @@ import (
 // intPtr / strPtr 测试助手（Python 字面 None→nil 对齐）。
 func intPtr(v int) *int { return &v }
 
-
 // ──────────────────────────── 测试桩（对齐 Python monkeypatch subprocess.run） ────────────────────────────
 
 // tbRunCall 单次命令调用记录（断言调用参数序列与超时/输入）。

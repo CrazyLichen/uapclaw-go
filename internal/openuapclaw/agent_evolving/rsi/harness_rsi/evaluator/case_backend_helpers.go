@@ -19,6 +19,7 @@ import (
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -48,14 +49,14 @@ func singleHarnessRails(params singleHarnessRailsParams) ([]agentinterfaces.Agen
 	sysOpRail := NewRSISysOperationRail(params.shellOnly, params.shellOnly, true)
 	reliabilityRail, err := harnessrsi.BuildSingleAgentReliabilityRail()
 	if err != nil {
-		return nil, NewEvaluationInfrastructureError(err.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 	}
 	railsList := []agentinterfaces.AgentRail{sysOpRail, reliabilityRail}
 	// Python: if controlled_skill_name: rails.append(ControlledSkillTreatmentRail(...))
 	if params.controlledSkillName != "" {
 		controlled, err := NewControlledSkillTreatmentRail(params.controlledSkillName)
 		if err != nil {
-			return nil, NewEvaluationInfrastructureError(err.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(err.Error())
 		}
 		railsList = append(railsList, controlled)
 	}
@@ -126,7 +127,7 @@ func stageCaseAssets(caseMapping map[string]any, workspacePath, containerName st
 	copied, err := dataloader.CopyPublicAssets(caseMapping, workspacePath)
 	if err != nil {
 		// Python: except (OSError, ValueError, ...) → 基建错误。
-		return NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
+		return evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
 	}
 	if containerName == "" {
 		return nil
@@ -136,10 +137,10 @@ func stageCaseAssets(caseMapping map[string]any, workspacePath, containerName st
 	for _, pair := range copied {
 		target := "/testbed/" + filepath.ToSlash(pair[0])
 		if _, err := runDocker([]string{"docker", "exec", containerName, "mkdir", "-p", "--", filepath.ToSlash(filepath.Dir(target))}, true, 120); err != nil {
-			return NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
+			return evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
 		}
 		if _, err := runDocker([]string{"docker", "cp", pair[1], containerName + ":" + target}, true, 120); err != nil {
-			return NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
+			return evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf("dataset assets could not be prepared: %v", err))
 		}
 	}
 	return nil
@@ -310,7 +311,7 @@ func resolveSingleHarnessRef(harnessRefs map[string]string) (string, string, err
 		}
 	}
 	if len(refs) != 1 {
-		return "", "", NewEvaluationInfrastructureError(fmt.Sprintf(
+		return "", "", evalerrors.NewEvaluationInfrastructureError(fmt.Sprintf(
 			"single_harness backend requires exactly one harness ref; got %d", len(refs)))
 	}
 	for role, path := range refs {

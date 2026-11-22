@@ -25,11 +25,12 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	sourceEvidence "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/source_evidence"
 )
 
@@ -196,7 +197,7 @@ func (te *TeamEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]a
 		for _, caseMapping := range cases {
 			context := baselineContexts[evalToString(caseMapping["case_id"])]
 			if context == nil {
-				return "", NewEvaluationInfrastructureError(
+				return "", evalerrors.NewEvaluationInfrastructureError(
 					"Candidate evaluation is missing its same-case baseline")
 			}
 			if _, err := context.Validate(caseMapping); err != nil {
@@ -346,7 +347,7 @@ func (te *TeamEvaluator) EvaluateBatch(ctx context.Context, cases []map[string]a
 			executed, err := runner.Execute(ctx, runnerParams)
 			if err != nil {
 				// 基建失败：仅瞬态传输错误且未到上限才重考（Python L187-199）。
-				var infraErr *EvaluationInfrastructureError
+				var infraErr *evalerrors.EvaluationInfrastructureError
 				if !errors.As(err, &infraErr) {
 					return nil, err
 				}
@@ -898,7 +899,6 @@ func toStringMap(source map[string]any) map[string]string {
 	}
 	return result
 }
-
 
 // isFile 判断常规文件。
 func isFile(path string) bool {

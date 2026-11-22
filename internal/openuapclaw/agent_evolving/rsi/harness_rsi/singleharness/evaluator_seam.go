@@ -38,7 +38,6 @@ func NewEvaluatorInvoker(cfg harnessconfig.EvaluatorConfig) (EvaluatorInvoker, e
 	return evaluator.NewTeamEvaluator(cfg)
 }
 
-
 // AnalyzerInvoker 编排器依赖的诊断分析面（Python 构造器 analyzer: Any 注入点）。
 // 真身 *analyzerpkg.EvaluationResultAnalyzer（17.4b）；测试注入 fake。
 type AnalyzerInvoker interface {

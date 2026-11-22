@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -35,21 +37,21 @@ func (j *ScriptBasedJudger) ValidateCase(caseMapping map[string]any) error {
 		reference = map[string]any{}
 	}
 	if _, hasRubric := reference["rubric"]; hasRubric {
-		return NewEvaluationInfrastructureError(
+		return evalerrors.NewEvaluationInfrastructureError(
 			"script_based does not evaluate reference.rubric; configure a rubric-capable judger")
 	}
 	if swebench, ok := caseMapping["swebench"].(map[string]any); ok {
 		path := stringOr(swebench["official_dataset_path"], "")
 		if !fileExists(path) {
-			return NewEvaluationInfrastructureError("SWE-bench official_dataset_path is missing")
+			return evalerrors.NewEvaluationInfrastructureError("SWE-bench official_dataset_path is missing")
 		}
 		return nil
 	}
 	if _, hasFiles := reference["files"]; hasFiles {
-		return NewEvaluationInfrastructureError("reference.files has no supported verifier adapter")
+		return evalerrors.NewEvaluationInfrastructureError("reference.files has no supported verifier adapter")
 	}
 	if ReferenceAnswer(caseMapping) == nil {
-		return NewEvaluationInfrastructureError(
+		return evalerrors.NewEvaluationInfrastructureError(
 			"script_based cannot score this case: no backend JudgeResult or reference answer. " +
 				"Successful execution is not evidence of correctness.")
 	}
@@ -109,7 +111,7 @@ func judgeSwebench(caseMapping map[string]any, executionResult CaseExecutionView
 	modelPatch, err := loadSwebenchModelPatch(executionResult, workspaceDir)
 	if err != nil {
 		// Python: except SWEbenchInfrastructureError: raise；其余异常 0 分兜底。
-		var infra *EvaluationInfrastructureError
+		var infra *evalerrors.EvaluationInfrastructureError
 		if errors.As(err, &infra) {
 			return nil, err
 		}
@@ -146,7 +148,7 @@ func judgeSwebench(caseMapping map[string]any, executionResult CaseExecutionView
 	result, evalErr := callRunOfficialSwebenchEvaluation(caseMapping, modelPatch, outputDir)
 	if evalErr != nil {
 		// Python: except SWEbenchInfrastructureError: raise
-		var infra *EvaluationInfrastructureError
+		var infra *evalerrors.EvaluationInfrastructureError
 		if errors.As(evalErr, &infra) {
 			return nil, evalErr
 		}
@@ -191,12 +193,12 @@ func loadSwebenchModelPatch(executionResult CaseExecutionView, workspaceDir stri
 	}
 	resolved, err := filepath.Abs(capturedPath)
 	if err != nil {
-		return "", NewEvaluationInfrastructureError(
+		return "", evalerrors.NewEvaluationInfrastructureError(
 			fmt.Sprintf("failed to read captured SWE-bench patch: %s: %v", capturedPath, err))
 	}
 	raw, readErr := os.ReadFile(resolved)
 	if readErr != nil {
-		return "", NewEvaluationInfrastructureError(
+		return "", evalerrors.NewEvaluationInfrastructureError(
 			fmt.Sprintf("failed to read captured SWE-bench patch: %s: %v", capturedPath, readErr))
 	}
 	return string(raw), nil

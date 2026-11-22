@@ -17,7 +17,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

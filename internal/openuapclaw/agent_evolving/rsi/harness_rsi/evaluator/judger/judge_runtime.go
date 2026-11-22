@@ -18,7 +18,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
+	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -190,7 +191,7 @@ func RunJudgeAgent(ctx context.Context, cfg *config.EvaluatorConfig, workspacePa
 	payload := InlineEvidence(workspacePath, 0, false, true)
 	if payload != nil {
 		if errValue, isErr := payload.(error); isErr {
-			return "", NewEvaluationInfrastructureError(errValue.Error())
+			return "", evalerrors.NewEvaluationInfrastructureError(errValue.Error())
 		}
 		model, err := judgeModel(cfg)
 		if err != nil {
@@ -267,10 +268,10 @@ func RunJudgeCloseout(ctx context.Context, cfg *config.EvaluatorConfig, workspac
 	payload := InlineEvidence(workspacePath, 0, true, true)
 	if payload == nil {
 		// required=True 使该分支仅为防御
-		return "", NewEvaluationInfrastructureError("Judge closeout evidence is unavailable; no score produced")
+		return "", evalerrors.NewEvaluationInfrastructureError("Judge closeout evidence is unavailable; no score produced")
 	}
 	if errValue, isErr := payload.(error); isErr {
-		return "", NewEvaluationInfrastructureError(errValue.Error())
+		return "", evalerrors.NewEvaluationInfrastructureError(errValue.Error())
 	}
 	hasBaseline, err := hasBaseline(cfg, workspacePath)
 	if err != nil {
@@ -522,7 +523,7 @@ func invokeCompleteEvidence(ctx context.Context, model *GuardedJudgeModel, paylo
 	if _, isList := payload.([]any); isList {
 		supported := modelSupportsVision(model.Model)
 		if supported == nil || !*supported {
-			return "", NewEvaluationInfrastructureError(
+			return "", evalerrors.NewEvaluationInfrastructureError(
 				"Judge image evidence requires a vision-capable model with confirmed image support; " +
 					"no evidence omitted and no score produced")
 		}

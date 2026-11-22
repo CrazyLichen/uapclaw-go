@@ -11,7 +11,6 @@
 //	├── judge_search.go     # 证据检索
 //	├── evidence_guard.go   # 证据守护
 //	├── direct_evidence.go  # 证据直取
-//	├── errors.go           # EvaluationInfrastructureError 反转缝
 //	├── fs_helpers.go       # 文件系统助手
 //	├── judge_prompt.md     # 裁判提示词（Python 逐字 embed）
 //	└── judge_prompt.legacy.md # 旧版提示词（Python 逐字 embed）

@@ -17,6 +17,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,8 +30,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	dataloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/data_loader"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/judger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 )
@@ -136,8 +138,8 @@ func (r *CaseRunner) Execute(ctx context.Context, params CaseRunnerParams) (*har
 	ref, bodyErr := r.executeCaseBody(homeCtx, params, caseID, sessionID, caseDir,
 		tracePath, resultPath, startedAt, resolvedTeamName, caseState)
 	if bodyErr != nil {
-		var infra *EvaluationInfrastructureError
-		if asEvaluationInfrastructureError(bodyErr, &infra) {
+		var infra *evalerrors.EvaluationInfrastructureError
+		if errors.As(bodyErr, &infra) {
 			_ = writeJSON(filepath.Join(caseDir, "evaluation_error.json"), map[string]any{
 				"case_id": caseID, "status": "error", "score": nil, "error": bodyErr.Error(),
 			})
@@ -317,13 +319,13 @@ func (r *CaseRunner) judge(ctx context.Context, caseMapping map[string]any,
 	var result *judger.JudgeResult
 	if executionResult.JudgeResultView() != nil {
 		if baselineContext != nil {
-			return nil, NewEvaluationInfrastructureError("Backend grade cannot bypass baseline-aware LLM judging")
+			return nil, evalerrors.NewEvaluationInfrastructureError("Backend grade cannot bypass baseline-aware LLM judging")
 		}
 		result = executionResult.JudgeResultView()
 	} else if r.judger != nil {
 		if baselineContext != nil {
 			if r.judger.MethodName() != "llm_as_judge" {
-				return nil, NewEvaluationInfrastructureError("Baseline comparison requires the LLM judger")
+				return nil, evalerrors.NewEvaluationInfrastructureError("Baseline comparison requires the LLM judger")
 			}
 			judged, err := r.judger.Judge(ctx, caseMapping, executionResult, outputDir, baselineContext)
 			if err != nil {
@@ -338,12 +340,12 @@ func (r *CaseRunner) judge(ctx context.Context, caseMapping map[string]any,
 			result = judged
 		}
 	} else {
-		return nil, NewEvaluationInfrastructureError(
+		return nil, evalerrors.NewEvaluationInfrastructureError(
 			"Cannot score this case: no judger configured and no backend JudgeResult. " +
 				"Successful execution is not evidence of correctness.")
 	}
 	if judger.IsExecutionOnlyEvaluation(map[string]any{"method": result.Method, "metadata": result.Metadata}) {
-		return nil, NewEvaluationInfrastructureError("Completion-only JudgeResult is not a valid correctness evaluation")
+		return nil, evalerrors.NewEvaluationInfrastructureError("Completion-only JudgeResult is not a valid correctness evaluation")
 	}
 	return result, nil
 }
@@ -643,15 +645,6 @@ func sortedFileInfos(root string) []string {
 	})
 	sort.Strings(files)
 	return files
-}
-
-// asEvaluationInfrastructureError 错误类型断言。
-func asEvaluationInfrastructureError(err error, target **EvaluationInfrastructureError) bool {
-	if e, ok := err.(*EvaluationInfrastructureError); ok {
-		*target = e
-		return true
-	}
-	return false
 }
 
 // newUUIDHex 32 位十六进制随机串（Python uuid4().hex 等价；仅作会话唯一标识）。

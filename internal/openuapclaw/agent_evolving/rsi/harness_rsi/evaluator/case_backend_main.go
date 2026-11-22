@@ -25,6 +25,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator/evalerrors"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -160,11 +161,11 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 		b.cfg.SolverMaxIterations, b.cfg.SolverOnMaxIterations,
 		b.cfg.SolverMaxIterationsHardLimit)
 	if policyErr != nil {
-		return nil, NewEvaluationInfrastructureError(policyErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(policyErr.Error())
 	}
 	runtimeConfig = runtimePolicy.ToDict()
 	if mkErr := os.MkdirAll(caseRoot, 0o755); mkErr != nil {
-		return nil, NewEvaluationInfrastructureError(mkErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(mkErr.Error())
 	}
 	workspaceDir = singleHarnessWorkspaceDir(params.Case, absPath(params.OutputDir), params.SessionID)
 
@@ -182,7 +183,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 			Case: params.Case, WorkspaceDir: workspaceDir, TimeoutSec: timeoutSec,
 		})
 		if prepErr != nil {
-			return nil, NewEvaluationInfrastructureError(prepErr.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(prepErr.Error())
 		}
 		name, startErr := StartTerminalBenchSolverContainer(StartSolverContainerParams{
 			DockerImage:           image,
@@ -193,7 +194,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 			MountWorkspace:        false,
 		})
 		if startErr != nil {
-			return nil, NewEvaluationInfrastructureError(startErr.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(startErr.Error())
 		}
 		solverContainerName = name
 		if stageErr := stageCaseAssets(params.Case, workspaceDir, solverContainerName); stageErr != nil {
@@ -212,7 +213,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 		})
 	} else {
 		if prepErr := prepareSingleHarnessWorkspace(params.Case, workspaceDir); prepErr != nil {
-			return nil, NewEvaluationInfrastructureError(prepErr.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(prepErr.Error())
 		}
 		if stageErr := stageCaseAssets(params.Case, workspaceDir, ""); stageErr != nil {
 			return nil, stageErr
@@ -223,7 +224,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	// Python: model = load_member_optimizer_model(self.config.model_config_ref)
 	model, modelErr := memberoptimizer.LoadMemberOptimizerModel(b.cfg.ModelConfigRef)
 	if modelErr != nil {
-		return nil, NewEvaluationInfrastructureError(modelErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(modelErr.Error())
 	}
 
 	// Python: agent_rails = _single_harness_rails(...)
@@ -265,7 +266,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 		SysOperation:        sysOperation,
 	})
 	if buildErr != nil {
-		return nil, NewEvaluationInfrastructureError(buildErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(buildErr.Error())
 	}
 	agent = built
 
@@ -273,14 +274,14 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	for _, rail := range agentRails {
 		if sr, isSkill := rail.(*RSISkillUseRail); isSkill {
 			if regErr := agent.RegisterRail(ctx, sr); regErr != nil {
-				return nil, NewEvaluationInfrastructureError(regErr.Error())
+				return nil, evalerrors.NewEvaluationInfrastructureError(regErr.Error())
 			}
 			skillUseRails = append(skillUseRails, sr)
 		}
 	}
 	// Python: await agent.load_plugin(harness_path)
 	if _, loadErr := agent.LoadPlugin(ctx, harnessPath, nil); loadErr != nil {
-		return nil, NewEvaluationInfrastructureError(loadErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(loadErr.Error())
 	}
 	for _, skillRail := range skillUseRails {
 		// Python: 单 harness 执行在源/候选/重放/发布评估中统一任务启动触发。
@@ -290,7 +291,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	if solverContainerName != "" {
 		// Python: _enforce_container_sys_operation_rail(agent)
 		if enforceErr := enforceContainerSysOperationRail(ctx, agent); enforceErr != nil {
-			return nil, NewEvaluationInfrastructureError(enforceErr.Error())
+			return nil, evalerrors.NewEvaluationInfrastructureError(enforceErr.Error())
 		}
 	}
 	// Python: trajectory_rail = _attach_single_harness_trajectory_rail(...)
@@ -306,7 +307,7 @@ func (b *SingleHarnessExecutionBackend) Execute(ctx context.Context, params Exec
 	var invokeErr error
 	response, invokeErr = runAgentForCase(ctx, agent, caseInput, params.SessionID)
 	if invokeErr != nil {
-		return nil, NewEvaluationInfrastructureError(invokeErr.Error())
+		return nil, evalerrors.NewEvaluationInfrastructureError(invokeErr.Error())
 	}
 
 	// ─── Python L331-391：termination 构造 + 证据归档 + 结果组装 ───
