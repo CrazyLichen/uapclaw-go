@@ -5,11 +5,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -116,6 +116,8 @@ type TeamManager struct {
 	roundStateReporter func(sessionID string, generation int, running bool)
 	// pendingWaitersTM 会话级等待者（与 adapter 层 channel 级 pendingWaiters 分立）。
 	pendingWaitersTM map[string][]tmPendingWaiter
+	// pushFallback 无 waiter 终态帧的 server-push 兜底（D-25.3-1，SetPushFallback 注入）
+	pushFallback func(channelID, sessionID string, payload map[string]any)
 	// waiterGenerations (session\x00request) → 登记代次。
 	waiterGenerations map[string]int
 	// exclusiveWaiters session → 排他等待者 requestID。

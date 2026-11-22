@@ -20,6 +20,8 @@ type fakeTeamLifecycleManager struct {
 	lastEventType string
 	// lastPayload 最近一次 BroadcastEvent 的载荷
 	lastPayload map[string]any
+	// lastChannelID 最近一次 BroadcastEvent 的渠道归属（D-25.3-1）
+	lastChannelID string
 }
 
 // reportRoundState 触发已注册的轮状态观察者（模拟团队运行时回调）。
@@ -52,11 +54,12 @@ func (f *fakeTeamLifecycleManager) StopSessionRuntime(_ context.Context, session
 	return true, nil
 }
 
-// BroadcastEvent 记录事件类型与载荷。
-func (f *fakeTeamLifecycleManager) BroadcastEvent(sessionID, event string, payload map[string]any) bool {
+// BroadcastEvent 记录事件类型、载荷与渠道归属（D-25.3-1）。
+func (f *fakeTeamLifecycleManager) BroadcastEvent(sessionID, event string, payload map[string]any, channelID string) bool {
 	f.events = append(f.events, "broadcast")
 	f.lastEventType = event
 	f.lastPayload = payload
+	f.lastChannelID = channelID
 	return true
 }
 
@@ -157,6 +160,10 @@ func TestTeamLifecycle_PublishPauseCompleted(t *testing.T) {
 	}
 	if !containsString(manager.events, "broadcast") {
 		t.Fatalf("应广播事件，实际 %v", manager.events)
+	}
+	// D-25.3-1：渠道归属经广播透传（Python team_session_lifecycle.py:186）
+	if manager.lastChannelID != "web" {
+		t.Fatalf("channel 透传 = %s", manager.lastChannelID)
 	}
 }
 

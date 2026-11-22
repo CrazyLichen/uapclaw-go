@@ -82,11 +82,11 @@ func TestBroadcastEvent_送达与丢弃(t *testing.T) {
 	ch := make(chan map[string]any, 1)
 	m.RegisterSessionWaiter("s1", "req-1", ch, true, false, 1)
 	// 无等待者的会话 → false。
-	if m.BroadcastEvent("s-none", "chat.chunk", map[string]any{"x": 1}) {
+	if m.BroadcastEvent("s-none", "chat.chunk", map[string]any{"x": 1}, "") {
 		t.Fatal("no waiters must return false")
 	}
 	// 送达 → true + event_type 注入。
-	if !m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "hi"}) {
+	if !m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "hi"}, "") {
 		t.Fatal("delivery must return true")
 	}
 	event := <-ch
@@ -95,8 +95,8 @@ func TestBroadcastEvent_送达与丢弃(t *testing.T) {
 	}
 	_ = event
 	// 先占满队列，再广播 → 丢弃不阻塞，全丢弃应返回 false。
-	m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "fill"})
-	if m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "2"}) {
+	m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "fill"}, "")
+	if m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "2"}, "") {
 		t.Fatal("full queue drop must return false when nothing delivered")
 	}
 }
@@ -131,5 +131,63 @@ func TestIsGenerationRunning_代次运行判定(t *testing.T) {
 	}
 	if m.IsGenerationRunning("s-other", 1) {
 		t.Fatal("other session must not be running")
+	}
+}
+
+// TestBroadcastEvent_终态无等待者走PushFallback 无 waiter 终态帧走 push fallback。
+// Python: broadcast_event :772-779 elif terminal → _push_event_without_waiter
+func TestBroadcastEvent_终态无等待者走PushFallback(t *testing.T) {
+	m := newRoundStateTM()
+	var pushedChannel, pushedSession []string
+	var pushedPayloads []map[string]any
+	m.SetPushFallback(func(channelID, sessionID string, payload map[string]any) {
+		pushedChannel = append(pushedChannel, channelID)
+		pushedSession = append(pushedSession, sessionID)
+		pushedPayloads = append(pushedPayloads, payload)
+	})
+	payload := map[string]any{"event_type": "chat.processing_status", "is_processing": false, "is_complete": true}
+	if m.BroadcastEvent("s1", "chat.processing_status", payload, "xiaoya") {
+		t.Fatal("no waiters must return false")
+	}
+	if len(pushedPayloads) != 1 {
+		t.Fatalf("fallback must fire once, got %d", len(pushedPayloads))
+	}
+	if pushedChannel[0] != "xiaoya" || pushedSession[0] != "s1" {
+		t.Fatalf("channel/session = %s/%s", pushedChannel[0], pushedSession[0])
+	}
+	if pushedPayloads[0]["is_complete"] != true {
+		t.Fatalf("payload = %v", pushedPayloads[0])
+	}
+}
+
+// TestBroadcastEvent_终态无渠道缺省Web channel 空缺省 web。
+// Python: team_manager.py:907 str(channel_id or "").strip() or "web"
+func TestBroadcastEvent_终态无渠道缺省Web(t *testing.T) {
+	m := newRoundStateTM()
+	var got string
+	m.SetPushFallback(func(channelID, _ string, _ map[string]any) { got = channelID })
+	m.BroadcastEvent("s1", "chat.processing_status",
+		map[string]any{"event_type": "chat.processing_status", "is_processing": false, "is_complete": true}, "")
+	if got != "web" {
+		t.Fatalf("default channel = %s", got)
+	}
+}
+
+// TestBroadcastEvent_非终态无等待者不Fallback 非 terminal 且非 workflow-terminal：不 fallback。
+func TestBroadcastEvent_非终态无等待者不Fallback(t *testing.T) {
+	m := newRoundStateTM()
+	fired := false
+	m.SetPushFallback(func(channelID, sessionID string, payload map[string]any) { fired = true })
+	m.BroadcastEvent("s1", "chat.chunk", map[string]any{"delta": "hi"}, "")
+	if fired {
+		t.Fatal("non-terminal frame must not trigger fallback")
+	}
+	// 终态但已注册 waiter 且送达：也不 fallback
+	ch := make(chan map[string]any, 1)
+	m.RegisterSessionWaiter("s2", "req-1", ch, true, false, 1)
+	m.BroadcastEvent("s2", "chat.processing_status",
+		map[string]any{"event_type": "chat.processing_status", "is_processing": false, "is_complete": true}, "web")
+	if fired {
+		t.Fatal("delivered terminal frame must not trigger fallback")
 	}
 }

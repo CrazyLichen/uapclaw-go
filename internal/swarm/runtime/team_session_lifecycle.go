@@ -22,8 +22,9 @@ type TeamLifecycleManager interface {
 	PauseSessionRuntime(ctx context.Context, sessionID, reason string, generation *int) (bool, error)
 	// StopSessionRuntime 停止匹配代次的运行时资源
 	StopSessionRuntime(ctx context.Context, sessionID, reason string, stopRunner bool, generation *int) (bool, error)
-	// BroadcastEvent 向匹配代次广播事件（返回是否有存活接收方，Python broadcast_event -> bool）
-	BroadcastEvent(sessionID, eventType string, payload map[string]any) bool
+	// BroadcastEvent 向匹配代次广播事件（返回是否有存活接收方，Python broadcast_event -> bool）。
+	// channelID 用于无 waiter 终态帧的 server-push fallback 渠道归属（D-25.3-1）。
+	BroadcastEvent(sessionID, eventType string, payload map[string]any, channelID string) bool
 	// IsGenerationRunning 匹配代次是否拥有活跃工作（桩）
 	IsGenerationRunning(sessionID string, generation int) bool
 }
@@ -121,13 +122,14 @@ func (a *TeamSessionLifecycleAdapter) PublishPauseCompleted(
 		Str("session_id", sessionID).
 		Str("generation", intPtrText(generation)).
 		Msg("[TeamProcessingStatus] generated: source=pause_completed is_processing=false is_complete=true")
-	// channel_id 仅入日志；广播事件不带渠道归属（IMPLEMENTATION_PLAN 25.6 行登记补齐）。
+	// channel_id 经广播透传（D-25.3-1：无 waiter 终态帧 fallback 的渠道归属，
+	// Python team_session_lifecycle.py:186 channel_id=channel_id 透传 broadcast_event）
 	a.manager.BroadcastEvent(sessionID, "chat.processing_status", map[string]any{
 		"event_type":    "chat.processing_status",
 		"session_id":    sessionID,
 		"is_processing": false,
 		"is_complete":   true,
-	})
+	}, channelID)
 	return nil
 }
 
@@ -182,4 +184,3 @@ func itoaValue(v int) string {
 	}
 	return string(buf[i:])
 }
-

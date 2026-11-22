@@ -139,11 +139,13 @@ func (m *TeamManager) RemoveWaiter(sessionID, requestID string, generation *int)
 // channel 满时的短等待语义在 Go 以「丢弃 + debug 日志」承载（adapter 层
 // broadcastEvent 同款既定差异）。返回是否至少一个等待者收到事件。
 // Python: broadcast_event (team_manager.py L676-790+)。
-func (m *TeamManager) BroadcastEvent(sessionID, eventType string, payload map[string]any) bool {
+func (m *TeamManager) BroadcastEvent(sessionID, eventType string, payload map[string]any, channelID string) bool {
 	m.mu.Lock()
 	waiters := m.pendingWaitersTM[sessionID]
 	m.mu.Unlock()
 	if len(waiters) == 0 {
+		// Python :739 waiters 空仍走到 :772 terminal fallback——不提前跳过。
+		m.pushTerminalFallback(sessionID, eventType, payload, channelID)
 		return false
 	}
 	delivered := false
@@ -162,7 +164,47 @@ func (m *TeamManager) BroadcastEvent(sessionID, eventType string, payload map[st
 			// channel 满丢弃（Python 背压超时语义的 Go 承载，见文件头偏差注）。
 		}
 	}
+	if !delivered {
+		m.pushTerminalFallback(sessionID, eventType, payload, channelID)
+	}
 	return delivered
+}
+
+// pushTerminalFallback 无 waiter（或全部丢弃）的终态帧 → gateway server-push
+// 侧通道兜底（Python :772-779 elif terminal → _push_event_without_waiter；
+// workflow-terminal fallback 属 workflow 域，本处仅 chat.processing_status 终态帧）。
+func (m *TeamManager) pushTerminalFallback(sessionID, eventType string, payload map[string]any, channelID string) {
+	terminal := eventType == "chat.processing_status" &&
+		payload["is_processing"] == false && payload["is_complete"] == true
+	m.mu.Lock()
+	fallback := m.pushFallback
+	m.mu.Unlock()
+	if fallback == nil || !terminal {
+		return
+	}
+	ch := strings.TrimSpace(channelID)
+	if ch == "" {
+		// Python :907 str(channel_id or "").strip() or "web"
+		ch = "web"
+	}
+	copied := make(map[string]any, len(payload)+1)
+	for k, v := range payload {
+		copied[k] = v
+	}
+	if _, has := copied["session_id"]; !has {
+		copied["session_id"] = sessionID // Python :903 payload.setdefault
+	}
+	fallback(ch, sessionID, copied)
+}
+
+// SetPushFallback 注入无 waiter 终态帧的 server-push 兜底回调。
+// Python: _push_event_without_waiter 经懒 import AgentWebSocketServer.send_push；
+// Go 以回调注入承载（防 team→server 反向依赖，AgentServer.SendPush 经适配接入）。
+// Python: team_manager.py:879-910（回调即该函数的注入等价物）。
+func (m *TeamManager) SetPushFallback(fallback func(channelID, sessionID string, payload map[string]any)) {
+	m.mu.Lock()
+	m.pushFallback = fallback
+	m.mu.Unlock()
 }
 
 // HasInputWaiters 是否存在属于输入持有流的等待者。
