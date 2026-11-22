@@ -32,12 +32,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	atrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
@@ -120,15 +121,17 @@ func buildOrganizationAvailabilityRail(params map[string]any, view *buildctx.Swa
 }
 
 // buildSessionMessagingRouteRail 仅 Team leader 挂载 Session messaging 路由。
-// 分支体（SessionMessagingRouteRail）⤴️25.6 群聊（缝 F2）。
+// 分支体（SessionMessagingRouteRail）随 25.6 批一 T5 落地；service 由
+// AgentServer 装配后经 SetService 刷新（Python adapter 路径
+// interface_deep.py:14254-14256，providers 路径构造时不带 service——与
+// Python build_session_messaging_tools 无参构造同语义）。
 // Python: _build_session_messaging_route_rail (member_rails.py:127-137)
 func buildSessionMessagingRouteRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	if view.Role != "leader" {
 		return nil, nil
 	}
-	// Python: return SessionMessagingRouteRail()——群聊域基座未实施
-	return nil, nil
+	return sessionmtools.NewSessionMessagingRouteRail(), nil
 }
 
 // buildHeartbeatRail 为 Team 成员挂载 Job Heartbeat Rail。
