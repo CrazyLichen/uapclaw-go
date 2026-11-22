@@ -20,6 +20,7 @@ type fakeCondState struct {
 	state.WorkflowState
 	globals      map[string]any
 	values       map[state.StateKey]any
+	inputs       map[string]any
 	onSetOutputs func(any)
 	setOutputs   []any
 }
@@ -27,6 +28,9 @@ type fakeCondState struct {
 func (s *fakeCondState) CommitCmp() {}
 
 func (s *fakeCondState) GetGlobal(key state.StateKey) any { return s.globals[key.String()] }
+
+// GetInputs 按 schema 取输入（io_state 面；fake 以 inputs 字段承载）
+func (s *fakeCondState) GetInputs(_ state.StateKey) any { return s.inputs }
 
 // Get 键值取值（Task1+ 起消费：state().get(key)）
 func (s *fakeCondState) Get(key state.StateKey) any { return s.values[key] }
