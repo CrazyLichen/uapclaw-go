@@ -373,11 +373,13 @@ func (t *SessionMessagingToolkit) GetTools() []tool.Tool {
 	intParam := func(name, desc string, required bool) *schema.Param {
 		return &schema.Param{Name: name, Description: desc, Type: schema.ParamTypeInteger, Required: required}
 	}
+	// mk 包装为调用级上下文感知工具：执行期从 cbc.extra 读 route + tool_call_id
+	// 注入 ctx（等价 Python ContextVar 在工具协程内可见的语义；spec §5 登记）。
+	// Python: get_tools 各 LocalFunction（:528-565）
 	mk := func(name, desc string, params []*schema.Param,
 		fn func(ctx context.Context, inputs map[string]any) (map[string]any, error)) tool.Tool {
 		card := tool.NewToolCard(name, desc, params, nil)
-		mf, _ := tool.NewMapFunction(card, fn, nil)
-		return mf
+		return &sessionMessagingInvokeTool{card: card, fn: fn}
 	}
 	return []tool.Tool{
 		mk("session_list",
@@ -456,6 +458,48 @@ func (t *SessionMessagingToolkit) GetTools() []tool.Tool {
 				return t.ResolveMessage(ctx, strAny(inputs["message_id"]), strAny(inputs["resolution"])), nil
 			}),
 	}
+}
+
+// sessionMessagingInvokeTool 调用级上下文感知的 session messaging 工具载体。
+// 实现 CallbackContextAcceptor（Python: accepts_tool_callback_context=True），
+// 执行期从 cbc.extra 读 rail 绑定的 route + tool_call_id 注入 ctx，
+// 等价 Python ContextVar 的 before_tool_call 作用域（spec §5 登记）。
+type sessionMessagingInvokeTool struct {
+	card *tool.ToolCard
+	fn   func(ctx context.Context, inputs map[string]any) (map[string]any, error)
+}
+
+// AcceptsToolCallbackContext 声明需要执行期回调上下文。
+func (t *sessionMessagingInvokeTool) AcceptsToolCallbackContext() bool { return true }
+
+// Card 返回工具卡片。
+func (t *sessionMessagingInvokeTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 沿用卡片级默认预算。
+func (t *sessionMessagingInvokeTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
+
+// Invoke 从调用级 extra 注入路由后执行。
+func (t *sessionMessagingInvokeTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
+	o := tool.NewToolCallOptions(opts...)
+	if o.CallbackContext != nil {
+		extra := o.CallbackContext.Extra()
+		if raw, ok := extra[sessionMessagingRouteTokenExtraKey].(map[string]any); ok {
+			if route := routeFromWire(raw); route != nil {
+				ctx = context.WithValue(ctx, routeContextKey, route)
+			}
+		}
+		if callID, ok := extra[sessionMessagingToolCallIDExtraKey].(string); ok && callID != "" {
+			ctx = context.WithValue(ctx, toolCallIDContextKey, callID)
+		}
+	}
+	return t.fn(ctx, inputs)
+}
+
+// Stream 不支持流式。
+func (t *sessionMessagingInvokeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.NewErrStreamNotSupported(t.card.String())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

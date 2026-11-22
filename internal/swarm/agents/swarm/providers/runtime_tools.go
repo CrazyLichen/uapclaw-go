@@ -3,13 +3,13 @@ package providers
 import (
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
-	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
+	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // runtime_tools.go —— 成员运行时工具工厂（组织/cron/send_file/session_messaging）。
@@ -22,11 +22,11 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	constOrgOwnerInboxTools   = "swarm.organization_owner_inbox_tools"
-	constOrgModelTools        = "swarm.organization_model_tools"
+	constOrgOwnerInboxTools    = "swarm.organization_owner_inbox_tools"
+	constOrgModelTools         = "swarm.organization_model_tools"
 	constSessionMessagingTools = "swarm.session_messaging_tools"
-	constCronTools            = "swarm.cron_tools"
-	constSendFile             = "swarm.send_file"
+	constCronTools             = "swarm.cron_tools"
+	constSendFile              = "swarm.send_file"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -55,14 +55,16 @@ func buildOrganizationModelTools(params map[string]any, view *buildctx.SwarmBuil
 }
 
 // buildSessionMessagingTools leader-only 跨会话持久消息工具。
-// 分支体（SessionMessagingToolkit）⤴️25.6 群聊（缝 F2）。
+// 分支体（SessionMessagingToolkit）随 25.6 批一 T5 落地；无参构造与 Python
+// runtime_tools.py:87 SessionMessagingToolkit() 同语义（service 由调用级
+// cbc.extra 路由注入后 toolkit 经 ctx 解析，或 adapter 路径 SetService）。
 // Python: build_session_messaging_tools (runtime_tools.py:79-88)
 func buildSessionMessagingTools(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
 	if view.Role != "leader" {
 		return nil
 	}
-	return nil
+	return sessionmtools.NewSessionMessagingToolkit(nil).GetTools()
 }
 
 // buildCronTools 每成员 cron 工具（team 成员作用域）。
@@ -132,7 +134,7 @@ func buildSendFileTools(params map[string]any, view *buildctx.SwarmBuildContext)
 		return nil
 	}
 	metadata := copyMapOrEmpty(view.RequestMetadata)
-	toolkit := teamtools.NewSendFileToolkit(requestID, sessionOrEmpty(view), channelID, teamtools.SendFileRuntimeContext{
+	toolkit := sessionmtools.NewSendFileToolkit(requestID, sessionOrEmpty(view), channelID, sessionmtools.SendFileRuntimeContext{
 		Metadata:          metadata,
 		UserID:            view.UserID,
 		ProjectDir:        view.ProjectDir,
