@@ -34,7 +34,8 @@ import (
 // SwebenchDockerSuite swebench 容器运行时套件。
 type SwebenchDockerSuite struct {
 	suite.Suite
-	image string
+	image  string
+	image2 string
 }
 
 // TestSwebenchDockerSuite 入口（SWEBENCH_INTEGRATION=1 门禁）。
@@ -51,19 +52,30 @@ func TestSwebenchDockerSuite(t *testing.T) {
 // SetupTest 构建本地 itest 镜像（alpine + python3 + /testbed + 符号链接）。
 func (s *SwebenchDockerSuite) SetupTest() {
 	ctxDir := s.T().TempDir()
-	dockerfile := `FROM alpine:3.19
-RUN apk add --no-cache python3 git && mkdir -p /testbed /opt/miniconda3/envs/testbed/bin \
+		dockerfile := `FROM alpine:3.19
+RUN apk add --no-cache bash coreutils python3 git && mkdir -p /testbed /opt/miniconda3/envs/testbed/bin \
 	&& ln -s /usr/bin/python3 /opt/miniconda3/envs/testbed/bin/python
 WORKDIR /testbed
 RUN echo "base content" > /testbed/README.md && echo "dep==1.0" > /testbed/requirements.txt
 RUN ln -s /usr/bin/python3 /testbed/python-link
+# /testbed 须为 git 仓库（真实 testbed 是 git clone；_configure_workspace_git 依赖）。
+RUN git config --global user.email itest@local && git config --global user.name itest \
+	&& git init -q /testbed && git -C /testbed add -A && git -C /testbed commit -qm base
 `
 	s.Require().NoError(os.WriteFile(filepath.Join(ctxDir, "Dockerfile"), []byte(dockerfile), 0o644))
-	image := "uapclaw-itest/sweb.eval.x86_64.itest_case_1:latest"
+	// 镜像名必须用 SwebenchImageName 转换后的形式（instance_id 的 __ → _1776_），
+	// 与 PrepareSwebenchWorkspace 内部核验的 docker_image 一致。
+	image := "uapclaw-itest/sweb.eval.x86_64.itest_1776_case-1:latest"
 	build := exec.Command("docker", "build", "-t", image, ctxDir)
 	out, err := build.CombinedOutput()
 	s.Require().NoError(err, "docker build failed: %s", out)
 	s.image = image
+	// case-2（依赖缓存子测试）用同 Dockerfile 构建自身实例名的镜像。
+	image2 := "uapclaw-itest/sweb.eval.x86_64.itest_1776_case-2:latest"
+	build2 := exec.Command("docker", "build", "-t", image2, ctxDir)
+	out2, err2 := build2.CombinedOutput()
+	s.Require().NoError(err2, "docker build failed: %s", out2)
+	s.image2 = image2
 }
 
 // TestSwebenchDocker_全链 考场准备 → solver 容器 → 容器命令 → patch sync → 清理。
@@ -134,25 +146,33 @@ func (s *SwebenchDockerSuite) TestSwebenchDocker_全链() {
 	s.Require().Equal("echo $ITEST_VAR && cat README.md", shellOp.CommandLog()[0]["command"])
 
 	// ④ 容器内改动 → patch sync 回宿主（真实 git diff + git apply）。
+	// Python 语义（docstring "its pristine host checkout"）：patch 应用到与
+	// solver 挂载工作区分离的干净宿主检出——先复制一份 pristine 检出。
+	pristineDir := filepath.Join(root, "pristine")
+	cpOut, cpErr := exec.Command("cp", "-a", workspaceDir, pristineDir).CombinedOutput()
+	s.Require().NoError(cpErr, "cp failed: %s", cpOut)
 	_, err = shell.ExecuteCmd(s.T().Context(), "echo 'solver edit' >> README.md && git add -A")
 	s.Require().NoError(err)
 	patch, err := evaluator.SyncContainerGitPatchToWorkspace(evaluator.SyncPatchParams{
 		ContainerName:         containerName,
-		WorkspaceDir:          workspaceDir,
+		WorkspaceDir:          pristineDir,
 		ContainerWorkspaceDir: "/testbed",
 	})
 	s.Require().NoError(err)
 	s.Require().Contains(patch, "diff --git")
-	// 宿主检出已应用补丁。
-	edited, err := os.ReadFile(filepath.Join(workspaceDir, "README.md"))
+	// 宿主 pristine 检出已应用补丁。
+	edited, err := os.ReadFile(filepath.Join(pristineDir, "README.md"))
 	s.Require().NoError(err)
 	s.Require().Contains(string(edited), "solver edit")
 
 	// ⑤ CollectModelPatch（宿主 git diff --binary HEAD；git 配置已由考场准备落位）。
-	// 宿主仓库未 init —— Python 语义下 collect_model_patch 失败抛 SWEbenchInfrastructureError，
-	// 这里断言失败路径真实（错误可分类）。
-	_, collectErr := evaluator.CollectModelPatch(workspaceDir)
-	s.Require().Error(collectErr)
+	// workspace 含 docker cp 拷出的 .git，是真实 git 仓库：solver 改动应可收集。
+	modelPatch, collectErr := evaluator.CollectModelPatch(workspaceDir)
+	s.Require().NoError(collectErr)
+	s.Require().Contains(modelPatch, "solver edit")
+	// 非 git 目录走 Python 语义失败路径（抛 SWEbenchInfrastructureError）。
+	_, emptyErr := evaluator.CollectModelPatch(s.T().TempDir())
+	s.Require().Error(emptyErr)
 
 	// ⑥ RemoveTerminalBenchContainer（真实 docker rm -f）。
 	evaluator.RemoveTerminalBenchContainer(containerName)
@@ -172,7 +192,9 @@ func (s *SwebenchDockerSuite) TestSwebenchDocker_依赖缓存() {
 			"swebench": map[string]any{
 				"instance_id": "itest__case-2",
 				"namespace":   "uapclaw-itest",
-				"docker_image": s.image,
+				// 缓存目录键是 config["repo"]（Python _dependency_cache_dir L443）。
+				"repo": "uapclaw-itest",
+				"docker_image": s.image2,
 				// base_commit == environment_setup_commit → 不触发外网下载。
 				"base_commit":              "deadbeef",
 				"environment_setup_commit": "deadbeef",
