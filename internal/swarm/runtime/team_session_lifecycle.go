@@ -21,7 +21,7 @@ type TeamLifecycleManager interface {
 	// PauseSessionRuntime 暂停匹配代次的运行时资源
 	PauseSessionRuntime(ctx context.Context, sessionID, reason string, generation *int) (bool, error)
 	// StopSessionRuntime 停止匹配代次的运行时资源
-	StopSessionRuntime(ctx context.Context, sessionID, reason string, stopRunner bool, generation *int) (bool, error)
+	StopSessionRuntime(ctx context.Context, sessionID, reason string, stopRunner bool, generation *int, expectedRequestID string) (bool, error)
 	// BroadcastEvent 向匹配代次广播事件（返回是否有存活接收方，Python broadcast_event -> bool）。
 	// channelID 用于无 waiter 终态帧的 server-push fallback 渠道归属（D-25.3-1）。
 	BroadcastEvent(sessionID, eventType string, payload map[string]any, channelID string) bool
@@ -97,7 +97,7 @@ func (a *TeamSessionLifecycleAdapter) StopSession(
 	reason string,
 ) error {
 	generation := sess.Generation
-	_, err := a.manager.StopSessionRuntime(ctx, sess.SessionID, reason, true, &generation)
+	_, err := a.manager.StopSessionRuntime(ctx, sess.SessionID, reason, true, &generation, "")
 	return err
 }
 

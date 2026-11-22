@@ -141,7 +141,7 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 			continue
 		}
 		seen[sid] = true
-		m.StopSessionRuntime(ctx, sid, reason, true, nil) //nolint:errcheck // 清理操作，错误不可操作
+		m.StopSessionRuntime(ctx, sid, reason, true, nil, "") //nolint:errcheck // 清理操作，错误不可操作
 	}
 	return nil
 }
@@ -407,7 +407,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 //     Python: 6. if team_name: runner_stopped = await Runner.stop_agent_team(...)
 //     Python: 7. if not has_local: release a2x + stop runner transport
 //     Python: 8. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
-func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string, stopRunner bool, generation *int) (bool, error) {
+func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string, stopRunner bool, generation *int, expectedRequestID string) (bool, error) {
 	m.mu.Lock()
 	// Python: 首行 `if not self.generation_matches(session_id, generation): return False`
 	// （team_manager.py:3613-3615；generation None/nil 恒匹配）
@@ -415,6 +415,11 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 		m.mu.Unlock()
 		return false, nil
 	}
+	// expected_request_id 守卫（Python :3616-3630：active round request_id 匹配
+	// + inflight 集合全等 + _begin_request_stop）——Go TeamManager 缺
+	// _active_rounds/_inflight_requests 对应结构（25.1/25.2 域），guard 段
+	// ⤴️该结构回填时同批补齐（spec 附录 A3）；本批接收 expectedRequestID
+	// 形参并保持原停止流程。
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasRunnerTeamAgent(sessionID) || m.hasMonitor(sessionID) ||
@@ -486,6 +491,11 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 		m.mu.Unlock()
 		return false, nil
 	}
+	// expected_request_id 守卫（Python :3616-3630：active round request_id 匹配
+	// + inflight 集合全等 + _begin_request_stop）——Go TeamManager 缺
+	// _active_rounds/_inflight_requests 对应结构（25.1/25.2 域），guard 段
+	// ⤴️该结构回填时同批补齐（spec 附录 A3）；本批接收 expectedRequestID
+	// 形参并保持原停止流程。
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
@@ -538,7 +548,7 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 	// Python: stop 在 try 块外——异常直接传播给调用方（外层 except → deleted=False）。
 	// 原实现吞错恒 (true,nil)，清理失败用户仍收到"已解散"成功文案（错误契约失真）。
 	// Python: delete 路径 stop_runner=False 语义——Runner 运行时由后续 delete_agent_team(force=True) 处置
-	if _, stopErr := m.StopSessionRuntime(ctx, sessionID, reason, false, nil); stopErr != nil {
+	if _, stopErr := m.StopSessionRuntime(ctx, sessionID, reason, false, nil, ""); stopErr != nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).
 			Err(stopErr).Msg("failed to stop team session runtime")
 		return false, stopErr

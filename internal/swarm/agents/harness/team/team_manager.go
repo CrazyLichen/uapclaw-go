@@ -275,7 +275,7 @@ func StopTeamSessionRuntimeAcrossManagers(ctx context.Context, sessionID string,
 	teamManagersMu.RUnlock()
 	stopped := false
 	for _, mgr := range managers {
-		if s, _ := mgr.StopSessionRuntime(ctx, sessionID, reason, true, nil); s {
+		if s, _ := mgr.StopSessionRuntime(ctx, sessionID, reason, true, nil, ""); s {
 			stopped = true
 		}
 	}

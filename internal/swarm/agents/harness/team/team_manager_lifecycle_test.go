@@ -278,7 +278,7 @@ func TestStopSessionRuntime_代次不匹配不动作(t *testing.T) {
 	fake := &fakeStopPoolAccessor{}
 	injectFakePoolAccessorAny(t, fake)
 
-	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", true, intPtrTest(2))
+	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", true, intPtrTest(2), "")
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestStopSessionRuntime_stopRunnerFalse_跳过Runner停止(t *testing.T) {
 	mgr.activeSessionID = "s1"
 	mgr.activeTeamName = "team-a"
 
-	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", false, nil)
+	stopped, err := mgr.StopSessionRuntime(context.Background(), "s1", "test", false, nil, "")
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
