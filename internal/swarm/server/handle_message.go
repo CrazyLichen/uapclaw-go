@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
@@ -94,6 +95,13 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 	// Python: if request.req_method == ReqMethod.CHAT_SEND: await self._try_record_implicit_feedback(request)
 	if request.ReqMethod == schema.ReqMethodChatSend {
 		s.tryRecordImplicitFeedback(request)
+	}
+
+	// RSI 优化平台：rsi.* method 统一分发（B2；对齐 Python
+	// agent_ws_server.py:3181-3186 的前缀分支，handle_rsi.go 自己写响应）。
+	if strings.HasPrefix(string(request.ReqMethod), "rsi.") {
+		s.HandleRSIRequest(ctx, request)
+		return
 	}
 
 	var resp *schema.AgentResponse
