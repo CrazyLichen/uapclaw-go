@@ -26,6 +26,8 @@
 //	├── session_stubs.go       # 会话管理适配器与空实现桩
 //	├── session_message_store.go    # SessionMessageStore：跨会话消息信箱 DAO 与状态机（25.6）
 //	├── session_message_store_test.go # 信箱 store 单元测试
+//	├── session_message_service.go   # SessionMessageService：编排服务与事件驱动投递 worker（25.6）
+//	├── session_message_service_test.go # 编排服务单元测试
 //	├── handle_proactive.go   # 主动推荐 RPC handler（注入引擎 + 未初始化守卫）
 //	├── handle_recommendation.go # 推荐面板 RPC（prompt_suggestion_get/event）+ 建议就绪推送
 //	├── proactive_host.go     # proactiveHost：MainAgentHost 适配器（依赖倒置给 recommendation）
