@@ -208,7 +208,8 @@ func (s *SessionMessageServiceSuite) TestSendMessage_校验链逐分支() {
 	// 32KB 上限
 	_, err = s.svc.SendMessage(ctx, src, "sess-B", string(make([]byte, MaxSessionMessageBytes+1)), "")
 	s.Require().Error(err)
-	s.Equal("INVALID_ARGUMENT", err.(*SessionMessagingError).Code)
+	// Python: session_message_service.py:514-516 LIMIT_EXCEEDED
+	s.Equal("LIMIT_EXCEEDED", err.(*SessionMessagingError).Code)
 
 	// 目标不存在
 	_, err = s.svc.SendMessage(ctx, src, "sess-X", "hi", "")
