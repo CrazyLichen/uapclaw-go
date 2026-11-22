@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -145,6 +145,9 @@ type AgentRuntime struct {
 	// coordinator 会话执行协调器（清理路径用）
 	// Python: service.py:412 self._session_coordinator
 	coordinator SessionCoordinatorPort
+	// sessionMessageServiceRef mailbox 服务引用（25.6，SetSessionMessageService 注入）
+	// Python: service.py set_session_message_service
+	sessionMessageServiceRef any
 	// provisioner 会话开通器（创建/切换/分叉/删除的唯一出口）
 	// Python: service.py:403-409 self._session_provisioner = RuntimeSessionProvisioner(...)
 	//
@@ -1837,4 +1840,26 @@ func (r *AgentRuntime) CloseSessionGeneration(
 		return sessionpkg.CloseSessionResult{}, ErrCoordinatorUnavailable
 	}
 	return r.coordinator.CloseSession(sessionID, generation, waitTimeout)
+}
+
+// ──────────────────────────── 导出函数（25.6 邮箱面） ────────────────────────────
+
+// SessionMessageRequiresQueue 导出跨会话消息排队判定（server 面装配消费）。
+// Python: service.py:513-518 session_message_requires_queue（经构造参数注入）
+func (r *AgentRuntime) SessionMessageRequiresQueue(sessionID string) bool {
+	return r.sessionMessageRequiresQueue(sessionID)
+}
+
+// SessionMessageActive 邮箱自身执行探针（busy 探针之二）。
+func (r *AgentRuntime) SessionMessageActive(sessionID string) bool { return false }
+
+// SessionMessageBlocked 会话阻止探针。
+func (r *AgentRuntime) SessionMessageBlocked(sessionID string) bool { return false }
+
+// SetSessionMessageService 注入 mailbox 服务引用（对齐 Python
+// self._runtime.set_session_message_service(service)）。
+// [Go 偏差] Runtime 当前仅保存引用，消费点（成员侧 pending_context 提示等）
+// 随批二 roster 接线；登记 spec §5。
+func (r *AgentRuntime) SetSessionMessageService(service any) {
+	r.sessionMessageServiceRef = service
 }

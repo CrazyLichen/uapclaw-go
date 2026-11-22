@@ -58,7 +58,11 @@ const (
 	// sessionMessageInternalKey 跨会话消息内部参数键
 	//
 	// Python: gateway/common/session_message.SESSION_MESSAGE_INTERNAL_KEY
-	sessionMessageInternalKey = "_jiuwenswarm_cross_session"
+	// SessionMessageInternalKey 跨会话消息内部参数键（导出供 server 面执行回调使用）
+	// Python: gateway/common/session_message.SESSION_MESSAGE_INTERNAL_KEY
+	SessionMessageInternalKey = "_jiuwenswarm_cross_session"
+	// sessionMessageInternalKey 内部别名（既有调用方不动）
+	sessionMessageInternalKey = SessionMessageInternalKey
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
