@@ -5,8 +5,8 @@ import (
 	"sort"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 

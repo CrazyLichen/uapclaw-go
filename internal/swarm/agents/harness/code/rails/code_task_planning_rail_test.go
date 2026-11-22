@@ -10,14 +10,14 @@ import (
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	result "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -1,9 +1,9 @@
 package prompt
 
 import (
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
