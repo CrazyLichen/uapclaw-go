@@ -876,8 +876,9 @@ func (s *SessionMessageService) SendMessage(ctx context.Context, source *Session
 		return nil, &SessionMessagingError{Code: "INVALID_ARGUMENT", Msg: "message must not be empty"}
 	}
 	// 步骤 6: 字节上限
+	// Python: session_message_service.py:514-516 LIMIT_EXCEEDED
 	if len([]byte(content)) > MaxSessionMessageBytes {
-		return nil, &SessionMessagingError{Code: "INVALID_ARGUMENT", Msg: "message is too large"}
+		return nil, &SessionMessagingError{Code: "LIMIT_EXCEEDED", Msg: "message is too large"}
 	}
 	// 步骤 7: hop 上限
 	hopCount := source.HopCount + 1
