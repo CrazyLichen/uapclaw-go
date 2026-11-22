@@ -6,7 +6,8 @@
 //	prompt/
 //	├── doc.go               # 包文档
 //	├── multimodal_image.go   # 图片附件提取/归一化/dataURI/定位/注入/剥离（user_prompt_builder.py 图片段）
-//	└── prompt_builder.go    # BuildResponseSection + BuildAgentIdentityPrompt + readWorkspaceFile
+//	├── prompt_builder.go     # BuildResponseSection + BuildAgentIdentityPrompt + readWorkspaceFile
+//	└── shell_environment.go  # Shell 能力单飞探测 + 能力快照渲染（shell_environment.py，15.20 ⑧ 前置件）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/prompt/prompt_builder.py
 package prompt
