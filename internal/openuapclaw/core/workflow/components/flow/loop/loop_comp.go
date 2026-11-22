@@ -248,18 +248,10 @@ func NewLoopSetVariableComponent(variableMapping map[string]any) (*LoopSetVariab
 	return c, nil
 }
 
-// globalStateGetter get_global_state 面（Python session.get_global_state）。
-// ≙ Python 静态方法 generate_value(session, value) 的鸭子参数翻译：Python 侧
-// 任何有 get_global_state 的对象都可传，Go 以最小能力接口承载同一鸭子面
-// （NodeSessionFacade 天然满足）；收窄成具体 *NodeSessionFacade 反而会缩窄
-// Python 的鸭子参数面（规则 12），故保留接口形态（2026-11-22 审查定案）。
-type globalStateGetter interface {
-	GetGlobalState(key state.StateKey) (any, error)
-}
-
-// GenerateValue 取变量值（loop_comp.py:291-296 一比一）：引用路径 → get_global_state
-// 解引用；否则原值。
-func GenerateValue(sess globalStateGetter, value any) any {
+// GenerateValue 取变量值（loop_comp.py:291-296 一比一，静态方法收 session →
+// Go 收具体 *session.NodeSessionFacade 直调 GetGlobalState 面；2026-11-22 用户
+// 拍板：不为测试方便加窄接口，测试一律走真实会话链路）。
+func GenerateValue(sess *session.NodeSessionFacade, value any) any {
 	if s, ok := value.(string); ok && sessionutils.IsRefPath(s) {
 		// Python: session.get_global_state(extract_origin_key(value))
 		v, err := sess.GetGlobalState(state.StringKey(sessionutils.ExtractOriginKey(s)))

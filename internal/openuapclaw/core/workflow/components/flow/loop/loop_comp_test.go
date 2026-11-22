@@ -145,11 +145,24 @@ func TestLoopSetVariableComponent_引用路径写入目标节点(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 单测 GenerateOutput/GenerateValue 组合语义（完整 invoke 链由集成覆盖）
-	value := GenerateValue(&nilFacade{}, "${node_b.y}")
-	assert.Equal(t, map[string]any{"y": "val"}, value) // get_global_state("node_b")
+	// 单测 GenerateOutput/GenerateValue 组合语义（完整 invoke 链由集成覆盖）。
+	// 2026-11-22 用户拍板：不为测试方便加窄接口/替身，GenerateValue 收具体
+	// Facade，单测走真实会话链路——真实 staged 语义：UpdateGlobalState 进
+	// global_state_updates，须 Commit 合并后才对 GetGlobal 可见（D-20-6 同源，
+	// Python update_by_id/commit 同款）；预置即"模拟上游节点已提交"。
+	// 真实嵌套解析取叶值 "val"（原 nilFacade 替身模拟成 {"y":"val"} 系替身
+	// 说谎，与 GetValueByNestedPath 语义相悖，一并纠正）。
+	root := session.NewWorkflowVertexSession(newFakeVertexSessionInner(t), "root", "", false)
+	facade, _ := session.NewWorkflowNodeSessionPair(root, "setvar_1", "", false)
+	facade.UpdateGlobalState(map[string]any{"node_b": map[string]any{"y": "val"}})
+	if ws, ok := facade.InnerNodeSession().State().(state.WorkflowState); ok {
+		ws.Commit()
+	}
+
+	value := GenerateValue(facade, "${node_b.y}")
+	assert.Equal(t, "val", value) // 真实嵌套解析取叶值（Python get_global_state 同语义）
 	out := GenerateOutput([]string{"x"}, value)
-	assert.Equal(t, map[string]any{"x": map[string]any{"y": "val"}}, out)
+	assert.Equal(t, map[string]any{"x": "val"}, out)
 }
 
 // TestGenerateOutput_多层嵌套 对齐 loop_comp.py:298-305
@@ -163,9 +176,11 @@ func TestGenerateOutput_空keys(t *testing.T) {
 	assert.Equal(t, 1, GenerateOutput([]string{}, 1))
 }
 
-// TestGenerateValue_非引用原值 对齐 loop_comp.py:296
+// TestGenerateValue_非引用原值 对齐 loop_comp.py:296（真实 Facade 链路）
 func TestGenerateValue_非引用原值(t *testing.T) {
-	assert.Equal(t, 42, GenerateValue(&nilFacade{}, 42))
+	root := session.NewWorkflowVertexSession(newFakeVertexSessionInner(t), "root", "", false)
+	facade, _ := session.NewWorkflowNodeSessionPair(root, "setvar_1", "", false)
+	assert.Equal(t, 42, GenerateValue(facade, 42))
 }
 
 // TestPostLoopBody_FINISHINDEX递增 对齐 loop_comp.py:320-327
@@ -292,17 +307,6 @@ func newFakeVertexSession(t *testing.T, nodeID, nodeType string) session.Workflo
 func newFakeVertexSessionWithParent(t *testing.T, parent *fakeInnerSess, nodeID, nodeType string) session.WorkflowVertexSession {
 	t.Helper()
 	return session.NewWorkflowVertexSession(parent, nodeID, nodeType, false)
-}
-
-// nilFacade 最小门面替身（GenerateValue 单测用；仅覆盖 GetGlobalState 面）
-type nilFacade struct{}
-
-func (f *nilFacade) GetGlobalState(key state.StateKey) (any, error) {
-	// 模拟 get_global_state("node_b.y") 嵌套解析 → {"y": "val"}
-	if key.String() == "node_b.y" {
-		return map[string]any{"y": "val"}, nil
-	}
-	return nil, nil
 }
 
 // newFakeVertexSessionInner 构造真实 NodeSession 的根会话（State 为 InMemory WorkflowState）
