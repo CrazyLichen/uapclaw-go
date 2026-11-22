@@ -119,6 +119,12 @@ type DeepAdapter struct {
 	// parentSessionID 子适配器所属的会话标识（仅 isSessionScoped 为真时有意义）。
 	// Python: interface_deep.py _parent_session_id
 	parentSessionID string
+	// externalHarnessBinding External Harness 不可变绑定（child 专属）。
+	// Python: interface_deep.py _external_harness_binding（:1960）
+	externalHarnessBinding *ResolvedExternalHarnessBinding
+	// externalHarnessState 会话私有 External Harness 运行态（懒启动的 IOAdapter 等）。
+	// Python: _external_harness（:1961）
+	externalHarnessState *ExternalHarnessSessionState
 	// sessionChildFactory 造一个与原适配器同类的新适配器。
 	// Python: type(self)()（_new_session_scoped_adapter :2680）
 	//
@@ -1064,8 +1070,22 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
+		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18171-18180）。
+		// 冲突/类型错误 → ok=False error 响应（Python _equipment_error_response）。
+		var externalBindingMap map[string]any
+		if req.ReqMethod == schema.ReqMethodChatSend {
+			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
+			if resolveErr != nil {
+				return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+					schema.WithResponseOK(false),
+					schema.WithPayload(map[string]any{"error": resolveErr.Error()}),
+				), nil
+			}
+			externalBindingMap = bindingToMap(resolved)
+		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
-			ReserveActivity: !isAttachOnlySubscription(req.Params),
+			ReserveActivity:        !isAttachOnlySubscription(req.Params),
+			ExternalHarnessBinding: externalBindingMap,
 		})
 		if err != nil {
 			return nil, err
@@ -1084,6 +1104,16 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+	}
+
+	// External Harness 会话（Python: :18193-18198）——非流式拒绝。
+	if d.externalHarnessBinding != nil {
+		return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "External Harness currently requires a streaming request",
+			}),
+		), nil
 	}
 
 	// 23.9 复审批2 后半: 受管语音任务绑定（对齐 interface_deep.py:18918-18921
@@ -1310,8 +1340,24 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
+		// External Harness 绑定解析（仅 CHAT_SEND；Python: :18947-18960 请求前置步）。
+		var externalBindingMap map[string]any
+		if req.ReqMethod == schema.ReqMethodChatSend {
+			resolved, resolveErr := ResolveExternalHarnessBinding(sid, parseParams(req.Params))
+			if resolveErr != nil {
+				ch := make(chan *schema.AgentResponseChunk, 1)
+				ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+					"event_type": "chat.error",
+					"error":      resolveErr.Error(),
+				}, schema.WithChunkIsComplete(true))
+				close(ch)
+				return ch, nil
+			}
+			externalBindingMap = bindingToMap(resolved)
+		}
 		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
-			ReserveActivity: !isAttachOnlySubscription(req.Params),
+			ReserveActivity:        !isAttachOnlySubscription(req.Params),
+			ExternalHarnessBinding: externalBindingMap,
 		})
 		if err != nil {
 			ch := make(chan *schema.AgentResponseChunk)
@@ -1331,6 +1377,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 			return child.ProcessMessageStreamImpl(ctx, req, inputs)
 		})
+	}
+
+	// External Harness 会话分流（Python: :19001-19068；15.18 接线：child 流式入口）。
+	// _ensure_chat_extensions 门卫为 equipment 扩展半区（D-e12 ⤴️扩展包管理），
+	// Go 侧结构性跳过，登记偏差 D-18-12。
+	if d.externalHarnessBinding != nil {
+		return d.ProcessExternalHarnessStream(ctx, d.externalHarnessState, req, inputs), nil
 	}
 
 	// 步骤 1: 实例 nil 检查
@@ -1614,15 +1667,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			})
 		}()
 
-		// usage 累加器
-		usage := &utils.UsageAccumulator{}
-		// askUser 去重集合
-		emittedAskUserIDs := make(map[string]bool)
-		// Python: has_streamed_content = False
-		hasStreamedContent := false
-		// 累积文本/reasoning
-		accumulatedText := ""
-		accumulatedReasoning := ""
+		// 跨块累加状态（15.18 从本循环提取为 streamParseState，与 external
+		// harness 投影共用；见 deep_adapter_parse_stream_chunk.go）：
+		// usage 累加器 / askUser 去重集合 / has_streamed_content / 累积文本与推理。
+		st := newStreamParseState()
 
 		for raw := range rawCh {
 			// 值/指针双分支（对齐 deep_adapter_team.go T-01 遗留点 C 的修复模式）：
@@ -1674,69 +1722,36 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 
 			switch chunkType {
-			case "llm_usage":
-				// 累加 usage → yield chat.usage_metadata
-				utils.AccumulateUsage(usage, payload)
-				usagePayload := map[string]any{
-					"event_type":    "chat.usage_metadata",
-					"input_tokens":  usage.InputTokens,
-					"output_tokens": usage.OutputTokens,
-					"total_tokens":  usage.TotalTokens,
-					"input_cost":    usage.InputCost,
-					"output_cost":   usage.OutputCost,
-					"total_cost":    usage.TotalCost,
+			case "llm_usage", "llm_reasoning", "llm_output":
+				// 三类跨块累加块：15.18 提取至 parseAccumulatingChunk（deep_adapter_parse_stream_chunk.go），
+				// 与 external harness 投影共用；步骤逐行搬移，行为不变。
+				for _, frame := range func() []map[string]any {
+					frames, _ := parseAccumulatingChunk(output, st, sessionID)
+					return frames
+				}() {
+					if frame["event_type"] == "chat.delta" {
+						text, _ := frame["content"].(string)
+						d.noteRoundVisibleText(text)
+					}
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, frame)
 				}
-				// Python: metadata 和 session_id 字段
-				if metadata, ok := payload["metadata"]; ok {
-					usagePayload["metadata"] = metadata
-				}
-				if sessionID != "" {
-					usagePayload["session_id"] = sessionID
-				}
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usagePayload)
-
-			case "llm_reasoning":
-				// 待实现：产出推理内容 yield chat.reasoning
-				reasoningContent := extractReasoningContent(payload)
-				accumulatedReasoning += reasoningContent
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-					"event_type": "chat.reasoning",
-					"content":    reasoningContent,
-				})
-
-			case "llm_output":
-				// 先 flush reasoning，再 yield chat.delta
-				if accumulatedReasoning != "" {
-					accumulatedReasoning = ""
-				}
-				textContent := extractTextContent(payload)
-				// M-02: 对齐 Python — llm_output 直接 yield + continue，不累加 accumulated_text
-				// Python: if chunk_type == "llm_output": yield ... ; continue
-				hasStreamedContent = true
-				d.noteRoundVisibleText(textContent)
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-					"event_type": "chat.delta",
-					"content":    textContent,
-				})
 
 			case "answer":
 				// Python: if chunk_type == "answer": 先 flush 累积，再调用 _parse_stream_chunk
-				if accumulatedText != "" {
+				if text, ok := st.flushAccumulatedText(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.delta",
-						"content":    accumulatedText,
+						"content":    text,
 					})
-					accumulatedText = ""
 				}
-				if accumulatedReasoning != "" {
+				if reasoning, ok := st.flushAccumulatedReasoning(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.reasoning",
-						"content":    accumulatedReasoning,
+						"content":    reasoning,
 					})
-					accumulatedReasoning = ""
 				}
 				// Python: if has_streamed_content: parsed = self._parse_stream_chunk(chunk, _has_streamed_content=True)
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
+				parsed := utils.ParseStreamChunk(output, st.usage, st.emittedAskUserIDs, d.interactionConverter, st.hasStreamedContent)
 				if parsed != nil {
 					if text, ok := parsed["content"].(string); ok {
 						d.noteRoundVisibleText(text)
@@ -1778,23 +1793,21 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 			default:
 				// flush 累积（对齐 Python: 先 emit 再置空）
-				if accumulatedText != "" {
+				if text, ok := st.flushAccumulatedText(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.delta",
-						"content":    accumulatedText,
+						"content":    text,
 					})
-					accumulatedText = ""
 				}
-				if accumulatedReasoning != "" {
+				if reasoning, ok := st.flushAccumulatedReasoning(); ok {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 						"event_type": "chat.reasoning",
-						"content":    accumulatedReasoning,
+						"content":    reasoning,
 					})
-					accumulatedReasoning = ""
 				}
 				// ParseStreamChunk 处理其他类型
 				// Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
+				parsed := utils.ParseStreamChunk(output, st.usage, st.emittedAskUserIDs, d.interactionConverter, st.hasStreamedContent)
 				if parsed != nil {
 					if text, ok := parsed["content"].(string); ok {
 						d.noteRoundVisibleText(text)
@@ -1837,30 +1850,30 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		}
 
 		// flush 残留 accumulatedText/accumulatedReasoning
-		if accumulatedText != "" {
+		if text, ok := st.flushAccumulatedText(); ok {
 			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 				"event_type": "chat.final",
-				"content":    accumulatedText,
+				"content":    text,
 			})
 		}
 
 		// 用量摘要
 		// Python: interface_deep._parse_stream_chunk L4906-4972
-		if usage.TotalTokens > 0 {
+		if st.usage.TotalTokens > 0 {
 			// 对齐 Python: usage 子对象（仅 token 字段 + 条件 cost 字段）
 			usageSubObj := map[string]any{
-				"input_tokens":  usage.InputTokens,
-				"output_tokens": usage.OutputTokens,
-				"total_tokens":  usage.TotalTokens,
+				"input_tokens":  st.usage.InputTokens,
+				"output_tokens": st.usage.OutputTokens,
+				"total_tokens":  st.usage.TotalTokens,
 			}
-			if usage.InputCost > 0 {
-				usageSubObj["input_cost"] = usage.InputCost
+			if st.usage.InputCost > 0 {
+				usageSubObj["input_cost"] = st.usage.InputCost
 			}
-			if usage.OutputCost > 0 {
-				usageSubObj["output_cost"] = usage.OutputCost
+			if st.usage.OutputCost > 0 {
+				usageSubObj["output_cost"] = st.usage.OutputCost
 			}
-			if usage.TotalCost > 0 {
-				usageSubObj["total_cost"] = usage.TotalCost
+			if st.usage.TotalCost > 0 {
+				usageSubObj["total_cost"] = st.usage.TotalCost
 			}
 
 			usageSummary := map[string]any{
@@ -1970,6 +1983,11 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			defer d.evictIdleSessionAdapters(ctx)
 			return child.ProcessInterrupt(ctx, req)
 		}
+	}
+
+	// External Harness 会话（Python: :16365-16376；15.18 接线：child 中断入口）。
+	if d.externalHarnessBinding != nil {
+		return d.ProcessExternalHarnessInterrupt(ctx, d.externalHarnessState, req), nil
 	}
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx（Python: interface_deep.py :19684，D-23.8-1）

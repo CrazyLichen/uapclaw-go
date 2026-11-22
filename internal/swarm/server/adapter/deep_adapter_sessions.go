@@ -197,6 +197,41 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 	// Python: :3951 existing = self._session_adapters.get(sid)
 	existing := d.getCachedSessionAdapter(sid)
 
+	// ⤴️ R-2 回填（15.18）：external harness binding 判据。
+	// Python: :3969-4016。步骤对齐：双缺失时读持久化绑定；已有 child 与请求绑定
+	// 一致性裁决（一致 pass / 深空切换 pass / 空闲重绑 cleanup+drop / 其余冲突）。
+	externalBinding := opts.ExternalHarnessBinding
+	if externalBinding == nil && existing == nil {
+		if persisted, loadErr := LoadPersistedExternalHarnessBinding(sid); loadErr == nil &&
+			persisted != nil && persisted.Kind == externalHarnessKind {
+			externalBinding = bindingToMap(persisted)
+			opts.ExternalHarnessBinding = externalBinding
+		}
+	}
+	if existing != nil && bindingKind(externalBinding) != "" {
+		current := externalBindingOfChild(existing)
+		requestedKind := bindingKind(externalBinding)
+		if requestedKind == deepAgentKind && current == nil {
+			// Python: :3993-3994 pass
+		} else if requestedKind == externalHarnessKind &&
+			current != nil &&
+			current.AgentTemplateName == storedString(externalBinding, "agent_template_name") &&
+			current.ProviderName == storedString(externalBinding, "provider_name") {
+			// Python: :3995-3996 binding_unchanged pass
+		} else if requestedKind == externalHarnessKind && current == nil &&
+			!d.isSessionActive(sid) {
+			// Python: :3997-4005 can_rebind_idle_child → cleanup + drop cache。
+			// 偏差（登记 D-18-11）：Go 子适配器无 cleanup() 对应物（Python 清理
+			// instance/rails；Go 侧实例生命周期由 evict 承担），此处仅摘缓存条目。
+			d.dropSessionAdapterCacheEntry(sid, false, false)
+			existing = nil
+		} else {
+			return nil, &ExternalHarnessBindingError{
+				Message: "当前 session child 的运行时与请求不一致；请新建会话后切换专家或运行时",
+			}
+		}
+	}
+
 	// 步骤 6: ★ 7 组重建判据（本节全部留位，回填时按上游原序插入本处）
 	//   ⤵️ R-1 cron 执行配方变化            Python :3953-3970
 	//   ⤵️ R-2 external harness binding 变化 Python :3974-4003
@@ -227,13 +262,32 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 
 	// 步骤 9: 让 child 建自己的 DeepAgent（含自己的 rail 树与 context engine）
 	// Python: :4310 await adapter.create_instance(config, mode=..., sub_mode=...)
-	// ⤵️ R-2 的 external_harness 分支（:4254-4282，只装 binding 不建 instance）
-	//    与下面这段互斥，随 R-2 回填时插在其前。
-	cfg := d.instanceOverridesSnapshot()
-	// Python: :4310 await adapter.create_instance(config, mode=..., sub_mode=...)
-	// child 不接收 agent_definition：声明式定义固化在根上，child 继承根的装配结果
-	if err := child.CreateInstance(ctx, cfg, d.mode, d.subMode, nil); err != nil {
-		return nil, fmt.Errorf("会话子适配器 CreateInstance 失败: %w", err)
+	// R-2 回填（15.18）：external_harness 分支（Python :4254-4282）——只装 binding
+	// 不建 instance，随后持久化不可变绑定；与普通 CreateInstance 互斥。
+	if bindingKind(opts.ExternalHarnessBinding) == externalHarnessKind {
+		typedChild, ok := child.(*DeepAdapter)
+		if !ok {
+			return nil, fmt.Errorf("external harness 会话子适配器类型不符: %T", child)
+		}
+		typed := bindingFromMap(opts.ExternalHarnessBinding)
+		typedChild.externalHarnessBinding = typed
+		typedChild.externalHarnessState = &ExternalHarnessSessionState{
+			Binding:         typed,
+			ParentSessionID: sid,
+		}
+		if err := PersistExternalHarnessBinding(sid, typed); err != nil {
+			return nil, err
+		}
+	} else if err := func() error {
+		cfg := d.instanceOverridesSnapshot()
+		// Python: :4310 await adapter.create_instance(config, mode=..., sub_mode=...)
+		// child 不接收 agent_definition：声明式定义固化在根上，child 继承根的装配结果
+		if err := child.CreateInstance(ctx, cfg, d.mode, d.subMode, nil); err != nil {
+			return fmt.Errorf("会话子适配器 CreateInstance 失败: %w", err)
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
 	}
 
 	// 步骤 10-11: 入缓存并 touch
