@@ -1494,7 +1494,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// Python: self._write_runtime_state(mode=..., language=..., channel=...,
 		//   project_dir=inputs.get("project_dir") or self._project_dir or self._workspace_dir)
 		d.writeRuntimeStateYAML(
-			ctx, mode, resolvedLanguage, resolvedChannel,
+			ctx, sessionID, mode, resolvedLanguage, resolvedChannel,
 			commrails.FirstNonEmpty(
 				paramsString(inputs, "project_dir", ""),
 				d.projectDir,

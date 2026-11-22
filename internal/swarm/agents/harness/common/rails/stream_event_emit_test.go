@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 辅助类型 ────────────────────────────

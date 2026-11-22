@@ -26,10 +26,10 @@ import (
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	interruptrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

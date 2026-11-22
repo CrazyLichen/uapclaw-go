@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -881,4 +881,12 @@ type CliModelCatalog interface {
 	// ResolveCliModels 按真实部署名解析。
 	// Python: resolve_cli_models (allocator.py:211)
 	ResolveCliModels(modelName string, providerFilter func(string) bool) []CliModelAllocation
+}
+
+// SelectableRouteTags 成员可点名 tag 集合的导出入口。
+// 供 runtime_prompt_rail 等跨包消费方复用与 allocator 相同的 tag 语义，
+// 避免复制实现（对齐 Python _agent_group_model_names 直接 import
+// _selectable_route_tags 的做法，runtime_prompt_rail.py:376-379）。
+func SelectableRouteTags(router map[string]any) []string {
+	return selectableRouteTags(router)
 }

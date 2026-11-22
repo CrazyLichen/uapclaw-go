@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strings"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 

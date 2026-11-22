@@ -14,10 +14,10 @@ import (
 	"context"
 	"sync"
 
-	hsrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hsrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 )
 

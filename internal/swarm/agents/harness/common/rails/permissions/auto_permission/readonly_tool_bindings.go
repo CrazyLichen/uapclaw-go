@@ -29,11 +29,11 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/tool_display"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/tool_display"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

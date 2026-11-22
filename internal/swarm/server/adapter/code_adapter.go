@@ -827,6 +827,7 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	outputLanguage := c.resolveOutputLanguage()
 	c.deep.writeRuntimeStateYAML(
 		ctx,
+		config.SessionID,
 		config.Mode,
 		outputLanguage,
 		resolvedChannel,
@@ -840,7 +841,8 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 		c.deep.runtimePromptRail.SetForceEnglish(c.forceEnglishRuntimePrompt)
 		c.deep.runtimePromptRail.SetChannel(resolvedChannel)
 		c.deep.runtimePromptRail.SetTrustedDirs(config.TrustedDirs)
-		c.deep.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir)
+		c.deep.runtimePromptRail.SetSessionID(config.SessionID)
+		c.deep.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir, "", "", "", "")
 		c.deep.runtimePromptRail.SetModelName(c.deep.resolveModelName())
 		c.deep.runtimePromptRail.SetMode(config.Mode)
 	}

@@ -248,13 +248,14 @@ func buildRuntimePromptRail(params map[string]any, view *buildctx.SwarmBuildCont
 	// 活会话读取而非进程级 default 状态文件。
 	// Python: rail.set_mode(context.mode); rail.set_session_id(context.session_id)
 	rail.SetMode(view.Mode)
-	// rail.set_session_id —— 基座缺 ⤴️15.20
+	// Python: rail.set_session_id(context.session_id)
+	rail.SetSessionID(view.SessionID)
 
 	// Python :346-379 分支：
 	if projectDir != "" || teamOutputsDir == "" || taskWorkspaceRoot == "" {
 		// else 前分支：有项目或无 task 路径
 		// Python: rail.set_runtime_paths(cwd=..., project_dir=..., workspace_dir=...)
-		rail.SetRuntimePaths(orEmpty(projectDir, memberWorkspaceRoot), projectDir)
+		rail.SetRuntimePaths(orEmpty(projectDir, memberWorkspaceRoot), projectDir, memberWorkspaceRoot, "", "", "")
 	} else {
 		workDir, err := view.ResolveMemberWorkDir()
 		if err != nil {
@@ -266,8 +267,8 @@ func buildRuntimePromptRail(params map[string]any, view *buildctx.SwarmBuildCont
 		}
 		// Python: set_runtime_paths(cwd=work_dir, project_dir=..., workspace_dir=...,
 		//   task_workspace_root=..., task_work_dir=..., task_outputs_dir=...)
-		// 扩展形参 ⤴️15.20；本批先传已支持形参。
-		rail.SetRuntimePaths(workDir, projectDir)
+		// 扩展形参已随 15.20 ⑧ 回填（runtime_prompt_rail.py:153-201）。
+		rail.SetRuntimePaths(workDir, projectDir, memberWorkspaceRoot, taskWorkspaceRoot, workDir, teamOutputsDir)
 	}
 	// 没有这一步成员永远渲染不出 trusted_dirs 策略段。
 	rail.SetTrustedDirs(trustedDirs)

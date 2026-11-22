@@ -118,8 +118,9 @@ func buildCodeRuntimePrompt(params map[string]any, view *buildctx.SwarmBuildCont
 	_ = params
 	rail := swarmrails.NewRuntimePromptRail(CodeRuntimeLanguage(view), stringFieldOrEmpty(view.Channel, "default"))
 	rail.SetMode(view.Mode)
-	// rail.set_session_id(ctx.session_id)——基座缺 ⤴️15.20
-	rail.SetRuntimePaths(view.ProjectDir, view.ProjectDir)
+	// Python: rail.set_session_id(ctx.session_id)
+	rail.SetSessionID(view.SessionID)
+	rail.SetRuntimePaths(view.ProjectDir, view.ProjectDir, "", "", "", "")
 	return rail, nil
 }
 

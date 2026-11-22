@@ -8,13 +8,13 @@ import (
 	"unsafe"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 

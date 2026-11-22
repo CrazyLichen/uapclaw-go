@@ -9,12 +9,12 @@ import (
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 
 	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"

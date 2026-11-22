@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
