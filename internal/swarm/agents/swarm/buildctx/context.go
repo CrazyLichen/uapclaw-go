@@ -41,12 +41,19 @@ import (
 
 // ──────────────────────────── 类型别名 ────────────────────────────
 
-// HeartbeatJobService 进程级 Heartbeat 服务的占位类型。
-// 偏差 D-15.16-c2③（用户 12-02 裁决）：Go 侧 Heartbeat 域 ⤴️AgentServer
-// 章节未移植，先以 any 别名承载字段，调用处仅调用不处理返回值；实现注入
-// 随实现计划对应章节回填，届时收窄为具体类型/窄接口。
-// Python: heartbeat_job_service: Any | None（context.py:119-122）
-type HeartbeatJobService = any
+// HeartbeatJobService AgentServer 本地心跳作业服务窄面（心跳工具消费）。
+// Python: jiuwenswarm/agents/harness/code/rails/heartbeat/tools.py:13-24 Protocol；
+// 偏差 D-15.16-c2③（用户 12-02 裁决 any 占位）由 25.6 批二收窄为本接口。
+//
+// ⤴️15.20 双向标注：本接口是 25.6 批二的注入面而非桥实现——Go 侧
+// HeartbeatRailRuntime 域（heartbeat/ 十文件 5081 行）零命中、归属 15.20；
+// 15.20 落 HeartbeatRuntimeBridge（9 工具）与服务体时若形状变化须迁移/
+// 删除本接口并同步两级安装链（回收条件：15.20 实施完成）。
+type HeartbeatJobService interface {
+	// HandleOperation 心跳作业操作分发。
+	// Python: Protocol.handle_operation(action, data, *, channel_id, session_id, user_id, source)
+	HandleOperation(action string, data map[string]any, channelID, sessionID, userID, source string) (map[string]any, error)
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 

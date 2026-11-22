@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -1724,4 +1725,17 @@ func (uc *UapClawSwarm) closeCoordinator() error {
 		return nil
 	}
 	return coordinator.Close(nil, nil)
+}
+
+// SetHeartbeatService 注入进程级心跳服务（转发 adapter；duck-typing 容忍缺席）。
+// Python: interface.py:1590-1600 adapter set_heartbeat_service 转发段。
+func (uc *UapClawSwarm) SetHeartbeatService(service buildctx.HeartbeatJobService) {
+	if uc.adapter == nil {
+		return
+	}
+	if setter, ok := uc.adapter.(interface {
+		SetHeartbeatService(buildctx.HeartbeatJobService)
+	}); ok {
+		setter.SetHeartbeatService(service)
+	}
 }

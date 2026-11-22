@@ -3,10 +3,12 @@ package runtime
 import (
 	"context"
 	"crypto/rand"
+	// buildctx 心跳服务窄面（25.6 批二注入链）
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"maps"
 	"os"
 	"path/filepath"
@@ -33,6 +35,8 @@ type AgentManager struct {
 	// agents 存储: channel_key → cache_key → agentEntry
 	// Python: self.agents: dict[str, dict[str, "JiuWenClaw"]]
 	agents map[string]map[string]*agentEntry
+	// heartbeatService 进程级心跳服务（25.6 批二，⤴️15.20 真值）
+	heartbeatService buildctx.HeartbeatJobService
 
 	// agentCreateParams 记录创建参数: channel_key → cache_key → agentCreateParamsEntry
 	// Python: self._agent_create_params: dict[str, dict[str, dict[str, Any]]]
@@ -1121,4 +1125,29 @@ func (am *AgentManager) SetRuntimeProvider(provider func() AgentRuntimeHandle) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 	am.runtimeProvider = provider
+}
+
+// SetHeartbeatService 注入进程级心跳服务（single 与 Team agent 两路发布）。
+// Python: agent_manager.py:250-261 set_heartbeat_service
+// （设字段 + set_heartbeat_job_service(context) 进程级 + 遍历已建 agents 转发）；
+// 25.6 批二：进程级发布经 buildctx.SetHeartbeatJobService，遍历转发经门面
+// SetHeartbeatService；服务体（HeartbeatRailRuntime）⤴️15.20，装配暂传 nil。
+func (am *AgentManager) SetHeartbeatService(service buildctx.HeartbeatJobService) {
+	am.mu.Lock()
+	am.heartbeatService = service
+	am.mu.Unlock()
+	// Python: set_heartbeat_job_service(service)（进程级 ContextVar → Go 静态发布）
+	buildctx.SetHeartbeatJobService(service)
+	// Python: for agents in self.agents.values(): for agent: agent.set_heartbeat_service(service)
+	am.mu.RLock()
+	snapshot := make([]*UapClawSwarm, 0)
+	for _, byMode := range am.agents {
+		for _, entry := range byMode {
+			snapshot = append(snapshot, entry.agent)
+		}
+	}
+	am.mu.RUnlock()
+	for _, agent := range snapshot {
+		agent.SetHeartbeatService(service)
+	}
 }

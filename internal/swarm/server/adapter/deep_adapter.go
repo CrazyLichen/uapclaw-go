@@ -44,6 +44,7 @@ import (
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -256,6 +257,8 @@ type DeepAdapter struct {
 	// sessionMessagingToolkit Session messaging 工具族（懒建，对齐 :2242）
 	// Python: interface_deep.py:2242 _session_messaging_toolkit
 	sessionMessagingToolkit *swarmtools.SessionMessagingToolkit
+	// heartbeatService 进程级心跳服务（25.6 批二注入链；消费方 ⤴️15.20）
+	heartbeatService buildctx.HeartbeatJobService
 	// sessionMessageServiceProvider mailbox 服务提供方（门面 ensureAdapter 注入）
 	// Python: get_current_runtime().session_message_service 的注入等价物
 	sessionMessageServiceProvider func() any

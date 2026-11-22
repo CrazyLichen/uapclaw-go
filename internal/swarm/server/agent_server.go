@@ -173,6 +173,10 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	// delete）都要经它。Python service.py:403-409 由 __init__ 自造；Go 侧依赖方向相反
 	// （provisioner 的依赖在 server 层），故改为构造后注入。
 	server.agentRuntime.SetSessionProvisioner(server.provisioner)
+	// 进程级心跳服务注入（Python agent_ws_server.py:1334 set_heartbeat_service）。
+	// 服务体（HeartbeatRailRuntime）⤴️15.20——装配点保留、暂传 nil（buildctx
+	// Get 返回 nil，member_rails 心跳门控走既有跳过路径）。
+	server.agentManager.SetHeartbeatService(nil)
 	return server
 }
 

@@ -7,6 +7,8 @@ import (
 	"context"
 	"strings"
 
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	sessionmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
@@ -182,4 +184,12 @@ func requiredSubset(tk *sessionmtools.SessionMessagingToolkit, registered map[st
 		}
 	}
 	return true
+}
+
+// SetHeartbeatService 注入进程级心跳服务（存字段；消费方 HeartbeatRuntimeBridge
+// ⤴️15.20）。Python: interface.py:1589-1600 adapter.set_heartbeat_service
+// （设字段 + set_heartbeat_job_service(context) 进程级已在 AgentManager 层完成
+// + adapter 转发——Go 无子 adapter 层，字段即终态）。
+func (d *DeepAdapter) SetHeartbeatService(service buildctx.HeartbeatJobService) {
+	d.heartbeatService = service
 }
