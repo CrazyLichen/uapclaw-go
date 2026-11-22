@@ -21,8 +21,8 @@ import (
 //  4. get_team_manager(channel_id).interact(session_id, payload)
 //  5. 成功 → {"published": true}；失败 → {"error": reason}
 //
-// ⤴️25.6 回填登记：25.6 原文含「team.mq.publish 混合事件」，本 handler 为
-// 15.16b 端到端出站链的承载件，随本批提前落地（最小实现）。
+// 已由 25.6 T0 核实闭合（2026-12-08，对照 handlers/team.py:659-684 五分支全对齐，
+// 见 docs/superpowers/specs/2026-12-08-25.6-messager-gap-audit.md）。
 func (s *AgentServer) handleTeamMqPublishRelay(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	sessionID := ""
 	if request.SessionID != nil {
