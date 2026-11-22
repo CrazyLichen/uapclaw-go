@@ -129,13 +129,14 @@ func TestHeartbeatSlot(t *testing.T) {
 	if GetHeartbeatJobService() != nil {
 		t.Fatal("未安装应 nil")
 	}
-	SetHeartbeatJobService("fake-heartbeat")
-	if GetHeartbeatJobService() != "fake-heartbeat" {
-		t.Fatal("应返回同值")
+	fake := &fakeHeartbeatJobService{}
+	SetHeartbeatJobService(fake)
+	if GetHeartbeatJobService() != fake {
+		t.Fatal("应返回同实例")
 	}
 	// from_seed 从本进程单槽取（context.py:258）
 	r := SwarmBuildContextFromSeed(map[string]any{}, nil, nil)
-	if r.HeartbeatJobService != "fake-heartbeat" {
+	if r.HeartbeatJobService != fake {
 		t.Fatal("from_seed 应从单槽取 heartbeat")
 	}
 }
@@ -143,4 +144,11 @@ func TestHeartbeatSlot(t *testing.T) {
 // hschemaOverridesMember 构造仅覆盖 MemberName 的 overrides。
 func hschemaOverridesMember(name string) hschema.BuildContextOverrides {
 	return hschema.BuildContextOverrides{MemberName: hschema.StringPtr(name)}
+}
+
+// fakeHeartbeatJobService 窄面假实现（25.6 批二接口收窄后替代字符串占位）。
+type fakeHeartbeatJobService struct{}
+
+func (fakeHeartbeatJobService) HandleOperation(string, map[string]any, string, string, string, string) (map[string]any, error) {
+	return nil, nil
 }
