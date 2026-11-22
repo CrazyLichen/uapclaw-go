@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
@@ -56,6 +56,13 @@ type AgentServer struct {
 	// provisioner 会话供给事务编排器（10.3.28b/c）
 	// Python: AgentRuntime._session_provisioner
 	provisioner *swruntime.RuntimeSessionProvisioner
+	// sessionMessageService 跨会话消息邮箱编排（25.6）
+	// Python: self._session_message_service（_install_session_message_service 装配）
+	sessionMessageService *SessionMessageService
+	// sessionMessageMetadataProvider 邮箱元数据注入缝
+	sessionMessageMetadataProvider SessionMessageMetadataProvider
+	// sessionMessageModeClassifier 邮箱 mode 判定注入缝
+	sessionMessageModeClassifier SessionMessageModeClassifier
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
