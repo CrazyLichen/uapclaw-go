@@ -111,6 +111,11 @@ func NewDatasetInvalid(message string, errors []map[string]string) *RsiError {
 	return &RsiError{Code: "DATASET_INVALID", Message: message, Detail: detail}
 }
 
+// NewInvalidHarness 对齐 Python RsiInvalidHarness(message)。
+func NewInvalidHarness(message string) *RsiError {
+	return &RsiError{Code: "INVALID_HARNESS", Message: message}
+}
+
 // NewTaskNotFound 对齐 Python RsiTaskNotFound(task_id)。
 func NewTaskNotFound(taskID string) *RsiError {
 	return &RsiError{Code: "TASK_NOT_FOUND", Message: fmt.Sprintf("任务不存在: %s", taskID)}
