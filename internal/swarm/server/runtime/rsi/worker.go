@@ -85,6 +85,9 @@ type Worker struct {
 func NewWorker(store *TaskStore, adapters map[string]ScenarioAdapter,
 	usageRecorder UsageRecorderSink, projector *Projector, artifactService ArtifactSink,
 	pushCallbacks map[string]func(eventType, taskID string, payload map[string]any) error) *Worker {
+	if pushCallbacks == nil {
+		pushCallbacks = map[string]func(string, string, map[string]any) error{}
+	}
 	return &Worker{
 		store:                store,
 		adapters:             adapters,
@@ -843,4 +846,15 @@ func upper(s string) string {
 		}
 	}
 	return string(out)
+}
+
+// RegisteredPushCallbacksForTest 测试观测缝（返回推送回调快照）。
+func (w *Worker) RegisteredPushCallbacksForTest() map[string]func(eventType, taskID string, payload map[string]any) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := map[string]func(string, string, map[string]any) error{}
+	for k, v := range w.pushCallbacks {
+		out[k] = v
+	}
+	return out
 }
