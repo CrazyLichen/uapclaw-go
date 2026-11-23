@@ -249,18 +249,28 @@ func (s *CancelNoResidueSuite) TestCancelNoResidueSuite_服务域全链() {
 
 	// 断言 3：引擎状态文件 status=terminated（Run 收尾段落盘，
 	// iterative.go observer.State()["status"]="terminated"）。
-	var stateStatus string
-	_ = filepath.Walk(filepath.Join(homeRoot, taskID), func(path string, _ os.FileInfo, _ error) error {
-		if filepath.Base(path) == "single_harness_state.yaml" {
-			raw, err := os.ReadFile(path)
-			if err == nil && strings.Contains(string(raw), "status: terminated") {
-				stateStatus = "terminated"
+	// 引擎状态文件落 terminated（Run 收尾段异步写，轮询窗口消除竞态）。
+	stateStatus := ""
+	deadlineState := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadlineState) {
+		found := false
+		_ = filepath.Walk(filepath.Join(homeRoot, taskID), func(path string, _ os.FileInfo, _ error) error {
+			if filepath.Base(path) == "single_harness_state.yaml" {
+				raw, err := os.ReadFile(path)
+				if err == nil && strings.Contains(string(raw), "status: terminated") {
+					stateStatus = "terminated"
+					found = true
+				}
 			}
+			return nil
+		})
+		if found {
+			break
 		}
-		return nil
-	})
+		time.Sleep(200 * time.Millisecond)
+	}
 	if stateStatus != "terminated" {
-		t.Logf("引擎状态文件尚未写 terminated（引擎协程收尾竞态容忍）：stateStatus=%q", stateStatus)
+		t.Fatalf("引擎状态文件未落 terminated（60s 轮询超时）")
 	}
 
 	// 断言 4：终态后排空期无新增帧（无残留活动）。

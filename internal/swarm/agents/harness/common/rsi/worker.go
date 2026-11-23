@@ -765,7 +765,7 @@ func eventToDict(event rsi.EngineEvent) map[string]any {
 		if mc := e.ModelCall(); mc != nil {
 			var tokens any
 			if t := mc.Tokens(); t != nil {
-				tokens = map[string]any{"input": t.Input, "output": t.Output, "cache_hit": t.CacheHit}
+				tokens = map[string]any{"input": nullableCounter(t.Input()), "output": nullableCounter(t.Output()), "cache_hit": nullableCounter(t.CacheHit())}
 			}
 			modelCall = map[string]any{"model": mc.Model(), "call_count": mc.CallCount(), "tokens": tokens}
 		}
@@ -793,6 +793,14 @@ func eventToDict(event rsi.EngineEvent) map[string]any {
 	default:
 		return map[string]any{"event_type": event.EventType()}
 	}
+}
+
+// nullableCounter *int → JSON 安全值（nil → nil，否则解引用）。
+func nullableCounter(v *int) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 // usageToDict RsiUsage → §3.4 dict（私有字段访问器导出）。
