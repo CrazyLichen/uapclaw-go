@@ -3,17 +3,18 @@ package evolution
 import (
 	"context"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 )
 
 // ──────────────────────────── EvolutionRail 构造测试 ────────────────────────────
@@ -466,11 +467,33 @@ func TestAfterModelCall_从Config获取ModelName(t *testing.T) {
 // fakeSessionFacade 用于测试的模拟 SessionFacade
 type fakeSessionFacade struct {
 	sessionID string
+	// stateMap 模拟会话状态存储（evolution_interrupt_rail 测试需要 auto_confirm 存取）
+	stateMap map[string]any
+	stateMu  sync.Mutex
 }
 
-func (f *fakeSessionFacade) GetSessionID() string                       { return f.sessionID }
-func (f *fakeSessionFacade) UpdateState(_ map[string]any)               {}
-func (f *fakeSessionFacade) GetState(_ state.StateKey) (any, error)     { return nil, nil }
+func (f *fakeSessionFacade) GetSessionID() string { return f.sessionID }
+
+func (f *fakeSessionFacade) UpdateState(data map[string]any) {
+	f.stateMu.Lock()
+	defer f.stateMu.Unlock()
+	if f.stateMap == nil {
+		f.stateMap = map[string]any{}
+	}
+	for k, v := range data {
+		f.stateMap[k] = v
+	}
+}
+
+func (f *fakeSessionFacade) GetState(key state.StateKey) (any, error) {
+	f.stateMu.Lock()
+	defer f.stateMu.Unlock()
+	v, ok := f.stateMap[key.String()]
+	if !ok {
+		return nil, nil
+	}
+	return v, nil
+}
 func (f *fakeSessionFacade) DumpState() map[string]any                  { return map[string]any{} }
 func (f *fakeSessionFacade) WriteStream(_ context.Context, _ any) error { return nil }
 func (f *fakeSessionFacade) WriteCustomStream(_ context.Context, _ any) error {
