@@ -9,6 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/service_api"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 )
@@ -220,3 +222,51 @@ func toInt(v any) *int {
 
 // ptrInt 取指针
 func ptrInt(i int) *int { return &i }
+
+// ──────────────────────────── 结构体（续）────────────────────────────
+
+// ToolComponent 工具组件组合面（Python ToolComponent :112-132 一比一）
+type ToolComponent struct {
+	// BaseComponentComposable 组合面基座（Python ComponentComposable mixin 嵌入）
+	components.BaseComponentComposable
+	// cfg 组件配置（Python self._config）
+	cfg *ToolComponentConfig
+	// toolObj 已解析工具（Python self._tool；方案 A' 直调无注入缝，D-21-2）
+	toolObj tool.Tool
+}
+
+// ──────────────────────────── 导出函数（续）────────────────────────────
+
+// NewToolComponent 构造组件（Python __init__ :114-120 一比一：tool_id 非空则
+// 构造期直调 Runner.resource_mgr.get_tool ≙ Go 全局单例 GetResourceMgr().GetTool，
+// 方案 A'；查不到 → 空 slice → toolObj 保持 nil，等 to_executable 102002）
+func NewToolComponent(componentConfig *ToolComponentConfig) *ToolComponent {
+	c := &ToolComponent{cfg: componentConfig}
+	if componentConfig.ToolID != nil {
+		tools, err := runner.GetResourceMgr().GetTool([]string{*componentConfig.ToolID})
+		if err == nil && len(tools) > 0 {
+			c.toolObj = tools[0]
+		}
+	}
+	// ToExecutableFn 槽注入（spec 拍板 #2 槽优先单点，102002 硬错承载于此）
+	c.ToExecutableFn = c.toExecutable
+	return c
+}
+
+// toExecutable 可执行体供应槽（Python to_executable :122-128 一比一：
+// tool None → 102002 硬错；否则 ToolExecutable(config).set_tool(tool)）
+func (c *ToolComponent) toExecutable() graphexe.GeneralExecutor {
+	if c.toolObj == nil {
+		panic(exception.BuildError(
+			exception.StatusComponentToolInitFailed,
+			exception.WithParam("error_msg", "tool component not bind a valid tool"),
+		))
+	}
+	return NewToolExecutable(c.cfg).SetTool(c.toolObj)
+}
+
+// BindTool 编程式绑定工具（Python bind_tool :130-132 一比一，自返回）
+func (c *ToolComponent) BindTool(t tool.Tool) *ToolComponent {
+	c.toolObj = t
+	return c
+}

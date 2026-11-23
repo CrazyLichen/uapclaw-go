@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/service_api"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 )
 
 func TestValidateToolInputs_非map拒绝(t *testing.T) {
@@ -200,4 +201,80 @@ func TestPostProcess_三键透传缺code默认182012(t *testing.T) {
 	// code 键存在但为 nil → mapDefault 取到 nil（非缺省）——对齐 Python dict.get 行为
 	assert.Equal(t, "d", out[restfulDataKey])
 	assert.Equal(t, "m", out[errMessageKey])
+}
+
+// ──────────────────────────── Task3 组合面 ────────────────────────────
+
+func TestNewToolComponent_按ID取工具(t *testing.T) {
+	mgr := runner.GetResourceMgr()
+	// card.ID 必须与查询 id 一致（Python BaseCard.id 默认 uuid4，产品层显式设 id）
+	card := tool.NewToolCardWithID("reg_tool", "reg_tool", "注册工具", nil, nil)
+	fn, err := tool.NewMapFunction(card, func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+		return map[string]any{"ok": true}, nil
+	}, nil)
+	require.NoError(t, err)
+	require.NoError(t, mgr.AddTool(fn))
+
+	tid := "reg_tool"
+	c := NewToolComponent(&ToolComponentConfig{ToolID: &tid})
+	require.NotNil(t, c.toolObj) // 构造期已按 id 直调 GetTool 取到
+}
+
+func TestNewToolComponent_无ID不取(t *testing.T) {
+	c := NewToolComponent(&ToolComponentConfig{})
+	assert.Nil(t, c.toolObj) // Python tool_id None → 不查 → 等 BindTool
+}
+
+func TestToolComponent_ToExecutable_102002(t *testing.T) {
+	c := NewToolComponent(&ToolComponentConfig{}) // 无 id 未绑定
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "应 panic（102002 硬错，llm toExecutableCached 同款形态）")
+		be, ok := r.(*exception.BaseError)
+		require.True(t, ok)
+		assert.Equal(t, 102002, be.Code())
+	}()
+	c.ToExecutable()
+}
+
+func TestToolComponent_ToExecutable_绑定后产出(t *testing.T) {
+	card := tool.NewToolCard("bind_tool", "绑定工具", nil, nil)
+	fn, err := tool.NewMapFunction(card, func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+		return map[string]any{}, nil
+	}, nil)
+	require.NoError(t, err)
+	c := NewToolComponent(&ToolComponentConfig{})
+	c.BindTool(fn) // Python bind_tool :130-132
+	ex := c.ToExecutable()
+	te, ok := ex.(*ToolExecutable)
+	require.True(t, ok) // 外层类型保住（槽优先）
+	assert.NotNil(t, te.toolObj)
+}
+
+func TestToolComponent_ToExecutable_fn复用invoke链(t *testing.T) {
+	mgr := runner.GetResourceMgr()
+	card := tool.NewToolCardWithID("e2e_tool", "e2e_tool", "端到端工具", nil, nil)
+	fn, err := tool.NewMapFunction(card, func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+		return map[string]any{"code": 0, "data": "ok", "message": "m"}, nil
+	}, nil)
+	require.NoError(t, err)
+	tid := "e2e_tool"
+	require.NoError(t, mgr.AddTool(fn))
+	c := NewToolComponent(&ToolComponentConfig{ToolID: &tid})
+	te := c.ToExecutable().(*ToolExecutable)
+	sess := newTestNodeSession(t)
+	out, err := te.InvokeFn(context.Background(), map[string]any{"x": 1}, sess)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", out["data"])
+}
+
+func TestToolComponent_BindTool自返回(t *testing.T) {
+	card := tool.NewToolCard("chain_tool", "链式工具", nil, nil)
+	fn, err := tool.NewMapFunction(card, func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+		return map[string]any{}, nil
+	}, nil)
+	require.NoError(t, err)
+	c := NewToolComponent(&ToolComponentConfig{})
+	ret := c.BindTool(fn)
+	assert.Same(t, c, ret) // Python return self
 }
