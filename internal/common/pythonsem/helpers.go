@@ -181,6 +181,33 @@ func PyRepr(value any) string {
 	}
 }
 
+// PyStr 复刻 Python str() 的字符串化语义：str 原样（不加引号，与 PyRepr 的
+// repr 语义区分）、bool True/False、None→None、数值十进制、容器回退 repr
+//（Python str(list/dict) 即其 repr）。8.22 HTTP 组件占位符替换 str(value) 先例。
+func PyStr(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return "None"
+	case string:
+		return v
+	case bool:
+		if v {
+			return "True"
+		}
+		return "False"
+	case int:
+		return intRepr(int64(v))
+	case int64:
+		return intRepr(v)
+	case float64:
+		return PyFloatRepr(v)
+	case []any, []string, map[string]any:
+		return PyRepr(value)
+	default:
+		return fmt.Sprintf("%v", value)
+	}
+}
+
 // PyFloatRepr 复刻 Python float repr：整值带 .0 后缀（2.0 → "2.0"），
 // 其余用最短 round-trip 表示（Python repr 语义），如 0.1 → "0.1"、1e-12 → "1e-12"。
 func PyFloatRepr(f float64) string {

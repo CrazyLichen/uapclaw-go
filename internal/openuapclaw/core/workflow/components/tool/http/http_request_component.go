@@ -1,7 +1,12 @@
 package http
 
 import (
+	"encoding/json"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	components "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
+	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -297,4 +302,124 @@ func NewHttpRequestParamConfig() *HttpRequestParamConfig {
 // NewHttpComponentConfig 默认组件配置
 func NewHttpComponentConfig() *HttpComponentConfig {
 	return &HttpComponentConfig{RequestParams: NewHttpRequestParamConfig()}
+}
+
+// NewHTTPRequestExecutable 构造执行体（Python __init__ :140-143 一比一）
+func NewHTTPRequestExecutable(componentConfig *HttpComponentConfig) *HTTPRequestExecutable {
+	e := &HTTPRequestExecutable{cfg: componentConfig, requestParams: componentConfig.RequestParams}
+	// 四槽装配在 Task6 统一落地（Python :145-168 四方法全实现后挂槽）
+	return e
+}
+
+// ProcessInputs 输入组装与合并（Python process_inputs :190-238 一比一）。
+// 步骤序不可调换（规则 9.3）：url → method → headers → query → body → authentication。
+func (e *HTTPRequestExecutable) ProcessInputs(inputs map[string]any) (map[string]any, error) {
+	processed := map[string]any{}
+	// url：占位符解析（:199）
+	processed["url"] = resolvePlaceholders(e.requestParams.URL, inputs)
+	// method：inputs 可覆盖 + 大写化（:202-203）
+	method := e.requestParams.Method
+	if m, ok := inputs["method"].(string); ok {
+		method = m
+	}
+	processed["method"] = strings.ToUpper(method)
+	// headers：str 模板 dict 化 / dict 拷贝，inputs.headers 覆盖（:206-212）
+	var headers map[string]string
+	switch raw := e.requestParams.Headers.(type) {
+	case string:
+		headers = toStringStringMap(resolveTemplateToDict(raw, inputs))
+	case map[string]string:
+		headers = make(map[string]string, len(raw))
+		for k, v := range raw {
+			headers[k] = v
+		}
+	case map[string]any:
+		headers = toStringStringMap(raw)
+	default:
+		headers = map[string]string{}
+	}
+	if extra, ok := inputs["headers"].(map[string]any); ok {
+		for k, v := range extra {
+			headers[k] = pythonsem.PyStr(v)
+		}
+	}
+	processed["headers"] = headers
+	// query：str 值逐个占位符解析，inputs.query_parameters 覆盖（:215-220）
+	query := map[string]any{}
+	for k, v := range e.requestParams.QueryParameters {
+		query[k] = v
+	}
+	for k, v := range query {
+		if s, ok := v.(string); ok {
+			query[k] = resolvePlaceholders(s, inputs)
+		}
+	}
+	if extra, ok := inputs["query_parameters"].(map[string]any); ok {
+		for k, v := range extra {
+			query[k] = v
+		}
+	}
+	processed["query_parameters"] = query
+	// body：config 有 → json_data str 时解析【原地写回】；无 → inputs.body 默认 {}（:223-229）
+	bodyConfig := e.requestParams.Body
+	if bodyConfig != nil {
+		if s, ok := bodyConfig.JSONData.(string); ok {
+			// D-22-3 忠实复刻：写回 config 内嵌对象（组件级状态跨 invoke 持续）
+			bodyConfig.JSONData = resolveTemplateToDict(s, inputs)
+		}
+		processed["body"] = bodyConfig
+	} else {
+		if b, ok := inputs["body"]; ok {
+			processed["body"] = b
+		} else {
+			processed["body"] = map[string]any{}
+		}
+	}
+	// authentication：config 有则透传；无 → inputs.authentication 默认 {}（:232-236）
+	if e.requestParams.Authentication != nil {
+		processed["authentication"] = e.requestParams.Authentication
+	} else {
+		if a, ok := inputs["authentication"]; ok {
+			processed["authentication"] = a
+		} else {
+			processed["authentication"] = map[string]any{}
+		}
+	}
+	return processed, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolvePlaceholders {{key}} 字面替换（Python _resolve_placeholders :170-176；
+// 值经 PyRepr 对齐 Python str(value)）
+func resolvePlaceholders(template string, inputs map[string]any) string {
+	for key, value := range inputs {
+		placeholder := "{{" + key + "}}"
+		template = strings.ReplaceAll(template, placeholder, pythonsem.PyStr(value))
+	}
+	return template
+}
+
+// resolveTemplateToDict 占位符解析后 dict 化（Python _resolve_template_to_dict
+// :178-188；ast.literal_eval → Go yaml/json 宽解析，失败回 {}，偏差 D-22-4）
+func resolveTemplateToDict(template string, inputs map[string]any) map[string]any {
+	resolved := resolvePlaceholders(template, inputs)
+	var parsed map[string]any
+	// 先 json 后 yaml 宽解析：ast.literal_eval 接受 Python 字面量（单引号等），
+	// yaml 超集覆盖；解析失败或非 dict → 空 map（except 分支逐字对齐）
+	if err := json.Unmarshal([]byte(resolved), &parsed); err != nil {
+		if err := yaml.Unmarshal([]byte(resolved), &parsed); err != nil {
+			return map[string]any{}
+		}
+	}
+	return parsed
+}
+
+// toStringStringMap map[string]any → map[string]string（headers 内部承载形态）
+func toStringStringMap(m map[string]any) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = pythonsem.PyStr(v)
+	}
+	return out
 }

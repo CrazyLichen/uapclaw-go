@@ -129,3 +129,19 @@ func TestMapValue(t *testing.T) {
 		t.Fatal("MapValue 语义错误")
 	}
 }
+
+// TestPyStr_str语义 str() 与 repr() 分野：str 原样、bool/None/数值、容器回退 repr
+func TestPyStr_str语义(t *testing.T) {
+	if PyStr("s") != "s" {
+		t.Fatal("str 应原样不加引号")
+	}
+	if PyStr(true) != "True" || PyStr(nil) != "None" || PyStr(8080) != "8080" {
+		t.Fatal("标量 str 漂移")
+	}
+	if PyStr(2.0) != "2.0" {
+		t.Fatal("float str 应走 PyFloatRepr")
+	}
+	if PyStr([]any{"a"}) != "['a']" {
+		t.Fatal("容器 str 应回退 repr")
+	}
+}
