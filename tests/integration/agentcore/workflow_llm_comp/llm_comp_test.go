@@ -4,6 +4,7 @@ package workflow_llm_comp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -11,6 +12,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
@@ -43,6 +45,29 @@ func (f *fakeIntegrationModel) Stream(ctx context.Context, messages modelclients
 	return ch, nil
 }
 
+// ── BaseModelClient 接口面补齐（AddModel 注册需要；多模态/KV 亲和不在集成
+// 范围，llm 包 fakeModelClient 同款空实现）──
+func (f *fakeIntegrationModel) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeIntegrationModel) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeIntegrationModel) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeIntegrationModel) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeIntegrationModel) Release(_ context.Context, _ ...modelclients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+func (f *fakeIntegrationModel) SupportsKVCacheRelease() bool  { return false }
+func (f *fakeIntegrationModel) SupportsKVCacheAffinity() bool { return false }
+func (f *fakeIntegrationModel) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return nil
+}
+
 // textConfig text 单字段配置（ModelID 走注入缝）
 func textConfig() *llmcomp.LLMCompConfig {
 	modelID := "fake"
@@ -57,12 +82,22 @@ func textConfig() *llmcomp.LLMCompConfig {
 	}
 }
 
-// newComp 构造注入 fake 模型的组件
+// newComp 构造注册真实 ResourceMgr 模型的组件（8.21 连带收口：
+// D-18-5 模型解析缝废弃，fake 经 AddModel 注册走真实链；
+// modelID 全局唯一，跨用例重复注册先移除再注册）
 func (s *LLMCompSuite) newComp(resp string, cfg *llmcomp.LLMCompConfig) *llmcomp.LLMComponent {
-	return llmcomp.NewLLMComponent(cfg,
-		llmcomp.WithComponentModelResolver(func(ctx context.Context, modelID string) (llmcomp.LLMInvoker, error) {
-			return &fakeIntegrationModel{respContent: resp}, nil
-		}))
+	if cfg.ModelID != nil {
+		modelID := *cfg.ModelID
+		mgr := runner.GetResourceMgr()
+		if _, err := mgr.GetModel(context.Background(), []string{modelID}); err == nil {
+			_, _ = mgr.RemoveModel([]string{modelID})
+		}
+		s.Require().NoError(mgr.AddModel(modelID,
+			func(ctx context.Context, id string) (modelclients.BaseModelClient, error) {
+				return &fakeIntegrationModel{respContent: resp}, nil
+			}))
+	}
+	return llmcomp.NewLLMComponent(cfg)
 }
 
 // TestInvoke_全链批式 ExecuteSingleComponent 十步链：校验→组装→调用→格式化→commit

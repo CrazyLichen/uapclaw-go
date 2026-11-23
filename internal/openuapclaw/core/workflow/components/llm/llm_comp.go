@@ -143,9 +143,6 @@ type LLMExecutable struct {
 	// state 流式缓存状态（Python self._state）
 	state *LLMExecutableState
 
-	// getModelFn 按 ID 取预注册模型的注入缝（Python Runner.resource_mgr.get_model；
-	// 注入承载避免 llm→runner 包环，8.14b InvokeFn 注入缝先例，spec 偏差 D-18-5）
-	getModelFn func(ctx context.Context, modelID string) (LLMInvoker, error)
 	// baseInvoke/baseStream 基座钩子引用（方法遮蔽后转调用；D-17-1 同款遮蔽模式）
 	baseInvoke func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error)
 	baseStream func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error)
@@ -168,14 +165,6 @@ type LLMComponent struct {
 	cfg *LLMCompConfig
 	// executable 缓存产物（Python self._executable）
 	executable *LLMExecutable
-	// modelResolver 模型解析注入缝（D-18-5：集成测试 fake 注入；nil=默认 runner）
-	modelResolver func(ctx context.Context, modelID string) (LLMInvoker, error)
-}
-
-// WithComponentModelResolver 注入组件级模型解析缝（D-18-5：构造 LLMExecutable
-// 时下发；Python 无对应物——测试注入需求，spec 预登记偏差）
-func WithComponentModelResolver(fn func(ctx context.Context, modelID string) (LLMInvoker, error)) func(*LLMComponent) {
-	return func(c *LLMComponent) { c.modelResolver = fn }
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -195,13 +184,7 @@ func NewLLMComponent(componentConfig *LLMCompConfig, opts ...func(*LLMComponent)
 // property 懒初始化合并承载：首调构造并缓存）
 func (c *LLMComponent) toExecutableCached() graphexe.GeneralExecutor {
 	if c.executable == nil {
-		var e *LLMExecutable
-		var err error
-		if c.modelResolver != nil {
-			e, err = newLLMExecutableWithOptions(c.cfg, WithModelResolver(c.modelResolver))
-		} else {
-			e, err = NewLLMExecutable(c.cfg)
-		}
+		e, err := NewLLMExecutable(c.cfg)
 		if err != nil {
 			panic(err)
 		}
@@ -217,9 +200,8 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 		return nil, err
 	}
 	e := &LLMExecutable{
-		cfg:        componentConfig,
-		state:      newLLMExecutableState(),
-		getModelFn: defaultGetModel,
+		cfg:   componentConfig,
+		state: newLLMExecutableState(),
 	}
 	// 保存基座钩子（方法遮蔽后转调）
 	e.baseInvoke = e.WorkflowComponent.OnInvoke
@@ -228,40 +210,6 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 	e.InvokeFn = e.invokeEntry
 	e.StreamFn = e.streamEntry
 	return e, nil
-}
-
-// WithModelResolver 注入按 ID 取模型的解析缝（生产默认 runner.GetResourceMgr；
-// 测试注入 fake，spec D-18-5）
-func WithModelResolver(fn func(ctx context.Context, modelID string) (LLMInvoker, error)) func(*LLMExecutable) {
-	return func(e *LLMExecutable) { e.getModelFn = fn }
-}
-
-// newLLMExecutableWithOptions 变参选项构造缝（NewLLMExecutable 的选项扩展面）
-func newLLMExecutableWithOptions(componentConfig *LLMCompConfig, opts ...func(*LLMExecutable)) (*LLMExecutable, error) {
-	e, err := NewLLMExecutable(componentConfig)
-	if err != nil {
-		return nil, err
-	}
-	for _, opt := range opts {
-		opt(e)
-	}
-	return e, nil
-}
-
-// defaultGetModel 生产默认解析（Python Runner.resource_mgr.get_model(id=...) 一比一）
-func defaultGetModel(ctx context.Context, modelID string) (LLMInvoker, error) {
-	mgr := runner.GetResourceMgr()
-	if mgr == nil {
-		return nil, fmt.Errorf("resource mgr is not initialized")
-	}
-	clients, err := mgr.GetModel(ctx, []string{modelID})
-	if err != nil {
-		return nil, err
-	}
-	if len(clients) == 0 {
-		return nil, fmt.Errorf("model %s not found", modelID)
-	}
-	return clients[0], nil
 }
 
 // ──────────────────────────── LLMExecutable 钩子遮蔽 ────────────────────────────
@@ -1038,11 +986,28 @@ func (e *LLMExecutable) createLLMInstance(ctx context.Context) (LLMInvoker, erro
 		}
 		return forllm.NewModel(e.cfg.ModelClientConfig, e.cfg.ModelConfig)
 	}
-	model, err := e.getModelFn(ctx, *e.cfg.ModelID)
+	model, err := e.getModel(ctx, *e.cfg.ModelID)
 	if err != nil {
 		return nil, err
 	}
 	return model, nil
+}
+
+// getModel 按 ID 取预注册模型（Python Runner.resource_mgr.get_model(id=...) 一比一；
+// 8.21 连带收口：D-18-5 解析缝废弃，消费点直调全局单例）
+func (e *LLMExecutable) getModel(ctx context.Context, modelID string) (LLMInvoker, error) {
+	mgr := runner.GetResourceMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("resource mgr is not initialized")
+	}
+	clients, err := mgr.GetModel(ctx, []string{modelID})
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("model %s not found", modelID)
+	}
+	return clients[0], nil
 }
 
 // getModelInput 组装模型输入（Python _get_model_input :656-662 步骤一比一：

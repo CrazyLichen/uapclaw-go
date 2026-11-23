@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
@@ -473,7 +475,34 @@ func (f *fakeModelClient) Stream(ctx context.Context, messages modelclients.Mess
 	return ch, nil
 }
 
-// newTestExecutable 构造带 fake 模型的执行体（WithModelResolver 注入缝）
+// BuildKVCacheAffinityInvokeKwargs BaseModelClient 接口面补齐（8.21 真实链
+// 注册经 AddModel 需要；KV 亲和为 agent 域能力，组件测试桩空实现）
+func (f *fakeModelClient) BuildKVCacheAffinityInvokeKwargs(sess any, sessionID, parentSessionID string, turnNum int) map[string]any {
+	return nil
+}
+
+// GenerateImage/GenerateSpeech/GenerateVideo/TranscribeAudio/Release/
+// SupportsKVCache* —— BaseModelClient 接口面补齐（AddModel 注册需要，
+// 多模态能力不在组件测试范围，im_pipeline fakeLLMClient 同款空实现）
+func (f *fakeModelClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeModelClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeModelClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeModelClient) Release(_ context.Context, _ ...modelclients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+func (f *fakeModelClient) SupportsKVCacheRelease() bool  { return false }
+func (f *fakeModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// newTestExecutable 构造带 fake 模型的执行体（同包字段直注，非注入缝）
 func newTestExecutable(t *testing.T, cfg *LLMCompConfig, fake LLMInvoker) *LLMExecutable {
 	t.Helper()
 	e, err := NewLLMExecutable(cfg)
@@ -504,18 +533,19 @@ func TestInvoke_全链(t *testing.T) {
 	assert.Equal(t, "assistant", msgs[1].GetRole().String())
 }
 
-// TestInvoke_懒初始化modelID路径 ModelID 走 getModelFn 注入缝
+// TestInvoke_懒初始化modelID路径 ModelID 走真实 ResourceMgr 注册链
+// （8.21 连带收口：D-18-5 解析缝废弃，测试经 AddModel 注册真身）
 func TestInvoke_懒初始化modelID路径(t *testing.T) {
 	cfg := llmTestConfig()
 	cfg.ModelID = ptrString("m1")
 	cfg.ModelClientConfig = nil
 	cfg.ModelConfig = nil
+	require.NoError(t, runner.GetResourceMgr().AddModel("m1", func(ctx context.Context, modelID string) (modelclients.BaseModelClient, error) {
+		require.Equal(t, "m1", modelID)
+		return &fakeModelClient{respContent: "ok"}, nil
+	}))
 	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
-	e.getModelFn = func(ctx context.Context, modelID string) (LLMInvoker, error) {
-		assert.Equal(t, "m1", modelID)
-		return &fakeModelClient{respContent: "ok"}, nil
-	}
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
 	out, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
@@ -791,48 +821,27 @@ func TestOnInvoke_context非ModelContext(t *testing.T) {
 	require.Nil(t, e.context, "非 ModelContext 断言失败应保持原字段")
 }
 
-// TestWithModelResolver_注入生效 选项注入 getModelFn 并经懒初始化消费
-func TestWithModelResolver_注入生效(t *testing.T) {
+// TestInvoke_未注册模型报错 8.21 连带收口替代原 resolver 注入用例：
+// ModelID 未在 ResourceMgr 注册 → 直调链报 not found
+func TestInvoke_未注册模型报错(t *testing.T) {
 	cfg := llmTestConfig()
 	cfg.ModelClientConfig = nil
 	cfg.ModelConfig = nil
-	modelID := "m9"
+	modelID := "nonexistent_model_xyz"
 	cfg.ModelID = &modelID
-	e, err := newLLMExecutableWithOptions(cfg, WithModelResolver(func(ctx context.Context, id string) (LLMInvoker, error) {
-		require.Equal(t, "m9", id)
-		return &fakeModelClient{respContent: "ok"}, nil
-	}))
+	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
 	e.setSession(newTestNodeSession(t))
-	out, err := e.invokeEntry(context.Background(), map[string]any{}, newTestNodeSession(t))
-	require.NoError(t, err)
-	require.Equal(t, "ok", out["answer"])
-}
-
-// TestWithComponentModelResolver_组合面下发 组件级缝透传至可执行体
-func TestWithComponentModelResolver_组合面下发(t *testing.T) {
-	cfg := llmTestConfig()
-	cfg.ModelClientConfig = nil
-	cfg.ModelConfig = nil
-	modelID := "mC"
-	cfg.ModelID = &modelID
-	c := NewLLMComponent(cfg, WithComponentModelResolver(func(ctx context.Context, id string) (LLMInvoker, error) {
-		return &fakeModelClient{respContent: "via-comp"}, nil
-	}))
-	e := c.ToExecutableFn().(*LLMExecutable)
-	require.NotNil(t, e.getModelFn, "组件级 resolver 应下发至执行体")
+	_, err = e.invokeEntry(context.Background(), map[string]any{}, newTestNodeSession(t))
+	require.Error(t, err)
+	// 懒初始化层包装为 101005（对齐 Python _ensure_initialized 包装），根因 not found
+	assert.Contains(t, err.Error(), "failed to initialize llm if needed")
 }
 
 // TestExtractContent_两形态 chunk 对象取 content、裸串兜底
 func TestExtractContent_两形态(t *testing.T) {
 	require.Equal(t, "abc", extractContent(llmschema.NewAssistantMessageChunk("abc")))
 	require.Equal(t, "raw", extractContent("raw"))
-}
-
-// TestDefaultGetModel_mgr未初始化 ResourceMgr 为 nil 时报错
-func TestDefaultGetModel_mgr未初始化(t *testing.T) {
-	_, err := defaultGetModel(context.Background(), "m1")
-	require.Error(t, err)
 }
 
 // newRecordingMC 可记录写回的 ModelContext 桩（iface 边界替身，集成套件同款）
