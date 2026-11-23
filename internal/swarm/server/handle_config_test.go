@@ -137,7 +137,7 @@ func TestHandleConfigPanelRequest_ConfigGet(t *testing.T) {
 // （locale.set_conf 写链 Task5 接线前未注册 → BAD_REQUEST）。
 func TestHandleConfigPanelRequest_未知方法BAD_REQUEST(t *testing.T) {
 	s, _ := newTestServer()
-	req := schema.NewAgentRequest("req-bad", "web", schema.ReqMethodLocaleSetConf, json.RawMessage(`{}`))
+	req := schema.NewAgentRequest("req-bad", "web", schema.ReqMethodPathSet, json.RawMessage(`{}`))
 	resp, err := s.handleConfigPanelRequest(context.Background(), req)
 	if err != nil {
 		t.Fatalf("返回错误: %v", err)
