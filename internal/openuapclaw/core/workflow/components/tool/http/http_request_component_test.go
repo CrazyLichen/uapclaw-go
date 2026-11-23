@@ -1,6 +1,11 @@
 package http
 
-import "testing"
+import (
+	"bytes"
+	"encoding/base64"
+	"strings"
+	"testing"
+)
 
 // TestEnums_全量映射 枚举成员与 Python 逐字对齐（规则 9.2.4 不裁剪）
 func TestEnums_全量映射(t *testing.T) {
@@ -141,5 +146,135 @@ func TestProcessInputs_无配置回落inputs(t *testing.T) {
 	}
 	if ga, ok := got["authentication"].(map[string]any); !ok || ga["type"] != "basic" {
 		t.Fatalf("inputs 回落 authentication 漂移: %v", got["authentication"])
+	}
+}
+
+// TestApplyAuthentication_四类认证 basic/bearer/api_key/none 逐类断言
+func TestApplyAuthentication_四类认证(t *testing.T) {
+	e := &HTTPRequestExecutable{}
+	// none / nil → 原头返回
+	h := e.ApplyAuthentication(map[string]string{"A": "1"}, nil)
+	if h["A"] != "1" || len(h) != 1 {
+		t.Fatal("nil auth 应原头返回")
+	}
+	// basic
+	a := NewHttpAuthConfig()
+	u, p := "user", "pass"
+	a.Type, a.Username, a.Password = HttpAuthTypeBasic, &u, &p
+	h = e.ApplyAuthentication(map[string]string{}, a)
+	// base64("user:pass") = dXNlcjpwYXNz
+	if h["Authorization"] != "Basic dXNlcjpwYXNz" {
+		t.Fatalf("basic 漂移: %v", h)
+	}
+	// basic 用户名缺失 → 不注入（Python :428 if username and password）
+	a2 := NewHttpAuthConfig()
+	a2.Type, a2.Password = HttpAuthTypeBasic, &p
+	h = e.ApplyAuthentication(map[string]string{}, a2)
+	if len(h) != 0 {
+		t.Fatalf("basic 缺 username 应不注入: %v", h)
+	}
+	// bearer
+	a3 := NewHttpAuthConfig()
+	a3.Type, a3.Token = HttpAuthTypeBearer, func() *string { s := "tk"; return &s }()
+	if h := e.ApplyAuthentication(map[string]string{}, a3); h["Authorization"] != "Bearer tk" {
+		t.Fatalf("bearer 漂移: %v", h)
+	}
+	// api_key header 位置
+	a4 := NewHttpAuthConfig()
+	a4.Type, a4.APIKey, a4.InLocation, a4.Name = HttpAuthTypeAPIKey, func() *string { s := "key"; return &s }(), "header", "X-Key"
+	if h := e.ApplyAuthentication(map[string]string{}, a4); h["X-Key"] != "key" {
+		t.Fatalf("api_key header 漂移: %v", h)
+	}
+	// api_key query 位置 → 不注入（Python :439-441 仅 header 分支）
+	a5 := NewHttpAuthConfig()
+	a5.Type, a5.APIKey, a5.InLocation = HttpAuthTypeAPIKey, func() *string { s := "key"; return &s }(), "query"
+	if h := e.ApplyAuthentication(map[string]string{}, a5); len(h) != 0 {
+		t.Fatalf("api_key query 应不注入: %v", h)
+	}
+	// digest → 不注入（Python 未实现）
+	a6 := NewHttpAuthConfig()
+	a6.Type = HttpAuthTypeDigest
+	if h := e.ApplyAuthentication(map[string]string{}, a6); len(h) != 0 {
+		t.Fatalf("digest 应不注入: %v", h)
+	}
+}
+
+// TestPrepareRequestBody_五类编码 各 ContentType 分支
+func TestPrepareRequestBody_五类编码(t *testing.T) {
+	e := &HTTPRequestExecutable{}
+	// nil / 空 → (nil, "")
+	if b, ct := e.PrepareRequestBody(nil); b != nil || ct != "" {
+		t.Fatalf("nil body 应空: %v %q", b, ct)
+	}
+	// JSON
+	bc := NewHttpRequestBodyConfig()
+	bc.JSONData = map[string]any{"a": 1}
+	b, ct := e.PrepareRequestBody(bc)
+	if ct != "application/json" || string(b.([]byte)) != `{"a":1}` {
+		t.Fatalf("JSON 编码漂移: %v %q", b, ct)
+	}
+	// FORM：urlencoded 载荷 + urlencoded 头（D-22-2 修正偏差，契约钉住）
+	bc2 := NewHttpRequestBodyConfig()
+	bc2.ContentType = HttpContentTypeForm
+	bc2.FormData = map[string]any{"x": "1", "y": "a b"}
+	b2, ct2 := e.PrepareRequestBody(bc2)
+	if ct2 != "application/x-www-form-urlencoded" {
+		t.Fatalf("FORM 头漂移: %q", ct2)
+	}
+	if b2.(string) != "x=1&y=a+b" && b2.(string) != "y=a+b&x=1" {
+		t.Fatalf("FORM urlencoded 载荷漂移: %q", b2)
+	}
+	// MULTIPART_FORM
+	bc3 := NewHttpRequestBodyConfig()
+	bc3.ContentType = HttpContentTypeMultipartForm
+	bc3.MultipartForm = map[string]any{"f": "v"}
+	b3, ct3 := e.PrepareRequestBody(bc3)
+	if ct3 != "multipart/form-data" {
+		t.Fatalf("MULTIPART 头漂移: %q", ct3)
+	}
+	if !strings.Contains(b3.(string), `name="f"`) {
+		t.Fatalf("MULTIPART 载荷缺字段: %q", b3)
+	}
+	// TEXT
+	td := "hi"
+	bc4 := NewHttpRequestBodyConfig()
+	bc4.ContentType = HttpContentTypeText
+	bc4.TextData = &td
+	if b4, ct4 := e.PrepareRequestBody(bc4); ct4 != "text/plain" || b4.(string) != "hi" {
+		t.Fatalf("TEXT 漂移: %v %q", b4, ct4)
+	}
+	// BINARY：base64 解码
+	enc := base64.StdEncoding.EncodeToString([]byte{1, 2, 3})
+	bc5 := NewHttpRequestBodyConfig()
+	bc5.ContentType = HttpContentTypeBinary
+	bc5.BinaryData = &enc
+	b5, ct5 := e.PrepareRequestBody(bc5)
+	if ct5 != "application/octet-stream" || !bytes.Equal(b5.([]byte), []byte{1, 2, 3}) {
+		t.Fatalf("BINARY 漂移: %v %q", b5, ct5)
+	}
+	// 有 config 但数据字段空 → (nil, "")（Python 各 elif 条件带 xxx_data 非空判断）
+	bc6 := NewHttpRequestBodyConfig()
+	bc6.ContentType = HttpContentTypeJSON
+	if b6, ct6 := e.PrepareRequestBody(bc6); b6 != nil || ct6 != "" {
+		t.Fatalf("JSON 无数据应空: %v %q", b6, ct6)
+	}
+}
+
+// TestCalculateRetryDelay_三退避 fixed/linear/exponential
+func TestCalculateRetryDelay_三退避(t *testing.T) {
+	e := &HTTPRequestExecutable{requestParams: NewHttpRequestParamConfig()}
+	rc := e.requestParams.RetryConfig
+	rc.RetryDelay = 1000
+	rc.BackoffType = "fixed"
+	if d := e.CalculateRetryDelay(2); d != 1.0 {
+		t.Fatalf("fixed 漂移: %v", d)
+	}
+	rc.BackoffType = "linear"
+	if d := e.CalculateRetryDelay(2); d != 3.0 {
+		t.Fatalf("linear 漂移: %v", d)
+	}
+	rc.BackoffType = "exponential"
+	if d := e.CalculateRetryDelay(2); d != 4.0 {
+		t.Fatalf("exponential 漂移: %v", d)
 	}
 }

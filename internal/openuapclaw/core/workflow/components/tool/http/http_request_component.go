@@ -1,7 +1,12 @@
 package http
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"math"
+	"mime/multipart"
+	"net/url"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
@@ -386,6 +391,103 @@ func (e *HTTPRequestExecutable) ProcessInputs(inputs map[string]any) (map[string
 		}
 	}
 	return processed, nil
+}
+
+// ApplyAuthentication 认证注入请求头（Python apply_authentication :420-446 一比一）。
+// DIGEST/AWS 与 Python 注释同款不实现；API_KEY 仅 header 位置生效。
+func (e *HTTPRequestExecutable) ApplyAuthentication(headers map[string]string, authConfig any) map[string]string {
+	auth, ok := authConfig.(*HttpAuthConfig)
+	if !ok || auth == nil || auth.Type == HttpAuthTypeNone {
+		return headers
+	}
+	switch auth.Type {
+	case HttpAuthTypeBasic:
+		// username/password 均非空才注入（Python :428 and 语义：nil 视为 falsy）
+		if auth.Username != nil && *auth.Username != "" && auth.Password != nil && *auth.Password != "" {
+			credentials := *auth.Username + ":" + *auth.Password
+			headers["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
+		}
+	case HttpAuthTypeBearer:
+		if auth.Token != nil && *auth.Token != "" {
+			headers["Authorization"] = "Bearer " + *auth.Token
+		}
+	case HttpAuthTypeAPIKey:
+		if auth.APIKey != nil && *auth.APIKey != "" && auth.InLocation == "header" {
+			headers[auth.Name] = *auth.APIKey
+		}
+	}
+	// DIGEST/AWS：需额外实现，Python 注释保留（:443-444）
+	return headers
+}
+
+// PrepareRequestBody 请求体编码（Python prepare_request_body :448-476 一比一）。
+// 返回 (载荷, contentType)；FORM 分支为偏差 D-22-2（urlencoded 修正）。
+func (e *HTTPRequestExecutable) PrepareRequestBody(bodyConfig any) (any, string) {
+	bc, ok := bodyConfig.(*HttpRequestBodyConfig)
+	if !ok || bc == nil {
+		// Python `if not body_config` 对空 dict 同样短路返回（:452-453）
+		return nil, ""
+	}
+	switch bc.ContentType {
+	case HttpContentTypeJSON:
+		if bc.JSONData != nil {
+			// Python json.dumps（无 indent）；Go Marshal 键序排序为已知微差
+			raw, err := json.Marshal(bc.JSONData)
+			if err != nil {
+				return nil, ""
+			}
+			return raw, "application/json"
+		}
+	case HttpContentTypeForm:
+		if len(bc.FormData) > 0 {
+			// D-22-2：Python aiohttp.FormData 出 multipart 载荷 + urlencoded 头不一致；
+			// Go 修正为 urlencoded 载荷 + urlencoded 头（spec 拍板 #4）
+			vals := url.Values{}
+			for k, v := range bc.FormData {
+				vals.Set(k, pythonsem.PyStr(v))
+			}
+			return vals.Encode(), "application/x-www-form-urlencoded"
+		}
+	case HttpContentTypeMultipartForm:
+		if len(bc.MultipartForm) > 0 {
+			var buf bytes.Buffer
+			w := multipart.NewWriter(&buf)
+			for k, v := range bc.MultipartForm {
+				_ = w.WriteField(k, pythonsem.PyStr(v))
+			}
+			_ = w.Close()
+			// Python 头写死 'multipart/form-data'（不带 boundary，:466）——逐字复刻
+			return buf.String(), "multipart/form-data"
+		}
+	case HttpContentTypeText:
+		if bc.TextData != nil {
+			return *bc.TextData, "text/plain"
+		}
+	case HttpContentTypeBinary:
+		if bc.BinaryData != nil {
+			// Python base64.b64decode 默认 std encoding（:473）
+			raw, err := base64.StdEncoding.DecodeString(*bc.BinaryData)
+			if err != nil {
+				return nil, ""
+			}
+			return raw, "application/octet-stream"
+		}
+	}
+	return nil, ""
+}
+
+// CalculateRetryDelay 重试延迟（秒）（Python calculate_retry_delay :478-491 一比一）
+func (e *HTTPRequestExecutable) CalculateRetryDelay(retryCount int) float64 {
+	baseDelay := float64(e.requestParams.RetryConfig.RetryDelay) / 1000.0
+	switch e.requestParams.RetryConfig.BackoffType {
+	case "fixed":
+		return baseDelay
+	case "linear":
+		return baseDelay * float64(retryCount+1)
+	case "exponential":
+		return baseDelay * math.Pow(2, float64(retryCount))
+	}
+	return baseDelay
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
