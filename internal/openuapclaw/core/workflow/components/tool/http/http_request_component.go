@@ -2,14 +2,21 @@ package http
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"math"
 	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	security "github.com/uapclaw/uapclaw-go/internal/common/security"
 	components "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"gopkg.in/yaml.v3"
 )
@@ -490,7 +497,222 @@ func (e *HTTPRequestExecutable) CalculateRetryDelay(retryCount int) float64 {
 	return baseDelay
 }
 
+// MakeRequest 执行 HTTP 请求（Python make_request :240-354 一比一）。
+// 步骤序（规则 9.3）：认证注入 → 请求体编码 + Content-Type → 代理 →
+// 重试循环（每轮新建 transport + SSL env 每轮重求，spec 拍板 #3）→
+// 分块读 + 超限 → 文本/二进制分型 → 结果 dict → 状态码重试判定 → 异常包装。
+func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]any, error) {
+	targetURL := params["url"].(string)
+	method := params["method"].(string)
+	headers := params["headers"].(map[string]string)
+	queryParams := params["query_parameters"].(map[string]any)
+	bodyConfig := params["body"]
+	authConfig := params["authentication"]
+
+	// 认证注入（:252）
+	headers = e.ApplyAuthentication(headers, authConfig)
+
+	// 请求体编码（:255-257）
+	requestBody, contentType := e.PrepareRequestBody(bodyConfig)
+	if contentType != "" {
+		headers["Content-Type"] = contentType
+	}
+
+	// 代理（:260）
+	proxy := security.GetProxyURL(targetURL, e.requestParams.AdvancedOptions.Proxy)
+
+	// 超时（秒，:263）
+	timeoutSeconds := e.requestParams.Timeout
+
+	// 重试上限（:266-267）
+	maxRetries := 0
+	if e.requestParams.RetryConfig.Enabled {
+		maxRetries = e.requestParams.RetryConfig.MaxRetries
+	}
+	retryCount := 0
+
+	var result map[string]any
+	for retryCount <= maxRetries {
+		// 每轮新建 transport + SSL 策略每轮重求（:269-278，spec 拍板 #3）
+		urlIsHTTPS := strings.HasPrefix(strings.ToLower(targetURL), "https://")
+		sslVerify, sslCert, err := security.GetSSLConfig(sslVerifyEnv, sslCertEnv,
+			[]string{sslTriggerValue}, urlIsHTTPS)
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg := &tls.Config{InsecureSkipVerify: true} // ≙ aiohttp.TCPConnector(ssl=False)
+		if sslVerify && !e.requestParams.AdvancedOptions.IgnoreSSLIssues {
+			strict, serr := security.CreateStrictTLSConfig(sslCert)
+			if serr != nil {
+				return nil, serr
+			}
+			tlsCfg = strict
+		}
+		transport := &http.Transport{TLSClientConfig: tlsCfg}
+		if proxy != "" {
+			pu, perr := url.Parse(proxy)
+			if perr != nil {
+				return nil, wrapRequestError(perr)
+			}
+			transport.Proxy = http.ProxyURL(pu)
+		}
+		client := &http.Client{
+			Transport: transport,
+			Timeout:   time.Duration(timeoutSeconds * float64(time.Second)),
+			// allow_redirects=False（:288；follow_redirect 死字段不生效，spec §4）
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+
+		// 构造请求（:282-291）：仅 POST/PUT/PATCH 携带 body（:286 条件逐字）
+		var bodyReader io.Reader
+		if method == "POST" || method == "PUT" || method == "PATCH" {
+			bodyReader = toBodyReader(requestBody)
+		}
+		q := url.Values{}
+		for k, v := range queryParams {
+			q.Set(k, pythonsem.PyStr(v))
+		}
+		fullURL := targetURL
+		if len(q) > 0 {
+			sep := "?"
+			if strings.Contains(fullURL, "?") {
+				sep = "&"
+			}
+			fullURL = fullURL + sep + q.Encode()
+		}
+		req, rerr := http.NewRequest(method, fullURL, bodyReader)
+		if rerr != nil {
+			return nil, wrapRequestError(rerr)
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, derr := client.Do(req)
+		if derr != nil {
+			// 异常路径：重试判定（:337-352）
+			if e.requestParams.RetryConfig.Enabled && retryCount < maxRetries {
+				time.Sleep(time.Duration(e.CalculateRetryDelay(retryCount) * float64(time.Second)))
+				retryCount++
+				continue
+			}
+			return nil, wrapRequestError(derr)
+		}
+
+		// 分块读 + 超限（:293-303）。Python raise 在 try 内 → 走 except
+		// 重试路径再包装，此处同序（超限 → retry/包装，而非直接抛）
+		content := []byte{}
+		buf := make([]byte, chunkSize)
+		readErr := error(nil)
+	readLoop:
+		for {
+			n, rerr := resp.Body.Read(buf)
+			content = append(content, buf[:n]...)
+			if int64(len(content)) > int64(e.requestParams.MaxResponseByteSize) {
+				readErr = exception.BuildError(exception.StatusComponentToolExecutionError,
+					exception.WithParam("error_msg", fmt.Sprintf(
+						"Response size (%d bytes) exceeds maximum allowed size \n                                        (%d bytes)",
+						len(content), e.requestParams.MaxResponseByteSize)))
+				break readLoop
+			}
+			if rerr == io.EOF {
+				break readLoop
+			}
+			if rerr != nil {
+				readErr = rerr
+				break readLoop
+			}
+		}
+		_ = resp.Body.Close()
+
+		if readErr != nil {
+			if e.requestParams.RetryConfig.Enabled && retryCount < maxRetries {
+				time.Sleep(time.Duration(e.CalculateRetryDelay(retryCount) * float64(time.Second)))
+				retryCount++
+				continue
+			}
+			return nil, wrapRequestError(readErr)
+		}
+
+		// 文本/二进制分型（:306-313）
+		respContentType := strings.ToLower(resp.Header.Get("Content-Type"))
+		var contentResult any
+		if containsAny(respContentType, textContentTypes) {
+			contentResult = string(content)
+		} else {
+			contentResult = content // D-22-1：[]byte 直装
+		}
+
+		// 响应头 dict 化（:317）
+		respHeaders := map[string]string{}
+		for k, vs := range resp.Header {
+			respHeaders[strings.ToLower(k)] = strings.Join(vs, ",")
+		}
+
+		result = map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     respHeaders,
+			"content":     contentResult,
+			"url":         resp.Request.URL.String(),
+			"reason":      resp.Status,
+		}
+
+		// 状态码重试判定（:324-335）
+		if e.requestParams.RetryConfig.Enabled &&
+			intInSlice(resp.StatusCode, e.requestParams.RetryConfig.RetryOnStatusCodes) &&
+			retryCount < maxRetries {
+			time.Sleep(time.Duration(e.CalculateRetryDelay(retryCount) * float64(time.Second)))
+			retryCount++
+			continue
+		}
+		break
+	}
+	return result, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// wrapRequestError 网络层错误 → 102000 包装（Python :347-352
+// build_error(COMPONENT_TOOL_EXECUTION_ERROR, "HTTP request failed: …") 一比一）
+func wrapRequestError(err error) *exception.BaseError {
+	return exception.BuildError(exception.StatusComponentToolExecutionError,
+		exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", err)))
+}
+
+// containsAny ct 是否命中白名单任一子串（Python any(x in ct for …) :308）
+func containsAny(ct string, list []string) bool {
+	for _, s := range list {
+		if strings.Contains(ct, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// intInSlice int 切片包含判定（Python `in` 列表）
+func intInSlice(v int, list []int) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+// toBodyReader 载荷 → io.Reader（aiohttp data= 参数对应物）
+func toBodyReader(requestBody any) io.Reader {
+	switch b := requestBody.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return bytes.NewReader(b)
+	case string:
+		return strings.NewReader(b)
+	default:
+		return strings.NewReader(pythonsem.PyStr(b))
+	}
+}
 
 // resolvePlaceholders {{key}} 字面替换（Python _resolve_placeholders :170-176；
 // 值经 PyRepr 对齐 Python str(value)）
