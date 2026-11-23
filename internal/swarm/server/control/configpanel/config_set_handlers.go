@@ -639,8 +639,35 @@ func ApplyConfigSet(ctx context.Context, params map[string]any, cryptoProv crypt
 		}
 	}
 
-	// Python: symphony / skill_retrieval / moa_params 保存段（⤵️ 缺口登记，
-	// moa/symphony 键集空 → 分支不进入，行为等价）。
+	// Python: build_symphony_config_update → update_symphony_in_config（:1709-1718）
+	symphonyUpdates, symphonyErr := buildSpecUpdates(params, symphonyConfigSpecs)
+	if symphonyErr != nil {
+		return nil, symphonyErr
+	}
+	if len(symphonyUpdates) > 0 {
+		ApplySymphonyConfigUpdates(symphonyUpdates)
+		for k := range symphonyConfigSpecs {
+			if _, ok := params[k]; ok {
+				yamlUpdated = append(yamlUpdated, k)
+			}
+		}
+	}
+
+	// Python: build_skill_retrieval_config_update → update_skill_retrieval_in_config（:1720-1728）
+	skillUpdates, skillErr := buildSpecUpdates(params, skillRetrievalConfigSpecs)
+	if skillErr != nil {
+		return nil, skillErr
+	}
+	if len(skillUpdates) > 0 {
+		ApplySkillRetrievalConfigUpdates(skillUpdates)
+		for k := range skillRetrievalConfigSpecs {
+			if _, ok := params[k]; ok {
+				yamlUpdated = append(yamlUpdated, k)
+			}
+		}
+	}
+
+	// Python: moa_params 保存段（⤵️ 缺口登记：MOA 键集空 → 分支不进入）。
 
 	// Python: env 写入进程内 + persist_env_updates（:1717-1723）
 	for envKey, value := range envUpdates {
@@ -835,4 +862,97 @@ func sortedKeysStr(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ──────────────────────────── symphony / skill_retrieval 写回段 ────────────────────────────
+
+// SymphonyConfigSpec symphony 开关规格（Python: config_set_handlers.py:489
+// SYMPHONY_CONFIG_SPECS：键 → (yaml 相对路径, 值类型, 默认值)）。
+type SymphonyConfigSpec struct {
+	// Path 相对 symphony 段的嵌套路径
+	Path []string
+	// ValueType bool/int/non_negative_int/raw_int/float/ratio/output_chars/空=string
+	ValueType string
+	// Default 强转失败回落值
+	Default any
+}
+
+// symphonyConfigSpecs SYMPHONY_CONFIG_SPECS（Python :492-498）。
+var symphonyConfigSpecs = map[string]SymphonyConfigSpec{
+	"symphony_enabled":           {Path: []string{"enabled"}, ValueType: "bool", Default: false},
+	"symphony_evolution_enabled": {Path: []string{"evolution", "flow", "enabled"}, ValueType: "bool", Default: false},
+}
+
+// skillRetrievalConfigSpecs SKILL_RETRIEVAL_CONFIG_SPECS（Python :499-512；
+// index_enabled 为旧版兼容键）。路径相对 symphony.skill_retrieval 段。
+var skillRetrievalConfigSpecs = map[string]SymphonyConfigSpec{
+	"skill_retrieval_enabled":                      {Path: []string{"enabled"}, ValueType: "bool", Default: false},
+	"skill_retrieval_index_enabled":                {Path: []string{"index", "enabled"}, ValueType: "bool", Default: false},
+	"skill_retrieval_max_results":                  {Path: []string{"discovery", "max_results"}, ValueType: "int", Default: 10},
+	"skill_retrieval_max_output_chars":             {Path: []string{"discovery", "max_output_chars"}, ValueType: "output_chars", Default: 12000},
+	"skill_retrieval_max_list_entries":             {Path: []string{"discovery", "max_list_entries"}, ValueType: "int", Default: 40},
+	"skill_retrieval_incremental_notice_max_chars": {Path: []string{"discovery", "incremental_notice_max_chars"}, ValueType: "int", Default: 4000},
+}
+
+// buildSpecUpdates 按 spec 表从 params 构造嵌套更新表（Python :1064/:1074
+// build_symphony_config_update / build_skill_retrieval_config_update 共用形状）。
+func buildSpecUpdates(params map[string]any, specs map[string]SymphonyConfigSpec) (map[string]any, error) {
+	updates := map[string]any{}
+	for key, spec := range specs {
+		raw, ok := params[key]
+		if !ok {
+			continue
+		}
+		value, err := CoerceConfigPanelValue(raw, spec.ValueType, spec.Default)
+		if err != nil {
+			return nil, err
+		}
+		SetNestedConfigValue(updates, spec.Path, value)
+	}
+	return updates, nil
+}
+
+// mergeConfigDict 深合并（Python config.py _merge_config_dict：updates 键覆盖，
+// 嵌套 dict 递归合并）。
+func mergeConfigDict(target, updates map[string]any) {
+	for k, v := range updates {
+		if uv, ok := v.(map[string]any); ok {
+			if tv, ok := target[k].(map[string]any); ok {
+				mergeConfigDict(tv, uv)
+				continue
+			}
+		}
+		target[k] = v
+	}
+}
+
+// ApplySymphonyConfigUpdates 写回 symphony 段（Python config.py:970
+// update_symphony_in_config：symphony 段缺失则建，updates 深合并）。
+func ApplySymphonyConfigUpdates(updates map[string]any) {
+	mutateYAMLFile(func(root map[string]any) {
+		symphony, _ := root["symphony"].(map[string]any)
+		if symphony == nil {
+			symphony = map[string]any{}
+			root["symphony"] = symphony
+		}
+		mergeConfigDict(symphony, updates)
+	})
+}
+
+// ApplySkillRetrievalConfigUpdates 写回 symphony.skill_retrieval 段
+// （Python config.py:980 update_skill_retrieval_in_config）。
+func ApplySkillRetrievalConfigUpdates(updates map[string]any) {
+	mutateYAMLFile(func(root map[string]any) {
+		symphony, _ := root["symphony"].(map[string]any)
+		if symphony == nil {
+			symphony = map[string]any{}
+			root["symphony"] = symphony
+		}
+		section, _ := symphony["skill_retrieval"].(map[string]any)
+		if section == nil {
+			section = map[string]any{}
+			symphony["skill_retrieval"] = section
+		}
+		mergeConfigDict(section, updates)
+	})
 }

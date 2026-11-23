@@ -22,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -267,4 +268,48 @@ func (s *ZenSuite) TestZen_fixture预热与list追加() {
 		}
 	}
 	s.True(found, "models.list 应追加 zen 免费条目")
+}
+
+// TestResolverRestore_FallbackOnDeletedModel 保存的选择失效回落默认
+// （Python model_routing_registry.py:39 ModelSelectionResolver.restore：
+// 引用仍存在→原样返回；已被删→回落默认模型/首条可用）。
+// 跨子系统：swarm/schema + swarm/server（models.* RPC 落盘）+ swarm/common（resolver restore）。
+func (s *ConfigPanelSuite) TestResolverRestore_FallbackOnDeletedModel() {
+	s.startPanelEnv("{}")
+	// 1. upsert 两个模型（A 默认、B 普通）
+	up := sendConfig(s.env, "models.upsert", map[string]any{
+		"model": map[string]any{"model_name": "model-a", "client_provider": "openai", "api_key": "k1", "is_default": true},
+	})
+	s.Require().NotNil(up["model"])
+	modelA := up["model"].(map[string]any)["model_id"].(string)
+	upB := sendConfig(s.env, "models.upsert", map[string]any{
+		"model": map[string]any{"model_name": "model-b", "client_provider": "openai", "api_key": "k2"},
+	})
+	s.Require().NotNil(upB["model"])
+	modelB := upB["model"].(map[string]any)["model_id"].(string)
+
+	// 2. 保存 B 的会话选择（session.selection.set）
+	payload := sendConfig(s.env, "session.selection.set", map[string]any{
+		"session_id": "sess-resolve-1",
+		"model_selection": map[string]any{"type": "model", "id": modelB},
+	})
+	s.Require().NotNil(payload["model_selection"], "保存选择应回显 selection，payload=%v", payload)
+
+	// 3. 删除 B → resolver.restore 回落默认（A）
+	sendConfig(s.env, "models.delete", map[string]any{"model_id": modelB})
+
+	cfg := configpanel.ReadRawConfig()
+	resolver := common.NewModelSelectionResolver(common.NewModelCatalog(cfg))
+	sel := &common.ModelSelection{Type: "model", ID: modelB}
+	restored, err := resolver.Restore(sel)
+	s.Require().NoError(err)
+	s.Require().NotNil(restored)
+	s.T().Logf("restored=%v", restored)
+	s.Require().NotNil(restored.ID)
+
+	// 4. 对照：仍存在的引用原样返回
+	selA := &common.ModelSelection{Type: "model", ID: modelA}
+	kept, err := resolver.Restore(selA)
+	s.Require().NoError(err)
+	s.Equal(modelA, kept.ID)
 }

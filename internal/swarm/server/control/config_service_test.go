@@ -1,6 +1,7 @@
 package control
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -202,9 +203,12 @@ func TestGetPanel_HarmonyPlatform(t *testing.T) {
 // TestHandleConfigRequest_LocaleGetConf 语言读取与非法值回落
 func TestHandleConfigRequest_LocaleGetConf(t *testing.T) {
 	useTestConfigDir(t, "", "preferred_language: en")
-	payload, ok := HandleConfigRequest("locale.get_conf", nil)
-	if !ok || payload["preferred_language"] != "en" {
-		t.Errorf("payload = %v ok=%v, want en", payload, ok)
+	payload, err := HandleConfigRequest("locale.get_conf", nil)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if payload["preferred_language"] != "en" {
+		t.Errorf("payload = %v, want en", payload)
 	}
 	useTestConfigDir(t, "", "preferred_language: fr")
 	payload, _ = HandleConfigRequest("locale.get_conf", nil)
@@ -224,9 +228,9 @@ browser:
     provider: typesafe
     mode: shadow
 `)
-	payload, ok := HandleConfigRequest("path.get", nil)
-	if !ok {
-		t.Fatal("ok = false, want true")
+	payload, err := HandleConfigRequest("path.get", nil)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
 	}
 	if payload["chrome_path"] != "/usr/bin/chrome" {
 		t.Errorf("chrome_path = %v", payload["chrome_path"])
@@ -250,9 +254,9 @@ memory:
     enabled: true
     patterns: ["secret"]
 `)
-	payload, ok := HandleConfigRequest("memory_forbidden.get", nil)
-	if !ok {
-		t.Fatal("ok = false, want true")
+	payload, err := HandleConfigRequest("memory_forbidden.get", nil)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
 	}
 	if payload["enabled"] != true {
 		t.Errorf("enabled = %v, want true", payload["enabled"])
@@ -262,12 +266,13 @@ memory:
 // TestHandleConfigRequest_UnsupportedMethod 未知方法 BAD_REQUEST
 func TestHandleConfigRequest_UnsupportedMethod(t *testing.T) {
 	useTestConfigDir(t, "", "")
-	payload, ok := HandleConfigRequest("config.bogus", nil)
-	if ok {
-		t.Fatal("ok = true, want false")
+	_, err := HandleConfigRequest("config.bogus", nil)
+	var badReq *ControlConfigError
+	if !errors.As(err, &badReq) {
+		t.Fatalf("期望 ControlConfigError，got %v", err)
 	}
-	if payload["code"] != "BAD_REQUEST" {
-		t.Errorf("code = %v, want BAD_REQUEST", payload["code"])
+	if badReq.Message != "unsupported control config method" {
+		t.Errorf("message = %q, want unsupported control config method", badReq.Message)
 	}
 }
 
@@ -453,9 +458,12 @@ func TestResolveEnvVars_Recursive(t *testing.T) {
 // TestHandleConfigRequest_MemoryForbiddenNotDict 非映射回空对象
 func TestHandleConfigRequest_MemoryForbiddenNotDict(t *testing.T) {
 	useTestConfigDir(t, "", "memory:\n  forbidden_memory_definition: bad")
-	payload, ok := HandleConfigRequest("memory_forbidden.get", nil)
-	if !ok || len(payload) != 0 {
-		t.Errorf("payload = %v ok=%v, want 空 map", payload, ok)
+	payload, err := HandleConfigRequest("memory_forbidden.get", nil)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if payload == nil || len(payload) != 0 {
+		t.Errorf("payload = %v, want 空 map", payload)
 	}
 }
 
@@ -524,9 +532,9 @@ func TestParsePositiveInt(t *testing.T) {
 // TestHandleConfigRequest_ConfigGet 分派回面板
 func TestHandleConfigRequest_ConfigGet(t *testing.T) {
 	useTestConfigDir(t, "", "")
-	payload, ok := HandleConfigRequest("config.get", nil)
-	if !ok {
-		t.Fatal("ok = false")
+	payload, err := HandleConfigRequest("config.get", nil)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
 	}
 	if _, exists := payload["app_version"]; !exists {
 		t.Errorf("payload 缺 app_version")

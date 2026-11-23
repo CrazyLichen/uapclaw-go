@@ -47,7 +47,7 @@ models:
 `)
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-ml", "web", schema.ReqMethodModelsList, json.RawMessage(`{}`))
-	resp, err := s.HandleModelsList(context.Background(), req)
+	resp, err := s.handleConfigPanelRequest(context.Background(), req)
 	if err != nil {
 		t.Fatalf("models.list 失败: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestHandleModelsValidate_ParamChecks(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-mv", "web", schema.ReqMethodModelsValidate,
 		json.RawMessage(`{"api_base":"http://x","model":"m1","model_provider":"OpenAI"}`))
-	resp, err := s.HandleModelsValidate(context.Background(), req)
+	resp, err := s.handleConfigPanelRequest(context.Background(), req)
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestHandleModelsValidate_ParamChecks(t *testing.T) {
 	}
 	req2 := schema.NewAgentRequest("req-mv2", "web", schema.ReqMethodModelsValidate,
 		json.RawMessage(`{"api_base":"http://x","api_key":"k","model":"m1","model_provider":"Nope"}`))
-	resp2, _ := s.HandleModelsValidate(context.Background(), req2)
+	resp2, _ := s.handleConfigPanelRequest(context.Background(), req2)
 	if msg, _ := resp2.Payload["error"].(string); !strings.Contains(msg, "Model provider must be one of") {
 		t.Fatalf("provider 校验文案不符: %v", msg)
 	}
@@ -102,7 +102,7 @@ func TestHandleModelsReplaceAll_NewEntry(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-mr", "web", schema.ReqMethodModelsReplaceAll,
 		json.RawMessage(`{"models":[{"model_name":"m-new","api_base":"http://y","api_key":"sk-9","model_provider":"OpenAI"}]}`))
-	resp, err := s.HandleModelsReplaceAll(context.Background(), req)
+	resp, err := s.handleConfigPanelRequest(context.Background(), req)
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestHandleModelsReplaceAll_Validation(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-mr2", "web", schema.ReqMethodModelsReplaceAll,
 		json.RawMessage(`{"models":[{"model_name":"m","api_base":"http://y","model_provider":"OpenAI"}]}`))
-	resp, _ := s.HandleModelsReplaceAll(context.Background(), req)
+	resp, _ := s.handleConfigPanelRequest(context.Background(), req)
 	if resp.OK {
 		t.Fatal("缺 api_key 新条目应 400")
 	}
@@ -148,7 +148,7 @@ models:
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-mr3", "web", schema.ReqMethodModelsReplaceAll,
 		json.RawMessage(`{"models":[{"model_id":"mid-1","model_name":"qwen-max","api_base":"http://x","api_key":"${API_KEY}","model_provider":"OpenAI","origin_index":0,"is_default":true}]}`))
-	resp, err := s.HandleModelsReplaceAll(context.Background(), req)
+	resp, err := s.handleConfigPanelRequest(context.Background(), req)
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}

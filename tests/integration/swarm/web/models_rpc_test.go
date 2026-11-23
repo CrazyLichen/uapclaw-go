@@ -35,8 +35,11 @@ func TestModelsRPCSuite(t *testing.T) {
 
 // SetupTest 每用例启动独立进程内 AgentServer 并隔离数据目录。
 func (s *ModelsRPCSuite) SetupTest() {
-	s.env = newGoalContractEnv(s.T())
+	// 顺序铁律：先隔离数据目录再启动 env——config.New("") 在构造时解析
+	// pathutil.ConfigFile()，若在 Setenv 之前解析会把 models.* 写盘落到
+	// 真实用户目录 ~/.uapclaw（23.4d 遗留缺陷，曾累积污染真实配置）。
 	isolateGoalDataDir(s.T())
+	s.env = newGoalContractEnv(s.T())
 }
 
 // TearDownTest 刷盘并还原环境。

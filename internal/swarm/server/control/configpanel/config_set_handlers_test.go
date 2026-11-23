@@ -252,3 +252,50 @@ func fmtAny(v any) string {
 	s := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", v)))
 	return s
 }
+
+// TestApplyConfigSet_SymphonyAndSkillRetrieval symphony/skill_retrieval 写回
+// （Python :1709-1728：spec 表强转 + 嵌套段深合并 + output_chars 越界报 400）。
+func TestApplyConfigSet_SymphonyAndSkillRetrieval(t *testing.T) {
+	withTempConfig(t, "")
+	res, err := ApplyConfigSet(context.Background(), map[string]any{
+		"symphony_enabled":                 "true",
+		"symphony_evolution_enabled":       "on",
+		"skill_retrieval_enabled":          true,
+		"skill_retrieval_max_results":      "20",
+		"skill_retrieval_max_output_chars": "8000",
+	}, nil)
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	raw := ReadRawConfig()
+	if GetNestedConfigValue(raw, []string{"symphony", "enabled"}, nil) != true {
+		t.Fatal("symphony.enabled 应写 true")
+	}
+	if GetNestedConfigValue(raw, []string{"symphony", "evolution", "flow", "enabled"}, nil) != true {
+		t.Fatal("symphony.evolution.flow.enabled 应写 true")
+	}
+	if GetNestedConfigValue(raw, []string{"symphony", "skill_retrieval", "discovery", "max_results"}, nil) != 20 {
+		t.Fatal("discovery.max_results 应写 20")
+	}
+	if GetNestedConfigValue(raw, []string{"symphony", "skill_retrieval", "discovery", "max_output_chars"}, nil) != 8000 {
+		t.Fatal("max_output_chars 应写 8000")
+	}
+	hasKey := func(keys []string, want string) bool {
+		for _, k := range keys {
+			if k == want {
+				return true
+			}
+		}
+		return false
+	}
+	for _, want := range []string{"symphony_enabled", "symphony_evolution_enabled", "skill_retrieval_enabled", "skill_retrieval_max_results", "skill_retrieval_max_output_chars"} {
+		if !hasKey(res.YAMLUpdated, want) {
+			t.Fatalf("yamlUpdated 应含 %s，got %v", want, res.YAMLUpdated)
+		}
+	}
+	// output_chars 越界报 400（Python :555-558）
+	if _, err := ApplyConfigSet(context.Background(),
+		map[string]any{"skill_retrieval_max_output_chars": "100"}, nil); err == nil {
+		t.Fatal("max_output_chars 越界应报 400")
+	}
+}

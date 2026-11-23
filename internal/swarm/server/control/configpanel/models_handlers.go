@@ -10,10 +10,16 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -564,4 +570,200 @@ func deepCopyAny(v any) any {
 		return out
 	}
 	return v
+}
+
+// ──────────────────────────── 三方法主处理器（Python models_handlers.py:667/:803/:911） ────────────────────────────
+
+// modelsListRows 序列化 defaults + zen 追加（Python: models_list_handler :815-878）。
+func modelsListRows(cfg map[string]any) []map[string]any {
+	models := config.GetDefaultModels(cfg)
+	result := make([]map[string]any, 0, len(models))
+	for idx, entry := range models {
+		// Python: 非 dict 条目跳过以保持 origin_index 对齐（:840-845 脏配置防御）
+		mcc, _ := entry["model_client_config"].(map[string]any)
+		mco, _ := entry["model_config_obj"].(map[string]any)
+		if mcc == nil {
+			mcc = map[string]any{}
+		}
+		if mco == nil {
+			mco = map[string]any{}
+		}
+		isDefault, _ := entry["is_default"].(bool)
+		modelName := strings.TrimSpace(orString(mcc["model_name"]))
+		resultEntry := map[string]any{
+			"model_id":         orString(entry["model_id"]),
+			"model_name":       modelName,
+			"api_base":         orString(mcc["api_base"]),
+			"api_key":          orString(mcc["api_key"]),
+			"has_api_key":      orString(mcc["api_key"]) != "",
+			"model_provider":   orString(mcc["client_provider"]),
+			"temperature":      mco["temperature"],
+			"reasoning_level":  ReasoningLevelDisplay(mco["reasoning_level"]),
+			"is_default":       isDefault,
+			"is_agentos":       orString(mco["_source"]) == "agentos",
+			"is_free":          boolOr(entry["is_free"]),
+			"alias":            orString(entry["alias"]),
+			"origin_index":     idx,
+			"vendor_key":       orString(orAny(mcc["vendor_key"], entry["vendor_key"])),
+			"plan":             orString(orAny(mcc["plan"], entry["plan"])),
+			"endpoint_profile": orString(mcc["endpoint_profile"]),
+		}
+		if modelName != "" {
+			cw := ParsePositiveInt(mco["context_window"])
+			if cw == 0 {
+				cw = DefaultContextWindowTokens
+			}
+			resultEntry["context_window_tokens"] = cw
+		}
+		if IsLoginModel(entry) {
+			resultEntry["source"] = entry["source"]
+			resultEntry["read_only"] = true
+		}
+		result = append(result, resultEntry)
+	}
+	// Python: zen 追加（:869-878）——跳过同名
+	existing := map[string]bool{}
+	for _, item := range result {
+		existing[orString(item["model_name"])] = true
+	}
+	for _, row := range AppendZenFreeModels(nil) {
+		name := strings.TrimSpace(orString(row["model_name"]))
+		if name == "" || existing[name] {
+			continue
+		}
+		result = append(result, row)
+		existing[name] = true
+	}
+	return result
+}
+
+// ModelsListPayload models.list payload（Python: models_handlers.py:803
+// models_list_handler：{models, model_groups, active_model}）。
+func ModelsListPayload(cfg map[string]any) map[string]any {
+	rows := modelsListRows(cfg)
+	activeModel := ""
+	if len(rows) > 0 {
+		activeModel = orString(rows[0]["model_name"])
+	}
+	catalog := common.NewModelCatalog(cfg)
+	return map[string]any{
+		"models":       rows,
+		"model_groups": catalog.ListPublicGroups(),
+		"active_model": activeModel,
+	}
+}
+
+// probeInvoke 探活单次尝试（Python: :750-776 max_tokens=3 失败回退 16 的单步）。
+type probeInvoker func(ctx context.Context, maxTokens int) error
+
+// ModelsValidate 探活草稿模型（Python: config_validate_model_handler :667）。
+// 返回 payload；入参非法回 *ConfigPanelBadRequest，探活失败回 *ModelsValidateLLMError。
+func ModelsValidate(ctx context.Context, params map[string]any) (map[string]any, error) {
+	infimum, supremum := 3, 16
+	apiBase := strings.TrimSpace(orString(params["api_base"]))
+	apiKey := strings.TrimSpace(orString(params["api_key"]))
+	model := strings.TrimSpace(orString(params["model"]))
+	modelProvider := strings.TrimSpace(orString(params["model_provider"]))
+	needsAPIKey := modelProvider != "OpenAIAccount"
+	if apiBase == "" || model == "" || modelProvider == "" || (needsAPIKey && apiKey == "") {
+		return nil, &ConfigPanelBadRequest{
+			Message: "api_base, model, model_provider, and api_key for non-OAuth providers are required",
+		}
+	}
+	if !IsAvailableProvider(modelProvider) {
+		return nil, &ConfigPanelBadRequest{
+			Message: fmt.Sprintf("Model provider must be one of: %v", AvailableModelProviders()),
+		}
+	}
+	apiBase = strings.TrimRight(apiBase, "/")
+	verifySSL := false
+	if v, ok := params["verify_ssl"].(bool); ok {
+		verifySSL = v
+	}
+	clientConfig := &llmSchema.ModelClientConfig{
+		ClientProvider: modelProvider,
+		APIKey:         apiKey,
+		APIBase:        apiBase,
+		Timeout:        60.0,
+		MaxRetries:     3,
+		VerifySSL:      verifySSL,
+	}
+	invoke := func(ctx context.Context, maxTokens int) error {
+		modelConfig := llmSchema.NewModelRequestConfig()
+		modelConfig.ModelName = model
+		modelConfig.MaxTokens = &maxTokens
+		zero := 0.0
+		modelConfig.Temperature = &zero
+		modelInst, err := llm.NewModel(clientConfig, modelConfig)
+		if err != nil {
+			return err
+		}
+		messages := model_clients.NewMessagesParam(llmSchema.NewUserMessage("Hi"))
+		resp, err := modelInst.Invoke(ctx, messages)
+		if err != nil {
+			return err
+		}
+		if resp == nil || resp.Content.Text() == "" {
+			return errEmptyModelResponse
+		}
+		return nil
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	var lastErr error
+	for _, bound := range []int{infimum, supremum} {
+		lastErr = invoke(probeCtx, bound)
+		if lastErr == nil {
+			return map[string]any{"ok": true, "model_provider": modelProvider}, nil
+		}
+	}
+	return nil, &ModelsValidateLLMError{Message: lastErr.Error()}
+}
+
+// errEmptyModelResponse 空响应（Python "模型返回空响应"）。
+var errEmptyModelResponse = fmt.Errorf("模型返回空响应")
+
+// ModelsValidateLLMError 探活失败（Python HTTP 语义 LLM_ERROR）。
+type ModelsValidateLLMError struct{ Message string }
+
+// Error 实现 error 接口。
+func (e *ModelsValidateLLMError) Error() string { return e.Message }
+
+// ModelsReplaceAll 整体替换 models.defaults（Python: models_replace_all_handler
+// :911：build → 四连归一/校验 → SetRoundTrip 写回 → reload（models.defaults →
+// model scope，force）。reload 回调由调用方注入（server 侧 AgentManager 直调，
+// 对齐 Python _apply_models_change 的 on_config_saved/agent_client 双态）。
+func ModelsReplaceAll(ctx context.Context, params map[string]any, cryptoProv crypto.CryptoProvider, reload func() error) (map[string]any, error) {
+	newModels, err := BuildModelsDefaultsFromFrontend(params["models"], cryptoProv)
+	if err != nil {
+		return nil, err
+	}
+	// Python: candidate 合成 + 四连归一/校验（:925-930）
+	candidate := ReadRawConfig()
+	modelsMap, _ := candidate["models"].(map[string]any)
+	if modelsMap == nil {
+		modelsMap = map[string]any{}
+	}
+	modelsMap["defaults"] = newModels
+	candidate["models"] = modelsMap
+	common.RecoverExistingModelFields(candidate)
+	common.NormalizeLegacyModelNulls(candidate)
+	common.EnsureModelBusinessIDs(candidate)
+	if err := common.RaiseIfInvalid(candidate); err != nil {
+		return nil, err
+	}
+	// Python: update_default_models_in_config（SetRoundTrip 保注释写回）
+	if err := ReplaceModelsDefaults(candidate["models"]); err != nil {
+		return nil, &ConfigPanelInternalError{Message: "failed to update models.defaults"}
+	}
+	// Python: _apply_models_change(changed_keys=["models.defaults"], force=True)
+	if reload != nil {
+		if err := reload(); err != nil {
+			logger.Warn(logComponentConfigPanel).Err(err).Msg("models.replace_all reload failed")
+		}
+	}
+	return map[string]any{
+		"count":                    len(newModels),
+		"applied_without_restart": true,
+	}, nil
 }

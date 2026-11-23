@@ -742,14 +742,21 @@ func GetPanel() map[string]any {
 	return getPanel()
 }
 
+// ControlConfigError control 只读方法不支持（HTTP 语义 BAD_REQUEST，
+// Python: build_error_response(request, ..., code="BAD_REQUEST")）。
+type ControlConfigError struct{ Message string }
+
+// Error 实现 error 接口。
+func (e *ControlConfigError) Error() string { return e.Message }
+
 // HandleConfigRequest 只读配置请求分派（Python: config_service.py:532
 // handle_config_request）。CONFIG_GET 回面板；LOCALE_GET_CONF 读偏好语言；
 // PATH_GET 回浏览器路径 + decision 投影；MEMORY_FORBIDDEN_GET 回记忆禁区段；
-// 其余 BAD_REQUEST。
-func HandleConfigRequest(reqMethod string, params map[string]any) (map[string]any, bool) {
+// 其余返回 ControlConfigError（BAD_REQUEST 语义）。
+func HandleConfigRequest(reqMethod string, params map[string]any) (map[string]any, error) {
 	switch reqMethod {
 	case "config.get":
-		return getPanel(), true
+		return getPanel(), nil
 	}
 	raw := readRawConfig()
 	switch reqMethod {
@@ -758,7 +765,7 @@ func HandleConfigRequest(reqMethod string, params map[string]any) (map[string]an
 		if lang != "zh" && lang != "en" {
 			lang = "zh"
 		}
-		return map[string]any{"preferred_language": lang}, true
+		return map[string]any{"preferred_language": lang}, nil
 	case "path.get":
 		browser, _ := raw["browser"].(map[string]any)
 		if browser == nil {
@@ -782,16 +789,16 @@ func HandleConfigRequest(reqMethod string, params map[string]any) (map[string]an
 		for key, value := range common.ProjectBrowserDecision(decisionMap, browserCredentialEnvironment()) {
 			payload[key] = value
 		}
-		return payload, true
+		return payload, nil
 	case "memory_forbidden.get":
 		memoryCfgAll, _ := raw["memory"].(map[string]any)
 		payload, _ := memoryCfgAll["forbidden_memory_definition"].(map[string]any)
 		if payload == nil {
 			payload = map[string]any{}
 		}
-		return payload, true
+		return payload, nil
 	}
-	return map[string]any{"error": "unsupported control config method", "code": "BAD_REQUEST"}, false
+	return nil, &ControlConfigError{Message: "unsupported control config method"}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

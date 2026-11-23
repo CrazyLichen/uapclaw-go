@@ -131,14 +131,6 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithPayload(payload))
 	}
-	badReq := func() *schema.AgentResponse {
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithResponseOK(false),
-			schema.WithPayload(map[string]any{
-				"error": "unsupported control config method",
-				"code":  "BAD_REQUEST",
-			}))
-	}
 
 	// Python: config_adapter.py:180-189 CONFIG_MOA_STATUS → moa_status(get_config(), selection)。
 	// 依赖 moa_runtime（build_moa_runtime/resolve_moa_settings，Python
@@ -193,15 +185,28 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 		return okResp(payload), nil
 	}
 
-	// Python: models_handlers.py:803/667 models.list / config.validate_model / models.validate
+	// Python: models_handlers.py:803/667/911 models.list / models.validate /
+	// config.validate_model / models.replace_all（实现在 configpanel 包单文件）
 	if request.ReqMethod == schema.ReqMethodModelsList {
-		return s.HandleModelsList(ctx, request)
+		return okResp(configpanel.ModelsListPayload(s.configData())), nil
 	}
 	if request.ReqMethod == schema.ReqMethodModelsValidate || request.ReqMethod == schema.ReqMethodConfigValidateModel {
-		return s.HandleModelsValidate(ctx, request)
+		payload, err := configpanel.ModelsValidate(ctx, params)
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(payload), nil
 	}
 	if request.ReqMethod == schema.ReqMethodModelsReplaceAll {
-		return s.HandleModelsReplaceAll(ctx, request)
+		payload, err := configpanel.ModelsReplaceAll(ctx, params, resolveServerCrypto(),
+			func() error {
+				// Python: _apply_models_change(["models.defaults"], force=True)
+				return s.agentManager.ReloadAgentsConfig(ctx, nil, nil, rt.ReloadOptions{ReloadScopes: []string{"model"}})
+			})
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(payload), nil
 	}
 
 	// Python: config_adapter.py:212-236 LOCALE_SET_CONF
@@ -245,9 +250,9 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 
 	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
 	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
-	payload, ok := control.HandleConfigRequest(string(request.ReqMethod), params)
-	if !ok {
-		return badReq(), nil
+	payload, readErr := control.HandleConfigRequest(string(request.ReqMethod), params)
+	if readErr != nil {
+		return applyErrorResponse(request, readErr), nil
 	}
 	return okResp(payload), nil
 }
@@ -272,6 +277,15 @@ func applyErrorResponse(request *schema.AgentRequest, err error) *schema.AgentRe
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(false),
 		schema.WithPayload(map[string]any{"error": err.Error(), "code": code}))
+}
+
+// configData 取当前配置表（serverCatalog 同源）。
+func (s *AgentServer) configData() map[string]any {
+	data, err := s.config.Load()
+	if err != nil {
+		return map[string]any{}
+	}
+	return data
 }
 
 // resolveServerCrypto server 侧 crypto provider（Python: _get_crypto_provider
