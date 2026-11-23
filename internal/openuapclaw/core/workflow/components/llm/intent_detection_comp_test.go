@@ -265,3 +265,103 @@ func TestInitializeIfNeeded_包装错误(t *testing.T) {
 		t.Fatal("失败不应置位 initialized")
 	}
 }
+
+// ──────────────────────────── Task 4 输入组装 ────────────────────────────
+
+// TestPrepareDetectionInputs_槽位填充 Python :278-312 十槽
+func TestPrepareDetectionInputs_槽位填充(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		CategoryNameList: []string{"退款"},
+		UserPrompt:       "客服语境",
+		ExampleContent:   []string{"示例1", "示例2"},
+	})
+	inputs := map[string]any{"query": "我的快递到哪了"}
+	cur, err := e.prepareDetectionInputs(inputs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cur[userPromptKey] != "客服语境" {
+		t.Fatalf("user_prompt 槽错误: %v", cur[userPromptKey])
+	}
+	if cur[categoryInfoKey] != "0: 默认意图\n1: 退款" {
+		t.Fatalf("category_info 槽错误: %q", cur[categoryInfoKey])
+	}
+	if cur[defaultClassKey] != "分类0" {
+		t.Fatalf("default_class 槽错误: %v", cur[defaultClassKey])
+	}
+	if cur[exampleContentKey] != "示例1\n\n示例2" {
+		t.Fatalf("example_content 槽错误: %q", cur[exampleContentKey])
+	}
+	if cur[chatHistoryKey] != "" {
+		t.Fatalf("chat_history 槽错误: %q", cur[chatHistoryKey])
+	}
+	if cur[inputKey] != "我的快递到哪了" {
+		t.Fatalf("input 槽错误: %v", cur[inputKey])
+	}
+	if cur[enableHistoryKey] != false || cur[enableInputKey] != true {
+		t.Fatalf("enable 开关槽错误: %v %v", cur[enableHistoryKey], cur[enableInputKey])
+	}
+	if cur[chatHistoryMaxTurnKey] != 3 {
+		t.Fatalf("max_turn 槽错误: %v", cur[chatHistoryMaxTurnKey])
+	}
+	if gi, ok := cur["global_intent_map"].([]any); !ok || len(gi) != 0 {
+		t.Fatalf("global_intent_map 槽错误: %v", cur["global_intent_map"])
+	}
+}
+
+// TestPrepareDetectionInputs_历史覆盖 enable_history=true 时 CHAT_HISTORY 槽被格式化覆盖
+func TestPrepareDetectionInputs_历史覆盖(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		CategoryNameList: []string{"退款"}, EnableHistory: true,
+	})
+	history := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("你好"),
+		llmschema.NewAssistantMessage("您好"),
+	}
+	cur, err := e.prepareDetectionInputs(map[string]any{"query": "q"}, history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cur[chatHistoryKey] != "用户: 你好\n助手: 您好\n" {
+		t.Fatalf("历史格式化错误: %q", cur[chatHistoryKey])
+	}
+}
+
+// TestPrepareDetectionInputs_query缺失报错 Python :300-308 → InputParamError
+func TestPrepareDetectionInputs_query缺失报错(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"x"}})
+	_, err := e.prepareDetectionInputs(map[string]any{}, nil)
+	assertIntentCode(t, err, exception.StatusComponentIntentDetectionInputParamError)
+}
+
+// TestFormatChatHistory_角色映射与截尾 Python :314-322：未知角色跳过 + 尾部截 N 条
+func TestFormatChatHistory_角色映射与截尾(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"x"}})
+	e.cfg.ChatHistoryMaxTurn = 2
+	history := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("h1"),
+		llmschema.NewUserMessage("h2"),
+		llmschema.NewUserMessage("h3"),
+		&fakeUnknownRoleMessage{content: "unknown"},
+		llmschema.NewUserMessage("h4"),
+	}
+	got := e.formatChatHistory(history)
+	// 末 2 条 = [alien, h4]，alien 角色不在表内被跳过 → 只剩 h4
+	if got != "用户: h4\n" {
+		t.Fatalf("截尾+角色映射错误: %q", got)
+	}
+}
+
+// fakeUnknownRoleMessage 非法 role 消息（角色映射跳过分支）
+type fakeUnknownRoleMessage struct{ content string }
+
+func (f *fakeUnknownRoleMessage) GetRole() llmschema.RoleType { return llmschema.RoleType(99) }
+func (f *fakeUnknownRoleMessage) GetContent() llmschema.MessageContent {
+	return llmschema.NewTextContent(f.content)
+}
+func (f *fakeUnknownRoleMessage) SetRole(llmschema.RoleType)                        {}
+func (f *fakeUnknownRoleMessage) SetContent(llmschema.MessageContent)               {}
+func (f *fakeUnknownRoleMessage) GetName() string                                   { return "" }
+func (f *fakeUnknownRoleMessage) SetName(string)                                    {}
+func (f *fakeUnknownRoleMessage) GetMetadata() map[string]any                       { return nil }
+func (f *fakeUnknownRoleMessage) SetMetadata(map[string]any)                        {}

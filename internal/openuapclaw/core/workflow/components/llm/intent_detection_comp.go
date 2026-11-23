@@ -291,6 +291,10 @@ func GetDefaultTemplate(acceptLanguage string) *prompt.PromptTemplate {
 // 字段初始化 → _init_default_config_category_list → _append_default_category →
 // router=nil；InvokeFn 槽承载 invoke）
 func NewIntentDetectionExecutable(cfg *IntentDetectionCompConfig) *IntentDetectionExecutable {
+	// Python dataclass 默认值语义（字段缺省时 __init__ 自动填）：max_turn=3
+	if cfg.ChatHistoryMaxTurn <= 0 {
+		cfg.ChatHistoryMaxTurn = 3
+	}
 	e := &IntentDetectionExecutable{cfg: cfg}
 	e.initDefaultConfigCategoryList()
 	e.appendDefaultCategory()
@@ -712,4 +716,91 @@ func (e *IntentDetectionExecutable) initializeIfNeeded(ctx context.Context) erro
 	e.llModel = model
 	e.initialized = true
 	return nil
+}
+
+// ──────────────────────────── Task 4 输入组装 ────────────────────────────
+
+// getCategoryInfo 分类信息串（Python _get_category_info :247-249 一比一）：
+// 分类表与名字表 zip 拼 "cid: cname"，"\n" 连接
+func (e *IntentDetectionExecutable) getCategoryInfo() string {
+	lines := make([]string, 0, len(e.defaultCfg.CategoryList))
+	for cid := range e.defaultCfg.CategoryList {
+		if cid < len(e.cfg.CategoryNameList) {
+			lines = append(lines, fmt.Sprintf("%d: %s", cid, e.cfg.CategoryNameList[cid]))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// prepareDetectionInputs 检测输入组装（Python _prepare_detection_inputs :278-312 十步一比一）：
+// 十槽 update → enable_history 时格式化覆盖 chat_history → enable_input 时校验
+// query（ValidationError → COMPONENT_INTENT_DETECTION_INPUT_PARAM_ERROR）→
+// global_intent_map 空表收尾
+func (e *IntentDetectionExecutable) prepareDetectionInputs(inputs map[string]any, chatHistory []llmschema.BaseMessage) (map[string]any, error) {
+	currentInputs := map[string]any{}
+	globalIntentMap := []any{}
+
+	// 步骤1：静态槽位（:282-291）
+	currentInputs[userPromptKey] = e.cfg.UserPrompt
+	currentInputs[categoryInfoKey] = e.getCategoryInfo()
+	currentInputs[defaultClassKey] = e.defaultCfg.DefaultClass
+	currentInputs[enableHistoryKey] = e.cfg.EnableHistory
+	currentInputs[enableInputKey] = e.defaultCfg.EnableInput
+	currentInputs[exampleContentKey] = strings.Join(e.cfg.ExampleContent, "\n\n")
+	currentInputs[chatHistoryMaxTurnKey] = e.cfg.ChatHistoryMaxTurn
+	currentInputs[chatHistoryKey] = ""
+
+	// 步骤2：历史格式化覆盖（:293-296）
+	if e.cfg.EnableHistory {
+		currentInputs[chatHistoryKey] = e.formatChatHistory(chatHistory)
+	}
+
+	// 步骤3：当前输入校验（:298-308；extra=allow → 只取 query，缺失报参数错误）
+	if e.defaultCfg.EnableInput {
+		query, err := validateIntentDetectionInput(inputs)
+		if err != nil {
+			return nil, exception.BuildError(exception.StatusComponentIntentDetectionInputParamError,
+				exception.WithMsg("failed to validate intent detection input"), exception.WithCause(err))
+		}
+		currentInputs[inputKey] = query
+	}
+
+	// 步骤4：global_intent_map 空表收尾（:310）
+	currentInputs["global_intent_map"] = globalIntentMap
+	return currentInputs, nil
+}
+
+// validateIntentDetectionInput 输入校验（Python IntentDetectionInput.model_validate
+// :301-302 等价面：query 缺失/非串/None → error；query 缺省空串)
+func validateIntentDetectionInput(inputs map[string]any) (string, error) {
+	raw, ok := inputs["query"]
+	if !ok || raw == nil {
+		return "", fmt.Errorf("query field required")
+	}
+	qs, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("query field must be string, got %T", raw)
+	}
+	return qs, nil
+}
+
+// formatChatHistory 历史格式化（Python _format_chat_history :314-322 一比一）：
+// 语言选角色表 → 尾部截 chat_history_max_turn 条 → 表内角色 "角色: 内容\n" 拼接
+func (e *IntentDetectionExecutable) formatChatHistory(chatHistory []llmschema.BaseMessage) string {
+	roleMap := roleMapZH
+	if e.cfg.AcceptLanguage == "en" {
+		roleMap = roleMapEN
+	}
+	var sb strings.Builder
+	start := len(chatHistory) - e.cfg.ChatHistoryMaxTurn
+	if start < 0 {
+		start = 0
+	}
+	for _, history := range chatHistory[start:] {
+		role := history.GetRole().String()
+		if _, ok := roleMap[role]; ok {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", roleMap[role], history.GetContent().String()))
+		}
+	}
+	return sb.String()
 }
