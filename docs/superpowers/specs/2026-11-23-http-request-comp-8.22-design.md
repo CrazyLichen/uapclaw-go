@@ -86,6 +86,9 @@ Python 定义但 `make_request`/`process_response` 零消费：`max_redirects=21
 | D-22-3 | 忠实复刻 | `process_inputs` 对 `body_config.json_data` str→dict **原地写回**（组件级状态跨 invoke 持续，重入可见） | 同样改 config 指针字段，不拷贝 | 无（对齐项非偏差，登记防"顺手修掉"） |
 | D-22-4 | 语言差异 | `ast.literal_eval` 解析 str headers 模板 | Go 无 ast：yaml/json 宽解析 + 失败回 `{}`（Python ValueError/SyntaxError 同款吞掉） | 如遇真实模板语法差异案例再收敛 |
 | D-22-5 | 语言差异 | asyncio.sleep 重试等待 | `time.Sleep`（同步）；aiohttp 异步取消语义由 ctx 取消承载 | 无 |
+| D-22-6 | 实现方式 | aiohttp `session.request(params=query_params)` 自动 URL 编码附加（已有 query 用 `&` 接） | Go net/http 无 params 形参，手动 `url.Values.Encode()` + `?/&` 分隔拼接 | 行为等价（编码/拼接/已有 query 处理一致），不改 |
+| D-22-7 | 死路合理化 | collect/transform 流式 inputs 为「schema 重建 dict，叶子值 async generator」（stream_actor base.py:255-266 rebuild_dict），透传给 invoke 后占位符解析产出语义无意义结果（可跑通但结果坏，零消费方未暴露） | collect/transform 经 drainLastFrame 收帧取最后帧传 invoke——结构对齐"透传"、语义合理化 | 上游若定义流式语义正确行为，同步复核 |
+| 审查收口（2026-11-23） | 修正 | ① Metadata any → 嵌 components.ComponentConfig（8.18 先例，非契约型 any 收窄）；② wrapRequestError 助手展开回内联（规则 9.3）；③ 响应头重复键改单值（Python dict(CIMultiDict) 后值覆盖语义，原 Join 多值）；④ 占位符/头值 str() 用 pythonsem.PyStr（比计划 PyRepr 更准，str() 语义） | 同左 | 无 |
 
 ## 6. 测试设计（httptest 真链，规则 3.3）
 
