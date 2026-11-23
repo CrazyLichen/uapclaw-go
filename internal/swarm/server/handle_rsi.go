@@ -17,7 +17,6 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	rsi "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsi"
 	rsihandlers "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsihandlers"
@@ -118,27 +117,13 @@ func rsiHarnessRefsProvider(params map[string]any) (string, error) {
 	requestedID := strings.TrimSpace(valueOf(mapGet(params, "package_id")))
 	if requestedID != "" {
 		// 与 chat.send 同源 Plugin registry；不静默以 H0 顶替显式选择。
-		// ⚠️ D-9-8 偏差登记：Python extension_package_manager.is_plugin_allowed/
-		// resolve_plugin_dir 注册表 Go 侧无等价实现——以 Agent 工作区 plugins
-		// 目录定位（安装即注册的既有形态），拒绝未安装与 MCP 依赖插件。
-		dir := filepath.Join(workspace.AgentWorkspaceDir(), "plugins", requestedID)
-		if !dirExistsSimple(dir) {
-			return "", rsi.NewInvalidHarness(fmtInvalidPlugin(requestedID))
-		}
-		manifest := filepath.Join(dir, "manifest.json")
-		data, err := os.ReadFile(manifest)
-		if err != nil {
-			return "", rsi.NewInvalidHarness(err.Error())
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return "", rsi.NewInvalidHarness(err.Error())
-		}
-		if payload == nil || payload["mcps"] != nil {
-			return "", rsi.NewInvalidHarness("RSI isolated evaluation does not yet support Plugin MCP dependencies")
-		}
-		abs, _ := filepath.Abs(dir)
-		return abs, nil
+		// ⤴️ 回填登记（D-9-8，2026-12-10 用户拍板）：Python
+		// extension_package_manager.is_plugin_allowed/resolve_plugin_dir
+		// 注册表 Go 侧尚无等价实现——占位拒绝，待 Plugin 注册表机制
+		// 落地后回填（校验已安装 + 拒 MCP 依赖 + 返回包目录）。
+		// 占位拒绝走 RsiNotReady 语义（Python errors.py:191——前端收到
+		// INTERNAL_ERROR 视作"暂不可用"，显式拒绝而非静默假实现）。
+		return "", rsi.ErrNotReady
 	}
 	// 第二级：RSI 激活版本。
 	activationRoot := rsiWorkspaceTasksRoot()
@@ -254,17 +239,6 @@ func expandTilde(p string) string {
 func fileExistsSimple(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()
-}
-
-// dirExistsSimple 目录存在。
-func dirExistsSimple(p string) bool {
-	info, err := os.Stat(p)
-	return err == nil && info.IsDir()
-}
-
-// fmtInvalidPlugin 插件不可用文案。
-func fmtInvalidPlugin(id string) string {
-	return "Plugin is not installed: " + id
 }
 
 // rsiLogComponent RSI 接线日志组件。
