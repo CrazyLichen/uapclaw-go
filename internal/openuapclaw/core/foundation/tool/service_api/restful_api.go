@@ -202,6 +202,12 @@ func (r *RestfulApi) Card() *tool.ToolCard {
 	return &r.card.ToolCard
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略（Python Tool 基类
+// get_call_timeout 默认实现继承；8.21 ToolComp 实施发现的缺口补齐）。
+func (r *RestfulApi) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 一次性执行 RESTful API 请求，返回完整结果。
 // 流程（严格对齐 Python RestfulApi.invoke）：
 //  1. 如果 card.InputSchema 不为 nil，用 FormatWithSchemaMap 格式化输入
