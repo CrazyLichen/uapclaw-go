@@ -671,6 +671,87 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 	return result, nil
 }
 
+// ProcessResponse 响应处理（Python process_response :356-418 一比一）。
+// 步骤序：码判定 → autodetect 判型 → 按 format 解析 → property 抽取 →
+// 结果 dict{statusCode,headers,body,url,ok} → response_mode 三分支。
+func (e *HTTPRequestExecutable) ProcessResponse(response map[string]any) map[string]any {
+	statusCode := response["status_code"].(int)
+	content := response["content"]
+	headers := response["headers"].(map[string]string)
+
+	// 码判定（:365-369）
+	successCodes := e.requestParams.ResponseHandling.ResponseCodeSuccessCodes
+	failureCodes := e.requestParams.ResponseHandling.ResponseCodeFailureCodes
+	isSuccess := intInSlice(statusCode, successCodes) ||
+		(len(failureCodes) == 0 && statusCode >= 200 && statusCode < 300)
+	isFailure := intInSlice(statusCode, failureCodes) || statusCode >= 400
+
+	// autodetect 判型（:372-380）
+	responseFormat := e.requestParams.ResponseHandling.ResponseFormat
+	if responseFormat == HttpResponseFormatAutodetect {
+		ct := strings.ToLower(headers["content-type"])
+		if strings.Contains(ct, "application/json") {
+			responseFormat = HttpResponseFormatJSON
+		} else if strings.Contains(ct, "text/") {
+			responseFormat = HttpResponseFormatText
+		} else {
+			responseFormat = HttpResponseFormatBinary
+		}
+	}
+
+	// 按 format 解析（:383-394）
+	parsedContent := content
+	switch responseFormat {
+	case HttpResponseFormatJSON:
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		} else if b, isB := content.([]byte); isB {
+			contentStr = string(b)
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(contentStr), &parsed); err == nil {
+			parsedContent = parsed
+		}
+		// JSONDecodeError → parsed_content = content（原文透传，:388-389）
+	case HttpResponseFormatText:
+		if s, ok := content.(string); ok {
+			parsedContent = s
+		} else if b, isB := content.([]byte); isB {
+			parsedContent = string(b)
+		}
+	case HttpResponseFormatBinary:
+		// Python pass（:392-394）
+	}
+
+	// property 抽取（:397-401，仅顶层 key，miss 回原值）
+	if prop := e.requestParams.ResponseHandling.ResponseDataProperty; prop != nil {
+		if m, ok := parsedContent.(map[string]any); ok {
+			if v, exists := m[*prop]; exists {
+				parsedContent = v
+			}
+		}
+	}
+
+	// 结果 dict（:405-411）
+	result := map[string]any{
+		"statusCode": statusCode,
+		"headers":    headers,
+		"body":       parsedContent,
+		"url":        response["url"],
+		"ok":         isSuccess && !isFailure,
+	}
+
+	// response_mode 三分支（:404-417）
+	responseMode := e.requestParams.ResponseHandling.ResponseMode
+	if responseMode == "on-success" && !isSuccess {
+		result = map[string]any{}
+	} else if responseMode == "on-error" && isSuccess {
+		result = map[string]any{}
+	}
+	return result
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // wrapRequestError 网络层错误 → 102000 包装（Python :347-352

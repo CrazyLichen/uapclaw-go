@@ -468,3 +468,124 @@ func TestMakeRequest_从不跟随重定向(t *testing.T) {
 		t.Fatalf("302 应原样返回不跟随: %v %v", res, err)
 	}
 }
+
+// TestProcessResponse_autodetect三分支 json/text/其余判型
+func TestProcessResponse_autodetect三分支(t *testing.T) {
+	e := &HTTPRequestExecutable{requestParams: NewHttpRequestParamConfig()}
+	rh := e.requestParams.ResponseHandling
+	// json
+	rh.ResponseFormat = HttpResponseFormatAutodetect
+	out := e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "application/json"},
+		"content": `{"a":1}`, "url": "u",
+	})
+	if out["statusCode"] != 200 || out["ok"] != true || out["url"] != "u" {
+		t.Fatalf("json autodetect 信封漂移: %v", out)
+	}
+	if m, ok := out["body"].(map[string]any); !ok || m["a"] != float64(1) {
+		t.Fatalf("json body 应解析为 map: %v", out["body"])
+	}
+	// text
+	out = e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "text/plain"},
+		"content": "hi", "url": "u",
+	})
+	if out["body"] != "hi" {
+		t.Fatalf("text body 漂移: %v", out)
+	}
+	// 其余 → BINARY pass（bytes 原样）
+	out = e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "application/octet-stream"},
+		"content": []byte{1}, "url": "u",
+	})
+	if b, ok := out["body"].([]byte); !ok || len(b) != 1 {
+		t.Fatalf("binary body 应原样: %v", out)
+	}
+}
+
+// TestProcessResponse_码判定矩阵 success/failure/ok 组合
+func TestProcessResponse_码判定矩阵(t *testing.T) {
+	e := &HTTPRequestExecutable{requestParams: NewHttpRequestParamConfig()}
+	rh := e.requestParams.ResponseHandling
+	mkResp := func(code int) map[string]any {
+		return map[string]any{"status_code": code,
+			"headers": map[string]string{"content-type": "text/plain"}, "content": "x", "url": "u"}
+	}
+	// 2xx + 默认 success_codes → ok=true
+	if out := e.ProcessResponse(mkResp(204)); out["ok"] != true {
+		t.Fatal("204 应成功")
+	}
+	// 4xx → ok=false
+	if out := e.ProcessResponse(mkResp(404)); out["ok"] != false {
+		t.Fatal("404 应失败")
+	}
+	// failure_codes 显式含 302 → 302 判失败
+	rh.ResponseCodeFailureCodes = []int{302}
+	if out := e.ProcessResponse(mkResp(302)); out["ok"] != false {
+		t.Fatal("302 命中 failure_codes 应失败")
+	}
+	rh.ResponseCodeFailureCodes = []int{}
+	// failure_codes 非空 → 抑制 2xx 兜底子句 + success_codes 收窄为 [200] → 204 失败
+	//（Python :368 is_success = in success_codes or (not failure_codes and 2xx)）
+	rh.ResponseCodeFailureCodes = []int{500}
+	rh.ResponseCodeSuccessCodes = []int{200}
+	if out := e.ProcessResponse(mkResp(204)); out["ok"] != false {
+		t.Fatal("failure_codes 非空时 204 出收窄 success_codes 应失败")
+	}
+}
+
+// TestProcessResponse_JSON失败透传 json.loads 失败 → 原文（Python :388-389）
+func TestProcessResponse_JSON失败透传(t *testing.T) {
+	e := &HTTPRequestExecutable{requestParams: NewHttpRequestParamConfig()}
+	rh := e.requestParams.ResponseHandling
+	rh.ResponseFormat = HttpResponseFormatJSON
+	out := e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{}, "content": "not-json{", "url": "u",
+	})
+	if out["body"] != "not-json{" {
+		t.Fatalf("JSON 解析失败应原文透传: %v", out)
+	}
+}
+
+// TestProcessResponse_property抽取与mode三分支 data_property + response_mode
+func TestProcessResponse_property抽取与mode三分支(t *testing.T) {
+	e := &HTTPRequestExecutable{requestParams: NewHttpRequestParamConfig()}
+	rh := e.requestParams.ResponseHandling
+	rh.ResponseFormat = HttpResponseFormatJSON
+	prop := "data"
+	rh.ResponseDataProperty = &prop
+	out := e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "application/json"},
+		"content": `{"data":{"x":1}}`, "url": "u",
+	})
+	if m, ok := out["body"].(map[string]any); !ok || m["x"] != float64(1) {
+		t.Fatalf("property 抽取漂移: %v", out)
+	}
+	// miss 回原值（Python .get(prop_path, parsed_content)）
+	out = e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "application/json"},
+		"content": `{"other":2}`, "url": "u",
+	})
+	if _, ok := out["body"].(map[string]any); !ok {
+		t.Fatalf("miss 应回原 dict: %v", out)
+	}
+	// on-success 非成功 → 空 dict
+	rh.ResponseDataProperty = nil
+	rh.ResponseMode = "on-success"
+	out = e.ProcessResponse(map[string]any{
+		"status_code": 500, "headers": map[string]string{"content-type": "text/plain"},
+		"content": "x", "url": "u",
+	})
+	if len(out) != 0 {
+		t.Fatalf("on-success 非成功应清空: %v", out)
+	}
+	// on-error 成功 → 空 dict
+	rh.ResponseMode = "on-error"
+	out = e.ProcessResponse(map[string]any{
+		"status_code": 200, "headers": map[string]string{"content-type": "text/plain"},
+		"content": "x", "url": "u",
+	})
+	if len(out) != 0 {
+		t.Fatalf("on-error 成功应清空: %v", out)
+	}
+}
