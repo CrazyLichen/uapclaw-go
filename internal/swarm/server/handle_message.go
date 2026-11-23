@@ -153,6 +153,24 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.HandleVendorsFetchModels(ctx, request)
 	case schema.ReqMethodSessionSelectionSet:
 		resp, err = s.HandleSessionSelectionSet(ctx, request)
+	// 配置面板（27.4，Python: config_adapter.py ConfigAdapter.handle 分派）
+	case schema.ReqMethodConfigGet,
+		schema.ReqMethodConfigSet,
+		schema.ReqMethodConfigSaveAll,
+		schema.ReqMethodConfigValidateModel,
+		schema.ReqMethodConfigMoaStatus,
+		schema.ReqMethodModelsList,
+		schema.ReqMethodModelsValidate,
+		schema.ReqMethodModelsReplaceAll,
+		schema.ReqMethodModelsZenEntries,
+		schema.ReqMethodModelsZenWarm,
+		schema.ReqMethodLocaleGetConf,
+		schema.ReqMethodLocaleSetConf,
+		schema.ReqMethodMemoryForbiddenGet,
+		schema.ReqMethodMemoryForbiddenSet,
+		schema.ReqMethodPermissionsOwnerScopesGet,
+		schema.ReqMethodPermissionsOwnerScopesSet:
+		resp, err = s.handleConfigPanelRequest(ctx, request)
 	// 推荐面板（10.7.2）
 	case schema.ReqMethodRecommendation:
 		resp, err = s.handleRecommendation(ctx, request)

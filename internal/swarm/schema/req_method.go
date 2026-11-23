@@ -66,6 +66,12 @@ const (
 	ReqMethodConfigGet ReqMethod = "config.get"
 	// ReqMethodConfigSet 设置配置
 	ReqMethodConfigSet ReqMethod = "config.set"
+	// ReqMethodConfigSaveAll 全量保存配置（Python ReqMethod.CONFIG_SAVE_ALL，27.4）
+	ReqMethodConfigSaveAll ReqMethod = "config.save_all"
+	// ReqMethodConfigValidateModel 校验模型连通性（Python ReqMethod.CONFIG_VALIDATE_MODEL，27.4）
+	ReqMethodConfigValidateModel ReqMethod = "config.validate_model"
+	// ReqMethodConfigMoaStatus MOA 兼容就绪状态（Python ReqMethod.CONFIG_MOA_STATUS，27.4）
+	ReqMethodConfigMoaStatus ReqMethod = "config.moa_status"
 	// ReqMethodChannelGet 获取通道信息
 	ReqMethodChannelGet ReqMethod = "channel.get"
 
@@ -127,6 +133,20 @@ const (
 	ReqMethodModelGroupsUpsert ReqMethod = "model_groups.upsert"
 	// ReqMethodModelGroupsDelete 删除模型组
 	ReqMethodModelGroupsDelete ReqMethod = "model_groups.delete"
+	// ReqMethodModelsList 模型列表（Python ReqMethod.MODELS_LIST，27.4）
+	ReqMethodModelsList ReqMethod = "models.list"
+	// ReqMethodModelsValidate 校验单个模型参数（Python ReqMethod.MODELS_VALIDATE，27.4）
+	ReqMethodModelsValidate ReqMethod = "models.validate"
+	// ReqMethodModelsReplaceAll 全量替换模型列表（Python ReqMethod.MODELS_REPLACE_ALL，27.4）
+	ReqMethodModelsReplaceAll ReqMethod = "models.replace_all"
+	// ReqMethodModelsZenEntries 免费模型清单（Python ReqMethod.MODELS_ZEN_ENTRIES，27.4）
+	ReqMethodModelsZenEntries ReqMethod = "models.zen.entries"
+	// ReqMethodModelsZenWarm 免费模型预热（Python ReqMethod.MODELS_ZEN_WARM，27.4）
+	ReqMethodModelsZenWarm ReqMethod = "models.zen.warm"
+	// ReqMethodLocaleGetConf 读取界面偏好语言（Python ReqMethod.LOCALE_GET_CONF，27.4）
+	ReqMethodLocaleGetConf ReqMethod = "locale.get_conf"
+	// ReqMethodLocaleSetConf 写入界面偏好语言（Python ReqMethod.LOCALE_SET_CONF，27.4）
+	ReqMethodLocaleSetConf ReqMethod = "locale.set_conf"
 	// ReqMethodVendorsList 厂商预设分组列表
 	ReqMethodVendorsList ReqMethod = "vendors.list"
 	// ReqMethodVendorsFetchModels 按厂商预设拉取远端模型列表
@@ -159,6 +179,14 @@ const (
 	ReqMethodPathGet ReqMethod = "path.get"
 	// ReqMethodPathSet 设置路径
 	ReqMethodPathSet ReqMethod = "path.set"
+	// ReqMethodMemoryForbiddenGet 读取记忆禁区（Python ReqMethod.MEMORY_FORBIDDEN_GET，27.4）
+	ReqMethodMemoryForbiddenGet ReqMethod = "memory.forbidden.get"
+	// ReqMethodMemoryForbiddenSet 写入记忆禁区（Python ReqMethod.MEMORY_FORBIDDEN_SET，27.4）
+	ReqMethodMemoryForbiddenSet ReqMethod = "memory.forbidden.set"
+	// ReqMethodPermissionsOwnerScopesGet 读取权限属主范围（Python ReqMethod.PERMISSIONS_OWNER_SCOPES_GET，27.4）
+	ReqMethodPermissionsOwnerScopesGet ReqMethod = "permissions.owner_scopes.get"
+	// ReqMethodPermissionsOwnerScopesSet 写入权限属主范围（Python ReqMethod.PERMISSIONS_OWNER_SCOPES_SET，27.4）
+	ReqMethodPermissionsOwnerScopesSet ReqMethod = "permissions.owner_scopes.set"
 	// ReqMethodFilesList 列出文件
 	ReqMethodFilesList ReqMethod = "files.list"
 	// ReqMethodFilesGet 获取文件
@@ -461,6 +489,9 @@ func AllReqMethods() []ReqMethod {
 		// 配置 / 通道
 		ReqMethodConfigGet,
 		ReqMethodConfigSet,
+		ReqMethodConfigSaveAll,
+		ReqMethodConfigValidateModel,
+		ReqMethodConfigMoaStatus,
 		ReqMethodChannelGet,
 		// 模型目录（23.4d）
 		ReqMethodModelsGet,
@@ -473,6 +504,13 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodVendorsList,
 		ReqMethodVendorsFetchModels,
 		ReqMethodSessionSelectionSet,
+		ReqMethodModelsList,
+		ReqMethodModelsValidate,
+		ReqMethodModelsReplaceAll,
+		ReqMethodModelsZenEntries,
+		ReqMethodModelsZenWarm,
+		ReqMethodLocaleGetConf,
+		ReqMethodLocaleSetConf,
 		// 会话
 		ReqMethodSessionList,
 		ReqMethodSessionCreate,
@@ -496,6 +534,10 @@ func AllReqMethods() []ReqMethod {
 		// 路径 / 文件 / TTS / 内存
 		ReqMethodPathGet,
 		ReqMethodPathSet,
+		ReqMethodMemoryForbiddenGet,
+		ReqMethodMemoryForbiddenSet,
+		ReqMethodPermissionsOwnerScopesGet,
+		ReqMethodPermissionsOwnerScopesSet,
 		ReqMethodFilesList,
 		ReqMethodFilesGet,
 		ReqMethodTTSSynthesize,
