@@ -415,11 +415,15 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 		m.mu.Unlock()
 		return false, nil
 	}
-	// expected_request_id 守卫（Python :3616-3630：active round request_id 匹配
-	// + inflight 集合全等 + _begin_request_stop）——Go TeamManager 缺
-	// _active_rounds/_inflight_requests 对应结构（25.1/25.2 域），guard 段
-	// ⤴️该结构回填时同批补齐（spec 附录 A3）；本批接收 expectedRequestID
-	// 形参并保持原停止流程。
+	// expected_request_id 守卫（Python :3616-3630）。回合账本已落（25.6 批三
+	// D-25.2b-15 回填）：active round 存在且请求不匹配 → 延迟回调/陈旧停止
+	// 拒绝。inflight 集合全等段与 _begin_request_stop（cron 移交窗口语义）
+	// 仍 ⤴️该结构消费面批（账本字段已就绪：inflightRequests/ExpectedRequestID）。
+	if current := m.activeRounds[sessionID]; current != nil && expectedRequestID != "" &&
+		current.RequestID != expectedRequestID {
+		m.mu.Unlock()
+		return false, nil
+	}
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasRunnerTeamAgent(sessionID) || m.hasMonitor(sessionID) ||
@@ -491,11 +495,11 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 		m.mu.Unlock()
 		return false, nil
 	}
-	// expected_request_id 守卫（Python :3616-3630：active round request_id 匹配
-	// + inflight 集合全等 + _begin_request_stop）——Go TeamManager 缺
-	// _active_rounds/_inflight_requests 对应结构（25.1/25.2 域），guard 段
-	// ⤴️该结构回填时同批补齐（spec 附录 A3）；本批接收 expectedRequestID
-	// 形参并保持原停止流程。
+	// expected_request_id 守卫（Python :3616-3630）。回合账本已落（25.6 批三
+	// D-25.2b-15 回填，StopSessionRuntime 侧已接 active round 匹配判定）；
+	// pause 侧 expected 形参与 inflight 集合全等段（_begin_request_stop cron
+	// 移交窗口语义）⤴️pause 调用方传参批（账本字段就绪：activeRounds/
+	// inflightRequests/ExpectedRequestID）。
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||

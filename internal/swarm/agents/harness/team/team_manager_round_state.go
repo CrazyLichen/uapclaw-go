@@ -16,6 +16,8 @@ package team
 import (
 	"fmt"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -196,7 +198,53 @@ func (m *TeamManager) RemoveWaiter(sessionID, requestID string, generation *int)
 // broadcastEvent 同款既定差异）。返回是否至少一个等待者收到事件。
 // Python: broadcast_event (team_manager.py L676-790+)。
 func (m *TeamManager) BroadcastEvent(sessionID, eventType string, payload map[string]any, channelID string) bool {
+	terminal := eventType == "chat.processing_status" &&
+		payload["is_processing"] == false && payload["is_complete"] == true
+
 	m.mu.Lock()
+	// 回合账本段（Python broadcast_event :717-751）：
+	// unarmed terminal 丢弃——持久 Runner 流在上回合释放后吐出的幽灵终态帧
+	// 会误关新回合的 exclusive waiter，未武装即丢弃（:718-728）。
+	if current := m.activeRounds[sessionID]; current != nil {
+		if terminal && !current.TerminalArmed {
+			logger.Info(logComponent).
+				Str("session_id", sessionID).Str("request_id", current.RequestID).
+				Msg("ignored unarmed terminal")
+			m.mu.Unlock()
+			return false
+		}
+		// 非终态事件武装回合（:733-735）
+		if !terminal {
+			current.TerminalArmed = true
+		}
+		// flow 终态见证即记录（:738-741）——无论有没有 waiter
+		if m.isWorkflowTerminalEventLocked(eventType, payload) {
+			current.SawFlowTerminal = true
+		}
+		// team.task 归档守卫记账（:726-737）
+		if eventType == "team.task" {
+			if task, ok := payload["event"].(map[string]any); ok {
+				if taskID, _ := task["task_id"].(string); taskID != "" {
+					status, _ := task["status"].(string)
+					taskType, _ := task["type"].(string)
+					if status == "completed" || status == "cancelled" || status == "failed" ||
+						strings.HasSuffix(taskType, ".completed") ||
+						strings.HasSuffix(taskType, ".cancelled") ||
+						strings.HasSuffix(taskType, ".verified") {
+						delete(current.OpenArchiveTasks, taskID)
+					} else if status != "" || strings.HasSuffix(taskType, ".created") ||
+						strings.HasSuffix(taskType, ".started") ||
+						strings.HasSuffix(taskType, ".claimed") {
+						current.OpenArchiveTasks[taskID] = true
+					}
+				}
+			}
+		}
+		// flow 终态后的 tool_call/ask_user 视为「flow 后仍有执行」（:743-751）
+		if current.SawFlowTerminal && (eventType == "chat.tool_call" || eventType == "chat.ask_user_question") {
+			current.ContinuedAfterFlow = true
+		}
+	}
 	// Python: waiters = self._select_broadcast_waiters(session_id)（:760）——
 	// 择一上游（exclusive>input>attach[:1]），非全量 fan-out。
 	waiters := m.selectBroadcastWaitersLocked(sessionID)
@@ -334,4 +382,302 @@ func (m *TeamManager) SessionWaiterIDs(sessionID string) []string {
 		ids = append(ids, w.RequestID)
 	}
 	return ids
+}
+
+// ──────────────────────────── 回合账本（25.6 批三回填，D-25.2b-15） ────────────────────────────
+
+// ActiveTeamRound 一个已提交团队交互回合的进程内所有权账本。
+// Python: _ActiveTeamRound (team_manager.py:259-271)。
+type ActiveTeamRound struct {
+	// RequestID 本回合绑定的请求标识
+	RequestID string
+	// Generation 会话代次（绑定时快照）
+	Generation int
+	// DeferTerminalRelease 终态事件暂缓释放回合（cron 移交窗口等）
+	DeferTerminalRelease bool
+	// TerminalArmed 武装开关：本回合见证过任何非终态事件后置位；
+	// 之后的终态帧才被接受。回合开始即 unarmed——持久 Runner 流在上一
+	// 回合释放后吐出的幽灵终态帧（armed=False）会被丢弃，防止误关
+	// 新回合的 exclusive waiter。
+	// Python: terminal_armed (team_manager.py:260)。
+	TerminalArmed bool
+	// SawFlowTerminal 本回合见证过 swarmflow/workflow 终态事件
+	// Python: saw_flow_terminal (team_manager.py:262-264)
+	SawFlowTerminal bool
+	// ContinuedAfterFlow flow 终态之后仍有执行（终态重放不得掩盖后续执行）
+	// Python: continued_after_flow (team_manager.py:265)
+	ContinuedAfterFlow bool
+	// OpenArchiveTasks 归档守卫跟踪的未完结任务 id 集合
+	// Python: open_archive_tasks (team_manager.py:266)
+	OpenArchiveTasks map[string]bool
+	// ReleaseAdmission 回合释放时的准入归还回调（nil 跳过）
+	// Python: release_admission (team_manager.py:261)。Go 为同步形态
+	// （Python Awaitable——当前调用方均无异步归还需求）。
+	ReleaseAdmission func()
+}
+
+// BeginRound 绑定回合所有权到请求。
+// Python: begin_round (team_manager.py:1003-1035)。已活跃回合存在时报错
+// 语义在 Go 以返回 error 承载（Python RuntimeError）。
+func (m *TeamManager) BeginRound(sessionID, requestID string, generation *int, releaseAdmission func(), deferTerminalRelease, terminalArmed bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if generation != nil {
+		m.sessionGenerations[sessionID] = *generation
+	}
+	if current := m.activeRounds[sessionID]; current != nil {
+		return fmt.Errorf("team round already active for session %s: %s", sessionID, current.RequestID)
+	}
+	gen := 0
+	if generation != nil {
+		gen = *generation
+	} else {
+		gen = m.sessionGenerations[sessionID]
+	}
+	m.activeRounds[sessionID] = &ActiveTeamRound{
+		RequestID:            requestID,
+		Generation:           gen,
+		ReleaseAdmission:     releaseAdmission,
+		DeferTerminalRelease: deferTerminalRelease,
+		TerminalArmed:        terminalArmed,
+		OpenArchiveTasks:     map[string]bool{},
+	}
+	return nil
+}
+
+// FinishRound 运行时终态事件收尾当前回合。
+// Python: finish_round (team_manager.py:1038-1043)。
+func (m *TeamManager) FinishRound(sessionID string) bool {
+	m.mu.Lock()
+	current := m.activeRounds[sessionID]
+	deferTerminal := current != nil && current.DeferTerminalRelease
+	var requestID string
+	if current != nil {
+		requestID = current.RequestID
+	}
+	m.mu.Unlock()
+	if current == nil || deferTerminal {
+		return false
+	}
+	return m.ReleaseRound(sessionID, requestID, nil)
+}
+
+// ReleaseRound 幂等释放一个回合及其准入租约。
+// Python: release_round (team_manager.py:1046-1082)。
+func (m *TeamManager) ReleaseRound(sessionID, requestID string, generation *int) bool {
+	m.mu.Lock()
+	current := m.activeRounds[sessionID]
+	if current == nil || current.RequestID != requestID {
+		m.mu.Unlock()
+		return false
+	}
+	if generation != nil && current.Generation != *generation {
+		m.mu.Unlock()
+		return false
+	}
+	delete(m.activeRounds, sessionID)
+	// 回合终态同时结束该 turn 的在飞窗口（归档闸门不再把已完结会话当运行中）
+	m.endRequestLocked(sessionID, requestID, generation)
+	// 流还在时记录"回合已结束的请求"——挂在其持久流上的 handler 据此
+	// 被归档闸门豁免；流已不在时保留会泄漏并可能被误认为未来回合。
+	if _, hasTask := m.streamTasks[sessionID]; hasTask {
+		if m.roundEndedRequests[sessionID] == nil {
+			m.roundEndedRequests[sessionID] = map[string]bool{}
+		}
+		m.roundEndedRequests[sessionID][requestID] = true
+	}
+	releaseAdmission := current.ReleaseAdmission
+	m.mu.Unlock()
+
+	if releaseAdmission != nil {
+		releaseAdmission()
+	}
+	return true
+}
+
+// ReleaseCurrentRound 释放持有刚终止流的那个回合。
+// Python: release_current_round (team_manager.py:1084-1090)。
+func (m *TeamManager) ReleaseCurrentRound(sessionID string) bool {
+	m.mu.Lock()
+	current := m.activeRounds[sessionID]
+	var requestID string
+	if current != nil {
+		requestID = current.RequestID
+	}
+	m.mu.Unlock()
+	if current == nil {
+		return false
+	}
+	return m.ReleaseRound(sessionID, requestID, nil)
+}
+
+// IsRoundActive 会话是否有活跃回合（区别于传输层活跃）。
+// Python: is_round_active (team_manager.py:1092-1094)。
+func (m *TeamManager) IsRoundActive(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.activeRounds[sessionID]
+	return ok
+}
+
+// RoundCanFinishAfterFlow 回合是否见过 flow 终态且无未完结/后续工作。
+// Python: round_can_finish_after_flow (team_manager.py:1096-1103)。
+func (m *TeamManager) RoundCanFinishAfterFlow(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.activeRounds[sessionID]
+	return current != nil && current.SawFlowTerminal &&
+		!current.ContinuedAfterFlow && len(current.OpenArchiveTasks) == 0
+}
+
+// IsRoundOwner 回合是否由指定请求持有。
+// Python: is_round_owner (team_manager.py:1105-1108)。
+func (m *TeamManager) IsRoundOwner(sessionID, requestID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.activeRounds[sessionID]
+	return current != nil && current.RequestID == requestID
+}
+
+// IsRoundEndedRequest 该请求的团队回合是否已释放。
+// Python: is_round_ended_request (team_manager.py:1110-1116)。
+func (m *TeamManager) IsRoundEndedRequest(sessionID, requestID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.roundEndedRequests[sessionID][requestID]
+}
+
+// BeginRequest 标记一个在飞团队 turn（适配器在 begin_round 前即调用——
+// spec 组装/MCP 预检/运行时激活窗口内会话不能看起来空闲）。
+// Python: begin_request (team_manager.py:515-533)。
+func (m *TeamManager) BeginRequest(sessionID, requestID string, generation *int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.beginRequestLocked(sessionID, requestID, generation)
+}
+
+// beginRequestLocked BeginRequest 的锁内实现。
+func (m *TeamManager) beginRequestLocked(sessionID, requestID string, generation *int) {
+	if generation != nil {
+		m.sessionGenerations[sessionID] = *generation
+	}
+	normalized := requestID
+	if m.inflightRequests[sessionID] == nil {
+		m.inflightRequests[sessionID] = map[string]bool{}
+	}
+	m.inflightRequests[sessionID][normalized] = true
+	if generation != nil {
+		m.requestGenerations[[2]string{sessionID, normalized}] = *generation
+	}
+}
+
+// EndRequest 幂等释放一个在飞团队 turn。
+// Python: end_request (team_manager.py:535-551)。
+func (m *TeamManager) EndRequest(sessionID, requestID string, generation *int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.endRequestLocked(sessionID, requestID, generation)
+}
+
+// endRequestLocked EndRequest 的锁内实现。
+func (m *TeamManager) endRequestLocked(sessionID, requestID string, generation *int) {
+	normalized := requestID
+	key := [2]string{sessionID, normalized}
+	if generation != nil {
+		if expected, ok := m.requestGenerations[key]; ok && expected != *generation {
+			return
+		}
+	}
+	requests := m.inflightRequests[sessionID]
+	if requests == nil {
+		return
+	}
+	delete(requests, normalized)
+	delete(m.requestGenerations, key)
+	if len(requests) == 0 {
+		delete(m.inflightRequests, sessionID)
+	}
+}
+
+// HasInflightRequest 会话是否有在飞团队 turn。
+// Python: has_inflight_request (team_manager.py:553-554)。
+func (m *TeamManager) HasInflightRequest(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.inflightRequests[sessionID]) > 0
+}
+
+// MarkSawFlowTerminal 记录本回合见证 flow 终态（broadcast_event 内调用）。
+// Python: broadcast_event 内 current_round.saw_flow_terminal 置位（:738-741）。
+func (m *TeamManager) MarkSawFlowTerminal(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if current := m.activeRounds[sessionID]; current != nil {
+		current.SawFlowTerminal = true
+	}
+}
+
+// MarkContinuedAfterFlow 记录 flow 终态后仍有执行。
+// Python: broadcast_event 内 continued_after_flow 置位（:744-751）。
+func (m *TeamManager) MarkContinuedAfterFlow(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if current := m.activeRounds[sessionID]; current != nil {
+		current.ContinuedAfterFlow = true
+	}
+}
+
+// TrackArchiveTask 归档守卫任务状态记账（completed/cancelled/failed 出集，
+// created/started/claimed 入集）。
+// Python: broadcast_event 内 open_archive_tasks 维护（:726-737）。
+func (m *TeamManager) TrackArchiveTask(sessionID, taskID, status, taskType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.activeRounds[sessionID]
+	if current == nil || taskID == "" {
+		return
+	}
+	if status == "completed" || status == "cancelled" || status == "failed" ||
+		strings.HasSuffix(taskType, ".completed") ||
+		strings.HasSuffix(taskType, ".cancelled") ||
+		strings.HasSuffix(taskType, ".verified") {
+		delete(current.OpenArchiveTasks, taskID)
+		return
+	}
+	if status != "" || strings.HasSuffix(taskType, ".created") ||
+		strings.HasSuffix(taskType, ".started") ||
+		strings.HasSuffix(taskType, ".claimed") {
+		current.OpenArchiveTasks[taskID] = true
+	}
+}
+
+// ExpectedRequestID 当前活跃回合的请求标识（无回合时空串）。
+// StopSessionRuntime expected_request_id guard 的读取面
+// （team_manager_lifecycle.go :420/:496 两个等待点）。
+func (m *TeamManager) ExpectedRequestID(sessionID string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if current := m.activeRounds[sessionID]; current != nil {
+		return current.RequestID
+	}
+	return ""
+}
+
+// isWorkflowTerminalEventLocked 事件是否为携带终态状态的 workflow.updated。
+// Python: _is_workflow_terminal_event (team_manager.py:869-877)。
+func (m *TeamManager) isWorkflowTerminalEventLocked(eventType string, event map[string]any) bool {
+	if eventType != "workflow.updated" && event["event_type"] != "workflow.updated" {
+		return false
+	}
+	status := ""
+	if workflow, ok := event["workflow"].(map[string]any); ok {
+		status, _ = workflow["status"].(string)
+	} else {
+		status, _ = event["status"].(string)
+	}
+	switch status {
+	case "stopped", "paused", "completed", "failed":
+		return true
+	}
+	return false
 }

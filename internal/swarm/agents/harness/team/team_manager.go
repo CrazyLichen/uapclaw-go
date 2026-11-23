@@ -116,6 +116,15 @@ type TeamManager struct {
 	roundStateReporter func(sessionID string, generation int, running bool)
 	// pendingWaitersTM 会话级等待者（与 adapter 层 channel 级 pendingWaiters 分立）。
 	pendingWaitersTM map[string][]tmPendingWaiter
+	// ── 回合账本（25.6 批三回填，D-25.2b-15；Python team_manager.py:364/:395）──
+	// activeRounds 会话 → 当前活跃回合（BeginRound/ReleaseRound 维护）
+	activeRounds map[string]*ActiveTeamRound
+	// inflightRequests 会话 → 在飞请求集合（BeginRequest/EndRequest 维护）
+	inflightRequests map[string]map[string]bool
+	// requestGenerations (sessionID, requestID) → 代次（EndRequest 代次守卫）
+	requestGenerations map[[2]string]int
+	// roundEndedRequests 会话 → 已释放回合的请求集合（归档闸门豁免）
+	roundEndedRequests map[string]map[string]bool
 	// pushFallback 无 waiter 终态帧的 server-push 兜底（D-25.3-1，SetPushFallback 注入）
 	pushFallback func(channelID, sessionID string, payload map[string]any)
 	// waiterGenerations (session\x00request) → 登记代次。
@@ -162,6 +171,10 @@ func NewTeamManager() *TeamManager {
 	broadcast := snapshotTeamCallbackDefaults()
 	return &TeamManager{
 		onEventBroadcast:        broadcast,
+		activeRounds:            make(map[string]*ActiveTeamRound),
+		inflightRequests:        make(map[string]map[string]bool),
+		requestGenerations:      make(map[[2]string]int),
+		roundEndedRequests:      make(map[string]map[string]bool),
 		teamAgents:              make(map[string]*agent.TeamAgent),
 		runnerTeamAgents:        make(map[string]*agent.TeamAgent),
 		teamMonitors:            make(map[string]TeamMonitorHandler),

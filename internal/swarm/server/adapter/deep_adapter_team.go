@@ -230,6 +230,29 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	// 对齐 Python: if not team_manager.has_stream_task(session_id)
 	isFirstRequest := !teamManager.HasStreamTask(sessionID)
 
+	// 回合账本·在飞登记（Python team_helpers.py:2995-3010 begin_request）：
+	// 适配器从进入起即算「运行中」——spec 组装/运行时激活窗口也要覆盖，
+	// 收尾 defer EndRequest（幂等）。
+	teamManager.BeginRequest(sessionID, req.RequestID, nil)
+	defer func() {
+		teamManager.EndRequest(sessionID, req.RequestID, nil)
+	}()
+
+	// 回合账本·回合绑定（Python _begin_round_adapter team_helpers.py:655-671）：
+	// terminal_armed=false（回合开始未武装——防上回合幽灵终态误关本回合）。
+	if beginErr := teamManager.BeginRound(sessionID, req.RequestID, nil, nil, false, false); beginErr != nil {
+		// 已有活跃回合：本请求不绑定回合（Python RuntimeError 被 except 转为
+		// 沿用既有回合——择一/武装逻辑按既有回合运转）
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).Str("request_id", req.RequestID).
+			Err(beginErr).
+			Msg("begin_round skipped: round already active")
+	} else {
+		defer func() {
+			teamManager.FinishRound(sessionID)
+		}()
+	}
+
 	go func() {
 		defer close(ch)
 
@@ -672,6 +695,9 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 		tm := team.GetTeamManager(channelID)
 		tm.ClearPendingRuntime(sessionID)
 		tm.PopStreamTask(sessionID)
+		// 回合账本：流终止释放持有它的回合（Python team_helpers.py:5158
+		// release_current_round——挂在其持久流上的 handler 由此解绑）
+		tm.ReleaseCurrentRound(sessionID)
 	}()
 
 	// S-44: 对齐 Python consume_stream_with_query 的 except Exception 块——

@@ -1,6 +1,7 @@
 package team
 
 import (
+	"context"
 	"testing"
 )
 
@@ -276,5 +277,117 @@ func TestBroadcastEvent_择一投递(t *testing.T) {
 	m.BroadcastEvent("s-bd", "team.task", map[string]any{"delta": 2}, "")
 	if len(attCh) != 1 {
 		t.Fatalf("attach must receive after exclusive gone, got %d", len(attCh))
+	}
+}
+
+// TestRoundLedger 回合账本全生命周期（Python begin_round/finish_round/
+// release_round/is_round_active :1003-1116）。
+func TestRoundLedger(t *testing.T) {
+	m := newRoundStateTM()
+	gen := 1
+
+	// 已活跃回合再绑定 → 报错（Python RuntimeError）
+	if err := m.BeginRound("s-rl", "req-1", &gen, nil, false, false); err != nil {
+		t.Fatalf("first bind must succeed: %v", err)
+	}
+	if err := m.BeginRound("s-rl", "req-2", &gen, nil, false, false); err == nil {
+		t.Fatal("second bind must fail while round active")
+	}
+	if !m.IsRoundActive("s-rl") || !m.IsRoundOwner("s-rl", "req-1") {
+		t.Fatal("round must be active and owned by req-1")
+	}
+
+	// unarmed terminal：未武装时终态广播被丢弃（幽灵终态防护）
+	if m.BroadcastEvent("s-rl", "chat.processing_status",
+		map[string]any{"is_processing": false, "is_complete": true}, "") {
+		t.Fatal("unarmed terminal must be dropped")
+	}
+	// 非终态事件武装回合
+	m.BroadcastEvent("s-rl", "team.task", map[string]any{"event": map[string]any{"task_id": "t1", "status": "started", "type": "x.started"}}, "")
+	// 武装后的终态正常投递；team.task 记账入 open_archive_tasks
+	if m.IsRoundOwner("s-rl", "req-1") {
+		m.mu.Lock()
+		r := m.activeRounds["s-rl"]
+		if !r.TerminalArmed {
+			t.Fatal("round must be armed after non-terminal event")
+		}
+		if !r.OpenArchiveTasks["t1"] {
+			t.Fatal("started task must enter open_archive_tasks")
+		}
+		m.mu.Unlock()
+	}
+
+	// FinishRound 释放（含 EndRequest 级联 + 流在场记 round_ended）
+	streamCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.RegisterStreamTask("s-rl", cancel)
+	_ = streamCtx
+	if !m.FinishRound("s-rl") {
+		t.Fatal("finish must release armed round")
+	}
+	if m.IsRoundActive("s-rl") {
+		t.Fatal("round must be released")
+	}
+	if !m.IsRoundEndedRequest("s-rl", "req-1") {
+		t.Fatal("released round must be recorded as ended (stream still present)")
+	}
+
+	// 释放后重新绑定允许
+	if err := m.BeginRound("s-rl", "req-2", &gen, nil, false, false); err != nil {
+		t.Fatalf("rebind after release must succeed: %v", err)
+	}
+}
+
+// TestInflightRequests 在飞窗口（Python begin_request/end_request :515-554）。
+func TestInflightRequests(t *testing.T) {
+	m := newRoundStateTM()
+	m.BeginRequest("s-ir", "req-1", nil)
+	if !m.HasInflightRequest("s-ir") {
+		t.Fatal("begin_request must register in-flight")
+	}
+	m.EndRequest("s-ir", "req-1", nil)
+	if m.HasInflightRequest("s-ir") {
+		t.Fatal("end_request must be idempotent release")
+	}
+	// 代次守卫：代次不符的 end 不动作
+	g1, g2 := 1, 2
+	m.BeginRequest("s-ir2", "req-1", &g1)
+	m.EndRequest("s-ir2", "req-1", &g2)
+	if !m.HasInflightRequest("s-ir2") {
+		t.Fatal("mismatched-generation end must not release")
+	}
+}
+
+// TestWorkflowTerminalRounds flow 终态见证与归档收尾探测
+// （Python _is_workflow_terminal_event :869 + round_can_finish_after_flow :1096）。
+func TestWorkflowTerminalRounds(t *testing.T) {
+	m := newRoundStateTM()
+	gen := 1
+	m.BeginRound("s-wf", "req-1", &gen, nil, false, false)
+	// workflow.updated 终态 → saw_flow_terminal
+	m.BroadcastEvent("s-wf", "workflow.updated",
+		map[string]any{"workflow": map[string]any{"status": "completed"}}, "")
+	m.mu.Lock()
+	r := m.activeRounds["s-wf"]
+	armed := r.TerminalArmed
+	sawFlow := r.SawFlowTerminal
+	m.mu.Unlock()
+	// flow 终态是非终态帧类型（chat.processing_status 才是终态）→ 应武装
+	if !armed {
+		t.Fatal("non-terminal frame must arm the round")
+	}
+	if !sawFlow {
+		t.Fatal("workflow terminal must be recorded")
+	}
+	// flow 后 tool_call → continued_after_flow
+	m.BroadcastEvent("s-wf", "chat.tool_call", map[string]any{}, "")
+	if !m.RoundCanFinishAfterFlow("s-wf") {
+		// continued_after_flow 置位 → 不可收尾
+		m.mu.Lock()
+		c := m.activeRounds["s-wf"].ContinuedAfterFlow
+		m.mu.Unlock()
+		if !c {
+			t.Fatal("tool_call after flow must mark continued")
+		}
 	}
 }
