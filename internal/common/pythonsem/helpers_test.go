@@ -15,6 +15,27 @@ func TestIsBool_IsInt_PyInt(t *testing.T) {
 	}
 }
 
+// TestPyIntConvert 验证 Python int(x) 宽转换：bool→0/1、float 截断、字符串解析、失败 false
+func TestPyIntConvert(t *testing.T) {
+	cases := []struct {
+		value any
+		want  int64
+		ok    bool
+	}{
+		{true, 1, true}, {false, 0, true},
+		{7, 7, true}, {int64(8), 8, true},
+		{200.0, 200, true}, {200.9, 200, true}, // int(float) 截断
+		{"200", 200, true}, {" 200 ", 200, true}, {"abc", 0, false},
+		{nil, 0, false}, {map[string]any{}, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := PyIntConvert(c.value)
+		if ok != c.ok || (ok && got != c.want) {
+			t.Fatalf("PyIntConvert(%v) = (%d,%v), want (%d,%v)", c.value, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 // TestIsNumber 验证 _is_number：排除 bool、含 int/int64/有限 float
 func TestIsNumber(t *testing.T) {
 	cases := []struct {

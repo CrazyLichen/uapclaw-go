@@ -74,6 +74,33 @@ func PyInt(value any) int64 {
 	}
 }
 
+// PyIntConvert 复刻 Python int(x) 宽转换（8.21 ToolComp int(code) 先例）：
+// bool→0/1、int/int64 直取、float64 截断取整、十进制字符串解析；
+// 其余类型（None/dict/list 等）转换失败 → (0, false)，≙ Python ValueError/TypeError。
+func PyIntConvert(value any) (int64, bool) {
+	switch v := value.(type) {
+	case bool:
+		if v {
+			return 1, true
+		}
+		return 0, true
+	case int:
+		return int64(v), true
+	case int64:
+		return v, true
+	case float64:
+		return int64(v), true
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
 // PyFloat 数值转 float64（非数值返回 NaN，调用方以 IsNumber/IsBool 先行判定）。
 func PyFloat(value any) float64 {
 	switch v := value.(type) {
