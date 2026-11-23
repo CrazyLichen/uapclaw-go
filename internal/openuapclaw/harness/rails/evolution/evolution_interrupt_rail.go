@@ -12,6 +12,7 @@ import (
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 )
 
@@ -40,7 +41,9 @@ var activeEvolutionToolOperations = map[string]string{
 type EvolutionInterruptRail struct {
 	interrupt.BaseInterruptRail
 	// reviewRuntime 审查运行时（configure 经 SkillEvolutionRail 绑定；可为 nil）
-	reviewRuntime *reviewRuntimeRef
+	// reviewRuntime 审查运行时（configure 经 SkillEvolutionRail 绑定；可为 nil）。
+	// review 为本包子包，父→子导入无环（2026-11-23 审查修正：原空结构体占位废除）。
+	reviewRuntime *review.EvolutionReviewRuntime
 	// submissionService 提交服务（configure 经 SkillEvolutionRail 绑定；可为 nil）。
 	// ⤴️ 工具链回填章节（15.24）：submission_service 依赖 agent_evolving
 	// ExperienceSubmissionService（submission.py 229 行，Go 未移植），
@@ -57,16 +60,10 @@ type EvolutionInterruptRail struct {
 // prepare_simplify_submission；具体实现随 15.24 工具链回填。
 type EvolutionSubmissionService interface {
 	// PrepareEvolveSubmission 预检 evolve 提交（对齐 prepare_evolve_submission）。
-	PrepareEvolveSubmission(reviewRuntime *reviewRuntimeRef, evolutionReviewRef string, subject map[string]any, selectedProposalIDs []string, sessionID string) (any, error)
+	PrepareEvolveSubmission(reviewRuntime *review.EvolutionReviewRuntime, evolutionReviewRef string, subject map[string]any, selectedProposalIDs []string, sessionID string) (*review.EvolutionProposalSelection, error)
 	// PrepareSimplifySubmission 预检 simplify 提交（对齐 prepare_simplify_submission）。
 	PrepareSimplifySubmission(subject map[string]any, actions []map[string]any) error
 }
-
-// reviewRuntimeRef 审查运行时占位引用。
-// ⤴️ 15.24：真实类型为 *review.EvolutionReviewRuntime；为避免 interrupt rail
-// 对 review 包的循环依赖（review 包未来将反向消费本 rail），此处以引用别名列，
-// 具体类型在 15.24 统一收编。
-type reviewRuntimeRef = struct{}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -98,7 +95,7 @@ func NewEvolutionInterruptRail() *EvolutionInterruptRail {
 
 // Configure 绑定由 SkillEvolutionRail 注入的运行时依赖。
 // Python: EvolutionInterruptRail.configure (evolution_interrupt_rail.py:55-68)
-func (r *EvolutionInterruptRail) Configure(reviewRuntime *reviewRuntimeRef, submissionService EvolutionSubmissionService, autoSave bool, language string) {
+func (r *EvolutionInterruptRail) Configure(reviewRuntime *review.EvolutionReviewRuntime, submissionService EvolutionSubmissionService, autoSave bool, language string) {
 	r.reviewRuntime = reviewRuntime
 	r.submissionService = submissionService
 	r.autoSave = autoSave
@@ -150,14 +147,13 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 		return r.rejectTool(cbc, fmt.Sprintf("unknown evolution tool: %s", toolName), nil)
 	}
 	var (
-		args    map[string]any
-		subject experience.EvolutionSubject
+		args     map[string]any
+		subject  experience.EvolutionSubject
+		resolved *review.EvolutionProposalSelection
 	)
 	// Python: try: args=_active_tool_args; subject=...to_payload(); resolved=await _preflight;
 	//         self._replace_active_tool_args
 	// except Exception: return self._reject_tool(...)
-	// 偏差：resolved（preflight 返回的 EvolutionProposalSelection）依赖 submission
-	// service 真实实现，15.24 回填；当前 preflight 仅做配置与形状校验。
 	if err := func() error {
 		var err error
 		args, err = activeToolArgs(cbc)
@@ -168,7 +164,8 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 		if err != nil {
 			return err
 		}
-		if err := r.preflight(operation, args, subject, cbc); err != nil {
+		resolved, err = r.preflight(operation, args, subject, cbc)
+		if err != nil {
 			return err
 		}
 		// Python: self._replace_active_tool_args(ctx, args)（步骤对齐；当前
@@ -192,7 +189,12 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 		return r.Approve(nil)
 	}
 
-	message := r.renderApprovalMessage(operation, subject.Name, subject.Kind, approvalCount(operation, args))
+	// Python: count = len(resolved.proposals)（evolve）/ len(actions)（simplify）(:187/:217)
+	count := len(objectListOrEmpty(args["actions"]))
+	if operation == "evolve" && resolved != nil {
+		count = len(resolved.Proposals)
+	}
+	message := r.renderApprovalMessage(operation, subject.Name, subject.Kind, count)
 	return r.Interrupt(&saschema.InterruptRequest{
 		Message:        message,
 		PayloadSchema:  actionPayloadSchema(),
@@ -204,22 +206,21 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 
 // preflight 提交预检。
 // Python: _preflight (evolution_interrupt_rail.py:116-138)
-// 偏差 ⤴️15.24：submission_service 的 prepare_evolve_submission /
-// prepare_simplify_submission 真实实现随工具链回填；此处校验配置存在性，
-// evolve 分支的 evolution_review_ref 解析、simplify 分支的动作校验委托接口实现。
-func (r *EvolutionInterruptRail) preflight(operation string, args map[string]any, subject experience.EvolutionSubject, cbc *agentinterfaces.AgentCallbackContext) error {
+// evolve 分支返回 submission 服务解析出的 proposal 选择载体（供审批消息渲染）；
+// simplify 分支返回 nil。偏差 ⤴️15.24：submission_service 的真实实现随工具链
+// 回填，接口实现方负责 evolution_review_ref 解析与动作校验语义。
+func (r *EvolutionInterruptRail) preflight(operation string, args map[string]any, subject experience.EvolutionSubject, cbc *agentinterfaces.AgentCallbackContext) (*review.EvolutionProposalSelection, error) {
 	if r.reviewRuntime == nil || r.submissionService == nil {
-		return fmt.Errorf("EvolutionInterruptRail is not configured")
+		return nil, fmt.Errorf("EvolutionInterruptRail is not configured")
 	}
 	sessionID := railSessionID(cbc)
 	if operation == "evolve" {
 		selected := stringListOrEmpty(args["selected_proposal_ids"])
 		ref := asEvolutionString(args["evolution_review_ref"])
-		_, err := r.submissionService.PrepareEvolveSubmission(r.reviewRuntime, ref, subject.ToPayload(), selected, sessionID)
-		return err
+		return r.submissionService.PrepareEvolveSubmission(r.reviewRuntime, ref, subject.ToPayload(), selected, sessionID)
 	}
 	actions := objectListOrEmpty(args["actions"])
-	return r.submissionService.PrepareSimplifySubmission(subject.ToPayload(), actions)
+	return nil, r.submissionService.PrepareSimplifySubmission(subject.ToPayload(), actions)
 }
 
 // resolveUserInput 用户输入四分支。
@@ -287,15 +288,6 @@ func (r *EvolutionInterruptRail) renderApprovalMessage(operation string, subject
 		return fmt.Sprintf("Approve %d skill experience simplification action(s) for `%s` (%s)?", count, subjectName, subjectKind)
 	}
 	return fmt.Sprintf("是否批准 `%s` (%s) 的 %d 项 Skill 经验精简操作？", subjectName, subjectKind, count)
-}
-
-// approvalCount 计算审批条目数（evolve：proposal 数；simplify：actions 数）。
-// Python: len(proposals)/len(actions) (:187/:217)
-func approvalCount(operation string, args map[string]any) int {
-	if operation == "evolve" {
-		return len(objectListOrEmpty(args["selected_proposal_ids"]))
-	}
-	return len(objectListOrEmpty(args["actions"]))
 }
 
 // approvalUIOptions 审批 UI 选项（双语）。

@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 )
 
@@ -23,7 +24,7 @@ func newEvolutionTestContext(t *testing.T, toolName string, toolArgs map[string]
 // stubSubmissionService 测试用提交服务桩（15.24 真实实现回填前的占位）。
 type stubSubmissionService struct{}
 
-func (s *stubSubmissionService) PrepareEvolveSubmission(_ *reviewRuntimeRef, _ string, _ map[string]any, _ []string, _ string) (any, error) {
+func (s *stubSubmissionService) PrepareEvolveSubmission(_ *review.EvolutionReviewRuntime, _ string, _ map[string]any, _ []string, _ string) (*review.EvolutionProposalSelection, error) {
 	return nil, nil
 }
 
@@ -34,7 +35,7 @@ func (s *stubSubmissionService) PrepareSimplifySubmission(_ map[string]any, _ []
 // newConfiguredRail 构造已配置依赖的 rail（Python preflight 要求已配置才能走到后续分支）。
 func newConfiguredRail() *EvolutionInterruptRail {
 	rail := NewEvolutionInterruptRail()
-	rail.Configure(&reviewRuntimeRef{}, &stubSubmissionService{}, false, "cn")
+	rail.Configure(&review.EvolutionReviewRuntime{}, &stubSubmissionService{}, false, "cn")
 	return rail
 }
 
