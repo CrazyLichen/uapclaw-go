@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
@@ -41,8 +42,10 @@ type OrganizationModelBackend interface {
 	LoadTeamModel(teamID, sessionID string) (TeamModelSetting, bool)
 	// ResolveTeamModel 解析 selection 并构造可用模型，返回模型、
 	// 签名输入（Python: compiled.model_dump_json(exclude client_id) 的 payload）。
-	// Python: resolve_team_model(setting.selection) + Model(...) 构造
-	ResolveTeamModel(setting TeamModelSetting) (model any, signaturePayload string, ok bool)
+	// Python: resolve_team_model(setting.selection) + Model(...) 构造。
+	// 25.9 装配真实 backend；返回 *llm.Model 具体类型（2026-12-22 收紧，
+	// 消除 any 回避——team/rails → core/foundation/llm 无环）。
+	ResolveTeamModel(setting TeamModelSetting) (model *llm.Model, signaturePayload string, ok bool)
 }
 
 // OrganizationModelRail 在下一次 native 成员模型调用时应用持久专家 Team 模型。
@@ -62,7 +65,7 @@ type OrganizationModelRail struct {
 	// signature 上次应用的 payload 签名（Python: self._signature）
 	signature string
 	// model 上次应用的模型实例（Python: self._model）
-	model any
+	model *llm.Model
 	// builder init 时捕获的提示词构建器（Python: self._builder）
 	builder saprompt.SystemPromptBuilderInterface
 }
@@ -199,7 +202,7 @@ func (r *OrganizationModelRail) BeforeModelCall(_ context.Context, cbc *agentint
 	signature := sha256Hex(payload)
 	agent := cbc.Agent()
 	setter, canSet := agent.(interface {
-		SetLLM(model any)
+		SetLLM(model *llm.Model)
 	})
 	if !canSet {
 		return fmt.Errorf("Persistent Team model requires an agent with a callable set_llm")
@@ -314,18 +317,22 @@ func (r *OrganizationModelRail) loadTeamModelFor(teamID string) (TeamModelSettin
 }
 
 // liveModelOf 读取 agent 的活模型（Python: get_llm()，ValueError → None）。
-func (r *OrganizationModelRail) liveModelOf(agent agentinterfaces.BaseAgent) any {
+func (r *OrganizationModelRail) liveModelOf(agent agentinterfaces.BaseAgent) *llm.Model {
 	getter, canGet := agent.(interface {
-		GetLLM() any
+		GetLLM() (*llm.Model, error)
 	})
 	if !canGet {
 		return nil
 	}
-	return getter.GetLLM()
+	m, err := getter.GetLLM()
+	if err != nil {
+		return nil
+	}
+	return m
 }
 
 // applyModel 应用模型（Python: set_llm(model)）。
-func (r *OrganizationModelRail) applyModel(setter interface{ SetLLM(model any) }, model any) error {
+func (r *OrganizationModelRail) applyModel(setter interface{ SetLLM(model *llm.Model) }, model *llm.Model) error {
 	setter.SetLLM(model)
 	return nil
 }

@@ -15,6 +15,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -312,23 +313,27 @@ func (f *fakeOrgModelBackend) LoadTeamModel(teamID, sessionID string) (TeamModel
 	return f.setting, f.hasSetting
 }
 
-func (f *fakeOrgModelBackend) ResolveTeamModel(setting TeamModelSetting) (any, string, bool) {
+func (f *fakeOrgModelBackend) ResolveTeamModel(setting TeamModelSetting) (*llm.Model, string, bool) {
 	if !f.resolved {
 		return nil, "", false
 	}
-	model := "resolved-model"
-	return model, "payload-1", true
+	return &llm.Model{ModelConfig: &llmschema.ModelRequestConfig{ModelName: "resolved-model"}}, "payload-1", true
 }
 
 // fakeLLMAgent 支持读写 LLM 的测试 agent（对齐 Python set_llm/get_llm）。
 type fakeLLMAgent struct {
 	*fakeRailsAgent
 	hinterfaces.UnimplementedDeepAgentInteraction
-	model any
+	model *llm.Model
 }
 
-func (f *fakeLLMAgent) SetLLM(model any) { f.model = model }
-func (f *fakeLLMAgent) GetLLM() any      { return f.model }
+func (f *fakeLLMAgent) SetLLM(model *llm.Model) { f.model = model }
+func (f *fakeLLMAgent) GetLLM() (*llm.Model, error) {
+	if f.model == nil {
+		return nil, errors.New("no model")
+	}
+	return f.model, nil
+}
 
 // TestOrganizationModel_Init注入策略节 对齐 Python init：leader 注入双语策略节。
 func TestOrganizationModel_Init注入策略节(t *testing.T) {
@@ -364,7 +369,7 @@ func TestOrganizationModel_BeforeModelCall_selection节与模型应用(t *testin
 
 	// 第一次调用：注入 selection 节 + 应用模型
 	require.NoError(t, rail.BeforeModelCall(context.Background(), newModelCallCBC(agent)))
-	assert.Equal(t, "resolved-model", agent.model)
+	assert.Equal(t, "resolved-model", agent.model.ModelConfig.ModelName)
 	secs := sectionsOf(agent.builder)
 	require.Len(t, secs, 2)
 	assert.Equal(t, "organization_team_model_selection", secs[1].Name)

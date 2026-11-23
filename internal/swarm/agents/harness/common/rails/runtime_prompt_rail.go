@@ -25,6 +25,7 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
@@ -1084,9 +1085,11 @@ func configuredModelNames() []string {
 // Python: _agent_model (runtime_prompt_rail.py:319-344)。
 // 偏差：Go ReActAgent/DeepAgent 经 SetLLM 注入模型，GetLLM 读取；
 // model-group 内层 agent 探测段以 ReactAgent() 访问器承接。
-func (r *RuntimePromptRail) agentModelOf(cbc *agentinterfaces.AgentCallbackContext) (llmModel, config any) {
+func (r *RuntimePromptRail) agentModelOf(cbc *agentinterfaces.AgentCallbackContext) (*llm.Model, agentinterfaces.AgentConfig) {
 	agent := r.agentOf(cbc)
 
+	var llmModel *llm.Model
+	var config agentinterfaces.AgentConfig
 	if getter, ok := agent.(interface {
 		GetLLM() (*llm.Model, error)
 	}); ok {
@@ -1094,7 +1097,16 @@ func (r *RuntimePromptRail) agentModelOf(cbc *agentinterfaces.AgentCallbackConte
 			llmModel = m
 		}
 	}
+	// Python: config = getattr(agent, "config", None)——活模型缺失时承载
+	// model_config_obj / model_name 回退（_agent_model_name 的 2/3 级）。
+	if cfgGetter, ok := agent.(interface {
+		Config() agentinterfaces.AgentConfig
+	}); ok {
+		config = cfgGetter.Config()
+	}
 	if llmModel == nil {
+		// Python: model-group agent 经内层 ReActAgent 读模型，使
+		// before_invoke 与 before_model_call 渲染同一 runtime 状态。
 		if deepAgent, ok := agent.(interface {
 			ReactAgent() *agents.ReActAgent
 		}); ok {
@@ -1105,16 +1117,32 @@ func (r *RuntimePromptRail) agentModelOf(cbc *agentinterfaces.AgentCallbackConte
 			}
 		}
 	}
-	return llmModel, nil
+	return llmModel, config
 }
 
 // agentModelName 读取回调的活模型名，而非共享 session 模型。
 //
-// Python: _agent_model_name (runtime_prompt_rail.py:346-360)
+// Python: _agent_model_name (runtime_prompt_rail.py:346-360)——三级回退：
+// model.model_config → config.model_config_obj → config.model_name。
+// Model calls run on the inner ReActAgent; before_invoke can run on the
+// outer DeepAgent, whose config holds the same Model directly.
 func (r *RuntimePromptRail) agentModelName(cbc *agentinterfaces.AgentCallbackContext) string {
-	model, _ := r.agentModelOf(cbc)
-	if mc, ok := model.(*llm.Model); ok && mc != nil && mc.ModelConfig != nil && mc.ModelConfig.ModelName != "" {
-		return strings.TrimSpace(mc.ModelConfig.ModelName)
+	model, config := r.agentModelOf(cbc)
+	// 1) 活模型的请求配置
+	if model != nil && model.ModelConfig != nil && strings.TrimSpace(model.ModelConfig.ModelName) != "" {
+		return strings.TrimSpace(model.ModelConfig.ModelName)
+	}
+	// 2) agent config 持有的 model_config_obj（Python getattr(config, "model_config_obj")；
+	//    Go 对应 saconfig.ReActAgentConfig.ModelRequestConfig）
+	if rc, ok := config.(*saconfig.ReActAgentConfig); ok && rc != nil &&
+		rc.ModelRequestConfig != nil && strings.TrimSpace(rc.ModelRequestConfig.ModelName) != "" {
+		return strings.TrimSpace(rc.ModelRequestConfig.ModelName)
+	}
+	// 3) config 本身的 model_name
+	if config != nil {
+		if name := strings.TrimSpace(config.ModelName()); name != "" {
+			return name
+		}
 	}
 	return ""
 }
@@ -1126,14 +1154,13 @@ func (r *RuntimePromptRail) agentModelName(cbc *agentinterfaces.AgentCallbackCon
 // 使列表始终与 spawn_teammate 接受的 selectable_models 一致。
 func (r *RuntimePromptRail) agentGroupModelNames(cbc *agentinterfaces.AgentCallbackContext) []string {
 	model, _ := r.agentModelOf(cbc)
-	mc, ok := model.(*llm.Model)
-	if !ok || mc == nil || mc.ClientConfig == nil || mc.ClientConfig.IntelliRouter == nil {
+	if model == nil || model.ClientConfig == nil || model.ClientConfig.IntelliRouter == nil {
 		return []string{}
 	}
-	if len(mc.ClientConfig.IntelliRouter.Deployments) == 0 {
+	if len(model.ClientConfig.IntelliRouter.Deployments) == 0 {
 		return []string{}
 	}
-	routerMap := intelliRouterToMap(mc.ClientConfig.IntelliRouter)
+	routerMap := intelliRouterToMap(model.ClientConfig.IntelliRouter)
 	return agentteamsmodels.SelectableRouteTags(routerMap)
 }
 
@@ -1143,9 +1170,9 @@ func (r *RuntimePromptRail) agentGroupModelNames(cbc *agentinterfaces.AgentCallb
 // 组 id 只记一次：无活模型的回调（如外层 agent）仍归属同一组。
 func (r *RuntimePromptRail) modelGroupModelLabel(cbc *agentinterfaces.AgentCallbackContext) string {
 	model, _ := r.agentModelOf(cbc)
-	if mc, ok := model.(*llm.Model); ok && mc != nil && mc.ClientConfig != nil && mc.ClientConfig.IntelliRouter != nil && mc.ClientConfig.IntelliRouter.ModelGroupID != nil {
+	if model != nil && model.ClientConfig != nil && model.ClientConfig.IntelliRouter != nil && model.ClientConfig.IntelliRouter.ModelGroupID != nil {
 		r.mu.Lock()
-		r.modelGroupID = *mc.ClientConfig.IntelliRouter.ModelGroupID
+		r.modelGroupID = *model.ClientConfig.IntelliRouter.ModelGroupID
 		r.mu.Unlock()
 	}
 	r.mu.RLock()
