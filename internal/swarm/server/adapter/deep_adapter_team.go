@@ -280,7 +280,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		waiterRegistered := false
 		defer func() {
 			if waiterRegistered {
-				unregisterWaiter(channelID, sessionID, req.RequestID)
+				teamManager.RemoveWaiter(sessionID, req.RequestID, nil)
 			}
 		}()
 
@@ -453,7 +453,9 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			// Python: waiter_key = (_resolve_channel_id(channel_id), session_id)
 			// Python: _pending_waiters[waiter_key].append((rid, request_queue))
 			requestQueue := make(chan map[string]any, 256)
-			registerWaiter(channelID, sessionID, req.RequestID, requestQueue)
+			// 双表合并（B3）：waiter 注册统一走 TeamManager 真表
+			//（exclusive=true——轮的主等待者；Python add_waiter(exclusive=True)）
+			teamManager.RegisterSessionWaiter(sessionID, req.RequestID, requestQueue, true, false, 0)
 			waiterRegistered = true // S-45: defer 清理标记
 			logger.Info(logComponent).
 				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
@@ -711,11 +713,10 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 				Str("session_id", sessionID).Int("round_id", roundID).
 				Any("panic", r).
 				Msg("consumeStreamWithQuery: stream failed")
-			broadcastEvent(channelID, sessionID, map[string]any{
-				"event_type": "team.error",
+			team.GetTeamManager(channelID).BroadcastEvent(sessionID, "team.error", map[string]any{
 				"error":      fmt.Sprintf("%v", r),
 				"session_id": sessionID,
-			})
+			}, channelID)
 		}
 	}()
 
@@ -724,13 +725,12 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 		Msg("consumeStreamWithQuery: stream started")
 
 	// Python 步骤 1: 广播 round-start 信号
-	broadcastEvent(channelID, sessionID, map[string]any{
-		"event_type":    "chat.processing_status",
+	team.GetTeamManager(channelID).BroadcastEvent(sessionID, "chat.processing_status", map[string]any{
 		"session_id":    sessionID,
 		"rid":           roundID,
 		"is_processing": true,
 		"is_complete":   false,
-	})
+	}, channelID)
 
 	streamTraceEnabled := false
 	if v, ok := _envs[streamTraceEnvKey].(string); ok && v != "" {
@@ -762,11 +762,10 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("session_id", sessionID).
 			Msg("consumeStreamWithQuery: RunAgentTeamStreaming failed")
-		broadcastEvent(channelID, sessionID, map[string]any{
-			"event_type": "team.error",
+		team.GetTeamManager(channelID).BroadcastEvent(sessionID, "team.error", map[string]any{
 			"error":      err.Error(),
 			"session_id": sessionID,
-		})
+		}, channelID)
 		return
 	}
 
@@ -854,19 +853,18 @@ loop:
 				// round-complete 信号（chat.processing_status），只透传
 				// member_count/task_count 两个统计字段，原始事件的其余字段
 				//（如内部状态）按 Python 语义不透出。
-				broadcastEvent(channelID, sessionID, map[string]any{
-					"event_type":    "chat.processing_status",
+				team.GetTeamManager(channelID).BroadcastEvent(sessionID, "chat.processing_status", map[string]any{
 					"session_id":    sessionID,
 					"rid":           roundID,
 					"is_processing": false,
 					"is_complete":   true,
 					"member_count":  parsed["member_count"],
 					"task_count":    parsed["task_count"],
-				})
+				}, channelID)
 				continue
 			}
 
-			broadcastEvent(channelID, sessionID, parsed)
+			broadcastParsedEvent(channelID, sessionID, parsed)
 		}
 	}
 
@@ -880,11 +878,10 @@ loop:
 		logger.Warn(logComponent).
 			Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
 			Msg("consumeStreamWithQuery: stream ended with no output")
-		broadcastEvent(channelID, sessionID, map[string]any{
-			"event_type": "team.error",
+		team.GetTeamManager(channelID).BroadcastEvent(sessionID, "team.error", map[string]any{
 			"error":      "Team stream ended with no output (possible pool/DB inconsistency or internal error)",
 			"session_id": sessionID,
-		})
+		}, channelID)
 	} else {
 		logger.Info(logComponent).
 			Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).Int("chunks", receivedChunks).
@@ -1061,7 +1058,7 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 			}
 			parsed := utilsParseStreamChunk(evt)
 			if parsed != nil {
-				broadcastEvent(channelID, sessionID, parsed)
+				broadcastParsedEvent(channelID, sessionID, parsed)
 			}
 		}
 
@@ -1851,6 +1848,7 @@ func resolveEvolutionEventTimeoutSec(rail *coreevolution.TeamSkillEvolutionRail,
 //   - 注册在 startup 时序内完成，锁随即释放、消费期间不持锁
 //   - 订阅保持附着直到响应流被调用方关闭（"stays attached until the
 //     response stream is closed by the caller"）
+//
 // processTeamAttachOnlyStreamForRequest 流路径入口（模型校验前分流的落点）。
 func (d *DeepAdapter) processTeamAttachOnlyStreamForRequest(ctx context.Context,
 	req *agentschema.AgentRequest,

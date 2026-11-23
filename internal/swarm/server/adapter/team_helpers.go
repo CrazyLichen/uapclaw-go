@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"unicode"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -20,13 +19,6 @@ import (
 
 // pendingWaiter 单个等待条目。
 // 对齐 Python: _pending_waiters 中的 (request_id, asyncio.Queue) 对
-type pendingWaiter struct {
-	// RequestID 请求标识
-	RequestID string
-	// Ch 事件接收通道
-	Ch chan map[string]any
-}
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -51,13 +43,10 @@ var (
 		"CREATE":              true,
 		"NEW_TEAM_IN_SESSION": true,
 	}
-	// pendingWaitersMu 保护 pendingWaiters 的读写锁。
 	// Python 用 asyncio（单线程事件循环）无需锁，Go 需要 sync.RWMutex 保护并发安全。
-	pendingWaitersMu sync.RWMutex
 	// pendingWaiters 等待事件广播的请求队列。
 	// 键: [2]string{channelID, sessionID}，值: []pendingWaiter
 	// 对齐 Python: _pending_waiters: dict[tuple[str, str], list[tuple[str, asyncio.Queue]]] (line 61)
-	pendingWaiters = make(map[[2]string][]pendingWaiter)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -373,7 +362,7 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 // team.NewTeamManager 创建实例时一次性继承到实例字段，运行期字段只读——
 // 这样避免了原先"每个 team 请求都向 TeamManager 重写回调"造成的并发写读竞态。
 func init() {
-	team.RegisterTeamCallbackDefaults(broadcastEvent)
+	team.RegisterTeamCallbackDefaults(broadcastParsedEvent)
 	team.SetShutdownCleanupNoticePusher(newShutdownCleanupNoticePusher())
 }
 
@@ -683,63 +672,6 @@ func teamProcessingDoneChunk(requestID, channelID, sessionID string) *agentschem
 	}
 }
 
-// broadcastEvent 向所有等待同一 (channelID, sessionID) 的请求队列广播事件。
-// 对齐 Python: _broadcast_event(channel_id, session_id, event) (line 181-196)
-func broadcastEvent(channelID, sessionID string, event map[string]any) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.RLock()
-	waiters := pendingWaiters[key]
-	pendingWaitersMu.RUnlock()
-
-	for _, w := range waiters {
-		// Python: queue.put_nowait(dict(event)) — 浅拷贝，避免多个 waiter 共享同一 map 被修改
-		copied := make(map[string]any, len(event))
-		for k, v := range event {
-			copied[k] = v
-		}
-		select {
-		case w.Ch <- copied:
-		default:
-			// Python: except Exception — channel 满时丢弃并 debug 日志
-			logger.Debug(logComponent).
-				Str("channel_id", key[0]).
-				Str("session_id", sessionID).
-				Str("request_id", w.RequestID).
-				Msg("broadcastEvent: channel full, dropping event")
-		}
-	}
-}
-
-// registerWaiter 注册一个请求等待者。
-// 对齐 Python: _pending_waiters[key].append((request_id, queue))
-func registerWaiter(channelID, sessionID, requestID string, ch chan map[string]any) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.Lock()
-	defer pendingWaitersMu.Unlock()
-	pendingWaiters[key] = append(pendingWaiters[key], pendingWaiter{
-		RequestID: requestID,
-		Ch:        ch,
-	})
-}
-
-// unregisterWaiter 注销一个请求等待者。
-// 对齐 Python: 从 _pending_waiters[key] 中移除对应 (request_id, queue) 条目
-func unregisterWaiter(channelID, sessionID, requestID string) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.Lock()
-	defer pendingWaitersMu.Unlock()
-	waiters := pendingWaiters[key]
-	for i, w := range waiters {
-		if w.RequestID == requestID {
-			pendingWaiters[key] = append(waiters[:i], waiters[i+1:]...)
-			break
-		}
-	}
-	if len(pendingWaiters[key]) == 0 {
-		delete(pendingWaiters, key)
-	}
-}
-
 // groupTeamEvolutionApprovals 审批分组（team 版包装）。
 // 对齐 Python: _group_team_evolution_approvals(session_id, events) (line 314-328)
 //
@@ -800,4 +732,13 @@ func splitMaxN(s string, n int) []string {
 		}
 	}
 	return parts
+}
+
+// broadcastParsedEvent 引擎解析事件的出站（真表版——双表合并 B3 后唯一广播路径）。
+// event_type 从 parsed 中拆出作 BroadcastEvent 的类型参数；无类型时原样投递。
+// Python: broadcast_event(channel_id, session_id, parsed)。
+func broadcastParsedEvent(channelID, sessionID string, parsed map[string]any) {
+	eventType, _ := parsed["event_type"].(string)
+	team.GetTeamManager(resolveChannelID(channelID)).
+		BroadcastEvent(sessionID, eventType, parsed, resolveChannelID(channelID))
 }

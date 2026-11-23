@@ -7,12 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -302,82 +301,6 @@ func TestTeamProcessingDoneChunk(t *testing.T) {
 	if payload["is_complete"] != true {
 		t.Error("is_complete should be true")
 	}
-}
-
-// ──────────────────────────── broadcastEvent 测试 ────────────────────────────
-
-func TestBroadcastEvent(t *testing.T) {
-	// 清理全局状态
-	pendingWaitersMu.Lock()
-	pendingWaiters = make(map[[2]string][]pendingWaiter)
-	pendingWaitersMu.Unlock()
-
-	ch1 := make(chan map[string]any, 8)
-	ch2 := make(chan map[string]any, 8)
-
-	registerWaiter("ch1", "s1", "r1", ch1)
-	registerWaiter("ch1", "s1", "r2", ch2)
-
-	evt := map[string]any{"event_type": "chat.delta", "content": "hello"}
-	broadcastEvent("ch1", "s1", evt)
-
-	// 验证两个 waiter 都收到了事件
-	select {
-	case got := <-ch1:
-		if got["content"] != "hello" {
-			t.Errorf("ch1 got %v", got)
-		}
-	default:
-		t.Error("ch1 should receive event")
-	}
-	select {
-	case got := <-ch2:
-		if got["content"] != "hello" {
-			t.Errorf("ch2 got %v", got)
-		}
-	default:
-		t.Error("ch2 should receive event")
-	}
-
-	unregisterWaiter("ch1", "s1", "r1")
-	unregisterWaiter("ch1", "s1", "r2")
-
-	// 验证注销后无 waiter
-	pendingWaitersMu.RLock()
-	key := [2]string{"ch1", "s1"}
-	if _, ok := pendingWaiters[key]; ok {
-		t.Error("waiters should be cleaned up after unregister")
-	}
-	pendingWaitersMu.RUnlock()
-}
-
-// ──────────────────────────── registerWaiter/unregisterWaiter 并发测试 ────────────────────────────
-
-func TestRegisterUnregisterWaiter_并发安全(t *testing.T) {
-	pendingWaitersMu.Lock()
-	pendingWaiters = make(map[[2]string][]pendingWaiter)
-	pendingWaitersMu.Unlock()
-
-	const n = 100
-	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			ch := make(chan map[string]any, 8)
-			rid := fmt.Sprintf("r%d", i)
-			registerWaiter("ch", "s1", rid, ch)
-			unregisterWaiter("ch", "s1", rid)
-		}(i)
-	}
-	wg.Wait()
-
-	pendingWaitersMu.RLock()
-	key := [2]string{"ch", "s1"}
-	if _, ok := pendingWaiters[key]; ok {
-		t.Error("all waiters should be unregistered")
-	}
-	pendingWaitersMu.RUnlock()
 }
 
 // ──────────────────────────── SyncTeamIdentityMetadata 测试 ────────────────────────────
