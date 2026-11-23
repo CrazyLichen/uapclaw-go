@@ -151,8 +151,8 @@ func TestGetPanel_DepthSwitch(t *testing.T) {
 
 // TestGetPanel_EnvMapCount 对照表条目数与 Python 一致（74，机器核对）
 func TestGetPanel_EnvMapCount(t *testing.T) {
-	if len(configSetEnvMap) != 74 {
-		t.Errorf("configSetEnvMap = %d 条, want 74", len(configSetEnvMap))
+	if len(ConfigSetEnvMap) != 74 {
+		t.Errorf("ConfigSetEnvMap = %d 条, want 74", len(ConfigSetEnvMap))
 	}
 }
 
