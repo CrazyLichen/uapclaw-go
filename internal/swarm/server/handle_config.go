@@ -204,6 +204,45 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 		return s.HandleModelsReplaceAll(ctx, request)
 	}
 
+	// Python: config_adapter.py:212-236 LOCALE_SET_CONF
+	if request.ReqMethod == schema.ReqMethodLocaleSetConf {
+		if err := configpanel.LocaleSetConf(params); err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(map[string]any{"preferred_language": orStr(params["preferred_language"])}), nil
+	}
+	// Python: config_adapter.py:333-388 PATH_SET（decision 族字段 ⤵️ 待回填）
+	if request.ReqMethod == schema.ReqMethodPathSet {
+		chromePath, headless, err := configpanel.PathSet(params)
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(map[string]any{"chrome_path": chromePath, "headless": headless}), nil
+	}
+	// Python: config_adapter.py:393-427 PERMISSIONS_OWNER_SCOPES_GET/SET
+	if request.ReqMethod == schema.ReqMethodPermissionsOwnerScopesGet {
+		return okResp(configpanel.GetPermissionsOwnerScopes()), nil
+	}
+	if request.ReqMethod == schema.ReqMethodPermissionsOwnerScopesSet {
+		if params == nil {
+			return applyErrorResponse(request, &configpanel.ConfigPanelBadRequest{Message: "params must be object"}), nil
+		}
+		configpanel.UpdatePermissionsOwnerScopes(params["owner_scopes"], params["deny_guidance_message"])
+		// Python: A5 写入后 server 侧 in-process reload（reload_scopes=["permissions"]）
+		if err := s.agentManager.ReloadAgentsConfig(ctx, nil, nil, rt.ReloadOptions{ReloadScopes: []string{"permissions"}}); err != nil {
+			logger.Warn(logComponentAgentServer).Err(err).Msg("permissions scope reload failed")
+		}
+		return okResp(map[string]any{"ok": true, "applied_without_restart": true}), nil
+	}
+	// Python: config_adapter.py:431-446 MEMORY_FORBIDDEN_SET
+	if request.ReqMethod == schema.ReqMethodMemoryForbiddenSet {
+		if params == nil {
+			return applyErrorResponse(request, &configpanel.ConfigPanelBadRequest{Message: "params must be object"}), nil
+		}
+		configpanel.MemoryForbiddenSet(params)
+		return okResp(map[string]any{"ok": true}), nil
+	}
+
 	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
 	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
 	payload, ok := control.HandleConfigRequest(string(request.ReqMethod), params)
@@ -211,6 +250,14 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 		return badReq(), nil
 	}
 	return okResp(payload), nil
+}
+
+// orStr any→string（nil 回空串）。
+func orStr(v any) string {
+	if s, isStr := v.(string); isStr {
+		return s
+	}
+	return ""
 }
 
 // applyErrorResponse 错误分类响应：400 类回 ok=false+error 文案，500 类同形
