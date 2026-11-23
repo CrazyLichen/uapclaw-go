@@ -6,8 +6,9 @@
 //   - 第二层：本地 method handler（返回 ack 响应给客户端）
 //
 // 配置热重载链路（箭头表示调用先后）：
-//   - config.set 触发 ApplyConfigPayload → NotifyConfigSavedOnce → onConfigSaved
-//   - config.save_all 触发 ApplyConfigPayload + models + team → NotifyConfigSavedOnce → onConfigSaved
+//   - 配置面板 RPC（config.get/set/save_all/validate_model、models.*、locale.*、
+//     path.*、memory.forbidden.*、permissions.owner_scopes.*）经 configForwardToAgent
+//     转发到 AgentServer（27.4；真相源=AgentServer 侧 control/configpanel）
 //
 // 文件目录：
 //

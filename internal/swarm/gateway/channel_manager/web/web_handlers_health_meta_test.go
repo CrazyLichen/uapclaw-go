@@ -5,8 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -77,8 +80,7 @@ func TestHealthCheckSetConf_写回health_check段(t *testing.T) {
 	_, err := callHandler(heartbeatSetConf(newTestChannel(), svc, nil), map[string]any{"every": 120.0}, "")
 	require.NoError(t, err)
 
-	cfg, loadErr := loadAppConfig()
-	require.NoError(t, loadErr)
+	cfg := configpanel.ReadRawConfig()
 	section := mapSection(cfg, "health_check")
 	assert.Contains(t, section, "every", "写回键应为 health_check.every")
 	assert.NotContains(t, mapSection(cfg, "heartbeat"), "every", "不得再写旧 heartbeat 段")

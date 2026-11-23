@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -135,52 +135,6 @@ func TestRegisterWebHandlers_全量注册(t *testing.T) {
 		_, ok := d.methodHandlers[method]
 		assert.True(t, ok, "方法 %q 应已注册", method)
 	}
-}
-
-func TestHandleConfigGet(t *testing.T) {
-	// 设置测试环境变量
-	_ = os.Setenv("MODEL_PROVIDER", "openai")
-	_ = os.Setenv("MODEL_NAME", "gpt-4")
-	defer func() {
-		_ = os.Unsetenv("MODEL_PROVIDER")
-		_ = os.Unsetenv("MODEL_NAME")
-	}()
-
-	handler := configGet(newTestChannel(), nil)
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-
-	// 验证环境变量映射
-	assert.Equal(t, "openai", result["model_provider"])
-	assert.Equal(t, "gpt-4", result["model"])
-
-	// 验证 app_version 存在
-	assert.Contains(t, result, "app_version")
-
-	// 验证 config.yaml 补充字段存在
-	assert.Contains(t, result, "context_engine_enabled")
-	assert.Contains(t, result, "permissions_enabled")
-	assert.Contains(t, result, "memory_forbidden_enabled")
-}
-
-func TestHandleConfigSet(t *testing.T) {
-	// 测试 configSet 逻辑（onConfigSaved 为 nil，跳过热重载）
-	handler := configSet(newTestChannel(), nil, nil, nil)
-	result, err := callHandler(handler, map[string]any{
-		"model_provider": "OpenAI",
-		"model":          "gpt-4",
-	}, "sess_test")
-	require.NoError(t, err)
-	// config.set 响应不再包含 "ok"（对齐 Python: payload 中无 ok）
-	assert.NotContains(t, result, "ok")
-	assert.Contains(t, result, "updated")
-	assert.Contains(t, result, "applied_without_restart")
-
-	// 验证环境变量已更新
-	assert.Equal(t, "OpenAI", os.Getenv("MODEL_PROVIDER"))
-	assert.Equal(t, "gpt-4", os.Getenv("MODEL_NAME"))
-	_ = os.Unsetenv("MODEL_PROVIDER")
-	_ = os.Unsetenv("MODEL_NAME")
 }
 
 func TestHandleChannelGet(t *testing.T) {
@@ -316,61 +270,6 @@ func TestConfigEnvMap_条目数(t *testing.T) {
 	assert.Len(t, configEnvMap, 48, "configEnvMap 应有 48 个条目（含 evolution_auto_scan 和 skill_create 环境变量映射）")
 }
 
-func TestHandleConfigSaveAll_params为空(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, nil, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
-func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{
-		"config": map[string]any{
-			"model_provider": "OpenAI",
-		},
-	}, "")
-	require.NoError(t, err)
-	assert.NoError(t, err)
-	_ = os.Unsetenv("MODEL_PROVIDER")
-}
-
-func TestHandleConfigSaveAll_config非对象(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{
-		"config": "not an object",
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
-func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{
-		"models": "not a list",
-	}, "")
-	require.Error(t, err)
-}
-
-func TestHandleModelsList_无配置(t *testing.T) {
-	handler := modelsList(newTestChannel())
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-	assert.Contains(t, result, "models")
-}
-
-func TestHandleModelsList_有crypto(t *testing.T) {
-	// handler 已不收 crypto（config 层解密），保留用例验证全局 provider 路径不炸
-	original := crypto.GetCryptoProvider()
-	defer crypto.SetCryptoProvider(original)
-	crypto.SetCryptoProvider(&fakeCryptoHandler{})
-
-	handler := modelsList(newTestChannel())
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-	assert.Contains(t, result, "models")
-}
-
 func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 	// 测试 nil ChannelManager 返回空
 	handler := channelGet(newTestChannel(), nil)
@@ -378,27 +277,6 @@ func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 	require.NoError(t, err)
 	channels := result["channels"].([]map[string]any)
 	assert.Empty(t, channels)
-}
-
-func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{
-		"config": map[string]any{
-			"model_provider": "OpenAI",
-		},
-		"agents": []any{map[string]any{"name": "agent1"}},
-		"team":   []any{map[string]any{"name": "team1"}},
-	}, "")
-	require.NoError(t, err)
-	assert.NoError(t, err)
-	_ = os.Unsetenv("MODEL_PROVIDER")
-}
-
-func TestHandleConfigSaveAll_空params对象(t *testing.T) {
-	handler := configSaveAll(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{}, "")
-	require.NoError(t, err)
-	assert.NoError(t, err)
 }
 
 func TestHandleSessionList_有会话目录(t *testing.T) {
@@ -465,209 +343,9 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 	assert.NotContains(t, result, "ok")
 }
 
-func TestHandleConfigSet_params为空(t *testing.T) {
-	handler := configSet(newTestChannel(), nil, nil, nil)
-	result, err := callHandler(handler, nil, "")
-	assert.Error(t, err)
-	assert.Empty(t, result)
-}
-
-func TestHandleConfigSet_无效Provider(t *testing.T) {
-	handler := configSet(newTestChannel(), nil, nil, nil)
-	_, err := callHandler(handler, map[string]any{
-		"model_provider": "InvalidProvider",
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
-func TestGetConfigString_路径不存在(t *testing.T) {
-	result := getConfigString(map[string]any{}, "a.b.c", "default")
-	assert.Equal(t, "default", result)
-}
-
-func TestGetConfigString_正常路径(t *testing.T) {
-	cfg := map[string]any{
-		"react": map[string]any{
-			"context_engine_config": map[string]any{
-				"enabled": "true",
-			},
-		},
-	}
-	result := getConfigString(cfg, "react.context_engine_config.enabled", "false")
-	assert.Equal(t, "true", result)
-}
-
-func TestGetConfigAny_路径不存在(t *testing.T) {
-	result := getConfigAny(map[string]any{}, "a.b.c", "fallback")
-	assert.Equal(t, "fallback", result)
-}
-
-func TestGetConfigAny_正常路径(t *testing.T) {
-	cfg := map[string]any{
-		"models": map[string]any{
-			"defaults": []any{"item1"},
-		},
-	}
-	result := getConfigAny(cfg, "models.defaults", nil)
-	assert.NotNil(t, result)
-}
-
-func TestFlattenTeamConfig_无team(t *testing.T) {
-	result := make(map[string]any)
-	flattenTeamConfig(map[string]any{}, result)
-	// 无 team 数据，result 不变
-	assert.Empty(t, result)
-}
-
-func TestFlattenTeamConfig_有team(t *testing.T) {
-	cfg := map[string]any{
-		"modes": map[string]any{
-			// Python: modes.team 为 dict（key=team_name, value=team_spec）
-			"team": map[string]any{
-				"my_team": map[string]any{
-					"team_name":     "team1",
-					"lifecycle":     "async",
-					"teammate_mode": "route",
-					"spawn_mode":    "droplet",
-					"leader": map[string]any{
-						"member_name":  "leader1",
-						"display_name": "Leader",
-						"persona":      "test",
-						"agent_key":    "key1",
-					},
-					"agents": map[string]any{
-						"teammate": map[string]any{
-							"model": map[string]any{
-								"model_client_config": map[string]any{
-									"model_name": "gpt-4",
-								},
-							},
-							"max_iterations":     10,
-							"completion_timeout": 300,
-						},
-					},
-				},
-			},
-		},
-	}
-	result := make(map[string]any)
-	flattenTeamConfig(cfg, result)
-	assert.Equal(t, "team1", result["team_0_name"])
-	assert.Equal(t, "async", result["team_0_lifecycle"])
-	assert.Equal(t, "route", result["team_0_teammate_mode"])
-	assert.Equal(t, "droplet", result["team_0_spawn_mode"])
-	assert.Equal(t, "leader1", result["team_0_leader_member_name"])
-	assert.Equal(t, "Leader", result["team_0_leader_display_name"])
-	assert.Equal(t, "key1", result["team_0_leader_agent_key"])
-	// teammate 从 agents.teammate 取，agent_key 推导为 team_name_teammate
-	assert.Equal(t, "my_team_teammate", result["team_0_teammate_agent_key"])
-	// agent 详情输出格式对齐 Python: agent_name_0/agent_model_0
-	assert.Equal(t, "my_team_teammate", result["agent_name_0"])
-	assert.Equal(t, "gpt-4", result["agent_model_0"])
-}
-
-func TestFlattenTeamConfig_predefinedMembers(t *testing.T) {
-	cfg := map[string]any{
-		"modes": map[string]any{
-			// Python: modes.team 为 dict
-			"team": map[string]any{
-				"my_team": map[string]any{
-					"team_name": "team1",
-					"predefined_members": []any{
-						map[string]any{
-							"member_name":  "agent1",
-							"display_name": "Agent 1",
-							"persona":      "",
-							"prompt_hint":  "",
-							"agent_key":    "my_team_agent1",
-						},
-					},
-				},
-			},
-		},
-	}
-	result := make(map[string]any)
-	flattenTeamConfig(cfg, result)
-	assert.Contains(t, result, "team_0_predefined_members")
-}
-
-func TestPersistEnvUpdates_新建env(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	err := persistEnvUpdates(map[string]string{
-		"TEST_KEY1": "value1",
-		"TEST_KEY2": "",
-	})
-	require.NoError(t, err)
-
-	// 验证文件存在
-	envPath := workspace.EnvFile()
-	data, err := os.ReadFile(envPath)
-	require.NoError(t, err)
-	content := string(data)
-	assert.Contains(t, content, `TEST_KEY1="value1"`)
-	assert.Contains(t, content, "TEST_KEY2=")
-}
-
-func TestPersistEnvUpdates_更新已有env(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	// 先写入已有 .env
-	envPath := workspace.EnvFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(envPath), 0o755))
-	require.NoError(t, os.WriteFile(envPath, []byte("EXISTING_KEY=old_val\n# comment\n"), 0o644))
-
-	err := persistEnvUpdates(map[string]string{
-		"EXISTING_KEY": "new_val",
-		"NEW_KEY":      "new_entry",
-	})
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(envPath)
-	require.NoError(t, err)
-	content := string(data)
-	assert.Contains(t, content, `EXISTING_KEY="new_val"`)
-	assert.Contains(t, content, `NEW_KEY="new_entry"`)
-}
-
-func TestSortedKeys(t *testing.T) {
-	m := map[string]string{"c": "3", "a": "1", "b": "2"}
-	keys := sortedKeys(m)
-	assert.Equal(t, []string{"a", "b", "c"}, keys)
-}
-
 func TestSortedKeys_空map(t *testing.T) {
 	keys := sortedKeys(map[string]string{})
 	assert.Empty(t, keys)
-}
-
-func TestLoadAppConfig(t *testing.T) {
-	// loadAppConfig 在无配置文件时返回 error，不会 panic
-	cfg, err := loadAppConfig()
-	// 可能成功或失败取决于测试环境
-	if err != nil {
-		assert.Empty(t, cfg)
-	}
-}
-
-func TestNormalizeTruthy(t *testing.T) {
-	assert.Equal(t, "true", normalizeTruthy("true"))
-	assert.Equal(t, "true", normalizeTruthy("True"))
-	assert.Equal(t, "true", normalizeTruthy("1"))
-	assert.Equal(t, "true", normalizeTruthy("yes"))
-	assert.Equal(t, "true", normalizeTruthy("YES"))
-	assert.Equal(t, "false", normalizeTruthy("false"))
-	assert.Equal(t, "false", normalizeTruthy("0"))
-	assert.Equal(t, "false", normalizeTruthy("no"))
-	assert.Equal(t, "false", normalizeTruthy(""))
-	assert.Equal(t, "false", normalizeTruthy("random"))
 }
 
 func TestHandleHistoryGet(t *testing.T) {
@@ -720,29 +398,6 @@ func TestHandleSessionList_分页(t *testing.T) {
 	assert.Equal(t, 1, result["offset"])
 }
 
-func TestHandleModelsReplaceAll_缺models(t *testing.T) {
-	handler := modelsReplaceAll(newTestChannel(), nil, nil)
-	_, err := callHandler(handler, map[string]any{}, "")
-	require.Error(t, err)
-}
-
-func TestHandleModelsValidate_缺必填字段(t *testing.T) {
-	handler := modelsValidate(newTestChannel())
-	_, err := callHandler(handler, map[string]any{}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
-func TestHandleModelsValidate_缺apiBase(t *testing.T) {
-	handler := modelsValidate(newTestChannel())
-	_, err := callHandler(handler, map[string]any{
-		"api_key": "key1",
-		"model":   "gpt-4",
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // splitSessionID 拆分 session ID 的各部分。
@@ -757,22 +412,6 @@ func splitSessionID(sid string) []string {
 	}
 	parts = append(parts, sid[start:])
 	return parts
-}
-
-// TestIsSensitiveKey 测试敏感键判断
-func TestIsSensitiveKey(t *testing.T) {
-	assert.True(t, isSensitiveKey("api_key"))
-	assert.True(t, isSensitiveKey("my_api_key"))
-	assert.True(t, isSensitiveKey("access_token"))
-	assert.True(t, isSensitiveKey("token_secret"))
-	assert.False(t, isSensitiveKey("model_name"))
-	assert.False(t, isSensitiveKey("base_url"))
-	assert.False(t, isSensitiveKey("timeout"))
-	// M-05：大写键大小写不敏感（对齐 Python key.lower()，与 config_apply 加密路径对称）
-	assert.True(t, isSensitiveKey("OPENAI_API_KEY"))
-	assert.True(t, isSensitiveKey("MY_TOKEN"))
-	assert.True(t, isSensitiveKey("Api_Key"))
-	assert.False(t, isSensitiveKey("MODEL_NAME"))
 }
 
 // TestStrOrEmpty 测试 strOrEmpty 转换
@@ -793,108 +432,4 @@ func (f *fakeCryptoFailDecrypt) Encrypt(_ context.Context, plaintext string) (st
 
 func (f *fakeCryptoFailDecrypt) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "", errors.New("decrypt boom")
-}
-
-// TestHandleConfigGet_解密失败保留原值 解密失败时保留密文原值
-func TestHandleConfigGet_解密失败保留原值(t *testing.T) {
-	_ = os.Setenv("API_KEY", "rawcipher")
-	defer func() { _ = os.Unsetenv("API_KEY") }()
-
-	handler := configGet(newTestChannel(), &fakeCryptoFailDecrypt{})
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-	if result["api_key"] != "rawcipher" {
-		t.Errorf("api_key = %v, 期望解密失败时保留原值", result["api_key"])
-	}
-}
-
-// TestHandleConfigGet_解密成功 注入 provider 时敏感字段解密返回
-func TestHandleConfigGet_解密成功(t *testing.T) {
-	_ = os.Setenv("API_KEY", "cipher")
-	defer func() { _ = os.Unsetenv("API_KEY") }()
-
-	handler := configGet(newTestChannel(), &fakeCryptoHandler{})
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-	if result["api_key"] != "dec(cipher)" {
-		t.Errorf("api_key = %v, 期望 dec(cipher)", result["api_key"])
-	}
-}
-
-// TestHandleConfigGet_全局provider 注入为 nil 时回退查全局
-func TestHandleConfigGet_全局provider(t *testing.T) {
-	original := crypto.GetCryptoProvider()
-	defer crypto.SetCryptoProvider(original)
-	crypto.SetCryptoProvider(&fakeCryptoHandler{})
-
-	_ = os.Setenv("API_KEY", "cipher")
-	defer func() { _ = os.Unsetenv("API_KEY") }()
-
-	handler := configGet(newTestChannel(), nil)
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-	if result["api_key"] != "dec(cipher)" {
-		t.Errorf("api_key = %v, 期望全局 provider 解密 dec(cipher)", result["api_key"])
-	}
-}
-
-// TestHandleModelsList_走config层解密 对齐 Python _models_list：
-// 解密发生在 GetDefaultModels→decryptModelEntries（config 层，全局 provider），
-// handler 层零解密（对齐 Python handler 不持 crypto）。
-func TestHandleModelsList_走config层解密(t *testing.T) {
-	// 重定向 workspace 到临时目录并写入含密文的 config.yaml
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	// 构造真实密文（AES-GCM）
-	original := crypto.GetCryptoProvider()
-	defer crypto.SetCryptoProvider(original)
-	provider, err := crypto.NewAesGcmProvider([]byte("0123456789abcdef0123456789abcdef"))
-	require.NoError(t, err)
-	ciphertext, err := provider.Encrypt(context.Background(), "sk-plain")
-	require.NoError(t, err)
-	crypto.SetCryptoProvider(provider)
-
-	cfgDir := workspace.ConfigDir()
-	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
-	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: " + ciphertext + "\n      model_config_obj:\n        temperature: 0.7\n"
-	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
-
-	handler := modelsList(newTestChannel())
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-
-	models, ok := result["models"].([]map[string]any)
-	require.True(t, ok, "models 应为 []map[string]any")
-	require.Len(t, models, 1)
-	require.Equal(t, "sk-plain", models[0]["api_key"], "api_key 应由 config 层（全局 provider）解密")
-	require.Equal(t, "m1", models[0]["model_name"])
-}
-
-// TestHandleModelsList_无provider保持密文 全局 provider 为 nil 时 api_key 保持密文原值
-// （对齐 Python crypto=None 时 _decrypt_model_entries 跳过解密）。
-func TestHandleModelsList_无provider保持密文(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	original := crypto.GetCryptoProvider()
-	defer crypto.SetCryptoProvider(original)
-	crypto.SetCryptoProvider(nil)
-
-	cfgDir := workspace.ConfigDir()
-	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
-	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: rawcipher\n"
-	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
-
-	handler := modelsList(newTestChannel())
-	result, err := callHandler(handler, nil, "")
-	require.NoError(t, err)
-
-	models := result["models"].([]map[string]any)
-	require.Len(t, models, 1)
-	require.Equal(t, "rawcipher", models[0]["api_key"], "无全局 provider 时保持密文")
 }
