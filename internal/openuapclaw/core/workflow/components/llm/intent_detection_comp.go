@@ -4,8 +4,12 @@
 package llm
 
 import (
+	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -324,4 +328,341 @@ func (e *IntentDetectionExecutable) appendDefaultCategory() {
 	}
 	e.defaultCfg.CategoryList = append([]string{e.defaultCfg.DefaultClass}, e.defaultCfg.CategoryList...)
 	e.cfg.CategoryNameList = append([]string{defaultName}, e.cfg.CategoryNameList...)
+}
+
+// ──────────────────────────── Task 2 解析层 ────────────────────────────
+
+// refixRegex 首个 { 到最后一个 }（贪婪，re.DOTALL 语义，Python :198）
+var refixRegex = regexp.MustCompile(`(?s)\{.*\}`)
+
+// refixLLMOutput 提取首个 {...} 块并修 false/true/null → False/True/None
+// （Python _refix_llm_output :196-205 一比一）。替换波及普通文本照搬不修。
+func refixLLMOutput(inputStr string) string {
+	loc := refixRegex.FindStringIndex(inputStr)
+	if loc == nil {
+		return inputStr
+	}
+	res := inputStr[loc[0]:loc[1]]
+	res = strings.ReplaceAll(res, "false", "False")
+	res = strings.ReplaceAll(res, "true", "True")
+	res = strings.ReplaceAll(res, "null", "None")
+	return res
+}
+
+// ──────────────────────────── pyLiteralEval（D-23-1）────────────────────────────
+
+// pyLiteralParser Python 字面量递归下降解析器（ast.literal_eval 等价子集）
+type pyLiteralParser struct {
+	s   string
+	pos int
+}
+
+// pyLiteralEval Python 字面量安全求值（ast.literal_eval 等价子集：dict/list/tuple/
+// str/bool/None/int/float，spec D-23-1）。不支持语法或残缺输入返回 error。
+func pyLiteralEval(s string) (any, error) {
+	p := &pyLiteralParser{s: s}
+	v, err := p.parseValue()
+	if err != nil {
+		return nil, err
+	}
+	p.skipBlank()
+	if p.pos != len(p.s) {
+		return nil, fmt.Errorf("pyLiteralEval: 尾随字符 %q", p.s[p.pos:])
+	}
+	return v, nil
+}
+
+// skipBlank 跳过空白
+func (p *pyLiteralParser) skipBlank() {
+	for p.pos < len(p.s) && (p.s[p.pos] == ' ' || p.s[p.pos] == '\t' || p.s[p.pos] == '\n' || p.s[p.pos] == '\r') {
+		p.pos++
+	}
+}
+
+// parseValue 递归分派：容器/串/关键字/数字
+func (p *pyLiteralParser) parseValue() (any, error) {
+	p.skipBlank()
+	if p.pos >= len(p.s) {
+		return nil, fmt.Errorf("pyLiteralEval: 意外结束")
+	}
+	switch c := p.s[p.pos]; {
+	case c == '{':
+		return p.parseDict()
+	case c == '[' || c == '(':
+		return p.parseSeq(c)
+	case c == '\'' || c == '"':
+		return p.parseString()
+	case c == '-' || (c >= '0' && c <= '9') || c == '+' || c == '.':
+		return p.parseNumber()
+	default:
+		return p.parseKeyword()
+	}
+}
+
+// parseDict 解析 {'k': v, ...}
+func (p *pyLiteralParser) parseDict() (any, error) {
+	p.pos++ // 跳过 '{'
+	m := map[string]any{}
+	p.skipBlank()
+	if p.pos < len(p.s) && p.s[p.pos] == '}' {
+		p.pos++
+		return m, nil
+	}
+	for {
+		key, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		ks, ok := key.(string)
+		if !ok {
+			return nil, fmt.Errorf("pyLiteralEval: dict 键须为字符串")
+		}
+		p.skipBlank()
+		if p.pos >= len(p.s) || p.s[p.pos] != ':' {
+			return nil, fmt.Errorf("pyLiteralEval: dict 缺冒号")
+		}
+		p.pos++
+		val, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		m[ks] = val
+		p.skipBlank()
+		if p.pos >= len(p.s) {
+			return nil, fmt.Errorf("pyLiteralEval: dict 意外结束")
+		}
+		switch p.s[p.pos] {
+		case ',':
+			p.pos++
+		case '}':
+			p.pos++
+			return m, nil
+		default:
+			return nil, fmt.Errorf("pyLiteralEval: dict 缺逗号或右括号")
+		}
+	}
+}
+
+// parseSeq 解析 [...] / (...)（元组归并为列表，与 parseDetectionResult 消费形态一致）
+func (p *pyLiteralParser) parseSeq(open byte) (any, error) {
+	p.pos++
+	items := []any{}
+	p.skipBlank()
+	if p.pos < len(p.s) && (p.s[p.pos] == ']' || p.s[p.pos] == ')') {
+		p.pos++
+		return items, nil
+	}
+	for {
+		v, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, v)
+		p.skipBlank()
+		if p.pos >= len(p.s) {
+			return nil, fmt.Errorf("pyLiteralEval: 序列意外结束")
+		}
+		switch p.s[p.pos] {
+		case ',':
+			p.pos++
+			// 尾逗号允许（Python 字面量特性）
+			p.skipBlank()
+			if p.pos < len(p.s) && (p.s[p.pos] == ']' || p.s[p.pos] == ')') {
+				p.pos++
+				return items, nil
+			}
+		case ']', ')':
+			p.pos++
+			return items, nil
+		default:
+			return nil, fmt.Errorf("pyLiteralEval: 序列缺逗号或右括号")
+		}
+	}
+}
+
+// parseString 解析引号串（不支持转义——LLM 输出场景无转义需求，残缺即报错）
+func (p *pyLiteralParser) parseString() (any, error) {
+	quote := p.s[p.pos]
+	p.pos++
+	var sb strings.Builder
+	for p.pos < len(p.s) {
+		if p.s[p.pos] == quote {
+			p.pos++
+			return sb.String(), nil
+		}
+		sb.WriteByte(p.s[p.pos])
+		p.pos++
+	}
+	return nil, fmt.Errorf("pyLiteralEval: 字符串未闭合")
+}
+
+// parseNumber 解析整数/浮点（含正负号与小数点）
+func (p *pyLiteralParser) parseNumber() (any, error) {
+	start := p.pos
+	if p.pos < len(p.s) && (p.s[p.pos] == '-' || p.s[p.pos] == '+') {
+		p.pos++
+	}
+	isFloat := false
+	for p.pos < len(p.s) && (p.s[p.pos] >= '0' && p.s[p.pos] <= '9' || p.s[p.pos] == '.') {
+		if p.s[p.pos] == '.' {
+			if isFloat {
+				return nil, fmt.Errorf("pyLiteralEval: 非法数字")
+			}
+			isFloat = true
+		}
+		p.pos++
+	}
+	lit := p.s[start:p.pos]
+	if lit == "" || lit == "-" || lit == "+" || lit == "." {
+		return nil, fmt.Errorf("pyLiteralEval: 非法数字")
+	}
+	if isFloat {
+		f, err := strconv.ParseFloat(lit, 64)
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+	i, err := strconv.ParseInt(lit, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
+// parseKeyword 解析 True/False/None（含前缀陷阱逐字报错）
+func (p *pyLiteralParser) parseKeyword() (any, error) {
+	for kw, v := range map[string]any{"True": true, "False": false, "None": nil} {
+		if strings.HasPrefix(p.s[p.pos:], kw) {
+			p.pos += len(kw)
+			return v, nil
+		}
+	}
+	return nil, fmt.Errorf("pyLiteralEval: 无法识别的记号 %q", p.s[p.pos:])
+}
+
+// ──────────────────────────── 解析主链 ────────────────────────────
+
+// postProcessIntentDetection 解析主链（Python :377-414 步骤一比一）：
+// refix → literal_eval（异常/非 dict → 默认分类+JSON 失败文案）→ 缺 class →
+// 缺键文案 → 去 \n/空格/引号 → 正则规整 分类N/CategoryN → 不在表内 → 默认分类+
+// 校验失败文案（reason 同步覆盖）→ 返回 (class, reason)
+func (e *IntentDetectionExecutable) postProcessIntentDetection(result string) (string, string) {
+	lang := e.cfg.AcceptLanguage
+	jsonFailReason := jsonParseFailReasonZH
+	classMissingReason := classKeyMissingReasonZH
+	validationFailReason := validationFailReasonZH
+	categoryPattern := `分类\d+`
+	if lang == "en" {
+		jsonFailReason = jsonParseFailReasonEN
+		classMissingReason = classKeyMissingReasonEN
+		validationFailReason = validationFailReasonEN
+		categoryPattern = `Category\d+`
+	}
+
+	// 步骤1：refix + 字面量求值（:385-389）
+	refixed := refixLLMOutput(result)
+	parsedDict, err := pyLiteralEval(refixed)
+	if err != nil {
+		return e.defaultCfg.DefaultClass, strings.ReplaceAll(jsonFailReason, "{result}", refixed)
+	}
+
+	// 步骤2：非 dict → JSON 失败文案（:391-392；result 形参为 refixed 原文）
+	dict, ok := parsedDict.(map[string]any)
+	if !ok {
+		return e.defaultCfg.DefaultClass, strings.ReplaceAll(jsonFailReason, "{result}", refixed)
+	}
+
+	// 步骤3：缺 class 键（falsy，Python :395-396；文案形参是解析后 dict 的 repr）
+	rawClass, hasClass := dict[classKey]
+	if !hasClass || rawClass == nil || rawClass == "" || rawClass == false {
+		return e.defaultCfg.DefaultClass,
+			strings.ReplaceAll(classMissingReason, "{result}", pythonsem.PyRepr(dict))
+	}
+
+	// 步骤4：class 清洗（Python :398：去 \n/空格/双引/单引）
+	intentClass, _ := rawClass.(string)
+	if intentClass == "" {
+		intentClass = fmt.Sprintf("%v", rawClass)
+	}
+	intentClass = strings.ReplaceAll(intentClass, "\n", "")
+	intentClass = strings.ReplaceAll(intentClass, " ", "")
+	intentClass = strings.ReplaceAll(intentClass, "\"", "")
+	intentClass = strings.ReplaceAll(intentClass, "'", "")
+
+	// 步骤5：正则规整（Python :399-405；IGNORECASE；en 再提数字组重排 CategoryN）
+	match := regexp.MustCompile(`(?i)` + categoryPattern).FindString(intentClass)
+	if match != "" {
+		if lang == "en" {
+			digitPart := regexp.MustCompile(`\d+`).FindString(match)
+			if digitPart != "" {
+				match = "Category" + digitPart
+			}
+		}
+		intentClass = match
+		dict[classKey] = intentClass
+	}
+
+	// 步骤6：不在分类表 → 默认分类 + 校验失败文案（:407-412）
+	if !e.validateLLMParsedResult(intentClass) {
+		reason := strings.ReplaceAll(validationFailReason, "{intent_class}", intentClass)
+		reason = strings.ReplaceAll(reason, "{category_list}", pythonsem.PyRepr(e.defaultCfg.CategoryList))
+		dict[classKey] = e.defaultCfg.DefaultClass
+		dict[reasonKey] = reason
+	}
+
+	// 步骤7：返回 class 与 reason（缺省 ""，:414——class 取 dict 终值：
+	// 命中分类表时为规整值，回落时被 :412 update 为默认分类）
+	reason, _ := dict[reasonKey].(string)
+	finalClass, _ := dict[classKey].(string)
+	return finalClass, reason
+}
+
+// validateLLMParsedResult 类别表校验（Python _validate_llm_parsed_result :416-418）
+func (e *IntentDetectionExecutable) validateLLMParsedResult(result string) bool {
+	for _, category := range e.defaultCfg.CategoryList {
+		if category == result {
+			return true
+		}
+	}
+	return false
+}
+
+// getIntentIDAndName 分类号与名字解析（Python :426-433 一比一）：顺序扫描命中返回
+// {classificationId: idx, name: 名字表[idx]}；未命中 {0, 默认名}
+func (e *IntentDetectionExecutable) getIntentIDAndName(intentClass string) (int, string) {
+	defaultName := classificationDefaultNameZH
+	if e.cfg.AcceptLanguage == "en" {
+		defaultName = classificationDefaultNameEN
+	}
+	for idx, category := range e.defaultCfg.CategoryList {
+		if category == intentClass {
+			return idx, e.cfg.CategoryNameList[idx]
+		}
+	}
+	return classificationDefaultID, defaultName
+}
+
+// buildOutputMap 输出构造（Python IntentDetectionOutput.model_dump(exclude_defaults=True)
+// :332-334 等价面）：字段==默认值（-1 / ""）时剔除键
+func buildOutputMap(classificationID int, reason string, categoryName string) map[string]any {
+	out := map[string]any{}
+	if classificationID != -1 {
+		out[classificationIDKey] = classificationID
+	}
+	if reason != "" {
+		out["reason"] = reason
+	}
+	if categoryName != "" {
+		out[classificationNameKey] = categoryName
+	}
+	return out
+}
+
+// parseDetectionResult 解析总入口（Python :329-334 一比一）：
+// postProcess → getIntentIDAndName → exclude_defaults 输出 map
+func (e *IntentDetectionExecutable) parseDetectionResult(llmOutput string) map[string]any {
+	intentClass, reason := e.postProcessIntentDetection(llmOutput)
+	classificationID, categoryName := e.getIntentIDAndName(intentClass)
+	return buildOutputMap(classificationID, reason, categoryName)
 }

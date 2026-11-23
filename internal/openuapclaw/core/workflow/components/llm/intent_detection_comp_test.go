@@ -1,6 +1,8 @@
 package llm
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -87,5 +89,126 @@ func TestGetDefaultTemplate_其他语言回落zh(t *testing.T) {
 	msgs, _ := GetDefaultTemplate("jp").ToMessages()
 	if msgs[0].GetContent().String() != defaultSystemPromptZH {
 		t.Fatalf("非 en 应回落 zh 模板")
+	}
+}
+
+// ──────────────────────────── Task 2 解析层 ────────────────────────────
+
+// TestPostProcessIntentDetection_全分支 Python :377-414 逐分支（spec §5 覆盖点 4）
+func TestPostProcessIntentDetection_全分支(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+
+	// 分支1：非 JSON 文本 → 默认分类 + jsonParseFailReason（zh）
+	class, reason := e.postProcessIntentDetection("完全不是JSON")
+	if class != "分类0" || !strings.Contains(reason, "格式不符合有效的JSON规范") {
+		t.Fatalf("分支1错误: %q %q", class, reason)
+	}
+
+	// 分支1b：true/false/null 修复后可解析（LLM 常见输出，Python :202）
+	class, _ = e.postProcessIntentDetection(`{"class": "分类1", "reason": "r", "ok": true}`)
+	if class != "分类1" {
+		t.Fatalf("分支1b 修复失败: %q", class)
+	}
+
+	// 分支1c：单引号 dict（ast.literal_eval 特性）
+	class, _ = e.postProcessIntentDetection(`{'class': '分类1', 'reason': 'r'}`)
+	if class != "分类1" {
+		t.Fatalf("分支1c 单引号失败: %q", class)
+	}
+
+	// 分支2：解析成功但非 dict（如纯数字）→ jsonParseFailReason
+	class, reason = e.postProcessIntentDetection("123")
+	if class != "分类0" || !strings.Contains(reason, "格式不符合有效的JSON规范") {
+		t.Fatalf("分支2错误: %q %q", class, reason)
+	}
+
+	// 分支3：缺 class 键 → 默认分类 + classKeyMissingReason
+	class, reason = e.postProcessIntentDetection(`{"reason": "r"}`)
+	if class != "分类0" || !strings.Contains(reason, "缺少必要的输出") {
+		t.Fatalf("分支3错误: %q %q", class, reason)
+	}
+
+	// 分支4：类别不在列表（带杂音被规整成 分类9，不在表内）→ 默认分类 + validationFailReason
+	class, reason = e.postProcessIntentDetection(`{"class": "分类 9\n", "reason": "r"}`)
+	if class != "分类0" || !strings.Contains(reason, "不在预定义的分类列表") {
+		t.Fatalf("分支4错误: %q %q", class, reason)
+	}
+
+	// 分支5：规整命中——"分类 1\n" 去空白后正则捕获 分类1（Python :398-405）
+	class, _ = e.postProcessIntentDetection(`{"class": "分类 1\n", "reason": "r"}`)
+	if class != "分类1" {
+		t.Fatalf("分支5 规整失败: %q", class)
+	}
+}
+
+// TestPostProcessIntentDetection_英文分支 en 正则 CategoryN + 数字组重排（Python :383/402-405）
+func TestPostProcessIntentDetection_英文分支(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		CategoryNameList: []string{"Refund"}, AcceptLanguage: "en",
+	})
+	// 大小写不敏感 + 杂音 → 规整 Category1
+	class, _ := e.postProcessIntentDetection(`{"class": "  category 1 x\n", "reason": "r"}`)
+	if class != "Category1" {
+		t.Fatalf("英文规整失败: %q", class)
+	}
+	// 失败文案为英文
+	_, reason := e.postProcessIntentDetection("bad")
+	if !strings.Contains(reason, "does not conform to valid JSON format") {
+		t.Fatalf("英文失败文案不符: %q", reason)
+	}
+}
+
+// TestParseDetectionResult_excludeDefaults Python :329-334 model_dump(exclude_defaults=True)
+func TestParseDetectionResult_excludeDefaults(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+
+	// 正常命中：id=1 非默认、name="退款" 非默认、reason="r" 非默认 → 三键齐
+	out := e.parseDetectionResult(`{"class": "分类1", "reason": "r"}`)
+	if out[classificationIDKey] != 1 || out["reason"] != "r" || out[classificationNameKey] != "退款" {
+		t.Fatalf("正常命中输出错误: %v", out)
+	}
+
+	// 解析失败：class=分类0（id=0 ≠ -1 保留）、reason 被回落文案覆盖非空、
+	// name=分类表[0]="分类0" 非默认 → 但 reason/name 键均非默认值
+	out = e.parseDetectionResult("bad")
+	if out[classificationIDKey] != 0 {
+		t.Fatalf("默认分类 id 应为 0: %v", out)
+	}
+
+	// reason 为空串时剔除（= 默认 ""）：构造 class 命中但 reason 缺失
+	out = e.parseDetectionResult(`{"class": "分类1"}`)
+	if _, ok := out["reason"]; ok {
+		t.Fatalf("reason 空串应被剔除: %v", out)
+	}
+}
+
+// TestPyLiteralEval_Python字面量子集 D-23-1：str/bool/None/数字/列表/元组/字典/嵌套
+func TestPyLiteralEval_Python字面量子集(t *testing.T) {
+	cases := []struct {
+		in   string
+		want any
+	}{
+		{`"abc"`, "abc"}, {`'abc'`, "abc"},
+		{`True`, true}, {`False`, false}, {`None`, nil},
+		{`123`, int64(123)}, {`-1.5`, -1.5},
+		{`[1, 'a', True]`, []any{int64(1), "a", true}},
+		{`(1, 2)`, []any{int64(1), int64(2)}},
+		{`{'a': 1, 'b': [True, None]}`, map[string]any{"a": int64(1), "b": []any{true, nil}}},
+	}
+	for _, c := range cases {
+		got, err := pyLiteralEval(c.in)
+		if err != nil {
+			t.Fatalf("pyLiteralEval(%q) err: %v", c.in, err)
+		}
+		if !reflect.DeepEqual(got, c.want) {
+			t.Fatalf("pyLiteralEval(%q) = %#v, want %#v", c.in, got, c.want)
+		}
+	}
+	// 残缺输入报错（Python literal_eval 语义）
+	if _, err := pyLiteralEval(`{'a': `); err == nil {
+		t.Fatal("残缺输入应报错")
+	}
+	if _, err := pyLiteralEval(`{'a': 1}x`); err == nil {
+		t.Fatal("尾随字符应报错")
 	}
 }
