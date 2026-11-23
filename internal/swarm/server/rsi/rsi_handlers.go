@@ -95,6 +95,13 @@ func NewAgentServerHandlers(context *ServiceContext,
 // RecoverySummary 构造期对账摘要（_get_rsi_handlers 复用）。
 func (h *AgentServerHandlers) RecoverySummary() map[string]any { return h.recoverySummary }
 
+// RegisterHarnessProvider 重注册 HarnessProvider（对齐 Python
+// handlers.context.register_harness_provider；供 set_rsi_harness_provider
+// 在句柄已装配后同步注入）。
+func (h *AgentServerHandlers) RegisterHarnessProvider(provider rsi.HarnessProviderContract) {
+	h.context.RegisterHarnessProvider(provider)
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Handle 按 req_method 分发；服务域异常 → 统一错误语义载荷。

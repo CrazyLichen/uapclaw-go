@@ -66,13 +66,27 @@ type snapshotEntry struct {
 	data  map[string]any
 }
 
+// HarnessProviderOption provider 构造选项（对齐 Python provider_factory 的
+// harness_provider 可注入语义：调用方注入实例即替换默认构造）。
+type HarnessProviderOption func(*HarnessProvider)
+
+// WithOrchestrator 注入预构造编排器（测试缝，优先级最高；Run 优先使用注入值，
+// 不再经 buildConfig 走配置路径构造）。
+func WithOrchestrator(o *singleharness.SingleHarnessIterativeOptimizationOrchestrator) HarnessProviderOption {
+	return func(p *HarnessProvider) { p.orchestrator = o }
+}
+
 // NewHarnessProvider 构造 provider。
-func NewHarnessProvider(tasksRoot string, modelResolver *ModelConfigResolver) *HarnessProvider {
-	return &HarnessProvider{
+func NewHarnessProvider(tasksRoot string, modelResolver *ModelConfigResolver, opts ...HarnessProviderOption) *HarnessProvider {
+	p := &HarnessProvider{
 		tasksRoot:     tasksRoot,
 		modelResolver: modelResolver,
 		snapshotCache: map[string]snapshotEntry{},
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // ──────────────────────────── 能力位 ────────────────────────────

@@ -20,10 +20,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/member_optimizer/agents"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 )
 
 // MemberAttributionFakeChainSuite 定责→定病根→选择 全链 suite。

@@ -32,9 +32,9 @@ import (
 // AgentServerDomainSuite 17.9 服务域集成套件。
 type AgentServerDomainSuite struct {
 	suite.Suite
-	root    string
-	context *rsi.ServiceContext
-	pushed  *[]map[string]any
+	root     string
+	context  *rsi.ServiceContext
+	pushed   *[]map[string]any
 	handlers *rsihandlers.AgentServerHandlers
 }
 
@@ -282,9 +282,9 @@ func (f *integrationFakeEngine) GetTree(string) map[string]any { return nil }
 func (f *integrationFakeEngine) LocateArtifact(string, *string) map[string]any { return nil }
 
 // SupportsPause / SupportsResume / SupportsTerminate 能力位。
-func (f *integrationFakeEngine) SupportsPause() bool      { return false }
-func (f *integrationFakeEngine) SupportsResume() bool     { return true }
-func (f *integrationFakeEngine) SupportsTerminate() bool  { return false }
+func (f *integrationFakeEngine) SupportsPause() bool     { return false }
+func (f *integrationFakeEngine) SupportsResume() bool    { return true }
+func (f *integrationFakeEngine) SupportsTerminate() bool { return false }
 
 // newIntegrationFakeEngine 构造。
 func newIntegrationFakeEngine() *integrationFakeEngine {

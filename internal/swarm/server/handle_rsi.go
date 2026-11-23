@@ -78,6 +78,18 @@ func (s *AgentServer) HandleRSIRequest(ctx context.Context, request *schema.Agen
 	s.writeResponse(request.RequestID, request.ChannelID, resp)
 }
 
+// SetRSIHarnessProvider 在 RSI 缝上安装生产 HarnessProvider（对齐 Python
+// agent_ws_server.py:1486 set_rsi_harness_provider）：设置后懒装配使用注入值；
+// 句柄已装配时同步重注册进服务域。
+func (s *AgentServer) SetRSIHarnessProvider(provider rsi.HarnessProviderContract) {
+	rsiWiringMu.Lock()
+	defer rsiWiringMu.Unlock()
+	rsiHarnessProvider = provider
+	if rsiHandlersInstance != nil {
+		rsiHandlersInstance.RegisterHarnessProvider(provider)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getRSIHandlers 懒装配 RSI 服务域 + 分发句柄（每进程一次）。

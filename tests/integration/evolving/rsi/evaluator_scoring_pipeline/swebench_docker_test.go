@@ -52,7 +52,7 @@ func TestSwebenchDockerSuite(t *testing.T) {
 // SetupTest 构建本地 itest 镜像（alpine + python3 + /testbed + 符号链接）。
 func (s *SwebenchDockerSuite) SetupTest() {
 	ctxDir := s.T().TempDir()
-		dockerfile := `FROM alpine:3.19
+	dockerfile := `FROM alpine:3.19
 RUN apk add --no-cache bash coreutils python3 git && mkdir -p /testbed /opt/miniconda3/envs/testbed/bin \
 	&& ln -s /usr/bin/python3 /opt/miniconda3/envs/testbed/bin/python
 WORKDIR /testbed
@@ -193,7 +193,7 @@ func (s *SwebenchDockerSuite) TestSwebenchDocker_依赖缓存() {
 				"instance_id": "itest__case-2",
 				"namespace":   "uapclaw-itest",
 				// 缓存目录键是 config["repo"]（Python _dependency_cache_dir L443）。
-				"repo": "uapclaw-itest",
+				"repo":         "uapclaw-itest",
 				"docker_image": s.image2,
 				// base_commit == environment_setup_commit → 不触发外网下载。
 				"base_commit":              "deadbeef",
