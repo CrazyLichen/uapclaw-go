@@ -118,7 +118,7 @@ func TestEvolutionReviewRuntime_RecordReviewResult(t *testing.T) {
 
 	proposal := map[string]any{
 		"proposal_id": "p1", "reason": "r1",
-		"experience":   map[string]any{"summary": "s", "content": "c"},
+		"experience":    map[string]any{"summary": "s", "content": "c"},
 		"evidence_refs": []any{"ev1"},
 	}
 	raw := map[string]any{
@@ -191,7 +191,7 @@ func TestEvolutionReviewRuntime_ResolveSelectedProposals(t *testing.T) {
 		"proposals": []any{
 			map[string]any{
 				"proposal_id": "p1", "reason": "r1",
-				"experience":   map[string]any{"summary": "s1", "content": "c1"},
+				"experience":    map[string]any{"summary": "s1", "content": "c1"},
 				"evidence_refs": []any{"ev1"},
 			},
 			map[string]any{
