@@ -76,6 +76,61 @@ func (m *TeamManager) SetSessionGeneration(sessionID string, generation int) {
 	m.sessionGenerations[sessionID] = generation
 }
 
+// HasInteractiveWaiter 是否存在非自动化的交互类消费者持有持久流。
+// exclusive 本身不算（它可被心跳等自动化请求接管）；
+// attach_only 纯观察也不算。
+// Python: has_interactive_waiter (team_manager.py L562-570)。
+func (m *TeamManager) HasInteractiveWaiter(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hasInteractiveWaiterLocked(sessionID)
+}
+
+// hasInteractiveWaiterLocked HasInteractiveWaiter 的锁内实现。
+func (m *TeamManager) hasInteractiveWaiterLocked(sessionID string) bool {
+	exclusiveID := m.exclusiveWaiters[sessionID]
+	for _, waiter := range m.pendingWaitersTM[sessionID] {
+		// Python: any(rid != exclusive_request_id ...)——非 exclusive 的登记
+		// （含 persistent owner）即视为交互持有。
+		if waiter.RequestID != exclusiveID || exclusiveID == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// selectBroadcastWaitersLocked 择一选择本轮事件应投递的 waiter。
+// 语义（Python _select_broadcast_waiters :641-674）：
+//  1. exclusive 存在 → 只投 exclusive（轮期间 attach 不重复收）
+//  2. 无 exclusive → 非 attach 的 input_waiters（persistent/request 类）优先
+//  3. 全无 → 只投第一条 waiter（多观察订阅择一，防重复投递/重复落库）
+//
+// Gateway 层负责向"订阅该会话的每个客户端"扇出——waiter 层择一上游，
+// 是 "fallback upstream observers, not additional fan-out destinations"。
+func (m *TeamManager) selectBroadcastWaitersLocked(sessionID string) []tmPendingWaiter {
+	waiters := m.pendingWaitersTM[sessionID]
+	if len(waiters) == 0 {
+		return nil
+	}
+	if exclusiveID := m.exclusiveWaiters[sessionID]; exclusiveID != "" {
+		for _, waiter := range waiters {
+			if waiter.RequestID == exclusiveID {
+				return []tmPendingWaiter{waiter}
+			}
+		}
+	}
+	var inputWaiters []tmPendingWaiter
+	for _, waiter := range waiters {
+		if !waiter.AttachOnly {
+			inputWaiters = append(inputWaiters, waiter)
+		}
+	}
+	if len(inputWaiters) > 0 {
+		return inputWaiters
+	}
+	return waiters[:1]
+}
+
 // RegisterSessionWaiter 注册一个会话级等待者（排他或仅观察）。
 // Python: _pending_waiters/_exclusive_waiters/_attach_waiter_ids 写入点。
 func (m *TeamManager) RegisterSessionWaiter(sessionID, requestID string, ch chan map[string]any, exclusive, attachOnly bool, generation int) {
@@ -141,7 +196,9 @@ func (m *TeamManager) RemoveWaiter(sessionID, requestID string, generation *int)
 // Python: broadcast_event (team_manager.py L676-790+)。
 func (m *TeamManager) BroadcastEvent(sessionID, eventType string, payload map[string]any, channelID string) bool {
 	m.mu.Lock()
-	waiters := m.pendingWaitersTM[sessionID]
+	// Python: waiters = self._select_broadcast_waiters(session_id)（:760）——
+	// 择一上游（exclusive>input>attach[:1]），非全量 fan-out。
+	waiters := m.selectBroadcastWaitersLocked(sessionID)
 	m.mu.Unlock()
 	if len(waiters) == 0 {
 		// Python :739 waiters 空仍走到 :772 terminal fallback——不提前跳过。

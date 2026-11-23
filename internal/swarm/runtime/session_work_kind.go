@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	swarmsession "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -211,4 +212,71 @@ func teamBackgroundTrigger(params map[string]any) string {
 		return "cron"
 	}
 	return ""
+}
+
+// TeamWaiterKindOf 判定一次团队请求在 execution 注册时应持有的响应等待者种类。
+// Python: AgentRuntime._team_waiter_kind (service.py:3965-3996)，分支顺序
+// 逐条对齐，不得调整。
+//
+// 背景：attach_only 请求存在的意义就是持有响应订阅，因此恒为 PERSISTENT
+// owner（会话保持进入期间可被停泊为 WAITING_FOR_INPUT）；普通 team 消息
+// 轮在无既有交互 waiter 时同样登记为 PERSISTENT（长驻 owner，可停泊）。
+func TeamWaiterKindOf(request *schema.AgentRequest, workKind sessionpkg.SessionWorkKind, background bool) sessionpkg.TeamWaiterKind {
+	params := parseWorkKindParams(request)
+
+	// 后台触发：heartbeat → EXCLUSIVE（takeover 语义）；cron → REQUEST（围栏取消对象）
+	if workKind == sessionpkg.SessionWorkKindTeamBackground {
+		switch teamBackgroundTrigger(params) {
+		case "heartbeat":
+			return sessionpkg.TeamWaiterKindExclusive
+		case "cron":
+			return sessionpkg.TeamWaiterKindRequest
+		}
+		// Python raise ValueError——Go 以 NONE 兜底（调用方已保证合法触发，
+		// 到此说明参数非法，不持有响应通道）
+		return sessionpkg.TeamWaiterKindNone
+	}
+	// 控制轮不持有响应等待者
+	if workKind == sessionpkg.SessionWorkKindTeamControl {
+		return sessionpkg.TeamWaiterKindNone
+	}
+	// attach-only 订阅恒为 PERSISTENT owner（service.py:3986-3989 注释语义）
+	if isTeamAttachOnlyRequest(request, params) {
+		return sessionpkg.TeamWaiterKindPersistent
+	}
+	// 后台投递 / 跨会话消息不持有响应通道
+	if background || isSessionMessageParams(params) {
+		return sessionpkg.TeamWaiterKindNone
+	}
+	// 普通 team 消息：已有交互 waiter → NONE（防双投），否则 PERSISTENT
+	// Python: get_team_manager(request.channel_id).has_interactive_waiter(session_id)
+	channelID := request.ChannelID
+	if request.SessionID == nil {
+		return sessionpkg.TeamWaiterKindNone
+	}
+	sessionID := strings.TrimSpace(*request.SessionID)
+	if sessionID == "" {
+		return sessionpkg.TeamWaiterKindNone
+	}
+	if teamharness.GetTeamManager(channelID).HasInteractiveWaiter(sessionID) {
+		return sessionpkg.TeamWaiterKindNone
+	}
+	return sessionpkg.TeamWaiterKindPersistent
+}
+
+// IsTeamAttachOnlyRequest 请求是否为团队被动订阅（不提交输入、不建运行时、
+// 不跑模型，仅观察活流）。
+// Python: _is_attach_only_subscription (interface_deep.py:355) /
+// AgentRuntime._is_attach_only_request (service.py:3999-4002)。
+func IsTeamAttachOnlyRequest(request *schema.AgentRequest) bool {
+	return isTeamAttachOnlyRequest(request, parseRequestParams(request))
+}
+
+// isTeamAttachOnlyRequest IsTeamAttachOnlyRequest 的带 params 版（免重复解析）。
+func isTeamAttachOnlyRequest(request *schema.AgentRequest, params map[string]any) bool {
+	if request == nil {
+		return false
+	}
+	v, ok := params[schema.TeamAttachOnlyParam].(bool)
+	return ok && v
 }

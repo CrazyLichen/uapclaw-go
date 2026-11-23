@@ -5,21 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/interaction"
 	teammonitor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/monitor"
 	ateamruntime "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/runtime"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
@@ -211,6 +212,14 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	// NewTeamManager 创建实例时继承（对齐 Python 模块级函数恒可用），
 	// 此请求路径不再做任何注入写操作。
 	teamManager := team.GetTeamManager(channelID)
+
+	// attach-only 被动订阅短路（Python team_helpers.py:3049-3072 + :2746 前置段）：
+	// 不提交输入、不建运行时、不跑模型，仅注册观察 waiter 并常驻消费广播帧。
+	// 必须在 spec 装配与准入工作之前——纯观察者不适用其中任何一步，
+	// 跳过可避免长驻订阅把会话标记为执行中（interface_deep.py:355 注释语义）。
+	if isTeamAttachOnlySubscription(req.Params) {
+		return d.processTeamAttachOnlyStream(ctx, req, sessionID, channelID, teamManager)
+	}
 
 	// 步骤 3: S-04——等待该 session 的 pending shutdown 清理完成（最多 15s）。
 	// 对齐 Python team_helpers.py L624-635：前一个 team session 全员 shutdown 后
@@ -1806,4 +1815,78 @@ func resolveEvolutionEventTimeoutSec(rail *coreevolution.TeamSkillEvolutionRail,
 	}
 	// 对齐 Python: return parsed_timeout + max(grace, 0.0)
 	return sdkTimeout + math.Max(evolutionlogic.TeamEvolutionEventTimeoutGraceSec, 0.0)
+}
+
+// processTeamAttachOnlyStream 团队被动订阅流：注册 attach_only waiter 后
+// 常驻消费广播帧，直到调用方关闭响应流（gateway 断开/切会话）。
+// Python: team_helpers.py:2735-2768（_add_team_waiter attach_only=True）+
+// :3072 _consume_attach_only_stream；语义锚点：
+//   - 订阅不提交输入、不建运行时、不跑模型（interface_deep.py:355 注释）
+//   - 注册在 startup 时序内完成，锁随即释放、消费期间不持锁
+//   - 订阅保持附着直到响应流被调用方关闭（"stays attached until the
+//     response stream is closed by the caller"）
+func (d *DeepAdapter) processTeamAttachOnlyStream(ctx context.Context,
+	req *agentschema.AgentRequest, sessionID, channelID string, teamManager *team.TeamManager,
+) (<-chan *agentschema.AgentResponseChunk, error) {
+	ch := make(chan *agentschema.AgentResponseChunk, 64)
+	requestID := req.RequestID
+
+	// 代次：attach 路径无 execution context → 登记 0（generationMatchesLocked
+	// 对 ≤0 恒匹配，Python generation=None 语义）；摘除传 nil（remove_waiter
+	// 的代次守卫对 nil 恒通过）。
+	generation := 0
+
+	// 注册 attach_only waiter（Python: _add_team_waiter(attach_only=True)）
+	requestQueue := make(chan map[string]any, 256)
+	teamManager.RegisterSessionWaiter(sessionID, requestID, requestQueue, false, true, generation)
+	logger.Info(logComponent).
+		Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
+		Str("request_id", requestID).
+		Msg("attach-only subscription registered")
+
+	go func() {
+		defer close(ch)
+		// 订阅摘除：响应流关闭（调用方断开）即摘——
+		// Python: 移除由 finally/the caller teardown 承担（remove_waiter :620）
+		defer func() {
+			teamManager.RemoveWaiter(sessionID, requestID, nil)
+			logger.Info(logComponent).
+				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
+				Str("request_id", requestID).
+				Msg("attach-only subscription detached")
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				// 调用方断开/会话取消：正常退出（Python generator GC/流关闭语义）
+				return
+			case event, ok := <-requestQueue:
+				if !ok {
+					return
+				}
+				chunk := agentschema.NewAgentResponseChunk(requestID, channelID, event)
+				chunk.IsComplete = event["is_complete"] == true &&
+					event["event_type"] == "chat.processing_status"
+				select {
+				case ch <- chunk:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return ch, nil
+}
+
+// isTeamAttachOnlySubscription 请求参数是否描述团队被动订阅。
+// Python: interface_deep.py:355 _is_attach_only_subscription（adapter 层判定；
+// "submits no input, creates no runtime, and runs no model"）。
+func isTeamAttachOnlySubscription(params json.RawMessage) bool {
+	var parsed map[string]any
+	if json.Unmarshal(params, &parsed) != nil {
+		return false
+	}
+	v, ok := parsed[agentschema.TeamAttachOnlyParam].(bool)
+	return ok && v
 }

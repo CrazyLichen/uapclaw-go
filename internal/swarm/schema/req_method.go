@@ -662,3 +662,10 @@ func init() {
 		reqMethodLookup[string(m)] = m
 	}
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// TeamAttachOnlyParam 团队会话被动订阅参数键（chat.send 附加：只观察不提交输入）。
+// Python: openjiuwen_protocol.message.TEAM_ATTACH_ONLY_PARAM（协议包常量，
+// jiuwenswarm/common/schema/message.py re-export）。
+const TeamAttachOnlyParam = "team_attach_only"

@@ -51,10 +51,8 @@ const (
 	PlanModeExitedEvent = "plan_mode_exited"
 	// PreviousSessionModeKey 上一次会话模式参数键
 	PreviousSessionModeKey = "_session_previous_mode"
-	// TeamAttachOnlyParam 团队会话被动订阅参数键
-	//
-	// Python: openjiuwen_protocol.message.TEAM_ATTACH_ONLY_PARAM（协议包常量）
-	TeamAttachOnlyParam = "team_attach_only"
+	// TeamAttachOnlyParam 团队会话被动订阅参数键（schema 协议常量别名）
+	TeamAttachOnlyParam = schema.TeamAttachOnlyParam
 	// sessionMessageInternalKey 跨会话消息内部参数键
 	//
 	// Python: gateway/common/session_message.SESSION_MESSAGE_INTERNAL_KEY
