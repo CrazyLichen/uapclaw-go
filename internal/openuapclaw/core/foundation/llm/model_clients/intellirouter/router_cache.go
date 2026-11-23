@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/observability"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/provider"
 	llmrouter "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/router"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -19,6 +19,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	intelliroutertypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
 	llmrouter "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/router"
@@ -27,8 +29,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/routing"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // logComponent 组件级日志常量。

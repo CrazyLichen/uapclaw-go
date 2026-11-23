@@ -3,16 +3,17 @@ package intellirouter
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	intelliroutertypescore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
 	intelliroutertypesprovider "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/provider"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // 以下用例对齐上游 test_intelli_router_routed_model.py 12 例中的
@@ -463,4 +464,45 @@ func errorDetails(err error) map[string]any {
 		return g.Details()
 	}
 	return nil
+}
+
+// TestClient_Invoke_FillsPromptPlaceholder 组装级端到端：
+// prompt 携带 <routed-model/> → Invoke → 断言 provider 实际收到的请求体
+// 中占位符已替换为该 attempt deployment 的模型名。
+// （15.20 审查补：此前占位符替换仅 TransformRequest 层单测，未贯穿 Invoke。）
+func TestClient_Invoke_FillsPromptPlaceholder(t *testing.T) {
+	var captured string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "c1", "model": "m",
+			"choices": []map[string]any{{"index": 0, "finish_reason": "stop",
+				"message": map[string]any{"role": "assistant", "content": "ok"}}},
+			"usage": map[string]any{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL, "m", "m2")
+	msgs := model_clients.NewMessagesParam(
+		llmschema.NewSystemMessage("当前模型：<routed-model/>"),
+		llmschema.NewUserMessage("use <routed-model/> please"),
+	)
+	result, err := client.Invoke(context.Background(), msgs)
+	if err != nil {
+		t.Fatalf("invoke: %v", err)
+	}
+	if result.Content.Text() != "ok" {
+		t.Fatalf("内容错误：%v", result.Content)
+	}
+	// 占位符绝不原样发给 provider（契约边界）
+	if strings.Contains(captured, RoutedModelPlaceholder) {
+		t.Fatalf("占位符泄漏到 provider 请求：%s", captured)
+	}
+	// 第一个 attempt 的 deployment model_name 已回填
+	if !strings.Contains(captured, `"m"`) || !strings.Contains(captured, "当前模型：m") {
+		t.Fatalf("占位符未回填为 deployment 模型名：%s", captured)
+	}
 }

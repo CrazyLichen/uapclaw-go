@@ -1,6 +1,7 @@
 package intellirouter
 
 import (
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
@@ -84,6 +85,16 @@ func fillMessagePlaceholder(message map[string]any, label string) {
 	if ok {
 		if HasRoutedModelPlaceholder(content) {
 			message["content"] = FillRoutedModel(content, label)
+		}
+		return
+	}
+	// schema.MessageContent 形态：ConvertMessagesToDict 的产物
+	// （JSON 序列化为 text 字符串）。占位符必须在此层回填——否则字面
+	// <routed-model/> 会原样发给 provider（端到端用例
+	// TestClient_Invoke_FillsPromptPlaceholder 抓出的缺口）。
+	if mc, ok := message["content"].(llmschema.MessageContent); ok {
+		if HasRoutedModelPlaceholder(mc.Text()) {
+			message["content"] = FillRoutedModel(mc.Text(), label)
 		}
 		return
 	}
