@@ -173,12 +173,13 @@ type HTTPRequestComponent struct {
 	executable *HTTPRequestExecutable
 }
 
-// HttpComponentConfig 组件配置（Python :131-133 一比一；Metadata 照搬 Optional 字段）
+// HttpComponentConfig 组件配置（Python :131-133 一比一；metadata 字段经
+// components.ComponentConfig 基座承载——8.18 LLMComponentConfig 同款，审查收口②）
 type HttpComponentConfig struct {
+	// components.ComponentConfig 组件基座配置（承载 metadata: Optional[WorkflowComponentMetadata]）
+	components.ComponentConfig
 	// RequestParams 请求参数
 	RequestParams *HttpRequestParamConfig
-	// Metadata 组件元数据（Python Optional[WorkflowComponentMetadata]）
-	Metadata any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -561,7 +562,8 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 		if proxy != "" {
 			pu, perr := url.Parse(proxy)
 			if perr != nil {
-				return nil, wrapRequestError(perr)
+				return nil, exception.BuildError(exception.StatusComponentToolExecutionError,
+				exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", perr)))
 			}
 			transport.Proxy = http.ProxyURL(pu)
 		}
@@ -593,7 +595,8 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 		}
 		req, rerr := http.NewRequest(method, fullURL, bodyReader)
 		if rerr != nil {
-			return nil, wrapRequestError(rerr)
+			return nil, exception.BuildError(exception.StatusComponentToolExecutionError,
+				exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", rerr)))
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)
@@ -606,7 +609,8 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 				retryCount++
 				continue
 			}
-			return nil, wrapRequestError(derr)
+			return nil, exception.BuildError(exception.StatusComponentToolExecutionError,
+				exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", derr)))
 		}
 
 		// 分块读 + 超限（:293-303）。Python raise 在 try 内 → 走 except
@@ -641,7 +645,8 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 				retryCount++
 				continue
 			}
-			return nil, wrapRequestError(readErr)
+			return nil, exception.BuildError(exception.StatusComponentToolExecutionError,
+				exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", readErr)))
 		}
 
 		// 文本/二进制分型（:306-313）
@@ -653,10 +658,11 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 			contentResult = content // D-22-1：[]byte 直装
 		}
 
-		// 响应头 dict 化（:317）
+		// 响应头 dict 化（:317）。Python dict(CIMultiDict) 对重复键后值覆盖前值，
+		// 审查收口④：取切片末值（后值覆盖）对齐，不用 Join 多值拼接
 		respHeaders := map[string]string{}
 		for k, vs := range resp.Header {
-			respHeaders[strings.ToLower(k)] = strings.Join(vs, ",")
+			respHeaders[strings.ToLower(k)] = vs[len(vs)-1]
 		}
 
 		result = map[string]any{
@@ -810,16 +816,21 @@ func (e *HTTPRequestExecutable) stream(ctx context.Context, inputs map[string]an
 	return ch, nil
 }
 
-// collect 批出委托（Python collect :160-163 return invoke）
+// collect 批出委托（Python collect :160-163 透传 inputs 给 invoke）。偏差 D-22-7：
+// Python 流式 inputs 为「schema 重建 dict，叶子值 async generator」（stream_actor
+// base.py:255-266 rebuild_dict），透传后占位符解析产出语义无意义结果（可跑通但结果坏，
+// 零消费方未暴露）；Go 收帧取最后帧传 invoke——结构对齐"透传"、语义合理化。
 func (e *HTTPRequestExecutable) collect(ctx context.Context, inputs <-chan map[string]any,
 	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
-	return e.invoke(ctx, nil, sess, modelContext)
+	last := drainLastFrame(inputs)
+	return e.invoke(ctx, last, sess, modelContext)
 }
 
-// transform 单帧委托（Python transform :165-168 yield invoke）
+// transform 单帧委托（Python transform :165-168 yield invoke；inputs 透传同 collect，D-22-7）
 func (e *HTTPRequestExecutable) transform(ctx context.Context, inputs <-chan map[string]any,
 	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
-	out, err := e.invoke(ctx, nil, sess, modelContext)
+	last := drainLastFrame(inputs)
+	out, err := e.invoke(ctx, last, sess, modelContext)
 	if err != nil {
 		return nil, err
 	}
@@ -829,16 +840,21 @@ func (e *HTTPRequestExecutable) transform(ctx context.Context, inputs <-chan map
 	return ch, nil
 }
 
+// drainLastFrame 消费流式 inputs 至关闭，返回最后帧（nil ≙ 无帧）。nil 通道直通。
+func drainLastFrame(inputs <-chan map[string]any) map[string]any {
+	if inputs == nil {
+		return nil
+	}
+	var last map[string]any
+	for frame := range inputs {
+		last = frame
+	}
+	return last
+}
+
 // toExecutable 产出可执行体（Python to_executable :511-512）
 func (c *HTTPRequestComponent) toExecutable() *HTTPRequestExecutable {
 	return NewHTTPRequestExecutable(c.config)
-}
-
-// wrapRequestError 网络层错误 → 102000 包装（Python :347-352
-// build_error(COMPONENT_TOOL_EXECUTION_ERROR, "HTTP request failed: …") 一比一）
-func wrapRequestError(err error) *exception.BaseError {
-	return exception.BuildError(exception.StatusComponentToolExecutionError,
-		exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", err)))
 }
 
 // containsAny ct 是否命中白名单任一子串（Python any(x in ct for …) :308）
