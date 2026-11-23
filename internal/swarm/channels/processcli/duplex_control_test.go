@@ -60,7 +60,11 @@ func (f *fakeAnswerClient) StreamInteractionAnswer(
 	f.answers = append(f.answers, answer)
 	f.mu.Unlock()
 	f.entered <- struct{}{}
-	<-f.release
+	// release 或 ctx 取消二者其一即返回（清理期泵被 cancel 时不挂死）
+	select {
+	case <-f.release:
+	case <-ctx.Done():
+	}
 	if onEvent != nil {
 		onEvent(&swruntime.RuntimeEvent{
 			Payload:    map[string]any{"event_type": "chat.answer_accepted"},
@@ -96,6 +100,17 @@ func newControlTestRig(t *testing.T) (*DuplexController, *OneShotWriter, *locked
 	sid := "sess-1"
 	writer.SessionID = &sid
 	ctrl := NewDuplexController(reader, writer, false)
+	// 清理：停输入泵并关闭管道两端。泄漏的泵 goroutine 持裸 fd 轮询，
+	// GC 终局器关闭旧 os.Pipe 后 fd 号被下一用例复用 → 旧泵 EBADF/偷读
+	// 新管道 → 控制器 INVALID_CONTROL 提前死亡（duplex 假红根因）。
+	t.Cleanup(func() {
+		// 先停输入泵（CloseStreams 不停输入泵；泵持裸 fd 轮询，先关管道
+		// 会让旧泵在 fd 号复用后偷读下一用例的控制帧——duplex 假红根因）
+		ctrl.StopInput()
+		_ = ctrl.CloseStreams()
+		_ = pipeW.Close()
+		_ = pipeR.Close()
+	})
 	return ctrl, writer, out, pipeR, pipeW
 }
 
@@ -135,18 +150,20 @@ func TestDuplexController_交互登记与answer回填(t *testing.T) {
 	rootEvents := []*swruntime.RuntimeEvent{interactionEvent("inter-1")}
 	idx := 0
 	releaseRoot := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	rootFn := streamDriver(func(handler func(*swruntime.RuntimeEvent) bool) error {
 		if idx < len(rootEvents) {
 			handler(rootEvents[idx])
 			idx++
 		}
-		// 等 answer 流路径被触发后结束根流
-		<-releaseRoot
+		// 等 answer 流路径被触发后结束根流（ctx 取消兜底，失败路径可退出）
+		select {
+		case <-releaseRoot:
+		case <-ctx.Done():
+		}
 		return nil
 	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	ctrl.Start(ctx, cancel)
 
 	consumeDone := make(chan error, 1)
@@ -180,6 +197,7 @@ func TestDuplexController_交互登记与answer回填(t *testing.T) {
 	require.Equal(t, []map[string]any{{"selected_options": []any{"ok"}}}, ans.Answers)
 
 	close(releaseRoot)
+	close(client.release)
 	cancel()
 	<-consumeDone
 }
@@ -296,7 +314,7 @@ func TestDuplexController_toolResult回填(t *testing.T) {
 func TestDuplexController_unattended权限卡自动reject(t *testing.T) {
 	pipeR, pipeW, err := os.Pipe()
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = pipeW.Close() })
+	t.Cleanup(func() { _ = pipeW.Close(); _ = pipeR.Close() })
 	// unattended：reader 必须为 nil（Python _execute_document 同款）
 	reader, rerr := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 10*time.Millisecond)
 	require.NoError(t, rerr)

@@ -179,7 +179,7 @@ func TestExecuteDocument_unattendedController(t *testing.T) {
 func TestExecuteDuplex_空输入(t *testing.T) {
 	pipeR, pipeW, err := os.Pipe()
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = pipeW.Close() })
+	t.Cleanup(func() { _ = pipeW.Close(); _ = pipeR.Close() })
 	_ = pipeW.Close() // 立即 EOF
 	reader, rerr := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 10*time.Millisecond)
 	require.NoError(t, rerr)

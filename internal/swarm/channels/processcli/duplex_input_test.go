@@ -112,7 +112,7 @@ func TestDuplexLineReader_并发读拒绝(t *testing.T) {
 	// os.Pipe 无数据 → 首个读真正挂起，第二个读才能撞上活跃互斥
 	pipeR, pipeW, pipeErr := os.Pipe()
 	require.NoError(t, pipeErr)
-	t.Cleanup(func() { _ = pipeW.Close() })
+	t.Cleanup(func() { _ = pipeW.Close(); _ = pipeR.Close() })
 	r, err := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 2*time.Second)
 	require.NoError(t, err)
 	go func() {
@@ -177,7 +177,7 @@ func TestDuplexLineReader_ReadDocument超限(t *testing.T) {
 func TestDuplexLineReader_ReadDocumentClose提前关闭(t *testing.T) {
 	pipeR, pipeW, pipeErr := os.Pipe()
 	require.NoError(t, pipeErr)
-	t.Cleanup(func() { _ = pipeW.Close() })
+	t.Cleanup(func() { _ = pipeW.Close(); _ = pipeR.Close() })
 	r, err := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 100*time.Millisecond)
 	require.NoError(t, err)
 	done := make(chan error, 1)

@@ -46,6 +46,7 @@ func TestReadPrompt_读stdin一行(t *testing.T) {
 		t.Fatalf("写入管道: %v", err)
 	}
 	_ = writeEnd.Close()
+	t.Cleanup(func() { _ = readEnd.Close() })
 	os.Stdin = readEnd
 
 	got, readErr := readPrompt(nil, promptText)
@@ -67,6 +68,7 @@ func TestReadPrompt_空stdin返回EOF(t *testing.T) {
 		t.Fatalf("os.Pipe: %v", err)
 	}
 	_ = writeEnd.Close()
+	t.Cleanup(func() { _ = readEnd.Close() })
 	os.Stdin = readEnd
 
 	if _, readErr := readPrompt(nil, promptText); readErr == nil {
