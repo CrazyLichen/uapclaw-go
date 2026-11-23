@@ -2334,8 +2334,8 @@ func resultMatched(result *sessionpkg.CancelExecutionResult) int {
 // RunStream 流式执行接线转发（门面经 AgentRuntimeHandle 调用；RunUnary 同形）。
 // Python: service.py:2419 self._session_coordinator.run_stream(...)。
 func (r *AgentRuntime) RunStream(ctx context.Context, sessionID, requestID string,
-	kind sessionpkg.SessionWorkKind, operation func(context.Context) (<-chan any, error),
-	options sessionpkg.StreamOptions, emit func(any) bool) error {
+	kind sessionpkg.SessionWorkKind, operation func(context.Context) (<-chan *schema.AgentResponseChunk, error),
+	options sessionpkg.StreamOptions, emit func(*schema.AgentResponseChunk) bool) error {
 	if r.coordinator == nil {
 		return ErrCoordinatorUnavailable
 	}
@@ -2345,8 +2345,8 @@ func (r *AgentRuntime) RunStream(ctx context.Context, sessionID, requestID strin
 // RunTeamStream 团队流式执行接线转发。
 // Python: service.py:2399 self._session_coordinator.run_team_stream(...)。
 func (r *AgentRuntime) RunTeamStream(ctx context.Context, sessionID, requestID string,
-	kind sessionpkg.SessionWorkKind, operation func(context.Context, sessionpkg.TeamExecutionContext) (<-chan any, error),
-	options sessionpkg.StreamOptions, emit func(any) bool) error {
+	kind sessionpkg.SessionWorkKind, operation func(context.Context, sessionpkg.TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error),
+	options sessionpkg.StreamOptions, emit func(*schema.AgentResponseChunk) bool) error {
 	if r.coordinator == nil {
 		return ErrCoordinatorUnavailable
 	}
@@ -2368,10 +2368,9 @@ func (r *AgentRuntime) TeamDetailsOf(request *schema.AgentRequest, kind sessionp
 	if v, ok := params[schema.TeamAttachOnlyParam].(bool); ok {
 		attachOnly = v
 	}
-	controlID := ""
-	if kind == sessionpkg.SessionWorkKindTeamControl {
-		controlID = request.RequestID
-	}
+	// Python _team_control_id (:3947-3964)：params.request_id；
+	// source=permission_interrupt 且 answers 恰一张卡时用 card_id。
+	controlID := teamControlIDOf(request, params)
 	return &sessionpkg.TeamExecutionDetails{
 		ControlID:         controlID,
 		BackgroundTrigger: teamBackgroundTrigger(params),
@@ -2390,4 +2389,75 @@ func sessionMessageIDOf(params map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// teamControlIDOf 控制轮关联键。
+// Python: _team_control_id (service.py:3947-3964)。
+func teamControlIDOf(request *schema.AgentRequest, params map[string]any) string {
+	requestID, _ := params["request_id"].(string)
+	requestID = strings.TrimSpace(requestID)
+	if src, _ := params["source"].(string); strings.TrimSpace(src) != "permission_interrupt" {
+		if requestID != "" {
+			return requestID
+		}
+		return ""
+	}
+	answers, _ := params["answers"].([]any)
+	cardIDs := make([]string, 0, len(answers))
+	for _, answer := range answers {
+		card, ok := answer.(map[string]any)
+		if !ok {
+			continue
+		}
+		cardID, _ := card["card_id"].(string)
+		cardID = strings.TrimSpace(cardID)
+		if cardID != "" {
+			cardIDs = append(cardIDs, cardID)
+		}
+	}
+	if len(cardIDs) == 1 {
+		return cardIDs[0]
+	}
+	if requestID != "" {
+		return requestID
+	}
+	return ""
+}
+
+// userInteractionEvents 要求用户回答的事件集合。
+// Python: USER_INTERACTION_EVENTS (interaction.py:26)。
+var userInteractionEvents = map[string]bool{
+	"chat.ask_user_question":       true,
+	"chat.client_tool_request":     true,
+	"harness.activate_interaction": true,
+}
+
+// interactionIDsOfChunk 从流元素提取交互标识（ask_user 类挂起标记用）。
+// Python: interaction_ids (interaction.py:35-39)——USER_INTERACTION_EVENTS
+// 取 payload.request_id，harness.activate_interaction 取 interaction_id。
+func interactionIDsOfChunk(item any) map[string]struct{} {
+	chunk, ok := item.(*schema.AgentResponseChunk)
+	if !ok || chunk.Payload == nil {
+		return nil
+	}
+	eventType, _ := chunk.Payload["event_type"].(string)
+	if !userInteractionEvents[eventType] {
+		return nil
+	}
+	key := "request_id"
+	if eventType == "harness.activate_interaction" {
+		key = "interaction_id"
+	}
+	id, _ := chunk.Payload[key].(string)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	return map[string]struct{}{id: {}}
+}
+
+// InteractionIDsOfChunk 流元素交互标识提取公开转发（门面 InteractionIDs 用）。
+// Python: interaction_ids (interaction.py:35)。
+func (r *AgentRuntime) InteractionIDsOfChunk(item any) map[string]struct{} {
+	return interactionIDsOfChunk(item)
 }

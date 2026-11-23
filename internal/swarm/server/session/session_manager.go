@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -723,4 +725,55 @@ func (q *taskQueue) Pop() any {
 	item := old[n-1]
 	q.items = old[:n-1]
 	return item
+}
+
+// SubmitTaskStream 会话队列的流式变体：排队后由会话 processor 执行 fn，
+// fn 产出的流逐帧写入返回通道（同一 processor goroutine 直写——无桥协程）。
+// 串行/LIFO/取消语义与 SubmitTask 完全一致；executor 接线用
+// （runViaExecutionCoordinator 的 operation，Python submit 流式对应物）。
+func (m *SessionManager) SubmitTaskStream(
+	ctx context.Context, sessionID string,
+	fn func(context.Context) (<-chan *schema.AgentResponseChunk, error),
+) <-chan *schema.AgentResponseChunk {
+	out := make(chan *schema.AgentResponseChunk, 64)
+	m.EnsureSessionProcessor(ctx, sessionID)
+	m.mu.Lock()
+	priority := m.nextPriorityLocked(sessionID)
+	queue := m.sessionQueues[sessionID]
+	task := &sessionTask{
+		fn: func(taskCtx context.Context) (any, error) {
+			stream, streamErr := fn(taskCtx)
+			if streamErr != nil {
+				return nil, streamErr
+			}
+			for chunk := range stream {
+				select {
+				case out <- chunk:
+				case <-taskCtx.Done():
+					return nil, taskCtx.Err()
+				}
+			}
+			return nil, nil
+		},
+		ctx:      ctx,
+		result:   make(chan taskResult, 1),
+		priority: priority,
+	}
+	if queue != nil {
+		heap.Push(queue, task)
+	}
+	m.mu.Unlock()
+	go func() {
+		defer close(out)
+		m.waitForTask(ctx, task)
+	}()
+	return out
+}
+
+// waitForTask 等任务完成（SubmitTaskStream 的收尾：任务结束关流）。
+func (m *SessionManager) waitForTask(ctx context.Context, task *sessionTask) {
+	select {
+	case <-task.result:
+	case <-ctx.Done():
+	}
 }

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -54,7 +56,7 @@ type ChildOptions struct {
 // Python: run_stream / run_team_stream 关键字参数
 type StreamOptions struct {
 	// InteractionIDs 从元素提取交互标识
-	InteractionIDs func(any) map[string]struct{}
+	InteractionIDs func(*schema.AgentResponseChunk) map[string]struct{}
 	// ParentExecutionID 父执行标识
 	ParentExecutionID string
 	// ChannelID 渠道标识
@@ -63,17 +65,6 @@ type StreamOptions struct {
 	Team *TeamExecutionDetails
 	// Details Team 流的团队详情（与 Team 同义，供 RunTeamStream 使用）
 	Details *TeamExecutionDetails
-}
-
-// streamItem 流式队列元素。
-// Python: coordinator.py _StreamItem
-type streamItem struct {
-	// value 数据元素
-	value any
-	// err 错误
-	err error
-	// done 是否为终态标记
-	done bool
 }
 
 // delivery 一次控制投递的在飞状态。
@@ -130,8 +121,6 @@ type RuntimeSessionCoordinator struct {
 	scheduler *SessionWorkScheduler
 	// cancelTimeout 取消等待超时
 	cancelTimeout time.Duration
-	// streamBufferSize 流式队列容量
-	streamBufferSize int
 	// sessions 会话标识 → 账本记录
 	sessions map[string]*sessionRecord
 	// generations 会话标识 → 单调代次计数
@@ -212,13 +201,12 @@ func NewRuntimeSessionCoordinator(opts CoordinatorOptions) *RuntimeSessionCoordi
 		bufSize = 1
 	}
 	return &RuntimeSessionCoordinator{
-		registry:         registry,
-		scheduler:        scheduler,
-		cancelTimeout:    opts.CancelTimeout,
-		streamBufferSize: bufSize,
-		sessions:         map[string]*sessionRecord{},
-		generations:      map[string]int{},
-		accepting:        true,
+		registry:      registry,
+		scheduler:     scheduler,
+		cancelTimeout: opts.CancelTimeout,
+		sessions:      map[string]*sessionRecord{},
+		generations:   map[string]int{},
+		accepting:     true,
 	}
 }
 
@@ -718,9 +706,9 @@ func (c *RuntimeSessionCoordinator) RunStream(
 	ctx context.Context,
 	sessionID, requestID string,
 	workKind SessionWorkKind,
-	operation func(context.Context) (<-chan any, error),
+	operation func(context.Context) (<-chan *schema.AgentResponseChunk, error),
 	opts StreamOptions,
-	emit func(any) bool,
+	emit func(*schema.AgentResponseChunk) bool,
 ) error {
 	if _, isTeam := teamWorkKinds[workKind]; isTeam {
 		return errors.New("Team work must use run_team_stream")
@@ -743,9 +731,9 @@ func (c *RuntimeSessionCoordinator) RunTeamStream(
 	ctx context.Context,
 	sessionID, requestID string,
 	workKind SessionWorkKind,
-	operation func(context.Context, TeamExecutionContext) (<-chan any, error),
+	operation func(context.Context, TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error),
 	opts StreamOptions,
-	emit func(any) bool,
+	emit func(*schema.AgentResponseChunk) bool,
 ) error {
 	if _, isTeam := teamWorkKinds[workKind]; !isTeam {
 		return errors.New("non-Team work must use run_stream")
@@ -778,7 +766,7 @@ func (c *RuntimeSessionCoordinator) RunTeamStream(
 		},
 		Details: *details,
 	}
-	contextual := func(ctx context.Context) (<-chan any, error) {
+	contextual := func(ctx context.Context) (<-chan *schema.AgentResponseChunk, error) {
 		return operation(ctx, teamCtx)
 	}
 	return c.runStream(ctx, record, handle, contextual, opts.InteractionIDs, emit)
@@ -798,42 +786,36 @@ func (c *RuntimeSessionCoordinator) runStream(
 	parentCtx context.Context,
 	record *sessionRecord,
 	handle *SessionExecutionHandle,
-	operation func(context.Context) (<-chan any, error),
-	interactionIDs func(any) map[string]struct{},
-	emit func(any) bool,
+	operation func(context.Context) (<-chan *schema.AgentResponseChunk, error),
+	interactionIDs func(*schema.AgentResponseChunk) map[string]struct{},
+	emit func(*schema.AgentResponseChunk) bool,
 ) error {
-	queue := make(chan streamItem, c.streamBufferSize)
 	opCtx, cancel := context.WithCancel(parentCtx)
 	handle.Cancel = cancel
+	// spec §2.1：Done 最后关闭；状态刷新与 ctx 释放按逆序收尾
+	defer handle.MarkDone()
+	defer cancel()
+	defer c.refreshSessionState(record)
 
-	produce := func(opCtx context.Context) (any, error) {
+	// use_lane：scheduled 且非 SESSION_MESSAGE
+	// 上游注释：流式邮箱工作已持有宿主准入，放进聊天 lane 避免死锁
+	// （Python: coordinator 用 lane 调度区分邮箱流与聊天流）。
+	useLane := handle.WorkKind.Scheduled() && handle.WorkKind != SessionWorkKindSessionMessage
+
+	// 内联执行（Python asyncio 单循环形态）：无 producer/queue 中转——
+	// runStream 自身消费 operation 的流，逐项标记+emit。
+	run := func(op context.Context) error {
 		c.registry.MarkRunning(handle)
 		c.mu.Lock()
 		record.state = RuntimeSessionStateActive
 		c.mu.Unlock()
 
-		var (
-			stream       <-chan any
-			terminalItem *streamItem
-			opErr        error
-		)
-		defer func() {
-			c.refreshSessionState(record)
-			if terminalItem != nil {
-				// 必须阻塞投递：缓冲满时丢终态会让消费者永久等待
-				queue <- *terminalItem
-			}
-			close(queue)
-			// spec §2.1：Done 最后关闭，表示收尾完成
-			handle.MarkDone()
-		}()
-
-		stream, opErr = operation(opCtx)
+		stream, opErr := operation(op)
 		if opErr != nil {
 			c.registry.MarkTerminal(handle, SessionExecutionStateFailed, opErr.Error())
-			terminalItem = &streamItem{err: opErr, done: true}
-			return nil, opErr
+			return opErr
 		}
+		stopEmit := false
 		for item := range stream {
 			if interactionIDs != nil {
 				if ids := interactionIDs(item); len(ids) > 0 {
@@ -843,7 +825,14 @@ func (c *RuntimeSessionCoordinator) runStream(
 					c.mu.Unlock()
 				}
 			}
-			queue <- streamItem{value: item}
+			if stopEmit {
+				continue
+			}
+			if !emit(item) {
+				// 消费方主动停止：置位后继续 range 到生产者 close（drain
+				// 语义，旧 queue 版等价——lane 调度下不 cancel opCtx）。
+				stopEmit = true
+			}
 		}
 		// 正常结束：有等待交互则置 WAITING，否则 SUCCEEDED
 		if len(handle.WaitingControlIDs) > 0 {
@@ -851,53 +840,21 @@ func (c *RuntimeSessionCoordinator) runStream(
 		} else {
 			c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
 		}
-		terminalItem = &streamItem{done: true}
-		return nil, nil
+		return nil
 	}
 
-	// use_lane：scheduled 且非 SESSION_MESSAGE
-	// 上游注释：流式邮箱工作已持有宿主准入，放进聊天 lane 会死锁
-	useLane := handle.WorkKind.Scheduled() && handle.WorkKind != SessionWorkKindSessionMessage
-
-	produceDone := make(chan error, 1)
-	go func() {
-		if useLane {
-			_, err := c.scheduler.SubmitAndWait(opCtx, handle, func(op context.Context) (any, error) {
-				return produce(op)
-			})
-			produceDone <- err
-			return
-		}
-		_, err := produce(opCtx)
-		produceDone <- err
-	}()
-
-	completedNormally := false
-	for item := range queue {
-		if item.err != nil {
-			// 生产者已结束，等它返回后上抛
-			<-produceDone
-			cancel()
-			return item.err
-		}
-		if item.done {
-			completedNormally = true
-			break
-		}
-		if !emit(item.value) {
-			// 消费方主动停止：继续 drain 队列直到生产者 close，
-			// 避免生产者阻塞在 queue <- terminalItem（有界缓冲满）。
-			for range queue {
-			}
-			break
-		}
+	var err error
+	if useLane {
+		_, err = c.scheduler.SubmitAndWait(opCtx, handle, func(op context.Context) (any, error) {
+			return nil, run(op)
+		})
+	} else {
+		err = run(opCtx)
 	}
-	produceErr := <-produceDone
-	cancel()
-	if !completedNormally {
-		_ = c.cancelExecutionInternal(handle.SessionID, handle.ExecutionID, nil)
+	if err != nil {
+		cancel()
 	}
-	return produceErr
+	return err
 }
 
 // cancelExecutionInternal 内部取消（供 runStream 的异常清理使用）。
@@ -1743,11 +1700,11 @@ type StreamSessionInputOptions struct {
 	// RequestID 请求标识
 	RequestID string
 	// Operation 有父执行时运行的操作（接收会话渠道标识）
-	Operation func(ctx context.Context, channelID string) (<-chan any, error)
+	Operation func(ctx context.Context, channelID string) (<-chan *schema.AgentResponseChunk, error)
 	// IdleOperation 无父执行时的回落操作
-	IdleOperation func(ctx context.Context) (<-chan any, error)
+	IdleOperation func(ctx context.Context) (<-chan *schema.AgentResponseChunk, error)
 	// InteractionIDs 从元素提取交互标识
-	InteractionIDs func(any) map[string]struct{}
+	InteractionIDs func(*schema.AgentResponseChunk) map[string]struct{}
 	// ExpectedExecutionID 调用方期望的目标执行（nil 表示不校验）
 	ExpectedExecutionID *string
 }
@@ -1760,7 +1717,7 @@ type StreamSessionInputOptions struct {
 func (c *RuntimeSessionCoordinator) StreamSessionInput(
 	ctx context.Context,
 	opts StreamSessionInputOptions,
-	emit func(any) bool,
+	emit func(*schema.AgentResponseChunk) bool,
 ) error {
 	// 1. 会话必须打开
 	record, requireErr := c.requireOpenSession(opts.SessionID)
@@ -1825,12 +1782,12 @@ func (c *RuntimeSessionCoordinator) StreamSessionInput(
 	// 8. 分流：有父执行走 session_input，否则走普通 chat_stream
 	workKind := SessionWorkKindChatStream
 	parentExecutionID := ""
-	var operation func(context.Context) (<-chan any, error)
+	var operation func(context.Context) (<-chan *schema.AgentResponseChunk, error)
 	if parent != nil {
 		workKind = SessionWorkKindSessionInput
 		parentExecutionID = parent.ExecutionID
 		channelID := record.channelID
-		operation = func(opCtx context.Context) (<-chan any, error) {
+		operation = func(opCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
 			return opts.Operation(opCtx, channelID)
 		}
 	} else {

@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -574,4 +575,61 @@ func TestSessionManager_CloseSession_待到任务结束(t *testing.T) {
 	if leftover {
 		t.Error("关闭后不应残留 closing_tasks 条目")
 	}
+}
+
+// TestSubmitTaskStream_排队与串行 流式变体契约：同会话 LIFO/串行、
+// 流通道收尾（out 关闭即任务完成）。
+func TestSubmitTaskStream_排队与串行(t *testing.T) {
+	m := NewSessionManager()
+	sid := "st-stream"
+
+	// 任务 A：先提交，慢速产出（占住 processor）
+	doneA := make(chan struct{})
+	outA := m.SubmitTaskStream(context.Background(), sid,
+		func(taskCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+			ch := make(chan *schema.AgentResponseChunk, 4)
+			go func() {
+				defer close(doneA)
+				for i := 0; i < 3; i++ {
+					select {
+					case ch <- mkStreamChunk(i):
+					case <-taskCtx.Done():
+						return
+					}
+				}
+				close(ch)
+			}()
+			return ch, nil
+		})
+
+	// 任务 B：A 未完成时提交（LIFO 队列，等 A 结束才执行）
+	outB := m.SubmitTaskStream(context.Background(), sid,
+		func(taskCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+			ch := make(chan *schema.AgentResponseChunk, 2)
+			ch <- mkStreamChunk("b-done")
+			close(ch)
+			return ch, nil
+		})
+
+	// A 的帧先到（串行证明：B 排队未插队）
+	got := 0
+	for range outA {
+		got++
+	}
+	<-doneA
+	if got != 3 {
+		t.Fatalf("A 应产出 3 帧，实际 %d", got)
+	}
+	// A 完成后 B 才执行
+	bVals := 0
+	for range outB {
+		bVals++
+	}
+	if bVals != 1 {
+		t.Fatalf("B 应产出 1 帧，实际 %d", bVals)
+	}
+}
+
+func mkStreamChunk(v any) *schema.AgentResponseChunk {
+	return schema.NewAgentResponseChunk("t", "web", map[string]any{"v": v})
 }

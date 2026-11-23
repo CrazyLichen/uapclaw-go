@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"sync"
 	"testing"
 	"time"
@@ -446,16 +447,19 @@ func TestCoordinator_SubmitUnary立即返回快照(t *testing.T) {
 func TestCoordinator_RunStream按序产出(t *testing.T) {
 	c := newTestCoordinator()
 	mustRegister(t, c, "s1")
-	var got []any
+	var got []string
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context) (<-chan any, error) {
-			ch := make(chan any, 3)
-			ch <- "a"
-			ch <- "b"
-			ch <- "c"
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			mk := func(id string) *swarmschema.AgentResponseChunk {
+				return swarmschema.NewAgentResponseChunk(id, "web", map[string]any{"v": id})
+			}
+			ch <- mk("a")
+			ch <- mk("b")
+			ch <- mk("c")
 			close(ch)
 			return ch, nil
-		}, StreamOptions{}, func(v any) bool { got = append(got, v); return true })
+		}, StreamOptions{}, func(v *swarmschema.AgentResponseChunk) bool { got = append(got, v.Payload["v"].(string)); return true })
 	if err != nil {
 		t.Fatalf("RunStream 失败: %v", err)
 	}
@@ -474,14 +478,18 @@ func TestCoordinator_RunStream终态不丢(t *testing.T) {
 	mustRegister(t, c, "s1")
 	count := 0
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context) (<-chan any, error) {
-			ch := make(chan any, 10)
-			for i := 0; i < 5; i++ {
-				ch <- i
-			}
-			close(ch)
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			// 内联形态下 operation 须快速返回（真实场景 fn 在 processor 异步
+			// 产出）——同步填充超过缓冲会自阻塞死锁。异步填充保持原语义。
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			go func() {
+				for i := 0; i < 5; i++ {
+					ch <- mkChunk(i)
+				}
+				close(ch)
+			}()
 			return ch, nil
-		}, StreamOptions{}, func(any) bool { count++; return true })
+		}, StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { count++; return true })
 	if err != nil {
 		t.Fatalf("RunStream 失败: %v", err)
 	}
@@ -495,11 +503,11 @@ func TestCoordinator_RunStream关闭Done且置终态(t *testing.T) {
 	c := newTestCoordinator()
 	mustRegister(t, c, "s1")
 	_ = c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context) (<-chan any, error) {
-			ch := make(chan any)
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			ch := make(chan *swarmschema.AgentResponseChunk)
 			close(ch)
 			return ch, nil
-		}, StreamOptions{}, func(any) bool { return true })
+		}, StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	snap := c.SnapshotSession("s1")
 	if len(snap.Executions) != 1 {
 		t.Fatalf("应有 1 条执行，实际 %d", len(snap.Executions))
@@ -514,8 +522,8 @@ func TestCoordinator_RunStream拒绝团队种类(t *testing.T) {
 	c := newTestCoordinator()
 	mustRegister(t, c, "s1")
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindTeamRequest,
-		func(context.Context) (<-chan any, error) { return nil, nil },
-		StreamOptions{}, func(any) bool { return true })
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+		StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err == nil || err.Error() != "Team work must use run_team_stream" {
 		t.Fatalf("应拒绝团队种类并给出上游文案，实际 %v", err)
 	}
@@ -527,8 +535,8 @@ func TestCoordinator_RunStream中途报错上抛(t *testing.T) {
 	mustRegister(t, c, "s1")
 	boom := errors.New("stream boom")
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context) (<-chan any, error) { return nil, boom },
-		StreamOptions{}, func(any) bool { return true })
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, boom },
+		StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if !errors.Is(err, boom) {
 		t.Fatalf("应上抛原错误，实际 %v", err)
 	}
@@ -544,14 +552,22 @@ func TestCoordinator_RunStream消费方主动停止(t *testing.T) {
 	mustRegister(t, c, "s1")
 	seen := 0
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(ctx context.Context) (<-chan any, error) {
-			ch := make(chan any, 10)
-			for i := 0; i < 10; i++ {
-				ch <- i
-			}
-			close(ch)
+		func(ctx context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			// 内联形态：异步填充（同终态不丢测试），ctx 取消时生产者自然终止
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			go func() {
+				for i := 0; i < 10; i++ {
+					select {
+					case ch <- mkChunk(i):
+					case <-ctx.Done():
+						close(ch)
+						return
+					}
+				}
+				close(ch)
+			}()
 			return ch, nil
-		}, StreamOptions{}, func(any) bool {
+		}, StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool {
 			seen++
 			return seen < 2 // 第二个元素后主动停
 		})
@@ -568,8 +584,10 @@ func TestCoordinator_RunTeamStream拒绝非团队种类(t *testing.T) {
 	c := newTestCoordinator()
 	mustRegister(t, c, "s1")
 	err := c.RunTeamStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context, TeamExecutionContext) (<-chan any, error) { return nil, nil },
-		StreamOptions{Details: &TeamExecutionDetails{}}, func(any) bool { return true })
+		func(context.Context, TeamExecutionContext) (<-chan *swarmschema.AgentResponseChunk, error) {
+			return nil, nil
+		},
+		StreamOptions{Details: &TeamExecutionDetails{}}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err == nil || err.Error() != "non-Team work must use run_stream" {
 		t.Fatalf("应拒绝非团队种类，实际 %v", err)
 	}
@@ -581,13 +599,13 @@ func TestCoordinator_RunTeamStream传入团队上下文(t *testing.T) {
 	mustRegister(t, c, "s1")
 	var captured TeamExecutionContext
 	err := c.RunTeamStream(context.Background(), "s1", "r-team", SessionWorkKindTeamRequest,
-		func(_ context.Context, teamCtx TeamExecutionContext) (<-chan any, error) {
+		func(_ context.Context, teamCtx TeamExecutionContext) (<-chan *swarmschema.AgentResponseChunk, error) {
 			captured = teamCtx
-			ch := make(chan any)
+			ch := make(chan *swarmschema.AgentResponseChunk)
 			close(ch)
 			return ch, nil
 		}, StreamOptions{Details: &TeamExecutionDetails{ControlID: "c1"}},
-		func(any) bool { return true })
+		func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}
@@ -607,19 +625,19 @@ func TestCoordinator_RunStream交互标识登记(t *testing.T) {
 	c := newTestCoordinator()
 	mustRegister(t, c, "s1")
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
-		func(ctx context.Context) (<-chan any, error) {
-			ch := make(chan any, 1)
-			ch <- "ask"
+		func(ctx context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			ch <- mkChunk("ask")
 			close(ch)
 			return ch, nil
 		}, StreamOptions{
-			InteractionIDs: func(v any) map[string]struct{} {
-				if v == "ask" {
+			InteractionIDs: func(v *swarmschema.AgentResponseChunk) map[string]struct{} {
+				if v.Payload["v"] == "ask" {
 					return map[string]struct{}{"c1": {}}
 				}
 				return nil
 			},
-		}, func(any) bool { return true })
+		}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}
@@ -639,11 +657,11 @@ func TestCoordinator_RunStream空流正常结束(t *testing.T) {
 	mustRegister(t, c, "s1")
 	count := 0
 	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
-		func(context.Context) (<-chan any, error) {
-			ch := make(chan any)
+		func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
+			ch := make(chan *swarmschema.AgentResponseChunk)
 			close(ch)
 			return ch, nil
-		}, StreamOptions{}, func(any) bool { count++; return true })
+		}, StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { count++; return true })
 	if err != nil || count != 0 {
 		t.Fatalf("空流应正常结束且无元素，实际 (err=%v, count=%d)", err, count)
 	}
@@ -1339,21 +1357,21 @@ func TestStreamSessionInput_无父执行走idle(t *testing.T) {
 	err := c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 		SessionID: "s1",
 		RequestID: "r1",
-		Operation: func(_ context.Context, _ string) (<-chan any, error) {
+		Operation: func(_ context.Context, _ string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			parentCalled = true
-			ch := make(chan any, 1)
-			ch <- "parent"
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			ch <- mkChunk("parent")
 			close(ch)
 			return ch, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) {
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
 			idleCalled = true
-			ch := make(chan any, 1)
-			ch <- "idle"
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			ch <- mkChunk("idle")
 			close(ch)
 			return ch, nil
 		},
-	}, func(any) bool { return true })
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -1376,16 +1394,16 @@ func TestStreamSessionInput_有父执行(t *testing.T) {
 	go func() {
 		defer close(chatDone)
 		_ = c.RunStream(context.Background(), "s1", "chat-1", SessionWorkKindChatStream,
-			func(ctx context.Context) (<-chan any, error) {
+			func(ctx context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
 				close(started)
-				ch := make(chan any)
+				ch := make(chan *swarmschema.AgentResponseChunk)
 				go func() {
 					<-release
 					close(ch)
 				}()
 				return ch, nil
 			},
-			StreamOptions{}, func(any) bool { return true })
+			StreamOptions{}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	}()
 	<-started
 
@@ -1396,21 +1414,21 @@ func TestStreamSessionInput_有父执行(t *testing.T) {
 		errCh <- c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 			SessionID: "s1",
 			RequestID: "r2",
-			Operation: func(_ context.Context, channelID string) (<-chan any, error) {
+			Operation: func(_ context.Context, channelID string) (<-chan *swarmschema.AgentResponseChunk, error) {
 				parentCalled = true
 				if channelID == "" {
 					t.Error("应传入会话渠道标识")
 				}
-				ch := make(chan any, 1)
-				ch <- "steer"
+				ch := make(chan *swarmschema.AgentResponseChunk, 4)
+				ch <- mkChunk("steer")
 				close(ch)
 				return ch, nil
 			},
-			IdleOperation: func(context.Context) (<-chan any, error) {
+			IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
 				idleCalled = true
 				return nil, nil
 			},
-		}, func(any) bool { return true })
+		}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	}()
 
 	// 等补投完成后释放聊天流
@@ -1445,11 +1463,11 @@ func TestStreamSessionInput_等交互时拒绝(t *testing.T) {
 	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 		SessionID: "s1",
 		RequestID: "r2",
-		Operation: func(context.Context, string) (<-chan any, error) {
+		Operation: func(context.Context, string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			return nil, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
-	}, func(any) bool { return true })
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 
 	var rejected *SessionInputRejectedError
 	if !errors.As(err, &rejected) {
@@ -1475,11 +1493,11 @@ func TestStreamSessionInput_取消中拒绝(t *testing.T) {
 	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 		SessionID: "s1",
 		RequestID: "r2",
-		Operation: func(context.Context, string) (<-chan any, error) {
+		Operation: func(context.Context, string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			return nil, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
-	}, func(any) bool { return true })
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 
 	var rejected *SessionInputRejectedError
 	if !errors.As(err, &rejected) {
@@ -1500,11 +1518,11 @@ func TestStreamSessionInput_目标已变时拒绝(t *testing.T) {
 		SessionID:           "s1",
 		RequestID:           "r2",
 		ExpectedExecutionID: &expected,
-		Operation: func(context.Context, string) (<-chan any, error) {
+		Operation: func(context.Context, string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			return nil, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
-	}, func(any) bool { return true })
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 
 	var target *SessionInputTargetError
 	if !errors.As(err, &target) {
@@ -1532,15 +1550,15 @@ func TestStreamSessionInput_目标匹配通过(t *testing.T) {
 		SessionID:           "s1",
 		RequestID:           "r2",
 		ExpectedExecutionID: &expected,
-		Operation: func(_ context.Context, _ string) (<-chan any, error) {
+		Operation: func(_ context.Context, _ string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			called = true
-			ch := make(chan any, 1)
-			ch <- "ok"
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			ch <- mkChunk("ok")
 			close(ch)
 			return ch, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
-	}, func(any) bool { return true })
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err != nil {
 		t.Fatalf("目标匹配不应报错: %v", err)
 	}
@@ -1555,9 +1573,9 @@ func TestStreamSessionInput_会话未注册(t *testing.T) {
 	err := c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 		SessionID:     "nope",
 		RequestID:     "r1",
-		Operation:     func(context.Context, string) (<-chan any, error) { return nil, nil },
-		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
-	}, func(any) bool { return true })
+		Operation:     func(context.Context, string) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) { return nil, nil },
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err == nil {
 		t.Fatal("未注册会话应报错")
 	}
@@ -1579,18 +1597,18 @@ func TestStreamSessionInput_跳过输入类父执行(t *testing.T) {
 	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
 		SessionID: "s1",
 		RequestID: "r2",
-		Operation: func(context.Context, string) (<-chan any, error) {
+		Operation: func(context.Context, string) (<-chan *swarmschema.AgentResponseChunk, error) {
 			t.Error("session_input 类执行不应作为父执行")
 			return nil, nil
 		},
-		IdleOperation: func(context.Context) (<-chan any, error) {
+		IdleOperation: func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error) {
 			idleCalled = true
-			ch := make(chan any, 1)
-			ch <- "idle"
+			ch := make(chan *swarmschema.AgentResponseChunk, 4)
+			ch <- mkChunk("idle")
 			close(ch)
 			return ch, nil
 		},
-	}, func(any) bool { return true })
+	}, func(*swarmschema.AgentResponseChunk) bool { return true })
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -1714,18 +1732,20 @@ func TestRunTeamStream_ExecutionVisible(t *testing.T) {
 		ObservationOnly: false,
 	}
 	done := make(chan struct{})
-	inner := make(chan any, 4)
-	inner <- map[string]any{"event_type": "team.task"}
+	inner := make(chan *swarmschema.AgentResponseChunk, 4)
+	inner <- mkChunk("team.task")
 	close(inner)
 	go func() {
+		defer close(done)
 		err := c.RunTeamStream(context.Background(), sid, "req-exec", SessionWorkKindTeamRequest,
-			func(context.Context, TeamExecutionContext) (<-chan any, error) { return inner, nil },
+			func(context.Context, TeamExecutionContext) (<-chan *swarmschema.AgentResponseChunk, error) {
+				return inner, nil
+			},
 			StreamOptions{Details: details, ChannelID: "web"},
-			func(any) bool { return true })
+			func(*swarmschema.AgentResponseChunk) bool { return true })
 		if err != nil {
 			t.Errorf("run: %v", err)
 		}
-		close(done)
 	}()
 	// 执行期间快照可见
 	deadline := time.Now().Add(2 * time.Second)
@@ -1745,4 +1765,9 @@ func TestRunTeamStream_ExecutionVisible(t *testing.T) {
 		t.Fatal("execution with waiter_kind must be visible during run")
 	}
 	<-done
+}
+
+// mkChunk 测试 chunk 构造（窄化后流元素类型）。
+func mkChunk(v any) *swarmschema.AgentResponseChunk {
+	return swarmschema.NewAgentResponseChunk("t", "web", map[string]any{"v": v})
 }

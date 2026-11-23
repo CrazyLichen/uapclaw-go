@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"os"
 	"path/filepath"
 	"sync"
@@ -31,7 +32,7 @@ type fakeAdapter struct {
 	createErr       error
 	processResp     *schema.AgentResponse
 	processErr      error
-	streamCh        <-chan *schema.AgentResponseChunk
+	streamCh        <-chan *agentschema.AgentResponseChunk
 	streamErr       error
 	interruptResp   *schema.AgentResponse
 	interruptErr    error
@@ -77,7 +78,7 @@ func (f *fakeAdapter) TakeProcessCliRunOptions() *adapter.ProcessCliRunOptions {
 func (f *fakeAdapter) ProcessMessageImpl(_ context.Context, _ *schema.AgentRequest, _ map[string]any) (*schema.AgentResponse, error) {
 	return f.processResp, f.processErr
 }
-func (f *fakeAdapter) ProcessMessageStreamImpl(_ context.Context, _ *schema.AgentRequest, _ map[string]any) (<-chan *schema.AgentResponseChunk, error) {
+func (f *fakeAdapter) ProcessMessageStreamImpl(_ context.Context, _ *schema.AgentRequest, _ map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
 	return f.streamCh, f.streamErr
 }
 func (f *fakeAdapter) ProcessInterrupt(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -222,7 +223,7 @@ func TestUapClaw_ProcessMessageStream_基本流程(t *testing.T) {
 	fa := newFakeAdapter()
 
 	// 构建流式 chunk channel
-	chunkCh := make(chan *schema.AgentResponseChunk, 4)
+	chunkCh := make(chan *agentschema.AgentResponseChunk, 4)
 	chunkCh <- schema.NewAgentResponseChunk("req-2", "web", map[string]any{
 		"event_type": "chat.delta",
 		"content":    "你好",
@@ -757,7 +758,7 @@ func TestUapClaw_ProcessMessageStream_AfterChat钩子无内容条件(t *testing.
 	fa := newFakeAdapter()
 
 	// 流只发 delta 无 final：assistantMessage 回退拼接 delta
-	chunkCh := make(chan *schema.AgentResponseChunk, 2)
+	chunkCh := make(chan *agentschema.AgentResponseChunk, 2)
 	chunkCh <- schema.NewAgentResponseChunk("req-s", "web", map[string]any{
 		"event_type": "chat.delta",
 		"content":    "流式回复",
@@ -814,12 +815,12 @@ func TestProcessTeamInterrupt_Pause返回interrupt_result(t *testing.T) {
 
 // executor 接线接口扩展后的 test handle 兜底（接线用例不覆盖这些方法）。
 func (h *testRuntimeHandle) RunStream(context.Context, string, string, swsession.SessionWorkKind,
-	func(context.Context) (<-chan any, error), swsession.StreamOptions, func(any) bool) error {
+	func(context.Context) (<-chan *agentschema.AgentResponseChunk, error), swsession.StreamOptions, func(*agentschema.AgentResponseChunk) bool) error {
 	return nil
 }
 
 func (h *testRuntimeHandle) RunTeamStream(context.Context, string, string, swsession.SessionWorkKind,
-	func(context.Context, swsession.TeamExecutionContext) (<-chan any, error), swsession.StreamOptions, func(any) bool) error {
+	func(context.Context, swsession.TeamExecutionContext) (<-chan *agentschema.AgentResponseChunk, error), swsession.StreamOptions, func(*agentschema.AgentResponseChunk) bool) error {
 	return nil
 }
 
@@ -828,5 +829,9 @@ func (h *testRuntimeHandle) SessionWorkKindOf(*schema.AgentRequest) *swsession.S
 }
 
 func (h *testRuntimeHandle) TeamDetailsOf(*schema.AgentRequest, swsession.SessionWorkKind) *swsession.TeamExecutionDetails {
+	return nil
+}
+
+func (h *testRuntimeHandle) InteractionIDsOfChunk(item any) map[string]struct{} {
 	return nil
 }
