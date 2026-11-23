@@ -433,6 +433,17 @@ func (uc *UapClawSwarm) processMessageStreamInternal(
 		return uc.runMessageStreamDirect(ctx, request)
 	}
 	sessionID := session.GetSessionID(request.SessionID)
+
+	// 执行接线（Python service.py:2261-2418 对齐）：work_kind 非 None 的
+	// 会话执行型请求经 coordinator 注册 execution（RunStream/RunTeamStream）。
+	// work_kind 为 nil（非会话执行型）或 coordinator 不可用时维持原队列路径。
+	// 接线点在门面（Python run_team_stream 同层）；processTeamMessageStream
+	// /runMessageStreamDirect 整体成为 operation，内部分流逻辑不动。
+	if runtime := uc.currentAgentRuntime(); runtime != nil {
+		if kind := runtime.SessionWorkKindOf(request); kind != nil {
+			return uc.runViaExecutionCoordinator(ctx, request, sessionID, *kind, runtime)
+		}
+	}
 	inner := make(chan *schema.AgentResponseChunk)
 	ready := make(chan error, 1)
 	uc.sessionManager.SubmitTask(ctx, sessionID, func(taskCtx context.Context) (any, error) {
@@ -1742,4 +1753,104 @@ func (uc *UapClawSwarm) SetHeartbeatService(service buildctx.HeartbeatJobService
 	}); ok {
 		setter.SetHeartbeatService(service)
 	}
+}
+
+// runViaExecutionCoordinator 会话执行型流经 coordinator 注册 execution 后执行。
+// Python: service.py:2261-2418——work_kind 非 None 时 team→run_team_stream /
+// 单 agent→run_stream；operation 内保留 sessionManager 会话队列串行语义，
+// coordinator 只做执行登记/快照可见/取消链/作用域（包裹，不改生产路径）。
+// chunk→any 桥：adapter 产出的 *AgentResponseChunk 经 any 通道进 runStream，
+// emit 回调转回本函数返回的 out 通道给调用方。
+// 偏差登记：InteractionIDs 传 nil——Python interaction_ids 从 RuntimeEvent
+// 提取交互标识（ask_user 挂起 MarkAwaitingControl）；Go 流 item 是
+// AgentResponseChunk，提取键对齐 ⤴️交互挂起桥接批（净改进：接线前 execution
+// 完全不可见）。
+func (uc *UapClawSwarm) runViaExecutionCoordinator(ctx context.Context,
+	request *schema.AgentRequest, sessionID string, kind swsession.SessionWorkKind,
+	runtime agentRuntimeHandle,
+) (<-chan *schema.AgentResponseChunk, error) {
+	// RegisterSession 幂等（coordinator.go:241 exists 复用）
+	if _, err := runtime.Coordinator().RegisterSession(sessionID, request.ChannelID,
+		swsession.SessionPersistencePolicyPersistent); err != nil {
+		return nil, err
+	}
+
+	isTeam := kind == swsession.SessionWorkKindTeamRequest ||
+		kind == swsession.SessionWorkKindTeamControl ||
+		kind == swsession.SessionWorkKindTeamBackground
+	var details *swsession.TeamExecutionDetails
+	if isTeam {
+		details = runtime.TeamDetailsOf(request, kind)
+	}
+
+	out := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(out)
+		operation := func(opCtx context.Context) (<-chan any, error) {
+			inner := make(chan *schema.AgentResponseChunk, 64)
+			errCh := make(chan error, 1)
+			// 会话队列串行语义保留（SubmitTask 排队后转发）
+			go func() {
+				var taskErr error
+				uc.sessionManager.SubmitTask(opCtx, sessionID,
+					func(taskCtx context.Context) (any, error) {
+						stream, streamErr := uc.runMessageStreamDirect(taskCtx, request)
+						if streamErr != nil {
+							taskErr = streamErr
+							close(inner)
+							return nil, streamErr
+						}
+						for chunk := range stream {
+							inner <- chunk
+						}
+						close(inner)
+						return nil, nil
+					})
+				if taskErr != nil {
+					errCh <- taskErr
+				}
+			}()
+			anyCh := make(chan any, 64)
+			go func() {
+				defer close(anyCh)
+				for chunk := range inner {
+					anyCh <- chunk
+				}
+			}()
+			// 既有 SubmitTask 错误路径兜底：任务同步失败时 inner 已关，
+			// anyCh 随即关闭——错误由 runStream 的 produce 循环 range 感知
+			// （零元素流=空执行，与原路径错误 chunk 语义一致）。
+			return anyCh, nil
+		}
+		var runErr error
+		if isTeam {
+			runErr = runtime.RunTeamStream(ctx, sessionID, request.RequestID, kind,
+				func(opCtx context.Context, _ swsession.TeamExecutionContext) (<-chan any, error) {
+					return operation(opCtx)
+				},
+				swsession.StreamOptions{Details: details, ChannelID: request.ChannelID},
+				func(item any) bool {
+					if chunk, ok := item.(*schema.AgentResponseChunk); ok {
+						out <- chunk
+					}
+					return true
+				})
+		} else {
+			runErr = runtime.RunStream(ctx, sessionID, request.RequestID, kind,
+				operation,
+				swsession.StreamOptions{ChannelID: request.ChannelID},
+				func(item any) bool {
+					if chunk, ok := item.(*schema.AgentResponseChunk); ok {
+						out <- chunk
+					}
+					return true
+				})
+		}
+		if runErr != nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Str("request_id", request.RequestID).Err(runErr).
+				Msg("runViaExecutionCoordinator: coordinator run failed")
+		}
+	}()
+	return out, nil
 }

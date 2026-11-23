@@ -280,3 +280,25 @@ func isTeamAttachOnlyRequest(request *schema.AgentRequest, params map[string]any
 	v, ok := params[schema.TeamAttachOnlyParam].(bool)
 	return ok && v
 }
+
+// ParseWorkKindParamsPublic 参数解析公开版（门面 Details 构造用）。
+func ParseWorkKindParamsPublic(request *schema.AgentRequest) map[string]any {
+	return parseWorkKindParams(request)
+}
+
+// TeamBackgroundTriggerPublic 团队后台触发来源公开版（heartbeat/cron/空）。
+// Python: _team_background_trigger。
+func TeamBackgroundTriggerPublic(params map[string]any) string {
+	return teamBackgroundTrigger(params)
+}
+
+// SessionMessageIDOf 跨会话消息标识提取（无载荷时空串）。
+// Python: _team_session_message_id。
+func SessionMessageIDOf(params map[string]any) string {
+	if payload, ok := params[sessionMessageInternalKey].(map[string]any); ok {
+		if id, ok := payload["message_id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}

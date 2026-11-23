@@ -2328,3 +2328,66 @@ func resultMatched(result *sessionpkg.CancelExecutionResult) int {
 	}
 	return result.Matched
 }
+
+// CoordinatorAvailable coordinator 是否可用（门面接线门卫）。
+
+// RunStream 流式执行接线转发（门面经 AgentRuntimeHandle 调用；RunUnary 同形）。
+// Python: service.py:2419 self._session_coordinator.run_stream(...)。
+func (r *AgentRuntime) RunStream(ctx context.Context, sessionID, requestID string,
+	kind sessionpkg.SessionWorkKind, operation func(context.Context) (<-chan any, error),
+	options sessionpkg.StreamOptions, emit func(any) bool) error {
+	if r.coordinator == nil {
+		return ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RunStream(ctx, sessionID, requestID, kind, operation, options, emit)
+}
+
+// RunTeamStream 团队流式执行接线转发。
+// Python: service.py:2399 self._session_coordinator.run_team_stream(...)。
+func (r *AgentRuntime) RunTeamStream(ctx context.Context, sessionID, requestID string,
+	kind sessionpkg.SessionWorkKind, operation func(context.Context, sessionpkg.TeamExecutionContext) (<-chan any, error),
+	options sessionpkg.StreamOptions, emit func(any) bool) error {
+	if r.coordinator == nil {
+		return ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RunTeamStream(ctx, sessionID, requestID, kind, operation, options, emit)
+}
+
+// SessionWorkKindOf 会话执行种类判定公开转发（门面 Details 构造用）。
+// Python: service.py session_work_kind。
+func (r *AgentRuntime) SessionWorkKindOf(request *schema.AgentRequest) *sessionpkg.SessionWorkKind {
+	return SessionWorkKind(request, false)
+}
+
+// TeamDetailsOf 团队 Details 四键构造公开转发。
+// Python: TeamExecutionDetails(observation_only/control_id/background_trigger/
+// session_message_id/waiter_kind) (service.py:2363-2378)。
+func (r *AgentRuntime) TeamDetailsOf(request *schema.AgentRequest, kind sessionpkg.SessionWorkKind) *sessionpkg.TeamExecutionDetails {
+	params := parseWorkKindParams(request)
+	attachOnly := false
+	if v, ok := params[schema.TeamAttachOnlyParam].(bool); ok {
+		attachOnly = v
+	}
+	controlID := ""
+	if kind == sessionpkg.SessionWorkKindTeamControl {
+		controlID = request.RequestID
+	}
+	return &sessionpkg.TeamExecutionDetails{
+		ControlID:         controlID,
+		BackgroundTrigger: teamBackgroundTrigger(params),
+		SessionMessageID:  sessionMessageIDOf(params),
+		WaiterKind:        TeamWaiterKindOf(request, kind, false),
+		ObservationOnly:   attachOnly,
+	}
+}
+
+// sessionMessageIDOf 跨会话消息标识提取（无载荷时空串）。
+// Python: _team_session_message_id。
+func sessionMessageIDOf(params map[string]any) string {
+	if payload, ok := params[sessionMessageInternalKey].(map[string]any); ok {
+		if id, ok := payload["message_id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}

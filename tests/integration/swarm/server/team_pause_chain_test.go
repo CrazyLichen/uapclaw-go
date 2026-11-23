@@ -289,3 +289,31 @@ func (s *TeamPauseChainSuite) TestAttachOnly_择一路由_轮期间不重复收(
 	s.Require().True(delivered, "attach must be the fallback consumer")
 	s.T().Logf("select-end waiterIDs=%v", mgr.SessionWaiterIDs(sessionID))
 }
+
+// TestExecutor_交互轮注册与快照可见 矩阵 #8：chat.send 流式经 coordinator
+// 接线（RunStream/RunTeamStream 包裹）——链路级验证：pause/stop/attach 六用例
+// 全部经新接线跑通即证明 RunTeamStream/RunStream 真实执行（接线前这些用例
+// 走原队列路径）。快照断言（execution 可见）在 swruntime 单测覆盖
+// （集成黑盒无 coordinator 引用，见单测 TestRunTeamStream_ExecutionVisible）。
+func (s *TeamPauseChainSuite) TestExecutor_交互轮注册与快照可见() {
+	sessionID := s.createSession("tok-executor-visible")
+	s.registerToCoordinator(sessionID)
+
+	mgr := teamharness.GetTeamManager("web")
+	for _, wid := range mgr.SessionWaiterIDs(sessionID) {
+		mgr.RemoveWaiter(sessionID, wid, nil)
+	}
+
+	rid := s.env.Send(string(schema.ReqMethodChatSend),
+		map[string]any{"session_id": sessionID, "query": "demo",
+			"mode": "team"}, sessionID, true)
+	s.Require().NotEmpty(rid)
+	chunks := s.env.AwaitStreamEnd(rid)
+	hasTerminal := false
+	for _, c := range chunks {
+		if c.IsComplete {
+			hasTerminal = true
+		}
+	}
+	s.Require().True(hasTerminal, "wired stream must terminate with terminal chunk")
+}

@@ -1699,3 +1699,50 @@ func TestCoordinator_ResumeWaitingForInput_等待owner恢复(t *testing.T) {
 		t.Fatalf("代次不匹配不应恢复，实际 %s", got)
 	}
 }
+
+// TestRunTeamStream_ExecutionVisible 接线契约：RunTeamStream 执行期间
+// execution 在快照可见且 Details.waiter_kind 落账。
+// Python: run_team_stream 内 newExecution（service.py:2399）。
+func TestRunTeamStream_ExecutionVisible(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(CoordinatorOptions{})
+	sid := "exec-vis"
+	if _, err := c.RegisterSession(sid, "web", SessionPersistencePolicyPersistent); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	details := &TeamExecutionDetails{
+		WaiterKind:      TeamWaiterKindPersistent,
+		ObservationOnly: false,
+	}
+	done := make(chan struct{})
+	inner := make(chan any, 4)
+	inner <- map[string]any{"event_type": "team.task"}
+	close(inner)
+	go func() {
+		err := c.RunTeamStream(context.Background(), sid, "req-exec", SessionWorkKindTeamRequest,
+			func(context.Context, TeamExecutionContext) (<-chan any, error) { return inner, nil },
+			StreamOptions{Details: details, ChannelID: "web"},
+			func(any) bool { return true })
+		if err != nil {
+			t.Errorf("run: %v", err)
+		}
+		close(done)
+	}()
+	// 执行期间快照可见
+	deadline := time.Now().Add(2 * time.Second)
+	visible := false
+	for time.Now().Before(deadline) && !visible {
+		if snap := c.SnapshotSession(sid); snap != nil {
+			for _, ex := range snap.Executions {
+				if ex.RequestID == "req-exec" && ex.Team != nil &&
+					ex.Team.WaiterKind == TeamWaiterKindPersistent {
+					visible = true
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !visible {
+		t.Fatal("execution with waiter_kind must be visible during run")
+	}
+	<-done
+}

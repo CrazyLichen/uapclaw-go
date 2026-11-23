@@ -91,6 +91,20 @@ type AgentRuntimeHandle interface {
 	ActiveExecutions() bool
 	// SessionMessageService 读 mailbox 服务引用（nil=未装配；25.6 adapter 注入链）
 	SessionMessageService() any
+	// RunStream 流式执行接线（executor 包裹：execution 注册+作用域）
+	// Python: _session_coordinator.run_stream。
+	RunStream(ctx context.Context, sessionID, requestID string,
+		kind swsession.SessionWorkKind, operation func(context.Context) (<-chan any, error),
+		options swsession.StreamOptions, emit func(any) bool) error
+	// RunTeamStream 团队流式执行接线（execution 注册+TeamExecutionContext 组装）
+	// Python: _session_coordinator.run_team_stream。
+	RunTeamStream(ctx context.Context, sessionID, requestID string,
+		kind swsession.SessionWorkKind, operation func(context.Context, swsession.TeamExecutionContext) (<-chan any, error),
+		options swsession.StreamOptions, emit func(any) bool) error
+	// SessionWorkKindOf 会话执行种类判定（nil=非会话执行型，走原队列路径）
+	SessionWorkKindOf(request *schema.AgentRequest) *swsession.SessionWorkKind
+	// TeamDetailsOf 团队 Details 四键构造（仅 team kind 调用）
+	TeamDetailsOf(request *schema.AgentRequest, kind swsession.SessionWorkKind) *swsession.TeamExecutionDetails
 }
 
 // agentEntry Agent 实例条目，记录元数据。

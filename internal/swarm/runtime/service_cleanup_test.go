@@ -365,3 +365,14 @@ func (f *fakeCoordinator) QuiesceSession(
 	f.recorder.record("coordinator.QuiesceSession")
 	return &sessionpkg.SessionLifecycleContext{SessionID: sessionID}, nil
 }
+
+// RunStream/RunTeamStream 接口扩展后的 fake 兜底（fake 接线用例不覆盖流式执行）。
+func (f *fakeCoordinator) RunStream(context.Context, string, string, sessionpkg.SessionWorkKind,
+	func(context.Context) (<-chan any, error), sessionpkg.StreamOptions, func(any) bool) error {
+	return nil
+}
+
+func (f *fakeCoordinator) RunTeamStream(context.Context, string, string, sessionpkg.SessionWorkKind,
+	func(context.Context, sessionpkg.TeamExecutionContext) (<-chan any, error), sessionpkg.StreamOptions, func(any) bool) error {
+	return nil
+}

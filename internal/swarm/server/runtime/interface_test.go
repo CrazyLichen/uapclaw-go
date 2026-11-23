@@ -811,3 +811,22 @@ func TestProcessTeamInterrupt_Pause返回interrupt_result(t *testing.T) {
 	// 本用例没有真实 team runtime，故 paused=false（协议字段仍须完整）
 	assert.Equal(t, false, resp.Payload["success"])
 }
+
+// executor 接线接口扩展后的 test handle 兜底（接线用例不覆盖这些方法）。
+func (h *testRuntimeHandle) RunStream(context.Context, string, string, swsession.SessionWorkKind,
+	func(context.Context) (<-chan any, error), swsession.StreamOptions, func(any) bool) error {
+	return nil
+}
+
+func (h *testRuntimeHandle) RunTeamStream(context.Context, string, string, swsession.SessionWorkKind,
+	func(context.Context, swsession.TeamExecutionContext) (<-chan any, error), swsession.StreamOptions, func(any) bool) error {
+	return nil
+}
+
+func (h *testRuntimeHandle) SessionWorkKindOf(*schema.AgentRequest) *swsession.SessionWorkKind {
+	return nil
+}
+
+func (h *testRuntimeHandle) TeamDetailsOf(*schema.AgentRequest, swsession.SessionWorkKind) *swsession.TeamExecutionDetails {
+	return nil
+}
