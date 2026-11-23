@@ -1,4 +1,4 @@
-package rsihandlers
+package rsi
 
 // AgentServer RSI 分发层：18 个 rsi.* web method 的统一接线面（B2）。
 // 对应 Python：jiuwenswarm/server/rsi/rsi_handlers.py（322 行）+ __init__.py。
@@ -14,7 +14,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsi"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rsi"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -56,7 +56,7 @@ var methodDispatch = map[string]string{
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ServiceContext RSI 服务域最小依赖面（internal/swarm/server/runtime/rsi.ServiceContext）。
+// ServiceContext RSI 服务域最小依赖面（internal/swarm/agents/harness/common/rsi.ServiceContext）。
 type ServiceContext = rsi.ServiceContext
 
 // AgentServerHandlers AgentServer 侧 RSI 分发 + 推送发送（依赖注入，便于测试）。

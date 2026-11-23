@@ -1,4 +1,4 @@
-package rsihandlers
+package rsi
 
 // rsi_handlers.go 单测：分发表逐字、错误语义、session 标记、P1/P2/P3 绑定。
 
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsi"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rsi"
 )
 
 // newFixture 构造带 context 的 handlers。

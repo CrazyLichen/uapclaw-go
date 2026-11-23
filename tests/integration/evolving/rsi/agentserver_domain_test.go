@@ -5,7 +5,7 @@
 //   事件 → P2/P3 推送 → terminate → cancel ctx → ErrTaskCancelled 分支触达
 //   （17.7 回填兑现）→ TERMINATED 落盘 + P1 推送含 failure_reason。
 // 链路2（安装链）：激活指针轮换 → list_versions → rollback 门禁。
-// 跨子系统：server 分发层（rsihandlers）+ 服务域（runtime/rsi）+ 单 harness
+// 跨子系统：server 分发层（server/rsi）+ 服务域（agents/harness/common/rsi）+ 单 harness
 //   引擎（agent_evolving/rsi/harness_rsi/singleharness）≥3 子系统。
 
 package rsi
@@ -23,8 +23,8 @@ import (
 
 	coreRSI "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/singleharness"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsi"
-	rsihandlers "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsihandlers"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rsi"
+	rsihandlers "github.com/uapclaw/uapclaw-go/internal/swarm/server/rsi"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

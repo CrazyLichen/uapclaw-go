@@ -1,7 +1,7 @@
 package server
 
 // AgentServer RSI 分发接线：rsi.* 前缀统一走 RsiAgentServerHandlers
-//（服务域/推送见 runtime/rsi 包 + rsihandlers 分发层）。
+//（服务域见 agents/harness/common/rsi 包；分发层=本目录 server/rsi 包）。
 // 对应 Python：agent_ws_server.py _handle_rsi_request / _get_rsi_handlers /
 // _rsi_harness_refs_provider（约 13960-14230 行）。
 //
@@ -17,9 +17,9 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	rsi "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rsi"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	rsi "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsi"
-	rsihandlers "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/rsihandlers"
+	rsihandlers "github.com/uapclaw/uapclaw-go/internal/swarm/server/rsi"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
