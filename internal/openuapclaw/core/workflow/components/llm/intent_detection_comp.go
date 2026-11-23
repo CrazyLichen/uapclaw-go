@@ -19,6 +19,8 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
@@ -107,6 +109,8 @@ type IntentDetectionComponent struct {
 	cfg *IntentDetectionCompConfig
 	// router 分类路由器（Python self._router）
 	router *flow.BranchRouter
+	// testInvoker 测试注入缝（D-23-4，Python 所无）
+	testInvoker LLMInvoker
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -977,4 +981,63 @@ func (e *IntentDetectionExecutable) preProcess(inputs map[string]any) []llmschem
 		return nil
 	}
 	return msgs
+}
+
+// ──────────────────────────── Task 6 组合面 ────────────────────────────
+
+// NewIntentDetectionComponent 构造组件组合面（Python __init__ :464-468；
+// executable 懒初始化经 ToExecutableFn 槽首调构造缓存；opts 注入缝为
+// spec D-23-4 测试缝，Python 所无）
+func NewIntentDetectionComponent(cfg *IntentDetectionCompConfig, opts ...func(*IntentDetectionComponent)) *IntentDetectionComponent {
+	c := &IntentDetectionComponent{
+		cfg:    cfg,
+		router: flow.NewBranchRouter(false), // Python BranchRouter() 默认 report_trace=False
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	c.ToExecutableFn = c.toExecutableCached
+	return c
+}
+
+// WithIntentLLM 测试注入缝（D-23-4）：注入 LLMInvoker 替身，集成测试专用
+func WithIntentLLM(inv LLMInvoker) func(*IntentDetectionComponent) {
+	return func(c *IntentDetectionComponent) { c.testInvoker = inv }
+}
+
+// toExecutableCached 可执行体供应槽（Python to_executable :480-481 + executable
+// property 懒初始化合并承载：首调构造并 SetRouter 缓存）
+func (c *IntentDetectionComponent) toExecutableCached() graphexe.GeneralExecutor {
+	if c.executable == nil {
+		e := NewIntentDetectionExecutable(c.cfg)
+		e.setRouter(c.router)
+		if c.testInvoker != nil {
+			e.llModel = c.testInvoker
+			e.initialized = true
+		}
+		c.executable = e
+	}
+	return c.executable
+}
+
+// AddComponent 注册节点与条件边（Python add_component :476-478 一比一）：
+// AddNode(node_id, executable, wait_for_all) + AddConditionalEdges(node_id, router)
+func (c *IntentDetectionComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) {
+	if waitForAll {
+		g.AddNode(nodeID, c.toExecutableCached(), graph.WithWaitForAll())
+	} else {
+		g.AddNode(nodeID, c.toExecutableCached())
+	}
+	g.AddConditionalEdges(nodeID, c.router)
+}
+
+// AddBranch 登记分支（Python add_branch :483-487 一比一：str target 归一
+// [target]；校验与登记委派 BranchRouter.AddBranch）
+func (c *IntentDetectionComponent) AddBranch(cond any, target []string, branchID string) error {
+	return c.router.AddBranch(cond, target, branchID)
+}
+
+// Router 返回路由器（Python router() :489-490）
+func (c *IntentDetectionComponent) Router() *flow.BranchRouter {
+	return c.router
 }

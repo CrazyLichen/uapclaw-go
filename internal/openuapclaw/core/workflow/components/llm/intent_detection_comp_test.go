@@ -12,6 +12,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -494,4 +495,46 @@ func TestInvokeEntry_解析失败回落(t *testing.T) {
 func ctxBg(t *testing.T) context.Context {
 	t.Helper()
 	return context.Background()
+}
+
+// ──────────────────────────── Task 6 组合面 ────────────────────────────
+
+// TestIntentDetectionComponent_接线 wiring 级：AddComponent 注册节点+条件边、
+// AddBranch 委派 router、executable 懒加载缓存、opts 注入缝
+func TestIntentDetectionComponent_接线(t *testing.T) {
+	c := NewIntentDetectionComponent(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+	if c.router == nil {
+		t.Fatal("构造应创建 BranchRouter")
+	}
+	// AddBranch 委派
+	if err := c.AddBranch("${classificationId} == 1", []string{"refund"}, "b1"); err != nil {
+		t.Fatalf("AddBranch 失败: %v", err)
+	}
+	targets := c.router.AllTargets()
+	if _, ok := targets["refund"]; !ok {
+		t.Fatalf("分支未登记: %v", targets)
+	}
+	// AddComponent：真图注册节点 + 条件边
+	g := graph.NewPregelGraph()
+	c.AddComponent(g, "intent", false)
+	// executable 懒加载缓存（ToExecutableFn 槽）
+	e1 := c.toExecutableCached()
+	e2 := c.toExecutableCached()
+	if e1 != e2 {
+		t.Fatal("executable 应缓存复用")
+	}
+	if e1.(*IntentDetectionExecutable).router != c.router {
+		t.Fatal("executable 应共享组件 router")
+	}
+}
+
+// TestIntentDetectionComponent_AddBranch校验 nil 条件/空 target 报错（Python :484-487 → router 校验）
+func TestIntentDetectionComponent_AddBranch校验(t *testing.T) {
+	c := NewIntentDetectionComponent(&IntentDetectionCompConfig{})
+	if err := c.AddBranch(nil, []string{"x"}, ""); err == nil {
+		t.Fatal("nil 条件应报错")
+	}
+	if err := c.AddBranch("${a} == 1", []string{}, ""); err == nil {
+		t.Fatal("空 target 应报错")
+	}
 }
