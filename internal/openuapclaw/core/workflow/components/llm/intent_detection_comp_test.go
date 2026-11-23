@@ -1,9 +1,12 @@
 package llm
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
@@ -210,5 +213,55 @@ func TestPyLiteralEval_Python字面量子集(t *testing.T) {
 	}
 	if _, err := pyLiteralEval(`{'a': 1}x`); err == nil {
 		t.Fatal("尾随字符应报错")
+	}
+}
+
+// ──────────────────────────── Task 3 模型双路径 ────────────────────────────
+
+// TestCreateLLMInstance_双缺配置报错 Python :255-259：model_id 与双 config 皆缺 →
+// COMPONENT_INTENT_DETECTION_INVOKE_CALL_FAILED
+// assertIntentCode 错误码断言助手（同 llm_comp_test assertLLMCode 惯例）
+func assertIntentCode(t *testing.T, err error, status exception.StatusCode) {
+	t.Helper()
+	be, ok := err.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("期望 BaseError，实际 %T", err)
+	}
+	if be.Status() != status {
+		t.Fatalf("错误码不符: got %v want %v", be.Status(), status)
+	}
+}
+
+func TestCreateLLMInstance_双缺配置报错(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{})
+	_, err := e.createLLMInstance(context.Background())
+	if err == nil {
+		t.Fatal("期望 IntentDetectionInvokeCallFailed")
+	}
+	assertIntentCode(t, err, exception.StatusComponentIntentDetectionInvokeCallFailed)
+}
+
+// TestCreateLLMInstance_直构路径 client/request config 齐备 → NewModel 非 nil
+func TestCreateLLMInstance_直构路径(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		ModelClientConfig: &llmschema.ModelClientConfig{ClientID: "c1", ClientProvider: "openai", APIKey: "k"},
+		ModelConfig:       &llmschema.ModelRequestConfig{ModelName: "gpt"},
+	})
+	inv, err := e.createLLMInstance(context.Background())
+	if err != nil || inv == nil {
+		t.Fatalf("直构路径失败: %v", err)
+	}
+}
+
+// TestInitializeIfNeeded_包装错误 Python :266-276：创建异常包装 LLMInitFailed
+func TestInitializeIfNeeded_包装错误(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{}) // 双缺 → create 报错
+	err := e.initializeIfNeeded(context.Background())
+	if err == nil {
+		t.Fatal("期望 IntentDetectionLLMInitFailed 包装")
+	}
+	assertIntentCode(t, err, exception.StatusComponentIntentDetectionLLMInitFailed)
+	if e.initialized {
+		t.Fatal("失败不应置位 initialized")
 	}
 }

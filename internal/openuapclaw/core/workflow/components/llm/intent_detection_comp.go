@@ -4,14 +4,18 @@
 package llm
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
@@ -665,4 +669,47 @@ func (e *IntentDetectionExecutable) parseDetectionResult(llmOutput string) map[s
 	intentClass, reason := e.postProcessIntentDetection(llmOutput)
 	classificationID, categoryName := e.getIntentIDAndName(intentClass)
 	return buildOutputMap(classificationID, reason, categoryName)
+}
+
+// ──────────────────────────── Task 3 模型双路径 ────────────────────────────
+
+// createLLMInstance 模型实例创建（Python _create_llm_instance :254-264 一比一）：
+// model_id 为 nil → client/request config 双非空校验（缺任一
+// COMPONENT_INTENT_DETECTION_INVOKE_CALL_FAILED）后 NewModel；否则按 ID 走 ResourceMgr
+func (e *IntentDetectionExecutable) createLLMInstance(ctx context.Context) (LLMInvoker, error) {
+	if e.cfg.ModelID == nil {
+		if e.cfg.ModelClientConfig == nil || e.cfg.ModelConfig == nil {
+			return nil, exception.BuildError(exception.StatusComponentIntentDetectionInvokeCallFailed,
+				exception.WithMsg("failed to create llm instance"))
+		}
+		return forllm.NewModel(e.cfg.ModelClientConfig, e.cfg.ModelConfig)
+	}
+	mgr := runner.GetResourceMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("resource mgr is not initialized")
+	}
+	clients, err := mgr.GetModel(ctx, []string{*e.cfg.ModelID})
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("model %s not found", *e.cfg.ModelID)
+	}
+	return clients[0], nil
+}
+
+// initializeIfNeeded 懒初始化（Python _initialize_if_needed :266-276 一比一）：
+// 未初始化时创建并置位；异常包装 COMPONENT_INTENT_DETECTION_LLM_INIT_FAILED
+func (e *IntentDetectionExecutable) initializeIfNeeded(ctx context.Context) error {
+	if e.initialized {
+		return nil
+	}
+	model, err := e.createLLMInstance(ctx)
+	if err != nil {
+		return exception.BuildError(exception.StatusComponentIntentDetectionLLMInitFailed,
+			exception.WithMsg("failed to initialize llm if needed"), exception.WithCause(err))
+	}
+	e.llModel = model
+	e.initialized = true
+	return nil
 }
