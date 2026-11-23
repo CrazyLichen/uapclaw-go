@@ -5,8 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -161,8 +164,7 @@ func TestExternalCLIPrune_只删交集(t *testing.T) {
 	assert.Equal(t, []string{"/b/cli", "/c/cli"}, surviving)
 
 	// 落盘校验
-	cfg, loadErr := loadAppConfig()
-	require.NoError(t, loadErr)
+	cfg := configpanel.ReadRawConfig()
 	histories := mapSection(mapSection(mapSection(mapSection(cfg, "modes"), "team"), "jiuwen_team"), "external_cli_path_histories")
 	assert.Equal(t, []any{"/b/cli", "/c/cli"}, histories["claude"])
 }
@@ -302,8 +304,7 @@ func TestExternalCLIPrune_去重与空项(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, payload["histories"])
 
-	cfg, loadErr := loadAppConfig()
-	require.NoError(t, loadErr)
+	cfg := configpanel.ReadRawConfig()
 	histories := mapSection(mapSection(mapSection(mapSection(cfg, "modes"), "team"), "jiuwen_team"), "external_cli_path_histories")
 	assert.NotContains(t, histories, "claude", "删空后该种类的 key 应移除")
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,8 +24,7 @@ func newChannelConfManager(conf map[string]map[string]any) *cm.ChannelManager {
 // readChannelConfFromYAML 读回 config.yaml 里 channels.<platform> 的内容。
 func readChannelConfFromYAML(t *testing.T, platform string) map[string]any {
 	t.Helper()
-	cfg, err := loadAppConfig()
-	require.NoError(t, err)
+	cfg := configpanel.ReadRawConfig()
 	return mapSection(cfg, "channels", platform)
 }
 
