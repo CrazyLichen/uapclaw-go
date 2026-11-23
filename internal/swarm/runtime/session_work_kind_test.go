@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -356,5 +357,64 @@ func TestUsesSessionRuntime_团队为真(t *testing.T) {
 		map[string]any{"mode": "agent.work.normal", "action": "set"})
 	if !UsesSessionRuntime(goal, false) {
 		t.Error("goal 请求应由 Runtime 持有调度")
+	}
+}
+
+// TestTeamWaiterKindOf 判定矩阵（Python _team_waiter_kind :3965-3996 全分支）。
+func TestTeamWaiterKindOf(t *testing.T) {
+	mk := func(paramsJSON string) *schema.AgentRequest {
+		sid := "wk-sess"
+		req := schema.NewAgentRequest("req-1", "web", "chat.send", []byte(paramsJSON))
+		req.SessionID = &sid
+		return req
+	}
+	background := false
+
+	// 控制轮 → NONE
+	if got := TeamWaiterKindOf(mk(`{"mode":"team"}`), sessionpkg.SessionWorkKindTeamControl, background); got != sessionpkg.TeamWaiterKindNone {
+		t.Fatalf("control must be NONE, got %s", got)
+	}
+	// 跨会话消息 → NONE
+	if got := TeamWaiterKindOf(mk(`{"mode":"team","_jiuwenswarm_cross_session":{"content":"hi"}}`), sessionpkg.SessionWorkKindTeamRequest, background); got != sessionpkg.TeamWaiterKindNone {
+		t.Fatalf("session message must be NONE, got %s", got)
+	}
+	// attach-only → PERSISTENT
+	if got := TeamWaiterKindOf(mk(`{"mode":"team","team_attach_only":true}`), sessionpkg.SessionWorkKindTeamRequest, background); got != sessionpkg.TeamWaiterKindPersistent {
+		t.Fatalf("attach-only must be PERSISTENT, got %s", got)
+	}
+	// 普通 team 消息（无既有 waiter）→ PERSISTENT
+	if got := TeamWaiterKindOf(mk(`{"mode":"team"}`), sessionpkg.SessionWorkKindTeamRequest, background); got != sessionpkg.TeamWaiterKindPersistent {
+		t.Fatalf("plain round must be PERSISTENT, got %s", got)
+	}
+	// 已有交互 waiter（attach 注册后）→ NONE（防双投）
+	teamharness.GetTeamManager("web").RegisterSessionWaiter("wk-sess", "req-att", make(chan map[string]any, 1), false, true, 0)
+	if got := TeamWaiterKindOf(mk(`{"mode":"team"}`), sessionpkg.SessionWorkKindTeamRequest, background); got != sessionpkg.TeamWaiterKindNone {
+		t.Fatalf("with interactive waiter must be NONE, got %s", got)
+	}
+	teamharness.GetTeamManager("web").RemoveWaiter("wk-sess", "req-att", nil)
+	// cron 后台 → REQUEST
+	cronReq := mk(`{"mode":"team","cron":{"schedule":"* * * * *"}}`)
+	if got := TeamWaiterKindOf(cronReq, sessionpkg.SessionWorkKindTeamBackground, true); got != sessionpkg.TeamWaiterKindRequest {
+		t.Fatalf("cron background must be REQUEST, got %s", got)
+	}
+	// heartbeat 后台 → EXCLUSIVE
+	hbReq := mk(`{"mode":"team","automation":{"kind":"heartbeat"}}`)
+	if got := TeamWaiterKindOf(hbReq, sessionpkg.SessionWorkKindTeamBackground, true); got != sessionpkg.TeamWaiterKindExclusive {
+		t.Fatalf("heartbeat background must be EXCLUSIVE, got %s", got)
+	}
+}
+
+// TestIsTeamAttachOnlyRequest 参数判定（Python _is_attach_only_request :3999）。
+func TestIsTeamAttachOnlyRequest(t *testing.T) {
+	sid := "ao-sess"
+	req := schema.NewAgentRequest("req-1", "web", "chat.send", []byte(`{"mode":"team","team_attach_only":true}`))
+	req.SessionID = &sid
+	if !IsTeamAttachOnlyRequest(req) {
+		t.Fatal("attach param must be detected")
+	}
+	req2 := schema.NewAgentRequest("req-2", "web", "chat.send", []byte(`{"mode":"team"}`))
+	req2.SessionID = &sid
+	if IsTeamAttachOnlyRequest(req2) {
+		t.Fatal("plain request must not be attach-only")
 	}
 }

@@ -1147,10 +1147,15 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
 	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
+	// attach-only 被动订阅跳过模型校验（Python _model_config_error :8947-8955）：
+	// 纯观察者不提交输入、不建运行时，模型配置与它无关——不跳过则每次切会话/
+	// 刷新都被误拒（"spurious login-required error on every session switch or
+	// refresh"）。unary 路径对齐 Python :18336：跳过执行类副作用但不分流。
+	attachOnlySubscription := isTeamAttachOnlySubscription(req.Params)
 	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
 	reqModelName := paramsString(params, "model_name", "")
-	if !d.hasValidModelConfig(reqModelName) {
+	if !attachOnlySubscription && !d.hasValidModelConfig(reqModelName) {
 		return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
@@ -1436,6 +1441,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
 	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
+	// attach-only 被动订阅分流（Python :8947 模型检查跳过 + :19110 team 流内
+	// attach 短路的组合落点）：纯观察者不提交输入、不建运行时，模型配置与它
+	// 无关——不先分流则每次切会话/刷新都被误拒（"spurious login-required
+	// error on every session switch or refresh"）。
+	if isTeamAttachOnlySubscription(req.Params) {
+		return d.processTeamAttachOnlyStreamForRequest(ctx, req)
+	}
 	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
 	reqModelName := paramsString(params, "model_name", "")

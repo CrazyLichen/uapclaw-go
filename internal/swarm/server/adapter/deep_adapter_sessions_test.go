@@ -603,11 +603,17 @@ func TestIsAttachOnlySubscription(t *testing.T) {
 	}
 }
 
-// TestAttachOnly_不占活跃 attach-only 请求不登记在飞任务。
+// TestAttachOnly_不占活跃 attach-only 请求短路为常驻观察流，不建 child、
+// 不登记在飞任务；流随调用方 ctx 取消而结束并摘除订阅。
+// Python: team_helpers.py:3049 attach 短路先于 spec 装配（不建 child）+
+// :3072 常驻消费（"stays attached until the response stream is closed by
+// the caller"）。25.6 批二语义升级：批一时的"走 child 但不占活跃"改为
+// Python 对齐的短路+常驻订阅。
 func TestAttachOnly_不占活跃(t *testing.T) {
 	root := NewDeepAdapter()
 	sid := "s1"
-	ch, err := root.ProcessMessageStreamImpl(context.Background(), &schema.AgentRequest{
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := root.ProcessMessageStreamImpl(ctx, &schema.AgentRequest{
 		RequestID: "r1",
 		ChannelID: "web",
 		SessionID: &sid,
@@ -616,12 +622,13 @@ func TestAttachOnly_不占活跃(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
+	// 常驻流不自行结束：取消调用方 ctx 触发订阅摘除与流关闭
+	cancel()
 	for range ch {
 	}
-	child := root.getCachedSessionAdapter("s1")
-	if child == nil {
-		t.Fatal("attach-only 仍应创建 child（只是不占活跃）")
-	}
+	// child 由父层分流创建（短路在 child 的流实现内，Python 同构：
+	// interface_deep.py 的 attach 检查也在 child/adapter 层）——
+	// 短路豁免的是"spec 装配/在飞任务登记"，不是 child 缓存本身。
 	if root.hasRegisteredSessionTasks("s1") {
 		t.Error("attach-only 不应登记在飞任务")
 	}

@@ -76,10 +76,11 @@ func (m *TeamManager) SetSessionGeneration(sessionID string, generation int) {
 	m.sessionGenerations[sessionID] = generation
 }
 
-// HasInteractiveWaiter 是否存在非自动化的交互类消费者持有持久流。
-// exclusive 本身不算（它可被心跳等自动化请求接管）；
-// attach_only 纯观察也不算。
-// Python: has_interactive_waiter (team_manager.py L562-570)。
+// HasInteractiveWaiter 是否存在非 exclusive 的消费者持有会话响应。
+// Python: has_interactive_waiter (team_manager.py L562-570)——
+// any(rid != exclusive_request_id)：除 exclusive（可被自动化请求接管）外，
+// 任何登记（persistent owner 与 attach 订阅）都算交互持有。
+// 用途：_team_waiter_kind 的防双投判定（已有持有者时新普通轮 → NONE）。
 func (m *TeamManager) HasInteractiveWaiter(sessionID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -316,3 +317,21 @@ func derefGeneration(generation *int) int {
 
 // unusedStrings 保留 strings 引用（供后续扩展日志字段）。
 var _ = strings.TrimSpace
+
+// SessionWaiterCount 会话当前 waiter 数（监控/诊断面）。
+func (m *TeamManager) SessionWaiterCount(sessionID string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.pendingWaitersTM[sessionID])
+}
+
+// SessionWaiterIDs 会话当前 waiter 的 requestID 列表（监控/诊断面）。
+func (m *TeamManager) SessionWaiterIDs(sessionID string) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]string, 0, len(m.pendingWaitersTM[sessionID]))
+	for _, w := range m.pendingWaitersTM[sessionID] {
+		ids = append(ids, w.RequestID)
+	}
+	return ids
+}

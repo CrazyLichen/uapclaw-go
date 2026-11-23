@@ -1825,6 +1825,22 @@ func resolveEvolutionEventTimeoutSec(rail *coreevolution.TeamSkillEvolutionRail,
 //   - 注册在 startup 时序内完成，锁随即释放、消费期间不持锁
 //   - 订阅保持附着直到响应流被调用方关闭（"stays attached until the
 //     response stream is closed by the caller"）
+// processTeamAttachOnlyStreamForRequest 流路径入口（模型校验前分流的落点）。
+func (d *DeepAdapter) processTeamAttachOnlyStreamForRequest(ctx context.Context,
+	req *agentschema.AgentRequest,
+) (<-chan *agentschema.AgentResponseChunk, error) {
+	sessionID := "default"
+	if req.SessionID != nil && *req.SessionID != "" {
+		sessionID = *req.SessionID
+	}
+	channelID := req.ChannelID
+	if channelID == "" {
+		channelID = "default"
+	}
+	return d.processTeamAttachOnlyStream(ctx, req, sessionID, channelID,
+		team.GetTeamManager(channelID))
+}
+
 func (d *DeepAdapter) processTeamAttachOnlyStream(ctx context.Context,
 	req *agentschema.AgentRequest, sessionID, channelID string, teamManager *team.TeamManager,
 ) (<-chan *agentschema.AgentResponseChunk, error) {

@@ -191,3 +191,90 @@ func TestBroadcastEvent_非终态无等待者不Fallback(t *testing.T) {
 		t.Fatal("delivered terminal frame must not trigger fallback")
 	}
 }
+
+// TestHasInteractiveWaiter 交互持有判定（Python has_interactive_waiter :562）。
+func TestHasInteractiveWaiter(t *testing.T) {
+	m := newRoundStateTM()
+	if m.HasInteractiveWaiter("s-hi") {
+		t.Fatal("empty session must have no interactive waiter")
+	}
+	// 仅 exclusive：不算交互持有（exclusive 可被自动化接管）
+	m.RegisterSessionWaiter("s-hi", "req-x", make(chan map[string]any, 1), true, false, 1)
+	if m.HasInteractiveWaiter("s-hi") {
+		t.Fatal("exclusive-only must not count as interactive")
+	}
+	// 非 exclusive 登记（persistent owner）→ 交互持有
+	m.RegisterSessionWaiter("s-hi", "req-p", make(chan map[string]any, 1), false, false, 1)
+	if !m.HasInteractiveWaiter("s-hi") {
+		t.Fatal("non-exclusive waiter must count as interactive")
+	}
+	// attach 订阅按 Python 实现也算交互持有（any(rid != exclusive)）：
+	// 它不是自动化消费者，与 persistent owner 同类
+	m.RegisterSessionWaiter("s-h2", "req-a", make(chan map[string]any, 1), false, true, 1)
+	if !m.HasInteractiveWaiter("s-h2") {
+		t.Fatal("attach subscription must count as interactive (Python any(rid != exclusive))")
+	}
+}
+
+// TestSelectBroadcastWaiters 三级择一（Python _select_broadcast_waiters :641）。
+func TestSelectBroadcastWaiters(t *testing.T) {
+	m := newRoundStateTM()
+	exCh := make(chan map[string]any, 8)
+	perCh := make(chan map[string]any, 8)
+	attCh := make(chan map[string]any, 8)
+	att2Ch := make(chan map[string]any, 8)
+	m.RegisterSessionWaiter("s-sel", "req-ex", exCh, true, false, 1)
+	m.RegisterSessionWaiter("s-sel", "req-per", perCh, false, false, 1)
+	m.RegisterSessionWaiter("s-sel", "req-a1", attCh, false, true, 1)
+	m.RegisterSessionWaiter("s-sel", "req-a2", att2Ch, false, true, 1)
+
+	// 规则 1：exclusive 存在 → 只投 exclusive
+	m.mu.Lock()
+	picked := m.selectBroadcastWaitersLocked("s-sel")
+	m.mu.Unlock()
+	if len(picked) != 1 || picked[0].RequestID != "req-ex" {
+		t.Fatalf("exclusive must win, got %+v", picked)
+	}
+
+	// 规则 2：无 exclusive → 非 attach 优先
+	m.RemoveWaiter("s-sel", "req-ex", nil)
+	m.mu.Lock()
+	picked = m.selectBroadcastWaitersLocked("s-sel")
+	m.mu.Unlock()
+	if len(picked) != 1 || picked[0].RequestID != "req-per" {
+		t.Fatalf("input waiter must win, got %+v", picked)
+	}
+
+	// 规则 3：全 attach → 只选第一条
+	m.RemoveWaiter("s-sel", "req-per", nil)
+	m.mu.Lock()
+	picked = m.selectBroadcastWaitersLocked("s-sel")
+	m.mu.Unlock()
+	if len(picked) != 1 || picked[0].RequestID != "req-a1" {
+		t.Fatalf("single attach must be selected, got %+v", picked)
+	}
+}
+
+// TestBroadcastEvent_择一投递 端到端：exclusive 在场时 attach 不收实时帧。
+func TestBroadcastEvent_择一投递(t *testing.T) {
+	m := newRoundStateTM()
+	exCh := make(chan map[string]any, 4)
+	attCh := make(chan map[string]any, 4)
+	m.RegisterSessionWaiter("s-bd", "req-ex", exCh, true, false, 1)
+	m.RegisterSessionWaiter("s-bd", "req-att", attCh, false, true, 1)
+
+	m.BroadcastEvent("s-bd", "team.task", map[string]any{"delta": 1}, "")
+	if len(exCh) != 1 {
+		t.Fatalf("exclusive must receive, got %d", len(exCh))
+	}
+	if len(attCh) != 0 {
+		t.Fatal("attach must not receive while exclusive present")
+	}
+
+	// exclusive 摘除后 → 非 attach 无、仅 attach → attach 收（规则 3）
+	m.RemoveWaiter("s-bd", "req-ex", nil)
+	m.BroadcastEvent("s-bd", "team.task", map[string]any{"delta": 2}, "")
+	if len(attCh) != 1 {
+		t.Fatalf("attach must receive after exclusive gone, got %d", len(attCh))
+	}
+}
