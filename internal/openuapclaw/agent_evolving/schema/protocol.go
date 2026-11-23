@@ -75,6 +75,18 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
+	// EvolutionSubjectKindValues 演进 subject kind 合法取值。
+	// Python: EVOLUTION_SUBJECT_KIND_VALUES (protocols.py:31)
+	EvolutionSubjectKindValues = []string{"skill", "team-skill", "swarm-skill"}
+
+	// EvolutionTargetValues 演进目标层合法取值。
+	// Python: EVOLUTION_TARGET_VALUES (protocols.py:30)
+	EvolutionTargetValues = []string{"description", "body", "script"}
+
+	// SimplifyActionValues 精简动作合法取值。
+	// Python: SIMPLIFY_ACTION_VALUES (protocols.py:32)
+	SimplifyActionValues = []string{"DELETE", "MERGE", "REFINE", "KEEP"}
+
 	// ValidPatchActions 有效的补丁动作集合。
 	// Python: VALID_PATCH_ACTIONS = frozenset({"append", "merge", "replace", "skip"})
 	ValidPatchActions = map[string]bool{
