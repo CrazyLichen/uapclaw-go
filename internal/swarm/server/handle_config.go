@@ -3,14 +3,21 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 )
+
+// logComponentAgentServer server 包配置分派日志组件。
+const logComponentAgentServer = logger.ComponentAgentServer
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -115,7 +122,7 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 // replace_all、memory/permissions 的 set）随 configpanel 写入层落地，未落地前
 // 进入 default 回 BAD_REQUEST（IMPLEMENTATION_PLAN.md 27.4 行 ⤵️ 登记）。
 // command.model 按 spec D-1 豁免（既有 handleCommandModel 为 TUI 独立链，不属本分派）。
-func (s *AgentServer) handleConfigPanelRequest(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params map[string]any
 	if len(request.Params) > 0 {
 		_ = json.Unmarshal(request.Params, &params)
@@ -152,6 +159,40 @@ func (s *AgentServer) handleConfigPanelRequest(_ context.Context, request *schem
 		return okResp(map[string]any{"ok": true}), nil
 	}
 
+	// Python: config_set_handlers.py:2224 _config_set / :2233 _config_save_all
+	// （apply_config_payload + apply_config_change_set）。
+	if request.ReqMethod == schema.ReqMethodConfigSet || request.ReqMethod == schema.ReqMethodConfigSaveAll {
+		force := request.ReqMethod == schema.ReqMethodConfigSaveAll
+		result, applyErr := configpanel.ApplyConfigSet(ctx, params, resolveServerCrypto())
+		if applyErr != nil {
+			return applyErrorResponse(request, applyErr), nil
+		}
+		if err := configpanel.CommitPendingPermissionProfile(result); err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		changeSet := configpanel.ConfigChangeSet{
+			EnvUpdates:  result.EnvUpdates,
+			YAMLUpdated: result.YAMLUpdated,
+			Force:       force,
+		}
+		// Python: apply_config_change_set → _clear_agent_config_cache / on_config_saved
+		// （AgentServer 进程内直调 AgentManager 重载，对齐 reload_options 语义）
+		scopes := changeSet.ReloadScopes()
+		if changeSet.Changed() && configpanel.NeedsAgentReload(scopes) {
+			opts := rt.ReloadOptions{ReloadScopes: scopes}
+			if err := s.agentManager.ReloadAgentsConfig(ctx, nil, result.EnvUpdates, opts); err != nil {
+				logger.Warn(logComponentAgentServer).Err(err).Msg("config reload after save failed")
+			}
+		}
+		payload := map[string]any{"ok": true}
+		if result.CanonicalConfig != nil {
+			for k, v := range result.CanonicalConfig {
+				payload[k] = v
+			}
+		}
+		return okResp(payload), nil
+	}
+
 	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
 	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
 	payload, ok := control.HandleConfigRequest(string(request.ReqMethod), params)
@@ -159,6 +200,26 @@ func (s *AgentServer) handleConfigPanelRequest(_ context.Context, request *schem
 		return badReq(), nil
 	}
 	return okResp(payload), nil
+}
+
+// applyErrorResponse 错误分类响应：400 类回 ok=false+error 文案，500 类同形
+// （Python build_error_response / ConfigPanelBadRequest→BAD_REQUEST、
+// ConfigPanelInternalError→INTERNAL_ERROR）。
+func applyErrorResponse(request *schema.AgentRequest, err error) *schema.AgentResponse {
+	code := "INTERNAL_ERROR"
+	var badReq *configpanel.ConfigPanelBadRequest
+	if errors.As(err, &badReq) {
+		code = "BAD_REQUEST"
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(false),
+		schema.WithPayload(map[string]any{"error": err.Error(), "code": code}))
+}
+
+// resolveServerCrypto server 侧 crypto provider（Python: _get_crypto_provider
+// 经 common 钩子取，未注册回 nil → 明文落库，spec D-3）。
+func resolveServerCrypto() crypto.CryptoProvider {
+	return crypto.GetCryptoProvider()
 }
 
 // anyMapToStringMap 将 map[string]any 转为 map[string]string，

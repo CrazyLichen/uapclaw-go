@@ -24,10 +24,11 @@ const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// configSetEnvMap 配置面板参数键 → 环境变量键对照表
+// ConfigSetEnvMap 配置面板参数键 → 环境变量键对照表
 // （Python: config_service.py:29-105 _CONFIG_SET_ENV_MAP，74 条目机器抄录）。
 // 面板读一律以 .env 文件为准而非进程内存（跨进程时序修复，见模块 docstring）。
-var configSetEnvMap = map[string]string{
+var ConfigSetEnvMap = map[string]string{
+
 	"jev_openrouter_api_key":            "OPENROUTER_API_KEY",
 	"jev_typesafe_api_key":              "TYPESAFE_API_KEY",
 	"jev_custom_api_key":                "JEV_CUSTOM_API_KEY",
@@ -602,7 +603,7 @@ func dotenvValues(dotenvPath string) map[string]string {
 func getPanel() map[string]any {
 	environment := browserCredentialEnvironment()
 	payload := map[string]any{}
-	for paramKey, envKey := range configSetEnvMap {
+	for paramKey, envKey := range ConfigSetEnvMap {
 		payload[paramKey] = orStrEmpty(environment[envKey])
 	}
 	payload["app_version"] = version.Version
