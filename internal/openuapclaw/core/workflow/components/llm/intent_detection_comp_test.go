@@ -244,7 +244,7 @@ func TestCreateLLMInstance_双缺配置报错(t *testing.T) {
 // TestCreateLLMInstance_直构路径 client/request config 齐备 → NewModel 非 nil
 func TestCreateLLMInstance_直构路径(t *testing.T) {
 	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
-		ModelClientConfig: &llmschema.ModelClientConfig{ClientID: "c1", ClientProvider: "openai", APIKey: "k"},
+		ModelClientConfig: &llmschema.ModelClientConfig{ClientID: "c1", ClientProvider: "llm_OpenAI", APIKey: "k"},
 		ModelConfig:       &llmschema.ModelRequestConfig{ModelName: "gpt"},
 	})
 	inv, err := e.createLLMInstance(context.Background())
