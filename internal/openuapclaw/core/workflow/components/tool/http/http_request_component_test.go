@@ -3,8 +3,15 @@ package http
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // TestEnums_全量映射 枚举成员与 Python 逐字对齐（规则 9.2.4 不裁剪）
@@ -276,5 +283,188 @@ func TestCalculateRetryDelay_三退避(t *testing.T) {
 	rc.BackoffType = "exponential"
 	if d := e.CalculateRetryDelay(2); d != 4.0 {
 		t.Fatalf("exponential 漂移: %v", d)
+	}
+}
+
+// makeRequestParams 组装 makeRequest 的 params 形状（ProcessInputs 产物契约）
+func makeRequestParams(targetURL, method string, body any) map[string]any {
+	return map[string]any{
+		"url": targetURL, "method": method, "headers": map[string]string{},
+		"query_parameters": map[string]any{}, "body": body,
+		"authentication": map[string]any{},
+	}
+}
+
+// TestMakeRequest_GET基本链 GET + 查询透传 + 结果 dict 形状
+func TestMakeRequest_GET基本链(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("q") != "v" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	e := &HTTPRequestExecutable{requestParams: rp}
+	params := makeRequestParams(srv.URL, "GET", map[string]any{})
+	params["query_parameters"] = map[string]any{"q": "v"}
+	res, err := e.MakeRequest(params)
+	if err != nil {
+		t.Fatalf("MakeRequest 失败: %v", err)
+	}
+	if res["status_code"] != 200 || res["reason"] != "200 OK" {
+		t.Fatalf("status/reason 漂移: %v", res)
+	}
+	// 文本型 content-type → content 为 string（str 形态）
+	if _, ok := res["content"].(string); !ok {
+		t.Fatalf("文本响应 content 应为 string: %T", res["content"])
+	}
+	if res["url"] == "" || res["headers"] == nil {
+		t.Fatal("url/headers 缺失")
+	}
+}
+
+// TestMakeRequest_POST写体 POST + JSON 体 + Content-Type 头
+func TestMakeRequest_POST写体(t *testing.T) {
+	var gotBody, gotCT string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		gotBody, gotCT = string(raw), r.Header.Get("Content-Type")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	e := &HTTPRequestExecutable{requestParams: rp}
+	bc := NewHttpRequestBodyConfig()
+	bc.JSONData = map[string]any{"a": 1}
+	if _, err := e.MakeRequest(makeRequestParams(srv.URL, "POST", bc)); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if gotBody != `{"a":1}` {
+		t.Fatalf("请求体漂移: %q", gotBody)
+	}
+	if gotCT != "application/json" {
+		t.Fatalf("Content-Type 漂移: %q", gotCT)
+	}
+}
+
+// TestMakeRequest_响应超限重试后102000 超限异常走重试路径再包装（Python :298-303
+// raise 在 try 内 → except → 重试 → 耗尽后 102000 包装）
+func TestMakeRequest_响应超限重试后102000(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.Write(make([]byte, 100))
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	rp.MaxResponseByteSize = 50
+	rp.RetryConfig.Enabled = true
+	rp.RetryConfig.MaxRetries = 1
+	rp.RetryConfig.RetryDelay = 1
+	rp.RetryConfig.BackoffType = "fixed"
+	e := &HTTPRequestExecutable{requestParams: rp}
+	_, err := e.MakeRequest(makeRequestParams(srv.URL, "GET", map[string]any{}))
+	if err == nil {
+		t.Fatal("超限应报错")
+	}
+	var be *exception.BaseError
+	if !errors.As(err, &be) {
+		t.Fatalf("应 BaseError: %v", err)
+	}
+	if err.(*exception.BaseError).Code() != 102000 {
+		t.Fatalf("应 102000: %v", err)
+	}
+	if atomic.LoadInt32(&hits) != 2 {
+		t.Fatalf("超限应触发 1 次重试（共 2 次请求）: %d", hits)
+	}
+}
+
+// TestMakeRequest_状态码重试 429 命中重试表 → 重试后成功
+func TestMakeRequest_状态码重试(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&hits, 1) == 1 {
+			w.WriteHeader(429)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	rp.RetryConfig.Enabled = true
+	rp.RetryConfig.MaxRetries = 2
+	rp.RetryConfig.RetryDelay = 1
+	rp.RetryConfig.BackoffType = "fixed"
+	e := &HTTPRequestExecutable{requestParams: rp}
+	res, err := e.MakeRequest(makeRequestParams(srv.URL, "GET", map[string]any{}))
+	if err != nil || res["status_code"] != 200 {
+		t.Fatalf("重试后应成功: %v %v", res, err)
+	}
+	if atomic.LoadInt32(&hits) != 2 {
+		t.Fatalf("应恰好重试一次: %d", hits)
+	}
+}
+
+// TestMakeRequest_网络错误重试耗尽102000 连接拒绝 → 重试耗尽 → 102000
+func TestMakeRequest_网络错误重试耗尽102000(t *testing.T) {
+	rp := NewHttpRequestParamConfig()
+	rp.URL = "http://127.0.0.1:1/nope" // 保留端口必拒绝
+	rp.Timeout = 5
+	rp.RetryConfig.Enabled = true
+	rp.RetryConfig.MaxRetries = 1
+	rp.RetryConfig.RetryDelay = 1
+	rp.RetryConfig.BackoffType = "fixed"
+	e := &HTTPRequestExecutable{requestParams: rp}
+	_, err := e.MakeRequest(makeRequestParams(rp.URL, "GET", map[string]any{}))
+	if err == nil || err.(*exception.BaseError).Code() != 102000 {
+		t.Fatalf("网络错误耗尽应 102000: %v", err)
+	}
+}
+
+// TestMakeRequest_二进制分型 非文本 content-type → content 为 []byte（D-22-1 钉住）
+func TestMakeRequest_二进制分型(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte{0, 1, 2})
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	e := &HTTPRequestExecutable{requestParams: rp}
+	res, err := e.MakeRequest(makeRequestParams(srv.URL, "GET", map[string]any{}))
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if _, ok := res["content"].([]byte); !ok {
+		t.Fatalf("二进制 content 应为 []byte: %T", res["content"])
+	}
+}
+
+// TestMakeRequest_从不跟随重定向 allow_redirects=False 语义钉住
+func TestMakeRequest_从不跟随重定向(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "/next")
+		w.WriteHeader(302)
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	e := &HTTPRequestExecutable{requestParams: rp}
+	res, err := e.MakeRequest(makeRequestParams(srv.URL, "GET", map[string]any{}))
+	if err != nil || res["status_code"] != 302 {
+		t.Fatalf("302 应原样返回不跟随: %v %v", res, err)
 	}
 }
