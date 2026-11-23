@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 	"time"
 
 	configpkg "github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -105,8 +107,16 @@ type chain3WireCollector struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestRPCToRealEngine_端到端 链路3：RPC 编解码 → 分发 → 服务域 → 真引擎 → COMPLETED。
-func TestRPCToRealEngine_端到端(t *testing.T) {
+// Chain3RealEngineSuite 链路3 套件（17.9 既有用例迁 suite 入口，满足
+// integration-audit 文件级 suite.Run 硬规则；测试体零改动）。
+type Chain3RealEngineSuite struct{ suite.Suite }
+
+// TestChain3RealEngineSuite 入口。
+func TestChain3RealEngineSuite(t *testing.T) { suite.Run(t, new(Chain3RealEngineSuite)) }
+
+// TestChain3RealEngineSuite_端到端 链路3：RPC 编解码 → 分发 → 服务域 → 真引擎 → COMPLETED。
+func (s *Chain3RealEngineSuite) TestChain3RealEngineSuite_端到端() {
+	t := s.T()
 	t.Setenv("RSI_ENABLED", "true")
 	t.Setenv("HOME", t.TempDir())
 	// 工作区/配置根指到临时目录（getResolvedPaths 首次解析在本次调用内完成）。

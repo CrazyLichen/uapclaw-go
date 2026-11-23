@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/suite"
+
 	configpkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/singleharness"
@@ -61,8 +63,15 @@ func accParseFrame(frame string) map[string]any {
 	return m
 }
 
-// TestCancel_服务域全链_无残留 全链：terminate → 真引擎取消 → 无残留。
-func TestCancel_服务域全链_无残留(t *testing.T) {
+// CancelNoResidueSuite 取消残留套件。
+type CancelNoResidueSuite struct{ suite.Suite }
+
+// TestCancelNoResidueSuite 入口。
+func TestCancelNoResidueSuite(t *testing.T) { suite.Run(t, new(CancelNoResidueSuite)) }
+
+// TestCancelNoResidueSuite_服务域全链 全链：terminate → 真引擎取消 → 无残留。
+func (s *CancelNoResidueSuite) TestCancelNoResidueSuite_服务域全链() {
+	t := s.T()
 	t.Setenv("RSI_ENABLED", "true")
 	t.Setenv("HOME", t.TempDir())
 	dataDir := t.TempDir()
@@ -267,9 +276,10 @@ func TestCancel_服务域全链_无残留(t *testing.T) {
 	}
 }
 
-// TestCancel_引擎直调_清理面 直调 Run(ctx cancel)：取消分类 + 状态 terminated
-// + 无发布工件（与 17.9 域测试分工：此条管引擎清理面）。
-func TestCancel_引擎直调_清理面(t *testing.T) {
+// TestCancelNoResidueSuite_引擎直调 直调 Run(ctx cancel)：取消分类 + 状态
+// terminated + 无发布工件（与 17.9 域测试分工：此条管引擎清理面）。
+func (s *CancelNoResidueSuite) TestCancelNoResidueSuite_引擎直调() {
+	t := s.T()
 	llm := &accFakeLLM{replies: []string{"REPLY"}, slowDur: 1000}
 	llmServer := llm.server()
 	t.Cleanup(llmServer.Close)
