@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
 

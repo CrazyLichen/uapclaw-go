@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // ──────────────────── 测试辅助 ────────────────────

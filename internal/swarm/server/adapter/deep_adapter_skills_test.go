@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	skill "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 

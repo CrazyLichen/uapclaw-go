@@ -3,10 +3,10 @@ package adapter
 import (
 	"testing"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 

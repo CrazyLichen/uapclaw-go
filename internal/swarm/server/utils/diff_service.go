@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
