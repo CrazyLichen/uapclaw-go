@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 )
 
@@ -40,6 +41,33 @@ type accFakeLLM struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// accOrchestratorConfig 通过校验的编排器配置（复刻 chain3OrchestratorConfig
+// ——只取导出字段，评分模式 binary）。
+func accOrchestratorConfig() harnessconfig.AutoCoordinatingHarnessConfig {
+	return harnessconfig.AutoCoordinatingHarnessConfig{
+		MaxEpochs: 2,
+		Evaluator: harnessconfig.EvaluatorConfig{
+			Backend:                      "single_harness",
+			ScoreMode:                    "binary",
+			EvaluationMethod:             "script-based",
+			SolverMaxIterationsHardLimit: 10,
+		},
+		Scheduling: harnessconfig.OrchestratorSchedulingConfig{
+			EvaluationStrategy:        "hybrid",
+			CoordinationStrategy:      "team_first_single_pass",
+			FullEvaluationEnabled:     true,
+			FullEvaluationConcurrency: 1,
+		},
+		MemberOptimizer: harnessconfig.MemberOptimizerConfig{
+			SiblingCandidateCount:           1,
+			MaxRepairRoundsPerBatch:         2,
+			CandidateMinTargetBehaviorDelta: 0.1,
+		},
+		DataLoader: harnessconfig.DataLoaderConfig{BatchSize: 1},
+		Promotion:  harnessconfig.PromotionConfig{PolicyVersion: "legacy_epoch_v1"},
+	}
+}
 
 // server 启动 fake 端点（调用方负责 Close）。
 func (f *accFakeLLM) server() *httptest.Server {
@@ -106,6 +134,9 @@ func accWriteModelConfig(t *testing.T, apiBase string) string {
 // 形态复刻 ScoringPipelineSuite.writeDataset。
 func accWriteDataset(t *testing.T, dir string) harnessrsi.DatasetArtifact {
 	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	casesFile := filepath.Join(dir, "cases.json")
 	raw, err := json.Marshal([]map[string]any{
 		{
