@@ -19,8 +19,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
-	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/singleharness"
 )
 
@@ -54,44 +52,11 @@ func (c *eventCollector) snapshot() []rsi.EngineEvent {
 func TestEngineEventOrderSuite(t *testing.T) { suite.Run(t, new(EngineEventOrderSuite)) }
 
 // accNewOrchestrator 构造真编排器（真 evaluator + fake LLM 边界）。
-// 编排器配置复刻 chain3OrchestratorConfig（评分模式 binary，MaxEpochs 2）。
 func (s *EngineEventOrderSuite) accNewOrchestrator(apiBase string, root string) (
-	*singleharness.SingleHarnessIterativeOptimizationOrchestrator, *harnessrsi_testRequest) {
+	*singleharness.SingleHarnessIterativeOptimizationOrchestrator, *accRealEvalRequest) {
 	s.T().Helper()
 	modelConfig := accWriteModelConfig(s.T(), apiBase)
-
-	// evaluator 配置注入模型引用（评分全链经 fake 端点）。
-	cfg, err := harnessconfig.EvaluatorConfigFromDict(map[string]any{
-		"backend":               "single_harness",
-		"model_config_ref":      modelConfig,
-		"evaluation_method":     "exact_match",
-		"case_concurrency":      1,
-		"solver_max_iterations": 3,
-	})
-	s.Require().NoError(err)
-	te, err := evaluator.NewTeamEvaluator(cfg)
-	s.Require().NoError(err)
-
-	orchConfig := accOrchestratorConfig()
-	orchestrator, err := singleharness.NewSingleHarnessIterativeOptimizationOrchestrator(
-		orchConfig, te, nil, nil, nil)
-	s.Require().NoError(err)
-
-	dataset := accWriteDataset(s.T(), root+"/dataset")
-	refsPath := accWriteHarnessRefs(s.T(), root)
-	maxIter := 2
-	req, err := singleharness.NewIterativeSingleHarnessRequest(
-		dataset.DatasetFiles, refsPath, root+"/output", dataset.DatasetID,
-		false, "", false, "acc-task", &maxIter)
-	s.Require().NoError(err)
-	return orchestrator, &harnessrsi_testRequest{req: req, refsPath: refsPath, root: root}
-}
-
-// harnessrsi_testRequest 打包请求与路径。
-type harnessrsi_testRequest struct {
-	req      *singleharness.IterativeSingleHarnessRequest
-	refsPath string
-	root     string
+	return newAccOrchestratorWithModel(s.T(), modelConfig, root)
 }
 
 // TestEngineEventOrder_一轮演进事件剧本 fake LLM 驱动完整演进（solved 提前

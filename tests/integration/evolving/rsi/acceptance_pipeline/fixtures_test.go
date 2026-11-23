@@ -22,8 +22,76 @@ import (
 	"time"
 
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/singleharness"
 )
+
+// accRealEvalRequest 打包直调编排器所需的请求与路径。
+type accRealEvalRequest struct {
+	req      *singleharness.IterativeSingleHarnessRequest
+	refsPath string
+	root     string
+}
+
+// strPtr 字符串指针。
+func strPtr(s string) *string { return &s }
+
+// newAccOrchestratorWithModel 构造真编排器（真 TeamEvaluator + fake LLM
+// 边界）与直调请求（dataset/harness refs/output 均在 root 下）。
+func newAccOrchestratorWithModel(t *testing.T, modelConfig, root string) (
+	*singleharness.SingleHarnessIterativeOptimizationOrchestrator, *accRealEvalRequest) {
+	t.Helper()
+	cfg, err := harnessconfig.EvaluatorConfigFromDict(map[string]any{
+		"backend":               "single_harness",
+		"model_config_ref":      modelConfig,
+		"evaluation_method":     "exact_match",
+		"case_concurrency":      1,
+		"solver_max_iterations": 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	te, err := evaluator.NewTeamEvaluator(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orchestrator, err := singleharness.NewSingleHarnessIterativeOptimizationOrchestrator(
+		accOrchestratorConfig(), te, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataset := accWriteDataset(t, filepath.Join(root, "dataset"))
+	refsPath := accWriteHarnessRefs(t, root)
+	maxIter := 2
+	req, err := singleharness.NewIterativeSingleHarnessRequest(
+		dataset.DatasetFiles, refsPath, filepath.Join(root, "output"), dataset.DatasetID,
+		false, "", false, "acc-task", &maxIter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return orchestrator, &accRealEvalRequest{req: req, refsPath: refsPath, root: root}
+}
+
+// accRealEvaluatorForCancel 构造真 TeamEvaluator（服务域全链取消用例用）。
+func accRealEvaluatorForCancel(t *testing.T, modelConfig string) *evaluator.TeamEvaluator {
+	t.Helper()
+	cfg, err := harnessconfig.EvaluatorConfigFromDict(map[string]any{
+		"backend":               "single_harness",
+		"model_config_ref":      modelConfig,
+		"evaluation_method":     "exact_match",
+		"case_concurrency":      1,
+		"solver_max_iterations": 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	te, err := evaluator.NewTeamEvaluator(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return te
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
