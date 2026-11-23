@@ -444,8 +444,8 @@ func MatchZenFreeModelName(raw any) any {
 // PublicZenFreeModelRows Gateway 可直接合并的公开行（Python: :585）。
 func PublicZenFreeModelRows() []map[string]any {
 	rows := []map[string]any{}
-	AppendZenFreeModels(rows)
-	return rows
+	// AppendZenFreeModels 返回扩容后的切片（append 语义），必须接住返回值
+	return AppendZenFreeModels(rows)
 }
 
 // RegisterModelsReadyCallback 注册就绪回调（Python: :598）。
@@ -522,4 +522,12 @@ func AppendZenFreeModels(models []map[string]any) []map[string]any {
 		existingNames[modelName] = true
 	}
 	return models
+}
+
+// SetZenFreeModelsEnabledOverride 测试接缝：覆写免费拉取开关。
+// 对齐 Python 测试对模块属性 _zen_free_models_enabled 的 monkeypatch 惯例
+// （Python: config_panel 各 handler「调用方可 monkeypatch 本模块属性以隔离测试」）；
+// 生产代码不得调用。
+func SetZenFreeModelsEnabledOverride(enabled bool) {
+	zenFreeModelsEnabledFn = func() bool { return enabled }
 }
