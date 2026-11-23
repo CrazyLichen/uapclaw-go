@@ -369,6 +369,15 @@ func asString2(v any) string {
 // Python: config.py:2002-2032 upsert_model_resource。
 // 步骤：①归一 ②reasoning_level 归一校验 ③补 model_id ④写锁内合并或追加
 // ⑤is_default 互斥 ⑥候选校验。
+// EnsureModelBusinessIDs 导出包装（Python _ensure_model_business_ids；27.4 replace_all 消费）。
+func EnsureModelBusinessIDs(models map[string]any) bool { return ensureModelBusinessIDs(models) }
+
+// NormalizeLegacyModelNulls 导出包装（Python _normalize_legacy_model_nulls）。
+func NormalizeLegacyModelNulls(models map[string]any) { normalizeLegacyModelNulls(models) }
+
+// RecoverExistingModelFields 导出包装（Python _recover_existing_model_fields）。
+func RecoverExistingModelFields(models map[string]any) bool { return recoverExistingModelFields(models) }
+
 func UpsertModelResource(cfg *config.Config, entry map[string]any) (map[string]any, error) {
 	saved, err := normalizeModelEntry(entry)
 	if err != nil {

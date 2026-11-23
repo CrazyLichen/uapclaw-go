@@ -193,6 +193,17 @@ func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *sch
 		return okResp(payload), nil
 	}
 
+	// Python: models_handlers.py:803/667 models.list / config.validate_model / models.validate
+	if request.ReqMethod == schema.ReqMethodModelsList {
+		return s.HandleModelsList(ctx, request)
+	}
+	if request.ReqMethod == schema.ReqMethodModelsValidate || request.ReqMethod == schema.ReqMethodConfigValidateModel {
+		return s.HandleModelsValidate(ctx, request)
+	}
+	if request.ReqMethod == schema.ReqMethodModelsReplaceAll {
+		return s.HandleModelsReplaceAll(ctx, request)
+	}
+
 	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
 	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
 	payload, ok := control.HandleConfigRequest(string(request.ReqMethod), params)
