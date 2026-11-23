@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	stream "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	schema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -85,7 +85,7 @@ func TestProjectExternalUserInput(t *testing.T) {
 		Payload: map[string]any{
 			"id": "req-1",
 			"value": map[string]any{
-				"kind": "user_input",
+				"kind":   "user_input",
 				"prompt": "选一个",
 			},
 		},

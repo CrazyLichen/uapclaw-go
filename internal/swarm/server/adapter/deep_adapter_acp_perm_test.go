@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

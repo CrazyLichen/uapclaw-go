@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 )
 
 // mockSessionFacade 用于测试的 Session 桩实现，对齐项目其他测试中的 fakeSessionFacade 模式

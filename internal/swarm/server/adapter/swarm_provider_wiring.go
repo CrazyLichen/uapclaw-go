@@ -1,11 +1,11 @@
 package adapter
 
 import (
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
-	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	teamrt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
+	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
 // swarm_provider_wiring.go —— providers 包基座构造函数注入（D-15.16f-view

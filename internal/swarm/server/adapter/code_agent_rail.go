@@ -8,12 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
