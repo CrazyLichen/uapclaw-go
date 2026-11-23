@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -17,6 +18,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	security "github.com/uapclaw/uapclaw-go/internal/common/security"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	components "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"gopkg.in/yaml.v3"
 )
@@ -319,7 +323,12 @@ func NewHttpComponentConfig() *HttpComponentConfig {
 // NewHTTPRequestExecutable 构造执行体（Python __init__ :140-143 一比一）
 func NewHTTPRequestExecutable(componentConfig *HttpComponentConfig) *HTTPRequestExecutable {
 	e := &HTTPRequestExecutable{cfg: componentConfig, requestParams: componentConfig.RequestParams}
-	// 四槽装配在 Task6 统一落地（Python :145-168 四方法全实现后挂槽）
+	// 四槽装配（8.20 槽优先铁律）：invoke 必装；stream/collect/transform
+	// Python 为 yield/return invoke 委托单帧（:155-168）
+	e.InvokeFn = e.invoke
+	e.StreamFn = e.stream
+	e.CollectFn = e.collect
+	e.TransformFn = e.transform
 	return e
 }
 
@@ -752,7 +761,78 @@ func (e *HTTPRequestExecutable) ProcessResponse(response map[string]any) map[str
 	return result
 }
 
+// NewHTTPRequestComponent 构造组件（Python __init__ :495-498 一比一）
+func NewHTTPRequestComponent(componentConfig *HttpComponentConfig) *HTTPRequestComponent {
+	c := &HTTPRequestComponent{config: componentConfig}
+	// 槽优先（8.20 铁律）：ToExecutableFn 注入构造产物
+	c.ToExecutableFn = func() graphexe.GeneralExecutor { return c.Executable() }
+	return c
+}
+
+// Config 配置访问器（Python config property :500-503）
+func (c *HTTPRequestComponent) Config() *HttpComponentConfig { return c.config }
+
+// Executable 懒构造单例（Python executable property :505-509）
+func (c *HTTPRequestComponent) Executable() *HTTPRequestExecutable {
+	if c.executable == nil {
+		c.executable = c.toExecutable()
+	}
+	return c.executable
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// invoke 三步链（Python invoke :145-153 一比一；sess 形参为槽位签名要求，
+// Python 亦收 session 不使用）
+func (e *HTTPRequestExecutable) invoke(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
+	processed, err := e.ProcessInputs(inputs)
+	if err != nil {
+		return nil, err
+	}
+	response, err := e.MakeRequest(processed)
+	if err != nil {
+		return nil, err
+	}
+	return e.ProcessResponse(response), nil
+}
+
+// stream 单帧委托（Python stream :155-158 yield invoke）
+func (e *HTTPRequestExecutable) stream(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
+	out, err := e.invoke(ctx, inputs, sess, modelContext)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan graphexe.StreamChunk[any], 1)
+	ch <- graphexe.StreamChunk[any]{Val: out}
+	close(ch)
+	return ch, nil
+}
+
+// collect 批出委托（Python collect :160-163 return invoke）
+func (e *HTTPRequestExecutable) collect(ctx context.Context, inputs <-chan map[string]any,
+	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
+	return e.invoke(ctx, nil, sess, modelContext)
+}
+
+// transform 单帧委托（Python transform :165-168 yield invoke）
+func (e *HTTPRequestExecutable) transform(ctx context.Context, inputs <-chan map[string]any,
+	sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
+	out, err := e.invoke(ctx, nil, sess, modelContext)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan graphexe.StreamChunk[any], 1)
+	ch <- graphexe.StreamChunk[any]{Val: out}
+	close(ch)
+	return ch, nil
+}
+
+// toExecutable 产出可执行体（Python to_executable :511-512）
+func (c *HTTPRequestComponent) toExecutable() *HTTPRequestExecutable {
+	return NewHTTPRequestExecutable(c.config)
+}
 
 // wrapRequestError 网络层错误 → 102000 包装（Python :347-352
 // build_error(COMPONENT_TOOL_EXECUTION_ERROR, "HTTP request failed: …") 一比一）
