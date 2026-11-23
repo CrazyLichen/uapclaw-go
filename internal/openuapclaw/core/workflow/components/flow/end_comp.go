@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -459,7 +460,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 		e.template = NewTemplateProcessor(conf.ResponseTemplate)
 	}
 	// StreamFn 绑定（Python stream，end_comp.py:91-142）
-	e.StreamFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+	e.StreamFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetComponentID()).
 			Str("session_id", sess.GetSessionID()).
@@ -521,7 +522,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 	}
 
 	// TransformFn 绑定（Python transform，end_comp.py:144-179）
-	e.TransformFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+	e.TransformFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetExecutableID()).
 			Str("session_id", sess.GetSessionID()).
@@ -575,7 +576,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 	}
 
 	// CollectFn 绑定（Python collect，end_comp.py:181-212）
-	e.CollectFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	e.CollectFn = func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetExecutableID()).
 			Str("session_id", sess.GetSessionID()).
@@ -612,7 +613,7 @@ func NewEnd(conf *EndConfig) (*End, error) {
 	}
 
 	// InvokeFn 绑定（Python invoke，end_comp.py:59-89）
-	e.InvokeFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	e.InvokeFn = func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		logger.Debug(logComponent).
 			Str("component_id", sess.GetComponentID()).
 			Str("session_id", sess.GetSessionID()).

@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
@@ -20,7 +21,7 @@ type Start struct {
 func NewStart() *Start {
 	return &Start{
 		WorkflowComponent: components.WorkflowComponent{
-			InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+			InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 				return inputs, nil
 			},
 		},

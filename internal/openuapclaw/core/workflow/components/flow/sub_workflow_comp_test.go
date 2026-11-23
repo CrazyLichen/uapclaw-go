@@ -271,7 +271,7 @@ func TestSubWorkflowComponent_Stream_逐帧累积并转发(t *testing.T) {
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, true)
 	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
-	ch, err := comp.StreamFn(context.Background(), env, nil)
+	ch, err := comp.StreamFn(context.Background(), env, nil, nil)
 	if err != nil {
 		t.Fatalf("流启动失败: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestSubWorkflowComponent_Stream_dict帧合并缓存(t *testing.T) {
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, true)
 	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
-	ch, err := comp.StreamFn(context.Background(), env, nil)
+	ch, err := comp.StreamFn(context.Background(), env, nil, nil)
 	if err != nil {
 		t.Fatalf("流启动失败: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestSubWorkflowComponent_Invoke_非空缓存短路(t *testing.T) {
 	comp.streamState.Accumulate(map[string]any{"response": "cached-part1"})
 	comp.streamState.Accumulate(map[string]any{"response": "cached-part2"})
 	env := map[string]any{graph.InputsKey: map[string]any{"q": "hi"}, graph.ConfigKey: nil}
-	out, err := comp.InvokeFn(context.Background(), env, nil)
+	out, err := comp.InvokeFn(context.Background(), env, nil, nil)
 	if err != nil {
 		t.Fatalf("invoke 失败: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestSubWorkflowComponent_Stream_关缓存不累积(t *testing.T) {
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, false)
 	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
-	ch, _ := comp.StreamFn(context.Background(), env, nil)
+	ch, _ := comp.StreamFn(context.Background(), env, nil, nil)
 	for range ch {
 	}
 	merged, _ := comp.streamState.BuildFinalResult()
@@ -370,7 +370,7 @@ func TestSubWorkflowComponent_Stream_dict帧累积命中短路(t *testing.T) {
 	}}
 	comp, _ := newSubWorkflowComponentForTest(fw, true)
 	env := map[string]any{graph.InputsKey: map[string]any{}, graph.ConfigKey: nil}
-	ch, _ := comp.StreamFn(context.Background(), env, nil)
+	ch, _ := comp.StreamFn(context.Background(), env, nil, nil)
 	for range ch {
 	}
 	// 流后批式 invoke：空缓存（Schema 帧被过滤）→ {} 非 None → 仍短路

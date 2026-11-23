@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/service_api"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
@@ -138,11 +139,12 @@ func (c *ToolComponent) BindTool(t tool.Tool) *ToolComponent {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// invoke 执行链（Python invoke :61-81 五步一比一，顺序不改）：
+// invoke 执行链（Python invoke(self, inputs, session, context) :61-81 五步一比一，
+// 顺序不改；modelContext ≙ Python 第三形参，Python 体内未消费，Go 同位保留）：
 // ① tool nil → 102000；② 校验输入；③ tool.Invoke(skip_inputs_validate=False,
 // skip_none_value=True)；④ 错误吞没（BaseError 取 code/message，否则 182012
 // msg 格式化 card+reason）；⑤ postProcess → createOutput
-func (e *ToolExecutable) invoke(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+func (e *ToolExecutable) invoke(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 	// ① tool 未初始化
 	if e.toolObj == nil {
 		return nil, exception.BuildError(

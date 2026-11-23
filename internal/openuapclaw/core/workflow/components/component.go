@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
@@ -48,14 +49,15 @@ type WorkflowComponent struct {
 	// BaseComponentComposable 组合面基座（Python ComponentComposable mixin 嵌入）
 	BaseComponentComposable
 
-	// InvokeFn 批入批出（Python invoke(inputs, Session(session, False), context)）
-	InvokeFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error)
+	// InvokeFn 批入批出（Python invoke(inputs, Session(session, False), context)；
+	// modelContext ≙ Python 第三形参，基座 OnInvoke 统一从 kwargs 提取下发）
+	InvokeFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error)
 	// StreamFn 批入流出（Python stream(inputs, Session(session, False), context)）
-	StreamFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error)
+	StreamFn func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error)
 	// CollectFn 流入批出（Python collect(inputs, Session(session, True), context)）
-	CollectFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (map[string]any, error)
+	CollectFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error)
 	// TransformFn 流入流出（Python transform(inputs, Session(session, True), context)）
-	TransformFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error)
+	TransformFn func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error)
 	// TraceMetadataFn 组件追踪元数据（Python trace_metadata，默认 nil 不产出）
 	TraceMetadataFn func() map[string]any
 }
@@ -143,7 +145,9 @@ func (c *WorkflowComponent) OnInvoke(ctx context.Context, inputs map[string]any,
 	if c.InvokeFn == nil {
 		output, err = c.BaseExecutable.OnInvoke(ctx, inputs, sess, kwargs)
 	} else {
-		output, err = c.InvokeFn(ctx, inputs, compSess)
+		// Python component.py:99——基座统一提取 kwargs["context"] 作 invoke
+		// 第三形参下发（八次记录 8.21 审查对齐，组件侧无需再各自摸 kwargs）
+		output, err = c.InvokeFn(ctx, inputs, compSess, kwargModelContext(kwargs))
 	}
 	if err != nil {
 		return nil, err
@@ -176,7 +180,7 @@ func (c *WorkflowComponent) OnStream(ctx context.Context, inputs map[string]any,
 	if c.StreamFn == nil {
 		ch, err = c.BaseExecutable.OnStream(ctx, inputs, sess, kwargs)
 	} else {
-		ch, err = c.StreamFn(ctx, inputs, compSess)
+		ch, err = c.StreamFn(ctx, inputs, compSess, kwargModelContext(kwargs))
 	}
 	if err != nil {
 		return nil, err
@@ -197,7 +201,7 @@ func (c *WorkflowComponent) OnCollect(ctx context.Context, inputs <-chan map[str
 	if c.CollectFn == nil {
 		output, err = c.BaseExecutable.OnCollect(ctx, inputs, sess, kwargs)
 	} else {
-		output, err = c.CollectFn(ctx, inputs, compSess)
+		output, err = c.CollectFn(ctx, inputs, compSess, kwargModelContext(kwargs))
 	}
 	if err != nil {
 		return nil, err
@@ -224,7 +228,7 @@ func (c *WorkflowComponent) OnTransform(ctx context.Context, inputs <-chan map[s
 	if c.TransformFn == nil {
 		ch, err = c.BaseExecutable.OnTransform(ctx, inputs, sess, kwargs)
 	} else {
-		ch, err = c.TransformFn(ctx, inputs, compSess)
+		ch, err = c.TransformFn(ctx, inputs, compSess, kwargModelContext(kwargs))
 	}
 	if err != nil {
 		return nil, err
@@ -233,6 +237,13 @@ func (c *WorkflowComponent) OnTransform(ctx context.Context, inputs <-chan map[s
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// kwargModelContext 从 kwargs 提取 ModelContext（Python component.py:99
+// kwargs.get("context") 等价；非 ModelContext 值/缺省 → nil）
+func kwargModelContext(kwargs map[string]any) iface.ModelContext {
+	mc, _ := kwargs["context"].(iface.ModelContext)
+	return mc
+}
 
 // transformStreamOutput 对流出通道逐帧应用 COMPONENT_STREAM_OUTPUT 转换与触发。
 // Python transform_io 对 AsyncIterator 输出的逐项 output_event 语义

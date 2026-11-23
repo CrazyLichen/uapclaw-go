@@ -81,12 +81,12 @@ func TestLoopComponent_信封硬错(t *testing.T) {
 
 	facade, _ := session.NewWorkflowNodeSessionPair(newFakeVertexParent(t), "loop_1", "", false)
 	// INPUTS_KEY 缺失
-	_, err = c.invoke(context.Background(), map[string]any{}, facade)
+	_, err = c.invoke(context.Background(), map[string]any{}, facade, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing required key inputs")
 
 	// inputs nil
-	_, err = c.invoke(context.Background(), nil, facade)
+	_, err = c.invoke(context.Background(), nil, facade, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "inputs must be a dict")
 }

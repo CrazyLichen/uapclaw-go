@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -130,13 +131,13 @@ func newSubWorkflowComponent(subWorkflow *workflow.Workflow, opts ...SubWorkflow
 	}
 	// InvokeFn 槽绑定（Python invoke :78-84；Quirk A 空缓存短路逐字复刻，D-14b-1 已知行为）
 	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
-		sess *session.NodeSessionFacade) (map[string]any, error) {
+		sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		return c.invokeSubWorkflow(ctx, inputs, sess)
 	}
 	// StreamFn 槽绑定（Python stream :76-81：转调子工作流流式 + cache_stream 逐帧累积；
 	// 帧信封 {"frame": <stream.Schema>} 为 Go map 槽承载惯例，End 同款，D-17-1 延伸）
 	c.StreamFn = func(ctx context.Context, inputs map[string]any,
-		sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+		sess *session.NodeSessionFacade, _ iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 		subCh, err := c.subWorkflowStreamFn(ctx, inputs[graph.InputsKey], sess, nil,
 			nil, map[string]any{graph.ConfigKey: inputs[graph.ConfigKey], "is_sub": true})
 		if err != nil {

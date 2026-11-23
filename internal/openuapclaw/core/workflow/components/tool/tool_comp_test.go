@@ -61,7 +61,7 @@ func TestToolExecutableInvoke_普通Tool信封化(t *testing.T) {
 		return map[string]any{"code": 0, "data": "ok", "message": "done"}, nil
 	})
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{"q": 1}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{"q": 1}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, out["errCode"])
 	assert.Equal(t, "done", out["errMessage"])
@@ -73,7 +73,7 @@ func TestToolExecutableInvoke_裸结果塞data(t *testing.T) {
 		return map[string]any{"answer": 42}, nil
 	})
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{"answer": 42}, out["data"])
 	assert.Equal(t, 0, out["errCode"])
@@ -105,7 +105,7 @@ func TestToolExecutableInvoke_错误吞没182012(t *testing.T) {
 		card: card, err: assert.AnError,
 	})
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err) // 吞错误，不断图
 	assert.Equal(t, 182012, out["errCode"])
 	assert.Contains(t, out["errMessage"], "tool execution error")
@@ -118,7 +118,7 @@ func TestToolExecutableInvoke_BaseError透传码(t *testing.T) {
 		return nil, assert.AnError
 	})
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 182205, out["errCode"])
 	assert.Contains(t, out["errMessage"], assert.AnError.Error())
@@ -128,7 +128,7 @@ func TestToolExecutableInvoke_tool未初始化102000(t *testing.T) {
 	cfg := &ToolComponentConfig{}
 	e := NewToolExecutable(cfg) // 未 SetTool
 	sess := newTestNodeSession(t)
-	_, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	_, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.Error(t, err)
 	be, ok := err.(*exception.BaseError)
 	require.True(t, ok)
@@ -151,7 +151,7 @@ func TestToolExecutableInvoke_RestfulApi分支(t *testing.T) {
 	cfg := &ToolComponentConfig{}
 	e := NewToolExecutable(cfg).SetTool(api)
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, out["errCode"]) // 200 ≤ code < 300 → SUCCESS.code(0)
 	assert.Equal(t, map[string]any{"k": "v"}, out["data"])
@@ -171,7 +171,7 @@ func TestToolExecutableInvoke_RestfulApi非2xx(t *testing.T) {
 	cfg := &ToolComponentConfig{}
 	e := NewToolExecutable(cfg).SetTool(api)
 	sess := newTestNodeSession(t)
-	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess)
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	// Python 非 2xx → TOOL_RESTFUL_API_RESPONSE_ERROR(182103) BaseError 上抛
 	// → ToolComponent BaseError 分支透传 182103（restful_api.py:303）
@@ -263,7 +263,7 @@ func TestToolComponent_ToExecutable_fn复用invoke链(t *testing.T) {
 	c := NewToolComponent(&ToolComponentConfig{ToolID: &tid})
 	te := c.ToExecutable().(*ToolExecutable)
 	sess := newTestNodeSession(t)
-	out, err := te.InvokeFn(context.Background(), map[string]any{"x": 1}, sess)
+	out, err := te.InvokeFn(context.Background(), map[string]any{"x": 1}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", out["data"])
 }

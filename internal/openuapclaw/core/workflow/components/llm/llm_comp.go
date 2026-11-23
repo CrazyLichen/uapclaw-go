@@ -142,10 +142,6 @@ type LLMExecutable struct {
 	context iface.ModelContext
 	// state 流式缓存状态（Python self._state）
 	state *LLMExecutableState
-
-	// baseInvoke/baseStream 基座钩子引用（方法遮蔽后转调用；D-17-1 同款遮蔽模式）
-	baseInvoke func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error)
-	baseStream func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error)
 }
 
 // 统一模型调用面（导出，注入缝对外契约；（Python Union[Model, None]；*llm.Model 与
@@ -203,33 +199,17 @@ func NewLLMExecutable(componentConfig *LLMCompConfig) (*LLMExecutable, error) {
 		cfg:   componentConfig,
 		state: newLLMExecutableState(),
 	}
-	// 保存基座钩子（方法遮蔽后转调）
-	e.baseInvoke = e.WorkflowComponent.OnInvoke
-	e.baseStream = e.WorkflowComponent.OnStream
 	// 四槽装配：invoke + stream 槽
 	e.InvokeFn = e.invokeEntry
 	e.StreamFn = e.streamEntry
 	return e, nil
 }
 
-// ──────────────────────────── LLMExecutable 钩子遮蔽 ────────────────────────────
-
-// OnInvoke 批入批出钩子：先从 kwargs 捕获 ModelContext（Python on_invoke 的
-// kwargs.get("context") 等价，component.py:99）→ 转调基座（Trigger 序列 + InvokeFn 槽）。
-func (e *LLMExecutable) OnInvoke(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
-	if mc, ok := kwargs["context"].(iface.ModelContext); ok {
-		e.context = mc
-	}
-	return e.baseInvoke(ctx, inputs, sess, kwargs)
-}
-
-// OnStream 批入流出钩子：同 OnInvoke 捕获 context（component.py:106）→ 转调基座。
-func (e *LLMExecutable) OnStream(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
-	if mc, ok := kwargs["context"].(iface.ModelContext); ok {
-		e.context = mc
-	}
-	return e.baseStream(ctx, inputs, sess, kwargs)
-}
+// ──────────────────────────── LLMExecutable 钩子遮蔽（已删）────────────────────────────
+// 八次记录 8.21 审查收口：OnInvoke/OnStream 遮蔽与 baseInvoke/baseStream 删除——
+// Python 基座 on_invoke 统一提取 kwargs["context"] 作 invoke 第三形参下发
+// （component.py:95-99），Go 基座 InvokeFn/StreamFn 槽已补 modelContext 形参
+// 同语义，组件无需再遮蔽拦截（Python LLMExecutable 亦无 on_invoke override）。
 
 // ──────────────────────────── LLMExecutableState 方法 ────────────────────────────
 
@@ -883,10 +863,11 @@ func (e *LLMExecutable) setContext(mc iface.ModelContext) {
 }
 
 // invokeEntry 批入批出槽函数（Python invoke :524-572 十步一比一）
-func (e *LLMExecutable) invokeEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
-	// 步骤1：setSession/setContext（:525-526）
+func (e *LLMExecutable) invokeEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
+	// 步骤1：setSession/setContext（:525-526；context 由基座统一下发，
+	// 八次记录 8.21 审查对齐 Python on_invoke 形参语义）
 	e.setSession(sess)
-	e.setContext(e.context)
+	e.setContext(modelContext)
 	// 步骤2：准备模型输入（懒初始化 + 提示词组装，:527）
 	modelInputs, err := e.prepareModelInputs(ctx, inputs)
 	if err != nil {
@@ -1185,10 +1166,11 @@ func (e *LLMExecutable) createOutput(llmOutput string) (out map[string]any) {
 // ──────────────────────────── LLMExecutable stream 链（llm_comp.py:574-752） ────────────────────────────
 
 // streamEntry 批入流出槽函数（Python stream :574-600 外层 + :707-752 双分支一比一）
-func (e *LLMExecutable) streamEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+func (e *LLMExecutable) streamEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 	// Python stream 是 async generator——入口先执行的部分（:575-580 + 分派）同步，
 	// 产出经 channel；入口错误走第二返回值（流式签名 A'，8.2 spec）
 	e.setSession(sess)
+	e.setContext(modelContext) // Python :576 _set_context
 	// Reset state for new stream（:577-579）
 	if e.cfg.CacheStream {
 		e.state.Clear()

@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/constants"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
@@ -167,7 +168,7 @@ func ValidateLoopInput(raw any) (*LoopInput, error) {
 // loop_comp.py:248-256：controller 未初始化 → 101042，否则 BreakLoop() 返回 {}）。
 func NewLoopBreakComponent() *LoopBreakComponent {
 	c := &LoopBreakComponent{}
-	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		// Python: if self._loop_controller is None: raise 101042
 		if c.loopController == nil {
 			return nil, exception.BuildError(exception.StatusComponentLoopBreakExecutionError,
@@ -242,7 +243,7 @@ func NewLoopSetVariableComponent(variableMapping map[string]any) (*LoopSetVariab
 			exception.WithParam("reason", "variable_mapping is None or empty"))
 	}
 	c := &LoopSetVariableComponent{variableMapping: variableMapping}
-	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		return c.invoke(sess)
 	}
 	return c, nil
@@ -875,7 +876,7 @@ func (c *LoopComponent) LoopGroup() *LoopGroup { return c.loopGroup }
 
 // invoke 循环执行（loop_comp.py:166-220 十步一比一；D-20-1：getattr(session, "_inner")
 // → InnerNodeSession()）。
-func (c *LoopComponent) invoke(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+func (c *LoopComponent) invoke(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 	// Python 167-220 整体 try：GraphInterrupt/BaseError 透传，其余包装 101040。
 	// Go 错误分类在 defer 内承载（等价 except 链）。
 	result, err := c.invokeInner(ctx, inputs, sess)

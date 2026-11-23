@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
@@ -34,7 +35,7 @@ type countingComp struct {
 func newCounting() *countingComp {
 	c := &countingComp{}
 	c.InvokeFn = func(_ context.Context, inputs map[string]any,
-		_ *session.NodeSessionFacade) (map[string]any, error) {
+		_ *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		n, _ := inputs["source"].(int)
 		c.sources = append(c.sources, n)
 		return map[string]any{"result": n + 10}, nil
@@ -81,7 +82,7 @@ func TestLoopComponent_invoke包装器成功路径(t *testing.T) {
 	facade := newLoopFacadeWithCp(t, "loop")
 
 	result, err := loopComp.invoke(context.Background(),
-		map[string]any{"inputs": map[string]any{"loop_type": "number", "loop_number": 2}}, facade)
+		map[string]any{"inputs": map[string]any{"loop_type": "number", "loop_number": 2}}, facade, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, []int{0, 1}, body.sources)
@@ -101,7 +102,7 @@ func TestLoopComponent_全链expressionFalse(t *testing.T) {
 	facade := newLoopFacadeWithCp(t, "loop")
 
 	_, err = loopComp.invoke(context.Background(),
-		map[string]any{"inputs": map[string]any{"loop_type": "expression", "bool_expression": "False"}}, facade)
+		map[string]any{"inputs": map[string]any{"loop_type": "expression", "bool_expression": "False"}}, facade, nil)
 	require.NoError(t, err)
 	assert.Empty(t, body.sources, "表达式恒假 → 循环体零执行")
 }
@@ -123,7 +124,7 @@ func TestLoopComponent_全链alwaysTrueBreak(t *testing.T) {
 	facade := newLoopFacadeWithCp(t, "loop")
 
 	_, err = loopComp.invoke(context.Background(),
-		map[string]any{"inputs": map[string]any{"loop_type": "always_true", "loop_number": 0}}, facade)
+		map[string]any{"inputs": map[string]any{"loop_type": "always_true", "loop_number": 0}}, facade, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []int{0}, body.sources, "第 1 轮末 brk 置 BROKEN → 跳出")
 }

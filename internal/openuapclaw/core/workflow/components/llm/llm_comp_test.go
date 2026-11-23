@@ -15,7 +15,6 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
 // ──────────────────────────── 测试助手 ────────────────────────────
@@ -520,9 +519,9 @@ func TestInvoke_全链(t *testing.T) {
 	cfg.EnableHistory = true
 	e := newTestExecutable(t, cfg, &fakeModelClient{respContent: "模型回答"})
 	sess := newTestNodeSession(t)
+	mc := newFakeModelContext()
 	e.setSession(sess)
-	e.setContext(newFakeModelContext())
-	out, err := e.invokeEntry(context.Background(), map[string]any{"q": "hi"}, sess)
+	out, err := e.invokeEntry(context.Background(), map[string]any{"q": "hi"}, sess, mc)
 	require.NoError(t, err)
 	assert.Equal(t, "模型回答", out["answer"])
 	assert.True(t, e.initialized)
@@ -548,7 +547,7 @@ func TestInvoke_懒初始化modelID路径(t *testing.T) {
 	require.NoError(t, err)
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	out, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	out, err := e.invokeEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", out["answer"])
 }
@@ -561,7 +560,7 @@ func TestInvoke_双nil配置拒绝(t *testing.T) {
 	e := newTestExecutable(t, cfg, nil)
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess, nil)
 	// Python: createLLMInstance 的 101003 经 _initialize_if_needed 再包装为 101005
 	assertLLMCode(t, err, exception.StatusComponentLLMInitFailed)
 }
@@ -571,7 +570,7 @@ func TestInvoke_调用失败包装(t *testing.T) {
 	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{invokeErr: errors.New("boom")})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess, nil)
 	assertLLMCode(t, err, exception.StatusComponentLLMInvokeCallFailed)
 	assert.Equal(t, "invoke llm failed", errMsg(t, err))
 }
@@ -586,7 +585,7 @@ func TestInvoke_格式化101007转101004(t *testing.T) {
 	e := newTestExecutable(t, cfg, &fakeModelClient{respContent: "not-json{"})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess)
+	_, err := e.invokeEntry(context.Background(), map[string]any{}, sess, nil)
 	assertLLMCode(t, err, exception.StatusComponentLLMExecutionProcessError)
 }
 
@@ -681,7 +680,7 @@ func TestStream_json格式_一次性帧(t *testing.T) {
 	e := newTestExecutable(t, cfg, &fakeStreamClient{chunks: []string{"{\"name\": \"ok\"}"}})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	frames, ferr := drainFrames(t, ch)
 	require.NoError(t, ferr)
@@ -694,7 +693,7 @@ func TestStream_逐chunk格式化(t *testing.T) {
 	e := newTestExecutable(t, llmTestConfig(), &fakeStreamClient{chunks: []string{"你", "好"}})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	frames, ferr := drainFrames(t, ch)
 	require.NoError(t, ferr)
@@ -710,7 +709,7 @@ func TestStream_cacheStream_出错清状态(t *testing.T) {
 	e := newTestExecutable(t, cfg, &fakeStreamClient{streamErr: errors.New("mid")})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	_, ferr := drainFrames(t, ch)
 	require.Error(t, ferr)
@@ -726,7 +725,7 @@ func TestStream_getStreamOutput(t *testing.T) {
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
 	assert.Nil(t, e.getStreamOutput(), "空累积 → nil（Python output=None）")
-	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	_, ferr := drainFrames(t, ch)
 	require.NoError(t, ferr)
@@ -744,7 +743,7 @@ func TestStream_cacheStream_成功累积(t *testing.T) {
 	e := newTestExecutable(t, cfg, &fakeStreamClient{chunks: []string{"{\"name\": \"ok\"}"}})
 	sess := newTestNodeSession(t)
 	e.setSession(sess)
-	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess)
+	ch, err := e.streamEntry(context.Background(), map[string]any{}, sess, nil)
 	require.NoError(t, err)
 	_, ferr := drainFrames(t, ch)
 	require.NoError(t, ferr)
@@ -782,44 +781,9 @@ func TestLLMComponent_校验失败panic(t *testing.T) {
 	_ = "unreachable"
 }
 
-// ──────────────────────────── 补测：钩子捕获/注入缝/工具函数 ────────────────────────────
-
-// TestOnInvokeOnStream_context捕获 kwargs["context"] 为 ModelContext 时写入实例字段
-func TestOnInvokeOnStream_context捕获(t *testing.T) {
-	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{respContent: "x"})
-	baseInvoked := false
-	e.baseInvoke = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
-		baseInvoked = true
-		return map[string]any{}, nil
-	}
-	baseStreamCalled := false
-	e.baseStream = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (<-chan graphexe.StreamChunk[any], error) {
-		baseStreamCalled = true
-		ch := make(chan graphexe.StreamChunk[any], 1)
-		close(ch)
-		return ch, nil
-	}
-	mc := &recordingMCStub{}
-	_, err := e.OnInvoke(context.Background(), map[string]any{}, nil, map[string]any{"context": mc})
-	require.NoError(t, err)
-	require.True(t, baseInvoked, "基座钩子应被转调")
-	require.Equal(t, mc, e.context, "OnInvoke 应捕获 ModelContext")
-	_, err = e.OnStream(context.Background(), map[string]any{}, nil, map[string]any{"context": mc})
-	require.NoError(t, err)
-	require.True(t, baseStreamCalled)
-}
-
-// TestOnInvoke_context非ModelContext kwargs 携带非 ModelContext 值时不覆盖
-func TestOnInvoke_context非ModelContext(t *testing.T) {
-	e := newTestExecutable(t, llmTestConfig(), &fakeModelClient{respContent: "x"})
-	e.baseInvoke = func(ctx context.Context, inputs map[string]any, sess session.BaseSession, kwargs map[string]any) (map[string]any, error) {
-		return map[string]any{}, nil
-	}
-	e.context = nil
-	_, err := e.OnInvoke(context.Background(), map[string]any{}, nil, map[string]any{"context": "not-mc"})
-	require.NoError(t, err)
-	require.Nil(t, e.context, "非 ModelContext 断言失败应保持原字段")
-}
+// ──────────────────────────── 补测：工具函数 ────────────────────────────
+// 八次记录 8.21 审查收口：原 OnInvoke/OnStream context 捕获两用例随遮蔽机制删除
+// ——提取已下沉基座（component_test.go TestWorkflowComponent_OnInvoke_context下发）。
 
 // TestInvoke_未注册模型报错 8.21 连带收口替代原 resolver 注入用例：
 // ModelID 未在 ResourceMgr 注册 → 直调链报 not found
@@ -832,7 +796,7 @@ func TestInvoke_未注册模型报错(t *testing.T) {
 	e, err := NewLLMExecutable(cfg)
 	require.NoError(t, err)
 	e.setSession(newTestNodeSession(t))
-	_, err = e.invokeEntry(context.Background(), map[string]any{}, newTestNodeSession(t))
+	_, err = e.invokeEntry(context.Background(), map[string]any{}, newTestNodeSession(t), nil)
 	require.Error(t, err)
 	// 懒初始化层包装为 101005（对齐 Python _ensure_initialized 包装），根因 not found
 	assert.Contains(t, err.Error(), "failed to initialize llm if needed")

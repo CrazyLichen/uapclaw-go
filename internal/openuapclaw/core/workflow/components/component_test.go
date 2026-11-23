@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -14,7 +15,7 @@ import (
 // TestWorkflowComponent_OnInvoke_会话类型拒绝 验证非顶点会话返回编排错误
 // （component.py:96-98 isinstance(session, NodeSession) 校验）。
 func TestWorkflowComponent_OnInvoke_会话类型拒绝(t *testing.T) {
-	comp := &WorkflowComponent{InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	comp := &WorkflowComponent{InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		return inputs, nil
 	}}
 	_, err := comp.OnInvoke(context.Background(), map[string]any{"a": 1}, nil, nil)
@@ -26,7 +27,7 @@ func TestWorkflowComponent_OnInvoke_会话类型拒绝(t *testing.T) {
 // TestWorkflowComponent_OnInvoke_透传 验证 InvokeFn 收到组件级会话并透传输入。
 func TestWorkflowComponent_OnInvoke_透传(t *testing.T) {
 	var gotSess *session.NodeSessionFacade
-	comp := &WorkflowComponent{InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	comp := &WorkflowComponent{InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		gotSess = sess
 		return inputs, nil
 	}}
@@ -74,7 +75,7 @@ func TestWorkflowComponent_TraceMetadata_默认nil(t *testing.T) {
 // TestWorkflowComponent_OnCollect_流式会话包装 验证 collect/transform 的
 // streamMode=true 路径（component.py:114 Session(session, True)）。
 func TestWorkflowComponent_OnCollect_流式会话包装(t *testing.T) {
-	comp := &WorkflowComponent{CollectFn: func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	comp := &WorkflowComponent{CollectFn: func(ctx context.Context, inputs <-chan map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		if sess == nil {
 			t.Fatal("collect 应收到组件级会话")
 		}
@@ -112,7 +113,7 @@ func TestWorkflowComponent_OnStream_流输出转换触发(t *testing.T) {
 		})
 	defer fw.RegisterWorkflowTransformIO(callback.ComponentBatchInput, callback.ComponentStreamOutput, nil, nil)
 
-	comp := &WorkflowComponent{StreamFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+	comp := &WorkflowComponent{StreamFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 		ch := make(chan graphexe.StreamChunk[any], 1)
 		ch <- graphexe.StreamChunk[any]{Val: map[string]any{"raw": 1}}
 		close(ch)
@@ -212,4 +213,31 @@ func TestWorkflowComponent_覆写遮蔽基座(t *testing.T) {
 		}()
 		_ = m.AddComponent(g, "y", false)
 	}()
+}
+
+// TestWorkflowComponent_OnInvoke_context下发 基座统一提取 kwargs["context"]
+// 作 InvokeFn 第三形参（Python component.py:99 kwargs.get("context") 等价，
+// 八次记录 8.21 审查对齐：组件侧无需再各自摸 kwargs）。
+func TestWorkflowComponent_OnInvoke_context下发(t *testing.T) {
+	mc := &fakeModelContextStub{}
+	var got iface.ModelContext
+	comp := &WorkflowComponent{InvokeFn: func(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
+		got = modelContext
+		return inputs, nil
+	}}
+	out, err := comp.OnInvoke(context.Background(), map[string]any{"a": 1}, newFakeVertexSession(t, "n1", "LLM"), map[string]any{"context": mc})
+	if err != nil {
+		t.Fatalf("OnInvoke 失败: %v", err)
+	}
+	if _, ok := out["a"]; !ok {
+		t.Fatal("输出应透传")
+	}
+	if got != iface.ModelContext(mc) {
+		t.Fatal("InvokeFn 应收到基座下发的 ModelContext")
+	}
+}
+
+// fakeModelContextStub ModelContext 最小桩（iface 边界替身）
+type fakeModelContextStub struct {
+	iface.ModelContext
 }

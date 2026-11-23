@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
@@ -23,7 +24,7 @@ func NewBranchComponent() *BranchComponent {
 	c := &BranchComponent{router: NewBranchRouter(true)}
 	// InvokeFn：Python invoke（branch_comp.py:38-40）—— set_session(session) → 返回 {}；
 	// Python set_session 的 Session 分支取 _inner，Go 对应 Facade.InnerNodeSession()
-	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade) (map[string]any, error) {
+	c.InvokeFn = func(_ context.Context, _ map[string]any, sess *session.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		if err := c.router.SetSession(sess.InnerNodeSession()); err != nil {
 			return nil, err
 		}
