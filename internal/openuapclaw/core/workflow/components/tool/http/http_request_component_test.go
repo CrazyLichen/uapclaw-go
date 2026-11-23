@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 )
 
 // TestEnums_全量映射 枚举成员与 Python 逐字对齐（规则 9.2.4 不裁剪）
@@ -587,5 +589,75 @@ func TestProcessResponse_property抽取与mode三分支(t *testing.T) {
 	})
 	if len(out) != 0 {
 		t.Fatalf("on-error 成功应清空: %v", out)
+	}
+}
+
+// TestExecutable_四槽装配 invoke 真链 + stream/collect/transform 单帧委托
+func TestExecutable_四槽装配(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"r":1}`))
+	}))
+	defer srv.Close()
+	rp := NewHttpRequestParamConfig()
+	rp.URL = srv.URL
+	rp.Timeout = 5
+	e := NewHTTPRequestExecutable(&HttpComponentConfig{RequestParams: rp})
+	out, err := e.InvokeFn(context.Background(), map[string]any{}, nil, nil)
+	if err != nil {
+		t.Fatalf("invoke 失败: %v", err)
+	}
+	if out["statusCode"] != 200 {
+		t.Fatalf("invoke 三步链漂移: %v", out)
+	}
+	// stream：单帧
+	ch, err := e.StreamFn(context.Background(), map[string]any{}, nil, nil)
+	if err != nil {
+		t.Fatalf("stream 失败: %v", err)
+	}
+	frames := 0
+	for f := range ch {
+		frames++
+		if f.Err != nil {
+			t.Fatalf("stream 帧错误: %v", f.Err)
+		}
+	}
+	if frames != 1 {
+		t.Fatalf("stream 应单帧: %d", frames)
+	}
+	// collect：批出
+	cOut, err := e.CollectFn(context.Background(), nil, nil, nil)
+	if err != nil || cOut["statusCode"] != 200 {
+		t.Fatalf("collect 漂移: %v %v", cOut, err)
+	}
+	// transform：单帧
+	tch, err := e.TransformFn(context.Background(), nil, nil, nil)
+	if err != nil {
+		t.Fatalf("transform 失败: %v", err)
+	}
+	tFrames := 0
+	for range tch {
+		tFrames++
+	}
+	if tFrames != 1 {
+		t.Fatalf("transform 应单帧: %d", tFrames)
+	}
+}
+
+// TestComponent_懒构造缓存 executable 属性单例 + Config 访问器 + 槽优先
+func TestComponent_懒构造缓存(t *testing.T) {
+	cfg := NewHttpComponentConfig()
+	c := NewHTTPRequestComponent(cfg)
+	if c.Config() != cfg {
+		t.Fatal("Config 访问器应返回原引用")
+	}
+	ex1 := c.Executable()
+	ex2 := c.Executable()
+	if ex1 != ex2 {
+		t.Fatal("executable 应懒构造单例缓存（Python _executable 缓存）")
+	}
+	// ToExecutable 走 ToExecutableFn 槽返回同一单例（8.20 槽优先）
+	if c.ToExecutable() != graphexe.GeneralExecutor(ex1) {
+		t.Fatal("ToExecutable 应经槽返回单例")
 	}
 }
