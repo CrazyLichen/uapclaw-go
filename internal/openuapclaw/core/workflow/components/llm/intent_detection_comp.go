@@ -11,8 +11,12 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	"github.com/uapclaw/uapclaw-go/internal/common/security"
 	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
@@ -803,4 +807,174 @@ func (e *IntentDetectionExecutable) formatChatHistory(chatHistory []llmschema.Ba
 		}
 	}
 	return sb.String()
+}
+
+// ──────────────────────────── Task 5 invokeEntry 主链 ────────────────────────────
+
+// setSession 设置当前会话（Python _set_session :251-252）
+func (e *IntentDetectionExecutable) setSession(sess *session.NodeSessionFacade) {
+	e.session = sess
+}
+
+// setRouter 设置分类路由器（Python set_router :232-234，返回 self 链式语义由
+// NewIntentDetectionComponent 装配承载）
+func (e *IntentDetectionExecutable) setRouter(router *flow.BranchRouter) {
+	e.router = router
+}
+
+// postCommit 提交后钩子（Python post_commit :236-237 恒 true）
+func (e *IntentDetectionExecutable) postCommit() bool {
+	return true
+}
+
+// getChatHistoryFromContext 取历史窗口（Python _get_chat_history_from_context :239-245
+// 一比一）：enable_history 且 context 非 nil → GetContextWindow(dialogue_round=max_turn)
+// → 窗口非 nil 取消息；否则空表
+func (e *IntentDetectionExecutable) getChatHistoryFromContext(ctx context.Context, context iface.ModelContext) []llmschema.BaseMessage {
+	chatHistory := []llmschema.BaseMessage{}
+	if e.cfg.EnableHistory && context != nil {
+		window, err := context.GetContextWindow(ctx, nil, nil, 0, e.cfg.ChatHistoryMaxTurn)
+		if err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Err(err).
+				Str("event_type", "LLM_CALL_ERROR").
+				Str("method", "getChatHistoryFromContext").
+				Msg("failed to get context window")
+			return chatHistory
+		}
+		if window != nil {
+			chatHistory = window.ContextMessages
+		}
+	}
+	return chatHistory
+}
+
+// invokeEntry 批入批出槽（Python invoke :207-230 十步一比一）
+func (e *IntentDetectionExecutable) invokeEntry(ctx context.Context, inputs map[string]any, sess *session.NodeSessionFacade, modelContext iface.ModelContext) (map[string]any, error) {
+	// 步骤1-2：setSession + router.SetSession（Session._inner 等价 = InnerNodeSession，
+	// 8.19 branch_comp 同款接线）
+	e.setSession(sess)
+	if e.router != nil {
+		if err := e.router.SetSession(sess.InnerNodeSession()); err != nil {
+			return nil, err
+		}
+	}
+	// 步骤3：懒初始化（:211）
+	if err := e.initializeIfNeeded(ctx); err != nil {
+		return nil, err
+	}
+	// 步骤4：取历史窗口（:212）
+	chatHistory := e.getChatHistoryFromContext(ctx, modelContext)
+	// 步骤5：组装输入（:213）
+	currentInputs, err := e.prepareDetectionInputs(inputs, chatHistory)
+	if err != nil {
+		return nil, err
+	}
+	// 步骤6：调 LLM（:214；内含 START/完成两段日志）
+	llmOutput, err := e.invokeLLMAndGetResult(ctx, currentInputs)
+	if err != nil {
+		return nil, err
+	}
+	// 步骤7：组件完成日志（Python invoke :215-226）
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_END").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "IntentDetectionComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Bool("has_output", llmOutput != "").
+		Int("output_length", len(llmOutput)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("Intent detection completed")
+	// 步骤8：写 user 消息进 context（:227）
+	e.writeUserMessageToContext(ctx, inputs, modelContext)
+	// 步骤9：写 assistant 消息进 context（:228）
+	e.writeAssistantMessageToContext(ctx, llmOutput, modelContext)
+	// 步骤10：解析返回（:229-230）
+	return e.parseDetectionResult(llmOutput), nil
+}
+
+// invokeLLMAndGetResult 调 LLM 取文本（Python _invoke_llm_and_get_result :336-375）：
+// 模板 format → to_messages → START 日志 → Invoke → 异常包装 InvokeCallFailed →
+// 完成日志 → 返回 content
+func (e *IntentDetectionExecutable) invokeLLMAndGetResult(ctx context.Context, currentInputs map[string]any) (string, error) {
+	rendered, err := e.defaultCfg.IntentDetectionTemplate.Format(currentInputs)
+	if err != nil {
+		return "", exception.BuildError(exception.StatusComponentIntentDetectionInvokeCallFailed,
+			exception.WithMsg("failed to format intent detection template"), exception.WithCause(err))
+	}
+	llmInputs, err := rendered.ToMessages()
+	if err != nil {
+		return "", exception.BuildError(exception.StatusComponentIntentDetectionInvokeCallFailed,
+			exception.WithMsg("failed to convert template to messages"), exception.WithCause(err))
+	}
+	// START 日志（Python :339-350）
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_START").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "IntentDetectionComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Bool("has_inputs", len(llmInputs) > 0).
+		Int("input_count", len(llmInputs)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("Intent detection LLM invoke started")
+
+	llmOutputContent := ""
+	// 步骤：Invoke（Python :353-361）
+	response, invokeErr := e.llModel.Invoke(ctx, modelclients.NewMessagesParam(llmInputs...))
+	if invokeErr != nil {
+		return "", exception.BuildError(exception.StatusComponentIntentDetectionInvokeCallFailed,
+			exception.WithMsg("failed to invoke llm and get result"), exception.WithCause(invokeErr))
+	}
+	llmOutputContent = response.Content.String()
+	// 完成日志（Python :362-373）
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_END").
+		Str("component_id", e.session.GetExecutableID()).
+		Str("component_type_str", "IntentDetectionComponent").
+		Str("session_id", e.session.GetSessionID()).
+		Bool("has_output", llmOutputContent != "").
+		Int("output_length", len(llmOutputContent)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("Intent detection LLM invoke completed")
+	return llmOutputContent, nil
+}
+
+// writeUserMessageToContext 写 user 消息（Python _write_user_message_to_context
+// :446-455 一比一）：context nil / 未开历史 → 返回；query 校验失败静默返回；
+// query 非空才写
+func (e *IntentDetectionExecutable) writeUserMessageToContext(ctx context.Context, inputs map[string]any, context iface.ModelContext) {
+	if context == nil || !e.cfg.EnableHistory {
+		return
+	}
+	query, err := validateIntentDetectionInput(inputs)
+	if err != nil {
+		return
+	}
+	if query != "" {
+		_, _ = context.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(query)})
+	}
+}
+
+// writeAssistantMessageToContext 写 assistant 消息（Python :456-460 一比一）：
+// context nil / 未开历史 → 返回；content 非空才写
+func (e *IntentDetectionExecutable) writeAssistantMessageToContext(ctx context.Context, content string, context iface.ModelContext) {
+	if context == nil || !e.cfg.EnableHistory {
+		return
+	}
+	if content != "" {
+		_, _ = context.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewAssistantMessage(content)})
+	}
+}
+
+// preProcess 预处理（Python _pre_process :324-327，定义未消费死方法照搬）
+func (e *IntentDetectionExecutable) preProcess(inputs map[string]any) []llmschema.BaseMessage {
+	rendered, err := e.defaultCfg.IntentDetectionTemplate.Format(inputs)
+	if err != nil {
+		return nil
+	}
+	msgs, mErr := rendered.ToMessages()
+	if mErr != nil {
+		return nil
+	}
+	return msgs
 }

@@ -2,11 +2,17 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	ceengine "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
@@ -359,9 +365,133 @@ func (f *fakeUnknownRoleMessage) GetRole() llmschema.RoleType { return llmschema
 func (f *fakeUnknownRoleMessage) GetContent() llmschema.MessageContent {
 	return llmschema.NewTextContent(f.content)
 }
-func (f *fakeUnknownRoleMessage) SetRole(llmschema.RoleType)                        {}
-func (f *fakeUnknownRoleMessage) SetContent(llmschema.MessageContent)               {}
-func (f *fakeUnknownRoleMessage) GetName() string                                   { return "" }
-func (f *fakeUnknownRoleMessage) SetName(string)                                    {}
-func (f *fakeUnknownRoleMessage) GetMetadata() map[string]any                       { return nil }
-func (f *fakeUnknownRoleMessage) SetMetadata(map[string]any)                        {}
+func (f *fakeUnknownRoleMessage) SetRole(llmschema.RoleType)          {}
+func (f *fakeUnknownRoleMessage) SetContent(llmschema.MessageContent) {}
+func (f *fakeUnknownRoleMessage) GetName() string                     { return "" }
+func (f *fakeUnknownRoleMessage) SetName(string)                      {}
+func (f *fakeUnknownRoleMessage) GetMetadata() map[string]any         { return nil }
+func (f *fakeUnknownRoleMessage) SetMetadata(map[string]any)          {}
+
+// ──────────────────────────── Task 5 invokeEntry 主链 ────────────────────────────
+
+// fakeLLMInvoker LLM 网络边界替身（feedback-real-chain-testing：仅边界允许），
+// 捕获入参消息供断言
+type fakeLLMInvoker struct {
+	content  string
+	captured []llmschema.BaseMessage
+}
+
+func (f *fakeLLMInvoker) Invoke(_ context.Context, msgs modelclients.MessagesParam,
+	_ ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	f.captured = msgs.Messages()
+	return llmschema.NewAssistantMessage(f.content), nil
+}
+
+func (f *fakeLLMInvoker) Stream(_ context.Context, _ modelclients.MessagesParam,
+	_ ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, errors.New("意图识别组件不使用流式")
+}
+
+// newTestModelContext 真实 ModelContext（真实 ContextEngine + 真实 Session 管线）
+func newTestModelContext(t *testing.T) iface.ModelContext {
+	t.Helper()
+	ce := ceengine.NewContextEngine(ceschema.NewContextEngineConfig())
+	mc, err := ce.CreateContext(context.Background(), "ctx-itd",
+		session.NewSession(session.WithSessionID("s-itd")))
+	if err != nil || mc == nil {
+		t.Fatalf("真实 CreateContext 失败: %v", err)
+	}
+	return mc
+}
+
+// TestInvokeEntry_历史真实链 spec §5 覆盖点 3：取 N 轮 + user/assistant 写回（真实链）
+func TestInvokeEntry_历史真实链(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		CategoryNameList: []string{"退款"}, EnableHistory: true, ChatHistoryMaxTurn: 1,
+	})
+	fake := &fakeLLMInvoker{content: `{"class": "分类1", "reason": "r"}`}
+	e.llModel = fake
+	e.initialized = true
+
+	mc := newTestModelContext(t)
+	// 预置 2 轮历史
+	_, _ = mc.AddMessages(ctxBg(t), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("第一轮问"),
+		llmschema.NewAssistantMessage("第一轮答"),
+		llmschema.NewUserMessage("第二轮问"),
+		llmschema.NewAssistantMessage("第二轮答"),
+	})
+	sess := newTestNodeSession(t)
+
+	out, err := e.invokeEntry(ctxBg(t), map[string]any{"query": "我的快递到哪了"}, sess, mc)
+	if err != nil {
+		t.Fatalf("invokeEntry 失败: %v", err)
+	}
+	// 断言1：模板 chat_history 恰 1 轮（第二轮），渲染后的 user 消息含该历史文本
+	if len(fake.captured) != 2 {
+		t.Fatalf("应产出 system+user 双消息: %d", len(fake.captured))
+	}
+	// 历史窗口语义由真实 ContextEngine 决定（dialogue_round=1 → 末轮），
+	// 组件忠实透传：应含末轮内容、不含首轮
+	hist := fake.captured[1].GetContent().String()
+	if !strings.Contains(hist, "第二轮答") || strings.Contains(hist, "第一轮问") {
+		t.Fatalf("历史窗口透传错误: %q", hist)
+	}
+	// 断言2：ModelContext 尾部追加 user(query) + assistant(LLM 原文)
+	msgs, _ := mc.GetMessages(0, true)
+	if len(msgs) != 6 {
+		t.Fatalf("写回后应 6 条: %d", len(msgs))
+	}
+	if msgs[4].GetRole() != llmschema.RoleTypeUser || msgs[4].GetContent().String() != "我的快递到哪了" {
+		t.Fatalf("写回 user 错误: %v", msgs[4].GetContent().String())
+	}
+	if msgs[5].GetRole() != llmschema.RoleTypeAssistant ||
+		msgs[5].GetContent().String() != fake.content {
+		t.Fatalf("写回 assistant 错误: %v", msgs[5].GetContent().String())
+	}
+	// 断言3：输出 exclude_defaults 后键齐
+	if out[classificationIDKey] != 1 || out[classificationNameKey] != "退款" {
+		t.Fatalf("输出错误: %v", out)
+	}
+}
+
+// TestInvokeEntry_未开历史 不读不写 ModelContext（消息数执行前后不变）
+func TestInvokeEntry_未开历史(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+	fake := &fakeLLMInvoker{content: `{"class": "分类1", "reason": "r"}`}
+	e.llModel = fake
+	e.initialized = true
+	mc := newTestModelContext(t)
+	_, _ = mc.AddMessages(ctxBg(t), []llmschema.BaseMessage{llmschema.NewUserMessage("旧消息")})
+	sess := newTestNodeSession(t)
+	if _, err := e.invokeEntry(ctxBg(t), map[string]any{"query": "q"}, sess, mc); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := mc.GetMessages(0, true)
+	if len(msgs) != 1 {
+		t.Fatalf("未开历史不应读写 context: %d", len(msgs))
+	}
+}
+
+// TestInvokeEntry_解析失败回落 默认分类快照输出
+func TestInvokeEntry_解析失败回落(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+	e.llModel = &fakeLLMInvoker{content: "不是JSON"}
+	e.initialized = true
+	out, err := e.invokeEntry(ctxBg(t), map[string]any{"query": "q"}, newTestNodeSession(t), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[classificationIDKey] != 0 {
+		t.Fatalf("应回落默认分类 id=0: %v", out)
+	}
+	if _, ok := out["reason"]; !ok {
+		t.Fatalf("回落应带失败 reason: %v", out)
+	}
+}
+
+// ctxBg 测试上下文
+func ctxBg(t *testing.T) context.Context {
+	t.Helper()
+	return context.Background()
+}
