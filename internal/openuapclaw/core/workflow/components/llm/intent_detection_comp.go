@@ -306,7 +306,9 @@ func NewIntentDetectionExecutable(cfg *IntentDetectionCompConfig) *IntentDetecti
 	e := &IntentDetectionExecutable{cfg: cfg}
 	e.initDefaultConfigCategoryList()
 	e.appendDefaultCategory()
-	// InvokeFn 槽接线在 Task 5 invokeEntry 落地时补（Python invoke :207-230）
+	// InvokeFn 槽：Python invoke :207-230 十步（8.21 审查惯例——基座统一提 kwargs
+	// context 下发，组件经槽接入）
+	e.InvokeFn = e.invokeEntry
 	return e
 }
 
@@ -1022,13 +1024,14 @@ func (c *IntentDetectionComponent) toExecutableCached() graphexe.GeneralExecutor
 
 // AddComponent 注册节点与条件边（Python add_component :476-478 一比一）：
 // AddNode(node_id, executable, wait_for_all) + AddConditionalEdges(node_id, router)
-func (c *IntentDetectionComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) {
+func (c *IntentDetectionComponent) AddComponent(g *graph.PregelGraph, nodeID string, waitForAll bool) error {
 	if waitForAll {
 		g.AddNode(nodeID, c.toExecutableCached(), graph.WithWaitForAll())
 	} else {
 		g.AddNode(nodeID, c.toExecutableCached())
 	}
 	g.AddConditionalEdges(nodeID, c.router)
+	return nil
 }
 
 // AddBranch 登记分支（Python add_branch :483-487 一比一：str target 归一
