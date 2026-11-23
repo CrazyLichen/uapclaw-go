@@ -42,9 +42,14 @@
 
 ## 3. 路由与条件的取值语义（讨论澄清）
 
-- 条件**不感知 LLM 原始文本**：LLM 输出已在 invoke 内解析为三字段输出，图引擎将输出 commit 进 session state 后，BranchRouter 才逐 Branch 求值。
+- 条件**不感知 LLM 原始文本**：LLM 输出已在 invoke 内解析为三字段输出，节点输出 commit 后 BranchRouter 才逐 Branch 求值。
 - 三条件形态：string（ExpressionCondition，`${字段}` 占位符经 `get_global` 绑定）/ Callable（FuncCondition）/ 自定义 Condition。
-- **本组件贡献的路由字段只有 classification_id / reason / category_name**；表达式读的是全局状态（含此前节点产物），但本组件分支路由的判定语义仅针对本组件分类结果设计。
+- **状态归属（2026-11-23 用户纠偏后实证定稿）**：条件读到的是**节点会话（node session / facade session）的 io_state**，不是字面意义的"全局状态"。Python 证据链：
+  - `set_outputs` 写 `io_state.update_by_id(node_id, {node_id: data})`——先 stage 进 `_updates[node_id]`，`get` 不可见（与 8.20 memory 同款 commit 语义）；
+  - `_workflow.py` 第 9 步 `node_session.state().commit()` 合并 staged 更新后才可见；
+  - `get_global(key)` 是访问器名字而非存储位置，解析链三级回落 `global_state → io_state(parent 前缀) → io_state(node 前缀)`，节点输出命中的是第三级 io_state 的 node 前缀。
+- **set_outputs 有键、最新覆盖旧值**：每次输出追加一条 `{node_id: data}`，commit 按序 `state.update` 应用——同 node_id 键的旧值被最新一次覆盖（快照替换语义，非叠加）。
+- **本组件贡献的路由字段只有 classification_id / reason / category_name**；本组件分支路由的判定语义仅针对本组件分类结果设计。
 - 输出经 `model_dump(exclude_defaults=True)`：等于默认值的字段被剔除（极端情况为空 dict）——表达式缺键语义见 §6 偏差澄清。
 
 ## 4. 使用示例（装配态）
