@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -102,6 +104,61 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 			"reloaded": true,
 		}),
 	), nil
+}
+
+// handleConfigPanelRequest 配置面板 RPC 分派（27.4；Python: config_adapter.py:175
+// ConfigAdapter.handle）。分支顺序与 Python 一致：CONFIG_MOA_STATUS →
+// MODELS_ZEN_ENTRIES → MODELS_ZEN_WARM → LOCALE_GET/SET → PATH_GET/SET →
+// PERMISSIONS_OWNER_SCOPES_GET/SET → MEMORY_FORBIDDEN_GET/SET →
+// config.get/set/save_all/validate_model、models.list/validate/replace_all。
+// 写链（config.set/save_all/validate_model、locale.set_conf、models.validate/
+// replace_all、memory/permissions 的 set）随 configpanel 写入层落地，未落地前
+// 进入 default 回 BAD_REQUEST（IMPLEMENTATION_PLAN.md 27.4 行 ⤵️ 登记）。
+// command.model 按 spec D-1 豁免（既有 handleCommandModel 为 TUI 独立链，不属本分派）。
+func (s *AgentServer) handleConfigPanelRequest(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params map[string]any
+	if len(request.Params) > 0 {
+		_ = json.Unmarshal(request.Params, &params)
+	}
+	okResp := func(payload map[string]any) *schema.AgentResponse {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(payload))
+	}
+	badReq := func() *schema.AgentResponse {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "unsupported control config method",
+				"code":  "BAD_REQUEST",
+			}))
+	}
+
+	// Python: config_adapter.py:180-189 CONFIG_MOA_STATUS → moa_status(get_config(), selection)。
+	// 依赖 moa_runtime（build_moa_runtime/resolve_moa_settings，Python
+	// server/runtime/moa_runtime.py 222 行），Go 侧无对应物 → 本批按 Python
+	// except 兜底形返回 {"configured": false}；缺口在 IMPLEMENTATION_PLAN.md
+	// 27.4 行登记 ⤵️ 待回填（回填点=MOA 运行时域落地节）。
+	if request.ReqMethod == schema.ReqMethodConfigMoaStatus {
+		return okResp(map[string]any{"configured": false}), nil
+	}
+
+	// Python: config_adapter.py:191-200 MODELS_ZEN_ENTRIES → public_zen_free_model_rows()
+	if request.ReqMethod == schema.ReqMethodModelsZenEntries {
+		return okResp(map[string]any{"models": configpanel.PublicZenFreeModelRows()}), nil
+	}
+	// Python: config_adapter.py:202-210 MODELS_ZEN_WARM → warm_zen_free_models(reason="config-toggle")
+	if request.ReqMethod == schema.ReqMethodModelsZenWarm {
+		configpanel.WarmZenFreeModels("config-toggle", false)
+		return okResp(map[string]any{"ok": true}), nil
+	}
+
+	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
+	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
+	payload, ok := control.HandleConfigRequest(string(request.ReqMethod), params)
+	if !ok {
+		return badReq(), nil
+	}
+	return okResp(payload), nil
 }
 
 // anyMapToStringMap 将 map[string]any 转为 map[string]string，
