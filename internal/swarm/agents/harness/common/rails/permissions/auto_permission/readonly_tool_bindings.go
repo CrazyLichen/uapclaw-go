@@ -90,7 +90,7 @@ func trustedReadonlyBinding(
 // sessionObservationBinding 校验 owner / callback agent 桥接与 rail 身份。
 //
 // Python: _session_observation_binding(invocation, session_id, agent)
-// 只保留 ProgressiveToolRail 分支（D3），其余 SDK 工具分支留待 V-6 前置件。
+// V-6 回填后：tool_search 双归属 + cron_* 分支见本文件尾段；其余分支见 trustedReadonlyBindingV6。
 func sessionObservationBinding(
 	invocation ToolInvocation,
 	sessionID string,
