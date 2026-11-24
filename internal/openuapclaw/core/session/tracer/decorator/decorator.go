@@ -289,7 +289,7 @@ func (t *TracedTool) GetCallTimeout(inputs map[string]any, defaultTimeout float6
 // 流程：CreateAgentSpan → TriggerAgent(TraceWorkflowStart) → inner.Invoke → TriggerAgent(TraceWorkflowEnd/Error)
 //
 // Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
-func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (any, error) {
+func (w *TracedWorkflow) Invoke(ctx context.Context, inputs any, opts ...sainterfaces.WorkflowOption) (any, error) {
 	span := w.tracer.AgentSpanManager.CreateAgentSpan(w.agentSpan)
 	w.tracer.TriggerAgent(ctx, tracer.TraceWorkflowStart, &tracer.TriggerParams{
 		Span:         &span.Span,
@@ -315,7 +315,7 @@ func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts
 
 // Stream 流式执行工作流，直接委托 inner。
 // ⤵️ 领域八回填：流式 trace 包装逻辑，对齐 Python decorate_workflow_with_trace 中的 stream 包装。
-func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
+func (w *TracedWorkflow) Stream(ctx context.Context, inputs any, opts ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	return w.inner.Stream(ctx, inputs, opts...)
 }
 

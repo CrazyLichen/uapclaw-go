@@ -80,11 +80,11 @@ type mockWorkflow struct {
 	streamErr error
 }
 
-func (m *mockWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.WorkflowOption) (any, error) {
+func (m *mockWorkflow) Invoke(ctx context.Context, inputs any, opts ...interfaces.WorkflowOption) (any, error) {
 	return m.result, m.err
 }
 
-func (m *mockWorkflow) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
+func (m *mockWorkflow) Stream(ctx context.Context, inputs any, opts ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	return m.streamCh, m.streamErr
 }
 

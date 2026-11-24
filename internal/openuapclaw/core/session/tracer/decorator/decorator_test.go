@@ -143,12 +143,12 @@ type fakeWorkflow struct {
 }
 
 // Invoke 实现 sainterfaces.Workflow 接口
-func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (any, error) {
+func (f *fakeWorkflow) Invoke(_ context.Context, _ any, _ ...sainterfaces.WorkflowOption) (any, error) {
 	return f.invokeResult, f.invokeErr
 }
 
 // Stream 实现 sainterfaces.Workflow 接口
-func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
+func (f *fakeWorkflow) Stream(_ context.Context, _ any, _ ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	ch := make(chan stream.Schema)
 	close(ch)
 	return ch, nil

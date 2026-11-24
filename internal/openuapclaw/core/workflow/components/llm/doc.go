@@ -14,7 +14,8 @@
 //	├── doc.go                      # 包文档
 //	├── llm_comp.go                # 8.18 LLMComp：常量/枚举/配置/校验链/工具类/LLMExecutable/LLMComponent
 //	├── intent_detection_comp.go   # 8.23 IntentDetectionComp：常量/配置/解析层/执行体/组合面
-//	└── questioner_comp.go        # 8.24 QuestionerComp：常量/双语模板/状态机/Utils/Handler/Executable/Component
+//	├── questioner_comp.go        # 8.24 QuestionerComp：常量/双语模板/状态机/Utils/Handler/Executable/Component
+//	└── react/                    # 8.26 ReactComponent 薄壳（react_comp/config/executable + doc.go）
 //
 // 对应 Python 代码：openjiuwen/core/workflow/components/llm/
 // （llm_comp.py → llm_comp.go；intent_detection_comp.py → intent_detection_comp.go；

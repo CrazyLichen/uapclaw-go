@@ -20,6 +20,7 @@ import (
 	mcptool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
@@ -473,16 +474,24 @@ func TestAbilityManager_Execute_能力未找到(t *testing.T) {
 
 // fakeWorkflow 用于测试的模拟工作流
 type fakeWorkflow struct {
-	result any
-	err    error
-	card   *workflow.WorkflowCard
+	result     any
+	err        error
+	card       *workflow.WorkflowCard
+	mu         *sync.Mutex
+	lastInputs any // D-26-5：最近一次 Invoke 收到的 inputs（对象旁路断言用）
 }
 
-func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.WorkflowOption) (any, error) {
+func (f *fakeWorkflow) Invoke(_ context.Context, inputs any, _ ...interfaces.WorkflowOption) (any, error) {
+	if f.mu == nil {
+		f.mu = &sync.Mutex{}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastInputs = inputs
 	return f.result, f.err
 }
 
-func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
+func (f *fakeWorkflow) Stream(_ context.Context, _ any, _ ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	ch := make(chan stream.Schema)
 	close(ch)
 	return ch, nil
@@ -1723,5 +1732,70 @@ func TestExecute_MCP失败结果文本取error(t *testing.T) {
 	}
 	if !strings.Contains(results[0].ToolMsg.Content.Text(), "Permission denied") {
 		t.Fatalf("失败结果应渲染 Err，实际 %q", results[0].ToolMsg.Content.Text())
+	}
+}
+
+// TestAbilityManager_Execute_Workflow恢复对象旁路 D-26-5 重写版：
+// cbc extra WorkflowResumeInputsKey 命中该 tool_call_id 时，workflow 收到的是
+// InteractiveInput 对象本体（绕过 JSON 解析），非对象的其他 workflow 调用仍走
+// JSON 解析 map。Python 等价：_parse_tool_arguments_with_repair isinstance(str)
+// 短路透传对象（ability_manager.py L557-1560）。
+func TestAbilityManager_Execute_Workflow恢复对象旁路(t *testing.T) {
+	wf := workflow.NewWorkflowCard(schema.WithName("resume_wf"), schema.WithDescription("对象旁路测试"))
+	fw := &fakeWorkflow{result: map[string]any{"output": "resumed"}, card: wf}
+	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
+	am := NewAbilityManager(frm)
+	am.Add(wf)
+
+	ii, err := interaction.NewInteractiveInput()
+	if err != nil {
+		t.Fatalf("构造 InteractiveInput 失败: %v", err)
+	}
+	ii.UserInputs["ask"] = "答案"
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+	// 注入对象旁路：{tool_call_id: InteractiveInput 对象}
+	cbc.SetExtra(agentschema.WorkflowResumeInputsKey, map[string]any{"call_obj": ii})
+
+	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
+		llmschema.NewToolCall("call_obj", "resume_wf", `{}`),
+	}, nil, "", true)
+	if len(results) != 1 || isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("执行失败: %v", results)
+	}
+	// 核心断言：对象本体直达（指针同一），未被 JSON round-trip 降级为 map
+	fw.mu.Lock()
+	last := fw.lastInputs
+	fw.mu.Unlock()
+	iiGot, ok := last.(*interaction.InteractiveInput)
+	if !ok {
+		t.Fatalf("workflow 应收到 *InteractiveInput 对象，实际 %T", last)
+	}
+	if iiGot != ii {
+		t.Fatal("应与注入的 InteractiveInput 指针同一（对象直达，非重建）")
+	}
+}
+
+// TestAbilityManager_Execute_Workflow正常轮JSON解析 对照：无旁路注入时 workflow
+// 仍收到 JSON 解析后的 map（Python 正常轮 json.loads 路径）。
+func TestAbilityManager_Execute_Workflow正常轮JSON解析(t *testing.T) {
+	wf := workflow.NewWorkflowCard(schema.WithName("json_wf"), schema.WithDescription("JSON解析对照"))
+	fw := &fakeWorkflow{result: map[string]any{"output": "done"}, card: wf}
+	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
+	am := NewAbilityManager(frm)
+	am.Add(wf)
+
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
+		llmschema.NewToolCall("call_json", "json_wf", `{"query":"hi"}`),
+	}, nil, "", true)
+	if len(results) != 1 || isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("执行失败: %v", results)
+	}
+	fw.mu.Lock()
+	last := fw.lastInputs
+	fw.mu.Unlock()
+	m, ok := last.(map[string]any)
+	if !ok || m["query"] != "hi" {
+		t.Fatalf("正常轮 workflow 应收到 JSON 解析 map，实际 %T %v", last, last)
 	}
 }
