@@ -49,22 +49,24 @@ var (
 // Python: acquire_observability_demand（demand.py:130-168）——初始化错误向上
 // 传播；返回 provider 是否已存在（复用则 exporter 配置不生效）。
 func AcquireObservabilityDemand(runtime string, config *obs.ObservabilityConfig, initializer ObservabilityInitializer) (bool, error) {
+	// Python: _DEMAND_LOCK 为 RLock；Go 无可重入锁，内部改走无锁变体
+	// isInitializedLocked（偏差 spec §4）。
 	mu.Lock()
 	defer mu.Unlock()
 	if runtime != "agent" && runtime != "team" {
 		return false, fmt.Errorf("unknown observability runtime: %s", runtime)
 	}
-	if activeRuntimes[runtime] && IsInitialized() {
+	if activeRuntimes[runtime] && isInitializedLocked() {
 		return true, nil
 	}
-	existed := IsInitialized()
+	existed := isInitializedLocked()
 	// Python: (get_trajectory_span_processor(), get_span_record_processor())——
 	// span_record 落盘域未移植，偏差登记 spec §4。
 	processors := []sdktrace.SpanProcessor{obsdemand.GetTrajectorySpanProcessor()}
 	if err := initializer(config, processors); err != nil {
 		return existed, err
 	}
-	if !IsInitialized() {
+	if !isInitializedLocked() {
 		return existed, fmt.Errorf("%s observability initialization did not create a provider", runtime)
 	}
 	if !existed {
@@ -87,7 +89,7 @@ func ReleaseObservabilityDemand(runtime string) {
 	if len(activeRuntimes) > 0 || !providerOwned {
 		return
 	}
-	if IsInitialized() {
+	if isInitializedLocked() {
 		logger.Info(logComponent).Msg("last observability demand released, shutting provider down")
 		obs.ShutdownObservability()
 		providerOwned = false
@@ -99,6 +101,11 @@ func ReleaseObservabilityDemand(runtime string) {
 func IsInitialized() bool {
 	mu.Lock()
 	defer mu.Unlock()
+	return isInitializedLocked()
+}
+
+// isInitializedLocked 无锁内部变体（持 mu 调用）。
+func isInitializedLocked() bool {
 	return obs.ProviderInitialized()
 }
 

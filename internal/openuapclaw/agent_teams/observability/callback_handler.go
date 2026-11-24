@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"reflect"
 	"strings"
 	"time"
@@ -12,10 +13,10 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -354,9 +355,18 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 		llmSpan.SetAttributes(attribute.Int(GenAIRequestMaxTokens, *data.MaxTokens))
 	}
 	// Python: 遍历 messages
+	// 扁平 gen_ai.prompt.N.* 为 15.11 子集残留（v2 已改写标准结构化属性，
+	// 全量删除随 22.4 对齐批回收）。
+	var normalized []map[string]any
 	if data.Messages != nil {
 		if msgSlice, ok := toMessageSlice(data.Messages); ok {
+			normalized = make([]map[string]any, 0, len(msgSlice))
 			for i, msg := range msgSlice {
+				if m, ok := msg.(map[string]any); ok {
+					normalized = append(normalized, m)
+				} else if bm, ok := msg.(llmschema.BaseMessage); ok {
+					normalized = append(normalized, llmschema.BaseMessageToMap(bm))
+				}
 				role := messageRole(msg)
 				content := coerceMessageContent(messageContent(msg))
 				llmSpan.SetAttributes(
@@ -372,6 +382,12 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 				}
 			}
 		}
+		// Python: msg_count = len(messages); span.set_attribute(OJ_REQUEST_MESSAGE_COUNT, msg_count)
+		llmSpan.SetAttributes(attribute.Int(OJRequestMessageCount, len(normalized)))
+		// Python: self._record_standard_structured_input(span, messages)
+		// callback_handler.py:1116 —— 标准结构化输入属性是轨迹消息重放
+		// （ReadLLMExchange）的数据源，缺它 TrajectoryToMessages 恒空。
+		h.recordStandardStructuredInput(llmSpan, normalized)
 	}
 	// Python: push_llm_span_state(LlmSpanState(span=span, start_ns=time.monotonic_ns()))
 	// Go 不需要 context_token（不做 otel_context.attach/detach）
@@ -390,6 +406,14 @@ func (h *OtelCallbackHandler) closeLlmSpan(ctx context.Context, state *LlmSpanSt
 	reasoningText := extractReasoningContent(response)
 	// Python: self._maybe_record_response_attrs(state, response)
 	h.maybeRecordResponseAttrs(state, response)
+	// Python: self._record_structured_output(state.span, response, fallback_text=completion_text)
+	// callback_handler.py:1243 —— gen_ai.output.messages 是轨迹 completion
+	// 的数据源；消息对象经 BaseMessageToMap 归一后交由结构化输出记录。
+	structuredResponse := response
+	if bm, ok := response.(llmschema.BaseMessage); ok {
+		structuredResponse = llmschema.BaseMessageToMap(bm)
+	}
+	h.recordStructuredOutput(state.Span, structuredResponse)
 	// Python: state.span.set_attribute(f"{GEN_AI_COMPLETION}.0.role", "assistant")
 	state.Span.SetAttributes(
 		attribute.String(fmt.Sprintf("%s.0.role", GenAICompletion), "assistant"),
@@ -517,7 +541,12 @@ func messageRole(msg any) string {
 		}
 		return ""
 	}
-	// 尝试反射取 Role 字段（对 Go struct）
+	// llmschema 消息：GetRole() RoleType（15.24a 集成首跑实证缺陷——
+	// 旧断言 GetRole() string 永不匹配，角色恒空）。
+	if r, ok := msg.(llmschema.BaseMessage); ok {
+		return r.GetRole().String()
+	}
+	// 兜底：其他 GetRole() string 载体。
 	type roleHolder interface{ GetRole() string }
 	if r, ok := msg.(roleHolder); ok {
 		return r.GetRole()
@@ -534,6 +563,10 @@ func messageContent(msg any) any {
 	if m, ok := msg.(map[string]any); ok {
 		return m["content"]
 	}
+	// llmschema 消息：GetContent() MessageContent（同上实证缺陷）。
+	if m, ok := msg.(llmschema.BaseMessage); ok {
+		return m.GetContent().String()
+	}
 	type contentHolder interface{ GetContent() any }
 	if c, ok := msg.(contentHolder); ok {
 		return c.GetContent()
@@ -545,6 +578,38 @@ func messageContent(msg any) any {
 func toMessageSlice(messages any) ([]any, bool) {
 	if m, ok := messages.([]any); ok {
 		return m, true
+	}
+	// MessagesParam（model_clients 的消息载体，15.24a 集成首跑实证缺陷）：
+	// 事件经 LLMStreamInput/LLMInvokeInput 携带的是本类型，旧实现只认 []any
+	// 导致 prompt 属性恒空、轨迹重放不出消息。Python 侧 messages 为 dict/list
+	// 直读，无此缝。三种模式归一为 []any。
+	if mp, ok := messages.(model_clients.MessagesParam); ok {
+		if mp.IsText() {
+			// Python str 输入被 SDK 包成一条 UserMessage；此处取语义等价投影。
+			return []any{map[string]any{"role": "user", "content": mp.Text()}}, true
+		}
+		if mp.IsMessages() {
+			out := make([]any, 0, len(mp.Messages()))
+			for _, m := range mp.Messages() {
+				out = append(out, m)
+			}
+			return out, true
+		}
+		if dicts := mp.Dicts(); len(dicts) > 0 {
+			out := make([]any, 0, len(dicts))
+			for _, d := range dicts {
+				out = append(out, d)
+			}
+			return out, true
+		}
+	}
+	// BaseMessage 列表（个别直传路径）
+	if m, ok := messages.([]llmschema.BaseMessage); ok {
+		out := make([]any, 0, len(m))
+		for _, item := range m {
+			out = append(out, item)
+		}
+		return out, true
 	}
 	return nil, false
 }
