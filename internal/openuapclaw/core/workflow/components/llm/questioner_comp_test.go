@@ -460,6 +460,7 @@ func TestQuestionerHandlerTypeConversionValidation(t *testing.T) {
 			{FieldName: "age", Description: "年龄", Type: "integer", Required: false},
 			{FieldName: "score", Description: "分数", Type: "number", Required: false},
 			{FieldName: "active", Description: "激活", Type: "boolean", Required: false},
+			{FieldName: "bad_int", Description: "坏整数", Type: "integer", Required: false},
 		},
 	}
 	h, sess := newTestHandler(t, cfg, `{"age": "30", "score": 3.5, "active": "true", "bad_int": "abc"}`, NewQuestionerState())
