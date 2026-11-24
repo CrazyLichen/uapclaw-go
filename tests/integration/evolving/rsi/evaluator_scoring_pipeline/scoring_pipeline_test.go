@@ -40,6 +40,8 @@ type ScoringPipelineSuite struct {
 	suite.Suite
 	llmServer   *httptest.Server
 	modelConfig string
+	// realLLM true=真链模式（LLM_API_KEY 注入），false=fake 端点（默认/CI）
+	realLLM bool
 }
 
 // TestScoringPipelineSuite 入口。
@@ -47,30 +49,60 @@ func TestScoringPipelineSuite(t *testing.T) {
 	suite.Run(t, new(ScoringPipelineSuite))
 }
 
-// SetupTest 起 fake OpenAI 兼容端点 + 写模型配置 YAML。
+// SetupTest 起模型端点 + 写模型配置 YAML。
+//
+// 双模式（用户拍板 2026-12-06：RSI 域集成测试可切免费真模型）：
+//   - LLM_API_KEY 未设置（默认/CI）：fake OpenAI 兼容端点（httptest 网络边界，
+//     恒回固定内容）——确定性契约不受模型行为影响；
+//   - LLM_API_KEY 设置：真实模型（LLM_API_BASE/LLM_MODEL_NAME 可覆盖，
+//     缺省智谱 glm-4.5-flash 免费档）——同一段流水线代码真链执行，
+//     断言仍为结构性产物（eval_ref/cases/result.json），与模型行为无关。
 func (s *ScoringPipelineSuite) SetupTest() {
-	// fake LLM：无视路径/请求体，恒回固定 assistant 内容（finish_reason=stop）。
-	s.llmServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"REPLY"},"finish_reason":"stop"}]}`)
-	}))
-	s.T().Cleanup(s.llmServer.Close)
+	apiKey := os.Getenv("LLM_API_KEY")
+	apiBase := envWithDefaultKey("LLM_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
+	modelName := envWithDefaultKey("LLM_MODEL_NAME", "glm-4.5-flash")
+
+	clientCfg := map[string]any{
+		"client_provider": "OpenAI",
+		"client_id":       "itest-client",
+		"api_key":         "test-key",
+		"verify_ssl":      false,
+		"timeout":         300.0,
+	}
+	modelNameYAML := "fake-model"
+	if apiKey != "" {
+		// 真链模式：端点换真实服务商（mock 只允许在网络边界——此处直接
+		// 打真实端点，无 mock）。
+		s.realLLM = true
+		clientCfg["api_key"] = apiKey
+		clientCfg["api_base"] = apiBase
+		clientCfg["verify_ssl"] = true
+		modelNameYAML = modelName
+	} else {
+		// fake LLM：无视路径/请求体，恒回固定 assistant 内容（finish_reason=stop）。
+		s.llmServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"REPLY"},"finish_reason":"stop"}]}`)
+		}))
+		s.T().Cleanup(s.llmServer.Close)
+		clientCfg["api_base"] = s.llmServer.URL
+	}
 
 	dir := s.T().TempDir()
 	s.modelConfig = filepath.Join(dir, "model_config.yaml")
-	verifySSL := false
+	verifySSL := clientCfg["verify_ssl"].(bool)
 	raw, err := json.Marshal(map[string]any{
 		"model": map[string]any{
 			"model_client_config": map[string]any{
-				"client_provider": "OpenAI",
-				"client_id":       "itest-client",
-				"api_key":         "test-key",
-				"api_base":        s.llmServer.URL,
+				"client_provider": clientCfg["client_provider"],
+				"client_id":       clientCfg["client_id"],
+				"api_key":         clientCfg["api_key"],
+				"api_base":        clientCfg["api_base"],
 				"verify_ssl":      &verifySSL,
-				"timeout":         30.0,
+				"timeout":         clientCfg["timeout"],
 			},
 			"model_request_config": map[string]any{
-				"model": "fake-model",
+				"model": modelNameYAML,
 			},
 		},
 	})
@@ -255,3 +287,12 @@ func (v stubExecView) JudgeResultView() *judger.JudgeResult { return nil }
 
 // 防止 strings 未使用（保留给后续断言扩展）。
 var _ = strings.Contains
+
+// envWithDefaultKey 环境变量取值（缺省回落；与 suite/real_llm_suite.go
+// envWithDefault 同形——本目录不 import suite 包，避免测试包间耦合）。
+func envWithDefaultKey(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
+}
