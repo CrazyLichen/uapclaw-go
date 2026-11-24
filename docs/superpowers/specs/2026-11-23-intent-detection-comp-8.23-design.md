@@ -93,7 +93,8 @@ comp.AddComponent(graph, "intent_node", false)
 |---|---|---|---|
 | D-23-1 | `ast.literal_eval` 无 Go 原生等价 | 语言层缺失 | 用 Python 字面量求值等价实现（pythonsem 或包内私有，实施时定）；Python 行号 387 |
 | D-23-2 | ExpressionCondition 缺键求值语义 | 需实施时实证 | Python `get_global` 缺键返回 None；Go 表达式引擎缺键行为需核对（condition/expression.go 既有实现），若不一致登记偏差。expression.go 属 8.19 既有资产，本节只在必要时核对，不重写 |
-| D-23-3 | `Runner.resource_mgr.get_model` → Go resource manager | 平台映射 | model_id 路径走 Go 侧资源管理器取 Model（拍板 A：双路径照搬） |
+| D-23-3 | `Runner.resource_mgr.get_model` → Go resource manager | 平台映射 | model_id 路径走 Go 侧资源管理器取 Model（拍板 A：双路径照搬）。实施细化（2026-11-23 审查拍板③）：Go 侧新增两个 Python 所无防御分支——`mgr == nil`（资源管理器未初始化）与 model 未命中（`GetModel` 返回空表）；`GetModel` 为批量签名 `[]string → []BaseModelClient`（取 clients[0]），均被 initializeIfNeeded 包装为 LLMInitFailed |
+| D-23-4 | `WithIntentLLM` 组件 opts 测试注入缝 | Python 所无 | 组合面构造 opts 注入 LLMInvoker 替身（集成测试专用，替换懒初始化直构）；仅测试装配路径消费，生产路径不变。审查拍板④登记（注释声明不替代确认——此条即确认记录） |
 
 ## 7. 拍板记录
 

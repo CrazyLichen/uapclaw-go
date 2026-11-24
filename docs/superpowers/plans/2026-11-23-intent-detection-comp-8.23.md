@@ -514,7 +514,7 @@ type IntentDetectionComponent struct {
 ### Task 7: 集成测试
 
 **Files:**
-- Create: `tests/integration/workflow_intent_detection/intent_detection_test.go`
+- Create: `tests/integration/agentcore/workflow_intent_detection/intent_detection_test.go`（2026-11-23 勘误：实施落点在 agentcore/ 域下，对齐仓库既有惯例 workflow_branch_comp 等；审查拍板⑤）
 
 - [ ] **Step 1: 写集成测试（真实跨子系统：workflow 组件 + pregel 图引擎 + session + context_engine + foundation/llm，满足规则 7 两层门禁）**
 
