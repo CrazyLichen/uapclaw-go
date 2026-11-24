@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -305,4 +306,80 @@ func TestDeepCloneHelpers(t *testing.T) {
 	// nil 守卫
 	assert.Nil(t, deepCloneAssistantMessage(nil))
 	assert.Nil(t, deepCloneToolCall(nil))
+}
+
+// TestWriteInvokeResultToStream_WorkflowInterrupt 过滤单发（接缝5，6.12 占位回填）。
+// Python: react_agent.py _write_invoke_result_to_stream L3398-1631。
+func TestWriteInvokeResultToStream_WorkflowInterrupt(t *testing.T) {
+	a := &ReActAgent{}
+	mkSchema := func(id string) *stream.OutputSchema {
+		return &stream.OutputSchema{
+			Type:    interaction.InteractionType,
+			Index:   1,
+			Payload: &interaction.InteractionOutput{ID: id},
+		}
+	}
+	wfOut := &workflow.WorkflowOutput{
+		State:  workflow.WorkflowExecutionStateInputRequired,
+		Result: []stream.Schema{mkSchema("q1"), mkSchema("q2"), mkSchema("q1")},
+	}
+	sess := newRecordingSessionFacade()
+	// pendingID=q1 → 只写两块（过滤单发，Python L3425-1430）
+	a.WriteInvokeResultToStream(context.Background(), map[string]any{
+		"result_type":              "interrupt",
+		"workflow_execution_state": wfOut,
+		"component_ids":            []string{"q1"},
+	}, sess)
+	chunks := drainSessionStream(t, sess)
+	require.Len(t, chunks, 2)
+	for _, c := range chunks {
+		assert.Equal(t, "q1", c.(*stream.OutputSchema).Payload.(*interaction.InteractionOutput).ID)
+	}
+	// pendingID 为空 → 全透传（Python L3421-1423）
+	sess2 := newRecordingSessionFacade()
+	a.WriteInvokeResultToStream(context.Background(), map[string]any{
+		"result_type":              "interrupt",
+		"workflow_execution_state": wfOut,
+		"component_ids":            []string{},
+	}, sess2)
+	assert.Len(t, drainSessionStream(t, sess2), 3)
+	// 非 interrupt → 正常 answer 块（既有语义不变）
+	sess3 := newRecordingSessionFacade()
+	a.WriteInvokeResultToStream(context.Background(), map[string]any{
+		"result_type": "answer",
+		"output":      "done",
+	}, sess3)
+	ans := drainSessionStream(t, sess3)
+	require.Len(t, ans, 1)
+	os := ans[0].(*stream.OutputSchema)
+	assert.Equal(t, "answer", os.Type)
+	assert.Equal(t, "done", os.Payload.(map[string]any)["output"])
+}
+
+// recordingSessionFacade 记录 WriteStream 的会话门面（fakeSessionFacade 边界替身扩展）。
+type recordingSessionFacade struct {
+	*fakeSessionFacade
+	written []any
+}
+
+func newRecordingSessionFacade() *recordingSessionFacade {
+	return &recordingSessionFacade{fakeSessionFacade: &fakeSessionFacade{sessionID: "test_write_stream"}}
+}
+
+func (f *recordingSessionFacade) GetState(_ state.StateKey) (any, error) { return nil, nil }
+
+func (f *recordingSessionFacade) WriteStream(_ context.Context, schema any) error {
+	f.written = append(f.written, schema)
+	return nil
+}
+
+// drainSessionStream 取出已写入的流块。
+func drainSessionStream(_ *testing.T, sess *recordingSessionFacade) []stream.Schema {
+	var out []stream.Schema
+	for _, c := range sess.written {
+		if sc, ok := c.(stream.Schema); ok {
+			out = append(out, sc)
+		}
+	}
+	return out
 }

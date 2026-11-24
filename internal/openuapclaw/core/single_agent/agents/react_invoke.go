@@ -14,11 +14,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -278,12 +280,38 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 			if a.hitlHandler != nil {
 				_ = a.hitlHandler.WriteInterruptToStream(ctx, result, sess)
 			}
+		} else {
+			// 工作流中断写入流：只发 payload.id == pendingID 的块（过滤单发）。
+			// pendingID 为空则全透传；pendingID 非空时仅匹配块通过，调用方恰好
+			// 看到一个交互块。
+			// Python: react_agent.py _write_invoke_result_to_stream L3398-1631
+			// （8.26 层 2 中断桥回填，6.12 三条 ⤵️ 占位注释删除）
+			workflowState, _ := result["workflow_execution_state"].(*workflow.WorkflowOutput)
+			componentIDs, _ := result["component_ids"].([]string)
+			pendingID := ""
+			if len(componentIDs) > 0 {
+				pendingID = componentIDs[0]
+			}
+			var schemas []stream.Schema
+			if workflowState != nil {
+				if list, ok := workflowState.Result.([]stream.Schema); ok {
+					schemas = list
+				}
+			}
+			for _, sch := range schemas {
+				os, ok := sch.(*stream.OutputSchema)
+				if !ok {
+					continue
+				}
+				if pendingID == "" {
+					_ = sess.WriteStream(ctx, os) // Python L3421-1423：pending_id 为 None → 全透传
+					continue
+				}
+				if p, ok := os.Payload.(*interaction.InteractionOutput); ok && p.ID == pendingID {
+					_ = sess.WriteStream(ctx, os) // Python L3425-1430：payload.id == pending_id 才写
+				}
+			}
 		}
-		// ⤵️ 6.12: Workflow 中断写入流（暂未实现）
-		// else 分支：workflowState := result["workflow_execution_state"]
-		// 待实现：提取组件ID componentIDs := result["component_ids"]
-		// 待实现：获取待处理ID pendingID := componentIDs[0]
-		// 遍历 workflowState.result，写入 payload.id == pendingID 的 schema
 	} else {
 		// 正常 answer 结果
 		output, _ := result["output"].(string)
@@ -669,12 +697,23 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			a.hitlHandler.Clear(sess)
 			interruptionState = *hitlState
 		}
-		// ⤵️ Workflow: 中断状态加载（暂未实现）
-		// Python: interruptionState = a.loadInterruptionState(sess)
+		// ⤵️ Workflow: 中断状态加载 → 8.26 已回填。
+		// Python react_agent.py L2999：interruptionState = hitl_state or
+		// self._load_interruption_state(session)——HITL 优先，miss 回退工作流中断态。
+		var workflowState *agentschema.InterruptionState
+		if hitlState == nil {
+			workflowState = a.loadInterruptionState(sess)
+			if workflowState != nil {
+				a.clearInterruptionState(sess)
+			}
+		}
 
 		// 如果存在中断状态，恢复原始 query
+		// Python L3004-13008：HITL 与 workflow 双链都 clear + 恢复 _original_query
 		if hitlState != nil {
 			cbc.SetExtra("_original_query", hitlState.OriginalQuery)
+		} else if workflowState != nil {
+			cbc.SetExtra("_original_query", workflowState.BaseInterruptionState.OriginalQuery)
 		}
 
 		// 初始化上下文
@@ -720,6 +759,27 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			}
 			// 无新中断，从恢复起始迭代继续
 			if si, ok := cbc.DeleteExtra(interrupt.ResumeStartIterationKey); ok {
+				if siInt, ok := si.(int); ok {
+					startIteration = siInt
+				}
+			}
+		} else if workflowState != nil {
+			// 工作流中断恢复分支（8.26 层 2 中断桥；Python react_agent.py
+			// L3062-13078：_handle_resume workflow 路径，与 HITL 分派互斥——
+			// ResumeStartIterationKey 双链共用但同一时刻只有一链活跃，D-26-4）
+			resumeResult, resumeErr := a.handleResumeWorkflow(
+				ctx, workflowState, curInputs.Query, cbc, modelCtx, sess, curInputs,
+			)
+			if resumeErr != nil {
+				return resumeErr
+			}
+			if resumeResult != nil {
+				// 仍有中断（轮转或恢复后再中断），invokeInputs.result 已设置
+				result = resumeResult
+				return nil
+			}
+			// 全部工作流完成，从恢复起始迭代继续 ReAct 循环（Python L2736-1738）
+			if si, ok := cbc.DeleteExtra(agentschema.ResumeStartIterationKey); ok {
 				if siInt, ok := si.(int); ok {
 					startIteration = siInt
 				}
@@ -1122,7 +1182,20 @@ func (a *ReActAgent) reactLoop(
 			}
 			break
 		}
-		// ⤵️ 6.11: Workflow 中断检测
+		// ⤵️ 6.11: Workflow 中断检测 → 8.26 已回填（Python react_agent.py
+		// L3227-3235：HITL 未命中再判 workflow 中断，命中即 commit 并 break）
+		workflowInterrupt := a.afterExecuteToolCall(
+			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
+		)
+		if workflowInterrupt != nil {
+			if savedInvokeInputs != nil {
+				commitResult, commitErr := a.CommitWorkflowInterrupt(ctx, workflowInterrupt, modelCtx, sess, savedInvokeInputs)
+				if commitErr == nil && commitResult != nil {
+					iterResult = commitResult
+				}
+			}
+			break
+		}
 
 		// 单轮完全成功（模型响应 + 全部工具结果 + ToolMessage 均已写入）后触发。
 		// 触发范围与上游严格一致：只有完整工具轮触发一次（一个迭代内 N 个
