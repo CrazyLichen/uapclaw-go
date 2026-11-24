@@ -20,6 +20,6 @@
 // Agent 资源管理测试说明：
 // 对齐 Python test_runner_agent_resource_management 的资源管理链路
 // （AddAgent → RunAgent(ByAgentID) 会话 PreRun/Invoke/PostRun → RemoveAgent → 再运行失败）；
-// 其交互中断恢复部分（Questioner __interaction__）依赖 WorkflowAgent/IntentDetection/Questioner
-// （计划 8.14-8.24 未移植），待工作流组件移植后补充。
+// 其交互中断恢复部分（Questioner __interaction__）已随 8.14-8.24 移植补齐
+// （8.24 端到端中断恢复用例见 tests/integration/agentcore/workflow_questioner）。
 package runner_test

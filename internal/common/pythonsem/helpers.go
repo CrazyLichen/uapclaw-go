@@ -265,6 +265,78 @@ func MapValue(mapping map[string]any, key string) any {
 	return mapping[key]
 }
 
+// ValidateAndConvertType 按 Python 期望类型校验并转换值（Python questioner_comp.py
+// validate_and_convert_type :309-377 一比一；结构偏差 D-24-2：Python 定义在组件内，
+// 2026-11-24 拍板②迁 pythonsem 共享，8.26 等后续抽取类组件复用）。返回 (转换值,
+// 是否有效)；失败 (nil, false)，≙ Python (None, False)。
+func ValidateAndConvertType(value any, expectedType string) (any, bool) {
+	if value == nil {
+		return nil, false
+	}
+	switch expectedType {
+	case "string":
+		// String type: always convert to str(value)
+		return PyStr(value), true
+	case "integer":
+		// Integer type: bool 先于 int 排除（True=1/False=0 陷阱）；float 仅整值
+		// 接受；str 尝试 int(cleaned)
+		if IsBool(value) {
+			return nil, false
+		}
+		if IsInt(value) {
+			return PyInt(value), true
+		}
+		if f, ok := value.(float64); ok {
+			if f == float64(int64(f)) {
+				return int64(f), true
+			}
+			return nil, false
+		}
+		if s, ok := value.(string); ok {
+			n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+			if err != nil {
+				return nil, false
+			}
+			return n, true
+		}
+		return nil, false
+	case "number":
+		// Number type: 转 float(value)；bool 排除；str 尝试 float(cleaned)
+		if IsBool(value) {
+			return nil, false
+		}
+		if IsNumber(value) {
+			return PyFloat(value), true
+		}
+		if s, ok := value.(string); ok {
+			f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+			if err != nil {
+				return nil, false
+			}
+			return f, true
+		}
+		return nil, false
+	case "boolean":
+		// Boolean type: 仅接受 bool 或 "true"/"false"（忽略大小写与首尾空白）
+		if b, ok := value.(bool); ok {
+			return b, true
+		}
+		if s, ok := value.(string); ok {
+			switch strings.ToLower(strings.TrimSpace(s)) {
+			case "true":
+				return true, true
+			case "false":
+				return false, true
+			}
+			return nil, false
+		}
+		return nil, false
+	default:
+		// Unknown type: treat as string (backward compatible)
+		return PyStr(value), true
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // intRepr 整数十进制字面量
