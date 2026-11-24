@@ -45,14 +45,29 @@ func TestZhipuFreeModelEntries_形状(t *testing.T) {
 	}
 }
 
-// TestAppendZhipuFreeModels_key缺省不展示 key 未配置时回空（避免展示选中即报错的条目）。
-func TestAppendZhipuFreeModels_key缺省不展示(t *testing.T) {
+// TestAppendZhipuFreeModels_内置key缺省展示 27.4 内置 key 落库（用户拍板）后，
+// 缺省（env 未配置）即用内置常量展示条目；"key 缺省回空"分支仅在部署方
+// 清空内置常量时生效（防御性，源码常量非空时不可达）。
+func TestAppendZhipuFreeModels_内置key缺省展示(t *testing.T) {
 	t.Setenv("ZHIPU_BUILTIN_API_KEY", "")
 	rows := AppendZhipuFreeModels(nil)
-	for _, r := range rows {
-		if r["model_name"] == "glm-4.5-flash" {
-			t.Fatal("key 未配置不应展示 zhipu 条目")
-		}
+	if len(rows) != 1 {
+		t.Fatalf("内置 key 缺省应展示 1 条免费档, got %v", rows)
+	}
+	if rows[0]["api_key"] != ZhipuBuiltinAPIKey {
+		t.Fatalf("应使用内置常量 key: %v", rows[0]["api_key"])
+	}
+}
+
+// TestResolveZhipuAPIKey_env优先 env 注入优先于内置常量。
+func TestResolveZhipuAPIKey_env优先(t *testing.T) {
+	t.Setenv("ZHIPU_BUILTIN_API_KEY", "env-key")
+	if got := resolveZhipuAPIKey(); got != "env-key" {
+		t.Fatalf("env 应优先: %q", got)
+	}
+	t.Setenv("ZHIPU_BUILTIN_API_KEY", "")
+	if got := resolveZhipuAPIKey(); got != ZhipuBuiltinAPIKey {
+		t.Fatalf("无 env 应回内置常量: %q", got)
 	}
 }
 

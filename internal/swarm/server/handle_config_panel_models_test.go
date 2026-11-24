@@ -52,8 +52,10 @@ models:
 		t.Fatalf("models.list 失败: %v", err)
 	}
 	models, ok := resp.Payload["models"].([]map[string]any)
-	if !ok || len(models) != 1 {
-		t.Fatalf("期望 1 条模型，got %v", resp.Payload["models"])
+	// 27.4 内置智谱 key 落库后，models.list = 配置条目 + 内置免费档追加
+	//（AppendZhipuFreeModels 恒展示）——形状断言聚焦配置首条。
+	if !ok || len(models) != 2 {
+		t.Fatalf("期望 2 条模型（配置 1 + 内置免费档 1），got %v", resp.Payload["models"])
 	}
 	m := models[0]
 	if m["model_name"] != "qwen-max" || m["origin_index"] != 0 || m["is_default"] != true {
@@ -67,6 +69,11 @@ models:
 	}
 	if resp.Payload["active_model"] != "qwen-max" {
 		t.Fatalf("active_model 应为首条模型名，got %v", resp.Payload["active_model"])
+	}
+	// 末条为内置免费档（is_free 标记）
+	last := models[len(models)-1]
+	if last["model_name"] != "glm-4.5-flash" || last["is_free"] != true {
+		t.Fatalf("末条应为内置免费档 glm-4.5-flash: %v", last)
 	}
 }
 
