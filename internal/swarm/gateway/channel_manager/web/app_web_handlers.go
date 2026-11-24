@@ -23,10 +23,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/openai"
-	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -34,6 +30,10 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/openai"
+	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
@@ -351,6 +351,14 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("commands.list", commandsList(wc), false)
 	wc.registerMethod("config.moa_status", configMoaStatus(wc), false)
 	wc.registerMethod("chat.swarmflow_reply", chatSwarmflowReply(wc), false)
+
+	// ─── 媒体/文件域 + rsi.artifact 代理（27.8） ───
+	// Python: app_web_handlers.py:5811-5812（media.persist/discard）+
+	// :6492-6494（rsi.artifact 三薄代理）。media.persist 先做 _pre_persist_large_media
+	// 大图分流（app_web_handlers.py:4040-4069）再统一转发。
+	wc.registerMethod("media.persist", mediaPersist(wc, agentClient), false)
+	wc.registerMethod("media.discard", sessionProxyForward(wc, agentClient, "media.discard"), false)
+	registerRSIArtifactProxies(wc, agentClient)
 
 	// ─── session 薄代理（B1b-7） ───
 	// Python: app_web_handlers.py:5692-5693（两个都是 proxy_unary_request 薄代理）
