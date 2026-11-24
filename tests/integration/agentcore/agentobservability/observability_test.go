@@ -3,6 +3,7 @@
 package agentobservability_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,10 +14,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	obsdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	harnessobs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/observability"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -170,4 +173,81 @@ func (s *ObservabilityChainSuite) TestObs_Demand引用计数() {
 	s.Assert().True(harnessobs.IsInitialized(), "team 释放后 agent demand 仍持有 provider")
 	extdemand.ReleaseObservabilityDemand("agent")
 	s.Assert().False(harnessobs.IsInitialized(), "最后一个 demand 释放后 provider 关闭")
+}
+
+// TestObs_子agent归属 真跑 CreateSubagent 派生子 agent 并整轮 invoke，
+// 断言子 agent 有自己的 agent.* span 且归属父运行根（trace 继承）。
+// Python: subagent.py create_subagent_with_observability 包裹层 +
+// fork_for_agent 的 run-root 继承语义。
+func (s *ObservabilityChainSuite) TestObs_子agent归属() {
+	ctx := s.Ctx
+
+	_, err := harnessobs.AcquireObservability(testObservabilityConfig())
+	s.Require().NoError(err, "AcquireObservability 失败")
+	defer harnessobs.ReleaseObservability()
+
+	proc := trajectoryProcessor()
+	s.Require().NotNil(proc, "trajectory processor 单例应为具体类型")
+
+	// 宿主开父运行根
+	root := harnessobs.OpenAgentRunSpan("obs-sess-parent", "agent.fast", "", "", "", 0, nil)
+	s.Require().NotNil(root, "tracing 已开时运行根必须创建")
+	rootTraceID := root.SpanContext().TraceID()
+
+	handle, err := proc.Subscribe([]string{"llm", "tool", "agent"}, "")
+	s.Require().NoError(err, "订阅失败")
+	defer proc.Unsubscribe(handle)
+
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("子 agent 任务完成。"))
+
+	model, err := llm.NewModel(s.ClientConfig, s.ModelConfig)
+	s.Require().NoError(err, "创建 Mock Model 失败")
+
+	subCard := s.NewAgentCard(fmt.Sprintf("itest_sub_agent_%d", time.Now().UnixNano()), "子agent")
+	subCfg := &hschema.SubAgentConfig{
+		AgentCard:    subCard,
+		SystemPrompt: "你是子 agent，只回一句话。",
+		Model:        model,
+	}
+	parent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		MaxIterations: 4,
+		Subagents:     []hschema.SubagentSpec{subCfg},
+	})
+	s.Require().NoError(err, "创建父 DeepAgent 失败")
+
+	sub, err := parent.CreateSubagent(ctx, subCard.Name, "obs-sess-sub")
+	s.Require().NoError(err, "CreateSubagent 失败")
+	s.Require().NotNil(sub)
+
+	sess := s.NewTestSession("obs-sess-sub")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+	result, err := sub.Invoke(ctx, map[string]any{"query": "只回一句话"}, agentinterfaces.WithSession(sess))
+	sess.PostRun(ctx)
+	s.Require().NoError(err, "子 agent Invoke 失败")
+	s.Require().NotNil(result)
+
+	root.End()
+
+	// 轮询等待 span End 落进 processor
+	var traj *trajectory.Trajectory
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		traj, _ = proc.Drain(handle)
+		if traj != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	s.Require().NotNil(traj, "Drain 应产出 Trajectory")
+
+	// 归属断言：子 agent 的 span 与父运行根同 trace（run-root 继承）
+	rootTraceText := rootTraceID.String()
+	inherited := false
+	for _, span := range trajectory.IterSpans(traj) {
+		if traceID, _ := span["traceId"].(string); traceID == rootTraceText {
+			inherited = true
+			break
+		}
+	}
+	s.Assert().True(inherited, "子 agent span 应继承父运行根的 trace")
 }
