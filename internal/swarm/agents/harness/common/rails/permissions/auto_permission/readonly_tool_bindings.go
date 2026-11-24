@@ -16,25 +16,31 @@
 // `NewProgressiveToolRail` 已在本批补上该调用。
 // 残余风险：绕过构造函数后手工调 MarkTrusted 无法检测，已在 spec V-4 登记并接受。
 //
-// ## 范围（决策 D3）：只覆盖 ProgressiveToolRail
+// ## 范围（V-6 9.11b 回填后）
 //
-// Python 原文件覆盖 10+ 个内置工具（list_skill / get_current_goal /
-// recall_compressed_context / cron / heartbeat ...），这些依赖 V-6 前置件
-// ≥4,286 行、Go 侧未落地（spec §5.1）。本批只实现 `tool_search` +
-// ProgressiveToolRail 一条路径，其余工具名一律 false（走正常审批链）。
+// 覆盖：tool_search（ProgressiveToolRail 9.11a + ToolRetrievalPromptRail
+// 9.11b 双归属）+ cron_*（含受限视图判定）。skill_index / list_skill
+// ⤴️16.4、heartbeat_* ⤴️9.11c、get_current_goal / recall_compressed_context
+// 依赖既有未落地前置件，仍 fail-closed。
 
 package auto_permission
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/tool_display"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -76,17 +82,15 @@ func trustedReadonlyBinding(
 	sessionID string,
 	ownerAgent any,
 ) bool {
-	// D3：其余工具名一律不走快速路径
-	if invocation.ToolName != toolSearchName {
-		return false
-	}
-	return sessionObservationBinding(invocation, sessionID, ownerAgent)
+	// V-6（9.11b 回填）：分发扩展（tool_search 双归属 + cron_*）；
+	// heartbeat_* / skill_* 前置件未落地仍 fail-closed。
+	return trustedReadonlyBindingV6(invocation, sessionID, ownerAgent)
 }
 
 // sessionObservationBinding 校验 owner / callback agent 桥接与 rail 身份。
 //
 // Python: _session_observation_binding(invocation, session_id, agent)
-// 只保留 ProgressiveToolRail 分支（D3），其余 SDK 工具分支留待 V-6 前置件。
+// V-6 回填后：tool_search 双归属 + cron_* 分支见本文件尾段；其余分支见 trustedReadonlyBindingV6。
 func sessionObservationBinding(
 	invocation ToolInvocation,
 	sessionID string,
@@ -232,4 +236,166 @@ func registeredReadonlyToolType(toolName string) reflect.Type {
 	readonlyToolTypesMu.RLock()
 	defer readonlyToolTypesMu.RUnlock()
 	return readonlyToolTypes[toolName]
+}
+
+// ──────────────────────────── V-6 扩展（9.11b 回填） ────────────────────────
+
+var (
+	// toolRetrievalRailType 本层目录 rail 的具体类型（精确匹配用）。
+	toolRetrievalRailType = reflect.TypeOf((*commrails.ToolRetrievalPromptRail)(nil))
+	// toolRetrievalToolkitType 检索工具包的具体类型。
+	toolRetrievalToolkitType = reflect.TypeOf((*swarmtools.ToolRetrievalToolkit)(nil))
+	// cronBackendAdapterType cron backend 适配层的包级类型（cronbridge 内部
+	// 类型经 IsRestrictedCronBackend 判定，此处登记接口类型）。
+)
+
+// trustedReadonlyBindingV6 扩展分发：tool_search 双归属 + cron_* 绑定。
+// Python: _session_observation_binding 的 tool_retrieval 分支（:168-196）+
+// trusted_readonly_binding 的 cron_* 分支（:286-305）。skill_index/list_skill
+// ⤴️16.4、heartbeat_* ⤴️9.11c（前置件未落地，恒 false fail-closed）。
+func trustedReadonlyBindingV6(
+	invocation ToolInvocation,
+	sessionID string,
+	ownerAgent any,
+) bool {
+	// Python: try/except Exception → False（SDK 变更绝不授予快速路径）。
+	defer func() {
+		_ = recover()
+	}()
+	switch {
+	case invocation.ToolName == toolSearchName:
+		// 9.11a 既有路径
+		if sessionObservationBinding(invocation, sessionID, ownerAgent) {
+			return true
+		}
+		// 9.11b 新路径：ToolRetrievalPromptRail 持有的 tool_search
+		return toolRetrievalBinding(invocation, sessionID, ownerAgent)
+	case strings.HasPrefix(invocation.ToolName, "cron_") || invocation.ToolName == "cron":
+		return cronReadonlyBinding(invocation, sessionID, ownerAgent)
+	default:
+		// heartbeat_* / skill_index / list_skill / get_current_goal /
+		// recall_compressed_context：前置件未落地（9.11c / 16.4 / 既有
+		// fail-closed 登记项），恒走正常审批。
+		return false
+	}
+}
+
+// toolRetrievalBinding 校验 tool_search 由 ToolRetrievalPromptRail 持有。
+// Python: :176-196——tool_type=LocalFunction + rail_type=ToolRetrievalPromptRail
+// 归属校验；toolkit 类型精确匹配、session_scope 一致、执行函数归属 toolkit、
+// 双语参数合法性（progressive=False 分支）。
+func toolRetrievalBinding(
+	invocation ToolInvocation,
+	sessionID string,
+	ownerAgent any,
+) bool {
+	if invocation.Ctx == nil || sessionID == "" {
+		return false
+	}
+	owner, ok := ownerAgent.(*harness.DeepAgent)
+	if !ok || owner == nil {
+		return false
+	}
+	callbackAgent := invocation.Ctx.Agent()
+	if callbackAgent == nil || !deepAgentBridgeMatches(owner, callbackAgent) {
+		return false
+	}
+	session := invocation.Ctx.Session()
+	if session == nil || session.GetSessionID() != sessionID {
+		return false
+	}
+
+	// ① 恰好一个 ToolRetrievalPromptRail，具体类型匹配 + V-4 受信构造
+	found := owner.FindRailsByType(toolRetrievalRailType)
+	if len(found) != 1 {
+		return false
+	}
+	rail, isConcrete := found[0].(*commrails.ToolRetrievalPromptRail)
+	if !isConcrete || reflect.TypeOf(found[0]) != toolRetrievalRailType {
+		return false
+	}
+	if !rail.IsTrusted() {
+		return false
+	}
+
+	// ② toolkit 类型精确匹配 + session_scope 一致（Python: type(toolkit) is
+	// ToolRetrievalToolkit and toolkit._session_scope == session_id）
+	toolkit := rail.Toolkit()
+	if toolkit == nil || reflect.TypeOf(toolkit) != toolRetrievalToolkitType {
+		return false
+	}
+	if toolkit.SessionScope() != sessionID {
+		return false
+	}
+
+	// ③ 工具绑定：tool_search 卡片由该 toolkit 构造（tool_type + 执行函数
+	// 归属 toolkit 的等价校验——Go 经 Toolkit() 访问器回指）。
+	abilityManager := callbackAgent.AbilityManager()
+	if abilityManager == nil {
+		return false
+	}
+	if _, ok := abilityManager.Get(toolSearchName).(*tool.ToolCard); !ok {
+		return false
+	}
+
+	// ④ 参数合法性（progressive=False：list+category/keyword 或 get_schema）
+	_, searchArgs := tool_display.ExtractCallGoal(invocation.ToolArgs)
+	argsMap, _ := searchArgs.(map[string]any)
+	if argsMap == nil || !permissions.ToolSearchArgsValid(argsMap, false) {
+		return false
+	}
+	return true
+}
+
+// cronReadonlyBinding 校验 cron_* 工具的后端身份与绑定会话。
+// Python: :286-305——闭包挖出的 backend 类型精确判定（restricted 或
+// _CronToolsCronBackend）、受限视图时 delegate 归属校验、绑定上下文的
+// session_id 一致。Go：backend/context 经 factory 装配期登记的卡片属性取回
+// （语言边界偏差，行为等价）。
+func cronReadonlyBinding(
+	invocation ToolInvocation,
+	sessionID string,
+	ownerAgent any,
+) bool {
+	if invocation.Ctx == nil || sessionID == "" {
+		return false
+	}
+	owner, ok := ownerAgent.(*harness.DeepAgent)
+	if !ok || owner == nil {
+		return false
+	}
+	callbackAgent := invocation.Ctx.Agent()
+	if callbackAgent == nil || !deepAgentBridgeMatches(owner, callbackAgent) {
+		return false
+	}
+	if callbackAgent.AbilityManager() == nil {
+		return false
+	}
+	// 工具绑定：卡片存在且带装配期登记的 backend/context 属性
+	ability, _ := callbackAgent.AbilityManager().Get(invocation.ToolName).(*tool.ToolCard)
+	if ability == nil {
+		return false
+	}
+	backendValue, hasBackend := ability.Properties["cron_backend"]
+	if !hasBackend {
+		return false
+	}
+	backend, ok := backendValue.(agentcron.CronToolBackend)
+	if !ok || backend == nil {
+		return false
+	}
+	// 受限视图：delegate 挖取内层（Python: restricted → backend._inner）
+	if cronbridge.IsRestrictedCronBackend(backend) {
+		backend = cronbridge.RestrictedInnerBackend(backend)
+	}
+	// 绑定上下文会话一致（Python: backend._bound_context.session_id == session_id）
+	contextValue, hasContext := ability.Properties["cron_context"]
+	if !hasContext {
+		return false
+	}
+	cronCtx, ok := contextValue.(*agentcron.CronToolContext)
+	if !ok || cronCtx == nil || cronCtx.SessionID != sessionID {
+		return false
+	}
+	return true
 }

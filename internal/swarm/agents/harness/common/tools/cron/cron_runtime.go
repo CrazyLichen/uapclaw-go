@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -181,6 +181,16 @@ func (b *CronRuntimeBridge) EnsureSchedulerStarted() {
 // BuildTools 构建 cron 工具集。
 // 对齐 Python: build_tools（create_cron_tools 调用 agentcore 工厂）。
 func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agentID string, language string) []tool.Tool {
+	return b.BuildToolsWithPolicy(cronCtx, agentID, language, true, true)
+}
+
+// BuildToolsWithPolicy 按开关构建 cron 工具。
+// Python: build_tools（:1060-1103）——allowCreate/allowUpdate 任一关闭时
+// 经 _RestrictedCronBackend 包装 backend（create/update 运行时拒绝），
+// 并下架独立工具 cron_create_job / cron_update_job；统一 cron 工具保留
+// （list/get 等管理能力仍可用），schema 层摘除被禁动作由 CreateCronTools
+// 分发层在受限 backend 上报错承接。
+func (b *CronRuntimeBridge) BuildToolsWithPolicy(cronCtx *agentcron.CronToolContext, agentID string, language string, allowCreate, allowUpdate bool) []tool.Tool {
 	backend := b.GetBackend()
 	if backend == nil {
 		logger.Warn(logComponent).Msg("[CronRuntimeBridge] cron backend is not ready, skip builtin cron tools")
@@ -189,8 +199,12 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 	logger.Info(logComponent).
 		Str("tool_scope", cronCtx.ToolScope()).
 		Msg("[CronRuntimeBridge] Building cron tools for context")
+	effectiveBackend := backend
+	if !allowCreate || !allowUpdate {
+		effectiveBackend = NewRestrictedCronBackend(backend, allowCreate, allowUpdate)
+	}
 	tools := agentcron.CreateCronTools(
-		backend,
+		effectiveBackend,
 		cronCtx,
 		language,
 		gwcron.AllTargetChannels(),
@@ -198,6 +212,25 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 		true,
 		agentID,
 	)
+	// cron 执行会话下架的独立工具：cron_create_job / cron_update_job
+	// （Python :1093-1100）。
+	disabledToolNames := map[string]struct{}{}
+	if !allowCreate {
+		disabledToolNames["cron_create_job"] = struct{}{}
+	}
+	if !allowUpdate {
+		disabledToolNames["cron_update_job"] = struct{}{}
+	}
+	if len(disabledToolNames) > 0 {
+		kept := make([]tool.Tool, 0, len(tools))
+		for _, tl := range tools {
+			if _, disabled := disabledToolNames[tl.Card().Name]; disabled {
+				continue
+			}
+			kept = append(kept, tl)
+		}
+		tools = kept
+	}
 	// 尾部汇总（对齐 Python L396-398 "Built %d cron tools: %s"）
 	names := make([]string, 0, len(tools))
 	for _, tl := range tools {
@@ -205,6 +238,8 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 	}
 	logger.Info(logComponent).
 		Int("count", len(tools)).
+		Bool("create_enabled", allowCreate).
+		Bool("update_enabled", allowUpdate).
 		Strs("tools", names).
 		Msg("[CronRuntimeBridge] Built cron tools")
 	return tools

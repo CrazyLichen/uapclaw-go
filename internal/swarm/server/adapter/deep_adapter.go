@@ -37,6 +37,7 @@ import (
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
@@ -343,6 +344,12 @@ type DeepAdapter struct {
 	registeredMCPServerIDs map[string]bool
 	// registeredMCPServers 已注册 MCP 服务配置
 	registeredMCPServers map[string]*mcptypes.McpServerConfig
+	// toolRetrievalToolkit 检索工具包（懒创建缓存；关闭时清空）
+	toolRetrievalToolkit *swarmtools.ToolRetrievalToolkit
+	// toolRetrievalPromptRail 本层目录 rail 句柄（queued 或 mounted）
+	toolRetrievalPromptRail *commrails.ToolRetrievalPromptRail
+	// toolRetrievalSessionEnabled 构建期冻结的披露层开关（R-5 判据基线）
+	toolRetrievalSessionEnabled *bool
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11
 	autoHarnessService any
@@ -505,6 +512,127 @@ func NewDeepAdapter() *DeepAdapter {
 	// 优先读已发布的 configBase 快照，未初始化时才回退读盘（见 T-07）。
 	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
 	return d
+}
+
+// registerToolRetrievalPromptRail 目录披露层接管接线。
+// Python: _register_tool_retrieval_prompt_rail（:7359-7380）+ _build_tool_retrieval_prompt_rail
+// （:7330-7357）+ _drop_bundled_progressive（:7289-7305）——开关开启时构造
+// toolkit 与 rail、排队进 instance pending rails 并移除内置
+// ProgressiveToolRail（单一所有者：ToolRetrievalPromptRail owns tool_search）；
+// 构造失败返回不接管，内置 rail 兜底（绝不裸奔无披露层）。同时冻结
+// R-5 判据基线（构建期开关状态）。
+func (d *DeepAdapter) registerToolRetrievalPromptRail(configBase map[string]any) {
+	if d.instance == nil {
+		return
+	}
+	enabled := config.ToolRetrievalEnabled(configBase)
+	frozen := enabled
+	d.toolRetrievalSessionEnabled = &frozen
+	if !enabled {
+		return
+	}
+	toolkit := d.getOrCreateToolRetrievalToolkit(configBase)
+	if toolkit == nil {
+		return
+	}
+	if d.instance.DropBundledProgressiveToolRail() {
+		logger.Info(logComponent).
+			Str("event_type", "tool_retrieval_takeover").
+			Msg("[JiuWenSwarmDeepAdapter] dropped bundled ProgressiveToolRail; " +
+				"ToolRetrievalPromptRail will own tool_search")
+	}
+	rail := commrails.NewToolRetrievalPromptRail(toolkit, configBase)
+	d.instance.QueuePendingRail(rail)
+	d.toolRetrievalPromptRail = rail
+	logger.Info(logComponent).
+		Str("event_type", "tool_retrieval_queued").
+		Msg("[JiuWenSwarmDeepAdapter] ToolRetrievalPromptRail queued")
+}
+
+// getOrCreateToolRetrievalToolkit 懒创建检索工具包。
+// Python: _get_or_create_tool_retrieval_toolkit（:7330-7358）——deferred
+// 集合延迟读取（create_deep_agent 期间才分配曝光；rail.init 会再刷新）。
+func (d *DeepAdapter) getOrCreateToolRetrievalToolkit(configBase map[string]any) *swarmtools.ToolRetrievalToolkit {
+	language := d.resolveRuntimeLanguage()
+	if d.toolRetrievalToolkit != nil && d.toolRetrievalToolkit.Language() == language {
+		return d.toolRetrievalToolkit
+	}
+	if d.instance == nil || d.instance.AbilityManager() == nil {
+		return nil
+	}
+	abilityManager := d.instance.AbilityManager()
+	provider := func() []cschema.ToolInfoInterface {
+		infos := []cschema.ToolInfoInterface{}
+		for _, abilityCard := range abilityManager.List() {
+			card, ok := abilityCard.(*tool.ToolCard)
+			if !ok || card.EffectiveExposure() != tool.ToolExposureDeferred {
+				continue
+			}
+			infos = append(infos, card.ToolInfo())
+		}
+		return infos
+	}
+	toolkit := swarmtools.NewToolRetrievalToolkit(
+		provider,
+		d.sessionScope(),
+		configBase,
+		d.mcpServerDescriptions,
+		language,
+	)
+	d.toolRetrievalToolkit = toolkit
+	return toolkit
+}
+
+// sessionScope 会话唯一标识（R-5/披露冻结域）。
+func (d *DeepAdapter) sessionScope() string {
+	if d.instance != nil {
+		if card := d.instance.Card(); card != nil && card.ID != "" {
+			return card.ID
+		}
+	}
+	return "default"
+}
+
+// mcpServerDescriptions MCP server 名 → 本地化描述（连接器虚拟分支行）。
+// Python: _mcp_server_descriptions（:7359-7395 等价段）——已安装包 manifest
+// 的本地化描述 + mcp.servers 条目 plain description；只有名字的 server 也
+// 贡献名字（多下划线前缀精确分组）。
+func (d *DeepAdapter) mcpServerDescriptions() map[string]any {
+	out := map[string]any{}
+	for _, entry := range d.extractEnabledMcpServerEntries(d.configBase) {
+		name := strings.TrimSpace(stringValueOf(entry["name"]))
+		if name == "" {
+			continue
+		}
+		if plain := strings.TrimSpace(stringValueOf(entry["description"])); plain != "" {
+			out[name] = swarmtools.McpServerDescription{Zh: plain, En: plain}
+			continue
+		}
+		out[name] = swarmtools.McpServerDescription{}
+	}
+	for name := range d.registeredMCPServers {
+		server := strings.TrimSpace(name)
+		if server == "" {
+			continue
+		}
+		if _, exists := out[server]; !exists {
+			out[server] = swarmtools.McpServerDescription{}
+		}
+	}
+	return out
+}
+
+// toolRetrievalEnableFlipPending 优化开关与本会话冻结的披露画像不一致。
+// Python: _tool_retrieval_enable_flip_pending（:7498-7517）——披露层在构建期
+// 冻结：开 = 本层目录、关 = 引擎内置 ProgressiveToolRail；中途状态手术无法
+// 在两套系统间干净交接，会话获取路径在冻结画像与 live 开关任一方向不一致
+// 时重建 adapter。frozen 为 nil（旧会话未冻结）→ False。
+func (d *DeepAdapter) toolRetrievalEnableFlipPending(configBase map[string]any) bool {
+	frozen := d.toolRetrievalSessionEnabled
+	if frozen == nil {
+		return false
+	}
+	return *frozen != config.ToolRetrievalEnabled(configBase)
 }
 
 // CreateInstance 初始化底层 SDK Agent。
@@ -811,6 +939,10 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	if mode != "" {
 		d.instance.SetUapswarmAdapterMode(mode)
 	}
+
+	// 步骤 19.5: tool_retrieval 披露层接管（Python: _register_tool_retrieval_prompt_rail
+	// 在 ensure_initialized 前排队进 _pending_rails 并丢弃内置 ProgressiveToolRail）
+	d.registerToolRetrievalPromptRail(configBase)
 
 	// 步骤 20: d.instance.EnsureInitialized(ctx)
 	// Python: await self._instance.ensure_initialized()
@@ -3808,6 +3940,20 @@ func toolsFromDefinition(definition map[string]any) []string {
 
 // stringSliceOf 把 definition 里的 []string / []any 统一成 []string。
 // Python: list(agent_definition.get("skills") or ())
+// stringValueOf 宽松转串（nil 安全；Python str() 等价的保守实现）。
+func stringValueOf(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 func stringSliceOf(value any) []string {
 	switch v := value.(type) {
 	case nil:

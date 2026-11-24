@@ -25,6 +25,7 @@
 //	└── permissions/
 //	    ├── doc.go                    # 包文档
 //	    └── owner_scopes.go           # owner_scopes 权限判定（CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope）
+//	├── tool_retrieval_prompt_rail.go # 渐进披露目录节 + tools 过滤 + 漂移附件（9.11b）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/
 package rails

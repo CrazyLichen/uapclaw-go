@@ -158,7 +158,7 @@ func TestBuildHeartbeatRail_门控矩阵(t *testing.T) {
 	view7.ChannelID = "web"
 	out7, err7 := provider(nil, view7)
 	require.NoError(t, err7)
-	// 15.20 ⑫：骨架已回填——正常渠道返回 rail（工具注册缝 ⤴️9.11b）
+	// 15.20 ⑫：骨架已回填——正常渠道返回 rail（工具注册缝 ⤴️16.4）
 	require.NotNil(t, out7, "service/context 绑定段已随 15.20 ⑫ 回填")
 	hb := out7.(*coderails.HeartbeatRail)
 	assert.Equal(t, "web", hb.ToolContext()["channel_id"])
@@ -295,7 +295,7 @@ func TestBuildSkillRetrievalPrompt_开关门控(t *testing.T) {
 	view.Config = map[string]any{"skill_retrieval": map[string]any{"enabled": true}}
 	out, err := provider(nil, view)
 	require.NoError(t, err)
-	assert.Nil(t, out, "开关开但基座 ⤴️9.11b，返回 nil")
+	assert.Nil(t, out, "开关开但基座 ⤴️16.4，返回 nil")
 
 	view.Config = map[string]any{}
 	out2, err2 := provider(nil, view)

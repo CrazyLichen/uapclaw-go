@@ -150,7 +150,7 @@ func (s *ProviderRailsSuite) TestTeamSkillStoragePolicy_实例挂载() {
 		assert.True(s.T(), names["TeamSkillStoragePolicyRail"], "rails=%v", names)
 		assert.True(s.T(), names["TeamSkillLibraryReloadRail"], "rails=%v", names)
 	}
-	// 桩语义：skill_retrieval_prompt 不挂载（⤴️9.11b）
+	// 桩语义：skill_retrieval_prompt 不挂载（⤴️16.4，9.11b 批一改指）
 	assert.False(s.T(), names["SkillRetrievalPromptRail"])
 }
 

@@ -15,7 +15,7 @@ import (
 //
 // Python: HeartbeatRail (code/rails/heartbeat_rail.py, 1:1 骨架)。
 // 基座 HeartbeatRuntimeBridge + code/rails/heartbeat/ 子系统（scheduler/store/
-// tools/runtime/session_resolver，5145 行）Go 未实施 ⤴️9.11b（该行已挂账
+// tools/runtime/session_resolver，5145 行）Go 未实施 ⤴️9.11c（该行已挂账
 // HeartbeatRuntimeBridge 前置件）——本批实现 rail 骨架与工具注册缝：
 // Bridge 缺省 nil，Init 降级为不注册工具（工厂门控逻辑已在 member_rails.go）。
 type HeartbeatRail struct {
@@ -39,7 +39,7 @@ type HeartbeatTool struct {
 
 // heartbeatToolNames rail 拥有的工具名集合。
 // Python: HEARTBEAT_TOOL_NAMES（heartbeat/tools.py）
-// ⤴️9.11b：与 tools.py 1:1 对齐时填充。
+// ⤴️9.11c：与 tools.py 1:1 对齐时填充。
 var heartbeatToolNames []string
 
 // heartbeatRailLogComponent 日志组件
@@ -65,7 +65,7 @@ func (r *HeartbeatRail) ToolContext() map[string]any { return r.toolContext }
 // Init 在具体 DeepAgent 实例上注册 rail 持有的工具。
 //
 // Python: init (heartbeat_rail.py:41-53)。
-// ⤴️9.11b：HeartbeatRuntimeBridge.build_tools(context) 基座回填后，
+// ⤴️9.11c：HeartbeatRuntimeBridge.build_tools(context) 基座回填后，
 // 工具经 AbilityManager.AddAbility 注册并打 discovery 元数据。
 func (r *HeartbeatRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Bridge 未实施：工具列表为空，注册降级为日志（门控已保证只在
@@ -84,7 +84,7 @@ func (r *HeartbeatRail) Uninit(_ agentinterfaces.BaseAgent) error {
 			_ = manager
 			_ = name
 			// Python: ability_manager.remove(name)，异常 debug 忽略。
-			// ⤴️9.11b：AbilityManager remove 签名接线随基座回填。
+			// ⤴️9.11c：AbilityManager remove 签名接线随基座回填。
 		}
 	}
 	r.tools = nil
@@ -109,6 +109,6 @@ func (r *HeartbeatRail) RegisteredToolNames() []string {
 
 // abilityManagerOf 读取 agent 能力管理器（窄面）。
 func (r *HeartbeatRail) abilityManagerOf(agent agentinterfaces.BaseAgent) any {
-	// ⤴️9.11b：AbilityManager remove 接线时改为具体接口。
+	// ⤴️9.11c：AbilityManager remove 接线时改为具体接口。
 	return nil
 }

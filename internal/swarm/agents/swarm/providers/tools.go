@@ -21,7 +21,7 @@ import (
 // 常量值由 registry.go 常量层承载；多模态配置参数段（:270-355）自
 // providers_tools.go（e10③ scoped 拆分壳）迁入——规则 8 回收。
 //
-// 基座缺口：skill_retrieval_toolkit（⤴️9.11b）、xiaoyi 28 工具（⤴️10.6.24e）、
+// 基座缺口：skill_retrieval_toolkit（⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移））、xiaoyi 28 工具（⤴️10.6.24e）、
 // symphony toolkit（⤴️领域十六）、a4p tools（⤴️15.20/领域）、visual_gen
 // （Python visual_gen_enabled/configured 无 Go 基座 ⤴️15.20）、
 // mark_stateless（Go tool.Tool 无无状态标志位 ⤴️15.20 登记偏差）。
@@ -254,7 +254,7 @@ func buildA4PIntentAuthorizationTools(view *buildctx.SwarmBuildContext) []tool.T
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SkillToolkitForContext 成员运行时共享的 skill_index 与提示 rail 共用体。
-// 基座 SkillRetrievalToolkit ⤴️9.11b（与 member_rails.go 工厂同缝）；
+// 基座 SkillRetrievalToolkit ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移）（与 member_rails.go 工厂同缝）；
 // session_scope 组装语义在此保留（session:team:member 三段）。
 // Python: skill_retrieval_toolkit_for_context (tools.py:380-413)
 func SkillToolkitForContext(view *buildctx.SwarmBuildContext) any {
@@ -263,7 +263,7 @@ func SkillToolkitForContext(view *buildctx.SwarmBuildContext) any {
 	_ = skillLibraryDir(view)
 	// Python: SkillRetrievalToolkit(skill_directories=..., disabled_skills=...,
 	//   visible_skill_names=..., source_by_name=..., session_scope=...,
-	//   config_base=..., settings=..., auto_build_index=True)——基座 ⤴️9.11b
+	//   config_base=..., settings=..., auto_build_index=True)——基座 ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移）
 	return nil
 }
 
@@ -286,7 +286,7 @@ func BuildSkillRetrieval(params map[string]any, view *buildctx.SwarmBuildContext
 		return nil
 	}
 	// Python: _filter_whitelist(list(skill_retrieval_toolkit_for_context(ctx).get_tools()))
-	// ——基座 ⤴️9.11b
+	// ——基座 ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移）
 	return nil
 }
 

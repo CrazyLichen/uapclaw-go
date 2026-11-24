@@ -4,11 +4,17 @@
 // （DEFAULT_PROGRESSIVE_TOOL_ENABLED / get_progressive_tool_enabled）
 package config
 
+import "strings"
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // DefaultProgressiveToolEnabled 缺省关闭（历史行为：缺键 = 关）。
 // Python: DEFAULT_PROGRESSIVE_TOOL_ENABLED (config.py:64)
 const DefaultProgressiveToolEnabled = false
+
+// DefaultProgressiveToolOptimize 检索层开关缺省关闭。
+// Python: DEFAULT_PROGRESSIVE_TOOL_OPTIMIZE (config.py:68)
+const DefaultProgressiveToolOptimize = false
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -46,4 +52,38 @@ func toLowerFold(s string) string {
 		}
 	}
 	return string(out)
+}
+
+// ProgressiveToolOptimize 返回 tool_search 检索层开关。
+// Python: get_progressive_tool_optimize (config.py:451-465)——progressive_tool_enabled
+// 的伴随开关：两者同时为真才挂载检索层（AbilityManager deferred 分配保持武装时
+// 检索层可单独关闭）。
+func ProgressiveToolOptimize(cfg map[string]any) bool {
+	if cfg == nil {
+		return DefaultProgressiveToolOptimize
+	}
+	value, ok := cfg["progressive_tool_optimize"]
+	if !ok {
+		return DefaultProgressiveToolOptimize
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		switch toLowerFold(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on", "enabled":
+			return true
+		}
+		return false
+	}
+	// Python: bool(value)。
+	return value != nil && value != false && value != ""
+}
+
+// ToolRetrievalEnabled 返回 tool_search 渐进披露是否启用。
+// Python: is_tool_retrieval_enabled (config.py:469-479)——双顶层开关同时为真：
+// progressive_tool_enabled（AbilityManager deferred 分配）与
+// progressive_tool_optimize（检索层本身）。
+func ToolRetrievalEnabled(cfg map[string]any) bool {
+	return ProgressiveToolEnabled(cfg) && ProgressiveToolOptimize(cfg)
 }

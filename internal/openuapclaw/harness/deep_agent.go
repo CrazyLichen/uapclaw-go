@@ -755,6 +755,37 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 	return nil
 }
 
+// DropBundledProgressiveToolRail 从 pendingRails 移除内置 ProgressiveToolRail。
+// Python: interface_deep.py:7289-7305（kept = [rail for rail in pending
+// if not isinstance(rail, ProgressiveToolRail)]）——启用 jiuwenswarm
+// ToolRetrievalPromptRail 时由 DeepAdapter 调用，移交 tool_search 所有权。
+// 返回是否确有移除。
+func (d *DeepAgent) DropBundledProgressiveToolRail() bool {
+	d.railsMu.Lock()
+	kept := make([]agentinterfaces.AgentRail, 0, len(d.pendingRails))
+	dropped := false
+	for _, rail := range d.pendingRails {
+		if _, isProgressive := rail.(*rails.ProgressiveToolRail); isProgressive {
+			dropped = true
+			continue
+		}
+		kept = append(kept, rail)
+	}
+	if dropped {
+		d.pendingRails = kept
+	}
+	d.railsMu.Unlock()
+	return dropped
+}
+
+// QueuePendingRail 追加 rail 进 pendingRails（延迟注册）。
+// Python: instance._pending_rails.append(rail)（:7365-7372）。
+func (d *DeepAgent) QueuePendingRail(r agentinterfaces.AgentRail) {
+	d.railsMu.Lock()
+	d.pendingRails = append(d.pendingRails, r)
+	d.railsMu.Unlock()
+}
+
 // UnregisterRail 注销 Rail。
 // Python: BaseAgent.unregister_rail(rail) (line 1198)
 func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error {

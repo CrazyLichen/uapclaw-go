@@ -70,7 +70,7 @@ func isHeartbeatSupported(channelID string) bool {
 
 // isSkillRetrievalEnabled Skill 检索开关（config.skill_retrieval.enabled）。
 // Python: is_skill_retrieval_enabled
-// (common/tools/skill_retrieval_toolkits.py)——基座文件 ⤴️9.11b；
+// (common/tools/skill_retrieval_toolkits.py)——基座文件 ⤴️16.4（skill 侧随 discovery 后移）；
 // 开关键位与 config_specs.go 既有 retrievalEnabled 读取逻辑同源。
 func isSkillRetrievalEnabled(config map[string]any) bool {
 	if config == nil {
