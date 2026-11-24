@@ -98,3 +98,105 @@ func TestQuestionerStateSerializeRoundTrip(t *testing.T) {
 		t.Fatalf("roundtrip mismatch: %+v", got)
 	}
 }
+
+// TestQuestionerFormatTemplate 模板渲染（Python :255-265，含 D-24-1 缺键怪癖）
+func TestQuestionerFormatTemplate(t *testing.T) {
+	got := questionerFormatTemplate("您好 {{name}}，{{age}}岁", map[string]any{"name": "张三", "age": 18})
+	if got != "您好 张三，18岁" {
+		t.Fatalf("got %q", got)
+	}
+	got = questionerFormatTemplate("{{missing}}", map[string]any{})
+	if got != "None" {
+		t.Fatalf("D-24-1 quirk: got %q", got)
+	}
+}
+
+// TestQuestionerFormatContinueAsk 追问语句（Python :267-277）
+func TestQuestionerFormatContinueAsk(t *testing.T) {
+	fields := []QuestionerFieldInfo{
+		{FieldName: "id_card", CnFieldName: "身份证号", Description: "身份证"},
+		{FieldName: "addr", Description: "住址"},
+	}
+	if got := questionerFormatContinueAsk(fields, "zh"); got != "请您提供身份证号, 住址相关的信息" {
+		t.Fatalf("zh: %q", got)
+	}
+	if got := questionerFormatContinueAsk(fields, "en"); got != "Please provide information related to: 身份证号, 住址" {
+		t.Fatalf("en: %q", got)
+	}
+}
+
+// TestQuestionerIsValidValue 有效值判定（Python :297-306）
+func TestQuestionerIsValidValue(t *testing.T) {
+	invalid := []any{nil, "", map[string]any{}, []any{}, "null", " NONE "}
+	for _, v := range invalid {
+		if questionerIsValidValue(v) {
+			t.Errorf("%v should be invalid", v)
+		}
+	}
+	valid := []any{false, int64(0), 0.0, "0", "abc", map[string]any{"k": 1}}
+	for _, v := range valid {
+		if !questionerIsValidValue(v) {
+			t.Errorf("%v should be valid", v)
+		}
+	}
+}
+
+// TestQuestionerFormatOutputExcludeDefaults 输出 exclude_defaults（Python :279-284）
+func TestQuestionerFormatOutputExcludeDefaults(t *testing.T) {
+	cache := &QuestionerOutputCache{
+		UserResponse: "",
+		Question:     "q1",
+		KeyFields:    map[string]any{"name": "张三"},
+	}
+	out := questionerFormatQuestionerOutput(cache)
+	if _, ok := out["user_response"]; ok {
+		t.Fatal("user_response should be excluded (default)")
+	}
+	if out["question"] != "q1" || out["name"] != "张三" {
+		t.Fatalf("out=%v", out)
+	}
+	empty := questionerFormatQuestionerOutput(&QuestionerOutputCache{KeyFields: map[string]any{}})
+	if len(empty) != 0 {
+		t.Fatalf("want empty map, got %v", empty)
+	}
+	// 非 "" 的 user_response 保留（dict 形态）
+	dictOut := questionerFormatQuestionerOutput(&QuestionerOutputCache{
+		UserResponse: map[string]any{"k": 1}, KeyFields: map[string]any{}})
+	if dictOut["user_response"] == nil {
+		t.Fatal("dict user_response should be kept")
+	}
+}
+
+// TestQuestionerValidateInputs 输入校验（Python :286-295，D-24-3 三态）
+func TestQuestionerValidateInputs(t *testing.T) {
+	// 缺 query 回落 ""
+	m, err := questionerValidateInputs(map[string]any{})
+	if err != nil || m["query"] != "" {
+		t.Fatalf("default query: %v %v", m, err)
+	}
+	// str / dict / nil 均合法
+	if _, err = questionerValidateInputs(map[string]any{"query": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = questionerValidateInputs(map[string]any{"query": map[string]any{"k": 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = questionerValidateInputs(map[string]any{"query": nil}); err != nil {
+		t.Fatal(err)
+	}
+	// 非法类型 → 101070
+	_, err = questionerValidateInputs(map[string]any{"query": 42})
+	if err == nil {
+		t.Fatal("want 101070")
+	}
+}
+
+// TestQuestionerValidateAndConvertTypeDelegation pythonsem 委托（D-24-2）
+func TestQuestionerValidateAndConvertTypeDelegation(t *testing.T) {
+	if v, ok := questionerValidateAndConvertType(true, "integer"); ok || v != nil {
+		t.Fatal("bool≠int 边界失败")
+	}
+	if v, ok := questionerValidateAndConvertType("7", "integer"); !ok || v != int64(7) {
+		t.Fatalf("got %v %v", v, ok)
+	}
+}

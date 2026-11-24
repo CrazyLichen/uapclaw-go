@@ -7,8 +7,11 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -340,6 +343,108 @@ func QuestionerStateDeserialize(raw map[string]any) (*QuestionerState, error) {
 	}
 	// Python deserialize 尾调 handle_event(QuestionerEvent(state.status.value))
 	return st.HandleEvent(QuestionerEvent(st.Status)), nil
+}
+
+// ──────────────────────────── Task 4 QuestionerUtils ────────────────────────────
+
+// questionerFormatTemplate 模板渲染（Python format_template :255-265 一比一）：
+// {{key}} 占位符替换为 user_fields[key] 的 str()；D-24-1 缺键怪癖——Python
+// user_fields.get(key) 缺失得 None → str(None)="None"，Go 用 pythonsem.PyStr(nil)
+// 对齐；Python except (KeyError,TypeError,AttributeError) 返回 "" 的分支对应渲染
+// 过程 panic 场景（Go 值访问不会 panic，保留等价防御）
+func questionerFormatTemplate(template string, userFields map[string]any) string {
+	re := regexp.MustCompile(questionerSubPlaceholderPattern)
+	return re.ReplaceAllStringFunc(template, func(m string) string {
+		sub := re.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return ""
+		}
+		return pythonsem.PyStr(pythonsem.MapValue(userFields, sub[1]))
+	})
+}
+
+// questionerFormatContinueAsk 追问语句（Python format_continue_ask_question
+// :267-277 一比一：cn_field_name or description 回落、", " 拼接、双语模板选择）
+func questionerFormatContinueAsk(fields []QuestionerFieldInfo, acceptLanguage string) string {
+	names := make([]string, 0, len(fields))
+	for _, p := range fields {
+		if p.CnFieldName != "" {
+			names = append(names, p.CnFieldName)
+		} else {
+			names = append(names, p.Description)
+		}
+	}
+	tpl := questionerContinueAskStatementZh
+	if acceptLanguage == "en" {
+		tpl = questionerContinueAskStatementEn
+	}
+	return strings.ReplaceAll(tpl, "{non_extracted_key_fields_names}", strings.Join(names, ", "))
+}
+
+// questionerFormatQuestionerOutput 输出构造（Python format_questioner_output
+// :279-284 一比一）：QuestionerOutput(**key_fields) extra 展开 + user_response/
+// question 赋值 + model_dump(exclude_defaults=True)——user_response=="" 与
+// question=="" 剔除（默认值），extra 键保留
+func questionerFormatQuestionerOutput(cache *QuestionerOutputCache) map[string]any {
+	out := map[string]any{}
+	for k, v := range cache.KeyFields {
+		out[k] = v
+	}
+	if !pythonsem.PyEqual(cache.UserResponse, "") {
+		out["user_response"] = cache.UserResponse
+	}
+	if cache.Question != "" {
+		out["question"] = cache.Question
+	}
+	return out
+}
+
+// questionerValidateInputs 输入校验（Python validate_inputs :286-295 一比一）：
+// query 允许 str/dict/None（D-24-3），缺失回落 ""；非法类型抛 101070
+func questionerValidateInputs(inputs map[string]any) (map[string]any, error) {
+	if inputs == nil {
+		inputs = map[string]any{}
+	}
+	q, has := inputs["query"]
+	if has && q != nil {
+		switch q.(type) {
+		case string, map[string]any:
+		default:
+			return nil, exception.BuildError(exception.StatusComponentQuestionerInputParamError,
+				exception.WithMsg(fmt.Sprintf("query must be str or dict, got %T", q)))
+		}
+	} else if !has {
+		inputs["query"] = ""
+	}
+	return inputs, nil
+}
+
+// questionerIsValidValue 有效值判定（Python is_valid_value :297-306 一比一）：
+// None/""/{}/[]/"null"/"none"(strip+lower) 无效；false/0 是有效值（Python 怪癖，
+// 后续 _update_state_of_key_fields 的 truthy 过滤才拦 falsy——D-24-4 非全 falsy）
+func questionerIsValidValue(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return false
+		}
+		low := strings.ToLower(strings.TrimSpace(val))
+		return low != "null" && low != "none"
+	case map[string]any:
+		return len(val) > 0
+	case []any:
+		return len(val) > 0
+	}
+	return true
+}
+
+// questionerValidateAndConvertType 四类类型转换（Python :309-377；D-24-2 拍板②
+// 落 pythonsem.ValidateAndConvertType，包内禁止私抄）
+func questionerValidateAndConvertType(value any, expectedType string) (any, bool) {
+	return pythonsem.ValidateAndConvertType(value, expectedType)
 }
 
 // 以下为 Task 3-7 渐进实现区（状态机/Utils/Handler/Executable/Component）
