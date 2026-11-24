@@ -24,7 +24,7 @@ const ZhipuAPIBase = "https://open.bigmodel.cn/api/paas/v4"
 // ZHIPU_BUILTIN_API_KEY 注入覆盖，或直接改此常量）。
 // ⚠️ 入库风险提示：key 随源码分发即可被提取滥用额度，建议用
 // 限额度子账号 key 并定期轮换。
-const ZhipuBuiltinAPIKey = ""
+const ZhipuBuiltinAPIKey = "248437165669436c974ec48bb225ea46.1TijBhebTLsPkzuc"
 
 // zhipuFreeModelIDs 界面展示的 GLM 免费模型（智谱官方长期免费档；
 // 模型轮换时改此表即可）。
