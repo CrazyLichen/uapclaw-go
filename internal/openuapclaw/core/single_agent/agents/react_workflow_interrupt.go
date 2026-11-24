@@ -8,14 +8,18 @@
 package agents
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 )
@@ -189,4 +193,41 @@ func (a *ReActAgent) buildInterruptResult(st *agentschema.InterruptionState) map
 		"workflow_execution_state": pendingEntry.WorkflowExecutionState,
 		"component_ids":            []string{st.PendingComponentID},
 	}
+}
+
+// CommitWorkflowInterrupt 提交工作流中断：写占位 ToolMessage + 保存上下文 + 存态 +
+// 构建 interrupt 结果并设置 invokeInputs.result（D-26-1 双入口：与 HITL 的
+// CommitInterrupt 并存，调用方按状态类型分派）。
+// Python: react_agent.py _commit_interrupt L2633-1657 的非 HITL 分支。
+func (a *ReActAgent) CommitWorkflowInterrupt(
+	ctx context.Context,
+	st *agentschema.InterruptionState,
+	modelCtx ceinterface.ModelContext,
+	sess sessioninterfaces.SessionFacade,
+	invokeInputs *interfaces.InvokeInputs,
+) (map[string]any, error) {
+	pendingEntry := st.InterruptedWorkflows[st.PendingWorkflowID]
+	// 占位 ToolMessage（Python L2645-1650）
+	if modelCtx != nil && pendingEntry != nil && pendingEntry.ToolCall != nil {
+		toolMsg := llmschema.NewToolMessage(pendingEntry.ToolCall.ID, "[INTERRUPTED - Waiting for user input]")
+		if _, err := modelCtx.AddMessages(ctx, []llmschema.BaseMessage{toolMsg}); err != nil {
+			logger.Error(logComponent).Err(err).Msg("commit_workflow_interrupt: failed to add placeholder tool message")
+			return nil, fmt.Errorf("commit_workflow_interrupt: 写入占位 ToolMessage 失败: %w", err)
+		}
+	}
+	// 持久化上下文引擎状态（Python L2655 save_contexts；HITL 分支同款守卫）
+	if ce := a.ContextEngine(); ce != nil && sess != nil {
+		if _, err := ce.SaveContexts(ctx, sess, nil); err != nil {
+			logger.Error(logComponent).Err(err).Msg("commit_workflow_interrupt: failed to save context")
+			return nil, fmt.Errorf("commit_workflow_interrupt: 保存上下文失败: %w", err)
+		}
+	}
+	// 保存中断状态到 session（Python L2657）
+	a.saveInterruptionState(st, sess)
+	// 构建中断结果并设置 invokeInputs.result（Python L2659-1660）
+	result := a.buildInterruptResult(st)
+	if invokeInputs != nil {
+		invokeInputs.Result = result
+	}
+	return result, nil
 }

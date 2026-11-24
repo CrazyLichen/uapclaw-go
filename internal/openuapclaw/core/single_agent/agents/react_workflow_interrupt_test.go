@@ -3,6 +3,7 @@
 package agents
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/ability"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 )
@@ -180,4 +182,43 @@ func TestBuildInterruptResult(t *testing.T) {
 	assert.Equal(t, "interrupt", res["result_type"])
 	assert.Equal(t, out, res["workflow_execution_state"])
 	assert.Equal(t, []string{"q1"}, res["component_ids"])
+}
+
+// TestCommitWorkflowInterrupt 占位 ToolMessage + 存态 + invokeInputs.result。
+// Python: react_agent.py _commit_interrupt L2633-1657 workflow 分支。
+func TestCommitWorkflowInterrupt(t *testing.T) {
+	a := &ReActAgent{}
+	modelCtx := &fakeModelContext{}
+	sess := session.NewSession(session.WithSessionID("test_commit_wf"))
+	invokeInputs := &interfaces.InvokeInputs{}
+	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired}
+	st := &agentschema.InterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{
+			AIMessage: llmschema.NewAssistantMessage("ai"),
+			Iteration: 1,
+		},
+		InterruptedWorkflows: map[string]*agentschema.WorkflowInterruptEntry{
+			"wf_a": {
+				ToolCall:               &llmschema.ToolCall{ID: "t1", Name: "wf_a"},
+				ComponentIDs:           []string{"q1"},
+				WorkflowExecutionState: out,
+			},
+		},
+		PendingWorkflowID:  "wf_a",
+		PendingComponentID: "q1",
+	}
+	result, err := a.CommitWorkflowInterrupt(context.Background(), st, modelCtx, sess, invokeInputs)
+	require.NoError(t, err)
+	// 结果 == buildInterruptResult 输出（Python L2658-1660）
+	assert.Equal(t, "interrupt", result["result_type"])
+	// 占位 ToolMessage（Python L2645-1650）
+	require.Len(t, modelCtx.messages, 1)
+	toolMsg, ok := modelCtx.messages[0].(*llmschema.ToolMessage)
+	require.True(t, ok)
+	assert.Equal(t, "t1", toolMsg.ToolCallID)
+	assert.Equal(t, "[INTERRUPTED - Waiting for user input]", toolMsg.Content.String())
+	// invokeInputs.result 同值（Python L2660）
+	assert.Equal(t, result, invokeInputs.Result)
+	// 中断态已写入 session（Python L2657）
+	assert.NotNil(t, a.loadInterruptionState(sess))
 }
