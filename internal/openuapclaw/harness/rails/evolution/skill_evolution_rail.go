@@ -28,6 +28,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -119,6 +120,13 @@ type SkillEvolutionRail struct {
 	pendingApprovalSnapshots map[string]*experience.PendingChange
 	// skillsDir 技能目录
 	skillsDir []string
+	// reviewRuntime 审查运行时（configure 注入，供活动演化工具共享）
+	// Python: self._review_runtime
+	reviewRuntime *review.EvolutionReviewRuntime
+	// trajectorySpanProcessor 共享观测处理器（configure 注入；Go 消费面
+	// 仍为 builder 游标增量 D-25.2b-11，字段为配置一致性校验保留）
+	// Python: self._trajectory_span_processor
+	trajectorySpanProcessor *trajectory.TrajectorySpanProcessor
 }
 
 // SkillEvolutionRailOption SkillEvolutionRail 构造选项函数。
@@ -285,6 +293,18 @@ func WithAutoSave(autoSave bool) SkillEvolutionRailOption {
 	return func(r *SkillEvolutionRail) { r.autoSave = autoSave }
 }
 
+// WithEvolutionReviewRuntime 注入共享审查运行时。
+// Python: SkillEvolutionRail(review_runtime=...)（必选 kwarg，Go 经选项注入）
+func WithEvolutionReviewRuntime(runtime *review.EvolutionReviewRuntime) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.reviewRuntime = runtime }
+}
+
+// WithEvolutionTrajectorySpanProcessor 注入共享观测处理器。
+// Python: SkillEvolutionRail(trajectory_span_processor=...)（必选 kwarg）
+func WithEvolutionTrajectorySpanProcessor(processor *trajectory.TrajectorySpanProcessor) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.trajectorySpanProcessor = processor }
+}
+
 // WithEvalInterval 设置评估间隔。
 func WithEvalInterval(interval int) SkillEvolutionRailOption {
 	return func(r *SkillEvolutionRail) {
@@ -368,6 +388,31 @@ func (r *SkillEvolutionRail) SetAutoScan(v bool) { r.autoScan = v }
 // AutoSave 返回是否自动保存。
 // Python: SkillEvolutionRail.auto_save
 func (r *SkillEvolutionRail) AutoSave() bool { return r.autoSave }
+
+// ReviewRuntime 返回审查运行时。
+// Python: SkillEvolutionRail.review_runtime property（skill_evolution_rail.py:678）
+func (r *SkillEvolutionRail) ReviewRuntime() *review.EvolutionReviewRuntime { return r.reviewRuntime }
+
+// TrajectorySpanProcessor 返回共享观测处理器。
+// Python: SkillEvolutionRail.trajectory_span_processor（校验一致性用）
+func (r *SkillEvolutionRail) TrajectorySpanProcessor() *trajectory.TrajectorySpanProcessor {
+	return r.trajectorySpanProcessor
+}
+
+// ReviewLanguage 返回语言（configuration 校验用）。
+// Python: _language 属性读取（configuration.py:300 getattr(existing, "_language")）
+func (r *SkillEvolutionRail) ReviewLanguage() string { return r.language }
+
+// AsAgentRail 返回 rail 的 AgentRail 载体形态（configuration 装配用）。
+func (r *SkillEvolutionRail) AsAgentRail() agentinterfaces.AgentRail { return r }
+
+// ApprovalSubmissionService 返回审批提交服务（审批中断 rail 绑定用）。
+// Python: SkillEvolutionRail.approval_submission_service property（:673，
+// 返回 self._manager.experience_submission_service）。Go 的提交服务缝
+// ⤴️ 15.24b（ExperienceSubmissionService 随批落地），当前返回 nil。
+func (r *SkillEvolutionRail) ApprovalSubmissionService() EvolutionSubmissionService {
+	return nil
+}
 
 // SetAutoSave 设置是否自动保存。
 // Python: SkillEvolutionRail.auto_save = value

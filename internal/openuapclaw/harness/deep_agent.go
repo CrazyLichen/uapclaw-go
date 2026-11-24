@@ -1237,6 +1237,16 @@ func (d *DeepAgent) IsRegisteredRail(rail agentinterfaces.AgentRail) bool {
 	return false
 }
 
+// PendingRails 返回排队中的 Rail 列表快照。
+// Python: _pending_rails(agent)（configuration.py 经 getattr(agent, "_pending_rails")）
+func (d *DeepAgent) PendingRails() []agentinterfaces.AgentRail {
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	result := make([]agentinterfaces.AgentRail, len(d.pendingRails))
+	copy(result, d.pendingRails)
+	return result
+}
+
 // RemovePendingRail 按对象同一性从排队队列摘除指定 Rail。
 // Python: DeepAgent.remove_pending_rail(rail) (line 2131-2134)
 func (d *DeepAgent) RemovePendingRail(rail agentinterfaces.AgentRail) {

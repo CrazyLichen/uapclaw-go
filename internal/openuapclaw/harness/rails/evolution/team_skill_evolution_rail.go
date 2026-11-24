@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -109,6 +110,12 @@ type TeamSkillEvolutionRail struct {
 	experienceSkillOps map[string]*skill_call.SkillExperienceOperator
 	// skillsDir 技能目录
 	skillsDir []string
+	// reviewRuntime 审查运行时（configure 注入，供活动演化工具共享）
+	// Python: self._review_runtime
+	reviewRuntime *review.EvolutionReviewRuntime
+	// trajectorySpanProcessor 共享观测处理器（configure 注入；消费面偏差
+	// 同 SkillEvolutionRail）
+	trajectorySpanProcessor *trajectory.TrajectorySpanProcessor
 }
 
 // TeamSkillEvolutionRailOption TeamSkillEvolutionRail 构造选项函数。
@@ -320,6 +327,18 @@ func WithTeamSkillAutoScan(v bool) TeamSkillEvolutionRailOption {
 // WithTeamSkillAutoSave 设置是否自动保存。
 func WithTeamSkillAutoSave(v bool) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) { r.autoSave = v }
+}
+
+// WithTeamEvolutionReviewRuntime 注入共享审查运行时。
+// Python: TeamSkillEvolutionRail(review_runtime=...)
+func WithTeamEvolutionReviewRuntime(runtime *review.EvolutionReviewRuntime) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.reviewRuntime = runtime }
+}
+
+// WithTeamEvolutionTrajectorySpanProcessor 注入共享观测处理器。
+// Python: TeamSkillEvolutionRail(trajectory_span_processor=...)
+func WithTeamEvolutionTrajectorySpanProcessor(processor *trajectory.TrajectorySpanProcessor) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.trajectorySpanProcessor = processor }
 }
 
 // WithTeamSkillEvalInterval 设置评估间隔。
@@ -1792,6 +1811,28 @@ func (r *TeamSkillEvolutionRail) FinalizeReviewFeedback(ctx context.Context, pay
 
 // ReviewLanguage rail 语言（协调器归因提示词消费）。
 func (r *TeamSkillEvolutionRail) ReviewLanguage() string { return r.language }
+
+// ReviewRuntime 返回审查运行时。
+// Python: TeamSkillEvolutionRail.review_runtime property
+func (r *TeamSkillEvolutionRail) ReviewRuntime() *review.EvolutionReviewRuntime {
+	return r.reviewRuntime
+}
+
+// TrajectorySpanProcessor 返回共享观测处理器。
+// Python: TeamSkillEvolutionRail.trajectory_span_processor
+func (r *TeamSkillEvolutionRail) TrajectorySpanProcessor() *trajectory.TrajectorySpanProcessor {
+	return r.trajectorySpanProcessor
+}
+
+// AsAgentRail 返回 rail 的 AgentRail 载体形态（configuration 装配用）。
+func (r *TeamSkillEvolutionRail) AsAgentRail() agentinterfaces.AgentRail { return r }
+
+// ApprovalSubmissionService 返回审批提交服务（审批中断 rail 绑定用）。
+// Python: TeamSkillEvolutionRail.approval_submission_service property。
+// 提交服务缝 ⤴️ 15.24b，当前返回 nil。
+func (r *TeamSkillEvolutionRail) ApprovalSubmissionService() EvolutionSubmissionService {
+	return nil
+}
 
 // ReviewStore 演进存储（协调器证据面消费）。
 func (r *TeamSkillEvolutionRail) ReviewStore() *checkpointing.EvolutionStore { return r.evolutionStore }
