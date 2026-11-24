@@ -235,6 +235,22 @@ const (
 	GenAIInputMessages = "gen_ai.input.messages"
 	// GenAIOutputMessages 响应消息列表（JSON）
 	GenAIOutputMessages = "gen_ai.output.messages"
+	// GenAIAgentID Agent 标识（Python semconv.py GEN_AI_AGENT_ID）
+	GenAIAgentID = "gen_ai.agent.id"
+	// GenAIAgentDescription Agent 描述（GEN_AI_AGENT_DESCRIPTION）
+	GenAIAgentDescription = "gen_ai.agent.description"
+	// GenAIAgentVersion Agent 版本（GEN_AI_AGENT_VERSION）
+	GenAIAgentVersion = "gen_ai.agent.version"
+	// GenAIToolDescription 工具描述（GEN_AI_TOOL_DESCRIPTION）
+	GenAIToolDescription = "gen_ai.tool.description"
+	// GenAIToolType 工具类别（GEN_AI_TOOL_TYPE）
+	GenAIToolType = "gen_ai.tool.type"
+	// OJToolResourceID 工具资源 id（OJ_TOOL_RESOURCE_ID）
+	OJToolResourceID = "openjiuwen.tool.resource.id"
+	// OJToolProtocol 工具协议（OJ_TOOL_PROTOCOL）
+	OJToolProtocol = "openjiuwen.tool.protocol"
+	// DATaskLoopEvent 触发任务迭代的事件（DA_TASK_LOOP_EVENT）
+	DATaskLoopEvent = "deepagent.task.loop_event"
 )
 
 // ToolReportedFailure 工具结果报告自身失败（区别于框架侧异常）。

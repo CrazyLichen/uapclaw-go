@@ -411,6 +411,16 @@ func GetObservabilityConfig() *ObservabilityConfig {
 // demandMu provider/配置访问锁（extensions demand 层查询用）。
 var demandMu sync.Mutex
 
+// IsInitialized 共享 provider 是否已初始化。
+func IsInitialized() bool {
+	return ProviderInitialized()
+}
+
+// GetConfig 当前生效的共享观测配置。
+func GetConfig() *ObservabilityConfig {
+	return ActiveConfig()
+}
+
 // ProviderInitialized 共享 provider 是否已初始化（extensions demand 层查询用）。
 func ProviderInitialized() bool {
 	demandMu.Lock()

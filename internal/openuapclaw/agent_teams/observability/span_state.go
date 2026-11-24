@@ -296,3 +296,42 @@ func ResetAllSpanStates() {
 	}
 	spanStateRegistry = make(map[*OtelSpanState]struct{})
 }
+
+// PeekToolSpan 窥视指定 toolName 栈顶 tool span（不移除）。
+// Python: get_current_tool_span（span_context.py:1052）。
+func (s *OtelSpanState) PeekToolSpan(toolName string) trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if stack := s.toolSpanMap[toolName]; len(stack) > 0 {
+		return stack[len(stack)-1]
+	}
+	return nil
+}
+
+// PeekAgentSpan 窥视指定槽位栈顶 agent span（不移除）。
+// Python: get_current_agent_span（_current_agent_span ContextVar；Go 以
+// "current" 槽位承载，偏差 spec §4）。
+func (s *OtelSpanState) PeekAgentSpan(slot string) trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if stack := s.agentSpanMap[slot]; len(stack) > 0 {
+		return stack[len(stack)-1]
+	}
+	return nil
+}
+
+// PeekAnyToolSpan 窥视全部工具桶里最近压入的 tool span（派发检测用）。
+// Python: get_current_tool_span（span_context.py:1052）遍历各桶取最新；
+// Go 单遍扫描等价。
+func (s *OtelSpanState) PeekAnyToolSpan() trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var latest trace.Span
+	for _, stack := range s.toolSpanMap {
+		if len(stack) == 0 {
+			continue
+		}
+		latest = stack[len(stack)-1]
+	}
+	return latest
+}
