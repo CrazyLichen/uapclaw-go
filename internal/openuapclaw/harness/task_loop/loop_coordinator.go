@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

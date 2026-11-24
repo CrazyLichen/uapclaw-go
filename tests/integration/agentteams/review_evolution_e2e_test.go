@@ -35,9 +35,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -54,8 +54,8 @@ type ReviewEvolutionE2ESuite struct {
 	sched   *scheduling.TeamScheduler
 
 	// evolution 面（E-1 共用；每用例在 beforeTest 重建）
-	skillsDir    string
-	rail         *evolution.TeamSkillEvolutionRail
+	skillsDir     string
+	rail          *evolution.TeamSkillEvolutionRail
 	feedbackCalls int
 	// aggregated 终态聚合回调是否被调度器执行（E-3 断言面）。
 	aggregated bool

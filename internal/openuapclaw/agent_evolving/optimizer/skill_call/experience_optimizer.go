@@ -8,8 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
@@ -17,6 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

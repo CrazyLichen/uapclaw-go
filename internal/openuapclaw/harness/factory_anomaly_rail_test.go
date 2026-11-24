@@ -3,10 +3,10 @@ package harness
 import (
 	"testing"
 
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

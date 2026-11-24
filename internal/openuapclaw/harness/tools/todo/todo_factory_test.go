@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewTodoModifyToolWithUpdateFn_注入生效 验证工厂注入原语的构造与卡片。

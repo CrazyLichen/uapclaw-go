@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/reasoning"
@@ -15,8 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/utils/providererror"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/utils/requestsanitizer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

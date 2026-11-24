@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/config"
@@ -18,7 +19,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

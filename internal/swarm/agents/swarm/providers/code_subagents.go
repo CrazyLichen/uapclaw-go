@@ -1,11 +1,11 @@
 package providers
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	subagents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // code_subagents.go —— code profile 子代理工厂（四个，注册名=FactoryName 消费点）。

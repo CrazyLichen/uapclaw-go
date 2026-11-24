@@ -16,8 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	atevents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	atevents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 )
 
 // logComponent 组件常量。

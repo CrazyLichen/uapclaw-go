@@ -49,11 +49,11 @@ func TestRegisterSwarmProviders_幂等且全集注册(t *testing.T) {
 	exemptRails := map[string]bool{
 		// 15.21：evolution 段（swarm.team_skill_evolution/team_skill_create/
 		// member_skill_evolution/evolution_interrupt/symphony_graph_evolution）
-		"swarm.team_skill_evolution":      true,
-		"swarm.team_skill_create":         true,
-		"swarm.member_skill_evolution":    true,
-		"swarm.evolution_interrupt":       true,
-		"swarm.symphony_graph_evolution":  true,
+		"swarm.team_skill_evolution":     true,
+		"swarm.team_skill_create":        true,
+		"swarm.member_skill_evolution":   true,
+		"swarm.evolution_interrupt":      true,
+		"swarm.symphony_graph_evolution": true,
 	}
 	for name := range SwarmRailNamesForTest() {
 		if exemptRails[name] {

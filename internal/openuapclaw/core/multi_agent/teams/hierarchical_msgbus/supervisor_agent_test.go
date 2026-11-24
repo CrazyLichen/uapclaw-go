@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/team_runtime"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

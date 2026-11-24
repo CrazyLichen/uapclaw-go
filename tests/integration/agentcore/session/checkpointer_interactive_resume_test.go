@@ -8,6 +8,7 @@ import (
 
 	"errors"
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
@@ -19,7 +20,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

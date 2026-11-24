@@ -15,16 +15,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	interruptpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
 	clirails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/rails"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/storage"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/renderer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/tool_display"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	interruptpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // errExitREPL /exit、/quit 的哨兵错误（Python _ExitREPL）。

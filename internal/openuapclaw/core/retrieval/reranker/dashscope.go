@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	reranker "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/utils"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

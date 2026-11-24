@@ -7,10 +7,10 @@ import (
 	"sync"
 
 	"github.com/tiktoken-go/tokenizer"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/support"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/support"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────

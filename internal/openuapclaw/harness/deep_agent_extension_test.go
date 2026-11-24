@@ -12,10 +12,10 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // 15.15 DeepAgent 六入口测试（deep_agent.py:2211-2453）。

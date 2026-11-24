@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

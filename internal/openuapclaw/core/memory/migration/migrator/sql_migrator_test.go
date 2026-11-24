@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

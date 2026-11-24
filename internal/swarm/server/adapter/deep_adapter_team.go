@@ -634,7 +634,7 @@ func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID,
 	}
 
 	// Python 步骤 5: if not getattr(rail, "auto_scan", True)
-	if !rail.AutoScan() {
+	if !rail.SignalTrigger() {
 		logger.Info(logComponent).
 			Str("channel_id", channelID).Str("session_id", sessionID).Str("source", source).
 			Msg("ensureTeamEvolutionWatcher: auto_scan disabled, skipped")
@@ -1015,7 +1015,7 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		}
 
 		// Python: if not getattr(rail, "auto_scan", True)
-		if !rail.AutoScan() {
+		if !rail.SignalTrigger() {
 			if activeCycleRequestID != "" {
 				pushEvolutionStatus(activeCycleRequestID, "end", evolutionlogic.TeamEvolutionHiddenStage, "")
 			}

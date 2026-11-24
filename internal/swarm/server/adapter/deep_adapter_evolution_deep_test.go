@@ -118,7 +118,7 @@ func TestWatchEvolutionAndPush_autoScan关闭(t *testing.T) {
 		(*llm.Model)(d.model),
 		"test-model",
 		"cn",
-		coreevolution.WithAutoScan(false),
+		coreevolution.WithSignalTrigger(false),
 	)
 	if err := d.watchEvolutionAndPush(ctx, "watch-ctx", "c1", "r1"); err != nil {
 		t.Fatalf("auto_scan 关闭时不应报错: %v", err)

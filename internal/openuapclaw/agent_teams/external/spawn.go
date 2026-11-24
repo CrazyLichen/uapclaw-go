@@ -27,6 +27,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external/transport"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
@@ -34,8 +36,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -13,14 +13,14 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
-	subagentrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
-	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
+	subagentrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
+	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 辅助构造 ────────────────────────────

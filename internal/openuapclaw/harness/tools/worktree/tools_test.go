@@ -120,7 +120,7 @@ func (f *failingBackend) Create(_ context.Context, _, _, _ string) (*WorktreeCre
 	return nil, fmt.Errorf("模拟失败")
 }
 func (f *failingBackend) Remove(_ context.Context, _, _ string, _ bool) bool { return false }
-func (f *failingBackend) Exists(_ context.Context, _ string) bool    { return false }
+func (f *failingBackend) Exists(_ context.Context, _ string) bool            { return false }
 
 // TestExitWorktreeTool_Invoke_Keep 测试 keep 退出
 func TestExitWorktreeTool_Invoke_Keep(t *testing.T) {

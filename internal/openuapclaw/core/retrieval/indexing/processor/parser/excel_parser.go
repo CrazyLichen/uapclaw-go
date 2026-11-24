@@ -10,9 +10,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

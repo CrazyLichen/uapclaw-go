@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

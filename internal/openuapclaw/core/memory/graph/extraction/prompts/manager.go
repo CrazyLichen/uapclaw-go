@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

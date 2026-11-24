@@ -4,14 +4,14 @@ import (
 	"context"
 	"runtime"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/code"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/shell"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

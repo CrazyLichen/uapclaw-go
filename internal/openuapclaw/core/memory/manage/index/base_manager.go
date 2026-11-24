@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/codec"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/mem_model"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

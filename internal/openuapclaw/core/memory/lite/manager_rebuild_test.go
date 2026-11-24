@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

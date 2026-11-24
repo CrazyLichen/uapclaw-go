@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
@@ -17,14 +18,13 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	hsubagent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	hsubagent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

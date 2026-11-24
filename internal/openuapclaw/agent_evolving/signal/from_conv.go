@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -69,6 +69,23 @@ const userFeedbackPromptEN = "Determine whether the following user messages cont
 	"Only treat the messages as an evolution signal when the user is clearly correcting " +
 	"the agent's understanding, ordering, steps, or tool usage.\n\n" +
 	"Current skill: {skill_name}\n" +
+	"Recent user messages: {user_messages}\n\n" +
+	`Output JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
+
+// userFeedbackSkilllessPromptCN 无技能归属的中文用户反馈检测提示词。
+// Python: _USER_FEEDBACK_SKILLESS_PROMPT_CN（原文复刻，不翻译）
+const userFeedbackSkilllessPromptCN = "判断以下用户消息是否包含对 agent 行为的被动纠正或可沉淀的改进反馈。\n" +
+	"只有当用户消息明确指出 agent 的理解、步骤、顺序或工具使用需要调整时，" +
+	"才认为值得转成演进信号。\n\n" +
+	"最近用户消息：{user_messages}\n\n" +
+	`输出 JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
+
+// userFeedbackSkilllessPromptEN 无技能归属的英文用户反馈检测提示词。
+// Python: _USER_FEEDBACK_SKILLESS_PROMPT_EN（原文复刻，不翻译）
+const userFeedbackSkilllessPromptEN = "Determine whether the following user messages contain passive corrective feedback " +
+	"or reusable improvement guidance about the agent's behavior.\n" +
+	"Only treat the messages as an evolution signal when the user is clearly correcting " +
+	"the agent's understanding, ordering, steps, or tool usage.\n\n" +
 	"Recent user messages: {user_messages}\n\n" +
 	`Output JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
 
@@ -150,24 +167,6 @@ var execContentKeys = []string{
 	"command", "cmd", "shell_command",
 }
 
-// collaborationSignalTypes 协作信号类型集合。
-// Python: _COLLABORATION_SIGNAL_TYPES
-var collaborationSignalTypes = map[string]bool{
-	"collaboration_send": true, "collaboration_claim": true,
-	"collaboration_view": true, "collaboration_receive": true,
-	"collaboration_failure": true,
-}
-
-// collaborationFailurePattern 协作失败匹配正则。
-// Python: _COLLABORATION_FAILURE_PATTERN
-var collaborationFailurePattern = regexp.MustCompile(
-	`member.*failed|member.*error|member.*timeout` +
-		`|invoke.*exception|spawn.*failed` +
-		`|task.*error|task.*timeout` +
-		`|collaboration.*failed` +
-		`|协作.*失败|成员.*异常|任务.*超时`,
-)
-
 // errorEqualsNoneOnlyStart 匹配以 "\s*=\s*None" 开头的字符串，
 // 用于验证 "error" 后面是否跟着 "= None"。
 var errorEqualsNoneOnlyStart = regexp.MustCompile(`(?i)^\s*=\s*None`)
@@ -211,8 +210,59 @@ func (d *ConversationSignalDetector) BindLLM(llm *llm.Model, model, language str
 // Detect 从消息列表中检测演化信号，返回去重后的 EvolutionSignal 列表。
 // Python: ConversationSignalDetector.detect(trajectory_or_messages)
 func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionSignal {
-	signals := d.detectFromMessages(msgs)
-	return d.deduplicate(signals)
+	return d.detectMessageSignals(msgs, nil)
+}
+
+// detectMessageSignals 消息信号检测统一中间层：异常吞→空列表，
+// 按 enabled_signal_types 过滤（缺省 {"execution_failure","script_artifact"}）后去重。
+// Python: _detect_message_signals（from_conv.py:259-284）。
+func (d *ConversationSignalDetector) detectMessageSignals(input any, signalTypes map[string]bool) (result []*EvolutionSignal) {
+	defer func() {
+		// Python: except Exception → logger.warning + return []
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).
+				Str("method", "detectMessageSignals").
+				Any("panic", rec).
+				Msg("[ConversationSignalDetector] message signal detection failed")
+			result = []*EvolutionSignal{}
+		}
+	}()
+	var messages []map[string]any
+	switch v := input.(type) {
+	case []map[string]any:
+		messages = v
+	case *trajectory.Trajectory:
+		if v == nil {
+			return []*EvolutionSignal{}
+		}
+		// Python: trajectory_to_messages(input_data)（messages.py 投影）
+		converted, err := trajectory.TrajectoryToMessages(v, nil, false)
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("method", "detectMessageSignals").
+				Err(err).
+				Msg("[ConversationSignalDetector] message signal detection failed")
+			return []*EvolutionSignal{}
+		}
+		messages = converted
+	case nil:
+		return []*EvolutionSignal{}
+	default:
+		return []*EvolutionSignal{}
+	}
+	signals := d.detectFromMessages(messages)
+	// Python: enabled_signal_types = signal_types or {"execution_failure", "script_artifact"}
+	enabled := signalTypes
+	if enabled == nil {
+		enabled = map[string]bool{"execution_failure": true, "script_artifact": true}
+	}
+	filtered := make([]*EvolutionSignal, 0, len(signals))
+	for _, signal := range signals {
+		if enabled[signal.SignalType] {
+			filtered = append(filtered, signal)
+		}
+	}
+	return d.deduplicate(filtered)
 }
 
 // ParseMessages 将 BaseMessage 列表归一化为 map 列表（含 tool_calls）。
@@ -233,16 +283,22 @@ func ParseMessages(messages []llmschema.BaseMessage) []map[string]any {
 func (d *ConversationSignalDetector) DetectTrajectorySignals(
 	traj *trajectory.Trajectory,
 	messages []map[string]any,
+	signalTypes ...map[string]bool,
 ) []*EvolutionSignal {
+	// Python: input_data = messages if messages is not None else trajectory；均空返回 []
+	var input any
 	if messages != nil {
-		return d.deduplicate(d.detectFromMessages(messages))
-	}
-	if traj == nil {
+		input = messages
+	} else if traj != nil {
+		input = traj
+	} else {
 		return nil
 	}
-	// 无消息时，从轨迹投影后检测（上游同款一行委托）。
-	converted := d.ConvertTrajectoryToMessages(traj)
-	return d.deduplicate(d.detectFromMessages(converted))
+	var types map[string]bool
+	if len(signalTypes) > 0 {
+		types = signalTypes[0]
+	}
+	return d.detectMessageSignals(input, types)
 }
 
 // DetectUserMessageFeedback 使用 LLM 判断用户消息是否为被动纠正，返回 user_correction 信号。
@@ -270,6 +326,7 @@ func (d *ConversationSignalDetector) DetectUserMessageFeedback(
 func (d *ConversationSignalDetector) DetectUserIntent(
 	ctx context.Context,
 	msgs []map[string]any,
+	allowSkillless ...bool,
 ) ([]*EvolutionSignal, error) {
 	// 提取最近 5 条用户消息
 	var userMessages []string
@@ -287,9 +344,14 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 		return nil, nil
 	}
 
+	// Python: allow_skillless=False 缺省（技能演化口径）；TTSE 传 True 走
+	// 无归属检测路径。
 	skillName := d.inferSkillFromMessages(msgs)
 	if skillName == "" {
-		return nil, nil
+		if len(allowSkillless) == 0 || !allowSkillless[0] {
+			return nil, nil
+		}
+		return d.detectSkilllessUserFeedback(ctx, userMessages)
 	}
 
 	// 无 LLM 时走 fallback 正则
@@ -348,6 +410,81 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 		excerpt = userMessages[len(userMessages)-1]
 	}
 	return []*EvolutionSignal{d.makeUserFeedbackSignal(excerpt, skillName)}, nil
+}
+
+// detectSkilllessUserFeedback 无技能归属的纠正反馈检测（TTSE / 技能无关口径）。
+// Python: _detect_skillless_user_feedback（from_conv.py:390-428）——LLM 判定
+// 失败/不可解析时回退 _skillless_pattern_fallback。
+func (d *ConversationSignalDetector) detectSkilllessUserFeedback(ctx context.Context, userMessages []string) ([]*EvolutionSignal, error) {
+	text := ""
+	if len(userMessages) > 0 {
+		text = strings.TrimSpace(userMessages[len(userMessages)-1])
+	}
+	if text == "" {
+		return nil, nil
+	}
+	// Python: if self._llm is None or not self._model: return self._skillless_pattern_fallback(text)
+	if d.llm == nil || d.model == "" {
+		return d.skilllessPatternFallback(text), nil
+	}
+
+	promptTemplate := userFeedbackSkilllessPromptCN
+	if d.language != "cn" {
+		promptTemplate = userFeedbackSkilllessPromptEN
+	}
+	userText := strings.Join(userMessages, "\n")
+	if len(userText) > 2000 {
+		userText = userText[:2000]
+	}
+	prompt := strings.ReplaceAll(promptTemplate, "{user_messages}", userText)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	llmMessages := model_clients.NewMessagesParam(llmschema.NewUserMessage(prompt))
+	resp, err := d.llm.Invoke(timeoutCtx, llmMessages, model_clients.WithInvokeModel(d.model))
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("method", "detectSkilllessUserFeedback").
+			Str("error", err.Error()).
+			Msg("[ConversationSignalDetector] skillless user feedback detection failed")
+		return d.skilllessPatternFallback(text), nil
+	}
+
+	raw := responseToText(resp)
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return d.skilllessPatternFallback(text), nil
+	}
+	if parsed == nil {
+		return d.skilllessPatternFallback(text), nil
+	}
+	if !boolOfAny(parsed["is_feedback"]) {
+		return nil, nil
+	}
+	excerpt := strings.TrimSpace(fmt.Sprintf("%v", parsed["excerpt"]))
+	if excerpt == "" || excerpt == "<nil>" {
+		excerpt = text
+	}
+	return []*EvolutionSignal{d.makeUserFeedbackSignal(excerpt, "")}, nil
+}
+
+// skilllessPatternFallback 仅在纠正线索命中时发出无归属反馈信号。
+// Python: _skillless_pattern_fallback（from_conv.py:430-434）。
+func (d *ConversationSignalDetector) skilllessPatternFallback(text string) []*EvolutionSignal {
+	if text == "" || correctionPattern.MatchString(text) == false {
+		return nil
+	}
+	return []*EvolutionSignal{d.makeUserFeedbackSignal(text, "")}
+}
+
+// boolOfAny 归一 is_feedback 布尔（bool 原生 / 字符串 "true"）。
+func boolOfAny(v any) bool {
+	switch value := v.(type) {
+	case bool:
+		return value
+	default:
+		return fmt.Sprintf("%v", value) == "true"
+	}
 }
 
 // ConvertTrajectoryToMessages 把轨迹投影为消息列表格式（TTSE/调用方兼容包装）。
@@ -717,12 +854,16 @@ func (d *ConversationSignalDetector) fallbackUserFeedbackSignals(userMessages []
 // makeUserFeedbackSignal 构建用户反馈信号。
 // Python: ConversationSignalDetector._make_user_feedback_signal(excerpt, skill_name)
 func (d *ConversationSignalDetector) makeUserFeedbackSignal(excerpt, skillName string) *EvolutionSignal {
+	opts := []SignalOption{WithSource("passive_conversation")}
+	if skillName != "" {
+		// Python: skill_name=None（无归属路径）时不携带技能名
+		opts = append(opts, WithSkillName(skillName))
+	}
 	return MakeEvolutionSignal(
 		schema.UserIntentSignal,
 		"Instructions",
 		truncateString(excerpt, 600),
-		WithSkillName(skillName),
-		WithSource("passive_conversation"),
+		opts...,
 	)
 }
 

@@ -5,17 +5,17 @@ import (
 	"sort"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	mt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/memory"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	mt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/memory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

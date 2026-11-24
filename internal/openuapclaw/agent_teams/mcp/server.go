@@ -35,10 +35,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 )
 
 // logComponent 组件常量。

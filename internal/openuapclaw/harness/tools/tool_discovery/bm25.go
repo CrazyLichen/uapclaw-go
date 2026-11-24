@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor/recall"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor/recall"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

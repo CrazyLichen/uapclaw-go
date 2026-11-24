@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
 )
 
 // ──────────────────────────── 空值与非理想分支 ────────────────────────────

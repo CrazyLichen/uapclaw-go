@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/codec"
@@ -14,8 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/search"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/process/extract"
 	apiembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

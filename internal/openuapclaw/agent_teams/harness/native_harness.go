@@ -9,13 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
-	agentcore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	runner "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -23,7 +19,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentcore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

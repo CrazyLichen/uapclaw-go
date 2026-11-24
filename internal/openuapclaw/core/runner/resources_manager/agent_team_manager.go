@@ -3,9 +3,9 @@ package resources_manager
 import (
 	"context"
 
-	maschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	maschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

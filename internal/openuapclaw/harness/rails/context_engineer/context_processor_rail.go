@@ -3,20 +3,20 @@ package context_engineer
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/registry"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

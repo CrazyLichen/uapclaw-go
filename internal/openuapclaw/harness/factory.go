@@ -10,9 +10,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
@@ -22,12 +28,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

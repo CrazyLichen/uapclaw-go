@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	message_queue "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/message_queue"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	message_queue "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/message_queue"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

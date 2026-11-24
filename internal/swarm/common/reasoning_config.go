@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/reasoning"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/reasoning"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

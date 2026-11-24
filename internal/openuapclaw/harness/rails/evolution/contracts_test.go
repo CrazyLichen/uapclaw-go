@@ -3,10 +3,10 @@ package evolution
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -4,8 +4,8 @@ import (
 	workflow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowconfig"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/internal"
 )
 
 // TestNewWorkflowSessionFacade 测试基本构造

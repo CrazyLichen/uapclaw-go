@@ -11,17 +11,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	ext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/external"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

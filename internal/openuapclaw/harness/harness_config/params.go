@@ -5,12 +5,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

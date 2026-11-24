@@ -7,19 +7,19 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/agent_mode"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/agent_mode"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

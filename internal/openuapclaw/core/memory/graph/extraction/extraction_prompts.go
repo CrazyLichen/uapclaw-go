@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	graphobj "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
@@ -15,7 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/prompts/entity_extraction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/registry"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

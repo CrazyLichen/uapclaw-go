@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	ceservice "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	ceservice "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )

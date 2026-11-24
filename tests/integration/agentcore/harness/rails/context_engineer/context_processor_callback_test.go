@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/suite"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	ce "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

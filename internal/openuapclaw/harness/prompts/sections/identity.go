@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"strings"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

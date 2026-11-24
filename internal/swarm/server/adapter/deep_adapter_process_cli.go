@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

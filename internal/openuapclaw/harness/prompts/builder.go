@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

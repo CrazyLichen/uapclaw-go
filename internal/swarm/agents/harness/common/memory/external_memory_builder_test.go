@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 )
 
 // TestBuildExternalMemoryRail_provider为空 对齐 Python L41-43：无 provider 返回 None

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

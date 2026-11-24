@@ -11,8 +11,8 @@ import (
 
 	"github.com/wk8/go-ordered-map/v2"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

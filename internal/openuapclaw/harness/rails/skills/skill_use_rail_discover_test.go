@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	session "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

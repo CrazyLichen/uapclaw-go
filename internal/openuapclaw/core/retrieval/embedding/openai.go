@@ -12,9 +12,9 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

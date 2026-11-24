@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/mem_model"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

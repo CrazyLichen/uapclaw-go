@@ -15,9 +15,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 func TestVLLMEmbedding_EmbedQuery(t *testing.T) {

@@ -5,7 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -24,6 +27,47 @@ type LlmSpanState struct {
 	FirstChunkNs int64
 	// ChunkCount stream chunk 计数
 	ChunkCount int
+	// CallID 本次 LLM 请求的调用标识（开 span 时从 call scope 读出；
+	// 空=请求未经 call scope 到达回调框架，span 不入索引）
+	// Python: call_id
+	CallID string
+	// IsStreaming 是否流式（逐 chunk）调用
+	// Python: is_streaming
+	IsStreaming bool
+	// ResponseStartedNs 响应头到达（首字节）的单调时间（0 表示未上报）
+	// Python: response_started_ns
+	ResponseStartedNs int64
+	// RequestPurpose 请求用途（assistant / compaction）
+	// Python: request_purpose（缺省 "assistant"）
+	RequestPurpose string
+	// MessageOccurrenceIDs 每条消息的出现 id（开 span 时计算）
+	// Python: message_occurrence_ids
+	MessageOccurrenceIDs []string
+	// MessageMetadata 每条消息的 metadata 载荷（开 span 时收集）
+	// Python: message_metadata
+	MessageMetadata []map[string]any
+	// InitialTrajectoryMessages 开 span 时投影的初始轨迹消息
+	// Python: initial_trajectory_messages
+	InitialTrajectoryMessages []map[string]any
+	// ContextWindowCommitted 是否已为本次请求发出 context.window.commit
+	// Python: context_window_committed
+	ContextWindowCommitted bool
+	// RoutedInputOriginal 路由改名前记录的输入属性原文（键=属性名）。
+	// Python 在首次 fill 时惰性从 span.attributes 读；Go 的 trace.Span 接口
+	// 不支持属性回读，改为开 span 时一次性捕获（语义等价：属性此后只被
+	// fill 改写，首记值即原值）。偏差登记 spec §4。
+	RoutedInputOriginal map[string]string
+	// parentAttributes 开 span 时捕获的父属性快照（会话标识等），
+	// 供 context.window.commit 等价 Python 读 span.attributes 的路径使用。
+	parentAttributes map[string]attribute.Value
+	// initialInputMessagesJSON 开 span 时记录的 gen_ai.input.messages 原文
+	// （路由占位符回填用，Python 惰性从 span.attributes 读，Go 开期捕获）。
+	initialInputMessagesJSON string
+	// initialSystemInstructionsJSON 开 span 时记录的 gen_ai.system_instructions 原文。
+	initialSystemInstructionsJSON string
+	// trajectoryMessagesCommitted LLM_INPUT 时随 context.window.commit 提交的
+	// 轨迹消息（Python 在 on_llm_input 内局部变量，Go 侧留档便于测试断言）。
+	trajectoryMessagesCommitted []map[string]any
 }
 
 // OtelSpanState 每-DeepAgent 的可变 span 追踪状态容器。
@@ -129,6 +173,17 @@ func (s *OtelSpanState) CurrentLLMSpanContext() trace.SpanContext {
 	return s.llmStack[len(s.llmStack)-1].Span.SpanContext()
 }
 
+// CurrentLLMSpan 返回当前栈顶 LLM span（Python: get_current_llm_span）。
+// 返回 nil 表示无当前 LLM span。
+func (s *OtelSpanState) CurrentLLMSpan() trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.llmStack) == 0 {
+		return nil
+	}
+	return s.llmStack[len(s.llmStack)-1].Span
+}
+
 // PushToolSpan 将 tool span 压入 map。
 // Python: push_tool_span(tool_name, span)
 func (s *OtelSpanState) PushToolSpan(toolName string, span trace.Span) {
@@ -161,6 +216,93 @@ func (s *OtelSpanState) PushAgentSpan(agentID string, span trace.Span) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.agentSpanMap[agentID] = append(s.agentSpanMap[agentID], span)
+}
+
+// SnapshotTools 返回工具 span 栈的快照（toolName → 栈，浅拷贝切片）。
+// cascade 安全网遍历用；Python 直接读 ContextVar 的 map（单线程），
+// Go 侧经快照避免持锁回调 End。
+func (s *OtelSpanState) SnapshotTools() map[string][]trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string][]trace.Span, len(s.toolSpanMap))
+	for name, stack := range s.toolSpanMap {
+		out[name] = append([]trace.Span(nil), stack...)
+	}
+	return out
+}
+
+// SetTools 回写某工具名收口后剩余的栈（cascade 安全网用）。
+func (s *OtelSpanState) SetTools(toolName string, remaining []trace.Span) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(remaining) == 0 {
+		delete(s.toolSpanMap, toolName)
+		return
+	}
+	s.toolSpanMap[toolName] = remaining
+}
+
+// AgentSpanIDs 返回全部 agent span 的 SpanID（cascade 的 llm 父比对用）。
+// Python: cascade 以 _current_agent_span 单槽判定；Go 无单槽（偏差），
+// 全部 agent span 的 id 都参与比对。
+func (s *OtelSpanState) AgentSpanIDs() []trace.SpanID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var ids []trace.SpanID
+	for _, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil {
+				continue
+			}
+			if sc := span.SpanContext(); sc.IsValid() {
+				ids = append(ids, sc.SpanID())
+			}
+		}
+	}
+	return ids
+}
+
+// AgentTraceID 返回首个 agent span 的 TraceID hex（cascade 的 llm 迹线定位用）。
+// Python: tracker 内部 _resolve_root_span().context.trace_id。
+func (s *OtelSpanState) AgentTraceID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil {
+				continue
+			}
+			if sc := span.SpanContext(); sc.IsValid() {
+				return sc.TraceID().String()
+			}
+		}
+	}
+	return ""
+}
+
+// CloseAgentSpans 收口全部 recording 的 agent span 并清空（安全网兜底路径）。
+// Python: close_current_agent_span 关闭 _current_agent_span 单槽；Go 无单槽
+// （偏差），收口 agentSpanMap 内全部 recording span。
+func (s *OtelSpanState) CloseAgentSpans() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil || !span.IsRecording() {
+				continue
+			}
+			logger.Warn(logComponent).Str("agent_id", id).
+				Str("span_id", func() string {
+					if sc := span.SpanContext(); sc.IsValid() {
+						return sc.SpanID().String()
+					}
+					return "0"
+				}()).
+				Msg("otel: close_current_agent_span - closing unclosed agent span")
+			span.End()
+		}
+	}
+	s.agentSpanMap = make(map[string][]trace.Span)
 }
 
 // PopAgentSpan 弹出指定 agentID 最近的一个 agent span。
@@ -206,4 +348,43 @@ func ResetAllSpanStates() {
 		s.ResetAll()
 	}
 	spanStateRegistry = make(map[*OtelSpanState]struct{})
+}
+
+// PeekToolSpan 窥视指定 toolName 栈顶 tool span（不移除）。
+// Python: get_current_tool_span（span_context.py:1052）。
+func (s *OtelSpanState) PeekToolSpan(toolName string) trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if stack := s.toolSpanMap[toolName]; len(stack) > 0 {
+		return stack[len(stack)-1]
+	}
+	return nil
+}
+
+// PeekAgentSpan 窥视指定槽位栈顶 agent span（不移除）。
+// Python: get_current_agent_span（_current_agent_span ContextVar；Go 以
+// "current" 槽位承载，偏差 spec §4）。
+func (s *OtelSpanState) PeekAgentSpan(slot string) trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if stack := s.agentSpanMap[slot]; len(stack) > 0 {
+		return stack[len(stack)-1]
+	}
+	return nil
+}
+
+// PeekAnyToolSpan 窥视全部工具桶里最近压入的 tool span（派发检测用）。
+// Python: get_current_tool_span（span_context.py:1052）遍历各桶取最新；
+// Go 单遍扫描等价。
+func (s *OtelSpanState) PeekAnyToolSpan() trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var latest trace.Span
+	for _, stack := range s.toolSpanMap {
+		if len(stack) == 0 {
+			continue
+		}
+		latest = stack[len(stack)-1]
+	}
+	return latest
 }

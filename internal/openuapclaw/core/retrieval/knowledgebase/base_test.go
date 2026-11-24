@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
@@ -15,7 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/indexer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/parser"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 测试桩 ────────────────────────────

@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
@@ -17,7 +15,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

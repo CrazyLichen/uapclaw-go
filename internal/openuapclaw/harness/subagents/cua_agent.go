@@ -7,13 +7,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	hcua "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cua"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

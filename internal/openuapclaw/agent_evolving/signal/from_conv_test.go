@@ -7,8 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 辅助函数 ────────────────────────────
@@ -785,15 +788,6 @@ func TestCodeExecTools(t *testing.T) {
 	}
 }
 
-func TestCollaborationSignalTypes(t *testing.T) {
-	expected := []string{"collaboration_send", "collaboration_claim", "collaboration_view", "collaboration_receive", "collaboration_failure"}
-	for _, name := range expected {
-		if !collaborationSignalTypes[name] {
-			t.Errorf("collaborationSignalTypes should contain %q", name)
-		}
-	}
-}
-
 // ──────────────────────────── 【12-04】resolveActiveSkillForStep 测试已删除 ────────────────────────────
 // 该函数为协作信号段配套（上游 HEAD 已删，Go 同批删除，规则 8）。
 // 消息级 _resolve_active_skill 的测试保留于 TestResolveActiveSkill_* 系列。
@@ -1055,4 +1049,80 @@ func TestParseMessages_基础字段与工具调用(t *testing.T) {
 	if empty := ParseMessages(nil); len(empty) != 0 {
 		t.Fatalf("nil 输入应返回空切片，实际 %v", empty)
 	}
+}
+
+// ──────────────────────────── 【15.24a Task 8】detectMessageSignals 中间层 ────────────────────────────
+
+// TestDetectMessageSignals_默认过滤 缺省 signal_types 只保留 execution_failure
+// 与 script_artifact，其余信号被滤出。
+// Python: _detect_message_signals（from_conv.py:259-284）。
+func TestDetectMessageSignals_默认过滤(t *testing.T) {
+	messages := []map[string]any{
+		makeMsg("user", "请部署应用"),
+		makeMsgWithToolCalls(map[string]any{"id": "c1", "name": "bash", "arguments": `{"code": "echo hi"}`}),
+		makeMsg("tool", "Traceback (most recent call last):\nValueError: bad input"),
+	}
+	detector := &ConversationSignalDetector{}
+	all := detector.deduplicate(detector.detectFromMessages(messages))
+	require.NotEmpty(t, all, "原始检测应有信号")
+
+	filtered := detector.detectMessageSignals(messages, nil)
+	for _, sig := range filtered {
+		if sig.SignalType != "execution_failure" && sig.SignalType != "script_artifact" {
+			t.Errorf("缺省过滤后不应保留信号类型 %q", sig.SignalType)
+		}
+	}
+
+	// 显式 signal_types 透传：只保留指定类型
+	onlyFailure := detector.detectMessageSignals(messages, map[string]bool{"execution_failure": true})
+	for _, sig := range onlyFailure {
+		assert.Equal(t, "execution_failure", sig.SignalType)
+	}
+}
+
+// TestDetectMessageSignals_异常吞返回空 panic 与非法输入吞异常返回空列表。
+func TestDetectMessageSignals_异常吞返回空(t *testing.T) {
+	detector := &ConversationSignalDetector{}
+	assert.Empty(t, detector.detectMessageSignals(nil, nil))
+	assert.Empty(t, detector.detectMessageSignals("bad-input", nil))
+}
+
+// TestDetectTrajectorySignals_输入选择 messages 优先、轨迹投影兜底、双空返回空。
+// Python: detect_trajectory_signals（from_conv.py:286-300）。
+func TestDetectTrajectorySignals_输入选择(t *testing.T) {
+	detector := &ConversationSignalDetector{}
+	assert.Empty(t, detector.DetectTrajectorySignals(nil, nil))
+
+	messages := []map[string]any{
+		makeMsg("user", "部署"),
+		makeMsgWithToolCalls(map[string]any{"id": "c1", "name": "bash", "arguments": `{"code": "echo hi"}`}),
+		makeMsg("tool", "Traceback (most recent call last):\nValueError: bad input"),
+	}
+	assert.NotEmpty(t, detector.DetectTrajectorySignals(nil, messages))
+}
+
+// TestSkilllessPatternFallback_纠正线索命中 只在纠正正则命中时发信号。
+// Python: _skillless_pattern_fallback（from_conv.py:430-434）。
+func TestSkilllessPatternFallback_纠正线索命中(t *testing.T) {
+	detector := &ConversationSignalDetector{}
+	assert.NotEmpty(t, detector.skilllessPatternFallback("你搞错了，应该先构建再部署"))
+	assert.Empty(t, detector.skilllessPatternFallback("今天天气不错"))
+	assert.Empty(t, detector.skilllessPatternFallback(""))
+}
+
+// TestDetectUserIntent_缺省无技能即无信号 allow_skillless 缺省 False：
+// 无技能推断返回空；True 走 skillless 路径（无 LLM 时正则回退）。
+// Python: detect_user_intent 的 allow_skillless 分支。
+func TestDetectUserIntent_缺省无技能即无信号(t *testing.T) {
+	detector := &ConversationSignalDetector{}
+	msgs := []map[string]any{{"role": "user", "content": "你搞错了，应该先构建再部署"}}
+
+	signals, err := detector.DetectUserIntent(context.Background(), msgs)
+	assert.NoError(t, err)
+	assert.Empty(t, signals, "缺省 allow_skillless=False 无技能即无信号")
+
+	signals, err = detector.DetectUserIntent(context.Background(), msgs, true)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, signals, "allow_skillless=True 走 fallback 正则命中")
+	assert.Nil(t, signals[0].SkillName, "无归属信号 skill_name 为 nil（Python None）")
 }

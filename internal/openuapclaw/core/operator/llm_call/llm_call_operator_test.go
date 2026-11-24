@@ -3,9 +3,9 @@ package llm_call
 import (
 	"testing"
 
+	evolvingschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
-	evolvingschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

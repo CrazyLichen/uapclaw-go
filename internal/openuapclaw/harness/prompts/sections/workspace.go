@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	wscontent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	wscontent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

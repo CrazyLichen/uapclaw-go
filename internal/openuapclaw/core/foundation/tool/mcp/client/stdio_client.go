@@ -10,9 +10,9 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
 	mcp "github.com/mark3labs/mcp-go/mcp"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

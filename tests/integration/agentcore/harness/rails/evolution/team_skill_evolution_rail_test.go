@@ -10,15 +10,15 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -105,12 +105,14 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_GetEvolutionTot
 	s.Equal(720.0, rail.GetEvolutionTotalTimeoutSecs())
 }
 
-// TestTeamSkillEvolutionRail_AutoScan默认值 测试 autoScan 默认为 true。
+// TestTeamSkillEvolutionRail_SignalTrigger默认值 测试 signal_trigger 默认为 false。
 //
-// 对齐 Python: TeamSkillEvolutionRail(auto_scan=True)
-func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_AutoScan默认值() {
-	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+// 对齐 Python: TeamSkillEvolutionRail(signal_trigger=None)（新版 :157，bool(None)→False）
+func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SignalTrigger默认值() {
+	// 裸构造（套件夹具默认开启 signal_trigger，不适用缺省值断言）
+	rail := evolution.NewTeamSkillEvolutionRail([]string{s.T().TempDir()},
+		newTeamSkillMockModel(s.T()), "test-model", "cn")
+	s.False(rail.SignalTrigger())
 }
 
 // TestTeamSkillEvolutionRail_AutoSave默认值false 测试 autoSave 默认为 false（与 SkillEvolutionRail 的关键差异）。
@@ -173,12 +175,12 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_EvolutionConfig
 // TestTeamSkillEvolutionRail_WithTeamSkillAutoScan 测试 WithTeamSkillAutoScan 选项。
 //
 // 对齐 Python: TeamSkillEvolutionRail(auto_scan=False)
-func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_WithTeamSkillAutoScan() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
-	s.False(rail.AutoScan())
+func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_WithTeamSkillSignalTrigger() {
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
+	s.False(rail.SignalTrigger())
 
-	rail2 := s.newTestRail(evolution.WithTeamSkillAutoScan(true))
-	s.True(rail2.AutoScan())
+	rail2 := s.newTestRail(evolution.WithTeamSkillSignalTrigger(true))
+	s.True(rail2.SignalTrigger())
 }
 
 // TestTeamSkillEvolutionRail_WithTeamSkillAutoSave 测试 WithTeamSkillAutoSave 选项。
@@ -384,13 +386,13 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_WithTeamSkillSi
 // TestTeamSkillEvolutionRail_SetAutoScan 测试 SetAutoScan 运行时修改。
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SetAutoScan() {
 	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+	s.True(rail.SignalTrigger())
 
-	rail.SetAutoScan(false)
-	s.False(rail.AutoScan())
+	rail.SetSignalTrigger(false)
+	s.False(rail.SignalTrigger())
 
-	rail.SetAutoScan(true)
-	s.True(rail.AutoScan())
+	rail.SetSignalTrigger(true)
+	s.True(rail.SignalTrigger())
 }
 
 // TestTeamSkillEvolutionRail_SetAutoSave 测试 SetAutoSave 运行时修改。
@@ -451,7 +453,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_AllowEvolutionT
 //
 // 对齐 Python: if not self.auto_scan: return False
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_AllowEvolutionTrigger_autoScan关闭() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
 	s.False(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 }
 
@@ -529,7 +531,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnBeforeInvoke�
 //
 // 对齐 Python: if not self.auto_scan: return False
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_NotifyTeamCompleted_autoScan关闭() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
 	ok, err := rail.NotifyTeamCompleted(s.Ctx)
 	s.Require().NoError(err)
 	s.False(ok)
@@ -723,7 +725,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnAfterToolCall
 //
 // 对齐 Python: if not self.auto_scan: return
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnAfterToolCall_autoScan关闭跳过viewTask() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
 
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName:   "view_task",
@@ -860,8 +862,8 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RecordPresented
 //
 // 对齐 Python: if not self.auto_scan: return None
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvolution_autoScan关闭返回nil() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
-	s.False(rail.AutoScan())
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
+	s.False(rail.SignalTrigger())
 
 	snapshot := rail.SnapshotForEvolution(s.Ctx, trajectory.NewTestTrajectoryWithID("empty"), nil)
 	s.Nil(snapshot)
@@ -873,7 +875,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 // 与 SkillEvolutionRail 不同（SkillEvolutionRail 在 messages 为空时返回 None）
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvolution_空轨迹返回空消息快照() {
 	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+	s.True(rail.SignalTrigger())
 
 	emptyTraj := trajectory.NewTestTrajectoryWithIDWithSession("test")
 	snapshot := rail.SnapshotForEvolution(s.Ctx, emptyTraj, nil)
@@ -891,7 +893,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 	rail := s.newTestRail()
 
 	builder := mustIntegrationTestBuilder("session_team")
-		traj, buildErr := builder.Build()
+	traj, buildErr := builder.Build()
 	if buildErr != nil {
 		panic(buildErr)
 	}
@@ -914,7 +916,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 //
 // 对齐 Python: if not self.auto_scan: return
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RunEvolution_autoScan关闭() {
-	rail := s.newTestRail(evolution.WithTeamSkillAutoScan(false))
+	rail := s.newTestRail(evolution.WithTeamSkillSignalTrigger(false))
 	err := rail.RunEvolution(s.Ctx, nil, nil)
 	s.Require().NoError(err)
 }
@@ -1148,7 +1150,8 @@ func (s *TeamSkillEvolutionRailSuite) newTestRail(opts ...evolution.TeamSkillEvo
 // newTestRailWithDir 使用指定目录创建测试用 TeamSkillEvolutionRail。
 func (s *TeamSkillEvolutionRailSuite) newTestRailWithDir(skillsDir string, opts ...evolution.TeamSkillEvolutionRailOption) *evolution.TeamSkillEvolutionRail {
 	model := newTeamSkillMockModel(s.T())
-	allOpts := append([]evolution.TeamSkillEvolutionRailOption{}, opts...)
+	// signal_trigger 默认开：套件触发链/快照用例依赖开启态（Python 新版缺省 False）
+	allOpts := append([]evolution.TeamSkillEvolutionRailOption{evolution.WithTeamSkillSignalTrigger(true)}, opts...)
 	return evolution.NewTeamSkillEvolutionRail(
 		[]string{skillsDir},
 		model,

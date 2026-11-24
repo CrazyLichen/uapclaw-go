@@ -13,14 +13,14 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	harnessschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

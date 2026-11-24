@@ -11,8 +11,8 @@ import (
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

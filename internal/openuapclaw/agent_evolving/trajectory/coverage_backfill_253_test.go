@@ -229,7 +229,7 @@ func TestReadUsage_variants(t *testing.T) {
 // Python: spans.py read_rl_fields。
 func TestReadRLFields_variants(t *testing.T) {
 	span := map[string]any{"attributes": AttributesFromMap(map[string]any{
-		"evolution.rl.prompt_token_ids": []any{1, 2},
+		"evolution.rl.prompt_token_ids":     []any{1, 2},
 		"evolution.rl.completion_token_ids": []any{"3"},
 		"evolution.rl.logprobs":             []any{0.1, 0.2},
 		"evolution.rl.reward":               1.5,

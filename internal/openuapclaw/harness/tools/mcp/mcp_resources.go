@@ -3,10 +3,10 @@ package mcp
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

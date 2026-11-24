@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // newTestWorkflow 构造带两个组件的测试工作流基座。

@@ -2,9 +2,9 @@
 package reliability
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // exceptionWithRouteCase 构造携带模型组路由裁决 details 的异常。

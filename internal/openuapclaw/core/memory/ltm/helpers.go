@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	db "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/db"
 	kv "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/kv"
 	vector "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/common"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

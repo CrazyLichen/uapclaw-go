@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // TestNativeHarness_RunOnce拒绝已启动 验证 C15：supervisor 起来后不允许 run_once。

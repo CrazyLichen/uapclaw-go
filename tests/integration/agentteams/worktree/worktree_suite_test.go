@@ -11,19 +11,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	suite "github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	teamrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	awt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 	manifest "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
-	teamrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/shell"
-	suite "github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -80,10 +80,10 @@ type worktreeSuiteConfigurator struct {
 	manager  *worktree.WorktreeManager
 }
 
-func (f *worktreeSuiteConfigurator) TeamBackend() awt.TeamBackendAccess            { return f.backend }
-func (f *worktreeSuiteConfigurator) TeamName() string                              { return f.teamName }
-func (f *worktreeSuiteConfigurator) Spec() *atschema.TeamAgentSpec                 { return f.spec }
-func (f *worktreeSuiteConfigurator) WorktreeManager() *worktree.WorktreeManager    { return f.manager }
+func (f *worktreeSuiteConfigurator) TeamBackend() awt.TeamBackendAccess         { return f.backend }
+func (f *worktreeSuiteConfigurator) TeamName() string                           { return f.teamName }
+func (f *worktreeSuiteConfigurator) Spec() *atschema.TeamAgentSpec              { return f.spec }
+func (f *worktreeSuiteConfigurator) WorktreeManager() *worktree.WorktreeManager { return f.manager }
 
 // newFixture 建夹具：真 git 仓库 + DB 成员行 + lifecycle。
 func (s *WorktreeSuite) newFixture(sessionID string) (*awt.TeammateWorktreeLifecycle, *worktreeSuiteConfigurator, string) {
@@ -293,13 +293,13 @@ func (m *loopbackMessager) SendAndWait(ctx context.Context, nodeID string, paylo
 	}
 	resp := m.handler.Handle(ctx, req)
 	return map[string]any{
-		"success":        resp.Success,
-		"worktree_path":  resp.WorktreePath,
+		"success":         resp.Success,
+		"worktree_path":   resp.WorktreePath,
 		"worktree_branch": resp.WorktreeBranch,
-		"head_commit":    resp.HeadCommit,
-		"existed":        resp.Existed,
-		"exists":         resp.Exists,
-		"error":          resp.Error,
+		"head_commit":     resp.HeadCommit,
+		"existed":         resp.Existed,
+		"exists":          resp.Exists,
+		"error":           resp.Error,
 	}, nil
 }
 
@@ -355,4 +355,3 @@ func (s *WorktreeSuite) TestWorktreeSuite_I6_remote往返() {
 	s.Assert().True(backend.Remove(nodeCtx, created.WorktreePath, local, false))
 	s.Assert().False(backend.Exists(nodeCtx, created.WorktreePath))
 }
-

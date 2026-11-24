@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // TestNativeHarness_PauseResume空闲时幂等 验证 IDLE 下 Pause/Resume 是 no-op。

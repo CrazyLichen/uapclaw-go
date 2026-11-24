@@ -3,9 +3,9 @@ package context_engineer
 import (
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── RefreshTaskStateRuntime 测试 ────────────────────────────

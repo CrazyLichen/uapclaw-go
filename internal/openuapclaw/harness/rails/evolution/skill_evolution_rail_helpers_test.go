@@ -94,7 +94,7 @@ func TestActiveRequestRegularSkillNames(t *testing.T) {
 
 // TestSnapshotForEvolution_autoScan关闭 验证关闭扫描时不产生快照。
 func TestSnapshotForEvolution_autoScan关闭(t *testing.T) {
-	r := newConstructedRail(t, WithAutoScan(false))
+	r := newConstructedRail(t, WithSignalTrigger(false))
 	assert.Nil(t, r.SnapshotForEvolution(context.Background(), nil, nil))
 }
 
@@ -106,7 +106,7 @@ func TestSnapshotForEvolution_空轨迹(t *testing.T) {
 
 // TestRunEvolution_autoScan关闭时直接返回 验证关闭扫描时不做任何事。
 func TestRunEvolution_autoScan关闭时直接返回(t *testing.T) {
-	r := newConstructedRail(t, WithAutoScan(false))
+	r := newConstructedRail(t, WithSignalTrigger(false))
 	assert.NoError(t, r.RunEvolution(context.Background(), nil, nil))
 }
 

@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ateamcoordtypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	ateamprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -195,7 +195,7 @@ type TeamScheduler struct {
 	// IN_REVIEW CAS 成功才派发，派发后任务 IN_PROGRESS、板未清），故
 	// Wait 无「等待期间新 Add」窗口（勘误：早前注记的「WG 形态漏等」
 	// 系 Add 位置错误所致，非拓扑固有；2026-12-05 与用户复核 DB 守卫后改回 WG）。
-	ledgerMu sync.Mutex
+	ledgerMu         sync.Mutex
 	reviewFeedbackWG sync.WaitGroup
 	// templateLoader 绑定团队后端 workspace cache 的 A 类加载器（懒绑定；
 	// reviewer_* 模板读演进值）。Python: _template_loader_cache（scheduler.py L157-169）。

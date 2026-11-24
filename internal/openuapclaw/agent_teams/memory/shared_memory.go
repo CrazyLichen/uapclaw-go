@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

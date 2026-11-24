@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -165,7 +165,7 @@ func (r *TeamSkillCreateRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *
 
 // SnapshotForEvolution 返回基本快照。
 func (r *TeamSkillCreateRail) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	messages := collectMessagesFromTrajectory(traj)
+	messages := trajectoryToMessages(traj)
 	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
 

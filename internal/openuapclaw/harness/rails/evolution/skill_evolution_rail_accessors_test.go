@@ -62,7 +62,7 @@ func TestSkillRail_SnapshotForEvolution_空轨迹(t *testing.T) {
 
 // TestSkillRail_RunEvolution_关闭扫描 验证 auto_scan 关闭时直接返回 nil。
 func TestSkillRail_RunEvolution_关闭扫描(t *testing.T) {
-	r := newConstructedRail(t, WithAutoScan(false))
+	r := newConstructedRail(t, WithSignalTrigger(false))
 	assert.NoError(t, r.RunEvolution(context.Background(), nil, nil))
 }
 

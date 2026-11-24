@@ -8,13 +8,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // hookCfg 构造测试配置（LOW 也 local_steer，便于断言）。

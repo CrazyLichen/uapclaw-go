@@ -1,14 +1,12 @@
 package evolution
 
 import (
-	"encoding/json"
-	"maps"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -88,73 +86,23 @@ func normalizeMemberRole(role string) *string {
 	return &role
 }
 
-// collectMessagesFromTrajectory 从轨迹中提取消息列表。
-// 调用 ConversationSignalDetector.ConvertTrajectoryToMessages 获取消息列表，
-// 然后通过 normalizeCallbackMessages 规范化，最后去重。
-// Python: _collect_messages_from_trajectory(trajectory)
-//
-// Python 实现：
-//  1. ConversationSignalDetector.convert_trajectory_to_messages(trajectory) 获取 raw
-//  2. _normalize_callback_messages(raw) 规范化为 JSON 安全的 dict
-//  3. 去重（message not in deduped）
-func collectMessagesFromTrajectory(traj *trajectory.Trajectory) []map[string]any {
+// trajectoryToMessages 把规范轨迹投影为脱离的消息列表（显式字段集）。
+// Python: EvolutionRail._trajectory_to_messages（evolution_rail.py:1008）——
+// v2 切换后消息唯一来源是 span 重放（trajectory_to_messages），
+// 旧 _collect_messages_from_trajectory（signal detector + 规范化 + 去重）
+// 已在 Python v2 切换（09-24 cutover）中删除，Go 同改动删除（规则 8）。
+func trajectoryToMessages(traj *trajectory.Trajectory) []map[string]any {
 	if traj == nil {
 		return []map[string]any{}
 	}
-	// Python: raw = ConversationSignalDetector.convert_trajectory_to_messages(trajectory)
-	detector := &signal.ConversationSignalDetector{}
-	raw := detector.ConvertTrajectoryToMessages(traj)
-
-	// Python: normalized = cls._normalize_callback_messages(raw)
-	normalized := normalizeCallbackMessages(raw)
-
-	// Python: deduped = []; for message in normalized: if message not in deduped: deduped.append(message)
-	deduped := make([]map[string]any, 0, len(normalized))
-	for _, msg := range normalized {
-		if !containsMessage(deduped, msg) {
-			deduped = append(deduped, msg)
-		}
-	}
-	return deduped
-}
-
-// normalizeCallbackMessages 将回调可见的消息规范化为 JSON 安全的字典列表。
-// Python: _normalize_callback_messages(messages)
-//
-// Python 实现：
-//   - dict 消息直接使用
-//   - 对象消息：提取 role/content/tool_calls/name 字段
-//   - tool_calls 转为 [{id, name, arguments}] 格式
-//
-// Go 中 ConvertTrajectoryToMessages 返回的已经是 []map[string]any，
-// 所以大部分规范化已在 signal 包完成。这里只做浅拷贝防止外部修改。
-func normalizeCallbackMessages(messages []map[string]any) []map[string]any {
-	result := make([]map[string]any, 0, len(messages))
-	for _, msg := range messages {
-		// 浅拷贝，防止调用方修改原始数据
-		copied := maps.Clone(msg)
-		result = append(result, copied)
-	}
-	return result
-}
-
-// containsMessage 检查消息列表中是否已存在相同消息。
-// Python: message not in deduped（dict 的 __eq__ 比较）
-func containsMessage(list []map[string]any, msg map[string]any) bool {
-	msgJSON, err := json.Marshal(msg)
+	messages, err := trajectory.TrajectoryToMessages(traj, trajectory.DefaultEvolutionMessageFields, false)
 	if err != nil {
-		return false
+		// Python trajectory_to_messages 无错误路径（字段集为闭集常量）；
+		// Go 侧错误仅在字段集非法时出现，防御性记录并返回空。
+		logger.Warn(logComponent).Err(err).Msg("trajectory message replay failed")
+		return []map[string]any{}
 	}
-	for _, existing := range list {
-		existingJSON, err := json.Marshal(existing)
-		if err != nil {
-			continue
-		}
-		if string(msgJSON) == string(existingJSON) {
-			return true
-		}
-	}
-	return false
+	return messages
 }
 
 // formatSkillName 格式化技能名称用于日志和快照键。

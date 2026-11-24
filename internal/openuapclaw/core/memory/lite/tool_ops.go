@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

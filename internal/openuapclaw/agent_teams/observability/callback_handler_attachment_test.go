@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 )
 
 // TestAttachmentMarkOf_消息对象与map两种形态 验证附件标注判据。

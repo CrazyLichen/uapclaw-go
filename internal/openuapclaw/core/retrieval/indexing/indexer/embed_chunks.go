@@ -4,10 +4,10 @@ import (
 	"context"
 	"os"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	storeEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	retrievalEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

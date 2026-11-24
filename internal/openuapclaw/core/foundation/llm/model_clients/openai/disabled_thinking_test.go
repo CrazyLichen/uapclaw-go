@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/reasoning"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/reasoning"
 )
 
 // ──────────────────────────── 测试替身 ────────────────────────────

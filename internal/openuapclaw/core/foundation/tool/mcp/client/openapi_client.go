@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"gopkg.in/yaml.v3"
 )
 

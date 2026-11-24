@@ -7,9 +7,9 @@ import (
 
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
 // ToolTrackingRail 把工具调用/结果块写进会话流，供 CLI 渲染器以

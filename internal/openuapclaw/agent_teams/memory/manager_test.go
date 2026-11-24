@@ -14,13 +14,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

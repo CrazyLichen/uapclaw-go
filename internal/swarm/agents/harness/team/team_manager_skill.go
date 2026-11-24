@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -215,13 +215,14 @@ func (m *TeamManager) UpdateEvolutionConfig(ctx context.Context, config map[stri
 	// 步骤 3: 更新所有成员 SkillEvolutionRail 的 autoScan
 	for _, rails := range m.teamMemberSkillEvoRails {
 		for _, rail := range rails {
-			rail.SetAutoScan(autoScanEnabled)
+			rail.SetSignalTrigger(autoScanEnabled)
 		}
 	}
 
-	// 步骤 4: 更新所有 TeamSkillEvolutionRail 的 autoScan
+	// 步骤 4: 更新所有 TeamSkillEvolutionRail 的 autoScan（team rail 保持
+	// auto_scan 语义，Task 11 对照回收时按 Python 新版裁决）
 	for _, rail := range m.teamSkillRails {
-		rail.SetAutoScan(autoScanEnabled)
+		rail.SetSignalTrigger(autoScanEnabled)
 	}
 
 	// 步骤 5: 若 skill_create 未启用，反注册所有 skill create rails

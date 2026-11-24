@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	sasc "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

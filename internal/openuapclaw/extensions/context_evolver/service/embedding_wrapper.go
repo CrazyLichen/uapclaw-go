@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
-	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
+	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

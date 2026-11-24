@@ -10,10 +10,10 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
-	workspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	workspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -435,22 +435,35 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 			attrs["gen_ai.tool.definitions"] = tools
 		}
 
-		if err := r.builder.RecordSpan(map[string]any{
+		errRecord := r.builder.RecordSpan(map[string]any{
 			"name":       fmt.Sprintf("chat %s", modelName),
 			"attributes": attrs,
-		}); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("llm span record failed")
+		})
+		if errRecord != nil {
+			logger.Warn(logComponent).Err(errRecord).Msg("llm span record failed")
 		}
+	} else {
 	}
 
-	// 12-04：scope 窗口增量（D-25.2b-11 collector 源）。
-	// 2026-11-21 审计修复（17.6 基座缺口 1-4）：改经 drainForHook——
-	// quality gate / missing_required_span / recordExecutionIncrement 落地。
-	window, _, issues, derr := r.drainForHook(r.currentCapture, "llm", false)
+	// Python: after_model_call 以 merge=False drain，随后把 enrich 后的
+	// increment 合并回 scope 窗口（evolution_rail.py:400-407）——
+	// 消费 + 回并缺一不可：只消费不合并会让窗口丢失全部 llm span
+	//（15.24a 集成实证，main 既有红根因之一）。
+	window, increment, issues, derr := r.drainForHook(r.currentCapture, "llm", false)
 	if derr != nil {
 		logger.Warn(logComponent).Err(derr).Msg("scope window drain failed")
 	}
 	logCaptureIssues(issues)
+	if r.currentCapture != nil && increment != nil && len(issues) == 0 {
+		// Go 的 token 字段在记录时已挂 span（inputs.Response 就地可得），
+		// Python 的 _enrich_latest_llm 后处理等价物无需再补。
+		if merged, merr := r.mergeAdditions(r.currentCapture,
+			trajectory.IterSpans(increment.ToOTLP())); merr == nil {
+			window = merged
+		} else {
+			logger.Warn(logComponent).Err(merr).Msg("llm increment window merge failed")
+		}
+	}
 
 	// Python: 触发扩展点
 	if err := r.ext.OnAfterModelCall(ctx, cbc); err != nil {

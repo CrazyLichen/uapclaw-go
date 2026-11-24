@@ -2,10 +2,10 @@ package rails
 
 import (
 	hllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/modalityprobe"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // 本文件为 harness rails 共享的原生图片输入策略助手。

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"testing"
 
-	cerails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	cerails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

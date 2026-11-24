@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // newTestClientEmbed 创建测试用 BaseClientEmbed。

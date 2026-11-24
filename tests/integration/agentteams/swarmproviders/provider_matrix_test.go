@@ -4,6 +4,7 @@
 // 对应 tool / rail / subagent（spec §7.2 七用例）。
 //
 // 链路（真实消费路径，无被测子系统 mock）：
+//
 //	config.yaml 开关 → swarm.EnrichTeamSpecForSwarmSeed（真实 enrich，含
 //	legacyConfigMap 读盘）→ swarm.RegisterSwarmProviders（三步注册段）→
 //	agentcore.ResolveDeepAgentSpecParts（RailSpec/BuiltinToolSpec/
@@ -29,10 +30,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	agentteamsharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -383,4 +384,3 @@ func declaredRailTypes(rails []hschema.RailSpec) map[string]bool {
 	}
 	return out
 }
-

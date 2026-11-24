@@ -8,14 +8,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
-	subagentrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
-	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	resources_manager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/ability"
@@ -23,7 +18,12 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	toolskillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
+	subagentrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
+	hres "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // 插件/模板扩展热绑定：把 resolve 产物挂到 live DeepAgent 上，并支持逆序卸载。

@@ -10,16 +10,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	atharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	taskloop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
 	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

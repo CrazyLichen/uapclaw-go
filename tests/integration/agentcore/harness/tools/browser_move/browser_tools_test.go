@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	browser "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/browser_move"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	browser "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/browser_move"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

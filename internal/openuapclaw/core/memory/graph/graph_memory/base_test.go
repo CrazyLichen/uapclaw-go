@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
@@ -17,7 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

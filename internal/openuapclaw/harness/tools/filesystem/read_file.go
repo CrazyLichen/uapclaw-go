@@ -17,11 +17,11 @@ import (
 	"unicode/utf8"
 
 	pdf "github.com/ledongthuc/pdf"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -21,8 +23,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/prompts/entity_extraction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction/registry"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"golang.org/x/sync/errgroup"
 )
 

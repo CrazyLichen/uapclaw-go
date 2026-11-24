@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 

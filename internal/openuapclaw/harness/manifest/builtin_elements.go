@@ -21,9 +21,11 @@ package manifest
 import (
 	"strings"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	clirails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/rails"
+	harnessobservability "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/observability"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
@@ -35,7 +37,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -164,15 +165,17 @@ func registerCoreRailProviders() {
 	hschema.RegisterRailProvider("core.tool_tracking", func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
 		return clirails.NewToolTrackingRail(), nil
 	})
-	// core.lsp / core.observability：基座 Go 未实施 ⤴️15.20
-	// （Python: _build_lsp_rail 从 context.project_dir 根；_build_observability_rail
-	// 双道门 extra 安装 + 初始化，任一不满足 → None）
-	for _, name := range []string{"core.lsp", "core.observability"} {
-		name := name
-		hschema.RegisterRailProvider(name, func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
-			return nil, nil
-		})
-	}
+	// core.lsp：基座 Go 未实施 ⤴️15.20（Python: _build_lsp_rail 从
+	// context.project_dir 根）
+	hschema.RegisterRailProvider("core.lsp", func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
+		return nil, nil
+	})
+	// core.observability → AgentObservabilityRail（15.24a 落地，替换原 nil 占位）
+	// Python: _build_observability_rail 双道门（observability extra 安装 +
+	// is_initialized，任一不满足 → None）——MaybeAgentObservabilityRail 同款守卫。
+	hschema.RegisterRailProvider("core.observability", func(params map[string]any, ctx hschema.BuildContextInterface) (any, error) {
+		return harnessobservability.MaybeAgentObservabilityRail(), nil
+	})
 }
 
 // registerCoreToolProviders 注册 core.* tool provider。

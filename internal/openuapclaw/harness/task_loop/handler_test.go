@@ -9,8 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

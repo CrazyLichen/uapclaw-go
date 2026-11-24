@@ -3,11 +3,11 @@ package agents
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 )
 
 // syncPromptAttachments 把动态提示词同步进历史，并返回同步是否成功。

@@ -436,4 +436,3 @@ func (s *SessionMessageStoreSuite) TestContinueQueuedForTarget() {
 }
 
 // strPtr 便捷指针。
-

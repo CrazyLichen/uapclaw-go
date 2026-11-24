@@ -3,10 +3,10 @@ package memory
 import (
 	"os"
 
-	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/external"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

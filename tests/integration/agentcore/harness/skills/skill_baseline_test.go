@@ -13,10 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
-	skilltools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/skills"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/ability"
@@ -26,7 +24,9 @@ import (
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
+	skilltools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/skills"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

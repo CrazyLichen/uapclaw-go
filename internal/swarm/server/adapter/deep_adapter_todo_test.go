@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
 	// （生产路径经 sysop_builder import 链触发；测试直连 sysop 需显式引入）

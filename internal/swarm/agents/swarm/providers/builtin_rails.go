@@ -1,8 +1,8 @@
 package providers
 
 import (
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )

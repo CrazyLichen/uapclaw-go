@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	teamruntime "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/multi_agent/team_runtime"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

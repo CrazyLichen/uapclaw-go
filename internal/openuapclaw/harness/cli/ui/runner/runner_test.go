@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
 )
 
 // captureStdout 截获 stdout。

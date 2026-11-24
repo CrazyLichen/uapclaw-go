@@ -4,8 +4,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

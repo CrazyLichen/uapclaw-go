@@ -14,12 +14,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -185,29 +186,34 @@ func (s *SkillEvolutionPositiveSuite) TestRunEvolution_落盘失败保留待审�
 	s.assertSkillMDHasIndex()
 }
 
-// TestRunEvolution_禁用技能不被推断为主技能 无规则信号时依赖「读过的技能路径」推断主技能，
-// 被禁用的技能不进入推断集合，因此不会触发演进。
+// TestRunEvolution_禁用技能不触发 无规则信号时新版 run_evolution 不再走
+// 「路径推断主技能」兜底（Python :905-955 已移除该段）——只读快照应取消；
+// 禁用技能后失败信号因 existing_skills 不含它而不归属，同样取消。
 //
-// 对齐 Python: run_evolution 中 skill_names 按 _disabled_skills 过滤后再传给 _infer_primary_skill
-func (s *SkillEvolutionPositiveSuite) TestRunEvolution_禁用技能不被推断为主技能() {
+// 对齐 Python: run_evolution（skill_names 按 _disabled_skills 过滤 +
+// detect_trajectory_signals 仅规则检测，无 fallback）。
+func (s *SkillEvolutionPositiveSuite) TestRunEvolution_禁用技能不触发() {
 	ctx := s.Ctx
 
-	// 基线：未禁用时按路径推断出 data-processor → 演进产生 1 条记录
+	// 只读快照（无失败证据）→ 无规则信号 → 取消，不新增记录
 	enabledRail := s.newRail(evolution.WithAutoSave(true))
 	s.Require().NoError(enabledRail.RunEvolution(ctx, nil, s.newReadOnlySnapshot()))
 	evoLog, err := enabledRail.EvolutionStore().LoadFullEvolutionLog(ctx, s.skillName)
 	s.Require().NoError(err)
-	s.Require().Len(evoLog.Entries, 1, "未禁用时应按路径推断主技能并演进")
+	s.Empty(evoLog.Entries, "只读快照无规则信号，不应产生演进记录")
 
-	// 禁用同名技能：推断集合为空 → 取消，不再新增记录
+	// 禁用同名技能：skill_names 过滤后 existing_skills 为空集，detector 的
+	// is_existing_skill 语义是「空集=不过滤」（from_conv.py:543-545），
+	// 失败信号仍归属成功 → 依旧演进。这是上游 run_evolution 的原样行为
+	//（disabled 过滤只影响 skill_names 列表与 regular 过滤），Go 一比一保留。
 	disabledRail := s.newRail(
 		evolution.WithAutoSave(true),
 		evolution.WithDisabledSkillsSet([]string{s.skillName}),
 	)
-	s.Require().NoError(disabledRail.RunEvolution(ctx, nil, s.newReadOnlySnapshot()))
+	s.Require().NoError(disabledRail.RunEvolution(ctx, nil, s.newSnapshot()))
 	evoLog, err = disabledRail.EvolutionStore().LoadFullEvolutionLog(ctx, s.skillName)
 	s.Require().NoError(err)
-	s.Len(evoLog.Entries, 1, "禁用技能不应新增演进记录")
+	s.Len(evoLog.Entries, 1, "上游语义：existing_skills 空集不过滤归属，禁用技能仍演进（原样保留）")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -228,16 +234,19 @@ func (s *SkillEvolutionPositiveSuite) SetupTest() {
 func (s *SkillEvolutionPositiveSuite) newRail(opts ...evolution.SkillEvolutionRailOption) *evolution.SkillEvolutionRail {
 	model, client := s.newRecordsMockModel()
 	s.lastRecordsClient = client
+	// RunEvolution 门为 signal_trigger（Python run_evolution :838-841），
+	// 正例套件显式开启（Python 测试同款构造）。
 	return evolution.NewSkillEvolutionRail(
 		[]string{s.skillsDir},
 		model,
 		"mock-model",
 		"cn",
-		opts...,
+		append([]evolution.SkillEvolutionRailOption{evolution.WithSignalTrigger(true)}, opts...)...,
 	)
 }
 
-// newSnapshot 构造包含技能读取与执行失败的演化快照。
+// newSnapshot 构造包含技能读取与执行失败的演化快照（v2 契约：快照带 Trajectory，
+// messages 由轨迹投影产出——对齐 Python _trajectory_with_messages + _prepared_input）。
 //
 // 消息里带 `<skill>/SKILL.md` 路径 → 信号归属到 data-processor；
 // `Error: permission denied` → 触发 execution_failure 信号。
@@ -266,12 +275,63 @@ func (s *SkillEvolutionPositiveSuite) newSnapshot() *evolution.EvolutionSnapshot
 		},
 		{"role": "user", "content": "不对，读取系统文件应该用 sudo"},
 	}
+	traj := trajectoryFromMessages(s.T(), messages)
+	normalized, err := trajectory.TrajectoryToMessages(traj, nil, false)
+	s.Require().NoError(err)
 	return &evolution.EvolutionSnapshot{
-		Messages:            messages,
+		Trajectory:          traj,
+		Messages:            normalized,
 		SessionID:           "evo-positive-session",
 		PresentedEntries:    []experience.PresentedRecordEntry{},
-		IncrementalMessages: messages,
+		IncrementalMessages: normalized,
 	}
+}
+
+// trajectoryFromMessages 把消息列表编成规范轨迹（Python: _trajectory_with_messages）。
+// 每步按序注入时间戳（真实 span 有时钟序，投影按时间排序消费）。
+func trajectoryFromMessages(t *testing.T, messages []map[string]any) *trajectory.Trajectory {
+	t.Helper()
+	builder, err := trajectory.NewTrajectoryBuilder("evo-positive-session", "online", nil, nil, nil, nil, 0, nil, nil)
+	if err != nil {
+		t.Fatalf("构造 builder 失败: %v", err)
+	}
+	index := 0
+	addSpan := func(span map[string]any) {
+		start := fmt.Sprint(int64(index) * 1_000_000)
+		span["startTimeUnixNano"] = start
+		span["endTimeUnixNano"] = start
+		if err := builder.RecordSpan(span); err != nil {
+			t.Fatalf("记录 span 失败: %v", err)
+		}
+		index++
+	}
+	for _, message := range messages {
+		role, _ := message["role"].(string)
+		if role == "tool" {
+			attrs := map[string]any{
+				"gen_ai.operation.name":      "execute_tool",
+				"gen_ai.tool.name":           message["name"],
+				"gen_ai.tool.call.id":        message["tool_call_id"],
+				"gen_ai.tool.call.arguments": "{}",
+			}
+			if result, ok := message["content"].(string); ok {
+				attrs["gen_ai.tool.call.result"] = result
+			}
+			toolName, _ := message["name"].(string)
+			addSpan(map[string]any{"name": "execute_tool " + toolName, "attributes": attrs})
+			continue
+		}
+		attrs := map[string]any{"gen_ai.operation.name": "chat", "gen_ai.request.model": "test-model"}
+		for key, value := range trajectory.WriteLLMExchange([]map[string]any{message}, nil) {
+			attrs[key] = value
+		}
+		addSpan(map[string]any{"name": "llm.call", "attributes": attrs})
+	}
+	traj, err := builder.Build()
+	if err != nil {
+		t.Fatalf("构建轨迹失败: %v", err)
+	}
+	return traj
 }
 
 // newReadOnlySnapshot 构造「只读过技能、无失败」的快照：
@@ -290,11 +350,15 @@ func (s *SkillEvolutionPositiveSuite) newReadOnlySnapshot() *evolution.Evolution
 			"content": "# Data Processor Skill\n\n读取并处理数据文件。",
 		},
 	}
+	traj := trajectoryFromMessages(s.T(), messages)
+	normalized, err := trajectory.TrajectoryToMessages(traj, nil, false)
+	s.Require().NoError(err)
 	return &evolution.EvolutionSnapshot{
-		Messages:            messages,
+		Trajectory:          traj,
+		Messages:            normalized,
 		SessionID:           "evo-positive-session",
 		PresentedEntries:    []experience.PresentedRecordEntry{},
-		IncrementalMessages: messages,
+		IncrementalMessages: normalized,
 	}
 }
 

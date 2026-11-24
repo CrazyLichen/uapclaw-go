@@ -14,14 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	// blank import 触发 fileguard / netguard 的 init（注册判定器工厂）。
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/fileguard"
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/netguard"
-	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

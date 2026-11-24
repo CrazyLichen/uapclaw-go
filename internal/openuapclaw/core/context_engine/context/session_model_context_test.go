@@ -6,13 +6,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
 	ceservice "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
 	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

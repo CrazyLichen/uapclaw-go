@@ -3,9 +3,9 @@ package prompts
 import (
 	"strings"
 
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

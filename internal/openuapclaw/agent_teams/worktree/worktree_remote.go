@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	agent_teams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agent_teams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 )
 
@@ -332,17 +332,17 @@ func responseFromPayload(data map[string]any) (*WorktreeRemoteResponse, error) {
 // worktreeConfigToMap WorktreeConfig 序列化（Python model_dump）。
 func worktreeConfigToMap(cfg worktree.WorktreeConfig) map[string]any {
 	return map[string]any{
-		"enabled":                    cfg.Enabled,
-		"base_dir":                   cfg.BaseDir,
-		"base_dir_is_worktrees_dir":  cfg.BaseDirIsWorktreesDir,
-		"sparse_paths":               cfg.SparsePaths,
-		"symlink_directories":        cfg.SymlinkDirectories,
-		"include_patterns":           cfg.IncludePatterns,
-		"cleanup_after_days":         cfg.CleanupAfterDays,
-		"auto_cleanup_on_shutdown":   cfg.AutoCleanupOnShutdown,
-		"lifecycle_policy":           string(cfg.LifecyclePolicy),
-		"repo_lock":                  cfg.RepoLock,
-		"repo_lock_timeout":          cfg.RepoLockTimeout,
-		"longpaths_support":          cfg.LongpathsSupport,
+		"enabled":                   cfg.Enabled,
+		"base_dir":                  cfg.BaseDir,
+		"base_dir_is_worktrees_dir": cfg.BaseDirIsWorktreesDir,
+		"sparse_paths":              cfg.SparsePaths,
+		"symlink_directories":       cfg.SymlinkDirectories,
+		"include_patterns":          cfg.IncludePatterns,
+		"cleanup_after_days":        cfg.CleanupAfterDays,
+		"auto_cleanup_on_shutdown":  cfg.AutoCleanupOnShutdown,
+		"lifecycle_policy":          string(cfg.LifecyclePolicy),
+		"repo_lock":                 cfg.RepoLock,
+		"repo_lock_timeout":         cfg.RepoLockTimeout,
+		"longpaths_support":         cfg.LongpathsSupport,
 	}
 }

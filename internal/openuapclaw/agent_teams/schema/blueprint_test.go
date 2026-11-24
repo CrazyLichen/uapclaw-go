@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	harnessschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	harnessschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestNewTeamModelConfig 测试默认 TeamModelConfig 创建

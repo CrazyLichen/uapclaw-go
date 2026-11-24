@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	swcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 

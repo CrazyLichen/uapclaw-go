@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	hpbase "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // ──────────────────────────── 签名收窄（本轮新增） ────────────────────────────

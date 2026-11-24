@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
-	memoryop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/memory_call"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
+	memoryop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/memory_call"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

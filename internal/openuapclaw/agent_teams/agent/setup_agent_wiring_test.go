@@ -8,8 +8,8 @@ import (
 
 	teamrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestSetupAgent_注册团队railProvider 对齐上游 agent_configurator.py:711。

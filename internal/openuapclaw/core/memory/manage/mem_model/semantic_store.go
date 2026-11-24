@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	embedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	vector "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -1,8 +1,8 @@
 package agent
 
 import (
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // MemberRuntime：团队成员「大脑缝」接口，一比一移植 Python

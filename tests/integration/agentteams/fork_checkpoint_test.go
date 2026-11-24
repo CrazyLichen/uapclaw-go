@@ -12,16 +12,16 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
@@ -35,14 +35,14 @@ isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 // 真 DeepAgent（MockLLM provider）+ 真 context engine + 真 session state，
 // mock 只在 LLM 边界（本套件甚至不触发 LLM 调用）。
 type ForkCheckpointSuite struct {
-isuite.AgentSuite
+	isuite.AgentSuite
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestForkCheckpointSuite 套件入口。
 func TestForkCheckpointSuite(t *testing.T) {
-suite.Run(t, new(ForkCheckpointSuite))
+	suite.Run(t, new(ForkCheckpointSuite))
 }
 
 // ──────────────────────────── 测试 ────────────────────────────

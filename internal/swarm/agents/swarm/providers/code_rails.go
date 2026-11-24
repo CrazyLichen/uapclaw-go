@@ -1,13 +1,13 @@
 package providers
 
 import (
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
+	"github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -69,17 +69,34 @@ func TestEvolutionRailSuite(t *testing.T) {
 	suite.Run(t, new(EvolutionRailSuite))
 }
 
-// TestEvolutionRail_轨迹收集生命周期 测试完整 invoke 生命周期的轨迹收集。
+// TestTrajectoryRail_契约显式 测试轨迹归档轨道的显式契约。
 //
-// 对齐 Python: TestEvolutionRail.test_trajectory_collection_basic
-func (s *EvolutionRailSuite) TestEvolutionRail_轨迹收集生命周期() {
+// 对齐 Python: test_trajectory_recorder_contract_is_explicit——
+// TrajectoryRail 是 EvolutionRail、priority=10、store 为显式配置实例。
+func (s *EvolutionRailSuite) TestTrajectoryRail_契约显式() {
 	store := trajectory.NewInMemoryTrajectoryStore()
-	rail := evolution.NewEvolutionRail(testExtension{},
+	rail := evolution.NewTrajectoryRail(evolution.WithTrajectoryStore(store),
+		evolution.WithEvolutionTrigger(evolution.TriggerNone))
+
+	var base *evolution.EvolutionRail = rail.EvolutionRail
+	s.NotNil(base)
+	s.Equal(10, rail.Priority())
+	s.NotNil(rail.GetExtension(), "归档 ext 包装已换装")
+}
+
+// TestTrajectoryRail_生命周期归档至多一次 完整 invoke 生命周期经归档
+// 轨道恰好落盘一份轨迹（含 llm/tool 两类 span）。
+//
+// 对齐 Python: trajectory_rail.py 归档语义（accumulator+身份去重+AfterInvoke
+// 至多一次落盘）。
+func (s *EvolutionRailSuite) TestTrajectoryRail_生命周期归档至多一次() {
+	store := trajectory.NewInMemoryTrajectoryStore()
+	rail := evolution.NewTrajectoryRail(
 		evolution.WithTrajectoryStore(store),
-		evolution.WithAsyncEvolution(false),
+		evolution.WithEvolutionTrigger(evolution.TriggerNone),
 	)
 
-	// 1. BeforeInvoke — 创建 builder
+	// 1. BeforeInvoke — 创建 builder 与采集登记
 	cbc := newCBC(nil, &agentinterfaces.InvokeInputs{ConversationID: "conv_123"}, nil)
 	err := rail.BeforeInvoke(s.Ctx, cbc)
 	s.Require().NoError(err)
@@ -108,23 +125,16 @@ func (s *EvolutionRailSuite) TestEvolutionRail_轨迹收集生命周期() {
 	err = rail.AfterToolCall(s.Ctx, cbc)
 	s.Require().NoError(err)
 
-	// 4. AfterInvoke — 保存轨迹
+	// 4. AfterInvoke — 归档至多一次落盘
 	cbc = newCBC(nil, &agentinterfaces.InvokeInputs{ConversationID: "conv_123"}, nil)
 	err = rail.AfterInvoke(s.Ctx, cbc)
 	s.Require().NoError(err)
 
-	// 验证轨迹保存（span 模型读面）
+	// 验证归档（span 模型读面）：一份轨迹，含 llm 与 tool 两类 span。
 	trajs, queryErr := store.Query("", "", "", "", "", "online")
 	s.Require().NoError(queryErr)
-	s.Len(trajs, 1)
-	traj := trajs[0]
-	if traj.SessionID() != nil {
-		s.Equal("conv_123", *traj.SessionID())
-	}
-	spans := trajectory.IterSpans(traj)
-	s.Len(spans, 2)
-
-	// 检查 LLM span（按时间序：模型调用在前）
+	s.Require().Len(trajs, 1)
+	spans := trajectory.IterSpans(trajs[0])
 	categories := make([]string, 0, len(spans))
 	for _, span := range spans {
 		categories = append(categories, trajectory.SpanCategory(span))
@@ -158,8 +168,11 @@ func (s *EvolutionRailSuite) TestEvolutionRail_无Builder时AfterModelCall空操
 }
 
 // TestEvolutionRail_同Session复用Builder 测试同 session 的 builder 复用。
+// 基类 after_invoke 不落 store（归档属 TrajectoryRail 覆写，Python 同语义），
+// 断言归档 store 为空。
 //
-// 对齐 Python: TestEvolutionRailAccumulation.test_same_session_default_keeps_builder_after_invoke
+// 对齐 Python: evolution_rail.py after_invoke（不落 store）+
+// test_evolution_rail.py v2 契约（基类无归档路径）。
 func (s *EvolutionRailSuite) TestEvolutionRail_同Session复用Builder() {
 	store := trajectory.NewInMemoryTrajectoryStore()
 	rail := evolution.NewEvolutionRail(testExtension{},
@@ -182,11 +195,11 @@ func (s *EvolutionRailSuite) TestEvolutionRail_同Session复用Builder() {
 	cbc = newCBC(nil, &agentinterfaces.InvokeInputs{ConversationID: "conv_multi"}, nil)
 	s.Require().NoError(rail.AfterInvoke(s.Ctx, cbc))
 
-	// builder 不应为 nil（同 session 复用）
+	// builder 不应为 nil（同 session 复用）；基类不落归档 store
 	s.NotNil(rail.Builder())
 	trajsMulti, qErr := store.Query("", "conv_multi", "", "", "", "")
 	s.Require().NoError(qErr)
-	s.Len(trajsMulti, 1)
+	s.Len(trajsMulti, 0)
 }
 
 // TestEvolutionRail_新Session替换Builder 测试不同 session 创建新 builder。

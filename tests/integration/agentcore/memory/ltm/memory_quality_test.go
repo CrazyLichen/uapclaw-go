@@ -19,6 +19,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
@@ -28,7 +29,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/ltm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/mem_model"
 	migrationop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

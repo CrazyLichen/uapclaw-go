@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

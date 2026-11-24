@@ -11,9 +11,9 @@ import (
 	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -16,12 +16,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	skilluse "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -112,7 +112,7 @@ func (s *SkillEvolutionTriggerSuite) TestAutoScan关闭不触发演化() {
 	ctx := s.Ctx
 	client, rail := s.newEvolutionRail(
 		evolution.WithAutoSave(true),
-		evolution.WithAutoScan(false),
+		evolution.WithSignalTrigger(false),
 	)
 
 	agent := s.newAgent(rail)
@@ -174,7 +174,10 @@ func (s *SkillEvolutionTriggerSuite) newEvolutionRail(
 	)
 	s.Require().NoError(err)
 
-	rail := evolution.NewSkillEvolutionRail([]string{s.skillsDir}, model, "mock-model", "cn", opts...)
+	// signal_trigger 显式开启：after_invoke→SnapshotForEvolution→RunEvolution
+	// 触发链的门槛（Python 新版缺省 False，测试构造处显式开）。
+	rail := evolution.NewSkillEvolutionRail([]string{s.skillsDir}, model, "mock-model", "cn",
+		append([]evolution.SkillEvolutionRailOption{evolution.WithSignalTrigger(true)}, opts...)...)
 	return client, rail
 }
 

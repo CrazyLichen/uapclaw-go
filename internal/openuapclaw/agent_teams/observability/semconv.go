@@ -176,6 +176,24 @@ const (
 	OJGenAIResponseTotalLatencyMs = "openjiuwen.gen_ai.response.total_latency_ms"
 	// OJToolAuthoritative 工具可归位到引发它的推理请求
 	OJToolAuthoritative = "openjiuwen.tool.authoritative"
+	// OJRequestRetryCount 传输层在本次响应前完成的重试次数
+	// Python: semconv.py:67 OJ_REQUEST_RETRY_COUNT
+	OJRequestRetryCount = "openjiuwen.request.retry_count"
+	// OJModelGroupID 模型组标识
+	// Python: semconv.py:71 OJ_MODEL_GROUP_ID
+	OJModelGroupID = "openjiuwen.model_group.id"
+	// OJModelGroupRouteID 模型组路由标识
+	// Python: semconv.py:72 OJ_MODEL_GROUP_ROUTE_ID
+	OJModelGroupRouteID = "openjiuwen.model_group.route_id"
+	// OJGenAIResponseTimeToFirstByteMs 响应首字节时延（毫秒）
+	// Python: semconv.py:140 OJ_GEN_AI_RESPONSE_TIME_TO_FIRST_BYTE_MS
+	OJGenAIResponseTimeToFirstByteMs = "openjiuwen.gen_ai.response.time_to_first_byte_ms"
+	// OJContextOperationID 上下文操作标识（压缩等）
+	// Python: semconv.py:73 OJ_CONTEXT_OPERATION_ID
+	OJContextOperationID = "openjiuwen.context.operation.id"
+	// OJCompactionNumber 压缩操作在主体内的序号（1 起）
+	// Python: semconv.py:78 OJ_COMPACTION_NUMBER
+	OJCompactionNumber = "openjiuwen.compaction.number"
 	// ErrorType 错误类别
 	ErrorType = "error.type"
 )
@@ -235,6 +253,22 @@ const (
 	GenAIInputMessages = "gen_ai.input.messages"
 	// GenAIOutputMessages 响应消息列表（JSON）
 	GenAIOutputMessages = "gen_ai.output.messages"
+	// GenAIAgentID Agent 标识（Python semconv.py GEN_AI_AGENT_ID）
+	GenAIAgentID = "gen_ai.agent.id"
+	// GenAIAgentDescription Agent 描述（GEN_AI_AGENT_DESCRIPTION）
+	GenAIAgentDescription = "gen_ai.agent.description"
+	// GenAIAgentVersion Agent 版本（GEN_AI_AGENT_VERSION）
+	GenAIAgentVersion = "gen_ai.agent.version"
+	// GenAIToolDescription 工具描述（GEN_AI_TOOL_DESCRIPTION）
+	GenAIToolDescription = "gen_ai.tool.description"
+	// GenAIToolType 工具类别（GEN_AI_TOOL_TYPE）
+	GenAIToolType = "gen_ai.tool.type"
+	// OJToolResourceID 工具资源 id（OJ_TOOL_RESOURCE_ID）
+	OJToolResourceID = "openjiuwen.tool.resource.id"
+	// OJToolProtocol 工具协议（OJ_TOOL_PROTOCOL）
+	OJToolProtocol = "openjiuwen.tool.protocol"
+	// DATaskLoopEvent 触发任务迭代的事件（DA_TASK_LOOP_EVENT）
+	DATaskLoopEvent = "deepagent.task.loop_event"
 )
 
 // ToolReportedFailure 工具结果报告自身失败（区别于框架侧异常）。
@@ -244,6 +278,10 @@ const ToolReportedFailure = "ToolReportedFailure"
 // TrajectorySpanSchemaVersion span 级单一契约版本。
 // Python: extensions/observability/semconv.py:83
 const TrajectorySpanSchemaVersion = "2"
+
+// TrajectoryRecordKindInference 推理记录类别。
+// Python: semconv.py:231 "inference"
+const TrajectoryRecordKindInference = "inference"
 
 // TrajectoryRecordKinds OJ_TRAJECTORY_RECORD_KIND 取值闭集。
 // Python: semconv.py:229-232

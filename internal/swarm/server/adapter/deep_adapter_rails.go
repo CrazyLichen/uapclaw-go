@@ -429,10 +429,10 @@ func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any) {
 		return
 	}
 	d.skillEvolutionRail.UpdateLLM(d.modelSnapshot(), d.defaultModelName)
-	d.skillEvolutionRail.SetAutoScan(evolutionAutoScan(config))
+	d.skillEvolutionRail.SetSignalTrigger(evolutionAutoScan(config))
 	logger.Info(logComponent).
 		Str("model", d.defaultModelName).
-		Bool("auto_scan", d.skillEvolutionRail.AutoScan()).
+		Bool("auto_scan", d.skillEvolutionRail.SignalTrigger()).
 		Msg("SkillEvolutionRail hot-updated in place")
 }
 
@@ -479,7 +479,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		model,
 		modelName,
 		d.resolveRuntimeLanguage(),
-		evolution.WithAutoScan(evolutionAutoScan(cache)),
+		evolution.WithSignalTrigger(evolutionAutoScan(cache)),
 		// auto_save 恒 false：rail 构造默认 true（skill_evolution_rail.go:192），
 		// 省略该选项等于放开审批，必须显式传 false。
 		evolution.WithAutoSave(false),
@@ -488,7 +488,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 
 	logger.Info(logComponent).
 		Str("model", modelName).
-		Bool("auto_scan", rail.AutoScan()).
+		Bool("auto_scan", rail.SignalTrigger()).
 		Msg("SkillEvolutionRail created")
 	return rail
 }

@@ -1,8 +1,8 @@
 package harness
 
 import (
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

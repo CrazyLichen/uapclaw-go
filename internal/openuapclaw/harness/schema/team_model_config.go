@@ -2,9 +2,9 @@ package schema
 
 import (
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

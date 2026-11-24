@@ -11,6 +11,7 @@ import (
 	"fmt"
 	externalbackends "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
@@ -21,7 +22,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"go.opentelemetry.io/otel/attribute"
 )
 

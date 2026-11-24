@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	cmt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/coding_memory"
-	gmt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/memory"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cmt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/coding_memory"
+	gmt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/memory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

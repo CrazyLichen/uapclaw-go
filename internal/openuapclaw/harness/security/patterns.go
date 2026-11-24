@@ -11,10 +11,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/toolguard"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security/toolguard"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

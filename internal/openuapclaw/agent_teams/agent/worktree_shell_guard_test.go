@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	manifest "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestApplyTeamWorktreeShellGuard_合并既有deny 已有 sys_operation rail 时合并模式且保留原模式。

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -133,7 +133,10 @@ func TestWatchTeamEvolutionAndPushTeam_推送出口(t *testing.T) {
 	})
 
 	// 构造 rail 并注入一个审批事件
-	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh")
+	// signal_trigger 显式开启：watcher 的 ensureTeamEvolutionWatcher 门
+	// 依 SignalTrigger（Python 新版缺省 False）
+	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh",
+		coreevolution.WithTeamSkillSignalTrigger(true))
 	approvalEvt := &stream.OutputSchema{
 		Type: "team",
 		Payload: map[string]any{
@@ -194,8 +197,11 @@ func TestWatchTeamEvolutionAndPushTeam_未注入推送函数(t *testing.T) {
 	d := NewDeepAdapter()
 	// 不注入 SetSendPushFunc（实例级与默认级均 nil）
 
-	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh")
-	rail.SetAutoScan(false) // 立即退出，避免轮询
+	// signal_trigger 显式开启：watcher 的 ensureTeamEvolutionWatcher 门
+	// 依 SignalTrigger（Python 新版缺省 False）
+	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh",
+		coreevolution.WithTeamSkillSignalTrigger(true))
+	rail.SetSignalTrigger(false) // 立即退出，避免轮询
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
@@ -230,8 +236,11 @@ func TestWatchTeamEvolutionAndPushTeam_autoScan关闭(t *testing.T) {
 
 	// rail 带 auto_scan=false，但先有一个 progress 事件激活 active cycle
 	// 简化：直接验证关闭路径不 panic
-	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh")
-	rail.SetAutoScan(false)
+	// signal_trigger 显式开启：watcher 的 ensureTeamEvolutionWatcher 门
+	// 依 SignalTrigger（Python 新版缺省 False）
+	rail := coreevolution.NewTeamSkillEvolutionRail([]string{t.TempDir()}, nil, "test-model", "zh",
+		coreevolution.WithTeamSkillSignalTrigger(true))
+	rail.SetSignalTrigger(false)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()

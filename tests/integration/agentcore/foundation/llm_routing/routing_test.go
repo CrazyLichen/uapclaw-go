@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/support"
 	intelliroutererrors "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter"
 	intelliroutertypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
@@ -23,7 +24,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/intellirouter"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/routing"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

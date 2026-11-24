@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -23,7 +23,7 @@ func newApprovalAdapter(t *testing.T, autoScan bool) *DeepAdapter {
 		d.model,
 		"test-model",
 		"cn",
-		coreevolution.WithAutoScan(autoScan),
+		coreevolution.WithSignalTrigger(autoScan),
 		coreevolution.WithAutoSave(false),
 	)
 	return d

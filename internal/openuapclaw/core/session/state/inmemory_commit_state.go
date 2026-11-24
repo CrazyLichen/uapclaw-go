@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

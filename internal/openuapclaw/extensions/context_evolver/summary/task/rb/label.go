@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

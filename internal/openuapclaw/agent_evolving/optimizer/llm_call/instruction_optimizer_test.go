@@ -3,10 +3,10 @@ package llm_call
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/llm_call"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

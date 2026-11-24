@@ -1,9 +1,9 @@
 package llm_call
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

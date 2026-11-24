@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/openai"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

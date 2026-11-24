@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

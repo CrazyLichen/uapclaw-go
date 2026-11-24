@@ -16,13 +16,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/experts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor/recall"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/resources"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

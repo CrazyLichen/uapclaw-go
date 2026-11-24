@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/file_connector"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/file_connector"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

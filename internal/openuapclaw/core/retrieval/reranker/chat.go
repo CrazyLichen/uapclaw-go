@@ -5,11 +5,11 @@ import (
 	"math"
 	"strings"
 
-	reranker "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
+	reranker "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

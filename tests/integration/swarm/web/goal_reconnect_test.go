@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/goal"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

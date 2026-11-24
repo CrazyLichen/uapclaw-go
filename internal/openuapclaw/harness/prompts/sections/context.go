@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	wscontent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	wscontent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

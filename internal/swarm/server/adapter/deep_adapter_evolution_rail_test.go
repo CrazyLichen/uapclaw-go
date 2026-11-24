@@ -3,10 +3,10 @@ package adapter
 import (
 	"testing"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
@@ -46,7 +46,7 @@ func newTestEvolutionRail(t *testing.T, modelName string) *coreevolution.SkillEv
 		usableTestModel(),
 		modelName,
 		"cn",
-		coreevolution.WithAutoScan(false),
+		coreevolution.WithSignalTrigger(false),
 		coreevolution.WithAutoSave(false),
 	)
 }
@@ -69,7 +69,7 @@ func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 	if got := rail.ModelName(); got != "new-model" {
 		t.Fatalf("ModelName = %q, want new-model", got)
 	}
-	if !rail.AutoScan() {
+	if !rail.SignalTrigger() {
 		t.Fatal("auto_scan 应跟随配置更新为 true")
 	}
 }
@@ -87,7 +87,7 @@ func TestUpdateSkillEvolutionRail_环境变量优先(t *testing.T) {
 		"evolution": map[string]any{"auto_scan": false},
 	})
 
-	if !rail.AutoScan() {
+	if !rail.SignalTrigger() {
 		t.Fatal("环境变量 1 应覆盖配置的 false")
 	}
 }
@@ -114,7 +114,7 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 		if rail == nil {
 			t.Fatal("rail 不应为 nil")
 		}
-		if rail.AutoScan() {
+		if rail.SignalTrigger() {
 			t.Fatal("auto_scan 缺省必须为 false（对齐 Python :1955）")
 		}
 	})
@@ -122,7 +122,7 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 	t.Run("环境变量1开启", func(t *testing.T) {
 		t.Setenv("EVOLUTION_AUTO_SCAN", "1")
 		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"enabled": true, "auto_scan": false}})
-		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.AutoScan() {
+		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.SignalTrigger() {
 			t.Fatal("EVOLUTION_AUTO_SCAN=1 应开启 auto_scan（对齐 Python :1953）")
 		}
 	})
@@ -130,7 +130,7 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 	t.Run("环境变量yes开启", func(t *testing.T) {
 		t.Setenv("EVOLUTION_AUTO_SCAN", "yes")
 		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"enabled": true}})
-		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.AutoScan() {
+		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.SignalTrigger() {
 			t.Fatal("EVOLUTION_AUTO_SCAN=yes 应开启 auto_scan")
 		}
 	})

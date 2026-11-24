@@ -11,9 +11,9 @@ import (
 
 	atharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // TestCard_Capabilities 对齐 protocol_adapter.py:81-93。

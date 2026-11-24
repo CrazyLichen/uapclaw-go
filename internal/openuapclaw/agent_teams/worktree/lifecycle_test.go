@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 )
@@ -27,9 +27,9 @@ type lifecycleFakeConfigurator struct {
 	manager  *worktree.WorktreeManager
 }
 
-func (f *lifecycleFakeConfigurator) TeamBackend() TeamBackendAccess            { return f.backend }
-func (f *lifecycleFakeConfigurator) TeamName() string                          { return f.teamName }
-func (f *lifecycleFakeConfigurator) Spec() *atschema.TeamAgentSpec             { return f.spec }
+func (f *lifecycleFakeConfigurator) TeamBackend() TeamBackendAccess             { return f.backend }
+func (f *lifecycleFakeConfigurator) TeamName() string                           { return f.teamName }
+func (f *lifecycleFakeConfigurator) Spec() *atschema.TeamAgentSpec              { return f.spec }
 func (f *lifecycleFakeConfigurator) WorktreeManager() *worktree.WorktreeManager { return f.manager }
 
 // initGitRepoAt 在 dir 上建带初始提交的 git 仓库。

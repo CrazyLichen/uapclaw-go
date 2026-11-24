@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -15,9 +16,9 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -39,6 +40,12 @@ type ObservabilityOption func(*observabilityOptions)
 type observabilityOptions struct {
 	// spanExporterOverride span 导出器覆盖（测试用）
 	spanExporterOverride sdktrace.SpanExporter
+	// additionalSpanProcessors 附加挂载的 SpanProcessor（provider 构造时挂入）。
+	// Python: init_observability(config, additional_span_processors=(...))——
+	// demand.py:158 各 runtime 初始化时传入 (get_trajectory_span_processor(), ...)。
+	// 由调用方（harness/observability 或 team 侧 ensure）显式传入，
+	// 本包不得 import demand（demand→trajectory→本包构成环）。
+	additionalSpanProcessors []sdktrace.SpanProcessor
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -53,6 +60,9 @@ const (
 	// monitorTracerName Monitor 层 tracer 名称
 	// Python: _MONITOR_TRACER_NAME
 	monitorTracerName = "openjiuwen.agent_teams.observability.monitor"
+	// compressionTracerName 压缩观测桥 tracer 名
+	// Python: provider.get_tracer("openjiuwen.extensions.observability.context")
+	compressionTracerName = "openjiuwen.extensions.observability.context"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -67,6 +77,9 @@ var (
 	// monitorHandler 全局 OtelTeamMonitorHandler（由 InitObservability 设置）
 	// Python: _monitor_handler: Optional[OtelTeamMonitorHandler] = None
 	monitorHandler *OtelTeamMonitorHandler
+	// compressionBridge 全局压缩观测桥（由 InitObservability 设置）
+	// Python: runtime._context_compression_handler
+	compressionBridge *ContextCompressionObservabilityBridge
 	// monitorHandle AttachToTeamAgent 注册的事件监听句柄，用于 DetachFromTeamAgent 移除
 	monitorHandle *messager.EventListenerHandle
 	// registeredUnsubs 本次注册的注销动作清单，ShutdownObservability 逐条执行
@@ -76,6 +89,17 @@ var (
 	// Python: extensions/observability/setup.py 的模块级 config（get_config() 返回值）
 	activeConfig *ObservabilityConfig
 )
+
+// WithAdditionalSpanProcessors 附加挂载的 SpanProcessor 选项。
+// Python: init_observability(config, additional_span_processors=(...))（demand.py:158 传入）。
+// 调用方须传 demand.GetTrajectorySpanProcessor()（trajectory processor 单例）；
+// 本包 import demand 会构成环（demand→trajectory→本包），故由调用方显式传入。
+// 挂载前经 newSafeProcessor 包装并对齐 Python 的 same-instance 去重。
+func WithAdditionalSpanProcessors(processors ...sdktrace.SpanProcessor) ObservabilityOption {
+	return func(o *observabilityOptions) {
+		o.additionalSpanProcessors = append(o.additionalSpanProcessors, processors...)
+	}
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -142,6 +166,28 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(exporter)))
 	}
 
+	// Python: runtime.py:156 provider.add_span_processor(tracker)——ActiveSpanTracker
+	// 随 provider 恒挂载（活动 span 跟踪，安全网 flush 依赖）。
+	// Go 侧单例：先建/复用 tracker 再进 tpOpts（附加 processors 之前）。
+	if activeSpanTracker == nil {
+		activeSpanTracker = NewActiveSpanTracker()
+	}
+	tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(activeSpanTracker))
+
+	// Python: demand.py:158 把 (get_trajectory_span_processor(), get_span_record_processor())
+	// 作为 additional_span_processors 传入，经 runtime._register_span_processors →
+	// add_span_processor(SafeSpanProcessor(processor)) 挂进 provider；
+	// existing is processor 同实例去重对齐 runtime.py:225-228。
+	// get_span_record_processor 在 Go 无对应物（span_record 落盘域未移植），偏差登记 spec §4。
+	mounted := map[sdktrace.SpanProcessor]bool{}
+	for _, proc := range o.additionalSpanProcessors {
+		if proc == nil || mounted[proc] {
+			continue
+		}
+		mounted[proc] = true
+		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(newSafeProcessor(proc)))
+	}
+
 	tp := sdktrace.NewTracerProvider(tpOpts...)
 	provider = tp
 
@@ -152,8 +198,13 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 	callbackHandler = NewOtelCallbackHandler(config, tp.Tracer(callbackTracerName))
 	// Python: _monitor_handler = OtelTeamMonitorHandler(config, tracer=...)
 	monitorHandler = NewOtelTeamMonitorHandler(config, tp.Tracer(monitorTracerName))
+	// Python: context_compression_handler = ContextCompressionObservabilityBridge(
+	//     tracer=provider.get_tracer("openjiuwen.extensions.observability.context"),
+	//     window_messages=callback_handler.context_window_messages)
+	compressionBridge = NewContextCompressionObservabilityBridge(
+		tp.Tracer(compressionTracerName), callbackHandler.ContextWindowMessages)
 
-	// Python: _wire_callback_handlers(_callback_handler)
+	// Python: _register_callbacks(_callback_pairs(callback_handler, context_compression_handler))
 	wireCallbackHandlers(callbackHandler)
 
 	logger.Info(logComponent).Str("service_name", config.ServiceName).
@@ -195,6 +246,7 @@ func ShutdownObservability() {
 
 	provider = nil
 	callbackHandler = nil
+	compressionBridge = nil
 	monitorHandler = nil
 	monitorHandle = nil
 	activeConfig = nil
@@ -257,16 +309,46 @@ func wireCallbackHandlers(handler *OtelCallbackHandler) {
 	// M-23: 注册与注销在同一行上下文，避免"注册了忘注销"或"注销多了"的漂移。
 	track := func(off func()) { registeredUnsubs = append(registeredUnsubs, off) }
 
-	// LLM 回调（5 个）
+	// Python runtime.py:292-321 _callback_pairs 的注册表（21 对）。
+
+	// LLM 回调
 	// Python: LLMCallEvents.LLM_INVOKE_INPUT → handler.on_llm_invoke_input
 	fw.OnLLM(cb.LLMInvokeInput, handler.OnLLMInvokeInput, ns)
 	track(func() { fw.OffLLM(cb.LLMInvokeInput, handler.OnLLMInvokeInput) })
+	// Python: LLM_INVOKE_INPUT / LLM_STREAM_INPUT → context_compression_handler.on_llm_request_input
+	if compressionBridge != nil {
+		fw.OnLLM(cb.LLMInvokeInput, compressionBridge.OnLLMRequestInput, ns)
+		track(func() { fw.OffLLM(cb.LLMInvokeInput, compressionBridge.OnLLMRequestInput) })
+	}
 	fw.OnLLM(cb.LLMStreamInput, handler.OnLLMStreamInput, ns)
 	track(func() { fw.OffLLM(cb.LLMStreamInput, handler.OnLLMStreamInput) })
+	if compressionBridge != nil {
+		fw.OnLLM(cb.LLMStreamInput, compressionBridge.OnLLMRequestInput, ns)
+		track(func() { fw.OffLLM(cb.LLMStreamInput, compressionBridge.OnLLMRequestInput) })
+	}
+	// Python: LLM_INPUT → handler.on_llm_input
+	fw.OnLLM(cb.LLMInput, handler.OnLLMInput, ns)
+	track(func() { fw.OffLLM(cb.LLMInput, handler.OnLLMInput) })
+	// Python: LLM_RESPONSE_STARTED → handler.on_llm_response_started
+	fw.OnLLM(cb.LLMResponseStarted, handler.OnLLMResponseStarted, ns)
+	track(func() { fw.OffLLM(cb.LLMResponseStarted, handler.OnLLMResponseStarted) })
+	// Python: LLM_ROUTE / LLM_ROUTE_ATTEMPT → handler.on_llm_route。
+	// Go 侧两个事件经 intellirouter 桥以 TriggerCustom（事件字符串键）分发，
+	// 与 Python 的 LLM 事件注册表不同通道——经 OnCustom 注册（偏差登记 spec §4）。
+	fw.OnCustom(string(cb.LLMRoute), handler.OnLLMRoute, ns)
+	track(func() { fw.OffCustom(string(cb.LLMRoute), handler.OnLLMRoute) })
+	fw.OnCustom(string(cb.LLMRouteAttempt), handler.OnLLMRoute, ns)
+	track(func() { fw.OffCustom(string(cb.LLMRouteAttempt), handler.OnLLMRoute) })
 	fw.OnLLM(cb.LLMStreamOutput, handler.OnLLMStreamOutput, ns)
 	track(func() { fw.OffLLM(cb.LLMStreamOutput, handler.OnLLMStreamOutput) })
+	// Python: LLM_STREAM_COMPLETED → handler.on_llm_stream_completed
+	fw.OnLLM(cb.LLMStreamCompleted, handler.OnLLMStreamCompleted, ns)
+	track(func() { fw.OffLLM(cb.LLMStreamCompleted, handler.OnLLMStreamCompleted) })
 	fw.OnLLM(cb.LLMInvokeOutput, handler.OnLLMInvokeOutput, ns)
 	track(func() { fw.OffLLM(cb.LLMInvokeOutput, handler.OnLLMInvokeOutput) })
+	// Python: LLM_OUTPUT → handler.on_llm_output
+	fw.OnLLM(cb.LLMOutput, handler.OnLLMOutput, ns)
+	track(func() { fw.OffLLM(cb.LLMOutput, handler.OnLLMOutput) })
 	fw.OnLLM(cb.LLMCallError, handler.OnLLMCallError, ns)
 	track(func() { fw.OffLLM(cb.LLMCallError, handler.OnLLMCallError) })
 
@@ -279,12 +361,24 @@ func wireCallbackHandlers(handler *OtelCallbackHandler) {
 	fw.OnTool(cb.ToolCallError, handler.OnToolCallError, ns)
 	track(func() { fw.OffTool(cb.ToolCallError, handler.OnToolCallError) })
 
-	// Agent 回调（2 个）
+	// Agent 回调（4 个）
 	// Python: AgentEvents.AGENT_INVOKE_INPUT → handler.on_agent_invoke_input
 	fw.OnGlobalAgent(cb.GlobalAgentInvokeInput, handler.OnAgentInvokeInput, ns)
 	track(func() { fw.OffGlobalAgent(cb.GlobalAgentInvokeInput, handler.OnAgentInvokeInput) })
 	fw.OnGlobalAgent(cb.GlobalAgentInvokeOutput, handler.OnAgentInvokeOutput, ns)
 	track(func() { fw.OffGlobalAgent(cb.GlobalAgentInvokeOutput, handler.OnAgentInvokeOutput) })
+	// Python: AGENT_STREAM_INPUT / AGENT_STREAM_OUTPUT → 同 invoke 路径委托
+	fw.OnGlobalAgent(cb.GlobalAgentStreamInput, handler.OnAgentStreamInput, ns)
+	track(func() { fw.OffGlobalAgent(cb.GlobalAgentStreamInput, handler.OnAgentStreamInput) })
+	fw.OnGlobalAgent(cb.GlobalAgentStreamOutput, handler.OnAgentStreamOutput, ns)
+	track(func() { fw.OffGlobalAgent(cb.GlobalAgentStreamOutput, handler.OnAgentStreamOutput) })
+
+	// Context 回调
+	// Python: ContextEvents.CONTEXT_COMPRESSION_STATE → context_compression_handler.on_context_compression_state
+	if compressionBridge != nil {
+		fw.OnContext(cb.ContextCompressionStateEvent, compressionBridge.OnContextCompressionState, ns)
+		track(func() { fw.OffContext(cb.ContextCompressionStateEvent, compressionBridge.OnContextCompressionState) })
+	}
 }
 
 // buildExporter 构建 span 导出器。
@@ -365,5 +459,32 @@ func IsObservabilityInitialized() bool {
 // GetObservabilityConfig 返回当前生效的可观测性配置，未初始化返回 nil。
 // Python: extensions/observability/setup.py get_config()（⤴️15.11/22.1 最小面）
 func GetObservabilityConfig() *ObservabilityConfig {
+	return activeConfig
+}
+
+// demandMu provider/配置访问锁（extensions demand 层查询用）。
+var demandMu sync.Mutex
+
+// IsInitialized 共享 provider 是否已初始化。
+func IsInitialized() bool {
+	return ProviderInitialized()
+}
+
+// GetConfig 当前生效的共享观测配置。
+func GetConfig() *ObservabilityConfig {
+	return ActiveConfig()
+}
+
+// ProviderInitialized 共享 provider 是否已初始化（extensions demand 层查询用）。
+func ProviderInitialized() bool {
+	demandMu.Lock()
+	defer demandMu.Unlock()
+	return provider != nil
+}
+
+// ActiveConfig 当前生效的共享观测配置（extensions demand 层读取用）。
+func ActiveConfig() *ObservabilityConfig {
+	demandMu.Lock()
+	defer demandMu.Unlock()
 	return activeConfig
 }

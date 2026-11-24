@@ -1,9 +1,9 @@
 package workflow
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	workflowconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowconfig"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

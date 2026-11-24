@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

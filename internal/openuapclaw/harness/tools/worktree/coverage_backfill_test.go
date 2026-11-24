@@ -5,9 +5,9 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"time"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +146,6 @@ func TestAcquireFileLock_权限拒绝(t *testing.T) {
 func TestReleaseFileLock_Nil安全(t *testing.T) {
 	releaseFileLock(nil, "/unused") // 不 panic 即通过
 }
-
 
 func TestExportedGitWrappers_错误分支(t *testing.T) {
 	ctx := context.Background()

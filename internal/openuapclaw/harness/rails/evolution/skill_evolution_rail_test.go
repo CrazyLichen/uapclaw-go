@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,19 +32,19 @@ func TestSkillEvolutionRail_Priority(t *testing.T) {
 }
 
 func TestSkillEvolutionRail_AllowEvolutionTrigger(t *testing.T) {
-	r := &SkillEvolutionRail{autoScan: true}
+	r := &SkillEvolutionRail{signalTrigger: true}
 	assert.True(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, nil))
 
-	r.autoScan = false
+	r.signalTrigger = false
 	assert.False(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, nil))
 }
 
 func TestSkillEvolutionRail_AutoScan(t *testing.T) {
-	r := &SkillEvolutionRail{autoScan: true}
-	assert.True(t, r.AutoScan())
+	r := &SkillEvolutionRail{signalTrigger: true}
+	assert.True(t, r.SignalTrigger())
 
 	r.SetAutoScan(false)
-	assert.False(t, r.AutoScan())
+	assert.False(t, r.SignalTrigger())
 }
 
 func TestSkillEvolutionRail_AutoSave(t *testing.T) {
@@ -333,10 +333,10 @@ func TestWithDisabledSkillsSet_基类已初始化(t *testing.T) {
 }
 
 // TestWithAutoScan 验证 WithAutoScan 选项。
-func TestWithAutoScan(t *testing.T) {
+func TestWithSignalTrigger(t *testing.T) {
 	r := &SkillEvolutionRail{}
-	WithAutoScan(true)(r)
-	assert.True(t, r.autoScan)
+	WithSignalTrigger(true)(r)
+	assert.True(t, r.signalTrigger)
 }
 
 // TestWithAutoSave 验证 WithAutoSave 选项。

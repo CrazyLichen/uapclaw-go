@@ -13,9 +13,9 @@ import (
 	"github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

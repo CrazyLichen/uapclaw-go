@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evaluator/metrics"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
