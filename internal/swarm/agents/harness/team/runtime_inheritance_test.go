@@ -22,7 +22,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// TestToolWhitelist_39项 逐项对齐 Python TOOL_WHITELIST。
+// TestToolWhitelist_39项 逐项对齐 Python TOOL_WHITELIST（16.4b 补录 skill_index 后 44 项）。
 func TestToolWhitelist_39项(t *testing.T) {
 	want := []string{
 		"free_search", "fetch_webpage", "paid_search", "vision", "audio",
@@ -36,6 +36,8 @@ func TestToolWhitelist_39项(t *testing.T) {
 		"modify_alarm", "delete_alarm", "xiaoyi_collection", "image_reading",
 		"xiaoyi_gui_agent", "web_free_search", "web_fetch_webpage", "web_paid_search",
 		"skill_toolkit", "enter_worktree", "exit_worktree", "acp_chat",
+		// 16.4b 补录：Python TOOL_WHITELIST :127 "skill_index"
+		"skill_index",
 	}
 	if len(toolWhitelist) != len(want) {
 		t.Fatalf("toolWhitelist size = %d, want %d", len(toolWhitelist), len(want))

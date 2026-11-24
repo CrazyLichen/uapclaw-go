@@ -1305,3 +1305,36 @@ func sortedCopy(in []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// ──────────────────────────── 16.4b 集成测试缝 ────────────────────────────
+
+// Python 侧集成测试直接戳实例属性（adapter._skill_retrieval_toolkit 等）；
+// Go 跨包不可见，以下导出缝承接集成套件的等价触达（生产路径不走）。
+
+// SetSkillRetrievalToolkitForTest 注入工具包缓存（integration 缝）。
+func (d *DeepAdapter) SetSkillRetrievalToolkitForTest(tk *swarmtools.SkillRetrievalToolkit) {
+	d.skillRetrievalToolkit = tk
+}
+
+// SetSessionScopedForTest 标记会话级身份（integration 缝）。
+func (d *DeepAdapter) SetSessionScopedForTest(parentSessionID string) {
+	d.isSessionScoped = true
+	d.parentSessionID = parentSessionID
+}
+
+// SetSkillRetrievalSessionEnabledForTest 冻结开关（integration 缝）。
+func (d *DeepAdapter) SetSkillRetrievalSessionEnabledForTest(enabled bool) {
+	v := enabled
+	d.skillRetrievalSessionEnabled = &v
+}
+
+// LoadSkillRetrievalSessionProfileForTest 导出读 sidecar（integration 缝；
+// Python _load_skill_retrieval_session_profile 的跨包触达口）。
+func (d *DeepAdapter) LoadSkillRetrievalSessionProfileForTest(sessionID string) (map[string]any, bool) {
+	return d.loadSkillRetrievalSessionProfile(sessionID)
+}
+
+// SkillRetrievalProfilePathForTest 导出 sidecar 路径（integration 缝）。
+func (d *DeepAdapter) SkillRetrievalProfilePathForTest(sessionID string) string {
+	return d.skillRetrievalProfilePath(sessionID)
+}
