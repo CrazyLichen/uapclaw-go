@@ -220,3 +220,6 @@ func min64(a, b int64) int64 {
 	}
 	return b
 }
+
+// syscallStatT 平台 stat 别名（steer_images.sameInode 使用）。
+type syscallStatT = syscall.Stat_t
