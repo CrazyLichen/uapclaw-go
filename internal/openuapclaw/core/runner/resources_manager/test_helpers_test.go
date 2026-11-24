@@ -126,11 +126,11 @@ func (s *stubBaseModelClient) SupportsKVCacheRelease() bool {
 
 // --- stubWorkflow 实现 interfaces.Workflow ---
 
-func (s *stubWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (any, error) {
+func (s *stubWorkflow) Invoke(_ context.Context, _ any, _ ...sainterfaces.WorkflowOption) (any, error) {
 	return nil, nil
 }
 
-func (s *stubWorkflow) Stream(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
+func (s *stubWorkflow) Stream(_ context.Context, _ any, _ ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -244,4 +244,46 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 
 	PanicAgentInterrupt(nil)
 	return nil, nil // 不可达
+}
+
+// PopPendingInteractiveInput 取恢复队列中的下一个交互输入（无则 nil）。
+// 供非 interact 语义的中断源（8.26 ReAct 层 2 中断桥）在节点重放时读取
+// checkpointer 路由的用户反馈——与 WaitUserInputs 的队列消费同语义，
+// 但不触发挂起。
+func (w *WorkflowInteraction) PopPendingInteractiveInput() any {
+	return w.getNextInteractiveInput()
+}
+
+// SuspendNodeInteraction 工作流节点级交互挂起：提交检查点 → 写交互帧 →
+// PanicGraphInterrupt（复刻 WaitUserInputs 队列为空分支的三步，8.26 层 2
+// 中断桥挂起外层 workflow 图执行用——react 中断不经过 interact 调用语义）。
+// value 为交互载荷（挂起后外层恢复按节点 executable ID 路由反馈）。
+// 写帧失败返回错误（T-11：写失败先于中断上抛，吞掉会让图等一个永不展示的输入）；
+// 成功则 panic GraphInterrupt 不可达返回。
+func (w *WorkflowInteraction) SuspendNodeInteraction(ctx context.Context, value any) error {
+	// 挂起前清干恢复队列残留（8.26 轮转场景：恢复消费与挂起分属两个
+	// interaction 实例，节点 state 为 CommitState 缓冲、清空写回时序不可靠；
+	// 旧反馈已由恢复路径消费进 InterruptionState.CollectedInput，残留丢弃
+	// 不丢数据——挂起语义即"等待新输入"）。
+	for w.getNextInteractiveInput() != nil {
+	}
+	commitCMP(w.session)
+	nodeID := getExecutableID(w.session)
+	payload := InteractionOutput{ID: nodeID, Value: value}
+	if err := writeInteractionOutput(ctx, w.session, InteractionType, w.idx, payload); err != nil {
+		return err
+	}
+	logger.Info(logComponent).
+		Str("action", "workflow_interaction_interrupt").
+		Str("node_id", nodeID).
+		Int("index", w.idx).
+		Msg("workflow interaction interrupted: waiting for user input")
+	pregel.PanicGraphInterrupt(pregel.Interrupt{
+		Value: stream.OutputSchema{
+			Type:    InteractionType,
+			Index:   w.idx,
+			Payload: payload,
+		},
+	})
+	return nil // 不可达
 }

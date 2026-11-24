@@ -90,6 +90,13 @@ const (
 	// 自己 owner 那份答案，因此不同 rail 在同一调用上的中断不会串台。
 	// Python: RESUME_INTERRUPT_ANSWERS_KEY
 	ResumeInterruptAnswersKey = "_resume_interrupt_answers"
+	// WorkflowResumeInputsKey 工作流中断恢复时按调用归属的交互输入对象键（D-26-5）。
+	// 结构：{tool_call_id: any（*interaction.InteractiveInput）}。
+	// Python 经 tool_call.arguments 字段走私对象（pydantic 不校验赋值 +
+	// _parse_tool_arguments_with_repair isinstance(str) 短路透传）；
+	// Go 的 string Arguments 无法承载对象，改由 cbc extra 对象旁路承载，
+	// 起点终点与 finally 清理语义同 Python（仅载体异，spec D-26-5 重写版）。
+	WorkflowResumeInputsKey = "_workflow_resume_inputs"
 	// DeferredToolImagesKey 等待同批全部调用补齐 tool message 的图片项
 	// Python: DEFERRED_TOOL_IMAGES_KEY
 	DeferredToolImagesKey = "_deferred_tool_images"

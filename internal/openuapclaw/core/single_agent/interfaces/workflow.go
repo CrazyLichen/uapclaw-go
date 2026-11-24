@@ -19,12 +19,15 @@ type Workflow interface {
 	// Invoke 非流式调用工作流
 	//
 	// Python: Workflow.invoke(inputs, session, context, **kwargs) -> WorkflowOutput
-	Invoke(ctx context.Context, inputs map[string]any, opts ...WorkflowOption) (any, error)
+	// inputs 为 Python inputs: Any 的闭集等价：正常轮 map[string]any，
+	// 工作流恢复轮 *interaction.InteractiveInput（D-26-5 对象旁路）。
+	Invoke(ctx context.Context, inputs any, opts ...WorkflowOption) (any, error)
 	// Stream 流式调用工作流
 	//
 	// Python: Workflow.stream(inputs, session, context, stream_modes, **kwargs) -> AsyncIterator[WorkflowChunk]
 	// 返回 channel 中的 stream.Schema 对应 Python 的 WorkflowChunk = Union[OutputSchema, CustomSchema, TraceSchema]。
-	Stream(ctx context.Context, inputs map[string]any, opts ...WorkflowOption) (<-chan stream.Schema, error)
+	// inputs 闭集同 Invoke。
+	Stream(ctx context.Context, inputs any, opts ...WorkflowOption) (<-chan stream.Schema, error)
 	// Card 返回工作流配置卡片
 	//
 	// Python: Workflow.card 属性（@property）
