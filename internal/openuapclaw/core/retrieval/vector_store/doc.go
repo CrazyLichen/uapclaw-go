@@ -9,6 +9,7 @@
 //	├── base.go             # VectorStore 接口 + StoreOptions + CheckConfigsMatching
 //	├── chroma.go           # ChromaVectorStore 实现
 //	├── milvus.go           # MilvusVectorStore 实现（MilvusClient 接口 + 适配器）
+//	├── sqlite_store.go     # SQLiteVectorStore 实现（Go 私有 provider，spec D-25-7：vec0 + FTS5 bm25）
 //	└── store.go            # CreateVectorStore 工厂 + StoreCreateOptions
 //
 // 对应 Python 代码：

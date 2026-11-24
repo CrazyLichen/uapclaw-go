@@ -191,6 +191,10 @@ func storeOptionsFromConnection(conn map[string]any) []vector_store.StoreCreateO
 	if s, ok := getStr("milvus_token"); ok {
 		opts = append(opts, vector_store.WithStoreMilvusToken(s))
 	}
+	if s, ok := getStr("sqlite_path"); ok {
+		// Go 私有 provider D-25-7：sqlite 路径键（上游无 sqlite provider，无 Python 键名可对齐）
+		opts = append(opts, vector_store.WithStoreSQLitePath(s))
+	}
 	if s, ok := getStr("text_field"); ok {
 		opts = append(opts, vector_store.WithStoreTextField(s))
 	}
