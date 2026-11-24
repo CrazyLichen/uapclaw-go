@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -77,8 +78,9 @@ type KnowledgeRetrievalExecutable struct {
 	// llm agentic 检索模型实例（Python self._llm，惰性初始化；D-25-5 直构路径经
 	// modelClientAdapter 适配能力面）
 	llm modelclients.BaseModelClient
-	// initialized 惰性初始化标志（Python self._initialized）
-	initialized bool
+	// initialized 惰性初始化标志（Python self._initialized；Go 双检快路径读须原子——
+	// Python asyncio 单线程无此约束）
+	initialized atomic.Bool
 	// mu 初始化锁（Python self._lock asyncio.Lock）
 	mu sync.Mutex
 	// sess 当前会话（Python self._session）
@@ -166,6 +168,45 @@ func formatKnowledgeRetrievalOutput(results []retrievalcommon.MultiKBRetrievalRe
 		"results": texts,
 		"context": strings.Join(texts, "\n\n"),
 	}
+}
+
+// storeOptionsFromConnection 连接配置映射（Python create_vector_store(vs_config,
+// **vector_store_connection_config) 的 **kwargs 解包等价：snake_case 键 → StoreCreateOption）
+func storeOptionsFromConnection(conn map[string]any) []vector_store.StoreCreateOption {
+	opts := make([]vector_store.StoreCreateOption, 0, len(conn))
+	getStr := func(key string) (string, bool) {
+		v, ok := conn[key]
+		if !ok {
+			return "", false
+		}
+		s, ok := v.(string)
+		return s, ok
+	}
+	if s, ok := getStr("chroma_path"); ok {
+		opts = append(opts, vector_store.WithStoreChromaPath(s))
+	}
+	if s, ok := getStr("milvus_uri"); ok {
+		opts = append(opts, vector_store.WithStoreMilvusURI(s))
+	}
+	if s, ok := getStr("milvus_token"); ok {
+		opts = append(opts, vector_store.WithStoreMilvusToken(s))
+	}
+	if s, ok := getStr("text_field"); ok {
+		opts = append(opts, vector_store.WithStoreTextField(s))
+	}
+	if s, ok := getStr("vector_field_name"); ok {
+		opts = append(opts, vector_store.WithStoreVectorFieldName(s))
+	}
+	if s, ok := getStr("sparse_vector_field"); ok {
+		opts = append(opts, vector_store.WithStoreSparseVectorField(s))
+	}
+	if s, ok := getStr("metadata_field"); ok {
+		opts = append(opts, vector_store.WithStoreMetadataField(s))
+	}
+	if s, ok := getStr("doc_id_field"); ok {
+		opts = append(opts, vector_store.WithStoreDocIDField(s))
+	}
+	return opts
 }
 
 // invokeEntry 执行入口（Python invoke :80-143 十步一比一；InvokeFn 槽绑定）
@@ -260,12 +301,12 @@ func (e *KnowledgeRetrievalExecutable) traceMetadata() map[string]any {
 // initializeIfNeeded 惰性初始化（Python _initialize_if_needed :167-183；asyncio.Lock
 // 双检 → sync.Mutex 双检；失败保持未初始化可重试，wrap 101100）
 func (e *KnowledgeRetrievalExecutable) initializeIfNeeded(ctx context.Context) error {
-	if e.initialized {
+	if e.initialized.Load() {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.initialized {
+	if e.initialized.Load() {
 		return nil
 	}
 	// Python :175：agentic 时先建模型实例
@@ -288,7 +329,7 @@ func (e *KnowledgeRetrievalExecutable) initializeIfNeeded(ctx context.Context) e
 			exception.WithCause(err))
 	}
 	e.kbs = kbs
-	e.initialized = true
+	e.initialized.Store(true)
 	return nil
 }
 
@@ -304,7 +345,8 @@ func (e *KnowledgeRetrievalExecutable) createKnowledgeBases(ctx context.Context)
 		kbCfg := &e.cfg.ComponentKBConfigs[i]
 
 		// Python :190-192 create_vector_store(vector_store_config, **connection_config)
-		vectorStore, err := vector_store.CreateVectorStore(kbCfg.VectorStoreConfig)
+		vectorStore, err := vector_store.CreateVectorStore(kbCfg.VectorStoreConfig,
+			storeOptionsFromConnection(e.cfg.VectorStoreConnectionConfig)...)
 		if err != nil {
 			return nil, err
 		}
@@ -349,24 +391,21 @@ func (e *KnowledgeRetrievalExecutable) createKnowledgeBases(ctx context.Context)
 	return kbInstances, nil
 }
 
-// buildRetriever 按索引类型组装检索器（D-25-2；Python 无此函数——KB 内部组装的 Go 显式化；
-// agentic 时包装 AgenticRetriever，13.25 语义）
+// buildRetriever 按索引类型组装基础检索器（D-25-2；Python 无此函数——KB 内部组装的
+// Go 显式化。agentic 包装不在此处：KB 层 Retrieve 时按 RetrievalConfig.Agentic
+// 自动 wrapAgenticRetriever（simple_kb.go:142 / graph_kb.go:192，Python 语义即 KB
+// 内部组装），组件只负责传 WithLLMClient）
 func (e *KnowledgeRetrievalExecutable) buildRetriever(
 	kbCfg *ComponentKBConfig, vs vector_store.VectorStore, em storeembedding.BaseEmbedding,
 ) (retriever.Retriever, error) {
-	var base retriever.Retriever
 	switch kbCfg.KBConfig.IndexType {
 	case retrievalcommon.IndexTypeBM25:
-		base = retriever.NewSparseRetriever(vs)
+		return retriever.NewSparseRetriever(vs), nil
 	case retrievalcommon.IndexTypeHybrid:
-		base = retriever.NewHybridRetriever(vs, em)
+		return retriever.NewHybridRetriever(vs, em), nil
 	default:
-		base = retriever.NewVectorRetriever(vs, em)
+		return retriever.NewVectorRetriever(vs, em), nil
 	}
-	if e.cfg.RetrievalConfig.Agentic && e.llm != nil {
-		return retriever.NewAgenticRetriever(base, e.llm)
-	}
-	return base, nil
 }
 
 // createLLMInstance 创建 agentic 检索模型实例（Python _create_llm_instance :235-246；
