@@ -110,9 +110,6 @@ func TestCreateLLMInstance_直构Model走适配器(t *testing.T) {
 	m, err := e.createLLMInstance(context.Background())
 	require.NoError(t, err)
 	assert.NotNil(t, m)
-	// 适配器语义：TranscribeAudio 不支持（Python Model 无转写能力）
-	_, err = m.TranscribeAudio(context.Background(), "/tmp/a.wav")
-	require.Error(t, err)
 }
 
 func TestCreateLLMInstance_modelID走ResourceMgr(t *testing.T) {

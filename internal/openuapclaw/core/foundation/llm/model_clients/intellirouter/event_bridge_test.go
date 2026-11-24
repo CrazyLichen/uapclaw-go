@@ -227,10 +227,6 @@ func TestGenerateImage_UnsupportedProvider(t *testing.T) {
 	if err == nil || !containsStr(err.Error(), "does not support image generation") {
 		t.Fatalf("不支持 provider 应报错：%v", err)
 	}
-	_, err = client.TranscribeAudio(context.Background(), "x.wav")
-	if err == nil {
-		t.Fatal("TranscribeAudio 应不支持")
-	}
 }
 
 // 对齐 _to_ow_usage_metadata 的 nil 边界 + _provider_metadata 白名单

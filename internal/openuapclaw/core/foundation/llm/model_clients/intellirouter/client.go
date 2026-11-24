@@ -19,7 +19,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	intelliroutertypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
@@ -193,12 +192,6 @@ func (c *IntelliRouterModelClient) GenerateVideo(ctx context.Context, messages [
 		return nil, fmt.Errorf("Provider '%s' does not support video generation.Supported: %v", provider, generationSupport)
 	}
 	return c.generateVideoDashscope(ctx, messages, gopts)
-}
-
-// TranscribeAudio 音频转写（本客户端不支持）。Python: BaseModelClient 默认。
-func (c *IntelliRouterModelClient) TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
-	return nil, exception.BuildError(exception.StatusModelInvokeParamError,
-		exception.WithMsg("IntelliRouter client does not support audio transcription"))
 }
 
 // Release 释放资源（无持久资源）。Python: 默认 release。

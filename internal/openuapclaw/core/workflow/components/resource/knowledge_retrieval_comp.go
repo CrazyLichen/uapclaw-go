@@ -123,20 +123,6 @@ func NewKnowledgeRetrievalComponent(cfg *KnowledgeRetrievalCompConfig) (*Knowled
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// modelClientAdapter 直构路径适配器（D-25-5：Python Model 即 LLM 客户端本体，无转写能力；
-// Go model_clients.BaseModelClient 能力面更宽——嵌 *forllm.Model 促齐既有方法，
-// TranscribeAudio 显式不支持，与 Python Model 能力面一致）
-type modelClientAdapter struct {
-	*forllm.Model
-}
-
-// TranscribeAudio 直构 Model 不支持音频转写（Python Model 无此能力，语义一致）
-func (a *modelClientAdapter) TranscribeAudio(ctx context.Context,
-	audioPath string, opts ...llmschema.TranscribeAudioOption,
-) (*llmschema.TranscriptionResponse, error) {
-	return nil, fmt.Errorf("transcribe audio not supported by directly constructed model")
-}
-
 // validateKnowledgeRetrievalInputs 校验并提取输入（Python validate_inputs :249-258 静态方法；
 // pydantic ValidationError → 101102，消息对齐 ExceptionUtils.format_validation_error 风格 D-25-4）
 func validateKnowledgeRetrievalInputs(inputs map[string]any) (KnowledgeRetrievalInput, error) {
@@ -425,7 +411,7 @@ func (e *KnowledgeRetrievalExecutable) createLLMInstance(ctx context.Context) (m
 		if err != nil {
 			return nil, err
 		}
-		return &modelClientAdapter{Model: m}, nil
+		return m, nil
 	}
 	// Python :244-246 from runner import Runner; await Runner.resource_mgr.get_model(id=...)
 	mgr := runner.GetResourceMgr()
