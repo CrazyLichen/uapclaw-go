@@ -783,7 +783,7 @@ func (h *questionerDirectReplyHandler) initialExtractFromChatHistory(ctx context
 	}
 	h.updateParamDefaultValue(output)
 	h.updateStateOfKeyFields(output.KeyFields)
-	return h.checkIfContinueAsk(output), nil
+	return h.checkIfContinueAsk(output)
 }
 
 // repeatExtractFromChatHistory Python :511-517（与 initial 体相同，按 Python 保持两方法）
@@ -794,7 +794,7 @@ func (h *questionerDirectReplyHandler) repeatExtractFromChatHistory(ctx context.
 	}
 	h.updateParamDefaultValue(output)
 	h.updateStateOfKeyFields(output.KeyFields)
-	return h.checkIfContinueAsk(output), nil
+	return h.checkIfContinueAsk(output)
 }
 
 // getLatestChatHistory Python _get_latest_chat_history :519-532 一比一：
@@ -1031,7 +1031,7 @@ func (h *questionerDirectReplyHandler) exceedMaxResponse() bool {
 
 // checkIfContinueAsk 继续追问判定（Python :684-702 一比一：缺必填+未超限 →
 // 追问+key_fields.clear；缺必填+超限 → 101074；齐 → key_fields.update(state)）
-func (h *questionerDirectReplyHandler) checkIfContinueAsk(output *QuestionerOutputCache) bool {
+func (h *questionerDirectReplyHandler) checkIfContinueAsk(output *QuestionerOutputCache) (bool, error) {
 	isContinueAsk := false
 	nonExtracted := h.filterNonExtractedKeyFields()
 	if len(nonExtracted) > 0 {
@@ -1039,7 +1039,8 @@ func (h *questionerDirectReplyHandler) checkIfContinueAsk(output *QuestionerOutp
 			output.Question = questionerFormatContinueAsk(nonExtracted, h.cfg.AcceptLanguage)
 			isContinueAsk = true
 		} else {
-			return false
+			return false, exception.BuildError(exception.StatusComponentQuestionerRuntimeError,
+				exception.WithMsg(" max_response reached before all required fields were extracted"))
 		}
 	}
 	if isContinueAsk {
@@ -1049,7 +1050,7 @@ func (h *questionerDirectReplyHandler) checkIfContinueAsk(output *QuestionerOutp
 			output.KeyFields[k] = v
 		}
 	}
-	return isContinueAsk
+	return isContinueAsk, nil
 }
 
 // invokeLLMAndParseResult LLM 调用与结果合并（Python :704-711）
