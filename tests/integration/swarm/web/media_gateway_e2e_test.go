@@ -374,12 +374,15 @@ func (s *MediaGatewayE2ESuite) wsRequest(conn *websocket.Conn, id, method string
 	s.Require().NoError(conn.SetWriteDeadline(time.Now().Add(10 * time.Second)))
 	s.Require().NoError(conn.WriteMessage(websocket.TextMessage, payload))
 
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// 一元响应应较快到达：单次截止，任何读错误立即失败——
+	// 超时续读会让 gorilla 在连接已死后再次 ReadMessage 触发
+	// "repeated read on failed websocket connection" panic，掩盖真实原因
+	// （team_continuous_dialog_test.go 读循环注释同款教训，实证于 race 轮）。
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			continue // 读超时继续等
+			s.FailNow("WS 读连接失败: " + err.Error())
 		}
 		var envelope map[string]any
 		if err := json.Unmarshal(raw, &envelope); err != nil {
