@@ -9,8 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
@@ -382,4 +384,80 @@ func drainSessionStream(_ *testing.T, sess *recordingSessionFacade) []stream.Sch
 		}
 	}
 	return out
+}
+
+// fakeWorkflowForResume D-26-5 对象旁路测试用的最小 Workflow 替身，
+// 捕获最近一次 Invoke 收到的 inputs 以断言 InteractiveInput 对象形态直达。
+type fakeWorkflowForResume struct {
+	card       *workflow.WorkflowCard
+	lastInputs any
+}
+
+func (f *fakeWorkflowForResume) Invoke(_ context.Context, inputs any, _ ...interfaces.WorkflowOption) (any, error) {
+	f.lastInputs = inputs
+	return map[string]any{"output": "resumed"}, nil
+}
+
+func (f *fakeWorkflowForResume) Stream(_ context.Context, _ any, _ ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+
+func (f *fakeWorkflowForResume) Card() *workflow.WorkflowCard { return f.card }
+
+// TestHandleResumeWorkflow_步3对象旁路与清理 步3 全收齐 → 对象经 cbc extra 直达
+// workflow（InteractiveInput 指针形态，非 JSON round-trip 降级 map），执行完成后
+// WorkflowResumeInputsKey 按 finally 语义清理。
+// Python: react_agent.py L2707-1708（arguments 走私）+ L2696-1734（步3）。
+func TestHandleResumeWorkflow_步3对象旁路与清理(t *testing.T) {
+	wfCard := workflow.NewWorkflowCard(schema.WithName("wf_a"), schema.WithDescription("恢复测试"))
+	fw := &fakeWorkflowForResume{card: wfCard}
+	frm := resources_manager.NewResourceMgr()
+	require.NoError(t, frm.AddWorkflow(wfCard, resources_manager.WorkflowProvider(
+		func(_ context.Context, _ *workflow.WorkflowCard) (interfaces.Workflow, error) { return fw, nil },
+	)))
+
+	am := ability.NewAbilityManager(frm)
+	am.Add(wfCard) // 注册能力卡（executeWorkflow 按 am.workflows[name] 路由）
+	a := &ReActAgent{abilityManager: am}
+	modelCtx := &fakeModelContext{}
+	sess := session.NewSession(session.WithSessionID("test_resume_object"))
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+
+	// 两个 entry 预填 CollectedInput → 步3 全收齐
+	tcA := &llmschema.ToolCall{ID: "call_a", Name: "wf_a", Arguments: `{}`}
+	iiA, err := interaction.NewInteractiveInput()
+	require.NoError(t, err)
+	iiA.UserInputs["q1"] = "答案A"
+	st := &agentschema.InterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{
+			AIMessage:     llmschema.NewAssistantMessage("ai"),
+			Iteration:     1,
+			OriginalQuery: "orig",
+		},
+		InterruptedWorkflows: map[string]*agentschema.WorkflowInterruptEntry{
+			"wf_a": {
+				ToolCall:               tcA,
+				ComponentIDs:           []string{"q1"},
+				WorkflowExecutionState: &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired},
+				CollectedInput:         iiA,
+			},
+		},
+		PendingWorkflowID:  "wf_a",
+		PendingComponentID: "q1",
+	}
+	result, err := a.handleResumeWorkflow(context.Background(), st, iiA, cbc, modelCtx, sess, &interfaces.InvokeInputs{})
+	require.NoError(t, err)
+	assert.Nil(t, result) // 全完成 → nil 续跑
+	// 对象形态直达：同一 InteractiveInput 指针（非 map 降级）——D-26-5 核心断言
+	require.IsType(t, &interaction.InteractiveInput{}, fw.lastInputs)
+	assert.Same(t, iiA, fw.lastInputs)
+	// 续跑起点已写入
+	si, ok := cbc.GetExtra(agentschema.ResumeStartIterationKey)
+	require.True(t, ok)
+	assert.Equal(t, 2, si)
+	// finally 清理：WorkflowResumeInputsKey 不残留
+	_, ok = cbc.GetExtra(agentschema.WorkflowResumeInputsKey)
+	assert.False(t, ok, "恢复输入 extra 应按 finally 语义清理")
 }

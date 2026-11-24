@@ -1001,6 +1001,22 @@ func (am *AbilityManager) executeSingleToolCall(
 	}()
 
 	// 解析参数
+	// D-26-5（重写版）：工作流恢复对象旁路检查。
+	// Python _parse_tool_arguments_with_repair 对非 str 的 tool_call.arguments
+	// （恢复链塞入的 InteractiveInput 对象）isinstance 短路原样透传，直达
+	// run_workflow(inputs=对象)；Go 的 string Arguments 无法承载对象，
+	// 对象由 agents.handleResumeWorkflow 经 cbc extra
+	// {tool_call_id: InteractiveInput} 注入，在此处按 tool_call_id 命中后
+	// 绕过 JSON 解析直达 executeWorkflow（spec 2026-11-24-react-comp-8.26-design.md
+	// §6 D-26-5 重写版）。
+	var workflowResumeInputs map[string]any
+	if cbc != nil {
+		if v, ok := cbc.GetExtra(agentschema.WorkflowResumeInputsKey); ok {
+			if m, ok := v.(map[string]any); ok {
+				workflowResumeInputs = m
+			}
+		}
+	}
 	toolArgs, parseErr := ParseToolArguments(toolCall.Arguments)
 	if parseErr != nil {
 		logger.Error(logComponent).
@@ -1021,6 +1037,11 @@ func (am *AbilityManager) executeSingleToolCall(
 		return am.executeTool(ctx, cbc, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.workflows[toolName]; ok {
+		// 对象通道命中（恢复链）→ 绕过 JSON 解析直传对象；
+		// 未命中（正常轮）→ 走 JSON 解析结果 map
+		if obj, hit := workflowResumeInputs[toolCall.ID]; hit {
+			return am.executeWorkflow(ctx, toolCall, toolName, obj, sess, tag)
+		}
 		return am.executeWorkflow(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.agents[toolName]; ok {
@@ -1190,7 +1211,7 @@ func (am *AbilityManager) executeWorkflow(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
 	toolName string,
-	toolArgs map[string]any,
+	toolArgs any, // Python inputs: Any——正常轮为解析后的 map，恢复轮为 InteractiveInput 对象（D-26-5 对象旁路）
 	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (agentschema.ExecuteResult, error) {

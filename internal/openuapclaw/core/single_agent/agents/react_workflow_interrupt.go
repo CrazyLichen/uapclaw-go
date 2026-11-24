@@ -235,7 +235,7 @@ func (a *ReActAgent) CommitWorkflowInterrupt(
 
 // handleResumeWorkflow 处理一轮工作流中断恢复。
 // 步1 记录当前 pending 反馈；步2 未全收齐 → 轮转下一个未收集 workflow 并再 commit；
-// 步3 全收齐 → 回写 ai_message + arguments=collected_input 并发恢复全部 workflow →
+// 步3 全收齐 → 回写 ai_message + 恢复输入对象旁路注入并并发恢复全部 workflow →
 // 再中断则再 commit；全完成设置 ResumeStartIterationKey 续跑循环并返回 nil。
 // Python: react_agent.py _handle_resume L2663-1740（workflow 分支；HITL 分支由
 // hitlHandler.HandleResume 承载，本方法只接 InterruptionState）。
@@ -291,19 +291,33 @@ func (a *ReActAgent) handleResumeWorkflow(
 		}
 	}
 	allToolCalls := make([]*llmschema.ToolCall, 0, len(st.InterruptedWorkflows))
+	// D-26-5（重写版）：恢复输入对象旁路通道。
+	// Python 经 tc_copy.arguments = InteractiveInput 对象走私（pydantic 不校验
+	// 赋值 + ability_manager _parse_tool_arguments_with_repair isinstance(str)
+	// 短路透传，react_agent.py L2707-1708）；Go 的 string Arguments 无法承载
+	// 对象，改由 cbc extra {tool_call_id: InteractiveInput} 承载——起点、终点
+	// （run_workflow(inputs=对象)）与 finally 清理语义同 Python，仅载体异。
+	// 注意 Arguments 保持原值不动（对象通道命中时解析器跳过，内容无消费方）。
+	resumeInputs := make(map[string]any, len(st.InterruptedWorkflows))
 	for _, entry := range st.InterruptedWorkflows {
-		tc := deepCloneToolCall(entry.ToolCall) // D-26-2 深拷贝 + D-26-5 JSON string
+		tc := deepCloneToolCall(entry.ToolCall) // D-26-2 深拷贝
 		if tc != nil {
-			args, err := json.Marshal(entry.CollectedInput)
-			if err != nil {
-				logger.Error(logComponent).Err(err).Str("workflow_id", st.PendingWorkflowID).
-					Msg("handle_resume: failed to marshal collected input")
-				return nil, fmt.Errorf("handle_resume: 序列化 collected_input 失败: %w", err)
-			}
-			tc.Arguments = string(args)
+			allToolCalls = append(allToolCalls, tc)
 		}
-		allToolCalls = append(allToolCalls, tc)
+		if entry.CollectedInput != nil {
+			callID := ""
+			if tc != nil {
+				callID = tc.ID
+			}
+			resumeInputs[callID] = entry.CollectedInput
+		}
 	}
+	if len(resumeInputs) > 0 {
+		cbc.SetExtra(agentschema.WorkflowResumeInputsKey, resumeInputs)
+	}
+	// finally 清理（Python handler.py L372-1377 finally pop 同语义：
+	// 无论重执行成功、失败还是再中断，恢复输入都不残留到下一轮）
+	defer cbc.DeleteExtra(agentschema.WorkflowResumeInputsKey)
 	// 并发恢复由 executeToolCalls 内部并行承载（Python L2725 _execute_tool_call 并发；
 	// D-26-3：Go goroutine 并发语义与 executeToolCalls 既有实现一致）
 	results, err := a.executeToolCalls(ctx, cbc, allToolCalls, sess, modelCtx)

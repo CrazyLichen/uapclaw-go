@@ -340,7 +340,7 @@ func RunAgentStreaming(
 func RunWorkflow(
 	ctx context.Context,
 	workflowRef WorkflowRef,
-	inputs map[string]any,
+	inputs any, // Python inputs: Any——闭集 map[string]any | *interaction.InteractiveInput（恢复链对象旁路 D-26-5）
 	sess any,
 	modelCtx any,
 	envs map[string]any,
@@ -374,7 +374,7 @@ func RunWorkflow(
 func RunWorkflowStreaming(
 	ctx context.Context,
 	workflowRef WorkflowRef,
-	inputs map[string]any,
+	inputs any, // Python inputs: Any——闭集同 RunWorkflow（恢复链对象旁路 D-26-5）
 	sess any,
 	modelCtx any,
 	streamModes any,
