@@ -7,6 +7,10 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	tokeniface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	kvcache "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
@@ -499,5 +503,289 @@ func TestMapValueOf_FailedResult(t *testing.T) {
 	}
 	if failedResult(nil) || failedResult(map[string]any{}) {
 		t.Fatal("空结果不判失败")
+	}
+}
+
+// ──────────────────────────── 漂移同步分支补齐（审查批） ────────────────────────────
+
+// catalogAttachments 取已发布目录附件。
+func catalogAttachments(manager *prompts.Manager) []*prompts.Attachment {
+	list, _ := manager.ListByFilter(prompts.AttachmentFilter{
+		SessionID: "sess", Section: catalogAttachmentSection,
+	})
+	return list
+}
+
+
+// newSyncCBC 构造带历史快照桩的回调上下文（delta 路径可达）。
+func newSyncCBC(agent *fakeBaseAgent, sess *railStateSession) *agentinterfaces.AgentCallbackContext {
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, nil, sess)
+	cbc.SetModelContext(newSnapshotHistoryStub("sess"))
+	return cbc
+}
+
+// TestSyncDeferredToolCatalog_Delta附件与版本推进 对齐 Python：漂移后发布
+// delta 附件，version/delta_count 推进写入状态。
+func TestSyncDeferredToolCatalog_Delta附件与版本推进(t *testing.T) {
+	rail, agent := newRailUnderTest(t, true)
+	// 先冻结（不含 extra），再注册 → 漂移
+	rail.frozenSnapshot = nil
+	_ = rail.freezeDisclosureCatalogue()
+	extra := deferredCard("extra_tool", "新工具")
+	_ = agent.am.AddAbility(extra, stubTool{name: "extra_tool"})
+
+	manager := prompts.NewManager()
+	rail.attachmentManager = manager
+	sess := &railStateSession{state: map[string]any{}, id: "sess"}
+	cbc := newSyncCBC(agent, sess)
+	rail.syncDeferredToolCatalog(cbc, "cn")
+
+	atts := catalogAttachments(manager)
+	if len(atts) != 1 {
+		t.Fatalf("漂移应发布 1 条附件, got %d", len(atts))
+	}
+	if atts[0].Metadata["catalog_mode"] != "delta" {
+		t.Fatalf("漂移应为 delta 模式: %v", atts[0].Metadata["catalog_mode"])
+	}
+	if atts[0].Metadata["catalog_version"] != 2 {
+		t.Fatalf("漂移版本应推进到 2: %v", atts[0].Metadata["catalog_version"])
+	}
+	if atts[0].Metadata["delta_count"] != 1 {
+		t.Fatalf("delta 计数应为 1: %v", atts[0].Metadata["delta_count"])
+	}
+	state := railCatalogState(sess)
+	if state["version"] != 2 || state["delta_count"] != 1 {
+		t.Fatalf("状态未推进: %+v", state)
+	}
+}
+
+// TestSyncDeferredToolCatalog_连续Delta达上限转Snapshot 对齐 Python：
+// delta_count ≥ 10（catalogSnapshotInterval）→ 全量快照、计数清零。
+func TestSyncDeferredToolCatalog_连续Delta达上限转Snapshot(t *testing.T) {
+	rail, agent := newRailUnderTest(t, true)
+	manager := prompts.NewManager()
+	rail.attachmentManager = manager
+	state := map[string]any{
+		"initialized": true, "version": 11, "delta_count": 10, "language": "cn",
+		"initial_tools": map[string]any{"cron_create_job": "创建定时任务"},
+		"tools":         map[string]any{"cron_create_job": "创建定时任务"},
+	}
+	sess := &railStateSession{state: map[string]any{}, id: "sess"}
+	sess.UpdateState(map[string]any{catalogStateKey: state})
+	cbc := newSyncCBC(agent, sess)
+	rail.syncDeferredToolCatalog(cbc, "cn")
+
+	atts := catalogAttachments(manager)
+	if len(atts) != 1 {
+		t.Fatalf("达上限应发布快照附件, got %d", len(atts))
+	}
+	if atts[0].Metadata["catalog_mode"] != "snapshot" {
+		t.Fatalf("应为 snapshot 模式: %v", atts[0].Metadata["catalog_mode"])
+	}
+	if atts[0].Metadata["delta_count"] != 0 {
+		t.Fatalf("快照后计数应清零: %v", atts[0].Metadata["delta_count"])
+	}
+}
+
+// TestSyncDeferredToolCatalog_语言切换转Snapshot 对齐 Python：语言变化 →
+// 全量快照（目录节重渲染，附件随语言重建）。
+func TestSyncDeferredToolCatalog_语言切换转Snapshot(t *testing.T) {
+	rail, agent := newRailUnderTest(t, true)
+	manager := prompts.NewManager()
+	rail.attachmentManager = manager
+	state := map[string]any{
+		"initialized": true, "version": 3, "delta_count": 2, "language": "cn",
+		"tools": map[string]any{"cron_create_job": "创建定时任务"},
+	}
+	sess := &railStateSession{state: map[string]any{}, id: "sess"}
+	sess.UpdateState(map[string]any{catalogStateKey: state})
+	cbc := newSyncCBC(agent, sess)
+	rail.syncDeferredToolCatalog(cbc, "en")
+
+	atts := catalogAttachments(manager)
+	if len(atts) != 1 || atts[0].Metadata["catalog_mode"] != "snapshot" {
+		t.Fatalf("语言切换应发快照, got %+v", atts)
+	}
+	if atts[0].Metadata["catalog_language"] != "en" {
+		t.Fatalf("附件语言应为 en: %v", atts[0].Metadata["catalog_language"])
+	}
+}
+
+// TestSyncDeferredToolCatalog_移除与指纹变化发Delta 对齐 Python：removed
+// 成员进 delta；指纹变化（schema 变更）判 updated。
+func TestSyncDeferredToolCatalog_移除与指纹变化发Delta(t *testing.T) {
+	rail, agent := newRailUnderTest(t, true)
+	manager := prompts.NewManager()
+	rail.attachmentManager = manager
+	state := map[string]any{
+		"initialized": true, "version": 1, "delta_count": 0, "language": "cn",
+		"tools":       map[string]any{"cron_create_job": "创建定时任务", "gone_tool": "已移除"},
+		"fingerprints": map[string]any{"cron_create_job": "fp-old"},
+	}
+	sess := &railStateSession{state: map[string]any{}, id: "sess"}
+	sess.UpdateState(map[string]any{catalogStateKey: state})
+	cbc := newSyncCBC(agent, sess)
+	rail.syncDeferredToolCatalog(cbc, "cn")
+
+	atts := catalogAttachments(manager)
+	if len(atts) != 1 || atts[0].Metadata["catalog_mode"] != "delta" {
+		t.Fatalf("移除/指纹变化应发 delta, got %+v", atts)
+	}
+	if !strings.Contains(atts[0].Content, "gone_tool") {
+		t.Fatalf("delta 应含移除成员:\n%s", atts[0].Content)
+	}
+}
+
+// TestSyncDeferredToolCatalog_附件恢复基线 对齐 Python :800-819：会话状态
+// 丢失（热重载/重建）时从既有附件 metadata 恢复 diff 基线——无变化不重复推送。
+func TestSyncDeferredToolCatalog_附件恢复基线(t *testing.T) {
+	rail, agent := newRailUnderTest(t, true)
+	manager := prompts.NewManager()
+	rail.attachmentManager = manager
+	// 先构造一次漂移发布（先冻结不含 extra，再注册 → 漂移）
+	rail.frozenSnapshot = nil
+	_ = rail.freezeDisclosureCatalogue()
+	extra := deferredCard("extra_tool", "新工具")
+	_ = agent.am.AddAbility(extra, stubTool{name: "extra_tool"})
+	sess1 := &railStateSession{state: map[string]any{}, id: "sess"}
+	rail.syncDeferredToolCatalog(newSyncCBC(agent, sess1), "cn")
+	if len(catalogAttachments(manager)) != 1 {
+		t.Fatal("前置：应先有一条附件")
+	}
+	// 新 session（状态空）→ 从附件恢复基线，live 不再变化 → 不重复推送
+	sess2 := &railStateSession{state: map[string]any{}, id: "sess"}
+	rail.syncDeferredToolCatalog(newSyncCBC(agent, sess2), "cn")
+	if len(catalogAttachments(manager)) != 1 {
+		t.Fatalf("恢复基线后无变化不应重复推送, got %d", len(catalogAttachments(manager)))
+	}
+	// Python 同款早退语义：恢复基线后无变化不发布也不写状态——
+	// 恢复是否成功以「不重复推送」为判据。
+	if state := railCatalogState(sess2); state != nil && state["initialized"] == true {
+		t.Fatalf("无变化早退不应写状态: %+v", state)
+	}
+}
+
+// snapshotHistoryStub 声明「已有历史快照」的 ModelContext 边界桩。
+// 仅用于让 Manager.HasHistorySnapshot 返回 true（delta 路径可达）——
+// 与 progressive_test.go 的 snapshotHistory 同模式，非被测子系统替身。
+type snapshotHistoryStub struct {
+	sessionID string
+	messages  []llmschema.BaseMessage
+}
+
+func newSnapshotHistoryStub(sessionID string) *snapshotHistoryStub {
+	msg := &llmschema.UserMessage{}
+	msg.SetMetadata(map[string]any{
+		prompts.MetadataKeyAttachmentHistory: true,
+		prompts.MetadataKeySessionID:         sessionID,
+		prompts.MetadataKeyMode:              prompts.ModeSnapshot,
+	})
+	return &snapshotHistoryStub{sessionID: sessionID, messages: []llmschema.BaseMessage{msg}}
+}
+
+func (h *snapshotHistoryStub) Len() int { return len(h.messages) }
+func (h *snapshotHistoryStub) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {
+	return h.messages, nil
+}
+func (h *snapshotHistoryStub) SetMessages(messages []llmschema.BaseMessage, _ bool) { h.messages = messages }
+func (h *snapshotHistoryStub) PopMessages(_ int, _ bool) []llmschema.BaseMessage {
+	popped := h.messages
+	h.messages = nil
+	return popped
+}
+func (h *snapshotHistoryStub) ClearMessages(_ context.Context, _ bool, _ ...ceinterface.Option) error {
+	h.messages = nil
+	return nil
+}
+func (h *snapshotHistoryStub) AddMessages(_ context.Context, messages []llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
+	h.messages = append(h.messages, messages...)
+	return h.messages, nil
+}
+func (h *snapshotHistoryStub) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema.ToolInfoInterface, _ int, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
+	return nil, nil
+}
+func (h *snapshotHistoryStub) Statistic() *ceinterface.ContextStats { return nil }
+func (h *snapshotHistoryStub) SessionID() string                    { return h.sessionID }
+func (h *snapshotHistoryStub) ContextID() string                    { return h.sessionID }
+func (h *snapshotHistoryStub) TokenCounter() tokeniface.TokenCounter {
+	return nil
+}
+func (h *snapshotHistoryStub) ReloaderTool() tool.Tool { return nil }
+func (h *snapshotHistoryStub) WorkspaceDir() string    { return "" }
+
+// GetSessionRef 空实现。
+func (h *snapshotHistoryStub) GetSessionRef() sessioninterfaces.SessionFacade { return nil }
+
+// SaveState/LoadState 空实现。
+func (h *snapshotHistoryStub) SaveState() map[string]any { return nil }
+func (h *snapshotHistoryStub) LoadState(_ map[string]any) {}
+
+// OffloadMessages 空实现。
+func (h *snapshotHistoryStub) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
+
+// SetSessionRef/CreateContext/GetContext/UpdateModelContext/RecoverFromModelContextOverflow 空实现。
+func (h *snapshotHistoryStub) SetSessionRef(_ sessioninterfaces.SessionFacade) {}
+func (h *snapshotHistoryStub) CreateContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CreateContextOption) (ceinterface.ModelContext, error) {
+	return h, nil
+}
+func (h *snapshotHistoryStub) GetContext(_ string, _ string) ceinterface.ModelContext { return nil }
+func (h *snapshotHistoryStub) UpdateModelContext(_ string, _ int)                     {}
+func (h *snapshotHistoryStub) RecoverFromModelContextOverflow(_ context.Context, _ sessioninterfaces.SessionFacade, _ string, _ bool, _ int) bool {
+	return false
+}
+
+// CompressContext 空实现。
+func (h *snapshotHistoryStub) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
+	return nil, nil
+}
+
+var _ ceinterface.ModelContext = (*snapshotHistoryStub)(nil)
+
+// TestToolNameOfContext_分支 对齐 Python：ToolName 优先、ToolCall.Name 回落、
+// 非 ToolCallInputs/nil 上下文返回空。
+func TestToolNameOfContext_分支(t *testing.T) {
+	if got := toolNameOfContext(nil); got != "" {
+		t.Fatalf("nil 上下文应空串, got %q", got)
+	}
+	cbc := agentinterfaces.NewAgentCallbackContext(&fakeBaseAgent{am: ability.NewAbilityManager(nil), sb: saprompt.NewSystemPromptBuilder()}, &agentinterfaces.InvokeInputs{}, nil)
+	if got := toolNameOfContext(cbc); got != "" {
+		t.Fatalf("非 ToolCallInputs 应空串, got %q", got)
+	}
+	inputs := &agentinterfaces.ToolCallInputs{ToolCall: &llmschema.ToolCall{ID: "c", Name: "via_call"}}
+	cbc2 := agentinterfaces.NewAgentCallbackContext(&fakeBaseAgent{am: ability.NewAbilityManager(nil), sb: saprompt.NewSystemPromptBuilder()}, inputs, nil)
+	if got := toolNameOfContext(cbc2); got != "via_call" {
+		t.Fatalf("应回落 ToolCall.Name, got %q", got)
+	}
+}
+
+// TestInitialStateToolsOf_回落链 对齐 Python :716-721：state 优先 →
+// 冻结目录 → 当前播种。
+func TestInitialStateToolsOf_回落链(t *testing.T) {
+	rail, _ := newRailUnderTest(t, true)
+	// state 有 initial_tools → 直接取
+	fromState := rail.initialStateToolsOf(map[string]any{"initial_tools": map[string]any{"x": "X"}}, map[string]string{"y": "Y"})
+	if len(fromState) != 1 || fromState["x"] != "X" {
+		t.Fatalf("state 优先: %+v", fromState)
+	}
+	// state 空 → 冻结目录
+	fromFrozen := rail.initialStateToolsOf(map[string]any{}, map[string]string{"y": "Y"})
+	if _, ok := fromFrozen["cron_create_job"]; !ok {
+		t.Fatalf("应回落冻结目录: %+v", fromFrozen)
+	}
+	// 冻结清空 → 当前播种
+	rail.frozenSnapshot = nil
+	fromCurrent := rail.initialStateToolsOf(map[string]any{}, map[string]string{"z": "Z"})
+	if _, ok := fromCurrent["z"]; !ok {
+		t.Fatalf("应回落当前播种: %+v", fromCurrent)
+	}
+}
+
+// TestAbilityManagerOfAgent_Nil 对齐 Python：nil agent/nil manager 防御。
+func TestAbilityManagerOfAgent_Nil(t *testing.T) {
+	if abilityManagerOfAgent(nil) != nil {
+		t.Fatal("nil agent 应返回 nil")
+	}
+	if lookupCardByName(nil, "x") != nil {
+		t.Fatal("nil manager 应返回 nil")
 	}
 }

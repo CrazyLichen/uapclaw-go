@@ -54,7 +54,7 @@ MCP 工具命名契约 `mcp_{server}_{tool}`；server 名最长前缀匹配（�
 ### 2.6 DeepAdapter 接线 + R-5
 
 - `deep_adapter.go` 补 `_build_tool_retrieval_prompt_rail` 等价段（toolkit 懒创建 + pending rails 队列 + 内置 rail 丢弃 + 失败 nil 兜底），开关 = `isToolRetrievalEnabled`（= progressiveToolEnabled && progressiveToolOptimize，双默认 False，config.py:64/68）。
-- **R-5 回填**（`deep_adapter_sessions.go:240` ⤵️ 缝，Python interface_deep.py:4214-4232）：tool_retrieval 开关翻转 → 会话 child 重建判据。
+- **R-5 回填**（`deep_adapter_sessions.go:240` ⤵️ 缝，Python interface_deep.py:4143-4164（实测修正））：tool_retrieval 开关翻转 → 会话 child 重建判据。
 
 ## 3. 批一范围（Python→Go 文件映射，规则 9）
 
@@ -65,7 +65,7 @@ MCP 工具命名契约 `mcp_{server}_{tool}`；server 名最长前缀匹配（�
 | `common/tools/tool_discovery_catalog.py` | 187 | `internal/swarm/agents/harness/common/tools/tool_discovery_catalog.go` |
 | cron `_RestrictedCronBackend`（cron_runtime.py:937-1067 段） | ~130 | `internal/swarm/agents/harness/common/tools/cron/cron_runtime.go` 增补 |
 | readonly_tool_bindings 四类扩展 | — | `internal/swarm/agents/harness/common/rails/permissions/auto_permission/readonly_tool_bindings.go` |
-| interface_deep.py 接线段（:7270-7390）+ :4214-4232（R-5） | ~230 | `internal/swarm/server/adapter/deep_adapter.go` + `deep_adapter_sessions.go` |
+| interface_deep.py 接线段（:7270-7390）+ :4143-4164（R-5，实测修正） | ~230 | `internal/swarm/server/adapter/deep_adapter.go` + `deep_adapter_sessions.go` |
 | `common/config.py` is_tool_retrieval_enabled（:469-479） | ~15 | config 层对应助手 |
 
 已存在复用：9.11a progressive.go（目录渲染器/元工具基座）、tool_discovery/bm25、cron_runtime.go CronToolsCronBackend、providers 两工厂桩（member_rails.go:213 / tools.go:280 注释同步回收 ⤴️9.11b 标记）。
@@ -98,3 +98,12 @@ MCP 工具命名契约 `mcp_{server}_{tool}`；server 名最长前缀匹配（�
 ## 7. 已知偏差
 
 实施期如遇 Go 无继承/闭包身份校验不可直译（Python 用 `__closure__` 探测，Go 需以具体类型/函数值相等判定替代）等语言边界，按规则 9.6/12.3 在本节登记：Python 符号+行号、Go 等价位置、偏差性质、理由、回收条件，经确认后实施。
+
+**批一实施偏差登记（2026-11-24 审查批确认）：**
+
+| # | Python 符号与位置 | Go 等价位置 | 偏差性质 | 理由 | 回收条件 |
+|---|---|---|---|---|---|
+| D-7-1 | `type(backend) is _RestrictedCronBackend`（readonly_tool_bindings.py:288） | `cronbridge.IsRestrictedCronBackend`（类型断言 `backend.(*restrictedCronBackend)`，cron_runtime.go） | 语言边界（Go 无 `type(x) is` 语法） | 类型断言精确匹配具体类型，防子类/包装伪装语义一致 | Go 若引入 `type is` 等价语法则替换 |
+| D-7-2 | `_closure(func, create_cron_tools, method+"_wrapper")` 闭包挖掘 + `_methods_match`/`_method_matches(backend._cron_tools, CronTools, method)` 方法集一致性校验（readonly_tool_bindings.py:289-304） | 装配期登记：BuildTools 构造时把真实 `backend`/`*CronToolContext` 写入 `ToolCard.Properties["cron_backend"]`/`["cron_context"]`，运行期 `trustedReadonlyBindingV6` 校验（owner 桥接一致 → 卡片存在 → backend 接口断言 → IsRestrictedCronBackend → `cron_context.SessionID == sessionID`） | 语言边界（Go 工具为函数式实现，无 `resource._func`/`__closure__` 可挖；闭包/绑定方法为 Python 运行时概念） | 以「装配期登记 + 运行期身份卡校验」替代闭包挖掘；防线差异：①方法集一致性校验弱化为装配期信任链（卡片登记即真实装配产物）；②Properties 理论上可被构造注入（Python 闭包不可伪造）——以 owner 桥接校验 + fail-closed 兜底补偿 | 工具实现改为可导出的具体类型方法值时，可改用函数值指针相等判定收窄差距 |
+| D-7-3 | `tool_search` 退役字段防御性 `kwargs.pop("call_goal"/"cursor"/"query"/"tools")`（tool_retrieval_toolkits.py:646-655） | `ToolSearch` 显式 `map[string]any` 逐键 delete/读取（tool_retrieval_toolkits.go） | 类型系统差异（Go 无 kwargs 动态弹出） | 行为等价：旧快照长会话降级不报错语义逐项保留 | 无 |
+| D-7-4 | `_drop_pending_progressive_tool_rail` 手术方法归属 **DeepAdapter**（interface_deep.py:7289-7305，`getattr/setattr` 直改 DeepAgent 私有列表） | 手术方法 `dropPendingProgressiveToolRail` 同层保留于 `deep_adapter.go`；DeepAgent 仅提供 `PendingRails`/`ReplacePendingRails` 访问器 | 对齐修正（2026-11-24 审查批：批一初版误把手术逻辑放 DeepAgent.DropBundledProgressiveToolRail，用户拍板归属回 adapter） | Python 方法在 adapter 层；Go 可见性限制只需数据访问器、不需逻辑迁移 | 无（已按对齐收敛） |

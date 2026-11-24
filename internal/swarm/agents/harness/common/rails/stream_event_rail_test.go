@@ -699,3 +699,58 @@ func TestGetTodoTool_非DeepAgent返回nil(t *testing.T) {
 		t.Errorf("非 DeepAgent 应返回 nil, got %T", got)
 	}
 }
+
+// TestStreamEventRail_装配钩子 补齐构造器/注入器/Init-Uninit 覆盖（15.20 遗留）。
+func TestStreamEventRail_装配钩子(t *testing.T) {
+	rail := NewJiuClawStreamEventRailWithIdentity("  MemberA ", " LEADER ")
+	if rail.memberName != "MemberA" || rail.role != "leader" {
+		t.Fatalf("构造应 Trim/ToLower: %q/%q", rail.memberName, rail.role)
+	}
+	if rail.Priority() != 80 {
+		t.Fatal("优先级应 80")
+	}
+	if rail.RootPermissionQueue() != nil {
+		t.Fatal("未注入应 nil")
+	}
+	var nilQueue RootPermissionQueueAccessor
+	rail.SetRootPermissionQueue(nilQueue)
+	if rail.RootPermissionQueue() != nilQueue {
+		t.Fatal("注入后应可读回")
+	}
+	var emptyDeps InterruptionProjectionDeps
+	rail.SetInterruptionProjectionDeps(emptyDeps)
+	if rail.ProjectionDeps().ProjectCompleteInterruption != nil {
+		t.Fatal("空依赖应可读回")
+	}
+	if err := rail.Init(context.Background(), nil); err != nil {
+		t.Fatalf("Init 应无错: %v", err)
+	}
+	if err := rail.Uninit(nil); err != nil {
+		t.Fatalf("Uninit 应无错: %v", err)
+	}
+}
+
+// TestStreamEventRail_AfterModelCall与异常修复 补齐 AfterModelCall/OnModelException
+// （15.20 遗留：nil ModelContext 走静默分支）。
+func TestStreamEventRail_AfterModelCall与异常修复(t *testing.T) {
+	rail := NewJiuClawStreamEventRailWithIdentity("m", "leader")
+	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, nil)
+	if err := rail.AfterModelCall(context.Background(), cbc); err != nil {
+		t.Fatalf("AfterModelCall 应无错: %v", err)
+	}
+	if err := rail.OnModelException(context.Background(), cbc); err != nil {
+		t.Fatalf("nil ModelContext 应静默无错: %v", err)
+	}
+}
+
+// TestStreamEventRail_GetPromptLanguage回落链 补齐语言解析分支（15.20 遗留）。
+func TestStreamEventRail_GetPromptLanguage回落链(t *testing.T) {
+	rail := NewJiuClawStreamEventRailWithIdentity("m", "leader")
+	if got := rail.getPromptLanguage(); got != "cn" {
+		t.Fatalf("nil deepAgent 应回落 cn, got %q", got)
+	}
+	rail.deepAgent = &fakeBaseAgent{}
+	if got := rail.getPromptLanguage(); got != "cn" {
+		t.Fatalf("空语言应回落 cn, got %q", got)
+	}
+}

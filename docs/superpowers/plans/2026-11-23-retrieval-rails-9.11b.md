@@ -147,7 +147,7 @@ Python: `interface_deep.py:7270-7390`（三方法）+ `:4214-4232`（R-5）。
   1. enabled=true → `_pending_rails` 等价 rail 列表中 ProgressiveToolRail 被剔除、ToolRetrievalPromptRail 存在（日志字段 `dropped_bundled=true`）；
   2. toolkit 构造失败 → nil 返回 + 保留内置 rail（`keep_bundled=true`）；
   3. enabled=false → 内置 rail 保留；
-  4. R-5：config 快照 tool_retrieval 开关翻转 → `getOrCreateSessionAdapter` 重建 child（对齐 Python :4214-4232 判据原序）。
+  4. R-5：config 快照 tool_retrieval 开关翻转 → `getOrCreateSessionAdapter` 重建 child（对齐 Python :4143-4164 判据原序，实测修正（原 4214-4232 为行号漂移））。
 - [ ] **Step 2: FAIL** → **Step 3: 实现**——`buildToolRetrievalPromptRail()`（toolkit 懒创建，失败 nil + Warn）；装配点替换 9.11a rail；R-5 在步骤 6 判据链插入（读 config 快照前后对比）。**R-5 回填后删除 :240 ⤵️ 注释行**。
 - [ ] **Step 4: PASS** → **Step 5: Commit**
 

@@ -535,7 +535,7 @@ func (d *DeepAdapter) registerToolRetrievalPromptRail(configBase map[string]any)
 	if toolkit == nil {
 		return
 	}
-	if d.instance.DropBundledProgressiveToolRail() {
+	if d.dropPendingProgressiveToolRail() {
 		logger.Info(logComponent).
 			Str("event_type", "tool_retrieval_takeover").
 			Msg("[JiuWenSwarmDeepAdapter] dropped bundled ProgressiveToolRail; " +
@@ -547,6 +547,31 @@ func (d *DeepAdapter) registerToolRetrievalPromptRail(configBase map[string]any)
 	logger.Info(logComponent).
 		Str("event_type", "tool_retrieval_queued").
 		Msg("[JiuWenSwarmDeepAdapter] ToolRetrievalPromptRail queued")
+}
+
+// dropPendingProgressiveToolRail 从 DeepAgent pendingRails 剔除内置
+// ProgressiveToolRail。Python: interface_deep.py:7289-7305（kept = [rail for
+// rail in pending if not isinstance(rail, ProgressiveToolRail)]）——手术方法
+// 归属 adapter 层（Python 同层），DeepAgent 仅提供 pendingRails 访问器。
+// 返回是否确有移除。
+func (d *DeepAdapter) dropPendingProgressiveToolRail() bool {
+	if d.instance == nil {
+		return false
+	}
+	pending := d.instance.PendingRails()
+	kept := make([]sainterfaces.AgentRail, 0, len(pending))
+	dropped := false
+	for _, rail := range pending {
+		if _, isProgressive := rail.(*rails.ProgressiveToolRail); isProgressive {
+			dropped = true
+			continue
+		}
+		kept = append(kept, rail)
+	}
+	if dropped {
+		d.instance.ReplacePendingRails(kept)
+	}
+	return dropped
 }
 
 // getOrCreateToolRetrievalToolkit 懒创建检索工具包。

@@ -371,3 +371,79 @@ func TestIsObjectTyped_数组形态(t *testing.T) {
 		t.Fatal("非串非数组不应命中")
 	}
 }
+
+// ──────────────────────────── 审查批补齐 ────────────────────────────
+
+// TestDescriptionFor_双语回落链 对齐 Python description_for：en 缺失回落 zh、
+// zh 缺失回落 en、连接器组互为回落。
+func TestDescriptionFor_双语回落链(t *testing.T) {
+	cn := ToolCategory{Path: "p", Description: "中文", Tools: []string{"a"}}
+	en := ToolCategory{Path: "p", Description: "中文", DescriptionEn: "English", Tools: []string{"a"}}
+	if got := cn.DescriptionFor("en"); got != "中文" {
+		t.Fatalf("en 缺失应回落中文: %q", got)
+	}
+	if got := en.DescriptionFor("en"); got != "English" {
+		t.Fatalf("en 应取英文: %q", got)
+	}
+	group := McpServerGroup{DescriptionEn: "only-en"}
+	if got := group.DescriptionFor("zh"); got != "only-en" {
+		t.Fatalf("zh 缺失应回落 en: %q", got)
+	}
+	group2 := McpServerGroup{DescriptionZh: "only-zh"}
+	if got := group2.DescriptionFor("en"); got != "only-zh" {
+		t.Fatalf("en 缺失应回落 zh: %q", got)
+	}
+}
+
+// TestStringOf_宽松转串 对齐 Python str() 保守等价：nil 空、string 直通、
+// Stringer 调用、其他 fmt 兜底。
+func TestStringOf_宽松转串(t *testing.T) {
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{nil, ""},
+		{"abc", "abc"},
+		{42, "42"},
+		{true, "true"},
+	}
+	for _, c := range cases {
+		if got := stringOf(c.in); got != c.want {
+			t.Fatalf("stringOf(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestRenderRootListing_退役降级 对齐 Python _render_root_listing：裸 search
+// 降级渲染根目录——多成员 [category]、单成员 [tool]、en 头部文案。
+func TestRenderRootListing_退役降级(t *testing.T) {
+	tk := newRetrievalToolkit(providerInfos())
+	zh := tk.renderRootListing()
+	if !strings.Contains(zh, "## Tool categories") || !strings.Contains(zh, "旧拼写降级") {
+		t.Fatalf("zh 降级头部缺失:\n%s", zh)
+	}
+	if !strings.Contains(zh, "[tool] read_pdf") {
+		t.Fatalf("单成员应折叠 [tool]:\n%s", zh)
+	}
+	tkEn := NewToolRetrievalToolkit(fakeProvider(providerInfos()...), "s", nil, nil, "en")
+	en := tkEn.renderRootListing()
+	if !strings.Contains(en, "legacy calls") {
+		t.Fatalf("en 头部缺失:\n%s", en)
+	}
+}
+
+// TestRenderCategoryListing_Keyword与未知分类 对齐 Python：keyword BM25
+// 过滤与未知分类错误文案。
+func TestRenderCategoryListing_Keyword与未知分类(t *testing.T) {
+	tk := newRetrievalToolkit(providerInfos())
+	out, err := tk.renderCategoryListing("cron", "创建")
+	if err != nil {
+		t.Fatalf("命中分类不应报错: %v", err)
+	}
+	if !strings.Contains(out, "cron_create_job") {
+		t.Fatalf("keyword 命中应含 create:\n%s", out)
+	}
+	if _, err = tk.renderCategoryListing("no_such", ""); err == nil || !strings.Contains(err.Error(), "no_such") {
+		t.Fatalf("未知分类应报错: %v", err)
+	}
+}

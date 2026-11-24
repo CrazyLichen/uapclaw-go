@@ -12,7 +12,7 @@
 //	cron/
 //	├── doc.go            # 包文档
 //	├── cron_tools.go     # CronTools 本地双写 + E2A 转发 + ensureScheduler 方案 B 四分支
-//	└── cron_runtime.go   # CronRuntimeBridge + cronToolsBackend 11 方法 + extractLegacyParams
+//	└── cron_runtime.go   # CronRuntimeBridge + cronToolsBackend 11 方法 + extractLegacyParams + restrictedCronBackend 受限视图（cron_runtime.py:937-1103）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/tools/cron/
 package cronbridge

@@ -755,27 +755,23 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 	return nil
 }
 
-// DropBundledProgressiveToolRail 从 pendingRails 移除内置 ProgressiveToolRail。
-// Python: interface_deep.py:7289-7305（kept = [rail for rail in pending
-// if not isinstance(rail, ProgressiveToolRail)]）——启用 jiuwenswarm
-// ToolRetrievalPromptRail 时由 DeepAdapter 调用，移交 tool_search 所有权。
-// 返回是否确有移除。
-func (d *DeepAgent) DropBundledProgressiveToolRail() bool {
+// PendingRails 读出 pendingRails 快照（延迟注册队列）。
+// Python 的 _pending_rails 为 adapter 可直接 getattr 的被动持有；
+// Go 可见性限制下仅提供访问器，手术逻辑留在 DeepAdapter
+// （对齐 Python interface_deep.py:7289-7305 的方法归属）。
+func (d *DeepAgent) PendingRails() []agentinterfaces.AgentRail {
 	d.railsMu.Lock()
-	kept := make([]agentinterfaces.AgentRail, 0, len(d.pendingRails))
-	dropped := false
-	for _, rail := range d.pendingRails {
-		if _, isProgressive := rail.(*rails.ProgressiveToolRail); isProgressive {
-			dropped = true
-			continue
-		}
-		kept = append(kept, rail)
-	}
-	if dropped {
-		d.pendingRails = kept
-	}
+	defer d.railsMu.Unlock()
+	out := make([]agentinterfaces.AgentRail, len(d.pendingRails))
+	copy(out, d.pendingRails)
+	return out
+}
+
+// ReplacePendingRails 写回 pendingRails（整体替换，调用方自付过滤后的列表）。
+func (d *DeepAgent) ReplacePendingRails(kept []agentinterfaces.AgentRail) {
+	d.railsMu.Lock()
+	d.pendingRails = kept
 	d.railsMu.Unlock()
-	return dropped
 }
 
 // QueuePendingRail 追加 rail 进 pendingRails（延迟注册）。

@@ -979,7 +979,7 @@ func (r *ToolRetrievalPromptRail) writeCatalogState(
 	merged["delta_count"] = deltaCount
 	merged["language"] = language
 	merged["initial_tools"] = initialTools
-	merged[catalogMetadataTools+"_initial"] = initialFingerprints
+	merged["initial_fingerprints"] = initialFingerprints
 	merged["tools"] = tools
 	merged["fingerprints"] = fingerprints
 	sess.UpdateState(map[string]any{catalogStateKey: merged})

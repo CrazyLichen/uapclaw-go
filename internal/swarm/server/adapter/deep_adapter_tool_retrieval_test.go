@@ -8,6 +8,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
 // newToolRetrievalTestAdapter 构造带真实 instance 的最小 DeepAdapter。
@@ -74,12 +76,25 @@ func TestRegisterToolRetrievalPromptRail_单一所有者(t *testing.T) {
 	}
 }
 
-// TestDropBundledProgressiveToolRail 对齐 Python _drop_bundled_progressive：
-// pending 中 ProgressiveToolRail 被剔除，其余保留；无内置时返回 false。
-func TestDropBundledProgressiveToolRail(t *testing.T) {
+// TestDropPendingProgressiveToolRail 对齐 Python _drop_pending_progressive_tool_rail
+// （interface_deep.py:7289-7305，手术方法归属 adapter）：pending 中
+// ProgressiveToolRail 被剔除其余保留；无内置时返回 false。
+func TestDropPendingProgressiveToolRail(t *testing.T) {
 	d := newToolRetrievalTestAdapter(t)
-	if d.instance.DropBundledProgressiveToolRail() {
+	if d.dropPendingProgressiveToolRail() {
 		t.Fatal("无内置 rail 时应返回 false")
+	}
+	// 混入内置 rail + 其他 rail：剔除内置、保留其他（Python kept 列表重建）
+	other := commrails.NewToolRetrievalPromptRail(d.getOrCreateToolRetrievalToolkit(map[string]any{}), map[string]any{})
+	d.instance.QueuePendingRail(other)
+	d.instance.QueuePendingRail(rails.NewProgressiveToolRail(nil))
+	if !d.dropPendingProgressiveToolRail() {
+		t.Fatal("存在内置 rail 时应返回 true")
+	}
+	for _, rail := range d.instance.PendingRails() {
+		if _, isProgressive := rail.(*rails.ProgressiveToolRail); isProgressive {
+			t.Fatal("剔除后 pending 中不应再有内置 rail")
+		}
 	}
 }
 
