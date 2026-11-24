@@ -3,22 +3,27 @@
 package agentobservability_test
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	obsdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	harnessobs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/observability"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -250,4 +255,123 @@ func (s *ObservabilityChainSuite) TestObs_子agent归属() {
 		}
 	}
 	s.Assert().True(inherited, "子 agent span 应继承父运行根的 trace")
+}
+
+// TestE2E_配置装配与卸载 ConfigureSkillEvolution 挂栈 → 同配置幂等复用 →
+// UnconfigureSkillEvolution 清栈，rail 列表断言。
+// Python: configuration.py configure_skill_evolution/unconfigure_skill_evolution。
+// （信号→staging→审批/落盘全链由 evolution 包触发套件与正例套件覆盖：
+// TestAfterInvoke触发异步演化并落盘 / TestRunEvolution_*。）
+func (s *ObservabilityChainSuite) TestE2E_配置装配与卸载() {
+	agent := newFakeConfigurableAgent()
+
+	skillsDir := s.T().TempDir()
+	require.NoError(s.T(), coreevolution.ConfigureSkillEvolution(
+		agent, []string{skillsDir}, s.mockModel(), "mock-model", nil,
+		false, nil, false, "cn", false, false), "首次装配应成功")
+
+	evolutionRailType := reflect.TypeOf(&coreevolution.SkillEvolutionRail{})
+	interruptRailType := reflect.TypeOf(&coreevolution.EvolutionInterruptRail{})
+	s.Len(agent.FindRailsByType(evolutionRailType, interruptRailType), 2, "装配后应挂 interrupt+evolution 两条 rail")
+
+	// 幂等复用：不新增 rail
+	require.NoError(s.T(), coreevolution.ConfigureSkillEvolution(
+		agent, []string{skillsDir}, s.mockModel(), "mock-model", nil,
+		false, nil, false, "cn", false, false), "同配置幂等装配应成功")
+	s.Len(agent.FindRailsByType(evolutionRailType, interruptRailType), 2, "幂等装配不应新增 rail")
+
+	// 互斥守卫：换 team 模式报错
+	err := coreevolution.ConfigureSkillEvolution(
+		agent, []string{skillsDir}, s.mockModel(), "mock-model", nil,
+		true, nil, false, "cn", false, false)
+	require.Error(s.T(), err, "跨模式装配应报错")
+
+	// 卸载：全部移除
+	removed := coreevolution.UnconfigureSkillEvolution(agent, nil)
+	s.Equal(2, removed, "卸载应移除 2 条 rail")
+	s.Empty(agent.FindRailsByType(evolutionRailType, interruptRailType), "卸载后应无演进 rail")
+}
+
+// ──────────────────────────── 配置装配测试替身 ────────────────────────────
+
+// fakeConfigurableAgent EvolutionConfigurableAgent 测试替身（DeepAgent 排队形态）。
+type fakeConfigurableAgent struct {
+	pending    []agentinterfaces.AgentRail
+	registered []agentinterfaces.AgentRail
+}
+
+func newFakeConfigurableAgent() *fakeConfigurableAgent { return &fakeConfigurableAgent{} }
+
+func (a *fakeConfigurableAgent) FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail {
+	var result []agentinterfaces.AgentRail
+	for _, rail := range append(append([]agentinterfaces.AgentRail{}, a.pending...), a.registered...) {
+		railType := reflect.TypeOf(rail)
+		for _, want := range railTypes {
+			if railType == want {
+				result = append(result, rail)
+				break
+			}
+		}
+	}
+	return result
+}
+
+func (a *fakeConfigurableAgent) AddRail(rail agentinterfaces.AgentRail) {
+	a.pending = append(a.pending, rail)
+}
+
+func (a *fakeConfigurableAgent) StripRailsByType(railTypes ...reflect.Type) int {
+	removed := 0
+	var kept []agentinterfaces.AgentRail
+	for _, rail := range a.pending {
+		railType := reflect.TypeOf(rail)
+		match := false
+		for _, want := range railTypes {
+			if railType == want {
+				match = true
+				break
+			}
+		}
+		if match {
+			removed++
+		} else {
+			kept = append(kept, rail)
+		}
+	}
+	a.pending = kept
+	return removed
+}
+
+func (a *fakeConfigurableAgent) PendingRails() []agentinterfaces.AgentRail {
+	result := make([]agentinterfaces.AgentRail, len(a.pending))
+	copy(result, a.pending)
+	return result
+}
+
+func (a *fakeConfigurableAgent) RemovePendingRail(rail agentinterfaces.AgentRail) {
+	var kept []agentinterfaces.AgentRail
+	for _, queued := range a.pending {
+		if queued != rail {
+			kept = append(kept, queued)
+		}
+	}
+	a.pending = kept
+}
+
+func (a *fakeConfigurableAgent) RegisterRail(_ context.Context, rail agentinterfaces.AgentRail) error {
+	a.registered = append(a.registered, rail)
+	return nil
+}
+
+// mockModel 构造配置装配用的 Model（不实际发请求）。
+func (s *ObservabilityChainSuite) mockModel() *llm.Model {
+	s.T().Helper()
+	model, err := llm.NewModel(&llmschema.ModelClientConfig{
+		ClientProvider: "OpenAI",
+		ClientID:       "cfg-observe-client",
+		APIKey:         "k",
+		APIBase:        "http://localhost:1",
+	}, nil)
+	require.NoError(s.T(), err)
+	return model
 }

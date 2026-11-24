@@ -63,6 +63,12 @@ type EvolutionSnapshot struct {
 type EvolutionRequestResult struct {
 	// SkillName 技能名称
 	SkillName string
+	// Mode 请求模式（agent_prompt；Python 缺省）
+	// Python: mode（contracts.py:53）
+	Mode string
+	// FollowupPrompt 宿主投递的演进提示词（可选）
+	// Python: followup_prompt
+	FollowupPrompt *string
 	// RequestID 请求标识（可选）
 	RequestID *string
 	// ApprovalEvent 审批事件（可选）
@@ -71,12 +77,24 @@ type EvolutionRequestResult struct {
 	Records []checkpointing.EvolutionRecord
 	// AutoApproved 是否自动审批
 	AutoApproved bool
+	// Status 编排状态（可选）
+	// Python: status
+	Status *string
+	// Message 附加消息
+	// Python: message
+	Message string
 }
 
 // SimplifyRequestResult 主动精简请求 API 返回的结构化结果。
 type SimplifyRequestResult struct {
 	// SkillName 技能名称
 	SkillName string
+	// Mode 请求模式（agent_prompt；Python 缺省）
+	// Python: mode（contracts.py:71）
+	Mode string
+	// FollowupPrompt 宿主投递的精简提示词（可选）
+	// Python: followup_prompt
+	FollowupPrompt *string
 	// RequestID 请求标识（可选）
 	RequestID *string
 	// ApprovalEvent 审批事件（可选）
@@ -116,12 +134,14 @@ const (
 
 // HasChanges 是否有变更。
 func (r EvolutionRequestResult) HasChanges() bool {
-	return len(r.Records) > 0 || r.ApprovalEvent != nil
+	// Python: bool(self.records or self.approval_event or self.followup_prompt)
+	return len(r.Records) > 0 || r.ApprovalEvent != nil || r.FollowupPrompt != nil
 }
 
 // HasChanges 是否有变更。
 func (r SimplifyRequestResult) HasChanges() bool {
-	return len(r.Actions) > 0 || r.ApprovalEvent != nil
+	// Python: bool(self.actions or self.approval_event or self.followup_prompt)
+	return len(r.Actions) > 0 || r.ApprovalEvent != nil || r.FollowupPrompt != nil
 }
 
 // ToPayload 返回 JSON payload 形态，跳过空字段。
