@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

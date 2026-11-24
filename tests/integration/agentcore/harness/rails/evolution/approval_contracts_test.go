@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

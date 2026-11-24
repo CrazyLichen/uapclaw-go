@@ -9,11 +9,11 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

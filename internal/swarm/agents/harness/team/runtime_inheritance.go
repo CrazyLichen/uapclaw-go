@@ -5,22 +5,22 @@ import (
 	"os"
 	"strings"
 
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	ce "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	swarmSchema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
+	swarmSchema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -362,7 +362,7 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any) *evolution
 		llmModel,
 		modelName,
 		"cn",
-		evolution.WithAutoScan(evolutionAutoScan),
+		evolution.WithSignalTrigger(evolutionAutoScan),
 		evolution.WithAutoSave(true),
 		evolution.WithDisabledSkillsSet(skillruntime.LoadExecutionDisabledSkills()),
 	)

@@ -12,9 +12,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	cmschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // 扩展包加载器：manifest.json 与 legacy YAML（harness_config.yaml /

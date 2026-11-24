@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestInheritInvocationLogDir 继承语义（Python inherit_invocation_log_dir）

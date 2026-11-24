@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/skills"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	htools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
+	htools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

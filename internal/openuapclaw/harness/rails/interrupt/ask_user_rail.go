@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	askuser "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/ask_user"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	askuser "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/ask_user"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

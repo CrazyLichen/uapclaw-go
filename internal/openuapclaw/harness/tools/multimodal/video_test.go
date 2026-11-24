@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── NormalizeVideoURL 测试 ────────────────────────────

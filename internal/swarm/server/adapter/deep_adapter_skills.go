@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

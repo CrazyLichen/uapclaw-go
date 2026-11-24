@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/renderer"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // 非交互运行模式。

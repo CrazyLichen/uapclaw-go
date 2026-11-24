@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
@@ -17,7 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -311,7 +311,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 		return nil
 	}
 	// Python: if not getattr(self._skill_evolution_rail, "auto_scan", True): return
-	if !d.skillEvolutionRail.AutoScan() {
+	if !d.skillEvolutionRail.SignalTrigger() {
 		return nil
 	}
 
@@ -368,7 +368,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 			return nil
 		}
 		// Python: if not getattr(..., "auto_scan", True): if active → push end hidden; cleanup; return
-		if !d.skillEvolutionRail.AutoScan() {
+		if !d.skillEvolutionRail.SignalTrigger() {
 			if active {
 				pushStatus("end", evolutionlogic.TeamEvolutionHiddenStage, "")
 			}

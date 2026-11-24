@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
@@ -64,8 +65,6 @@ type SkillEvolutionRail struct {
 
 	// ─── 配置 ───
 
-	// autoScan 是否自动检测演进信号
-	autoScan bool
 	// autoSave 是否自动保存（跳过审批）
 	autoSave bool
 	// disabledSkills 禁用的技能名称列表
@@ -127,6 +126,42 @@ type SkillEvolutionRail struct {
 	// 仍为 builder 游标增量 D-25.2b-11，字段为配置一致性校验保留）
 	// Python: self._trajectory_span_processor
 	trajectorySpanProcessor *trajectory.TrajectorySpanProcessor
+
+	// ─── 15.24a Task 10 新版（08-13）字段 ───
+
+	// signalTrigger 是否触发确定性信号驱动演化
+	// Python: self._signal_trigger（__init__ :242）
+	signalTrigger bool
+	// twoStage 经验生成是否使用 analyzer+formatter 双段管线
+	// Python: self._two_stage（:251）
+	twoStage bool
+	// reviewTrigger 是否周期性排入审查自检 follow-up
+	// Python: self._review_trigger（:262）
+	reviewTrigger bool
+	// reviewInterval 非跟进任务迭代数间隔（两次审查自检之间）
+	// Python: self._review_interval
+	reviewInterval int
+	// reviewNonFollowupCount 非跟进迭代计数
+	// Python: self._review_non_followup_count
+	reviewNonFollowupCount int
+	// reviewAgentMaxIterations 审查子 agent 最大迭代数
+	// Python: self._review_agent_max_iterations
+	reviewAgentMaxIterations int
+	// skipSignalTriggerThisInvoke 本 invoke 已有活动演化活动时跳过被动信号扫描
+	// Python: self._skip_signal_trigger_this_invoke（:258）
+	skipSignalTriggerThisInvoke bool
+	// subjectKindValue 活动审查主体类别（"skill" / "swarm-skill"）
+	// Python: self._subject_kind_value
+	subjectKindValue string
+	// evolutionTools rail 注册的演化工具（uninit 注销用；注册面 ⤴️15.24b）
+	// Python: self._evolution_tools
+	evolutionTools []any
+	// agentRef 绑定的 agent（init 时设置）
+	// Python: self._agent
+	agentRef any
+	// systemPromptBuilder 系统提示词构建器（init 时抓取）
+	// Python: self._system_prompt_builder
+	systemPromptBuilder any
 }
 
 // SkillEvolutionRailOption SkillEvolutionRail 构造选项函数。
@@ -152,7 +187,55 @@ const (
 	// sharedRecordContextMarker 共享记录上下文标记前缀。
 	// 对齐 Python: _SHARED_RECORD_CONTEXT_MARKER = "[shared origin="
 	sharedRecordContextMarker = "[shared origin="
+	// evalSnippetMaxMessages 评估片段最大消息数
+	// Python: _EVAL_SNIPPET_MAX_MESSAGES = 20
+	evalSnippetMaxMessages = 20
+	// evalSnippetPostPresentMaxChars 评估片段单消息最大字符数
+	// Python: _EVAL_SNIPPET_POST_PRESENT_MAX_CHARS = 800
+	evalSnippetPostPresentMaxChars = 800
 )
+
+// nonRegularSkillKinds 非常规技能 kind 闭集（排除出 1D 演进检测）。
+// Python: _NON_REGULAR_SKILL_KINDS = {"team-skill", "swarm-skill"}
+var nonRegularSkillKinds = map[string]bool{"team-skill": true, "swarm-skill": true}
+
+// autoSkillEvolutionFollowUpTag 审查自检 follow-up 包裹标签。
+// Python: _AUTO_SKILL_EVOLUTION_FOLLOW_UP_TAG（:92）
+const autoSkillEvolutionFollowUpTag = "auto_skill_evolution_review_followup"
+
+// reviewFollowupPromptCN 审查自检 follow-up 中文提示词（原文复刻，不翻译）。
+// Python: _REVIEW_FOLLOWUP_PROMPT_CN（:93-98）
+const reviewFollowupPromptCN = "这是运行时插入的 Skill 演进自检，不是用户的新需求。\n" +
+	"参考常驻“技能演进自检”规则，只判断本轮是否存在可复用更新，不重新判断运行时触发门槛。\n" +
+	"如需建议，只在普通最终回复末尾追加一至两句，并同时包含可复用更新点和是否发起 Skill 演进的确认问题；" +
+	"否则自然回复，不提本提醒或内部判断。"
+
+// reviewFollowupPromptEN 审查自检 follow-up 英文提示词（原文复刻，不翻译）。
+// Python: _REVIEW_FOLLOWUP_PROMPT_EN（:99-104）
+const reviewFollowupPromptEN = "This runtime-inserted Skill evolution self-check is not a new user request.\n" +
+	"Refer to the standing \"Skill Evolution Self-Check\" rules and judge only whether this round contains a reusable " +
+	"update; do not re-evaluate the runtime trigger threshold.\n" +
+	"If suggesting, append only one or two sentences to the normal final reply and include both the reusable update " +
+	"and the Skill evolution question; otherwise reply naturally without mentioning this reminder or internal judgment."
+
+// skillMDRE 从文件路径提取技能名的正则（SKILL.md 路径形态）。
+// Python: SkillEvolutionRail._SKILL_MD_RE（:154）
+var skillMDRE = regexp.MustCompile(`[/\\]([^/\\]+)[/\\]SKILL\.md`)
+
+// skillMDFileReadTools 可能按路径读到 SKILL.md 的文件读工具闭集。
+// Python: SkillEvolutionRail._SKILL_MD_FILE_READ_TOOLS（:155）
+var skillMDFileReadTools = map[string]bool{"read": true, "read_file": true, "read_file_stream": true}
+
+// subjectLabels 活动审查主体展示名。
+// Python: SkillEvolutionRail._SUBJECT_LABELS（:159-162）
+var subjectLabels = map[string]string{
+	"skill":       "skill",
+	"swarm-skill": "swarm skill",
+}
+
+// experienceIndexIDRE SKILL.md Evolution Index 链接里的记录 ID 正则。
+// Python: SkillEvolutionRail._EXPERIENCE_INDEX_ID_RE（:157）
+var experienceIndexIDRE = regexp.MustCompile(`(?:#|/)(ev_[A-Za-z0-9_-]+)\b`)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -193,8 +276,10 @@ func NewSkillEvolutionRail(
 		skillsDir:                skillsDir,
 		language:                 language,
 		modelName:                model,
-		autoScan:                 true,
 		autoSave:                 true,
+		subjectKindValue:         "skill",
+		reviewInterval:           5,
+		reviewAgentMaxIterations: 25,
 		evalInterval:             defaultEvalInterval,
 		evolutionTimeoutSec:      defaultEvolutionTimeoutSecs,
 		processedSignalKeys:      make(map[[4]string]bool),
@@ -223,14 +308,11 @@ func NewSkillEvolutionRail(
 
 	// ─── 初始化核心组件 ───
 
-	// Python: self._evolution_store = EvolutionStore(skills_dir)
-	r.evolutionStore = checkpointing.NewEvolutionStore(r.skillsDir)
+	// Python: self._evolution_store = self._make_evolution_store(skills_dir)
+	r.evolutionStore = r.makeEvolutionStore()
 
-	// Python: self._evolver = SkillExperienceOptimizer(llm, model, language, generate_records_llm_policy=...)
-	r.evolver = skillopt.NewSkillExperienceOptimizer(
-		llmModel, model, language,
-		r.generateRecordsLLMPolicy,
-	)
+	// Python: self._evolver = self._make_skill_optimizer(llm, model, language, ...)
+	r.evolver = r.makeSkillOptimizer(llmModel, model, language)
 
 	// Python: self._scorer = ExperienceScorer(llm, model, language, evaluate_llm_policy=..., simplify_llm_policy=...)
 	r.scorer, _ = experience.NewExperienceScorer(
@@ -239,16 +321,8 @@ func NewSkillEvolutionRail(
 		&r.simplifyLLMPolicy,
 	)
 
-	// Python: self._manager = ExperienceManager(store=..., scorer=..., kind="skill", ...)
-	r.manager, _ = experience.NewExperienceManager(
-		r.evolutionStore,
-		r.scorer,
-		"skill",
-		language,
-		r.skillOps,
-		r.pendingApprovalSnapshots,
-		r.pendingGovernance,
-	)
+	// Python: self._manager = self._make_experience_manager()
+	r.manager, _ = r.makeExperienceManager()
 
 	// Python: self._approval_runtime = EvolutionApprovalRuntime(manager=..., pending_approval_snapshots=...)
 	r.approvalRuntime = NewEvolutionApprovalRuntime(
@@ -260,14 +334,8 @@ func NewSkillEvolutionRail(
 	r.onlineUpdater = single_dim.NewSingleDimUpdater(r.evolver)
 
 	// Python: self._online_orchestrator = OnlineEvolutionOrchestrator(store=..., updater=..., manager=..., skill_ops=..., stage_source="experience_updater")
-	r.orchestrator = experience.NewOnlineEvolutionOrchestrator(
-		r.evolutionStore,
-		r.onlineUpdater,
-		r.manager,
-		r.skillOps,
-		"skill_evolve_",
-		"experience_updater",
-	)
+	// Python: self._online_orchestrator = self._make_online_orchestrator()
+	r.orchestrator = r.makeOnlineOrchestrator()
 
 	// Python: self._experience_tracker = ExperienceTracker(store=..., scorer=..., eval_interval=...)
 	r.experienceTracker = experience.NewExperienceTracker(
@@ -281,11 +349,6 @@ func NewSkillEvolutionRail(
 	r.initSharing(r.sharingConfig, llmModel, model, language)
 
 	return r
-}
-
-// WithAutoScan 设置是否自动检测演进信号。
-func WithAutoScan(autoScan bool) SkillEvolutionRailOption {
-	return func(r *SkillEvolutionRail) { r.autoScan = autoScan }
 }
 
 // WithAutoSave 设置是否自动保存（跳过审批）。
@@ -353,6 +416,42 @@ func WithDisabledSkillsSet(names []string) SkillEvolutionRailOption {
 	}
 }
 
+// WithSignalTrigger 设置是否触发确定性信号驱动演化。
+// Python: SkillEvolutionRail(signal_trigger=...)（缺省 None→False）
+func WithSignalTrigger(v bool) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.signalTrigger = v }
+}
+
+// WithTwoStage 设置经验生成是否使用 analyzer+formatter 双段管线。
+// Python: SkillEvolutionRail(two_stage=...)
+func WithTwoStage(v bool) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.twoStage = v }
+}
+
+// WithReviewTrigger 设置是否周期性排入审查自检 follow-up。
+// Python: SkillEvolutionRail(review_trigger=...)（缺省 None→False）
+func WithReviewTrigger(v bool) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.reviewTrigger = v }
+}
+
+// WithReviewInterval 设置审查自检间隔（非跟进任务迭代数）。
+// Python: SkillEvolutionRail(review_interval=5)
+func WithReviewInterval(v int) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.reviewInterval = v }
+}
+
+// WithReviewAgentMaxIterations 设置审查子 agent 最大迭代数。
+// Python: SkillEvolutionRail(review_agent_max_iterations=25)
+func WithReviewAgentMaxIterations(v int) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.reviewAgentMaxIterations = v }
+}
+
+// WithSubjectKind 设置活动审查主体类别（"skill" / "swarm-skill"）。
+// Python: SkillEvolutionRail(subject_kind="skill")
+func WithSubjectKind(kind string) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.subjectKindValue = checkpointing.NormalizeSubjectKind(kind) }
+}
+
 // Priority 返回优先级 80。
 // 对齐 Python: SkillEvolutionRail.priority = 80
 func (r *SkillEvolutionRail) Priority() int { return 80 }
@@ -379,11 +478,11 @@ func (r *SkillEvolutionRail) Evolver() *skillopt.SkillExperienceOptimizer {
 
 // AutoScan 返回是否自动检测演进信号。
 // Python: SkillEvolutionRail.auto_scan
-func (r *SkillEvolutionRail) AutoScan() bool { return r.autoScan }
+func (r *SkillEvolutionRail) AutoScan() bool { return r.signalTrigger }
 
 // SetAutoScan 设置是否自动检测演进信号。
 // Python: SkillEvolutionRail.auto_scan = value
-func (r *SkillEvolutionRail) SetAutoScan(v bool) { r.autoScan = v }
+func (r *SkillEvolutionRail) SetAutoScan(v bool) { r.signalTrigger = v }
 
 // AutoSave 返回是否自动保存。
 // Python: SkillEvolutionRail.auto_save
@@ -502,6 +601,8 @@ func (r *SkillEvolutionRail) EvolutionConfig() map[string]any {
 // OnBeforeInvoke 空操作，基类已处理轨迹初始化。
 // Python: SkillEvolutionRail 无此扩展点，空操作
 func (r *SkillEvolutionRail) OnBeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	// Python: _on_before_invoke（:574-577）——重置本 invoke 的活动演化状态
+	r.skipSignalTriggerThisInvoke = false
 	return nil
 }
 
@@ -520,26 +621,8 @@ func (r *SkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agentinte
 	if !ok {
 		return nil
 	}
-
-	skillName := r.detectExperienceDetailRead(inputs)
-	if skillName == "" {
-		return nil
-	}
-
-	content := r.extractToolContent(inputs)
-	recordIDs := r.extractPresentedRecordIDs(content)
-	if len(recordIDs) == 0 {
-		return nil
-	}
-
-	sessionID := ""
-	if cbc.Session() != nil {
-		sessionID = cbc.Session().GetSessionID()
-	}
-
-	// Python: await self._experience_tracker.record_presented_records(session=session, skill_name=..., presentation_snippet=..., record_ids=...)
-	r.experienceTracker.RecordPresentedRecords(ctx, sessionID, skillName, content, recordIDs)
-	return nil
+	// Python: _on_after_tool_call（:769-785）——追踪暴露给 agent 的经验而不改写工具结果
+	return r.trackPresentedFromToolCall(ctx, cbc, inputs)
 }
 
 // OnAfterInvoke 空操作，基类已保存轨迹+触发演化。
@@ -563,7 +646,19 @@ func (r *SkillEvolutionRail) OnAfterEvolutionTriggered(ctx context.Context, traj
 // AllowEvolutionTrigger 返回 autoScan 控制是否允许触发演化。
 // 对齐 Python: SkillEvolutionRail._allow_evolution_trigger(trigger_point, ctx)
 func (r *SkillEvolutionRail) AllowEvolutionTrigger(trigger EvolutionTriggerPoint, cbc *agentinterfaces.AgentCallbackContext) bool {
-	return r.autoScan
+	// Python: _allow_evolution_trigger（:560-572）——signal_trigger 门 +
+	// 后台运行排除 + 活动演化活动跳过。
+	if !r.signalTrigger {
+		return false
+	}
+	if r.isBackgroundRun(cbc) {
+		return false
+	}
+	if r.skipSignalTriggerThisInvoke {
+		logger.Info(logComponent).Msg("[SkillEvolutionRail] active evolution activity detected, skip passive signal scan")
+		return false
+	}
+	return true
 }
 
 // SnapshotForEvolution 同步捕获快照（cbc 仍活跃），供后台演化任务使用。
@@ -571,7 +666,7 @@ func (r *SkillEvolutionRail) AllowEvolutionTrigger(trigger EvolutionTriggerPoint
 //
 // 对齐 Python: SkillEvolutionRail._snapshot_for_evolution(trajectory, ctx)
 func (r *SkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	if !r.autoScan {
+	if !r.signalTrigger {
 		return nil
 	}
 
@@ -616,8 +711,8 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 				Msg("[SkillEvolutionRail] RunEvolution panic")
 		}
 	}()
-	logger.Info(logComponent).Bool("auto_scan", r.autoScan).Msg("[SkillEvolutionRail] run_evolution called")
-	if !r.autoScan {
+	logger.Info(logComponent).Bool("auto_scan", r.signalTrigger).Msg("[SkillEvolutionRail] run_evolution called")
+	if !r.signalTrigger {
 		logger.Info(logComponent).Msg("[SkillEvolutionRail] auto_scan disabled, skipping")
 		return nil
 	}
@@ -645,11 +740,11 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 
 	logger.Info(logComponent).Int("messages", len(messages)).Msg("[SkillEvolutionRail] messages collected")
 
-	r.emitProgress("started", "开始常规技能演进分析")
+	r.emitProgress("started", "starting regular skill evolution review for completed conversation")
 
 	if len(messages) == 0 {
 		logger.Info(logComponent).Msg("[SkillEvolutionRail] no messages, skipping")
-		r.emitProgress("cancelled", "无对话消息，取消常规技能演进分析")
+		r.emitProgress("cancelled", "no conversation messages available; cancelling regular skill evolution review")
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
 		return nil
 	}
@@ -659,7 +754,9 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	allSkillNames := r.evolutionStore.ListSkillNames(ctx)
 	skillNames := r.filterRegularSkills(ctx, allSkillNames)
 
-	r.emitProgress("detecting_signals", fmt.Sprintf("检查 %d 个常规技能的演进信号（从 %d 个本地技能中筛选）", len(skillNames), len(allSkillNames)))
+	r.emitProgress("detecting_signals", fmt.Sprintf(
+		"checking %d regular skill(s) for evolution signals (filtered from %d local skill(s))",
+		len(skillNames), len(allSkillNames)))
 
 	// 信号检测
 	// Python: detector = SignalDetector(existing_skills=...).bind_llm(llm=..., model=..., language=...)
@@ -667,8 +764,9 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 		signal.WithExistingSkills(r.existingSkillSet(ctx, skillNames)),
 	).BindLLM(r.evolver.LLM(), r.evolver.ModelName(), r.language)
 
-	// Python: detected = detector.detect_trajectory_signals(trajectory, messages=messages)
-	detected := detector.DetectTrajectorySignals(traj, messages)
+	// Python: detected = detector.detect_trajectory_signals(
+	//     trajectory, signal_types={"execution_failure", "script_artifact"})（:892-896）
+	detected := detector.DetectTrajectorySignals(traj, nil)
 
 	var signals []*signal.EvolutionSignal
 	existingFingerprints := make(map[[4]string]bool)
@@ -683,21 +781,6 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 		}
 	}
 
-	// 用户意图信号（LLM 辅助检测）
-	// Python: user_intent_signals = await detector.detect_user_intent(messages)
-	userIntentSignals, _ := detector.DetectUserIntent(ctx, messages)
-	for _, sig := range userIntentSignals {
-		fp := signal.MakeSignalFingerprint(sig)
-		if existingFingerprints[fp] {
-			continue
-		}
-		if !r.processedSignalKeys[fp] {
-			r.processedSignalKeys[fp] = true
-			existingFingerprints[fp] = true
-			signals = append(signals, sig)
-		}
-	}
-
 	// 限制去重集合大小
 	// Python: if len(self._processed_signal_keys) > _MAX_PROCESSED_SIGNAL_KEYS: self._processed_signal_keys.clear()
 	if len(r.processedSignalKeys) > maxProcessedSignalKeys {
@@ -706,32 +789,48 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 
 	logger.Info(logComponent).Int("signals", len(signals)).Msg("[SkillEvolutionRail] signals detected")
 
-	// 无信号时推断 primary skill
-	// Python: if not signals: primary_skill = self._infer_primary_skill(messages, skill_names)
-	if len(signals) == 0 {
-		primarySkill := r.inferPrimarySkill(messages, skillNames)
-		if primarySkill != "" {
-			signals = []*signal.EvolutionSignal{
-				signal.MakeEvolutionSignal(
-					schema.ConversationReviewSignal, "", "[Auto] No rule-based signals. Analyze conversation for implicit experiences.",
-					signal.WithSkillName(primarySkill),
-					signal.WithSource("passive_conversation"),
-				),
-			}
+	// 技能归属
+	// Python: attributed_skills = {s.skill_name for s in signals if s.skill_name};
+	//         unattributed = [s for s in signals if not s.skill_name]（:905-913）
+	// 仅一个归属技能且存在未归属信号时，未归属信号回填到该技能。
+	attributedSkillsSet := map[string]bool{}
+	var unattributed []*signal.EvolutionSignal
+	for _, sig := range signals {
+		if sig.SkillName != nil && *sig.SkillName != "" {
+			attributedSkillsSet[*sig.SkillName] = true
+		} else {
+			unattributed = append(unattributed, sig)
 		}
 	}
-
-	// 技能归属
-	// Python: attributed_skills = {s.skill_name for s in signals if s.skill_name}; unattributed = [s for s in signals if not s.skill_name]
-	skillGroups := r.attributeSignalsToSkills(signals)
-
-	if len(skillGroups) == 0 {
-		msg := "未检测到常规技能使用或可操作的演进信号，取消常规技能演进分析"
-		if len(signals) > 0 {
-			msg = "检测到演进信号但无法归属到常规技能，取消常规技能演进分析"
+	if len(attributedSkillsSet) == 1 && len(unattributed) > 0 {
+		fallbackSkill := ""
+		for name := range attributedSkillsSet {
+			fallbackSkill = name
 		}
-		r.emitProgress("cancelled", msg)
+		for _, sig := range unattributed {
+			sig.SkillName = &fallbackSkill
+		}
+	}
+	skillGroups := map[string][]*signal.EvolutionSignal{}
+	for _, sig := range signals {
+		if sig.SkillName == nil || *sig.SkillName == "" {
+			continue
+		}
+		skillGroups[*sig.SkillName] = append(skillGroups[*sig.SkillName], sig)
+	}
+	if len(skillGroups) == 0 {
+		// Python: 两种文案（:916-927）；评估先于 cancelled 终态发出
+		//（宿主 watcher 把 cancelled 当周期结束，不能与评分竞争）。
+		var message string
+		if len(signals) > 0 {
+			message = "detected evolution signals but no regular skill could be attributed; " +
+				"cancelling regular skill evolution review"
+		} else {
+			message = "no skill usage of a regular skill or actionable evolution signal detected; " +
+				"cancelling regular skill evolution review"
+		}
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
+		r.emitProgress("cancelled", message)
 		return nil
 	}
 
@@ -744,13 +843,24 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	}
 
 	// 逐技能演化
-	// Python: for skill_name, skill_signals in skill_groups.items(): await self._evolve_skill_with_sharing(...)
+	// Python: for skill_name, skill_signals in skill_groups.items(): generated = await
+	//         self._evolve_skill_with_sharing(...)；未产出记录的延迟到评分后报 cancelled（:935-955）
+	deferredCancelled := []struct{ skillName, message string }{}
 	for skillName, skillSignals := range skillGroups {
 		sharedRecords := downloadedPerSkill[skillName]
-		r.evolveSkillWithSharing(ctx, skillName, skillSignals, messages, sharedRecords)
+		if generated := r.evolveSkillWithSharing(ctx, skillName, skillSignals, messages, sharedRecords); !generated {
+			deferredCancelled = append(deferredCancelled, struct{ skillName, message string }{
+				skillName,
+				fmt.Sprintf("attributed optimizer signal for '%s' produced no reusable evolution records", skillName),
+			})
+		}
 	}
 
+	// 评分先于终态 cancelled（宿主 watcher 把 cancelled 当周期结束）
 	r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
+	for _, deferred := range deferredCancelled {
+		r.emitProgress("cancelled", deferred.message, WithSkillName(deferred.skillName))
+	}
 	return nil
 }
 
@@ -1407,24 +1517,24 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 	skillSignals []*signal.EvolutionSignal,
 	messages []map[string]any,
 	sharedRecords []checkpointing.EvolutionRecord,
-) {
+) bool {
 	if len(sharedRecords) > 0 {
 		sharedRecords = r.filterDuplicateSharedRecords(ctx, skillName, sharedRecords)
 	}
 
 	if len(sharedRecords) == 0 {
 		// 无共享记录：走正常演化流程
-		r.emitProgress("generating_updates", fmt.Sprintf("为 '%s' 生成演进记录", skillName), WithSkillName(skillName))
+		// Python: return request_for_online_evolution_result(result) is not None（sharing.py:227-228）
 		request, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", !r.autoSave, true)
 		if err != nil {
 			logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] evolve_skill failed")
 			r.emitProgress("failed", fmt.Sprintf("'%s' 演进失败: %s", skillName, err.Error()), WithSkillName(skillName))
-			return
+			return false
 		}
 		if request == nil {
 			r.emitProgress("completed", fmt.Sprintf("'%s' 未生成演进记录", skillName), WithSkillName(skillName))
 		}
-		return
+		return request != nil
 	}
 
 	// 有共享记录
@@ -1439,11 +1549,12 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 		if _, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", false, true); err != nil {
 			logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("[SkillEvolutionRail] post-shared-record evolution failed")
 		}
-		return
+		return true
 	}
 
 	// 需要审批：发送共享记录审批事件
 	r.emitSharedRecordsApproval(ctx, skillName, sharedRecords, messages)
+	return true
 }
 
 // emitSharedRecordsApproval 发送共享记录审批事件。
@@ -2357,4 +2468,543 @@ func hasRealError(content string) bool {
 		}
 	}
 	return false
+}
+
+// ──────────────────────────── 15.24a Task 10：08-13 新版对照回收 ────────────────────────────
+// 以下方法对齐 Python skill_evolution_rail.py 08-13 新版（D-15.21-1 回收）。
+// ⤴️ 15.24b：RegisterEvolutionTools / RegisterEvolutionReviewAgent /
+// IsEvolveReviewTaskAvailable / EnsureEvolveReviewTaskAvailable /
+// PrepareEvolutionReviewScope / _build_user_evolution_request 链（依赖
+// create_main_evolution_tools + build_evolve_review_command_prompt +
+// agent_evolving/prompts/sections/evolution.py）。
+
+// MakeEvolutionStore 构建演化服务使用的持久化 store。
+// Python: _make_evolution_store（:321-323）。
+func (r *SkillEvolutionRail) makeEvolutionStore() *checkpointing.EvolutionStore {
+	return checkpointing.NewEvolutionStore(r.skillsDir)
+}
+
+// makeSkillOptimizer 构建在线演化 updater 使用的优化器。
+// Python: _make_skill_optimizer（:325-342）。
+// 偏差：Python 透传 two_stage（optimizer 双段管线 analyzer+formatter），
+// Go optimizer 侧双段管线未移植（⤴️ 登记 spec §4）。
+func (r *SkillEvolutionRail) makeSkillOptimizer(llmModel *llm.Model, model, language string) *skillopt.SkillExperienceOptimizer {
+	return skillopt.NewSkillExperienceOptimizer(llmModel, model, language, r.generateRecordsLLMPolicy)
+}
+
+// makeExperienceManager 构建本 rail 主体的经验管理器。
+// Python: _make_experience_manager（:343-354）。
+func (r *SkillEvolutionRail) makeExperienceManager() (*experience.ExperienceManager, error) {
+	return experience.NewExperienceManager(
+		r.evolutionStore,
+		r.scorer,
+		r.SubjectKind(),
+		r.language,
+		r.skillOps,
+		r.pendingApprovalSnapshots,
+		r.pendingGovernance,
+	)
+}
+
+// onlineRequestIDPrefix 返回在线演化 staged 请求的 request id 前缀（regular 为空）。
+// Python: _online_request_id_prefix（:355-358）。
+func (r *SkillEvolutionRail) onlineRequestIDPrefix() string { return "" }
+
+// onlineStageSource 返回在线经验生成记录的 stage source。
+// Python: _online_stage_source（:359-362）。
+func (r *SkillEvolutionRail) onlineStageSource() string { return "experience_updater" }
+
+// makeOnlineOrchestrator 构建编排器：把 optimizer 生成的经验 staged。
+// Python: _make_online_orchestrator（:363-373）。
+func (r *SkillEvolutionRail) makeOnlineOrchestrator() *experience.OnlineEvolutionOrchestrator {
+	return experience.NewOnlineEvolutionOrchestrator(
+		r.evolutionStore,
+		r.onlineUpdater,
+		r.manager,
+		r.skillOps,
+		r.onlineRequestIDPrefix(),
+		r.onlineStageSource(),
+	)
+}
+
+// SubjectKind 返回本 rail 的活动审查主体类别。
+// Python: subject_kind property（:288-291）。
+func (r *SkillEvolutionRail) SubjectKind() string { return r.subjectKindValue }
+
+// SubjectLabel 返回活动审查主体的人类可读展示名。
+// Python: subject_label property（:293-296）。
+func (r *SkillEvolutionRail) SubjectLabel() string {
+	if label, ok := subjectLabels[r.subjectKindValue]; ok {
+		return label
+	}
+	return r.subjectKindValue
+}
+
+// resolveStoreSubjectPayload store 支持时从 store 解析主体信封。
+// Python: _resolve_store_subject_payload（:297-314）。
+func (r *SkillEvolutionRail) resolveStoreSubjectPayload(ctx context.Context, skillName string) (bool, map[string]string) {
+	if r.evolutionStore == nil {
+		return false, nil
+	}
+	payload := r.evolutionStore.ResolveSubjectPayload(ctx, skillName)
+	return true, payload
+}
+
+// subjectPayload 构建命名技能式主体的规范信封。
+// Python: _subject_payload（:314-320）。
+func (r *SkillEvolutionRail) subjectPayload(ctx context.Context, skillName string) map[string]string {
+	_, payload := r.resolveStoreSubjectPayload(ctx, skillName)
+	if payload != nil {
+		return payload
+	}
+	return map[string]string{"kind": "skill", "name": skillName}
+}
+
+// EvolutionTotalTimeoutSecs 返回后台演化超时预算。
+// Python: evolution_total_timeout_secs property（:532-536）。
+func (r *SkillEvolutionRail) EvolutionTotalTimeoutSecs() float64 { return r.evolutionTimeoutSec }
+
+// TwoStage 返回经验生成是否使用双段管线。
+// Python: two_stage property（:537-541）。
+func (r *SkillEvolutionRail) TwoStage() bool { return r.twoStage }
+
+// SignalTrigger 返回是否启用确定性信号驱动演化。
+// Python: signal_trigger property（:699-703）。
+func (r *SkillEvolutionRail) SignalTrigger() bool { return r.signalTrigger }
+
+// SetSignalTrigger 设置是否启用确定性信号驱动演化。
+// Python: signal_trigger.setter（:704-707）。
+func (r *SkillEvolutionRail) SetSignalTrigger(v bool) { r.signalTrigger = v }
+
+// ReviewTrigger 返回是否启用审查自检 follow-up。
+// Python: review_trigger property（:708-712）。
+func (r *SkillEvolutionRail) ReviewTrigger() bool { return r.reviewTrigger }
+
+// SetReviewTrigger 设置是否启用审查自检 follow-up。
+// Python: review_trigger.setter（:713-715）。
+func (r *SkillEvolutionRail) SetReviewTrigger(v bool) { r.reviewTrigger = v }
+
+// Init 绑定 agent 并注册 rail 持有的演化工具与稳定审查子 agent。
+// Python: init（:374-381）。
+// ⤴️ 15.24b：_register_evolution_tools / _register_evolution_review_agent
+// 依赖 create_main_evolution_tools 与 build_evolution_review_agent_config，
+// 随工具面批落地；本实现先完成 agent 绑定与提示词构建器抓取。
+func (r *SkillEvolutionRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent) error {
+	r.agentRef = agent
+	r.systemPromptBuilder = systemPromptBuilderOf(agent)
+	// Python: self._evolution_tools = self._register_evolution_tools(agent)
+	//        self._register_evolution_review_agent(agent)（⤴️ 15.24b/24c）
+	return nil
+}
+
+// Uninit 注销 rail 持有的演化工具与审查子 agent。
+// Python: uninit（:382-394）。
+func (r *SkillEvolutionRail) Uninit(agent agentinterfaces.BaseAgent) error {
+	// Python: self._unregister_runtime_tools(agent, self._evolution_tools)
+	//        （⤴️ 15.24b：工具注册面落地后补注销调用）
+	r.evolutionTools = nil
+	r.unregisterEvolutionReviewAgent(agent)
+	r.systemPromptBuilder = nil
+	r.agentRef = nil
+	return nil
+}
+
+// unregisterEvolutionReviewAgent 从 agent.deep_config 摘除稳定审查子 agent 配置。
+// Python: _unregister_evolution_review_agent（:395-401）。
+func (r *SkillEvolutionRail) unregisterEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {
+	// Python: deep_config.subagents = remove_evolution_review_agent_config(subagents)
+	// 审查子 agent 配置面 ⤴️ 15.24c（build_evolution_review_agent_config 批），
+	// Go 侧暂无待摘除配置。
+	_ = agent
+}
+
+// isBackgroundRun 判定是否后台运行（心跳/定时），后台轮不做信号触发与 follow-up。
+// Python: _is_background_run（:631-648）。
+func (r *SkillEvolutionRail) isBackgroundRun(cbc *agentinterfaces.AgentCallbackContext) bool {
+	if cbc == nil || cbc.Inputs() == nil {
+		return false
+	}
+	// Python: inputs.is_heartbeat()/is_cron() + run_kind + conversation_id 前缀。
+	// Go 侧 RunKind 按事件类型分别落在 InvokeInputs / TaskIterationInputs。
+	switch inputs := cbc.Inputs().(type) {
+	case *agentinterfaces.InvokeInputs:
+		switch inputs.RunKind {
+		case agentinterfaces.RunKindHeartbeat, agentinterfaces.RunKindCron:
+			return true
+		}
+		return strings.HasPrefix(inputs.ConversationID, "heartbeat") ||
+			strings.HasPrefix(inputs.ConversationID, "cron")
+	case *agentinterfaces.TaskIterationInputs:
+		switch inputs.RunKind {
+		case agentinterfaces.RunKindHeartbeat, agentinterfaces.RunKindCron:
+			return true
+		}
+		return strings.HasPrefix(inputs.ConversationID, "heartbeat") ||
+			strings.HasPrefix(inputs.ConversationID, "cron")
+	default:
+		return false
+	}
+}
+
+// taskIterationFollowupBlocked 判定任务循环 follow-up 是否必须抑制。
+// Python: _task_iteration_followup_blocked（:623-630）。
+func (r *SkillEvolutionRail) taskIterationFollowupBlocked(cbc *agentinterfaces.AgentCallbackContext) bool {
+	if r.isBackgroundRun(cbc) {
+		return true
+	}
+	if inputs, ok := cbc.Inputs().(*agentinterfaces.TaskIterationInputs); ok && inputs.IsFollowUp {
+		return true
+	}
+	return false
+}
+
+// enqueueTaskIterationFollowup 从常规任务循环迭代排入 follow-up。
+// Python: _enqueue_task_iteration_followup（:600-622）。
+func (r *SkillEvolutionRail) enqueueTaskIterationFollowup(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, prompt, logPrefix string) bool {
+	if r.taskIterationFollowupBlocked(cbc) {
+		return false
+	}
+	if cbc == nil || cbc.Agent() == nil {
+		logger.Warn(logComponent).
+			Str("log_prefix", logPrefix).
+			Msg("[SkillEvolutionRail] follow-up dropped: no agent available")
+		return false
+	}
+	controller := getLoopController(cbc.Agent())
+	if controller == nil {
+		logger.Warn(logComponent).
+			Str("log_prefix", logPrefix).
+			Msg("[SkillEvolutionRail] follow-up dropped: no TaskLoopController available")
+		return false
+	}
+	controller.EnqueueFollowUp(prompt)
+	return true
+}
+
+// buildReviewFollowupPrompt 构建活动模糊审查自检 follow-up 提示词。
+// Python: _build_review_followup_prompt（:649-654）。
+func (r *SkillEvolutionRail) buildReviewFollowupPrompt() string {
+	prompt := reviewFollowupPromptCN
+	if r.language == "en" {
+		prompt = reviewFollowupPromptEN
+	}
+	return wrapReviewFollowupPrompt(prompt)
+}
+
+// wrapReviewFollowupPrompt 用自检标签包裹提示词。
+// Python: _wrap_review_followup_prompt（:655-658）。
+func wrapReviewFollowupPrompt(prompt string) string {
+	return "<" + autoSkillEvolutionFollowUpTag + ">\n" + prompt + "\n</" + autoSkillEvolutionFollowUpTag + ">"
+}
+
+// trackPresentedFromToolCall 从 detail 读或 SKILL.md 索引读记录已展示经验 ID。
+// Python: _track_presented_from_tool_call（:786-821）。
+func (r *SkillEvolutionRail) trackPresentedFromToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, inputs *agentinterfaces.ToolCallInputs) error {
+	sessionID := ""
+	if cbc != nil && cbc.Session() != nil {
+		sessionID = cbc.Session().GetSessionID()
+	}
+	content := r.extractToolContent(inputs)
+
+	// 来源 1：evolution/*.md detail 文件读（含具体记录标题）
+	if detailSkill := r.detectExperienceDetailRead(inputs); detailSkill != "" {
+		recordIDs := r.extractPresentedRecordIDs(content)
+		if len(recordIDs) == 0 {
+			return nil
+		}
+		r.experienceTracker.RecordPresentedRecords(ctx, sessionID, detailSkill, "", recordIDs)
+		return nil
+	}
+
+	// 来源 2：SKILL.md / skill_tool 默认入口读（含 Evolution Index 摘要）
+	indexSkill := r.detectSkillIndexRead(inputs)
+	if indexSkill == "" {
+		return nil
+	}
+	recordIDs := r.extractIndexRecordIDs(content)
+	if len(recordIDs) == 0 {
+		return nil
+	}
+	r.experienceTracker.RecordPresentedRecords(ctx, sessionID, indexSkill, "", recordIDs)
+	return nil
+}
+
+// evaluatePresentedEntries 用 after_invoke 时重建的对话片段评估已展示经验。
+// Python: _evaluate_presented_entries（:822-833）。
+func (r *SkillEvolutionRail) evaluatePresentedEntries(ctx context.Context, presentedEntries []experience.PresentedRecordEntry, messages []map[string]any) {
+	r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
+}
+
+// detectSignals 规则检测新信号并按指纹去重。
+// Python: _detect_signals（:1252-1278）。
+func (r *SkillEvolutionRail) detectSignals(ctx context.Context, messages []map[string]any, skillNames []string) []*signal.EvolutionSignal {
+	existingSkills := map[string]bool{}
+	for _, name := range skillNames {
+		if r.evolutionStore.SkillExists(ctx, name) {
+			existingSkills[name] = true
+		}
+	}
+	detector := signal.NewConversationSignalDetector(signal.WithExistingSkills(existingSkills))
+	detected := detector.Detect(messages)
+
+	var newSignals []*signal.EvolutionSignal
+	for _, sig := range detected {
+		fp := signal.MakeSignalFingerprint(sig)
+		if r.processedSignalKeys[fp] {
+			continue
+		}
+		r.processedSignalKeys[fp] = true
+		newSignals = append(newSignals, sig)
+	}
+	if len(r.processedSignalKeys) > maxProcessedSignalKeys {
+		r.processedSignalKeys = make(map[[4]string]bool)
+	}
+	if len(newSignals) > 0 {
+		logger.Info(logComponent).
+			Int("new_signals", len(newSignals)).
+			Int("filtered", len(detected)-len(newSignals)).
+			Msg("[SkillEvolutionRail] detected new signal(s)")
+	}
+	return newSignals
+}
+
+// normalizeSkillRelativeFilePath 主技能入口文件的规范相对路径（SKILL.md）。
+// Python: _normalize_skill_relative_file_path（:114-126，模块级）。
+func normalizeSkillRelativeFilePath(relativeFilePath string) string {
+	raw := strings.TrimSpace(relativeFilePath)
+	if raw == "" {
+		return "SKILL.md"
+	}
+	normalized := strings.TrimPrefix(strings.ReplaceAll(raw, "\\", "/"), "./")
+	prefix, base := "", normalized
+	if idx := strings.LastIndex(normalized, "/"); idx >= 0 {
+		prefix, base = normalized[:idx], normalized[idx+1:]
+	}
+	if !strings.Contains(base, ".") && strings.EqualFold(base, "skill") {
+		if prefix != "" {
+			return prefix + "/SKILL.md"
+		}
+		return "SKILL.md"
+	}
+	return raw
+}
+
+// utcnowISO 当前 UTC 时刻 ISO 形态。
+// Python: _utcnow_iso（:137-139，模块级）。
+func utcnowISO() string {
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+}
+
+// isSkillMDPath 判定相对路径是否指向技能主入口 SKILL.md。
+// Python: _is_skill_md_path（:1659-1664）。
+func isSkillMDPath(relativePath string) bool {
+	normalized := normalizeSkillRelativeFilePath(relativePath)
+	norm := strings.ToLower(strings.TrimPrefix(strings.ReplaceAll(normalized, "\\", "/"), "./"))
+	return norm == "skill.md" || strings.HasSuffix(norm, "/skill.md")
+}
+
+// isSkillMDFileReadTool 工具是否为可能按路径读到 SKILL.md 的已知文件读工具。
+// Python: _is_skill_md_file_read_tool（:1692-1696）。
+func isSkillMDFileReadTool(toolName string) bool {
+	return skillMDFileReadTools[strings.ToLower(toolName)]
+}
+
+// extractFilePath 从工具参数取 file_path。
+// Python: _extract_file_path（:1581-1585）。
+func extractFilePath(toolArgs any) string {
+	args := extractToolArgs(toolArgs)
+	if v, ok := args["file_path"]; ok && v != nil && fmt.Sprintf("%v", v) != "" {
+		return fmt.Sprintf("%v", v)
+	}
+	return ""
+}
+
+// detectSkillIndexRead 工具调用加载 SKILL.md（Evolution Index）时返回技能名。
+// Python: _detect_skill_index_read（:1607-1629）。
+func (r *SkillEvolutionRail) detectSkillIndexRead(inputs *agentinterfaces.ToolCallInputs) string {
+	toolName := inputs.ToolName
+	args := extractToolArgs(inputs.ToolArgs)
+
+	if toolName == "skill_tool" {
+		skillName := strings.TrimSpace(fmt.Sprintf("%v", args["skill_name"]))
+		relativePath := strings.TrimSpace(fmt.Sprintf("%v", args["relative_file_path"]))
+		if relativePath == "" || relativePath == "<nil>" {
+			relativePath = "SKILL.md"
+		}
+		if skillName != "" && isSkillMDPath(relativePath) {
+			return skillName
+		}
+		return ""
+	}
+
+	if !isSkillMDFileReadTool(toolName) {
+		return ""
+	}
+	filePath := strings.TrimSpace(extractFilePath(args))
+	if filePath == "" {
+		return ""
+	}
+	matched := skillMDRE.FindStringSubmatch(filePath)
+	if matched == nil {
+		return ""
+	}
+	return matched[1]
+}
+
+// extractIndexRecordIDs 从 SKILL.md Evolution Index 摘要/链接提取经验 ID。
+// Python: _extract_index_record_ids（:1541-1564）。
+func (r *SkillEvolutionRail) extractIndexRecordIDs(content string) []string {
+	if content == "" {
+		return nil
+	}
+	section := content
+	start := strings.Index(content, "<!-- evolution-index-start -->")
+	end := strings.Index(content, "<!-- evolution-index-end -->")
+	if start != -1 && end != -1 && end > start {
+		section = content[start:end]
+	} else if idx := strings.Index(content, "Evolution Experiences"); idx != -1 {
+		section = content[idx:]
+	}
+
+	seen := map[string]bool{}
+	var recordIDs []string
+	for _, match := range experienceIndexIDRE.FindAllStringSubmatch(section, -1) {
+		recordID := match[1]
+		if seen[recordID] {
+			continue
+		}
+		seen[recordID] = true
+		recordIDs = append(recordIDs, recordID)
+	}
+	return recordIDs
+}
+
+// findSkillLoadAnchor 返回最近一次加载 skill_name 的 SKILL.md 的消息下标（-1 无）。
+// Python: _find_skill_load_anchor（:1665-1691）。
+func (r *SkillEvolutionRail) findSkillLoadAnchor(messages []map[string]any, skillName string) int {
+	anchor := -1
+	for index, msg := range messages {
+		if role := fmt.Sprintf("%v", msg["role"]); role != "assistant" {
+			continue
+		}
+		for _, toolCall := range toolCallsOf(msg) {
+			tool := strings.ToLower(fmt.Sprintf("%v", trajectory.ToolCallName(toolCall)))
+			arguments := ""
+			if v := trajectory.ToolCallArguments(toolCall); v != nil {
+				arguments = fmt.Sprintf("%v", v)
+			}
+			if tool == "skill_tool" {
+				args := extractToolArgs(arguments)
+				if strings.TrimSpace(fmt.Sprintf("%v", args["skill_name"])) != skillName {
+					continue
+				}
+				rel := normalizeSkillRelativeFilePath(fmt.Sprintf("%v", args["relative_file_path"]))
+				if isSkillMDPath(rel) {
+					anchor = index
+				}
+			} else if isSkillMDFileReadTool(tool) {
+				filePath := extractFilePath(arguments)
+				matched := skillMDRE.FindStringSubmatch(filePath)
+				if matched != nil && matched[1] == skillName {
+					anchor = index
+				}
+			}
+		}
+	}
+	return anchor
+}
+
+// formatMessagesSnippet 把对话消息格式化为评分器友好的片段。
+// Python: _format_messages_snippet（:1697-1722）。
+func (r *SkillEvolutionRail) formatMessagesSnippet(messages []map[string]any, start int) string {
+	var lines []string
+	window := messages[start:]
+	if len(window) > evalSnippetMaxMessages {
+		window = window[len(window)-evalSnippetMaxMessages:]
+	}
+	for _, msg := range window {
+		role := fmt.Sprintf("%v", msg["role"])
+		if role == "" || role == "<nil>" {
+			role = "unknown"
+		}
+		content := truncateString(fmt.Sprintf("%v", msg["content"]), evalSnippetPostPresentMaxChars)
+		if content != "" && content != "<nil>" {
+			lines = append(lines, fmt.Sprintf("[%s] %s", role, content))
+		}
+		if role == "assistant" {
+			for _, toolCall := range toolCallsOf(msg) {
+				tool := fmt.Sprintf("%v", trajectory.ToolCallName(toolCall))
+				arguments := ""
+				if v := trajectory.ToolCallArguments(toolCall); v != nil {
+					arguments = fmt.Sprintf("%v", v)
+				}
+				args := truncateString(arguments, evalSnippetPostPresentMaxChars)
+				if tool != "" && tool != "<nil>" {
+					lines = append(lines, fmt.Sprintf("[assistant/tool_call] %s %s", tool, args))
+				}
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// buildEvaluationSnippet 构建展示后片段：从最后一次 SKILL.md 加载到本轮结束。
+// Python: _build_evaluation_snippet（:1723-1731）。
+func (r *SkillEvolutionRail) buildEvaluationSnippet(messages []map[string]any, skillName string) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	anchor := r.findSkillLoadAnchor(messages, skillName)
+	start := anchor
+	if start < 0 {
+		start = len(messages) - evalSnippetMaxMessages
+		if start < 0 {
+			start = 0
+		}
+	}
+	return r.formatMessagesSnippet(messages, start)
+}
+
+// systemPromptBuilderOf 从 agent 抓取系统提示词构建器
+// （Python getattr(agent, "system_prompt_builder")）。
+// 构建器类型面 ⤴️ 15.24b（evolution 协议段 sections/evolution.py 随批补），
+// 当前经反射读 SystemPromptBuilder 方法值（各实现返回类型不同，鸭子式取值）。
+func systemPromptBuilderOf(agent agentinterfaces.BaseAgent) any {
+	if agent == nil {
+		return nil
+	}
+	value := reflect.ValueOf(agent)
+	method := value.MethodByName("SystemPromptBuilder")
+	if !method.IsValid() {
+		return nil
+	}
+	results := method.Call(nil)
+	if len(results) == 0 {
+		return nil
+	}
+	if results[0].IsNil() {
+		return nil
+	}
+	return results[0].Interface()
+}
+
+// toolCallsOf 从消息提取 tool_calls 列表（signal.getToolCalls 的包内等价）。
+func toolCallsOf(m map[string]any) []map[string]any {
+	if m == nil {
+		return nil
+	}
+	switch v := m["tool_calls"].(type) {
+	case []map[string]any:
+		return v
+	case []any:
+		result := make([]map[string]any, 0, len(v))
+		for _, item := range v {
+			if mm, ok := item.(map[string]any); ok {
+				result = append(result, mm)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }

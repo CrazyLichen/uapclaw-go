@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	harnessprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	harnessprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 )
 
 // CLI agent 的系统提示词构建。

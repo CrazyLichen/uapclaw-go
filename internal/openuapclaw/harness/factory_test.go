@@ -12,16 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── fake 定义 ────────────────────────────

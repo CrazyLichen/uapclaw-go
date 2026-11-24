@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

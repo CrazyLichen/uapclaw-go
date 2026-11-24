@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"strings"
 
-	wc "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	wc "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/workspace_content"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

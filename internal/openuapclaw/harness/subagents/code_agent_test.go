@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestBuildCodeAgentConfig_默认值 验证不传 Card/Prompt 时使用默认值

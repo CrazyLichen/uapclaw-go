@@ -10,8 +10,14 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	mcpTypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	cliprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/prompts"
 	clirails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/rails"
@@ -25,12 +31,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // CLI agent 的后端装配。

@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
-	clirails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/rails"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/storage"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	interruptpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/agent"
+	clirails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/rails"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/storage"
 )
 
 // fakeBackend 可编程后端：RunStreaming 返回预设帧。

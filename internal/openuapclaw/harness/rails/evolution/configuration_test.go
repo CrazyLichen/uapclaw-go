@@ -106,8 +106,8 @@ func newConfigureFixture(t *testing.T) (*fakeConfigurableAgent, *llm.Model, *tra
 func TestConfigureSkillEvolution_互斥守卫(t *testing.T) {
 	agent, model, processor := newConfigureFixture(t)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn"))
-	err := ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn")
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn", false, false))
+	err := ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TeamSkillEvolutionRail is already configured")
 }
@@ -118,13 +118,13 @@ func TestConfigureSkillEvolution_互斥守卫(t *testing.T) {
 func TestConfigureSkillEvolution_幂等复用(t *testing.T) {
 	agent, model, processor := newConfigureFixture(t)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	pendingAfterFirst := len(agent.pending)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	assert.Len(t, agent.pending, pendingAfterFirst, "同配置重复调用不应新建 rail")
 
-	err := ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, true, "cn")
+	err := ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, true, "cn", false, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Evolution rail config mismatch")
 }
@@ -134,7 +134,7 @@ func TestConfigureSkillEvolution_幂等复用(t *testing.T) {
 func TestConfigureSkillEvolution_入栈顺序(t *testing.T) {
 	agent, model, processor := newConfigureFixture(t)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	require.Len(t, agent.pending, 2)
 	_, isInterrupt := agent.pending[0].(*EvolutionInterruptRail)
 	assert.True(t, isInterrupt, "中断 rail 应先入栈")
@@ -148,7 +148,7 @@ func TestConfigureSkillEvolution_入栈顺序(t *testing.T) {
 func TestConfigureSkillEvolutionRuntime_注册顺序(t *testing.T) {
 	agent, model, processor := newConfigureFixture(t)
 
-	require.NoError(t, ConfigureSkillEvolutionRuntime(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolutionRuntime(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	require.Len(t, agent.registerCalls, 2)
 	_, firstIsInterrupt := agent.registerCalls[0].(*EvolutionInterruptRail)
 	assert.True(t, firstIsInterrupt, "中断 rail 应先注册")
@@ -162,16 +162,16 @@ func TestUnconfigureSkillEvolution_模式分派(t *testing.T) {
 	falseVal := false
 	trueVal := true
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	// team=nil：移除全部（regular + interrupt = 2）
 	assert.Equal(t, 2, UnconfigureSkillEvolution(agent, nil))
 	assert.Empty(t, agent.pending)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn", false, false))
 	assert.Equal(t, 2, UnconfigureSkillEvolution(agent, &trueVal))
 	assert.Empty(t, agent.pending)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, true, nil, false, "cn", false, false))
 	// falseVal 移除集含 EvolutionInterruptRail：team 场景下中断 rail 被移除（1），team 演进 rail 保留
 	assert.Equal(t, 1, UnconfigureSkillEvolution(agent, &falseVal))
 	assert.Len(t, agent.pending, 1)
@@ -182,7 +182,7 @@ func TestUnconfigureSkillEvolution_模式分派(t *testing.T) {
 func TestReviewRuntime复用(t *testing.T) {
 	agent, model, processor := newConfigureFixture(t)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	var rail *SkillEvolutionRail
 	for _, r := range agent.pending {
 		if sr, ok := r.(*SkillEvolutionRail); ok {
@@ -193,6 +193,6 @@ func TestReviewRuntime复用(t *testing.T) {
 	firstRuntime := rail.ReviewRuntime()
 	require.NotNil(t, firstRuntime)
 
-	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn"))
+	require.NoError(t, ConfigureSkillEvolution(agent, []string{"/tmp/skills"}, model, "m", processor, false, nil, false, "cn", false, false))
 	assert.Same(t, firstRuntime, rail.ReviewRuntime(), "重复 configure 应复用既有 runtime")
 }

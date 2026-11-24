@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	ptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

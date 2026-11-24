@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -13,16 +13,16 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	evolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -137,12 +137,14 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionConfig() {
 	s.Greater(simplPolicy.MaxAttempts, 0)
 }
 
-// TestSkillEvolutionRail_AutoScan默认值 测试 autoScan 默认为 true。
+// TestSkillEvolutionRail_SignalTrigger默认值 测试 signal_trigger 默认为 false。
 //
-// 对齐 Python: SkillEvolutionRail(auto_scan=True)
-func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_AutoScan默认值() {
-	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+// 对齐 Python: SkillEvolutionRail(signal_trigger=None)（新版 :171，bool(None)→False）
+func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SignalTrigger默认值() {
+	// 裸构造（夹具默认开启 signal_trigger，不适用缺省值断言）
+	rail := evolution.NewSkillEvolutionRail([]string{s.T().TempDir()},
+		newSkillEvolutionMockModel(s.T()), "test-model", "cn")
+	s.False(rail.SignalTrigger())
 }
 
 // TestSkillEvolutionRail_AutoSave默认值 测试 autoSave 默认为 true。
@@ -173,12 +175,12 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_WithDisabledSkillsSet()
 // TestSkillEvolutionRail_WithAutoScan 测试 WithAutoScan 选项。
 //
 // 对齐 Python: SkillEvolutionRail(auto_scan=False)
-func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_WithAutoScan() {
-	rail := s.newTestRail(evolution.WithAutoScan(false))
-	s.False(rail.AutoScan())
+func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_WithSignalTrigger() {
+	rail := s.newTestRail(evolution.WithSignalTrigger(false))
+	s.False(rail.SignalTrigger())
 
-	rail2 := s.newTestRail(evolution.WithAutoScan(true))
-	s.True(rail2.AutoScan())
+	rail2 := s.newTestRail(evolution.WithSignalTrigger(true))
+	s.True(rail2.SignalTrigger())
 }
 
 // TestSkillEvolutionRail_WithAutoSave 测试 WithAutoSave 选项。
@@ -330,15 +332,20 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_WithSharingConfigMap启
 // ─── 属性访问器 ───
 
 // TestSkillEvolutionRail_SetAutoScan 测试 SetAutoScan 运行时修改。
-func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SetAutoScan() {
-	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SetSignalTrigger() {
+	rail := evolution.NewSkillEvolutionRail([]string{s.T().TempDir()},
+		newSkillEvolutionMockModel(s.T()), "test-model", "cn")
+	// Python 新版 signal_trigger 缺省 False（:242 bool(None)→False）
+	s.False(rail.SignalTrigger())
 
-	rail.SetAutoScan(false)
-	s.False(rail.AutoScan())
+	rail.SetSignalTrigger(true)
+	s.True(rail.SignalTrigger())
+
+	rail.SetSignalTrigger(false)
+	s.False(rail.SignalTrigger())
 
 	rail.SetAutoScan(true)
-	s.True(rail.AutoScan())
+	s.True(rail.SignalTrigger())
 }
 
 // TestSkillEvolutionRail_SetAutoSave 测试 SetAutoSave 运行时修改。
@@ -473,7 +480,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_AllowEvolutionTrigger()
 	rail := s.newTestRail()
 	s.True(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 
-	rail.SetAutoScan(false)
+	rail.SetSignalTrigger(false)
 	s.False(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 }
 
@@ -614,8 +621,8 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_OnAfterToolCall_非skil
 //
 // 对齐 Python: SkillEvolutionRail._snapshot_for_evolution → if not self.auto_scan: return None
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_autoScan关闭返回nil() {
-	rail := s.newTestRail(evolution.WithAutoScan(false))
-	s.False(rail.AutoScan())
+	rail := s.newTestRail(evolution.WithSignalTrigger(false))
+	s.False(rail.SignalTrigger())
 
 	// autoScan=false → SnapshotForEvolution 返回 nil
 	snapshot := rail.SnapshotForEvolution(s.Ctx, trajectory.NewTestTrajectoryWithID("empty"), nil)
@@ -627,7 +634,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_au
 // 对齐 Python: if not messages: return None
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_空轨迹返回nil() {
 	rail := s.newTestRail()
-	s.True(rail.AutoScan())
+	s.True(rail.SignalTrigger())
 
 	// 空轨迹（无 steps）→ trajectoryToMessages 返回空 → snapshot nil
 	emptyTraj := trajectory.NewTestTrajectoryWithIDWithSession("test")
@@ -643,7 +650,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_�
 
 	// 构造有内容的轨迹
 	builder := mustIntegrationTestBuilder("session_123")
-		traj, buildErr := builder.Build()
+	traj, buildErr := builder.Build()
 	if buildErr != nil {
 		panic(buildErr)
 	}
@@ -938,7 +945,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RequestUserEvolution_�
 //
 // 对齐 Python: SkillEvolutionRail.run_evolution → if not self.auto_scan: return
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RunEvolution_autoScan关闭() {
-	rail := s.newTestRail(evolution.WithAutoScan(false))
+	rail := s.newTestRail(evolution.WithSignalTrigger(false))
 
 	err := rail.RunEvolution(s.Ctx, nil, nil)
 	s.Require().NoError(err)
@@ -1107,7 +1114,9 @@ func (s *SkillEvolutionRailSuite) newTestRail(opts ...evolution.SkillEvolutionRa
 // newTestRailWithDir 使用指定目录创建测试用 SkillEvolutionRail。
 func (s *SkillEvolutionRailSuite) newTestRailWithDir(skillsDir string, opts ...evolution.SkillEvolutionRailOption) *evolution.SkillEvolutionRail {
 	model := newSkillEvolutionMockModel(s.T())
-	allOpts := append([]evolution.SkillEvolutionRailOption{}, opts...)
+	// signal_trigger 默认开：套件内触发链/快照用例依赖开启态
+	// （Python 新版缺省 False，构造处显式 signal_trigger=True 才开）
+	allOpts := append([]evolution.SkillEvolutionRailOption{evolution.WithSignalTrigger(true)}, opts...)
 	return evolution.NewSkillEvolutionRail(
 		[]string{skillsDir},
 		model,

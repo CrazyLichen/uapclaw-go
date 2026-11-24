@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // setupSkillTestEnv 隔离 workspace 根与 agent_teams home（测试辅助）。

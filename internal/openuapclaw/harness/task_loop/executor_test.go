@@ -13,8 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
@@ -23,6 +21,8 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

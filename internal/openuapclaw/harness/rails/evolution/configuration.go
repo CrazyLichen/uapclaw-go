@@ -84,6 +84,8 @@ func ConfigureSkillEvolution(
 	reviewRuntime *review.EvolutionReviewRuntime,
 	autoSave bool,
 	language string,
+	signalTrigger bool,
+	reviewTrigger bool,
 ) error {
 	existingRegular := findExistingSkillEvolutionRail(agent)
 	existingTeam := findExistingTeamSkillEvolutionRail(agent)
@@ -117,12 +119,12 @@ func ConfigureSkillEvolution(
 	created := false
 	switch {
 	case team && existingTeam != nil:
-		if err := validateEvolutionRailConfig(existingTeam.EvolutionRail, autoSave, language, trajectorySpanProcessor); err != nil {
+		if err := validateEvolutionRailConfig(existingTeam.EvolutionRail, autoSave, language, trajectorySpanProcessor, signalTrigger, reviewTrigger); err != nil {
 			return err
 		}
 		carrier = existingTeam
 	case !team && existingRegular != nil:
-		if err := validateEvolutionRailConfig(existingRegular.EvolutionRail, autoSave, language, trajectorySpanProcessor); err != nil {
+		if err := validateEvolutionRailConfig(existingRegular.EvolutionRail, autoSave, language, trajectorySpanProcessor, signalTrigger, reviewTrigger); err != nil {
 			return err
 		}
 		carrier = existingRegular
@@ -170,11 +172,13 @@ func ConfigureSkillEvolutionRuntime(
 	reviewRuntime *review.EvolutionReviewRuntime,
 	autoSave bool,
 	language string,
+	signalTrigger bool,
+	reviewTrigger bool,
 ) error {
 	// Python: before_pending = _pending_rail_identities(agent)
 	beforePending := pendingRailIdentities(agent)
 	if err := ConfigureSkillEvolution(agent, skillsDir, llmModel, model,
-		trajectorySpanProcessor, team, reviewRuntime, autoSave, language); err != nil {
+		trajectorySpanProcessor, team, reviewRuntime, autoSave, language, signalTrigger, reviewTrigger); err != nil {
 		return err
 	}
 
@@ -285,20 +289,24 @@ func ensureNoCrossModeConflict(team bool, existingRegular, existingTeam bool) er
 // Python: _validate_evolution_rail_config（configuration.py:283-330）。
 // signal_trigger / review_trigger 校验 ⤴️ Task 10（Go rail 字段随新版
 // 对照回收落地）。
-func validateEvolutionRailConfig(base *EvolutionRail, autoSave bool, language string, trajectorySpanProcessor *trajectory.TrajectorySpanProcessor) error {
+func validateEvolutionRailConfig(base *EvolutionRail, autoSave bool, language string, trajectorySpanProcessor *trajectory.TrajectorySpanProcessor, signalTrigger, reviewTrigger bool) error {
 	var mismatches []string
 	var existingAutoSave bool
 	var existingLanguage string
 	var existingProcessor *trajectory.TrajectorySpanProcessor
+	var existingSignalTrigger, existingReviewTrigger bool
 	switch carrier := base.ext.(type) {
 	case *SkillEvolutionRail:
 		existingAutoSave = carrier.AutoSave()
 		existingLanguage = carrier.ReviewLanguage()
 		existingProcessor = carrier.TrajectorySpanProcessor()
+		existingSignalTrigger = carrier.SignalTrigger()
+		existingReviewTrigger = carrier.ReviewTrigger()
 	case *TeamSkillEvolutionRail:
 		existingAutoSave = carrier.AutoSave()
 		existingLanguage = carrier.ReviewLanguage()
 		existingProcessor = carrier.TrajectorySpanProcessor()
+		// team rail 的 signal/review trigger 字段随 Task 11 对照回收落地
 	}
 	if existingAutoSave != autoSave {
 		mismatches = append(mismatches, fmt.Sprintf("auto_save: %v != %v", existingAutoSave, autoSave))
@@ -308,6 +316,15 @@ func validateEvolutionRailConfig(base *EvolutionRail, autoSave bool, language st
 	}
 	if existingProcessor != trajectorySpanProcessor {
 		mismatches = append(mismatches, "trajectory_span_processor: object identity differs")
+	}
+	// Python: requested_signal_trigger/review_trigger 来自 rail_kwargs，
+	// expected = bool(requested)；Go 以 ConfigureSkillEvolution 形参承载
+	//（configuration.py:308-324）。team rail 字段随 Task 11 落地后补分支。
+	if existingSignalTrigger != signalTrigger {
+		mismatches = append(mismatches, fmt.Sprintf("signal_trigger: %v != %v", existingSignalTrigger, signalTrigger))
+	}
+	if existingReviewTrigger != reviewTrigger {
+		mismatches = append(mismatches, fmt.Sprintf("review_trigger: %v != %v", existingReviewTrigger, reviewTrigger))
 	}
 	if len(mismatches) > 0 {
 		out := ""

@@ -11,21 +11,21 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -130,7 +130,7 @@ func newEvolveTestAdapter(t *testing.T, skillsDir string, stub *stubEvolveLLMCli
 	}
 	rail := coreevolution.NewSkillEvolutionRail(
 		[]string{skillsDir}, model, "test-model", "cn",
-		coreevolution.WithAutoScan(false), coreevolution.WithAutoSave(false),
+		coreevolution.WithSignalTrigger(false), coreevolution.WithAutoSave(false),
 	)
 	d := NewDeepAdapter()
 	d.skillEvolutionRail = rail

@@ -6,9 +6,9 @@ import (
 
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

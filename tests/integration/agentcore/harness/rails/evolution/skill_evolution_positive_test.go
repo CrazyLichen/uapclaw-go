@@ -14,12 +14,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -228,12 +228,14 @@ func (s *SkillEvolutionPositiveSuite) SetupTest() {
 func (s *SkillEvolutionPositiveSuite) newRail(opts ...evolution.SkillEvolutionRailOption) *evolution.SkillEvolutionRail {
 	model, client := s.newRecordsMockModel()
 	s.lastRecordsClient = client
+	// RunEvolution 门为 signal_trigger（Python run_evolution :838-841），
+	// 正例套件显式开启（Python 测试同款构造）。
 	return evolution.NewSkillEvolutionRail(
 		[]string{s.skillsDir},
 		model,
 		"mock-model",
 		"cn",
-		opts...,
+		append([]evolution.SkillEvolutionRailOption{evolution.WithSignalTrigger(true)}, opts...)...,
 	)
 }
 

@@ -41,8 +41,8 @@ func TestNewSkillEvolutionRail(t *testing.T) {
 	r := newConstructedRail(t)
 	require.NotNil(t, r)
 
-	// 默认开关：autoScan / autoSave 均为 true（对齐 Python）
-	assert.True(t, r.AutoScan(), "默认 autoScan 应为 true")
+	// 默认开关：signal_trigger 缺省 False（Python 新版 :242 bool(None)→False）
+	assert.False(t, r.SignalTrigger(), "默认 signal_trigger 应为 false")
 	assert.True(t, r.AutoSave(), "默认 autoSave 应为 true")
 	assert.Equal(t, 80, r.Priority())
 
@@ -60,8 +60,8 @@ func TestNewSkillEvolutionRail(t *testing.T) {
 // TestSkillEvolutionRailOptions 验证各 Functional Option 的赋值与边界钳制。
 func TestSkillEvolutionRailOptions(t *testing.T) {
 	t.Run("autoScan/autoSave 可关闭", func(t *testing.T) {
-		r := newConstructedRail(t, WithAutoScan(false), WithAutoSave(false))
-		assert.False(t, r.AutoScan())
+		r := newConstructedRail(t, WithSignalTrigger(false), WithAutoSave(false))
+		assert.False(t, r.SignalTrigger())
 		assert.False(t, r.AutoSave())
 	})
 
@@ -117,11 +117,15 @@ func TestSkillEvolutionRailHooks(t *testing.T) {
 	assert.NoError(t, r.OnAfterTaskIteration(ctx, cbc))
 	assert.NoError(t, r.OnAfterEvolutionTriggered(ctx, nil, cbc))
 
-	t.Run("autoScan 控制触发", func(t *testing.T) {
-		assert.True(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, cbc))
-		r.SetAutoScan(false)
+	t.Run("signalTrigger 控制触发", func(t *testing.T) {
+		// Python 新版 _allow_evolution_trigger：signal_trigger 门 +
+		// 后台运行排除 + skip 标记；缺省 False → 不触发。
 		assert.False(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, cbc))
-		r.SetAutoScan(true)
+		r.SetSignalTrigger(true)
+		assert.True(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, cbc))
+		r.skipSignalTriggerThisInvoke = true
+		assert.False(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, cbc), "活动演化活动应跳过被动扫描")
+		r.SetSignalTrigger(false)
 	})
 
 	t.Run("inputs 类型不符时 OnAfterToolCall 直接返回", func(t *testing.T) {

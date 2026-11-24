@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/todo_render"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/cli/ui/tool_display"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 )
 
 // 流式渲染器——把 OutputSchema 块映射成终端输出。

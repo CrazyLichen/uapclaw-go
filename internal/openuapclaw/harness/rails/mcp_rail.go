@@ -3,12 +3,12 @@ package rails
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	mcptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	mcptools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/mcp"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // TestResolvedPromptSection 等用例引用 single_agent/prompts 的 PromptSection。

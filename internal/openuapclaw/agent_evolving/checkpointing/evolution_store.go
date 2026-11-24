@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -773,4 +773,51 @@ func hasFiles(dir string) bool {
 		return false
 	}
 	return len(entries) > 0
+}
+
+// ──────────────────────────── 15.24a Task 10 回填 ────────────────────────────
+
+// ResolveSubjectPayload 从磁盘技能定义解析技能式主体信封。
+// Python: EvolutionStore.resolve_subject_payload（evolution_store.py:289-293）。
+// 返回 nil 表示技能目录不存在。
+func (s *EvolutionStore) ResolveSubjectPayload(ctx context.Context, name string) map[string]string {
+	skillDir := s.ResolveSkillDir(ctx, name)
+	if skillDir == "" {
+		return nil
+	}
+	return map[string]string{
+		"kind": s.readSkillDirSubjectKind(ctx, skillDir),
+		"name": name,
+	}
+}
+
+// readSkillDirSubjectKind 读取技能目录的 subject kind（frontmatter kind）。
+// Python: _read_skill_dir_subject_kind（evolution_store.py:295-311）。
+func (s *EvolutionStore) readSkillDirSubjectKind(ctx context.Context, skillDir string) string {
+	mdPath := s.FindSkillMD(ctx, skillDir)
+	if mdPath == "" {
+		return "skill"
+	}
+	data, err := os.ReadFile(mdPath)
+	if err != nil {
+		return "skill"
+	}
+	frontmatter := ParseTopLevelFrontmatter(string(data))
+	rawKind := strings.TrimSpace(frontmatter["kind"])
+	rawKind = strings.Trim(rawKind, "\"'")
+	if rawKind == "" {
+		rawKind = "skill"
+	}
+	return NormalizeSubjectKind(rawKind)
+}
+
+// NormalizeSubjectKind subject kind 归一。
+// Python: _normalize_subject_kind（evolution_store.py:313-316）——Python 经
+// 惰性 import 委托 draft_schema（避免包环），Go 内联同一映射（team-skill→swarm-skill）。
+func NormalizeSubjectKind(subjectKind string) string {
+	normalized := strings.TrimSpace(subjectKind)
+	if normalized == "team-skill" {
+		return "swarm-skill"
+	}
+	return normalized
 }
