@@ -159,6 +159,14 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(exporter)))
 	}
 
+	// Python: runtime.py:156 provider.add_span_processor(tracker)——ActiveSpanTracker
+	// 随 provider 恒挂载（活动 span 跟踪，安全网 flush 依赖）。
+	// Go 侧单例：先建/复用 tracker 再进 tpOpts（附加 processors 之前）。
+	if activeSpanTracker == nil {
+		activeSpanTracker = NewActiveSpanTracker()
+	}
+	tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(activeSpanTracker))
+
 	// Python: demand.py:158 把 (get_trajectory_span_processor(), get_span_record_processor())
 	// 作为 additional_span_processors 传入，经 runtime._register_span_processors →
 	// add_span_processor(SafeSpanProcessor(processor)) 挂进 provider；

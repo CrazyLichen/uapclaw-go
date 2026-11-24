@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -161,6 +163,93 @@ func (s *OtelSpanState) PushAgentSpan(agentID string, span trace.Span) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.agentSpanMap[agentID] = append(s.agentSpanMap[agentID], span)
+}
+
+// SnapshotTools 返回工具 span 栈的快照（toolName → 栈，浅拷贝切片）。
+// cascade 安全网遍历用；Python 直接读 ContextVar 的 map（单线程），
+// Go 侧经快照避免持锁回调 End。
+func (s *OtelSpanState) SnapshotTools() map[string][]trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string][]trace.Span, len(s.toolSpanMap))
+	for name, stack := range s.toolSpanMap {
+		out[name] = append([]trace.Span(nil), stack...)
+	}
+	return out
+}
+
+// SetTools 回写某工具名收口后剩余的栈（cascade 安全网用）。
+func (s *OtelSpanState) SetTools(toolName string, remaining []trace.Span) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(remaining) == 0 {
+		delete(s.toolSpanMap, toolName)
+		return
+	}
+	s.toolSpanMap[toolName] = remaining
+}
+
+// AgentSpanIDs 返回全部 agent span 的 SpanID（cascade 的 llm 父比对用）。
+// Python: cascade 以 _current_agent_span 单槽判定；Go 无单槽（偏差），
+// 全部 agent span 的 id 都参与比对。
+func (s *OtelSpanState) AgentSpanIDs() []trace.SpanID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var ids []trace.SpanID
+	for _, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil {
+				continue
+			}
+			if sc := span.SpanContext(); sc.IsValid() {
+				ids = append(ids, sc.SpanID())
+			}
+		}
+	}
+	return ids
+}
+
+// AgentTraceID 返回首个 agent span 的 TraceID hex（cascade 的 llm 迹线定位用）。
+// Python: tracker 内部 _resolve_root_span().context.trace_id。
+func (s *OtelSpanState) AgentTraceID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil {
+				continue
+			}
+			if sc := span.SpanContext(); sc.IsValid() {
+				return sc.TraceID().String()
+			}
+		}
+	}
+	return ""
+}
+
+// CloseAgentSpans 收口全部 recording 的 agent span 并清空（安全网兜底路径）。
+// Python: close_current_agent_span 关闭 _current_agent_span 单槽；Go 无单槽
+// （偏差），收口 agentSpanMap 内全部 recording span。
+func (s *OtelSpanState) CloseAgentSpans() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, stack := range s.agentSpanMap {
+		for _, span := range stack {
+			if span == nil || !span.IsRecording() {
+				continue
+			}
+			logger.Warn(logComponent).Str("agent_id", id).
+				Str("span_id", func() string {
+					if sc := span.SpanContext(); sc.IsValid() {
+						return sc.SpanID().String()
+					}
+					return "0"
+				}()).
+				Msg("otel: close_current_agent_span - closing unclosed agent span")
+			span.End()
+		}
+	}
+	s.agentSpanMap = make(map[string][]trace.Span)
 }
 
 // PopAgentSpan 弹出指定 agentID 最近的一个 agent span。
