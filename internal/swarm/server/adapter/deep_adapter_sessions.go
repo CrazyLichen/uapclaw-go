@@ -1047,17 +1047,17 @@ func (d *DeepAdapter) toolRetrievalFlipPendingOfChild(child AgentAdapter) bool {
 
 // skillRetrievalProfilePath 会话技能检索 profile sidecar 路径。
 // Python: _skill_retrieval_profile_path（interface_deep.py:2474-2483）：
-// <config_dir>/runtime_state/<sid-sanitized>.<sha256(sid)[:16]>.skill-retrieval.json。
-// [Go 适配偏差 D-16-4-8] Python runtime_path 取 per-session runtime_state/<sid>.yaml
-// 的同名目录改缀；Go runtime_state.yaml 为全进程单文件（drop() 注释 D-8），
-// 故直接按 Python 最终产物形态构造：runtime_state/<sid-sanitized>.<digest>.skill-retrieval.json，
-// 消费方只有本 sidecar，形态等价。
+// runtime_path = get_runtime_state_path(sid)；digest = sha256(sid)[:16]；
+// return runtime_path.with_name(f"{runtime_path.stem}.{digest}.skill-retrieval.json")。
+// ✅ D-16-4-8 已回收：workspace.RuntimeStatePath 对齐 get_runtime_state_path
+// （utils.py:1758-1765 per-session 派生），此处按 Python 逐字派生。
 func (d *DeepAdapter) skillRetrievalProfilePath(sessionID string) string {
 	sid := sessionAdapterKey(&sessionID)
-	sanitized := sanitizeSessionKey(sid)
-	digest := fmt.Sprintf("%x", sha256Sum16([]byte(sid)))
-	return filepath.Join(workspace.ConfigDir(), "runtime_state",
-		fmt.Sprintf("%s.%s.skill-retrieval.json", sanitized, digest))
+	runtimePath := workspace.RuntimeStatePath(sid)
+	digest := sha256Sum16([]byte(sid))
+	stem := strings.TrimSuffix(filepath.Base(runtimePath), filepath.Ext(runtimePath))
+	return filepath.Join(filepath.Dir(runtimePath),
+		fmt.Sprintf("%s.%s.skill-retrieval.json", stem, digest))
 }
 
 // skillRetrievalProfileChecksum sidecar 校验和（去 checksum 键后 canonical JSON）。
@@ -1219,6 +1219,30 @@ func (d *DeepAdapter) DiscardTransientSkillRetrievalSessionProfile() {
 	}
 }
 
+// SkillScanDirsForTest 导出扫描根（integration 缝；Python 集成直接调
+// adapter._skill_scan_dirs()，Go 跨包需出口）。
+func (d *DeepAdapter) SkillScanDirsForTest() []string {
+	return d.skillScanDirs()
+}
+
+// LiveSkillRetrievalDisabledSkillsForTest 导出 live 禁用现查（integration 缝）。
+func (d *DeepAdapter) LiveSkillRetrievalDisabledSkillsForTest() []string {
+	return d.liveSkillRetrievalDisabledSkills()
+}
+
+// SetSessionSelectedMcp 登记 chat.send mcp 字段选中的 MCP 名集合
+// （Python _session_selected_mcp 的写入侧：reconcile_session_mcp :6318 起；
+// reconcile 本体 ⤵️ MCP 注册章节，本入口供其调用与集成缝）。
+func (d *DeepAdapter) SetSessionSelectedMcp(names []string) {
+	set := map[string]bool{}
+	for _, name := range names {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			set[trimmed] = true
+		}
+	}
+	d.sessionSelectedMcp = set
+}
+
 // RestoreSkillRetrievalSession 子构造前恢复不可变技能/MCP 输入。
 // Python: restore_skill_retrieval_session（interface_deep.py:2631-2652）。
 func (d *DeepAdapter) RestoreSkillRetrievalSession(profile map[string]any, initialMCPNames []string, requestedModelName string) {
@@ -1251,33 +1275,10 @@ func (d *DeepAdapter) setInitialSkillRetrievalModel(modelName string) {
 	d.initialSkillRetrievalModelName = strings.TrimSpace(modelName)
 }
 
-// sanitizeSessionKey 会话键文件名净化（Python get_runtime_state_path 的
-// re.sub(r"[^A-Za-z0-9_.-]", "_")[:128] 语义）。
-func sanitizeSessionKey(sid string) string {
-	var b strings.Builder
-	for _, r := range sid {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('_')
-		}
-	}
-	out := b.String()
-	if len(out) > 128 {
-		out = out[:128]
-	}
-	if out == "" {
-		out = "default"
-	}
-	return out
-}
-
-// sha256Sum16 sha256 前 16 hex 字符。
-func sha256Sum16(data []byte) [16]byte {
+// sha256Sum16 sha256 前 16 hex 字符（Python hexdigest()[:16] 逐字）。
+func sha256Sum16(data []byte) string {
 	sum := sha256.Sum256(data)
-	var out [16]byte
-	copy(out[:], sum[:8])
-	return out
+	return hex.EncodeToString(sum[:8])
 }
 
 // intOfAny 宽松整数化（Python int(...) 容错，失败回 0）。

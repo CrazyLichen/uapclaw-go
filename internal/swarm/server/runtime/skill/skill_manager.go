@@ -23,6 +23,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -2312,6 +2313,23 @@ func (sm *SkillManager) GetSkillEnabled(name string) bool {
 func (sm *SkillManager) SetSkillEnabled(name string, enabled bool) {
 	SetSkillEnabled(sm.state, name, enabled)
 	sm.saveState()
+}
+
+// ReloadState 从 skills_state.json 重新加载内存状态。
+// Python: SkillManager.reload_state（skill_manager.py）：__init__ 加载一次
+// 之后内存缓存；外部流程（如 MCP 连接器经独立 SkillManager 实例写
+// skill_configs）落盘后本实例的 state 仍是旧值——检索现查禁用名单前调本
+// 方法重载，保证磁盘最新值生效。
+func (sm *SkillManager) ReloadState() {
+	sm.state = sm.loadState()
+}
+
+// McpSkillsDirs 待扫描的 MCP 捆绑技能目录。
+// Python: SkillManager._mcp_skills_dirs（skill_manager.py:9341-9352，静态
+// 方法→Go 挂 manager 的包级委托）：state.json 连接记录逐个取
+// <workspace>/mcp/skills/<name>/，磁盘存在才返回。Go 包级委托到 mcp 状态存储。
+func (sm *SkillManager) McpSkillsDirs() []map[string]string {
+	return mcpstate.ConnectedMcpSkillDirs()
 }
 
 // ListDisabledSkills 从 skill_configs 中返回已禁用的技能名称列表（排序）。
