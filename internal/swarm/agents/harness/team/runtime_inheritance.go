@@ -511,7 +511,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 				)
 			}
 			opts = append(opts,
-				evolution.WithTeamSkillAutoScan(evolutionAutoScan),
+				evolution.WithTeamSkillSignalTrigger(evolutionAutoScan),
 				evolution.WithTeamSkillAutoSave(false),
 				evolution.WithTeamSkillDisabledSkills(skillruntime.LoadExecutionDisabledSkills()),
 			)

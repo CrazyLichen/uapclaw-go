@@ -64,8 +64,9 @@ type TeamSkillEvolutionRail struct {
 
 	// ─── 配置 ───
 
-	// autoScan 是否自动检测团队完成信号
-	autoScan bool
+	// signalTrigger 是否触发确定性团队信号演化（Python 新版以 signal_trigger
+	// 取代旧 auto_scan；08-13 版 team ctor kwarg signal_trigger）
+	signalTrigger bool
 	// autoSave 是否自动保存（跳过审批）
 	autoSave bool
 	// language 语言（"cn" 或 "en"）
@@ -98,6 +99,25 @@ type TeamSkillEvolutionRail struct {
 
 	// passiveEvolutionPending 当前 invoke 是否观测到团队完成
 	passiveEvolutionPending bool
+	// completionFollowupPendingSessionID 活跃 follow-up 模式的待排入会话
+	// Python: self._completion_followup_pending_session_id
+	completionFollowupPendingSessionID *string
+	// skipSignalTriggerThisInvoke 本 invoke 已有活动演化活动时跳过被动扫描
+	// Python: self._skip_signal_trigger_this_invoke（继承自 SkillEvolutionRail）
+	skipSignalTriggerThisInvoke bool
+	// reviewTrigger 团队完成是否排入审查自检 follow-up
+	// Python: self._review_trigger
+	reviewTrigger bool
+	// reviewInterval 审查自检间隔（团队版继承基类语义，占位）
+	reviewInterval int
+	// reviewAgentMaxIterations 审查子 agent 最大迭代数
+	reviewAgentMaxIterations int
+	// reviewFeedbackSkillCreateRail 绑定的创建 rail（审查反馈重复模式复用）
+	// Python: self._review_feedback_skill_create_rail
+	reviewFeedbackSkillCreateRail any
+	// reviewFeedbackApprovalContinuations 审批后续动作（request_id → continuation）
+	// Python: self._review_feedback_approval_continuations
+	reviewFeedbackApprovalContinuations map[string]string
 	// hostCompletionPendingSessionID 外部通知的团队完成会话 ID
 	hostCompletionPendingSessionID *string
 	// processedSignalKeys 已处理的信号指纹集合
@@ -201,7 +221,9 @@ func NewTeamSkillEvolutionRail(
 	r := &TeamSkillEvolutionRail{
 		skillsDir:                skillsDir,
 		language:                 language,
-		autoScan:                 true,
+		signalTrigger:            false,
+		reviewInterval:           5,
+		reviewAgentMaxIterations: 40,
 		autoSave:                 false, // Python 默认 auto_save=False
 		evalInterval:             teamSkillDefaultEvalInterval,
 		evolutionTotalTimeoutSec: teamSkillDefaultEvolutionTimeoutSecs,
@@ -319,9 +341,28 @@ func NewTeamSkillEvolutionRail(
 	return r
 }
 
-// WithTeamSkillAutoScan 设置是否自动检测团队完成信号。
-func WithTeamSkillAutoScan(v bool) TeamSkillEvolutionRailOption {
-	return func(r *TeamSkillEvolutionRail) { r.autoScan = v }
+// WithTeamSkillSignalTrigger 设置是否触发确定性团队信号演化。
+// Python: TeamSkillEvolutionRail(signal_trigger=...)（08-13 新版 kwarg）
+func WithTeamSkillSignalTrigger(v bool) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.signalTrigger = v }
+}
+
+// WithTeamSkillReviewTrigger 设置团队完成是否排入审查自检 follow-up。
+// Python: TeamSkillEvolutionRail(review_trigger=...)
+func WithTeamSkillReviewTrigger(v bool) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.reviewTrigger = v }
+}
+
+// WithTeamSkillReviewInterval 设置审查自检间隔。
+// Python: TeamSkillEvolutionRail(review_interval=5)
+func WithTeamSkillReviewInterval(v int) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.reviewInterval = v }
+}
+
+// WithTeamSkillReviewAgentMaxIterations 设置审查子 agent 最大迭代数。
+// Python: TeamSkillEvolutionRail(review_agent_max_iterations=40)
+func WithTeamSkillReviewAgentMaxIterations(v int) TeamSkillEvolutionRailOption {
+	return func(r *TeamSkillEvolutionRail) { r.reviewAgentMaxIterations = v }
 }
 
 // WithTeamSkillAutoSave 设置是否自动保存。
@@ -438,7 +479,9 @@ func (r *TeamSkillEvolutionRail) Priority() int { return 80 }
 // OnBeforeInvoke 在每次 invoke 开始时重置团队完成标记。
 // Python: TeamSkillEvolutionRail._on_before_invoke(ctx)
 func (r *TeamSkillEvolutionRail) OnBeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	// Python: _on_before_invoke（:492-497）——重置 invoke 局部被动完成状态
 	r.passiveEvolutionPending = false
+	r.skipSignalTriggerThisInvoke = false
 	return nil
 }
 
@@ -462,7 +505,8 @@ func (r *TeamSkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agent
 	// Python: await self._record_presented_experience_detail(ctx, inputs)
 	r.recordPresentedExperienceDetail(ctx, inputs)
 
-	if !r.autoScan {
+	// Python: if not self._signal_trigger and not self._review_trigger: return（:594-596）
+	if !r.signalTrigger && !r.reviewTrigger {
 		return nil
 	}
 
@@ -495,8 +539,8 @@ func (r *TeamSkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agent
 		return nil
 	}
 
-	// Python: self._mark_passive_evolution_pending()
-	r.markPassiveEvolutionPending()
+	// Python: self._mark_team_completion_pending()（:613）
+	r.markTeamCompletionPending()
 	return nil
 }
 
@@ -506,9 +550,25 @@ func (r *TeamSkillEvolutionRail) OnAfterInvoke(_ context.Context, _ *agentinterf
 	return nil
 }
 
-// OnAfterTaskIteration 空实现。
-// Python: TeamSkillEvolutionRail 无此覆写
-func (r *TeamSkillEvolutionRail) OnAfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+// OnAfterTaskIteration 团队完成时经任务循环排入活跃审查 follow-up。
+// Python: _on_after_task_iteration（:632-658）。
+func (r *TeamSkillEvolutionRail) OnAfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	if !r.reviewTrigger {
+		return nil
+	}
+	if r.completionFollowupPendingSessionID == nil {
+		return nil
+	}
+	pendingSessionID := *r.completionFollowupPendingSessionID
+	sessionID := r.currentBuilderSessionID()
+	if pendingSessionID == "" || pendingSessionID != sessionID {
+		return nil
+	}
+	if !r.enqueueTaskIterationFollowup(ctx, cbc, r.buildTeamCompletionFollowupPrompt(), "team completion") {
+		return nil
+	}
+	r.completionFollowupPendingSessionID = nil
+	r.hostCompletionPendingSessionID = nil
 	return nil
 }
 
@@ -525,17 +585,17 @@ func (r *TeamSkillEvolutionRail) OnAfterEvolutionTriggered(_ context.Context, tr
 // 仅在团队任务完成时（passiveEvolutionPending 或 hostCompletionPending）允许触发。
 // Python: TeamSkillEvolutionRail._allow_evolution_trigger(trigger_point, ctx)
 func (r *TeamSkillEvolutionRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
-	if !r.autoScan {
+	// Python: _allow_evolution_trigger（:616-631）——skip 门 + review_trigger
+	// 排除 + passive/host 完成标记判定。
+	if r.skipSignalTriggerThisInvoke {
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] active evolution activity detected, skip passive signal scan")
 		return false
 	}
-	if r.passiveEvolutionPending {
-		return true
+	if r.reviewTrigger {
+		return false
 	}
-	sessionID := r.currentBuilderSessionID()
-	if r.hostCompletionPendingSessionID != nil && sessionID != "" && *r.hostCompletionPendingSessionID == sessionID {
-		return true
-	}
-	return false
+	return r.signalTrigger && (r.passiveEvolutionPending ||
+		r.hostCompletionPending())
 }
 
 // SnapshotForEvolution 同步捕获快照，供后台演化任务使用。
@@ -543,7 +603,7 @@ func (r *TeamSkillEvolutionRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, 
 //
 //	捕获轨迹 + 消息 + skill_name="team-skill" + presentedEntries
 func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	if !r.autoScan {
+	if !r.signalTrigger {
 		return nil
 	}
 
@@ -580,7 +640,7 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 //	5. handleEvolutionFromSignals（从信号触发演化）
 //	6. evaluatePresentedEntries（评估已呈现条目）
 func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
-	if !r.autoScan {
+	if !r.signalTrigger {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan disabled, skipping")
 		return nil
 	}
@@ -601,106 +661,64 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		logger.Info(logComponent).Float64("elapsed_secs", elapsed).Msg("[TeamSkillEvolutionRail] run_evolution completed")
 	}()
 
-	// Python: emit_progress("started", "team tasks completed; starting team skill evolution analysis")
-	r.emitProgress("started", "团队任务已完成，开始团队技能演进分析")
+	// Python: emit_progress("started", ...)
+	r.emitProgress("started", "team tasks completed; starting team skill evolution analysis")
 
-	// Python: 从 snapshot 或 ctx 获取数据
+	// Python: trajectory = prepared.trajectory; messages = deepcopy(...); presented_entries = deepcopy(...)
 	var messages []map[string]any
 	var presentedEntries []experience.PresentedRecordEntry
-
 	if snapshot != nil {
 		messages = snapshot.Messages
 		presentedEntries = snapshot.PresentedEntries
-	} else {
+	} else if traj != nil {
 		messages = trajectoryToMessages(traj)
-	}
-
-	// Python: team_trajectory = self._aggregate_team_trajectory(trajectory)
-	teamTrajectory := r.aggregateTeamTrajectory(traj)
-	if teamTrajectory != traj {
-		traj = teamTrajectory
-		if snapshot == nil {
-			messages = trajectoryToMessages(traj)
-		}
 	}
 
 	// Python: used_skill = self._detect_used_team_skill(trajectory)
 	usedSkill := r.detectUsedTeamSkill(ctx, traj)
 	if usedSkill == "" {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] no existing skills detected, skipping")
-		r.emitProgress("cancelled", "轨迹中未检测到团队/集群技能使用，取消团队技能演进分析")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] no existing skill detected, skipping")
+		r.emitProgress("cancelled",
+			"no skill usage of a team/swarm skill detected in trajectory; cancelling team skill evolution analysis")
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
 	}
+	logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] detected existing skill")
 
-	logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] existing skill detected")
-
-	// Python: current_content = await self._store.read_skill_content(used_skill)
-	currentContent, err := r.evolutionStore.ReadSkillContent(ctx, usedSkill)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] failed to read skill content")
-		currentContent = ""
-	}
-
-	// Python: signals = await self.team_signal_detector.detect_trajectory_signals(...)
-	signals, err := r.teamSignalDetector.DetectTrajectorySignals(ctx, traj, usedSkill, currentContent)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] trajectory signal detection failed")
-		signals = nil
-	}
-
-	// Python: user_intent = await self._detect_user_request(messages, current_content)
-	userIntent, err := r.detectUserRequest(ctx, messages, currentContent)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] user intent detection failed")
-	}
-	if userIntent != nil && userIntent.Intent != "" {
-		r.teamAppendUniqueSignal(&signals, signal.MakeTeamUserIntentSignal(usedSkill, userIntent.Intent))
-	}
-
+	// Python: signals = self._detect_rule_signals(trajectory=trajectory, skill_name=used_skill)（:761）
+	signals := r.DetectRuleSignals(ctx, traj, usedSkill)
 	if len(signals) == 0 {
 		logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] no signals detected")
-		r.emitProgress("cancelled", fmt.Sprintf("未检测到 '%s' 的可操作演进信号，取消团队技能演进分析", usedSkill), WithSkillName(usedSkill))
+		r.emitProgress("cancelled",
+			fmt.Sprintf("no actionable evolution signals detected for '%s'; cancelling team skill evolution analysis", usedSkill),
+			WithSkillName(usedSkill))
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
 	}
 
-	// Python: 统计信号类型
-	trajectoryIssueSignals := 0
-	for _, sig := range signals {
-		if sig.SignalType == string(signal.TeamSignalTypeTrajectoryIssue) {
-			trajectoryIssueSignals++
-		}
-	}
-	userIntentSignals := len(signals) - trajectoryIssueSignals
-	r.emitProgress("detecting_signals", fmt.Sprintf("检测到演进信号: %d 个轨迹问题, %d 个用户意图", trajectoryIssueSignals, userIntentSignals))
+	// Python: _emit_progress("detecting_signals", f"detected {len(signals)} deterministic rule signal(s) ...")
+	r.emitProgress("detecting_signals",
+		fmt.Sprintf("detected %d deterministic rule signal(s) for '%s'", len(signals), usedSkill),
+		WithSkillName(usedSkill))
 
-	// Python: request = await self._handle_evolution_from_signals(...)
-	userQuery := ""
-	if userIntent != nil {
-		userQuery = userIntent.Intent
-	}
-	request, err := r.handleEvolutionFromSignals(
-		ctx, usedSkill, traj, signals,
-		r.autoSave, userQuery, messages, true,
-	)
+	// Python: online_result = await self._handle_evolution_from_signals_with_result(...)（:790-797）
+	request, err := r.HandleEvolutionFromSignalsWithResult(ctx, usedSkill, traj, signals,
+		r.autoSave, "", messages, true)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] handleEvolutionFromSignals failed")
+		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).
+			Msg("[TeamSkillEvolutionRail] handleEvolutionFromSignals failed")
 	}
 
+	// Python: outcome/no-request/request-ready 三分支 progress（:798-812）
 	if request == nil {
-		r.emitProgress("completed", "未生成演进记录")
+		r.emitProgress("completed", "no evolution records generated")
 	} else {
-		requestID := ""
-		if request.RequestID != "" {
-			requestID = request.RequestID
-		}
-		r.emitProgress("completed", fmt.Sprintf("'%s' 的演进请求已就绪", usedSkill), WithSkillName(usedSkill), WithRequestID(requestID))
+		r.emitProgress("completed", fmt.Sprintf("evolution request ready for '%s'", usedSkill),
+			WithSkillName(usedSkill), WithRequestID(request.RequestID))
 	}
 
-	// Python: await self._evaluate_presented_entries(presented_entries)
+	// Python: await self._evaluate_presented_entries(presented_entries, messages)
 	r.evaluatePresentedEntries(ctx, presentedEntries)
-
 	return nil
 }
 
@@ -715,9 +733,9 @@ func (r *TeamSkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 // NotifyTeamCompleted 标记当前 invoke 在下一个 after_invoke 边界触发被动演化。
 // 对齐 Python: TeamSkillEvolutionRail.notify_team_completed(ctx)
 //
-//	检查 autoScan、builder 可用性，设置 hostCompletionPendingSessionID
+//	检查 signal/review trigger、builder 可用性，markTeamCompletionPending
 func (r *TeamSkillEvolutionRail) NotifyTeamCompleted(_ context.Context) (bool, error) {
-	if !r.autoScan {
+	if !r.signalTrigger {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] notify_team_completed ignored due to auto_scan disabled")
 		return false, nil
 	}
@@ -984,11 +1002,21 @@ func (r *TeamSkillEvolutionRail) HasPendingApprovalSnapshot(requestID string) bo
 	return ok
 }
 
-// AutoScan 返回是否自动检测团队完成信号。
-func (r *TeamSkillEvolutionRail) AutoScan() bool { return r.autoScan }
+// SignalTrigger 返回是否触发确定性团队信号演化。
+// Python: signal_trigger property（team_skill_evolution_rail.py:422-426）
+func (r *TeamSkillEvolutionRail) SignalTrigger() bool { return r.signalTrigger }
 
-// SetAutoScan 设置是否自动检测团队完成信号。
-func (r *TeamSkillEvolutionRail) SetAutoScan(v bool) { r.autoScan = v }
+// SetSignalTrigger 设置是否触发确定性团队信号演化。
+// Python: signal_trigger.setter（:427-430）
+func (r *TeamSkillEvolutionRail) SetSignalTrigger(v bool) { r.signalTrigger = v }
+
+// ReviewTrigger 返回团队完成是否排入审查自检 follow-up。
+// Python: review_trigger property（:431-435）
+func (r *TeamSkillEvolutionRail) ReviewTrigger() bool { return r.reviewTrigger }
+
+// SetReviewTrigger 设置团队完成是否排入审查自检 follow-up。
+// Python: review_trigger.setter（:436-439）
+func (r *TeamSkillEvolutionRail) SetReviewTrigger(v bool) { r.reviewTrigger = v }
 
 // AutoSave 返回是否自动保存。
 func (r *TeamSkillEvolutionRail) AutoSave() bool { return r.autoSave }
@@ -1863,4 +1891,158 @@ func (r *TeamSkillEvolutionRail) RailDrainApprovalEvents() []map[string]any {
 		}
 	}
 	return out
+}
+
+// ──────────────────────────── 15.24a Task 11：08-13 新版对照回收 ────────────────────────────
+
+// teamCompletionFollowUpTag 团队完成审查 follow-up 包裹标签。
+// Python: _AUTO_TEAM_SKILL_EVOLUTION_FOLLOW_UP_TAG（:63）
+const teamCompletionFollowUpTag = "auto_team_skill_evolution_review_followup"
+
+// teamCompletionFollowupPromptCN 团队完成自检 follow-up 中文提示词（原文复刻）。
+// Python: _TEAM_COMPLETION_FOLLOWUP_PROMPT_CN（:64-69）
+const teamCompletionFollowupPromptCN = "这是运行时插入的 Team/Swarm Skill 演进自检，不是用户的新需求。\n" +
+	"团队任务已完成；参考常驻“团队 Skill 演进自检”规则，只判断本轮是否存在可复用团队更新，不重新判断" +
+	"运行时触发门槛。\n" +
+	"如需建议，只在普通最终回复末尾追加一至两句，并同时包含可复用团队更新点和是否发起 Team/Swarm Skill " +
+	"演进的确认问题；否则自然回复，不提本提醒或内部判断。"
+
+// teamCompletionFollowupPromptEN 团队完成自检 follow-up 英文提示词（原文复刻）。
+// Python: _TEAM_COMPLETION_FOLLOWUP_PROMPT_EN（:70-76）
+const teamCompletionFollowupPromptEN = "This runtime-inserted Team/Swarm Skill evolution self-check is not a new user request.\n" +
+	"The team task is complete. Refer to the standing \"Team Skill Evolution Self-Check\" rules and judge only whether " +
+	"this round contains a reusable team update; do not re-evaluate the runtime trigger threshold.\n" +
+	"If suggesting, append only one or two sentences to the normal final reply and include both the reusable team " +
+	"update and the Team/Swarm Skill evolution question; otherwise reply naturally without mentioning this reminder " +
+	"or internal judgment."
+
+// markTeamCompletionPending 按模式标记团队完成（被动扫描或活跃 follow-up）。
+// Python: _mark_team_completion_pending（:820-828）。
+func (r *TeamSkillEvolutionRail) markTeamCompletionPending() {
+	sessionID := r.currentBuilderSessionID()
+	if r.reviewTrigger {
+		sid := sessionID
+		r.completionFollowupPendingSessionID = &sid
+		return
+	}
+	if sessionID != "" {
+		sid := sessionID
+		r.hostCompletionPendingSessionID = &sid
+	}
+	r.markPassiveEvolutionPending()
+}
+
+// hostCompletionPending host 完成标记是否命中当前会话。
+// Python: self._host_completion_pending_session_id == self._current_trajectory_session_id()（:629-630）。
+func (r *TeamSkillEvolutionRail) hostCompletionPending() bool {
+	sessionID := r.currentBuilderSessionID()
+	if sessionID == "" || r.hostCompletionPendingSessionID == nil {
+		return false
+	}
+	return *r.hostCompletionPendingSessionID == sessionID
+}
+
+// buildTeamCompletionFollowupPrompt 构建团队完成审查 follow-up 提示词。
+// Python: _build_team_completion_followup_prompt（:829-833）。
+func (r *TeamSkillEvolutionRail) buildTeamCompletionFollowupPrompt() string {
+	prompt := teamCompletionFollowupPromptCN
+	if r.language == "en" {
+		prompt = teamCompletionFollowupPromptEN
+	}
+	return "<" + teamCompletionFollowUpTag + ">\n" + prompt + "\n</" + teamCompletionFollowUpTag + ">"
+}
+
+// OwnsApprovalRequest 判断请求是否由本 rail 或其 Core 子件持有。
+// Python: owns_approval_request（:316-323）。
+func (r *TeamSkillEvolutionRail) OwnsApprovalRequest(requestID string) bool {
+	if _, ok := r.pendingApprovalSnapshots[requestID]; ok {
+		return true
+	}
+	_, ok := r.pendingGovernance[requestID]
+	return ok
+}
+
+// PopApprovalContinuation 取出并移除请求的审批后续动作。
+// Python: pop_approval_continuation（:324-331）。
+func (r *TeamSkillEvolutionRail) PopApprovalContinuation(requestID string) string {
+	if r.reviewFeedbackApprovalContinuations == nil {
+		return ""
+	}
+	continuation, ok := r.reviewFeedbackApprovalContinuations[requestID]
+	if !ok {
+		return ""
+	}
+	delete(r.reviewFeedbackApprovalContinuations, requestID)
+	return continuation
+}
+
+// enqueueTaskIterationFollowup 从常规任务循环迭代排入 follow-up。
+// Python: _enqueue_task_iteration_followup（skill_evolution_rail.py:600-622，team 继承）。
+func (r *TeamSkillEvolutionRail) enqueueTaskIterationFollowup(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, prompt, logPrefix string) bool {
+	if cbc == nil || cbc.Agent() == nil {
+		logger.Warn(logComponent).
+			Str("log_prefix", logPrefix).
+			Msg("[TeamSkillEvolutionRail] follow-up dropped: no agent available")
+		return false
+	}
+	controller := getLoopController(cbc.Agent())
+	if controller == nil {
+		logger.Warn(logComponent).
+			Str("log_prefix", logPrefix).
+			Msg("[TeamSkillEvolutionRail] follow-up dropped: no TaskLoopController available")
+		return false
+	}
+	controller.EnqueueFollowUp(prompt)
+	return true
+}
+
+// DetectRuleSignals 检测确定性执行/脚本信号并归属到团队技能。
+// Python: _detect_rule_signals（:1112-1134）。
+func (r *TeamSkillEvolutionRail) DetectRuleSignals(ctx context.Context, traj *trajectory.Trajectory, skillName string) []*signal.EvolutionSignal {
+	detector := signal.NewConversationSignalDetector(
+		signal.WithExistingSkills(map[string]bool{skillName: true}),
+	)
+	var detected []*signal.EvolutionSignal
+	func() {
+		defer func() {
+			// Python: except Exception → logger.warning + []
+			if rec := recover(); rec != nil {
+				logger.Warn(logComponent).
+					Str("skill_name", skillName).
+					Any("panic", rec).
+					Msg("[TeamSkillEvolutionRail] rule signal detection failed")
+				detected = nil
+			}
+		}()
+		detected = detector.DetectTrajectorySignals(traj, nil)
+	}()
+
+	signals := make([]*signal.EvolutionSignal, 0, len(detected))
+	for _, sig := range detected {
+		if sig.SkillName != nil && *sig.SkillName != skillName {
+			continue
+		}
+		sig.SkillName = &skillName
+		r.teamAppendUniqueSignal(&signals, sig)
+	}
+	return signals
+}
+
+// HandleEvolutionFromSignalsWithResult 处理演化并保留编排器状态供活动 API 使用。
+// Python: _handle_evolution_from_signals_with_result（:1135-1220）——
+// Go 侧既有 handleEvolutionFromSignals 已承载同款流程（staging + outcome
+// 事件 + 审批事件/auto-approved），此处作 API 形态别名（Python 拆分
+// with_result 与 wrapper 的目的在活动 API 返回编排结果，Go 返回值一致）。
+func (r *TeamSkillEvolutionRail) HandleEvolutionFromSignalsWithResult(
+	ctx context.Context,
+	skillName string,
+	traj *trajectory.Trajectory,
+	signals []*signal.EvolutionSignal,
+	autoApprove bool,
+	userQuery string,
+	messages []map[string]any,
+	emitHostEvents bool,
+) (*experience.ExperienceApprovalRequest, error) {
+	return r.handleEvolutionFromSignals(ctx, skillName, traj, signals,
+		autoApprove, userQuery, messages, emitHostEvents)
 }

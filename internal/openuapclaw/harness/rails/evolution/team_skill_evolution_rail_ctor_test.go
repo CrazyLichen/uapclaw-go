@@ -20,7 +20,7 @@ func newTeamRail(t *testing.T, opts ...TeamSkillEvolutionRailOption) *TeamSkillE
 		newTestLLMModel(t),
 		"team-model",
 		"cn",
-		opts...,
+		append([]TeamSkillEvolutionRailOption{WithTeamSkillSignalTrigger(true)}, opts...)...,
 	)
 }
 
@@ -90,7 +90,7 @@ func TestAggregateTeamTrajectory(t *testing.T) {
 
 // TestTeamRail_SnapshotForEvolution 验证关闭扫描时不产生快照。
 func TestTeamRail_SnapshotForEvolution(t *testing.T) {
-	r := newTeamRail(t, WithTeamSkillAutoScan(false))
+	r := newTeamRail(t, WithTeamSkillSignalTrigger(false))
 	assert.Nil(t, r.SnapshotForEvolution(context.Background(), nil, nil))
 }
 

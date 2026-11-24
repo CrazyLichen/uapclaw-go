@@ -33,18 +33,18 @@ func TestTeamSkillEvolutionRail_Priority(t *testing.T) {
 func TestTeamSkillEvolutionRail_AllowEvolutionTrigger(t *testing.T) {
 	// autoScan=true + passiveEvolutionPending=true → 允许触发
 	r := &TeamSkillEvolutionRail{
-		autoScan:                true,
+		signalTrigger:           true,
 		passiveEvolutionPending: true,
 		EvolutionRail:           &EvolutionRail{},
 	}
 	assert.True(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, nil))
 
 	// autoScan=false → 始终不允许
-	r.autoScan = false
+	r.signalTrigger = false
 	assert.False(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, nil))
 
 	// autoScan=true + passiveEvolutionPending=false + hostCompletionPending 匹配
-	r.autoScan = true
+	r.signalTrigger = true
 	r.passiveEvolutionPending = false
 	sessionID := "sess-1"
 	r.hostCompletionPendingSessionID = &sessionID
@@ -53,11 +53,11 @@ func TestTeamSkillEvolutionRail_AllowEvolutionTrigger(t *testing.T) {
 }
 
 func TestTeamSkillEvolutionRail_AutoScan(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true}
-	assert.True(t, r.AutoScan())
+	r := &TeamSkillEvolutionRail{signalTrigger: true}
+	assert.True(t, r.SignalTrigger())
 
-	r.SetAutoScan(false)
-	assert.False(t, r.AutoScan())
+	r.SetSignalTrigger(false)
+	assert.False(t, r.SignalTrigger())
 }
 
 func TestTeamSkillEvolutionRail_AutoSave(t *testing.T) {
@@ -331,7 +331,7 @@ func TestTeamExperienceRecordHeadingRE_匹配(t *testing.T) {
 
 func TestTeamSkillEvolutionRail_SnapshotForEvolution_禁用AutoScan(t *testing.T) {
 	// autoScan=false → 返回 nil
-	r := &TeamSkillEvolutionRail{autoScan: false}
+	r := &TeamSkillEvolutionRail{signalTrigger: false}
 	snapshot := r.SnapshotForEvolution(context.TODO(), nil, nil)
 	assert.Nil(t, snapshot)
 }
@@ -405,10 +405,10 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 
 // ─── Options 测试 ───
 
-func TestWithTeamSkillAutoScan(t *testing.T) {
+func TestWithTeamSkillSignalTrigger(t *testing.T) {
 	r := &TeamSkillEvolutionRail{}
-	WithTeamSkillAutoScan(false)(r)
-	assert.False(t, r.autoScan)
+	WithTeamSkillSignalTrigger(false)(r)
+	assert.False(t, r.signalTrigger)
 }
 
 func TestWithTeamSkillAutoSave(t *testing.T) {
@@ -513,7 +513,7 @@ func TestWithTeamSkillDisabledSkills_基类未初始化(t *testing.T) {
 func TestTeamSkillEvolutionRail_RunEvolution_DeferRecover(t *testing.T) {
 	// RunEvolution 中的 defer recover 应捕获 panic
 	r := &TeamSkillEvolutionRail{
-		autoScan:      true,
+		signalTrigger: true,
 		EvolutionRail: &EvolutionRail{},
 	}
 	// 使用一个会 panic 的场景——这里通过构造特殊的 trajectory 验证不传播
@@ -525,7 +525,7 @@ func TestTeamSkillEvolutionRail_RunEvolution_DeferRecover(t *testing.T) {
 // ─── OnAfterToolCall 测试 ───
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_非ToolCallInputs(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: true, EvolutionRail: &EvolutionRail{}}
 	// 空的 AgentCallbackContext，Inputs() 返回 nil
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	err := r.OnAfterToolCall(context.TODO(), cbc)
@@ -533,7 +533,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_非ToolCallInputs(t *testing.T) 
 }
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_非ViewTask(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: true, EvolutionRail: &EvolutionRail{}}
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "read_file"})
 	err := r.OnAfterToolCall(context.TODO(), cbc)
@@ -543,7 +543,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_非ViewTask(t *testing.T) {
 }
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask未完成(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: true, EvolutionRail: &EvolutionRail{}}
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolName:   "view_task",
@@ -555,7 +555,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask未完成(t *testing.T) 
 }
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask已完成(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: true, EvolutionRail: &EvolutionRail{}}
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolName:   "view_task",
@@ -567,7 +567,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask已完成(t *testing.T) 
 }
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_禁用AutoScan(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: false, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: false, EvolutionRail: &EvolutionRail{}}
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolName:   "view_task",
@@ -581,14 +581,14 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_禁用AutoScan(t *testing.T) {
 // ─── NotifyTeamCompleted 测试 ───
 
 func TestTeamSkillEvolutionRail_NotifyTeamCompleted_禁用AutoScan(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: false, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: false, EvolutionRail: &EvolutionRail{}}
 	ok, err := r.NotifyTeamCompleted(context.TODO())
 	assert.NoError(t, err)
 	assert.False(t, ok)
 }
 
 func TestTeamSkillEvolutionRail_NotifyTeamCompleted_无SessionID(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: true, EvolutionRail: &EvolutionRail{}}
 	ok, err := r.NotifyTeamCompleted(context.TODO())
 	assert.NoError(t, err)
 	assert.False(t, ok)
@@ -596,7 +596,7 @@ func TestTeamSkillEvolutionRail_NotifyTeamCompleted_无SessionID(t *testing.T) {
 
 func TestTeamSkillEvolutionRail_NotifyTeamCompleted_正常(t *testing.T) {
 	r := &TeamSkillEvolutionRail{
-		autoScan:      true,
+		signalTrigger: true,
 		EvolutionRail: &EvolutionRail{},
 	}
 	// 设置一个 hostCompletionPendingSessionID 来模拟 builder 有 sessionID
@@ -611,7 +611,7 @@ func TestTeamSkillEvolutionRail_NotifyTeamCompleted_正常(t *testing.T) {
 // ─── RunEvolution 禁用路径 ───
 
 func TestTeamSkillEvolutionRail_RunEvolution_禁用AutoScan(t *testing.T) {
-	r := &TeamSkillEvolutionRail{autoScan: false, EvolutionRail: &EvolutionRail{}}
+	r := &TeamSkillEvolutionRail{signalTrigger: false, EvolutionRail: &EvolutionRail{}}
 	err := r.RunEvolution(context.TODO(), &trajectory.Trajectory{}, nil)
 	assert.NoError(t, err)
 }

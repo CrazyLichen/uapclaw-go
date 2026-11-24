@@ -222,7 +222,7 @@ func (m *TeamManager) UpdateEvolutionConfig(ctx context.Context, config map[stri
 	// 步骤 4: 更新所有 TeamSkillEvolutionRail 的 autoScan（team rail 保持
 	// auto_scan 语义，Task 11 对照回收时按 Python 新版裁决）
 	for _, rail := range m.teamSkillRails {
-		rail.SetAutoScan(autoScanEnabled)
+		rail.SetSignalTrigger(autoScanEnabled)
 	}
 
 	// 步骤 5: 若 skill_create 未启用，反注册所有 skill create rails

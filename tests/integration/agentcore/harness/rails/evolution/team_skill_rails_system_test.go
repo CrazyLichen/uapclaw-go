@@ -195,7 +195,7 @@ func (s *TeamSkillRailsSystemSuite) TestTeamSkillEvolutionRail_审批后演化�
 		newPatchMockModel(s.T()),
 		"mock-model",
 		"cn",
-		evolution.WithTeamSkillAutoScan(false),
+		evolution.WithTeamSkillSignalTrigger(false),
 		evolution.WithTeamSkillAutoSave(false),
 		evolution.WithTeamSkillAsyncEvolution(false),
 	)
