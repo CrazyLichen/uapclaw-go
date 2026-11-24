@@ -199,6 +199,9 @@ func NewToolRetrievalPromptRail(
 		frozenConnectorGroups: map[string]swarmtools.McpServerGroup{},
 		ownedToolCards:        map[string]*tool.ToolCard{},
 	}
+	// V-4：受信任构造函数标记（对齐 NewProgressiveToolRail；readonly 绑定
+	// 链据此判定工具可免 LLM 审查）。
+	r.MarkTrusted()
 	return r
 }
 
@@ -249,6 +252,12 @@ func (r *ToolRetrievalPromptRail) Uninit(agent agentinterfaces.BaseAgent) error 
 	r.frozenConnectorGroups = map[string]swarmtools.McpServerGroup{}
 	r.catalogueFinalized = false
 	return nil
+}
+
+// Toolkit 返回检索工具包（V-6 绑定身份校验消费；Python 经
+// rail._toolkit 私有字段访问，Go 以导出访问器等价替代）。
+func (r *ToolRetrievalPromptRail) Toolkit() *swarmtools.ToolRetrievalToolkit {
+	return r.toolkit
 }
 
 // GetCallbacks 注册 BeforeModelCall / BeforeToolCall 钩子。
