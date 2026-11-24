@@ -73,7 +73,7 @@ func (s *QuestionerSuite) resultText(wo *workflow.WorkflowOutput) string {
 // 对齐 Python test_runner_agent_resource_management 欠的 Questioner
 // __interaction__ → 二次调用恢复场景（6.25 ⤵️ 回填兑现）。
 func (s *QuestionerSuite) TestQuestioner_中断恢复端到端() {
-	comp, mock := s.newQuestionerComp(`{}`, `{"name": "张三"}`)
+	comp, _ := s.newQuestionerComp(`{}`, `{"name": "张三"}`)
 	w := s.buildWorkflow(comp)
 
 	sess := session.NewSession(session.WithEnvs(map[string]any{}))
