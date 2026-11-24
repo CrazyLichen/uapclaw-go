@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"crypto/rand"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	// buildctx 心跳服务窄面（25.6 批二注入链）
 	"crypto/sha256"
 	"encoding/hex"
@@ -94,17 +95,19 @@ type AgentRuntimeHandle interface {
 	// RunStream 流式执行接线（executor 包裹：execution 注册+作用域）
 	// Python: _session_coordinator.run_stream。
 	RunStream(ctx context.Context, sessionID, requestID string,
-		kind swsession.SessionWorkKind, operation func(context.Context) (<-chan any, error),
-		options swsession.StreamOptions, emit func(any) bool) error
+		kind swsession.SessionWorkKind, operation func(context.Context) (<-chan *agentschema.AgentResponseChunk, error),
+		options swsession.StreamOptions, emit func(*agentschema.AgentResponseChunk) bool) error
 	// RunTeamStream 团队流式执行接线（execution 注册+TeamExecutionContext 组装）
 	// Python: _session_coordinator.run_team_stream。
 	RunTeamStream(ctx context.Context, sessionID, requestID string,
-		kind swsession.SessionWorkKind, operation func(context.Context, swsession.TeamExecutionContext) (<-chan any, error),
-		options swsession.StreamOptions, emit func(any) bool) error
+		kind swsession.SessionWorkKind, operation func(context.Context, swsession.TeamExecutionContext) (<-chan *agentschema.AgentResponseChunk, error),
+		options swsession.StreamOptions, emit func(*agentschema.AgentResponseChunk) bool) error
 	// SessionWorkKindOf 会话执行种类判定（nil=非会话执行型，走原队列路径）
 	SessionWorkKindOf(request *schema.AgentRequest) *swsession.SessionWorkKind
 	// TeamDetailsOf 团队 Details 四键构造（仅 team kind 调用）
 	TeamDetailsOf(request *schema.AgentRequest, kind swsession.SessionWorkKind) *swsession.TeamExecutionDetails
+	// InteractionIDsOfChunk 流元素交互标识提取（ask_user 挂起标记）
+	InteractionIDsOfChunk(item any) map[string]struct{}
 }
 
 // agentEntry Agent 实例条目，记录元数据。

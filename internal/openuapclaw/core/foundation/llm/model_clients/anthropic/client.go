@@ -491,14 +491,6 @@ func (c *AnthropicModelClient) Release(ctx context.Context, opts ...model_client
 	)
 }
 
-// TranscribeAudio Anthropic 无音频转写端点（对齐 openai transcription 不可用桩）。
-func (c *AnthropicModelClient) TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("transcribe_audio is not supported by AnthropicModelClient"),
-	)
-}
-
 // SupportsKVCacheRelease 仅 InferenceAffinity 返回 true。
 func (c *AnthropicModelClient) SupportsKVCacheRelease() bool { return false }
 

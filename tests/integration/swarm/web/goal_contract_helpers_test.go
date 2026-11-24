@@ -3,6 +3,8 @@
 package web_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,7 +106,17 @@ func newGoalContractEnv(t *testing.T) *testhelpers.ServerEnv {
 // Go 先例: goal_dispatch_test.go:48-60（TearDown 先 FlushMetadataQueue 再清缓存）
 func isolateGoalDataDir(t *testing.T) {
 	t.Helper()
-	t.Setenv(pathutil.EnvDataDir, t.TempDir())
+	dataDir := t.TempDir()
+	t.Setenv(pathutil.EnvDataDir, dataDir)
+	// 关键：在触发任何 pathutil 解析之前先创建 <data>/config/ 目录。
+	// 未初始化回退链（paths.go resolvePathsOnce）在 config/ 不存在时先回退
+	// ResourcesDir（测试二进制在 /tmp 下找不到）再降级真实用户目录
+	// ~/.uapclaw——曾经把 models.upsert / model_groups.upsert 的写盘落到
+	// 真实用户配置（组A/G 残留累积）。mkdir 若放在 ResetCache 之后会作为
+	// 首次解析调用把回退结果钉死，必须先建目录再重置缓存。
+	if err := os.MkdirAll(filepath.Join(dataDir, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	pathutil.ResetCache()
 	sessionpkg.ClearAllSessionMetadataCache()
 }

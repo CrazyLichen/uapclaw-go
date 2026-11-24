@@ -37,6 +37,7 @@ import (
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
@@ -343,6 +344,34 @@ type DeepAdapter struct {
 	registeredMCPServerIDs map[string]bool
 	// registeredMCPServers 已注册 MCP 服务配置
 	registeredMCPServers map[string]*mcptypes.McpServerConfig
+	// toolRetrievalToolkit 检索工具包（懒创建缓存；关闭时清空）
+	toolRetrievalToolkit *swarmtools.ToolRetrievalToolkit
+	// toolRetrievalPromptRail 本层目录 rail 句柄（queued 或 mounted）
+	toolRetrievalPromptRail *commrails.ToolRetrievalPromptRail
+	// toolRetrievalSessionEnabled 构建期冻结的披露层开关（R-5 判据基线）
+	toolRetrievalSessionEnabled *bool
+	// skillRetrievalToolkit 会话技能检索工具包（懒创建缓存；16.4b）
+	skillRetrievalToolkit *swarmtools.SkillRetrievalToolkit
+	// skillRetrievalPromptRail 技能检索提示词边界 rail 句柄
+	skillRetrievalPromptRail *commrails.SkillRetrievalPromptRail
+	// skillRetrievalSessionEnabled 构建期冻结的检索开关（persist 供体）
+	skillRetrievalSessionEnabled *bool
+	// restoredSkillRetrievalProfile sidecar 恢复的 profile（nil=无恢复）
+	restoredSkillRetrievalProfile map[string]any
+	// initialSkillRetrievalModelName 初始请求模型名（Python :2156）
+	initialSkillRetrievalModelName string
+	// skillRetrievalContextModelName 恢复的上下文模型名（Python :2157）
+	skillRetrievalContextModelName string
+	// skillRetrievalContextWindowTokens 恢复的上下文窗口（0=未恢复，Python :2158）
+	skillRetrievalContextWindowTokens int
+	// initialSkillScanMCPNames 构造期 MCP 扫描名单（Python :2233）
+	initialSkillScanMCPNames []string
+	// sessionSelectedMcp 本会话经 chat.send mcp 字段选中的 MCP 名集合
+	// （Python _session_selected_mcp :2223；reconcile_session_mcp 写入侧
+	// ⤵️ 该章节，入口 SetSessionSelectedMcp 先行落地）
+	sessionSelectedMcp map[string]bool
+	// pendingSkillScanMCPNames 构造期待消费的 MCP 扫描提示（Python :2230）
+	pendingSkillScanMCPNames []string
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11
 	autoHarnessService any
@@ -505,6 +534,152 @@ func NewDeepAdapter() *DeepAdapter {
 	// 优先读已发布的 configBase 快照，未初始化时才回退读盘（见 T-07）。
 	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
 	return d
+}
+
+// registerToolRetrievalPromptRail 目录披露层接管接线。
+// Python: _register_tool_retrieval_prompt_rail（:7359-7380）+ _build_tool_retrieval_prompt_rail
+// （:7330-7357）+ _drop_bundled_progressive（:7289-7305）——开关开启时构造
+// toolkit 与 rail、排队进 instance pending rails 并移除内置
+// ProgressiveToolRail（单一所有者：ToolRetrievalPromptRail owns tool_search）；
+// 构造失败返回不接管，内置 rail 兜底（绝不裸奔无披露层）。同时冻结
+// R-5 判据基线（构建期开关状态）。
+func (d *DeepAdapter) registerToolRetrievalPromptRail(configBase map[string]any) {
+	if d.instance == nil {
+		return
+	}
+	enabled := config.ToolRetrievalEnabled(configBase)
+	frozen := enabled
+	d.toolRetrievalSessionEnabled = &frozen
+	if !enabled {
+		return
+	}
+	toolkit := d.getOrCreateToolRetrievalToolkit(configBase)
+	if toolkit == nil {
+		return
+	}
+	if d.dropPendingProgressiveToolRail() {
+		logger.Info(logComponent).
+			Str("event_type", "tool_retrieval_takeover").
+			Msg("[JiuWenSwarmDeepAdapter] dropped bundled ProgressiveToolRail; " +
+				"ToolRetrievalPromptRail will own tool_search")
+	}
+	rail := commrails.NewToolRetrievalPromptRail(toolkit, configBase)
+	d.instance.QueuePendingRail(rail)
+	d.toolRetrievalPromptRail = rail
+	logger.Info(logComponent).
+		Str("event_type", "tool_retrieval_queued").
+		Msg("[JiuWenSwarmDeepAdapter] ToolRetrievalPromptRail queued")
+}
+
+// dropPendingProgressiveToolRail 从 DeepAgent pendingRails 剔除内置
+// ProgressiveToolRail。Python: interface_deep.py:7289-7305（kept = [rail for
+// rail in pending if not isinstance(rail, ProgressiveToolRail)]）——手术方法
+// 归属 adapter 层（Python 同层），DeepAgent 仅提供 pendingRails 访问器。
+// 返回是否确有移除。
+func (d *DeepAdapter) dropPendingProgressiveToolRail() bool {
+	if d.instance == nil {
+		return false
+	}
+	pending := d.instance.PendingRails()
+	kept := make([]sainterfaces.AgentRail, 0, len(pending))
+	dropped := false
+	for _, rail := range pending {
+		if _, isProgressive := rail.(*rails.ProgressiveToolRail); isProgressive {
+			dropped = true
+			continue
+		}
+		kept = append(kept, rail)
+	}
+	if dropped {
+		d.instance.ReplacePendingRails(kept)
+	}
+	return dropped
+}
+
+// getOrCreateToolRetrievalToolkit 懒创建检索工具包。
+// Python: _get_or_create_tool_retrieval_toolkit（:7330-7358）——deferred
+// 集合延迟读取（create_deep_agent 期间才分配曝光；rail.init 会再刷新）。
+func (d *DeepAdapter) getOrCreateToolRetrievalToolkit(configBase map[string]any) *swarmtools.ToolRetrievalToolkit {
+	language := d.resolveRuntimeLanguage()
+	if d.toolRetrievalToolkit != nil && d.toolRetrievalToolkit.Language() == language {
+		return d.toolRetrievalToolkit
+	}
+	if d.instance == nil || d.instance.AbilityManager() == nil {
+		return nil
+	}
+	abilityManager := d.instance.AbilityManager()
+	provider := func() []cschema.ToolInfoInterface {
+		infos := []cschema.ToolInfoInterface{}
+		for _, abilityCard := range abilityManager.List() {
+			card, ok := abilityCard.(*tool.ToolCard)
+			if !ok || card.EffectiveExposure() != tool.ToolExposureDeferred {
+				continue
+			}
+			infos = append(infos, card.ToolInfo())
+		}
+		return infos
+	}
+	toolkit := swarmtools.NewToolRetrievalToolkit(
+		provider,
+		d.sessionScope(),
+		configBase,
+		d.mcpServerDescriptions,
+		language,
+	)
+	d.toolRetrievalToolkit = toolkit
+	return toolkit
+}
+
+// sessionScope 会话唯一标识（R-5/披露冻结域）。
+func (d *DeepAdapter) sessionScope() string {
+	if d.instance != nil {
+		if card := d.instance.Card(); card != nil && card.ID != "" {
+			return card.ID
+		}
+	}
+	return "default"
+}
+
+// mcpServerDescriptions MCP server 名 → 本地化描述（连接器虚拟分支行）。
+// Python: _mcp_server_descriptions（:7359-7395 等价段）——已安装包 manifest
+// 的本地化描述 + mcp.servers 条目 plain description；只有名字的 server 也
+// 贡献名字（多下划线前缀精确分组）。
+func (d *DeepAdapter) mcpServerDescriptions() map[string]any {
+	out := map[string]any{}
+	for _, entry := range d.extractEnabledMcpServerEntries(d.configBase) {
+		name := strings.TrimSpace(stringValueOf(entry["name"]))
+		if name == "" {
+			continue
+		}
+		if plain := strings.TrimSpace(stringValueOf(entry["description"])); plain != "" {
+			out[name] = swarmtools.McpServerDescription{Zh: plain, En: plain}
+			continue
+		}
+		out[name] = swarmtools.McpServerDescription{}
+	}
+	for name := range d.registeredMCPServers {
+		server := strings.TrimSpace(name)
+		if server == "" {
+			continue
+		}
+		if _, exists := out[server]; !exists {
+			out[server] = swarmtools.McpServerDescription{}
+		}
+	}
+	return out
+}
+
+// toolRetrievalEnableFlipPending 优化开关与本会话冻结的披露画像不一致。
+// Python: _tool_retrieval_enable_flip_pending（:7498-7517）——披露层在构建期
+// 冻结：开 = 本层目录、关 = 引擎内置 ProgressiveToolRail；中途状态手术无法
+// 在两套系统间干净交接，会话获取路径在冻结画像与 live 开关任一方向不一致
+// 时重建 adapter。frozen 为 nil（旧会话未冻结）→ False。
+func (d *DeepAdapter) toolRetrievalEnableFlipPending(configBase map[string]any) bool {
+	frozen := d.toolRetrievalSessionEnabled
+	if frozen == nil {
+		return false
+	}
+	return *frozen != config.ToolRetrievalEnabled(configBase)
 }
 
 // CreateInstance 初始化底层 SDK Agent。
@@ -811,6 +986,10 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	if mode != "" {
 		d.instance.SetUapswarmAdapterMode(mode)
 	}
+
+	// 步骤 19.5: tool_retrieval 披露层接管（Python: _register_tool_retrieval_prompt_rail
+	// 在 ensure_initialized 前排队进 _pending_rails 并丢弃内置 ProgressiveToolRail）
+	d.registerToolRetrievalPromptRail(configBase)
 
 	// 步骤 20: d.instance.EnsureInitialized(ctx)
 	// Python: await self._instance.ensure_initialized()
@@ -3808,6 +3987,20 @@ func toolsFromDefinition(definition map[string]any) []string {
 
 // stringSliceOf 把 definition 里的 []string / []any 统一成 []string。
 // Python: list(agent_definition.get("skills") or ())
+// stringValueOf 宽松转串（nil 安全；Python str() 等价的保守实现）。
+func stringValueOf(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 func stringSliceOf(value any) []string {
 	switch v := value.(type) {
 	case nil:
@@ -3850,4 +4043,88 @@ func clientToolRequestEventOf(payload map[string]any) map[string]any {
 		"arguments":    value["arguments"],
 		"client_tool":  value["client_request"],
 	}
+}
+
+// ──────────────────────────── 16.4b：技能检索接线 ────────────────────────────
+
+// liveSkillRetrievalDisabledSkills live 禁用名单（reload 后现查）。
+// Python: _live_skill_retrieval_disabled_skills（interface_deep.py:7113-7163）。
+func (d *DeepAdapter) liveSkillRetrievalDisabledSkills() []string {
+	if d.skillManager == nil {
+		return []string{}
+	}
+	// Python: reload_state() 先重读 skills_state.json 再算禁用名单
+	// （外部流程经独立 SkillManager 实例落盘后本实例内存仍是旧值）。
+	// ✅ D-16-4-7 已回收：Go SkillManager.ReloadState 对齐 reload_state。
+	d.skillManager.ReloadState()
+	names := d.skillManager.ListDisabledSkills()
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// getOrCreateSkillRetrievalToolkit 懒创建技能检索工具包。
+// Python: _get_or_create_skill_retrieval_toolkit（interface_deep.py:7165-7191）。
+func (d *DeepAdapter) getOrCreateSkillRetrievalToolkit(configBase map[string]any) *swarmtools.SkillRetrievalToolkit {
+	if d.skillRetrievalToolkit != nil {
+		return d.skillRetrievalToolkit
+	}
+	toolkit, err := swarmtools.NewSkillRetrievalToolkit(swarmtools.ToolkitOptions{
+		SkillDirectories:      d.skillScanDirs,
+		DisabledSkills:        d.liveSkillRetrievalDisabledSkills,
+		SourceByName:          func() map[string]string { return swarmtools.SkillSourcesFromManager(d.skillManager) },
+		IndexSkillDirectories: func() []string { return []string{workspace.AgentSkillsDir()} },
+		SessionScope:          d.sessionScope(),
+		ConfigBase:            configBase,
+		AutoBuildIndex:        true,
+		FrozenProfile:         d.restoredSkillRetrievalProfile,
+	})
+	if err != nil {
+		logger.Warn(logComponent).
+			Msg("[JiuWenSwarmDeepAdapter] failed to create Skill retrieval toolkit")
+		return nil
+	}
+	d.skillRetrievalToolkit = toolkit
+	// 构造完立刻持久化 sidecar（Python :7187）
+	d.persistSkillRetrievalSessionProfile()
+	return toolkit
+}
+
+// registerSkillRetrievalPromptRail 装配技能检索提示词边界 rail。
+// Python: _build_skill_retrieval_prompt_rail（interface_deep.py:11137-11151）
+// + 注册段（:7630-7680）。
+func (d *DeepAdapter) registerSkillRetrievalPromptRail(configBase map[string]any) {
+	if d.instance == nil {
+		return
+	}
+	enabled := swarmtools.IsSkillRetrievalEnabled(configBase)
+	frozen := enabled
+	d.skillRetrievalSessionEnabled = &frozen
+	if !enabled {
+		return
+	}
+	toolkit := d.getOrCreateSkillRetrievalToolkit(configBase)
+	if toolkit == nil {
+		return
+	}
+	rail, err := commrails.NewSkillRetrievalPromptRail(commrails.RailOptions{
+		Toolkit:     toolkit,
+		SessionScope: d.sessionScope(),
+		ConfigBase:  configBase,
+	})
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "skill_retrieval_rail_create_failed").
+			Msg("[JiuWenSwarmDeepAdapter] SkillRetrievalPromptRail create failed")
+		return
+	}
+	d.instance.QueuePendingRail(rail)
+	d.skillRetrievalPromptRail = rail
+	logger.Info(logComponent).
+		Str("event_type", "skill_retrieval_queued").
+		Msg("[JiuWenSwarmDeepAdapter] SkillRetrievalPromptRail registered")
 }

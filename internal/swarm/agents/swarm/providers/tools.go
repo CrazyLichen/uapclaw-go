@@ -1,11 +1,13 @@
 package providers
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	discovery16 "github.com/uapclaw/uapclaw-go/internal/agentcore/symphony/discovery"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
@@ -21,7 +23,7 @@ import (
 // 常量值由 registry.go 常量层承载；多模态配置参数段（:270-355）自
 // providers_tools.go（e10③ scoped 拆分壳）迁入——规则 8 回收。
 //
-// 基座缺口：skill_retrieval_toolkit（⤴️9.11b）、xiaoyi 28 工具（⤴️10.6.24e）、
+// 基座缺口：xiaoyi 28 工具（⤴️10.6.24e）、
 // symphony toolkit（⤴️领域十六）、a4p tools（⤴️15.20/领域）、visual_gen
 // （Python visual_gen_enabled/configured 无 Go 基座 ⤴️15.20）、
 // mark_stateless（Go tool.Tool 无无状态标志位 ⤴️15.20 登记偏差）。
@@ -254,17 +256,57 @@ func buildA4PIntentAuthorizationTools(view *buildctx.SwarmBuildContext) []tool.T
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SkillToolkitForContext 成员运行时共享的 skill_index 与提示 rail 共用体。
-// 基座 SkillRetrievalToolkit ⤴️9.11b（与 member_rails.go 工厂同缝）；
-// session_scope 组装语义在此保留（session:team:member 三段）。
+// 16.4b 兑现：基座 SkillRetrievalToolkit 真身装配（context 槽缓存复用）。
 // Python: skill_retrieval_toolkit_for_context (tools.py:380-413)
-func SkillToolkitForContext(view *buildctx.SwarmBuildContext) any {
+func SkillToolkitForContext(view *buildctx.SwarmBuildContext) *teamtools.SkillRetrievalToolkit {
+	return skillRetrievalToolkitForContext(view)
+}
+
+// skillRetrievalToolkitForContext 返回成员运行时共享体（context 缓存复用）。
+// Python: skill_retrieval_toolkit_for_context (tools.py:380-413)
+func skillRetrievalToolkitForContext(view *buildctx.SwarmBuildContext) *teamtools.SkillRetrievalToolkit {
+	// Python: existing = getattr(ctx, "skill_retrieval_toolkit", None)
+	if view.SkillRetrievalToolkit != nil {
+		return view.SkillRetrievalToolkit
+	}
 	memberScope := orEmpty(view.MemberCardID, view.MemberName, view.Role, "member")
-	_ = memberScope
-	_ = skillLibraryDir(view)
-	// Python: SkillRetrievalToolkit(skill_directories=..., disabled_skills=...,
-	//   visible_skill_names=..., source_by_name=..., session_scope=...,
-	//   config_base=..., settings=..., auto_build_index=True)——基座 ⤴️9.11b
-	return nil
+	// Python: disabled_skills=load_execution_disabled_skills（skills.py 模块级）
+	// Python: visible_skill_names=lambda: visible_skill_names_for_list_skill(ctx)
+	visible := visibleSkillNamesForListSkill(view)
+	visibleSet := map[string]bool{}
+	for name := range visible {
+		visibleSet[name] = true
+	}
+	// Python: session_scope = f"{ctx.session_id or 'default'}:{ctx.team_id or 'team'}:{member_scope}"
+	sessionScope := orEmpty(view.SessionID, "default") + ":" + orEmpty(view.TeamID, "team") + ":" + memberScope
+	// Python: settings=build_model_discovery_settings(ctx.config, model=extras["_parent_model"])
+	var modelName string
+	if extras := view.GetExtras(); extras != nil {
+		modelName, _ = extras["_parent_model"].(string)
+	}
+	toolkit, err := teamtools.NewSkillRetrievalToolkit(teamtools.ToolkitOptions{
+		SkillDirectories:  func() []string { return []string{skillLibraryDir(view)} },
+		DisabledSkills:    LoadGlobalDisabledSkills,
+		VisibleSkillNames: func() map[string]bool { return visibleSet },
+		SourceByName:      func() map[string]string { return teamtools.SkillSourcesFromManager(nil) },
+		SessionScope:      sessionScope,
+		ConfigBase:        view.Config,
+		Settings:          ptrOf(teamtools.BuildModelDiscoverySettings(view.Config, modelName, nil, nil)),
+		AutoBuildIndex:    true,
+	})
+	if err != nil {
+		logger.Warn(logger.ComponentAgentServer).
+			Str("event_type", "skill_retrieval_toolkit_create_failed").
+			Msg("[swarm.skill_retrieval] toolkit construction failed")
+		return nil
+	}
+	view.SkillRetrievalToolkit = toolkit
+	return toolkit
+}
+
+// ptrOf 设置指针（Go 侧助手，Python 无对应）。
+func ptrOf(s discovery16.DiscoverySettings) *discovery16.DiscoverySettings {
+	return &s
 }
 
 // BuildSkillToolkit 白名单过滤后的技能管理工具（workspace_root 门控）。
@@ -278,16 +320,83 @@ func BuildSkillToolkit(params map[string]any, view *buildctx.SwarmBuildContext) 
 }
 
 // BuildSkillRetrieval 白名单过滤后的已安装 Skill 目录检索工具。
+// 16.4b 兑现：`swarm.skill_retrieval` 工厂桩闭合转真身 + V-6 skill 类绑定
+// （skill_index 工具装配期身份锚点 = discovery.ToolEntry.ToolID）。
 // Python: build_skill_retrieval (tools.py:545-563)
 func BuildSkillRetrieval(params map[string]any, view *buildctx.SwarmBuildContext) []tool.Tool {
 	_ = params
+	// Python: SkillRetrievalInput.resolve(params, ctx)——无 params 键纯 context
+	// 消费，Go 侧保留步骤序。
 	if !isSkillRetrievalEnabled(view.Config) {
 		logger.Info(logger.ComponentAgentServer).Msg("[swarm.skill_retrieval] skipped: disabled")
 		return nil
 	}
-	// Python: _filter_whitelist(list(skill_retrieval_toolkit_for_context(ctx).get_tools()))
-	// ——基座 ⤴️9.11b
-	return nil
+	// Python: try: return _filter_whitelist(list(...get_tools())) except: warn+[]
+	toolkit := skillRetrievalToolkitForContext(view)
+	if toolkit == nil {
+		return nil
+	}
+	entries := toolkit.GetTools()
+	tools := make([]tool.Tool, 0, len(entries))
+	for _, entry := range entries {
+		tools = append(tools, newSkillIndexTool(entry))
+	}
+	return filterWhitelist(tools)
+}
+
+// newSkillIndexTool discovery.ToolEntry → foundation tool.Tool 适配
+// （Go 侧载体转换；Python get_tools 返回的即 Tool 列表）。
+func newSkillIndexTool(entry discovery16.ToolEntry) tool.Tool {
+	card := tool.NewToolCardWithID(
+		entry.ToolID,
+		entry.Name,
+		toStringField(entry.Card["description"]),
+		nil,
+		entry.Card,
+	)
+	return &skillIndexTool{card: card, entry: entry}
+}
+
+// skillIndexTool skill_index 工具载体（ToolRetrievalToolkit toolSearchTool 同款）。
+type skillIndexTool struct {
+	card  *tool.ToolCard
+	entry discovery16.ToolEntry
+}
+
+// Card 工具卡片。
+func (s *skillIndexTool) Card() *tool.ToolCard { return s.card }
+
+// Invoke 一次性执行 skill_index。
+func (s *skillIndexTool) Invoke(_ context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	result, err := s.entry.Invoke(inputs)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]any{
+		"success": true,
+		// 模型可见文本键（toolSearchTool 同契约）
+		"__mapped_content": result.ModelContent,
+		// 结构化诊断（SkillDCICommandResult.detailed_output 透传）
+		"detailed_output": result.DetailedOutput,
+	}, nil
+}
+
+// Stream 不支持流式。
+func (s *skillIndexTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// GetCallTimeout 沿用默认外层预算。
+func (s *skillIndexTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
+
+// toStringField 卡片字段安全取字符串。
+func toStringField(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // BuildUserTodos 白名单过滤后的用户 todo 工具。

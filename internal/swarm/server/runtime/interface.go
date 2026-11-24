@@ -1786,65 +1786,27 @@ func (uc *UapClawSwarm) runViaExecutionCoordinator(ctx context.Context,
 	out := make(chan *schema.AgentResponseChunk, 64)
 	go func() {
 		defer close(out)
-		operation := func(opCtx context.Context) (<-chan any, error) {
-			inner := make(chan *schema.AgentResponseChunk, 64)
-			errCh := make(chan error, 1)
-			// 会话队列串行语义保留（SubmitTask 排队后转发）
-			go func() {
-				var taskErr error
-				uc.sessionManager.SubmitTask(opCtx, sessionID,
-					func(taskCtx context.Context) (any, error) {
-						stream, streamErr := uc.runMessageStreamDirect(taskCtx, request)
-						if streamErr != nil {
-							taskErr = streamErr
-							close(inner)
-							return nil, streamErr
-						}
-						for chunk := range stream {
-							inner <- chunk
-						}
-						close(inner)
-						return nil, nil
-					})
-				if taskErr != nil {
-					errCh <- taskErr
-				}
-			}()
-			anyCh := make(chan any, 64)
-			go func() {
-				defer close(anyCh)
-				for chunk := range inner {
-					anyCh <- chunk
-				}
-			}()
-			// 既有 SubmitTask 错误路径兜底：任务同步失败时 inner 已关，
-			// anyCh 随即关闭——错误由 runStream 的 produce 循环 range 感知
-			// （零元素流=空执行，与原路径错误 chunk 语义一致）。
-			return anyCh, nil
+		// operation 精简后形态：SubmitTaskStream 排队即返回流（fn 由会话
+		// processor 执行时直写流）——无桥 goroutine、无类型转换层。
+		operation := func(opCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+			return uc.sessionManager.SubmitTaskStream(opCtx, sessionID,
+				func(taskCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+					return uc.runMessageStreamDirect(taskCtx, request)
+				}), nil
 		}
 		var runErr error
 		if isTeam {
 			runErr = runtime.RunTeamStream(ctx, sessionID, request.RequestID, kind,
-				func(opCtx context.Context, _ swsession.TeamExecutionContext) (<-chan any, error) {
+				func(opCtx context.Context, _ swsession.TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error) {
 					return operation(opCtx)
 				},
 				swsession.StreamOptions{Details: details, ChannelID: request.ChannelID},
-				func(item any) bool {
-					if chunk, ok := item.(*schema.AgentResponseChunk); ok {
-						out <- chunk
-					}
-					return true
-				})
+				emitTo(out))
 		} else {
 			runErr = runtime.RunStream(ctx, sessionID, request.RequestID, kind,
 				operation,
 				swsession.StreamOptions{ChannelID: request.ChannelID},
-				func(item any) bool {
-					if chunk, ok := item.(*schema.AgentResponseChunk); ok {
-						out <- chunk
-					}
-					return true
-				})
+				emitTo(out))
 		}
 		if runErr != nil {
 			logger.Warn(logComponent).Str("session_id", sessionID).
@@ -1853,4 +1815,12 @@ func (uc *UapClawSwarm) runViaExecutionCoordinator(ctx context.Context,
 		}
 	}()
 	return out, nil
+}
+
+// emitTo emit 转发（out 通道直写——窄化后无类型断言）。
+func emitTo(out chan<- *schema.AgentResponseChunk) func(*schema.AgentResponseChunk) bool {
+	return func(chunk *schema.AgentResponseChunk) bool {
+		out <- chunk
+		return true
+	}
 }

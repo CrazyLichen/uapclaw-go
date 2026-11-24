@@ -10,6 +10,7 @@
 //	├── project_memory_rail.go        # ProjectMemoryRail 项目记忆护栏
 //	├── response_prompt_rail.go       # ResponsePromptRail 响应提示词护栏
 //	├── runtime_prompt_rail.go        # RuntimePromptRail 运行时提示词护栏
+//	├── skill_retrieval_prompt_rail.go# SkillRetrievalPromptRail 技能检索提示词边界（16.4b；skill_retrieval_prompt_rail.py，priority=94）
 //	├── stream_event_helpers.go       # StreamEvent 辅助函数（boolish/infer/extract/parse/truncate/常量）
 //	├── stream_event_context.go       # StreamEvent 上下文修复（ensureJSONArguments/fixMissingQuotes/fixIncompleteToolContext）
 //	├── stream_event_emit.go          # StreamEvent 流式事件发射（emitToolCall/Result/Update/ContextUsage/AskUser/Todo）
@@ -25,6 +26,7 @@
 //	└── permissions/
 //	    ├── doc.go                    # 包文档
 //	    └── owner_scopes.go           # owner_scopes 权限判定（CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope）
+//	├── tool_retrieval_prompt_rail.go # 渐进披露目录节 + tools 过滤 + 漂移附件（9.11b）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/
 package rails

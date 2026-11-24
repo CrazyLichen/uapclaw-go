@@ -23,6 +23,8 @@ type StoreCreateOptions struct {
 	MilvusURI string
 	// MilvusToken Milvus 连接令牌（Python milvus_token）
 	MilvusToken string
+	// SQLitePath SQLite 数据库文件路径（sqlite 专用，Go 私有 provider D-25-7）
+	SQLitePath string
 	// TextField 文本字段名（零值时工厂填默认 "content"）
 	TextField string
 	// VectorFieldName 向量字段名 str 侧（零值时工厂填默认 "embedding" 并转强类型）
@@ -81,6 +83,11 @@ func WithStoreMilvusURI(uri string) StoreCreateOption {
 // WithStoreMilvusToken 设置 Milvus 令牌。
 func WithStoreMilvusToken(token string) StoreCreateOption {
 	return func(o *StoreCreateOptions) { o.MilvusToken = token }
+}
+
+// WithStoreSQLitePath 设置 SQLite 数据库文件路径（Go 私有 provider D-25-7）。
+func WithStoreSQLitePath(path string) StoreCreateOption {
+	return func(o *StoreCreateOptions) { o.SQLitePath = path }
 }
 
 // WithStoreTextField 设置文本字段名。
@@ -163,6 +170,16 @@ func CreateVectorStore(config common.VectorStoreConfig, opts ...StoreCreateOptio
 		return NewChromaVectorStore(
 			config, o.ChromaPath,
 			defaultIfEmpty(o.TextField, defaultTextField), vectorField,
+			defaultIfEmpty(o.SparseVectorField, defaultSparseVectorField),
+			defaultIfEmpty(o.MetadataField, defaultMetadataField),
+			defaultIfEmpty(o.DocIDField, defaultDocIDField),
+		)
+
+	case common.StoreTypeSqlite:
+		// Go 侧私有 provider（spec D-25-7）：FTS5 bm25 + sqlite-vec dense
+		return NewSQLiteVectorStore(
+			config, o.SQLitePath,
+			defaultIfEmpty(o.TextField, defaultTextField), o.VectorFieldName,
 			defaultIfEmpty(o.SparseVectorField, defaultSparseVectorField),
 			defaultIfEmpty(o.MetadataField, defaultMetadataField),
 			defaultIfEmpty(o.DocIDField, defaultDocIDField),

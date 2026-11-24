@@ -756,6 +756,33 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 	return nil
 }
 
+// PendingRails 读出 pendingRails 快照（延迟注册队列）。
+// Python 的 _pending_rails 为 adapter 可直接 getattr 的被动持有；
+// Go 可见性限制下仅提供访问器，手术逻辑留在 DeepAdapter
+// （对齐 Python interface_deep.py:7289-7305 的方法归属）。
+func (d *DeepAgent) PendingRails() []agentinterfaces.AgentRail {
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	out := make([]agentinterfaces.AgentRail, len(d.pendingRails))
+	copy(out, d.pendingRails)
+	return out
+}
+
+// ReplacePendingRails 写回 pendingRails（整体替换，调用方自付过滤后的列表）。
+func (d *DeepAgent) ReplacePendingRails(kept []agentinterfaces.AgentRail) {
+	d.railsMu.Lock()
+	d.pendingRails = kept
+	d.railsMu.Unlock()
+}
+
+// QueuePendingRail 追加 rail 进 pendingRails（延迟注册）。
+// Python: instance._pending_rails.append(rail)（:7365-7372）。
+func (d *DeepAgent) QueuePendingRail(r agentinterfaces.AgentRail) {
+	d.railsMu.Lock()
+	d.pendingRails = append(d.pendingRails, r)
+	d.railsMu.Unlock()
+}
+
 // UnregisterRail 注销 Rail。
 // Python: BaseAgent.unregister_rail(rail) (line 1198)
 func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error {
@@ -1235,16 +1262,6 @@ func (d *DeepAgent) IsRegisteredRail(rail agentinterfaces.AgentRail) bool {
 		}
 	}
 	return false
-}
-
-// PendingRails 返回排队中的 Rail 列表快照。
-// Python: _pending_rails(agent)（configuration.py 经 getattr(agent, "_pending_rails")）
-func (d *DeepAgent) PendingRails() []agentinterfaces.AgentRail {
-	d.railsMu.Lock()
-	defer d.railsMu.Unlock()
-	result := make([]agentinterfaces.AgentRail, len(d.pendingRails))
-	copy(result, d.pendingRails)
-	return result
 }
 
 // RemovePendingRail 按对象同一性从排队队列摘除指定 Rail。

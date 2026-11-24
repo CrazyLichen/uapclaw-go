@@ -268,3 +268,34 @@ func TestIsSendFileEnabled_Xiaoyi与PolicyChannel(t *testing.T) {
 	// 空配置 + web → true（policy_channel == "web" 兜底）
 	assert.True(t, tools.IsSendFileEnabled(map[string]any{}, "web"))
 }
+
+// TestResponsePromptRail_UninitNilAgent 补齐 Uninit 覆盖（15.20 遗留）。
+func TestResponsePromptRail_UninitNilAgent(t *testing.T) {
+	rail := &ResponsePromptRail{}
+	if err := rail.Uninit(nil); err != nil {
+		t.Fatalf("Uninit 应无错: %v", err)
+	}
+}
+
+// TestResponsePromptRail_InitWithAgent 补齐带 agent 的 Init 覆盖。
+func TestResponsePromptRail_InitWithAgent(t *testing.T) {
+	rail := &ResponsePromptRail{}
+	agent := &responsePromptFakeAgent{sb: saprompt.NewSystemPromptBuilder()}
+	if err := rail.Init(context.Background(), agent); err != nil {
+		t.Fatalf("Init 应无错: %v", err)
+	}
+	if rail.builder == nil {
+		t.Fatal("应注入 builder")
+	}
+}
+
+// responsePromptFakeAgent 最小 BaseAgent 桩（仅 SystemPromptBuilder 面）。不同包文件内既有
+// fakeBaseAgent 同包共享，避免重名另立。
+type responsePromptFakeAgent struct {
+	agentinterfaces.BaseAgent
+	sb saprompt.SystemPromptBuilderInterface
+}
+
+func (a *responsePromptFakeAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return a.sb
+}

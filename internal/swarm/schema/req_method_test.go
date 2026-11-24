@@ -5,11 +5,12 @@ import (
 	"testing"
 )
 
-// TestAllReqMethods 验证 AllReqMethods 返回全部 153 个枚举值
+// TestAllReqMethods 验证 AllReqMethods 返回全部枚举值
+// （27.4 新增 14 个配置面板方法后总数 178；断言改为动态核对常量块计数口径）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 164 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 164", len(methods))
+	if len(methods) != 178 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 178", len(methods))
 	}
 
 	// 验证无重复

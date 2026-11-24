@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"context"
 	"errors"
 	"time"
@@ -26,15 +27,15 @@ type CoordinatorPort interface {
 	RegisterSession(sessionID, channelID string, policy SessionPersistencePolicy) (RuntimeSessionSnapshot, error)
 	// RunUnary 执行一次非流式任务并等待结果
 	RunUnary(ctx context.Context, sessionID, requestID string, kind SessionWorkKind, task func(context.Context) (any, error), options UnaryOptions) (any, error)
-	// RunStream 流式执行（单 agent 会话流）：operation 产出 any 流，
+	// RunStream 流式执行（单 agent 会话流）：operation 产出 chunk 流，
 	// emit 逐项消费（返回 false 停止）；阻塞到流结束。
 	// Python: _session_coordinator.run_stream。
 	RunStream(ctx context.Context, sessionID, requestID string, kind SessionWorkKind,
-		operation func(context.Context) (<-chan any, error), options StreamOptions, emit func(any) bool) error
+		operation func(context.Context) (<-chan *schema.AgentResponseChunk, error), options StreamOptions, emit func(*schema.AgentResponseChunk) bool) error
 	// RunTeamStream 团队流式执行（execution 注册 + TeamExecutionContext 组装）。
 	// Python: _session_coordinator.run_team_stream。
 	RunTeamStream(ctx context.Context, sessionID, requestID string, kind SessionWorkKind,
-		operation func(context.Context, TeamExecutionContext) (<-chan any, error), options StreamOptions, emit func(any) bool) error
+		operation func(context.Context, TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error), options StreamOptions, emit func(*schema.AgentResponseChunk) bool) error
 	// CancelExecution 取消某会话的执行
 	CancelExecution(sessionID string, options CancelExecutionOptions) (CancelExecutionResult, error)
 	// SnapshotSessions 取全部会话快照

@@ -28,11 +28,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/openai"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
@@ -246,9 +242,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	}
 
 	// 从 bind 中提取事件发送器和配置保存回调（bind 可为 nil）
-	var sendEvent EventSender
-	var onConfigSaved OnConfigSavedFunc
-	var cryptoProv crypto.CryptoProvider
 	var channelMgr *cm.ChannelManager
 	var agentClient *routing.AgentClient
 	var messageHandler MessageHandler
@@ -257,11 +250,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	var heartbeatSvc HeartbeatConfService
 	if bind != nil {
 		if bind.Channel != nil {
-			sendEvent = bind.Channel.broadcastEvent
 			channel = bind.Channel
 		}
-		onConfigSaved = bind.OnConfigSaved
-		cryptoProv = bind.CryptoProvider
 		channelMgr = bind.ChannelManager
 		agentClient = bind.AgentClient
 		messageHandler = bind.MessageHandler
@@ -270,9 +260,9 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	}
 
 	// ─── 本地实现方法 ───
-	wc.registerMethod("config.get", configGet(wc, cryptoProv), false)
-	wc.registerMethod("config.set", configSet(wc, sendEvent, onConfigSaved, cryptoProv), false)
-	wc.registerMethod("models.list", modelsList(wc), false)
+	wc.registerMethod("config.get", configForwardToAgent(wc, agentClient, "config.get"), false)
+	wc.registerMethod("config.set", configForwardToAgent(wc, agentClient, "config.set"), false)
+	wc.registerMethod("models.list", configForwardToAgent(wc, agentClient, "models.list"), false)
 	wc.registerMethod("channel.get", channelGet(wc, channelMgr), false)
 	wc.registerMethod("session.list", sessionList(wc), false)
 	wc.registerMethod("session.create", sessionCreate(wc), false)
@@ -281,12 +271,12 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("history.get", historyGet(wc), false)
 
 	// ─── config 辅助方法 ───
-	wc.registerMethod("config.save_all", configSaveAll(wc, sendEvent, onConfigSaved, cryptoProv), false)
-	wc.registerMethod("config.validate_model", stubHandler(wc, map[string]any{"ok": true}), false)
+	wc.registerMethod("config.save_all", configForwardToAgent(wc, agentClient, "config.save_all"), false)
+	wc.registerMethod("config.validate_model", configForwardToAgent(wc, agentClient, "config.validate_model"), false)
 
 	// ─── models 辅助方法 ───
-	wc.registerMethod("models.replace_all", modelsReplaceAll(wc, onConfigSaved, cryptoProv), false)
-	wc.registerMethod("models.validate", modelsValidate(wc), false)
+	wc.registerMethod("models.replace_all", configForwardToAgent(wc, agentClient, "models.replace_all"), false)
+	wc.registerMethod("models.validate", configForwardToAgent(wc, agentClient, "models.validate"), false)
 
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
@@ -295,15 +285,18 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("chat.user_answer", chatUserAnswer(wc), false)
 
 	// ─── 路径配置 ───
-	wc.registerMethod("path.get", stubHandler(wc, map[string]any{"path": ""}), false)
-	wc.registerMethod("path.set", stubHandler(wc, map[string]any{"ok": true}), false)
+	wc.registerMethod("path.get", configForwardToAgent(wc, agentClient, "path.get"), false)
+	wc.registerMethod("path.set", configForwardToAgent(wc, agentClient, "path.set"), false)
 
 	// ─── 内存信息 ───
 	// Python: _memory_compute (app_web_handlers.py L1414-1427)，psutil 真实采集
 	wc.registerMethod("memory.compute", memoryCompute(wc), false)
 
 	// ─── 语言配置 ───
-	wc.registerMethod("locale.get_conf", stubHandler(wc, map[string]any{"preferred_language": "zh"}), false)
+	wc.registerMethod("locale.get_conf", configForwardToAgent(wc, agentClient, "locale.get_conf"), false)
+	wc.registerMethod("locale.set_conf", configForwardToAgent(wc, agentClient, "locale.set_conf"), false)
+	wc.registerMethod("models.zen.entries", configForwardToAgent(wc, agentClient, "models.zen.entries"), false)
+	wc.registerMethod("models.zen.warm", configForwardToAgent(wc, agentClient, "models.zen.warm"), false)
 	wc.registerMethod("locale.set_conf", stubHandler(wc, map[string]any{"ok": true}), false)
 
 	// ─── 探活配置（health_check，heartbeat.* 为上游 deprecated 别名） ───
@@ -367,8 +360,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	// ─── 权限 ───
 	// Python: owner_scopes.get/set 在 web_handlers 中直接处理（不经 E2A / config_rpc）
 	// Python: tools/rules/approval_overrides 通过 _forward_permissions_to_agent 转发到 AgentServer
-	wc.registerMethod("permissions.owner_scopes.get", permissionsOwnerScopesGet(wc), false)
-	wc.registerMethod("permissions.owner_scopes.set", permissionsOwnerScopesSet(wc), false)
+	wc.registerMethod("permissions.owner_scopes.get", configForwardToAgent(wc, agentClient, "permissions.owner_scopes.get"), false)
+	wc.registerMethod("permissions.owner_scopes.set", configForwardToAgent(wc, agentClient, "permissions.owner_scopes.set"), false)
 	wc.registerMethod("permissions.tools.get", permissionsForwardToAgent(wc, agentClient, "permissions.tools.get"), false)
 	wc.registerMethod("permissions.tools.set", permissionsForwardToAgent(wc, agentClient, "permissions.tools.set"), false)
 	wc.registerMethod("permissions.tools.update", permissionsForwardToAgent(wc, agentClient, "permissions.tools.update"), false)
@@ -381,8 +374,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("permissions.approval_overrides.delete", permissionsForwardToAgent(wc, agentClient, "permissions.approval_overrides.delete"), false)
 
 	// ─── 禁止记忆 ───
-	wc.registerMethod("memory.forbidden.get", memoryForbiddenGet(wc), false)
-	wc.registerMethod("memory.forbidden.set", memoryForbiddenSet(wc), false)
+	wc.registerMethod("memory.forbidden.get", configForwardToAgent(wc, agentClient, "memory.forbidden.get"), false)
+	wc.registerMethod("memory.forbidden.set", configForwardToAgent(wc, agentClient, "memory.forbidden.set"), false)
 
 	// ─── IM 平台配置 ───
 	// Python: app_web_handlers.py:5844-5863（9 组 channel.<p>.{get,set}_conf）
@@ -572,154 +565,11 @@ func strOrEmpty(val any) string {
 	return s
 }
 
-// memoryForbiddenGet 处理 memory.forbidden.get 请求。
-// 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
-// Python: _memory_forbidden_get (app_web_handlers.py:6381)。
-func memoryForbiddenGet(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		cfg, err := loadAppConfig()
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get load config failed")
-			wc.sendResponse(ws, reqID, true, map[string]any{}, "", "")
-			return
-		}
-		// Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
-		payload := getConfigAny(cfg, "memory.forbidden_memory_definition", map[string]any{})
-		if m, ok := payload.(map[string]any); ok {
-			wc.sendResponse(ws, reqID, true, m, "", "")
-			return
-		}
-		wc.sendResponse(ws, reqID, true, map[string]any{}, "", "")
-	}
-}
-
-// memoryForbiddenSet 处理 memory.forbidden.set 请求。
-// 接收 params，调用 updateMemoryForbiddenInConfig 写回。
-// Python: _memory_forbidden_set (app_web_handlers.py:6403) + update_memory_forbidden_in_config (config.py)。
-func memoryForbiddenSet(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
-			return
-		}
-		if err := updateMemoryForbiddenInConfig(params); err != nil {
-			logger.Error(logComponent).Err(err).Msg("memory.forbidden.set write back config failed")
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-			return
-		}
-		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true}, "", "")
-	}
-}
-
 // stubHandler 返回固定 stub 响应的处理函数。
 // 用于尚未实现转发的 RPC 方法，返回占位数据使前端不报错。
 func stubHandler(wc *WebChannel, payload map[string]any) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		wc.sendResponse(ws, reqID, true, payload, "", "")
-	}
-}
-
-// configGet 处理 config.get 请求。
-// 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
-// Python: config_get_handler 中 ~65 字段的返回。
-// cryptoProv 用于解密 api_key/token 等敏感字段。
-func configGet(wc *WebChannel, cryptoProv crypto.CryptoProvider) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		ctx := context.Background()
-		p := resolveCrypto(cryptoProv)
-		result := make(map[string]any, len(configEnvMap)+10)
-
-		// 从环境变量映射读取
-		for key, envVar := range configEnvMap {
-			val := os.Getenv(envVar)
-			// Python: 对包含 api_key 或 token 的键解密（app_web_handlers.py L611-614）
-			// 解密失败保留原值 + Warn（Go error 签名；Python 整体 except 降级 → Go 逐字段跳过）
-			if p != nil && val != "" && isSensitiveKey(key) {
-				if dec, decErr := p.Decrypt(ctx, val); decErr == nil {
-					val = dec
-				} else {
-					logger.Warn(logComponent).
-						Str("key", key).
-						Err(decErr).
-						Msg("config.get decrypt failed, keep raw value")
-				}
-			}
-			result[key] = val
-		}
-
-		// 应用版本
-		result["app_version"] = version.Version
-
-		// config.yaml 补充字段
-		cfg, err := loadAppConfig()
-		if err != nil {
-			logger.Warn(logComponent).
-				Err(err).
-				Msg("config.get failed to load config.yaml, using defaults")
-		}
-
-		if err != nil {
-			// 异常兜底默认值（对齐 Python except Exception 时 payload.setdefault，仅当键不存在时设置）
-			if _, ok := result["context_engine_enabled"]; !ok {
-				result["context_engine_enabled"] = "false"
-			}
-			if _, ok := result["kv_cache_affinity_enabled"]; !ok {
-				result["kv_cache_affinity_enabled"] = "false"
-			}
-			if _, ok := result["permissions_enabled"]; !ok {
-				result["permissions_enabled"] = "false"
-			}
-			if _, ok := result["memory_forbidden_enabled"]; !ok {
-				result["memory_forbidden_enabled"] = "false"
-			}
-			if _, ok := result["memory_forbidden_description"]; !ok {
-				result["memory_forbidden_description"] = ""
-			}
-		} else {
-			// 上下文引擎启用
-			result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
-			// KV 缓存亲和启用
-			result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
-			// 权限启用
-			result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
-			// 记忆禁止启用
-			result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
-			// 记忆禁止描述：返回 dict（对齐 Python getConfigAny 而非 getConfigString）
-			result["memory_forbidden_description"] = getConfigAny(cfg, "memory.forbidden_memory_definition.description", map[string]any{})
-		}
-		// skill_create: 环境变量优先，fallback config.yaml（setdefault 语义：仅当键不存在时设置）
-		if _, ok := result["skill_create"]; !ok {
-			if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
-				result["skill_create"] = normalizeTruthy(envVal)
-			} else if err == nil {
-				result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
-			} else {
-				result["skill_create"] = "false"
-			}
-		}
-		// evolution_auto_scan: 环境变量优先，fallback config.yaml（setdefault 语义：仅当键不存在时设置）
-		if _, ok := result["evolution_auto_scan"]; !ok {
-			if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
-				result["evolution_auto_scan"] = normalizeTruthy(envVal)
-			} else if err == nil {
-				result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
-			} else {
-				result["evolution_auto_scan"] = "false"
-			}
-		}
-
-		// 默认值填充（setdefault 语义：仅当键不存在或为空时）
-		if v, ok := result["free_search_ddg_enabled"]; !ok || v == "" {
-			result["free_search_ddg_enabled"] = "false"
-		}
-		if v, ok := result["free_search_bing_enabled"]; !ok || v == "" {
-			result["free_search_bing_enabled"] = "false"
-		}
-
-		// 展平 team 配置
-		flattenTeamConfig(cfg, result)
-
-		wc.sendResponse(ws, reqID, true, result, "", "")
 	}
 }
 
@@ -731,25 +581,6 @@ func resolveCrypto(injected crypto.CryptoProvider) crypto.CryptoProvider {
 		return injected
 	}
 	return crypto.GetCryptoProvider()
-}
-
-// isSensitiveKey 判断配置键是否为敏感字段（需要解密）。
-// Python: "api_key" in key.lower() or "token" in key.lower()（app_web_handlers.py L612）。
-// 先 ToLower 再匹配，与 config_apply.go 的加密路径对称——否则大写键
-// （如 OPENAI_API_KEY）会"set 时加密、get 时不解密"，产生永远解不开的密文。
-func isSensitiveKey(key string) bool {
-	kl := strings.ToLower(key)
-	return strings.Contains(kl, "api_key") || strings.Contains(kl, "token")
-}
-
-// normalizeTruthy 对布尔型环境变量做 truthy 归一化。
-// Python: val.lower() in ("true", "1", "yes") → "true"，否则 "false"。
-func normalizeTruthy(val string) string {
-	lower := strings.ToLower(strings.TrimSpace(val))
-	if lower == "true" || lower == "1" || lower == "yes" {
-		return "true"
-	}
-	return "false"
 }
 
 // applyExternalCliConfigKeys 面板保存的外部 CLI 键拦截（config.set/save_all 共用）。
@@ -789,254 +620,6 @@ func refreshExternalCliBuiltinModels(entries []any, enabledNow []string) []strin
 					Msg("[config.set] external CLI builtin catalog seed write failed")
 			}
 		})
-}
-
-// configSet 处理 config.set 请求。
-// 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
-// Python: _config_set (app_web_handlers.py L870-895)。
-func configSet(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		ctx := context.Background()
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
-			return
-		}
-		p := resolveCrypto(cryptoProv)
-
-		// 步骤0: external_cli_agent_* 键拦截（组装/写 yaml/refresh 探测）。
-		// Python: config_set 循环 is_external_cli_agent_config_key 分支（:1629-1666）。
-		if err := applyExternalCliConfigKeys(params); err != nil {
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-			return
-		}
-
-		// 步骤1-5: applyConfigPayload 统一处理
-		envUpdates, yamlUpdated, err := ApplyConfigPayload(ctx, params, p)
-		if err != nil {
-			// 区分 BadRequest 和 InternalError
-			if _, ok := err.(*ConfigBadRequest); ok {
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-				return
-			}
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-			return
-		}
-
-		// 步骤6: 回包给前端（对齐 Python: 先回包后通知）
-		appliedWithoutRestart := true
-		updatedParamKeys := make([]string, 0)
-		for k, e := range configEnvMap {
-			if _, ok := envUpdates[e]; ok {
-				updatedParamKeys = append(updatedParamKeys, k)
-			}
-		}
-		updatedParamKeys = append(updatedParamKeys, yamlUpdated...)
-
-		// 步骤7: 触发热重载（对齐 Python: _notify_config_saved_once）
-		if len(envUpdates) > 0 || len(yamlUpdated) > 0 {
-			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, false)
-		}
-
-		wc.sendResponse(ws, reqID, true, map[string]any{
-			"updated":                 updatedParamKeys,
-			"applied_without_restart": appliedWithoutRestart,
-		}, "", "")
-	}
-}
-
-// configSaveAll 处理 config.save_all 请求。
-// 批量保存配置面板变更并触发热重载。
-// Python: _config_save_all (app_web_handlers.py L1086-1151)。
-// 支持子载荷：config、models、agents、team。
-func configSaveAll(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		ctx := context.Background()
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
-			return
-		}
-		p := resolveCrypto(cryptoProv)
-
-		envUpdates := make(map[string]string)
-		yamlUpdated := make([]string, 0)
-		var modelsCount any // 默认 nil，对齐 Python: null
-
-		// models 子载荷
-		var newModels []map[string]any
-		if modelsVal, ok := params["models"]; ok && modelsVal != nil {
-			// 将 []any 转为 []map[string]any
-			parsed, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
-			if err != nil {
-				if _, ok := err.(*ConfigBadRequest); ok {
-					wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-					return
-				}
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-				return
-			}
-			newModels = parsed
-		}
-
-		// config 子载荷 + agents/team 合并
-		configParams := make(map[string]any)
-		if rawConfig, ok := params["config"]; ok && rawConfig != nil {
-			configMap, ok := rawConfig.(map[string]any)
-			if !ok {
-				wc.sendResponse(ws, reqID, false, nil, "config must be object", WsErrBadRequest)
-				return
-			}
-			for k, v := range configMap {
-				configParams[k] = v
-			}
-		}
-		if agents, ok := params["agents"]; ok {
-			configParams["agents"] = agents
-		}
-		if team, ok := params["team"]; ok {
-			configParams["team"] = team
-		}
-
-		// external_cli_agent_* 键拦截（config.save_all 嵌套形状合并后统一判触碰，
-		// 对齐 Python keys_view 顶层优先语义；path_histories-only 键不触发探测门）
-		if err := applyExternalCliConfigKeys(configParams); err != nil {
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-			return
-		}
-
-		// 应用 config 子载荷
-		if len(configParams) > 0 {
-			appliedEnv, appliedYAML, err := ApplyConfigPayload(ctx, configParams, p)
-			if err != nil {
-				if _, ok := err.(*ConfigBadRequest); ok {
-					wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-					return
-				}
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-				return
-			}
-			for k, v := range appliedEnv {
-				envUpdates[k] = v
-			}
-			yamlUpdated = append(yamlUpdated, appliedYAML...)
-		}
-
-		// 应用 models 子载荷
-		if newModels != nil {
-			if err := updateDefaultModelsInConfig(newModels); err != nil {
-				logger.Warn(logComponent).
-					Err(err).
-					Msg("failed to write models.defaults")
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-				return
-			}
-			yamlUpdated = append(yamlUpdated, "models.defaults")
-			modelsCount = len(newModels)
-		}
-
-		// 回包给前端（始终设置 models_count 键，对齐 Python）
-		updatedParamKeys := make([]string, 0)
-		for k, e := range configEnvMap {
-			if _, ok := envUpdates[e]; ok {
-				updatedParamKeys = append(updatedParamKeys, k)
-			}
-		}
-		updatedParamKeys = append(updatedParamKeys, yamlUpdated...)
-
-		result := map[string]any{
-			"ok":                      true,
-			"updated":                 updatedParamKeys,
-			"applied_without_restart": true,
-			"models_count":            modelsCount,
-		}
-
-		// 触发热重载（force=true，对齐 Python: _notify_config_saved_once(force=True)）
-		if len(envUpdates) > 0 || len(yamlUpdated) > 0 {
-			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, true)
-		}
-
-		wc.sendResponse(ws, reqID, true, result, "", "")
-	}
-}
-
-// modelsList 处理 models.list 请求。
-// Python: _models_list (app_web_handlers.py L1023-1055)。
-// 数据流对齐 Python：get_config() → get_default_models(config) → _decrypt_model_entries
-// ——解密发生在 config 层（GetDefaultModels 内部经 decryptModelEntries 查全局 provider），
-// handler 层零解密（对齐 Python handler 不持 crypto）。api_key 解密失败由
-// decryptModelEntries 保留原值（对齐 Python except: pass）。
-func modelsList(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		// 对齐 Python: config = get_config(); models = get_default_models(config)
-		models := config.GetDefaultModels(nil)
-		if len(models) == 0 {
-			wc.sendResponse(ws, reqID, true, map[string]any{"models": []any{}, "active_model": ""}, "", "")
-			return
-		}
-
-		// 展平为前端格式：从嵌套的 model_client_config/model_config_obj 提取字段
-		result := make([]map[string]any, 0, len(models))
-		for idx, entry := range models {
-			flat := map[string]any{
-				"origin_index": idx,
-			}
-
-			// 从 model_client_config 提取
-			if mcc, ok := entry["model_client_config"].(map[string]any); ok {
-				if v, ok := mcc["model_name"].(string); ok {
-					flat["model_name"] = v
-				}
-				if v, ok := mcc["api_base"].(string); ok {
-					flat["api_base"] = v
-				}
-				if v, ok := mcc["api_key"].(string); ok {
-					// 已由 decryptModelEntries 解密（全局 provider），此处直接取值
-					flat["api_key"] = v
-				}
-				if v, ok := mcc["client_provider"].(string); ok {
-					flat["model_provider"] = v
-				}
-			}
-
-			// 从 model_config_obj 提取（上下文窗口与输出上限都归这里，对齐上游）
-			if mco, ok := entry["model_config_obj"].(map[string]any); ok {
-				// 上下文窗口：支持 256k/1m 字符串形态，0 表示未配置不回填
-				if n, perr := config.ParsePositiveTokens(mco["context_window"]); perr {
-					flat["context_window"] = n
-				}
-				if n, perr := parseInt(mco["max_tokens"]); perr == nil && n > 0 {
-					flat["max_tokens"] = n
-				}
-				// Python: mco.get("temperature", 0.95)
-				temperature := 0.95
-				if v, ok := mco["temperature"]; ok && v != nil {
-					if f, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
-						temperature = f
-					}
-				}
-				flat["temperature"] = temperature
-			}
-
-			// 顶层字段
-			if v, ok := entry["is_default"]; ok {
-				flat["is_default"] = v
-			}
-			if v, ok := entry["alias"].(string); ok {
-				flat["alias"] = v
-			}
-
-			result = append(result, flat)
-		}
-
-		// active_model: 列表首位的模型名称（对齐 Python L1049）
-		activeModel := ""
-		if len(result) > 0 {
-			if name, ok := result[0]["model_name"].(string); ok {
-				activeModel = name
-			}
-		}
-
-		wc.sendResponse(ws, reqID, true, map[string]any{"models": result, "active_model": activeModel}, "", "")
-	}
 }
 
 // channelGet 处理 channel.get 请求。
@@ -1237,152 +820,6 @@ func sessionCreate(wc *WebChannel) methodHandler {
 	}
 }
 
-// Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
-func modelsReplaceAll(wc *WebChannel, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		ctx := context.Background()
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
-			return
-		}
-		p := resolveCrypto(cryptoProv)
-
-		modelsVal, ok := params["models"]
-		if !ok || modelsVal == nil {
-			wc.sendResponse(ws, reqID, false, nil, "models 是必填项", WsErrBadRequest)
-			return
-		}
-
-		// 调用 buildModelsDefaultsFromFrontend（内部会调 merge + infer）
-		newModels, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
-		if err != nil {
-			if _, ok := err.(*ConfigBadRequest); ok {
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
-				return
-			}
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-			return
-		}
-
-		// 写入 config: models.defaults
-		if err := updateDefaultModelsInConfig(newModels); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("write models.defaults failed")
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
-			return
-		}
-
-		// 触发热重载（对齐 Python: _notify_config_saved_once(force=True)）
-		NotifyConfigSavedOnce(onConfigSaved, nil, []string{"models.defaults"}, true)
-
-		wc.sendResponse(ws, reqID, true, map[string]any{"count": len(newModels)}, "", "")
-	}
-}
-
-// modelsValidate 处理 models.validate 请求。
-// Python: _config_validate_model (app_web_handlers.py L897-1019)。
-// 调用 LLM 验证 api_key 和 api_base 是否有效。
-func modelsValidate(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params 是必填项", WsErrBadRequest)
-			return
-		}
-
-		apiBase, _ := params["api_base"].(string)
-		apiKey, _ := params["api_key"].(string)
-		model, _ := params["model"].(string)
-		modelProvider, _ := params["model_provider"].(string)
-
-		// 校验必填字段
-		if apiBase == "" {
-			wc.sendResponse(ws, reqID, false, nil, "api_base 是必填项", WsErrBadRequest)
-			return
-		}
-		if apiKey == "" {
-			wc.sendResponse(ws, reqID, false, nil, "api_key 是必填项", WsErrBadRequest)
-			return
-		}
-		if model == "" {
-			wc.sendResponse(ws, reqID, false, nil, "model 是必填项", WsErrBadRequest)
-			return
-		}
-		if modelProvider == "" {
-			wc.sendResponse(ws, reqID, false, nil, "model_provider 是必填项", WsErrBadRequest)
-			return
-		}
-
-		// 校验 model_provider 在可用列表中
-		if modelProvider != "" && !isAvailableProvider(modelProvider) {
-			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("model_provider 必须是以下之一: %v", availableModelProviders), WsErrBadRequest)
-			return
-		}
-
-		// api_base 归一（C-E1）：与请求构建侧共用 openai.NormalizeAPIBase
-		// （strip 空白 / 尾斜杠 / 已带 /chat/completions）
-		apiBase = openai.NormalizeAPIBase(apiBase)
-
-		// verify_ssl（对齐 Python: bool(item.get("verify_ssl", False))，默认 false）
-		verifySSL := false
-		if v, ok := params["verify_ssl"].(bool); ok {
-			verifySSL = v
-		}
-
-		// 构造 LLM 配置
-		clientConfig := &llmSchema.ModelClientConfig{
-			ClientProvider: modelProvider,
-			APIKey:         apiKey,
-			APIBase:        apiBase,
-			Timeout:        60.0,
-			MaxRetries:     3,
-			VerifySSL:      verifySSL,
-		}
-
-		// 尝试 max_tokens=1 验证
-		maxTokens1 := 1
-		modelConfig := llmSchema.NewModelRequestConfig()
-		modelConfig.ModelName = model
-		modelConfig.MaxTokens = &maxTokens1
-		zeroTemperature := 0.0
-		modelConfig.Temperature = &zeroTemperature
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		modelInst, err := llm.NewModel(clientConfig, modelConfig)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("model_provider", modelProvider).Msg("models.validate createmodel failed")
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrLLMError)
-			return
-		}
-
-		messages := model_clients.NewMessagesParam(llmSchema.NewUserMessage("hi"))
-		resp, err := modelInst.Invoke(ctx, messages)
-		if err != nil {
-			// 失败重试 max_tokens=16
-			maxTokens16 := 16
-			modelConfig.MaxTokens = &maxTokens16
-			modelInst2, err2 := llm.NewModel(clientConfig, modelConfig)
-			if err2 != nil {
-				wc.sendResponse(ws, reqID, false, nil, err2.Error(), WsErrLLMError)
-				return
-			}
-			resp, err = modelInst2.Invoke(ctx, messages)
-			if err != nil {
-				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrLLMError)
-				return
-			}
-		}
-
-		// 检查响应内容非空
-		if resp == nil || resp.Content.Text() == "" {
-			wc.sendResponse(ws, reqID, false, nil, "模型返回空响应", WsErrLLMError)
-			return
-		}
-
-		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true, "model_provider": modelProvider}, "", "")
-	}
-}
-
 // historyGet 处理 history.get 本地请求。
 // 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
 // Python: (L1459-1466)。
@@ -1454,320 +891,6 @@ func chatUserAnswer(wc *WebChannel) methodHandler {
 	}
 }
 
-// loadAppConfig 加载 config.yaml 配置。
-// 封装 config.New + Load 流程，失败时返回空 map 而非 error，
-// 调用方用默认值兜底。
-// 对齐 Python get_config()（含 _normalize_config——2026-10-28 审查接线）。
-func loadAppConfig() (map[string]any, error) {
-	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
-	if err != nil {
-		return make(map[string]any), err
-	}
-	data, err := cfg.Load()
-	if err != nil {
-		return make(map[string]any), err
-	}
-	return data, nil
-}
-
-// getConfigString 从配置 map 中读取点分隔路径的字符串值，不存在时返回默认值。
-func getConfigString(cfg map[string]any, key string, defaultVal string) string {
-	parts := strings.Split(key, ".")
-	var current any = cfg
-	for _, part := range parts {
-		m, ok := current.(map[string]any)
-		if !ok {
-			return defaultVal
-		}
-		current, ok = m[part]
-		if !ok {
-			return defaultVal
-		}
-	}
-	if s, ok := current.(string); ok {
-		return s
-	}
-	return fmt.Sprintf("%v", current)
-}
-
-// getConfigAny 从配置 map 中读取点分隔路径的值，不存在时返回默认值。
-func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
-	parts := strings.Split(key, ".")
-	var current any = cfg
-	for _, part := range parts {
-		m, ok := current.(map[string]any)
-		if !ok {
-			return defaultVal
-		}
-		current, ok = m[part]
-		if !ok {
-			return defaultVal
-		}
-	}
-	return current
-}
-
-// flattenTeamConfig 展平 modes.team 配置到结果 map。
-// Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
-// 遍历最多 10 个 team，提取 team_{idx}_* 前缀字段和 agent 详情。
-// flattenTeamConfig 展平 modes.team 配置为前端 config panel 格式。
-// Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)：
-//   - teams_raw 为 dict（key=team_name, value=team_spec），最多 10 个 team
-//   - 每个 team 展平 team_0_name/lifecycle/teammate_mode/spawn_mode 等字段
-//   - leader 信息 + agent_key 推导（缺省时用 "{team_name}_leader"）
-//   - teammate 从 agents.teammate 取（不是 teammates 数组）
-//   - predefined_members JSON 序列化
-//   - agent 详情从 agent_specs dict 按 agent_key 匹配（不是按位置）
-//   - agent 输出格式：agent_name_{idx}/agent_model_{idx}/agent_skills_{idx} 等
-func flattenTeamConfig(cfg map[string]any, result map[string]any) {
-	// 读取 modes.team
-	modes := getConfigAny(cfg, "modes", nil)
-	var teamsRaw map[string]any
-	if m, ok := modes.(map[string]any); ok {
-		if t, ok := m["team"].(map[string]any); ok {
-			teamsRaw = t
-		}
-	}
-	if teamsRaw == nil {
-		return
-	}
-
-	// 读取 web_config_panel.agent_team_agents 用于 agent 详情补充
-	// Python: L390-396
-	agentSpecs := make(map[string]map[string]any)
-	panelCfg := getConfigAny(cfg, "web_config_panel", nil)
-	if panel, ok := panelCfg.(map[string]any); ok {
-		if registry, ok := panel["agent_team_agents"].(map[string]any); ok {
-			for agentKey, spec := range registry {
-				if s, ok := spec.(map[string]any); ok {
-					agentSpecs[agentKey] = s
-				}
-			}
-		}
-	}
-
-	// addAgent 辅助函数：将 agent_key 加入 agentSpecs（如果尚未存在）
-	// Python: L398-403
-	addAgent := func(agentKey string, spec any) string {
-		if agentKey == "" {
-			return ""
-		}
-		if s, ok := spec.(map[string]any); ok {
-			if _, exists := agentSpecs[agentKey]; !exists {
-				agentSpecs[agentKey] = s
-			}
-		}
-		return agentKey
-	}
-
-	// modelNameFromSpec 辅助函数：从 agent spec 中提取 model name
-	// Python: L405-417
-	modelNameFromSpec := func(spec map[string]any) string {
-		modelCfg, _ := spec["model"].(map[string]any)
-		if modelCfg == nil {
-			return ""
-		}
-		if v := modelCfg["model"]; v != nil {
-			return fmt.Sprintf("%v", v)
-		}
-		if requestCfg, ok := modelCfg["model_request_config"].(map[string]any); ok {
-			if v := requestCfg["model"]; v != nil {
-				return fmt.Sprintf("%v", v)
-			}
-		}
-		if clientCfg, ok := modelCfg["model_client_config"].(map[string]any); ok {
-			if v := clientCfg["model_name"]; v != nil {
-				return fmt.Sprintf("%v", v)
-			}
-		}
-		return ""
-	}
-
-	// 遍历 teams（dict，key=team_name，value=team_spec）
-	// Python: L419-470
-	teamIdx := 0
-	for teamName, teamSpecRaw := range teamsRaw {
-		if teamIdx >= maxTeamsConfigPanel {
-			break
-		}
-		teamSpec, ok := teamSpecRaw.(map[string]any)
-		if !ok {
-			continue
-		}
-		prefix := fmt.Sprintf("team_%d_", teamIdx)
-
-		// 基础字段
-		name := strOrEmpty(teamSpec["team_name"])
-		if name == "" {
-			name = teamName
-		}
-		result[prefix+"name"] = name
-		result[prefix+"lifecycle"] = strOrEmpty(teamSpec["lifecycle"])
-		result[prefix+"teammate_mode"] = strOrEmpty(teamSpec["teammate_mode"])
-		result[prefix+"spawn_mode"] = strOrEmpty(teamSpec["spawn_mode"])
-
-		// agents 字典
-		agents, _ := teamSpec["agents"].(map[string]any)
-		if agents == nil {
-			agents = make(map[string]any)
-		}
-
-		// leader 信息（对齐 Python L432-439）
-		if leader, ok := teamSpec["leader"].(map[string]any); ok {
-			for _, key := range []string{"member_name", "display_name", "persona"} {
-				result[prefix+"leader_"+key] = strOrEmpty(leader[key])
-			}
-			leaderKey := strOrEmpty(leader["agent_key"])
-			if leaderKey == "" {
-				leaderKey = teamName + "_leader"
-			}
-			result[prefix+"leader_agent_key"] = addAgent(leaderKey, agents["leader"])
-		}
-
-		// teammate 信息（对齐 Python L441-449）
-		// 从 agents.teammate 取，不是从 teammates 数组
-		if teammateSpec, ok := agents["teammate"].(map[string]any); ok {
-			teammateKey := ""
-			if teammate, ok := teamSpec["teammate"].(map[string]any); ok {
-				teammateKey = strOrEmpty(teammate["agent_key"])
-			}
-			if teammateKey == "" {
-				teammateKey = teamName + "_teammate"
-			}
-			result[prefix+"teammate_agent_key"] = addAgent(teammateKey, teammateSpec)
-		} else {
-			result[prefix+"teammate_agent_key"] = ""
-		}
-
-		// predefined_members JSON 序列化（对齐 Python L451-470）
-		membersOut := []map[string]string{}
-		if members, ok := teamSpec["predefined_members"].([]any); ok {
-			for _, memberRaw := range members {
-				member, ok := memberRaw.(map[string]any)
-				if !ok {
-					continue
-				}
-				memberName := strOrEmpty(member["member_name"])
-				agentKey := strOrEmpty(member["agent_key"])
-				if agentKey == "" {
-					if memberName != "" {
-						agentKey = teamName + "_" + memberName
-					}
-				}
-				if agentKey != "" {
-					addAgent(agentKey, agents[memberName])
-				}
-				membersOut = append(membersOut, map[string]string{
-					"member_name":  memberName,
-					"display_name": strOrEmpty(member["display_name"]),
-					"persona":      strOrEmpty(member["persona"]),
-					"prompt_hint":  strOrEmpty(member["prompt_hint"]),
-					"agent_key":    agentKey,
-				})
-			}
-		}
-		if membersJSON, err := json.Marshal(membersOut); err == nil {
-			result[prefix+"predefined_members"] = string(membersJSON)
-		}
-
-		teamIdx++
-	}
-
-	// agent 详情（对齐 Python L472-480）
-	agentIdx := 0
-	for agentKey, spec := range agentSpecs {
-		if agentIdx >= maxTeamsConfigPanel {
-			break
-		}
-		result[fmt.Sprintf("agent_name_%d", agentIdx)] = agentKey
-		result[fmt.Sprintf("agent_model_%d", agentIdx)] = modelNameFromSpec(spec)
-		// skills: 逗号分隔
-		skillsStr := ""
-		if skills, ok := spec["skills"].([]any); ok {
-			parts := make([]string, 0, len(skills))
-			for _, s := range skills {
-				parts = append(parts, fmt.Sprintf("%v", s))
-			}
-			skillsStr = strings.Join(parts, ",")
-		}
-		result[fmt.Sprintf("agent_skills_%d", agentIdx)] = skillsStr
-		// max_iterations 默认 200（对齐 Python）
-		maxIter := 200
-		if v, ok := spec["max_iterations"]; ok && v != nil {
-			if n, err := strconv.Atoi(fmt.Sprintf("%v", v)); err == nil {
-				maxIter = n
-			}
-		}
-		result[fmt.Sprintf("agent_max_iterations_%d", agentIdx)] = strconv.Itoa(maxIter)
-		// completion_timeout 默认 600（对齐 Python）
-		timeout := 600
-		if v, ok := spec["completion_timeout"]; ok && v != nil {
-			if n, err := strconv.Atoi(fmt.Sprintf("%v", v)); err == nil {
-				timeout = n
-			}
-		}
-		result[fmt.Sprintf("agent_completion_timeout_%d", agentIdx)] = strconv.Itoa(timeout)
-		agentIdx++
-	}
-}
-
-// 5. 空值写为 KEY=
-func persistEnvUpdates(updated map[string]string) error {
-	envPath := workspace.EnvFile()
-
-	// 读取现有 .env 文件
-	var lines []string
-	data, err := os.ReadFile(envPath)
-	if err == nil {
-		lines = strings.Split(string(data), "\n")
-	}
-
-	// 构建更新集合
-	updatedSet := make(map[string]string, len(updated))
-	for k, v := range updated {
-		updatedSet[k] = v
-	}
-
-	// 替换已有行
-	for i, line := range lines {
-		// 跳过注释和空行
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		// 提取 KEY= 部分
-		eqIdx := strings.Index(line, "=")
-		if eqIdx < 0 {
-			continue
-		}
-		key := line[:eqIdx]
-		if newVal, ok := updatedSet[key]; ok {
-			if newVal == "" {
-				lines[i] = key + "="
-			} else {
-				lines[i] = fmt.Sprintf(`%s="%s"`, key, newVal)
-			}
-			delete(updatedSet, key)
-		}
-	}
-
-	// 追加新增的 key
-	for key, val := range updatedSet {
-		if val == "" {
-			lines = append(lines, key+"=")
-		} else {
-			lines = append(lines, fmt.Sprintf(`%s="%s"`, key, val))
-		}
-	}
-
-	// 写回文件
-	content := strings.Join(lines, "\n")
-	if err := os.MkdirAll(filepath.Dir(envPath), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(envPath, []byte(content), 0o644)
-}
-
 // sortedKeys 返回 map 的有序键列表。
 func sortedKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
@@ -1780,58 +903,45 @@ func sortedKeys(m map[string]string) []string {
 
 // ──────────────────────────── 权限 RPC 处理函数 ────────────────────────────
 
-// permissionsOwnerScopesGet 处理 permissions.owner_scopes.get 请求。
-// Python: _permissions_owner_scopes_get (app_web_handlers.py L2275-2283)
-// 直接从配置读取 owner_scopes，不经 E2A / config_rpc。
-func permissionsOwnerScopesGet(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		// Python: get_permissions_owner_scopes() — get_config()（normalize 后）
-		cfgPath := workspace.ConfigFile()
-		// 2026-10-28 审查接线：改走 Load+WithNormalize，对齐 Python get_config()
-		// （此前 Raw() 为原始视图；permissions 键不受 normalize 影响，行为无差，
-		// 但统一读链入口，消除与 Python 的视图分歧）
-		cfg, err := config.New(cfgPath, config.WithNormalize(config.NormalizeConfig))
+// configForwardToAgent 配置面板 RPC 转发（Python: app_web_handlers.py:5582
+// _register_config_proxy：Gateway 只做代理，真相源在 AgentServer 侧
+// control/configpanel；转发失败或未就绪回 INTERNAL_ERROR）。
+func configForwardToAgent(wc *WebChannel, ac *routing.AgentClient, method string) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		if ac == nil || !ac.ServerReady() {
+			logger.Warn(logComponent).Str("method", method).Msg("config forward skipped: AgentServer not ready")
+			wc.sendResponse(ws, reqID, false, nil, "AgentServer not ready", WsErrInternalError)
+			return
+		}
+		env := e2a.E2AFromAgentFields("",
+			e2a.WithFieldChannelID(""),
+			e2a.WithFieldSessionID(sessionID),
+			e2a.WithFieldReqMethod(method),
+			e2a.WithFieldParams(params),
+		)
+		resp, err := ac.SendRequest(context.Background(), env)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get load config failed")
-			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("读取 owner_scopes 配置失败: %v", err), WsErrInternalError)
+			logger.Error(logComponent).Err(err).Str("method", method).Msg("config forward failed")
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
 			return
 		}
-		raw, err := cfg.Load()
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get read config failed")
-			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("读取 owner_scopes 配置失败: %v", err), WsErrInternalError)
+		if resp != nil && resp.OK {
+			wc.sendResponse(ws, reqID, true, resp.Payload, "", "")
 			return
 		}
-		permCfg, _ := raw["permissions"].(map[string]any)
-		if permCfg == nil {
-			permCfg = map[string]any{}
+		errPayload := map[string]any{"error": "request failed"}
+		if resp != nil && resp.Payload != nil {
+			errPayload = resp.Payload
 		}
-		ownerScopes, _ := permCfg["owner_scopes"].(map[string]any)
-		if ownerScopes == nil {
-			ownerScopes = map[string]any{}
+		errMsg := "request failed"
+		if e, ok := errPayload["error"].(string); ok && e != "" {
+			errMsg = e
 		}
-		denyGuidance, _ := permCfg["deny_guidance_message"].(string)
-		wc.sendResponse(ws, reqID, true, map[string]any{
-			"owner_scopes":          ownerScopes,
-			"deny_guidance_message": denyGuidance,
-		}, "", "")
-	}
-}
-
-// permissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
-// Python: _permissions_owner_scopes_set (app_web_handlers.py:6221)
-// 直接调用 UpdatePermissionsOwnerScopesInConfig 统一写路径，不经 E2A / config_rpc。
-func permissionsOwnerScopesSet(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
-		if params == nil {
-			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
-			return
+		code := WsErrInternalError
+		if c, ok := errPayload["code"].(string); ok && c != "" {
+			code = c
 		}
-		if err := config.UpdatePermissionsOwnerScopesInConfig(params["owner_scopes"], params["deny_guidance_message"]); err != nil {
-			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("更新 owner_scopes 配置失败: %v", err), WsErrInternalError)
-			return
-		}
-		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true}, "", "")
+		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
 	}
 }
 
@@ -2335,6 +1445,94 @@ var configYAMLKeys = map[string]bool{
 	"memory_forbidden_description": true,
 }
 
+// isAvailableProvider 检查 provider 是否在可用列表中。
+func isAvailableProvider(provider string) bool {
+	for _, p := range availableModelProviders {
+		if p == provider {
+			return true
+		}
+	}
+	return false
+}
+
+// ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
+// Python: _process_files (web_connect.py L189-221)。
+func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
+	files, ok := params["files"]
+	if !ok {
+		return params
+	}
+	filesList, ok := files.([]any)
+	if !ok || len(filesList) == 0 {
+		return params
+	}
+
+	workspaceDir := workspace.AgentWorkspaceDir()
+	downloadedFiles := make([]any, 0, len(filesList))
+
+	for _, fileItem := range filesList {
+		fileInfo, ok := fileItem.(map[string]any)
+		if !ok {
+			downloadedFiles = append(downloadedFiles, fileItem)
+			continue
+		}
+
+		fileURL := ""
+		if u, ok := fileInfo["url"].(string); ok && u != "" {
+			fileURL = u
+		} else if u, ok := fileInfo["uri"].(string); ok && u != "" {
+			fileURL = u
+		}
+
+		fileName := "unknown_file"
+		if n, ok := fileInfo["name"].(string); ok && n != "" {
+			fileName = n
+		} else if n, ok := fileInfo["filename"].(string); ok && n != "" {
+			fileName = n
+		}
+
+		if fileURL != "" {
+			fileContent, err := downloadFile(ctx, fileURL)
+			if err != nil {
+				logger.Warn(logComponentConfigApply).
+					Str("url", fileURL).
+					Err(err).
+					Msg("file download failed")
+			} else if fileContent != nil {
+				if err := os.MkdirAll(workspaceDir, 0o755); err == nil {
+					filePath := filepath.Join(workspaceDir, fileName)
+					if err := os.WriteFile(filePath, fileContent, 0o644); err != nil {
+						logger.Warn(logComponentConfigApply).Err(err).Msg("file save failed")
+					} else {
+						fileInfo["path"] = filePath
+					}
+				}
+			}
+		}
+		downloadedFiles = append(downloadedFiles, fileInfo)
+	}
+
+	params["files"] = downloadedFiles
+	return params
+}
+
+// getConfigAny 从配置 map 中读取点分隔路径的值，不存在时返回默认值。
+func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
+	parts := strings.Split(key, ".")
+	var current any = cfg
+	for _, part := range parts {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return defaultVal
+		}
+		current, ok = m[part]
+		if !ok {
+			return defaultVal
+		}
+	}
+	return current
+}
+
 // availableModelProviders 可用的模型服务商列表。
 // Python: [provider.value for provider in ProviderType]
 //
@@ -2405,117 +1603,6 @@ func (e *ConfigBadRequest) Error() string { return e.Message }
 // Error 实现 error 接口。
 func (e *ConfigInternalError) Error() string { return e.Message }
 
-// ApplyConfigPayload 将 config.set 风格的参数应用到 .env 和 config.yaml，不触发重载。
-// Python: _apply_config_payload (app_web_handlers.py L701-761)。
-// 返回值：
-//   - envUpdates: 本次变更的环境变量增量
-//   - yamlUpdated: 本次变更的 YAML 键列表
-func ApplyConfigPayload(ctx context.Context, params map[string]any, cryptoProv crypto.CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
-	// Python: _encrypt_config_params (L692-699):
-	// 遍历 params，key 名包含 api_key 或 token 时加密。
-	// 加密失败保留明文 + Warn（Go error 签名；对齐 Python 无 error 概念的宽容语义）
-	if cryptoProv != nil {
-		for key, val := range params {
-			kl := strings.ToLower(key)
-			if strings.Contains(kl, "api_key") || strings.Contains(kl, "token") {
-				if strVal, ok := val.(string); ok && strVal != "" {
-					if enc, encErr := cryptoProv.Encrypt(ctx, strVal); encErr == nil {
-						params[key] = enc
-					} else {
-						logger.Warn(logComponentConfigApply).
-							Str("key", key).
-							Err(encErr).
-							Msg("加密失败，保留明文写入")
-					}
-				}
-			}
-		}
-	}
-
-	envUpdates = make(map[string]string)
-	yamlUpdated = make([]string, 0)
-
-	// 环境变量映射处理
-	for paramKey, envKey := range configEnvMap {
-		val, ok := params[paramKey]
-		if !ok {
-			continue
-		}
-		// provider 校验（对齐 Python available_model_providers 校验，仅非空值校验）
-		if strings.HasSuffix(paramKey, "_provider") {
-			strVal := strings.TrimSpace(fmt.Sprintf("%v", val))
-			if strVal != "" && !isAvailableProvider(strVal) {
-				return nil, nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("Model provider must in: %v", availableModelProviders),
-				}
-			}
-		}
-		if val == nil {
-			envUpdates[envKey] = ""
-		} else {
-			envUpdates[envKey] = strings.TrimSpace(fmt.Sprintf("%v", val))
-		}
-	}
-
-	// agents/team 写入 config.yaml
-	if _, hasAgents := params["agents"]; hasAgents {
-		if err := replaceTeamsInConfig(params); err != nil {
-			logger.Warn(logComponentConfigApply).
-				Err(err).
-				Msg("failed to write back modes.team")
-			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
-		}
-		yamlUpdated = append(yamlUpdated, "modes.team")
-	} else if _, hasTeam := params["team"]; hasTeam {
-		if err := replaceTeamsInConfig(params); err != nil {
-			logger.Warn(logComponentConfigApply).
-				Err(err).
-				Msg("failed to write back modes.team")
-			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
-		}
-		yamlUpdated = append(yamlUpdated, "modes.team")
-	}
-
-	// YAML 键写入 config.yaml
-	for paramKey := range configYAMLKeys {
-		val, ok := params[paramKey]
-		if !ok {
-			continue
-		}
-		if err := updateYAMLKeyInConfig(paramKey, val); err != nil {
-			logger.Warn(logComponentConfigApply).
-				Str("key", paramKey).
-				Err(err).
-				Msg("failed to write back config.yaml")
-		} else {
-			yamlUpdated = append(yamlUpdated, paramKey)
-		}
-	}
-
-	// 设置环境变量 + 持久化 .env
-	for envKey, value := range envUpdates {
-		_ = os.Setenv(envKey, value)
-	}
-	if len(envUpdates) > 0 {
-		if err := persistEnvUpdates(envUpdates); err != nil {
-			logger.Warn(logComponentConfigApply).
-				Err(err).
-				Msg("failed to persist .env file")
-		} else {
-			logger.Info(logComponentConfigApply).
-				Strs("keys", sortedKeys(envUpdates)).
-				Msg(".env updated")
-		}
-	}
-	if len(yamlUpdated) > 0 {
-		logger.Info(logComponentConfigApply).
-			Strs("keys", yamlUpdated).
-			Msg("config.yaml updated")
-	}
-
-	return envUpdates, yamlUpdated, nil
-}
-
 // NotifyConfigSavedOnce 在所有文件写入完成后触发一次热重载。
 // Python: _notify_config_saved_once (app_web_handlers.py L763-782)。
 func NotifyConfigSavedOnce(
@@ -2566,135 +1653,7 @@ func NotifyConfigSavedOnce(
 	}
 }
 
-// ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
-// Python: _process_files (web_connect.py L189-221)。
-func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
-	files, ok := params["files"]
-	if !ok {
-		return params
-	}
-	filesList, ok := files.([]any)
-	if !ok || len(filesList) == 0 {
-		return params
-	}
-
-	workspaceDir := workspace.AgentWorkspaceDir()
-	downloadedFiles := make([]any, 0, len(filesList))
-
-	for _, fileItem := range filesList {
-		fileInfo, ok := fileItem.(map[string]any)
-		if !ok {
-			downloadedFiles = append(downloadedFiles, fileItem)
-			continue
-		}
-
-		fileURL := ""
-		if u, ok := fileInfo["url"].(string); ok && u != "" {
-			fileURL = u
-		} else if u, ok := fileInfo["uri"].(string); ok && u != "" {
-			fileURL = u
-		}
-
-		fileName := "unknown_file"
-		if n, ok := fileInfo["name"].(string); ok && n != "" {
-			fileName = n
-		} else if n, ok := fileInfo["filename"].(string); ok && n != "" {
-			fileName = n
-		}
-
-		if fileURL != "" {
-			fileContent, err := downloadFile(ctx, fileURL)
-			if err != nil {
-				logger.Warn(logComponentConfigApply).
-					Str("url", fileURL).
-					Err(err).
-					Msg("file download failed")
-			} else if fileContent != nil {
-				if err := os.MkdirAll(workspaceDir, 0o755); err == nil {
-					filePath := filepath.Join(workspaceDir, fileName)
-					if err := os.WriteFile(filePath, fileContent, 0o644); err != nil {
-						logger.Warn(logComponentConfigApply).Err(err).Msg("file save failed")
-					} else {
-						fileInfo["path"] = filePath
-					}
-				}
-			}
-		}
-		downloadedFiles = append(downloadedFiles, fileInfo)
-	}
-
-	params["files"] = downloadedFiles
-	return params
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// isAvailableProvider 检查 provider 是否在可用列表中。
-func isAvailableProvider(provider string) bool {
-	for _, p := range availableModelProviders {
-		if p == provider {
-			return true
-		}
-	}
-	return false
-}
-
-// updateYAMLKeyInConfig 将单个 YAML 键写入 config.yaml。
-// Python: update_context_engine_enabled_in_config 等系列函数。
-func updateYAMLKeyInConfig(key string, value any) error {
-	cfg, err := config.New("")
-	if err != nil {
-		return fmt.Errorf("创建配置管理器失败: %w", err)
-	}
-
-	// 加载当前配置
-	cfgData, err := cfg.Load()
-	if err != nil {
-		return fmt.Errorf("加载配置失败: %w", err)
-	}
-
-	parsed := isTruthy(value)
-
-	switch key {
-	case "context_engine_enabled":
-		// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set（yaml.Marshal 全量重写丢注释），
-		// 对齐 Python 各 update_*_in_config 的 ruamel round-trip 写回
-		return cfg.SetRoundTrip("react.context_engine_config.enabled", parsed)
-	case "kv_cache_affinity_enabled":
-		return cfg.SetRoundTrip("react.context_engine_config.enable_kv_cache_release", parsed)
-	case "permissions_enabled":
-		return cfg.SetRoundTrip("permissions.enabled", parsed)
-	case "memory_forbidden_enabled":
-		return cfg.SetRoundTrip("memory.forbidden_memory_definition.enabled", parsed)
-	case "memory_forbidden_description":
-		// Python: update_memory_forbidden_description_in_config
-		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
-		// Python: config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
-		descMap := cfg.Get("memory.forbidden_memory_definition.description")
-		currentDesc := make(map[string]any)
-		if descMap != nil {
-			if m, ok := descMap.(map[string]any); ok {
-				currentDesc = m
-			}
-		}
-		// 合并：新值覆盖同名 key，旧的其他 key 保留
-		if descVal, ok := value.(map[string]any); ok {
-			for k, v := range descVal {
-				currentDesc[k] = v
-			}
-		} else if descStr, ok := value.(string); ok {
-			// 单语言字符串：用 preferred_language 确定写入的 key
-			preferredLang := "zh"
-			if lang, ok := cfgData["preferred_language"].(string); ok && lang != "" {
-				preferredLang = lang
-			}
-			currentDesc[preferredLang] = strings.TrimSpace(descStr)
-		}
-		return cfg.SetRoundTrip("memory.forbidden_memory_definition.description", currentDesc)
-	default:
-		return fmt.Errorf("未知的 YAML 配置键: %s", key)
-	}
-}
 
 // replaceTeamsInConfig 替换 config.yaml 中的 modes.team 配置。
 // Python: replace_teams_in_config (common/config.py L989-1038)。
@@ -2856,175 +1815,6 @@ func updateMemoryForbiddenInConfig(updates map[string]any) error {
 	}
 
 	return nil
-}
-
-// buildModelsDefaultsFromFrontend 从前端 models 参数构建 models.defaults 列表。
-// Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
-// cryptoProv 用于加密 api_key；rawModels 中的 origin_index 用于匹配原始 YAML 条目。
-func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoProv crypto.CryptoProvider) ([]map[string]any, error) {
-	modelsList, ok := rawModels.([]any)
-	if !ok || len(modelsList) == 0 {
-		return nil, &ConfigBadRequest{Message: "models must be a non-empty list"}
-	}
-
-	parsed := make([]map[string]any, 0, len(modelsList))
-	aliasesSeen := make(map[string]int)
-
-	for idx, item := range modelsList {
-		itemMap, ok := item.(map[string]any)
-		if !ok {
-			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d] must be object", idx)}
-		}
-
-		modelNameRaw, hasModelName := itemMap["model_name"]
-		if !hasModelName || modelNameRaw == nil {
-			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
-		}
-		modelName := strings.TrimSpace(fmt.Sprintf("%v", modelNameRaw))
-		if modelName == "" {
-			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
-		}
-
-		apiKeyRaw, hasAPIKey := itemMap["api_key"]
-		originIndex := itemMap["origin_index"] // 可为 nil
-		apiKey := ""
-		if hasAPIKey && apiKeyRaw != nil {
-			apiKey = strings.TrimSpace(fmt.Sprintf("%v", apiKeyRaw))
-		}
-		if apiKey == "" && originIndex == nil {
-			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].api_key is required", idx)}
-		}
-
-		apiBase := strings.TrimSpace(fmt.Sprintf("%v", itemMap["api_base"]))
-		modelProvider := ""
-		if mp, ok := itemMap["model_provider"]; ok && mp != nil {
-			modelProvider = strings.TrimSpace(fmt.Sprintf("%v", mp))
-		}
-		// provider 校验：仅当值非空时才检查（对齐 Python 逻辑）
-		if modelProvider != "" && !isAvailableProvider(modelProvider) {
-			return nil, &ConfigBadRequest{
-				Message: fmt.Sprintf("models[%d].model_provider must be one of: %v", idx, availableModelProviders),
-			}
-		}
-
-		temperature := 0.95
-		if t, ok := itemMap["temperature"]; ok {
-			if f, err := parseFloat(t); err == nil {
-				temperature = f
-			}
-		}
-
-		timeout := 1800
-		if t, ok := itemMap["timeout"]; ok {
-			if i, err := parseInt(t); err == nil {
-				timeout = i
-			}
-		}
-
-		alias := ""
-		if a, ok := itemMap["alias"]; ok && a != nil {
-			alias = strings.TrimSpace(fmt.Sprintf("%v", a))
-		}
-		if alias != "" {
-			if prevIdx, exists := aliasesSeen[alias]; exists {
-				return nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("Alias '%s' is used by both models[%d] and models[%d]", alias, prevIdx, idx),
-				}
-			}
-			aliasesSeen[alias] = idx
-		}
-
-		isDefault := false
-		if d, ok := itemMap["is_default"]; ok {
-			isDefault = isTruthy(d)
-		}
-
-		verifySSL := false
-		if v, ok := itemMap["verify_ssl"].(bool); ok {
-			verifySSL = v
-		}
-
-		// context_window / max_tokens：归 model_config_obj（对齐上游模型条目结构）。
-		// context_window 接受 256k/1m 等字符串形态；0 表示未配置，可覆盖旧值。
-		contextWindow := 0
-		if v, ok := itemMap["context_window"]; ok && v != nil && fmt.Sprint(v) != "" {
-			n, perr := config.ParsePositiveTokens(v)
-			if !perr {
-				return nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("models[%d].context_window 必须是正整数或 256k/1m 形式", idx),
-				}
-			}
-			contextWindow = n
-		}
-
-		maxTokens := 0
-		if v, ok := itemMap["max_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
-			n, perr := parseInt(v)
-			if perr != nil || n < 0 {
-				return nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("models[%d].max_tokens 必须是非负整数", idx),
-				}
-			}
-			maxTokens = n
-		}
-
-		entry := map[string]any{
-			"model_client_config": map[string]any{
-				"model_name":      modelName,
-				"api_base":        apiBase,
-				"api_key":         apiKey,
-				"client_provider": modelProvider,
-				"timeout":         timeout,
-				"verify_ssl":      verifySSL,
-			},
-			"model_config_obj": map[string]any{
-				"temperature": temperature,
-				// 上下文窗口（token）；0 = 未配置，回退内置表
-				"context_window": contextWindow,
-				// 输出上限（token）：请求 max_tokens 默认值；0 = 不限制
-				"max_tokens": maxTokens,
-			},
-			"is_default": isDefault,
-			"alias":      alias,
-		}
-		if originIndex != nil {
-			entry["origin_index"] = originIndex
-		}
-
-		parsed = append(parsed, entry)
-	}
-
-	// alias 与其他条目的 model_name 冲突校验
-	for i, p := range parsed {
-		a, _ := p["alias"].(string)
-		if a == "" {
-			continue
-		}
-		for j, q := range parsed {
-			if i == j {
-				continue
-			}
-			if q["model_client_config"] != nil {
-				if mcc, ok := q["model_client_config"].(map[string]any); ok {
-					if mn, _ := mcc["model_name"].(string); mn == a {
-						return nil, &ConfigBadRequest{
-							Message: fmt.Sprintf("Alias '%s' on models[%d] conflicts with model_name on models[%d]", a, i, j),
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
-	rawDefaults := loadRawModelsDefaults()
-	resolvedDefaults := config.GetDefaultModels(nil)
-	merged := mergeModelsForReplaceAll(ctx, parsed, rawDefaults, resolvedDefaults, cryptoProv)
-
-	// 推断 is_default（对齐 Python _infer_is_default）
-	merged = inferIsDefault(merged)
-
-	return merged, nil
 }
 
 // getConfigSnapshot 获取当前配置快照。

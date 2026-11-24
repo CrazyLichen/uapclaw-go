@@ -291,3 +291,15 @@ func (m multiErrWithNil) Unwrap() []error {
 }
 
 // TestExtractToolInterrupt_多错误含nil 验证 nil 元素被跳过、后续错误仍可识别。
+
+// TestInferToolResultError_字符串字典 对齐 Python dict 不分型语义。
+func TestInferToolResultError_字符串字典(t *testing.T) {
+	got := inferToolResultError(map[string]string{"success": "false"})
+	if got == nil || !*got {
+		t.Fatalf("map[string]string success=false 应判失败: %v", got)
+	}
+	got2 := inferToolResultError([]any{"x"})
+	if got2 != nil {
+		t.Fatalf("切片应 nil: %v", got2)
+	}
+}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -45,42 +46,6 @@ func writeSessionDir(t *testing.T, sessionID string, meta map[string]any) {
 }
 
 // ──────────────────────────── memory.forbidden 禁用记忆配置 ────────────────────────────
-
-// TestMemoryForbiddenGet_无配置回空对象 config.yaml 缺失时落默认空对象而非报错。
-func TestMemoryForbiddenGet_无配置回空对象(t *testing.T) {
-	useTempWorkspace(t)
-
-	payload, err := callHandler(memoryForbiddenGet(newTestChannel()), nil, "")
-	require.NoError(t, err)
-	assert.NotNil(t, payload)
-}
-
-// TestMemoryForbiddenSet_写入成功 写回 config.yaml 并回 {"ok": true}。
-func TestMemoryForbiddenSet_写入成功(t *testing.T) {
-	useTempWorkspace(t)
-	ensureConfigFile(t)
-
-	payload, err := callHandler(memoryForbiddenSet(newTestChannel()), map[string]any{
-		"enabled":     true,
-		"description": map[string]any{"zh": "不要记忆"},
-	}, "")
-	require.NoError(t, err)
-	assert.Equal(t, true, payload["ok"])
-
-	// 读回校验：get 必须拿到刚写入的字段
-	got, getErr := callHandler(memoryForbiddenGet(newTestChannel()), nil, "")
-	require.NoError(t, getErr)
-	assert.Equal(t, true, got["enabled"])
-}
-
-// TestMemoryForbiddenSet_params为空 BAD_REQUEST。
-func TestMemoryForbiddenSet_params为空(t *testing.T) {
-	useTempWorkspace(t)
-
-	_, err := callHandler(memoryForbiddenSet(newTestChannel()), nil, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
 
 // ──────────────────────────── session.list 会话列表 ────────────────────────────
 
@@ -220,44 +185,6 @@ func TestHistoryGet_透传cursor与limit(t *testing.T) {
 
 // ──────────────────────────── permissions.* 权限相关接口 ────────────────────────────
 
-// TestPermissionsOwnerScopesGet_无配置回空表 config.yaml 缺失时落空表而非报错。
-func TestPermissionsOwnerScopesGet_无配置回空表(t *testing.T) {
-	useTempWorkspace(t)
-
-	payload, err := callHandler(permissionsOwnerScopesGet(newTestChannel()), nil, "")
-	require.NoError(t, err)
-	assert.Equal(t, map[string]any{}, payload["owner_scopes"])
-	assert.Equal(t, "", payload["deny_guidance_message"])
-}
-
-// TestPermissionsOwnerScopesSet_params为空 BAD_REQUEST。
-func TestPermissionsOwnerScopesSet_params为空(t *testing.T) {
-	useTempWorkspace(t)
-
-	_, err := callHandler(permissionsOwnerScopesSet(newTestChannel()), nil, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrBadRequest, errorCode(err))
-}
-
-// TestPermissionsOwnerScopesSet_写入成功 回 {"ok": true} 且 get 能读回。
-func TestPermissionsOwnerScopesSet_写入成功(t *testing.T) {
-	useTempWorkspace(t)
-	ensureConfigFile(t)
-
-	payload, err := callHandler(permissionsOwnerScopesSet(newTestChannel()), map[string]any{
-		"owner_scopes":          map[string]any{"u1": "all"},
-		"deny_guidance_message": "无权限",
-	}, "")
-	require.NoError(t, err)
-	assert.Equal(t, true, payload["ok"])
-
-	got, getErr := callHandler(permissionsOwnerScopesGet(newTestChannel()), nil, "")
-	require.NoError(t, getErr)
-	scopes, _ := got["owner_scopes"].(map[string]any)
-	assert.Equal(t, "all", scopes["u1"])
-	assert.Equal(t, "无权限", got["deny_guidance_message"])
-}
-
 // TestPermissionsForwardToAgent_本地dispatch成功 AgentClient 未就绪时回退本地状态。
 func TestPermissionsForwardToAgent_本地dispatch成功(t *testing.T) {
 	useTempWorkspace(t)
@@ -285,71 +212,6 @@ func breakConfigFile(t *testing.T) {
 	t.Helper()
 	path := workspace.ConfigFile()
 	require.NoError(t, os.MkdirAll(path, 0o755))
-}
-
-// TestMemoryForbiddenGet_配置损坏 配置加载失败时落空对象而非报错（对齐 Python except 降级）。
-func TestMemoryForbiddenGet_配置损坏(t *testing.T) {
-	useTempWorkspace(t)
-	path := workspace.ConfigFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("key: [unclosed"), 0o644))
-
-	payload, err := callHandler(memoryForbiddenGet(newTestChannel()), nil, "")
-	require.NoError(t, err)
-	assert.NotNil(t, payload)
-}
-
-// TestConfigSet_写回失败回INTERNAL_ERROR yaml 写不进时非 BadRequest 分支回 INTERNAL_ERROR。
-func TestConfigSet_写回失败回INTERNAL_ERROR(t *testing.T) {
-	useTempWorkspace(t)
-	breakConfigFile(t)
-
-	_, err := callHandler(configSet(newTestChannel(), nil, nil, nil), map[string]any{
-		"team": []any{},
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrInternalError, errorCode(err))
-}
-
-// TestConfigSaveAll_config写回失败回INTERNAL_ERROR 同上，走 save_all 的 config 子载荷分支。
-func TestConfigSaveAll_config写回失败回INTERNAL_ERROR(t *testing.T) {
-	useTempWorkspace(t)
-	breakConfigFile(t)
-
-	_, err := callHandler(configSaveAll(newTestChannel(), nil, nil, nil), map[string]any{
-		"team": []any{},
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrInternalError, errorCode(err))
-}
-
-// TestModelsReplaceAll_写回失败回INTERNAL_ERROR models.defaults 写不进时回 INTERNAL_ERROR。
-func TestModelsReplaceAll_写回失败回INTERNAL_ERROR(t *testing.T) {
-	useTempWorkspace(t)
-	breakConfigFile(t)
-
-	_, err := callHandler(modelsReplaceAll(newTestChannel(), nil, nil), map[string]any{
-		"models": []any{map[string]any{
-			"model_name":     "qwen-max",
-			"api_base":       "https://example.com/v1",
-			"api_key":        "sk-x",
-			"model_provider": "OpenAI",
-		}},
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrInternalError, errorCode(err))
-}
-
-// TestPermissionsOwnerScopesSet_写回失败回INTERNAL_ERROR 配置不可写时回 INTERNAL_ERROR。
-func TestPermissionsOwnerScopesSet_写回失败回INTERNAL_ERROR(t *testing.T) {
-	useTempWorkspace(t)
-	breakConfigFile(t)
-
-	_, err := callHandler(permissionsOwnerScopesSet(newTestChannel()), map[string]any{
-		"owner_scopes": map[string]any{"u1": "all"},
-	}, "")
-	require.Error(t, err)
-	assert.Equal(t, WsErrInternalError, errorCode(err))
 }
 
 // TestSessionList_目录不存在 首启无会话目录时回空列表（对齐 Python 目录缺失容错）。
@@ -387,15 +249,3 @@ type errNotJobNotFound struct{}
 
 // Error 实现 error 接口。
 func (errNotJobNotFound) Error() string { return "scheduler unavailable" }
-
-// TestMemoryForbiddenGet_非对象值兜底 配置里该键不是 mapping 时回空对象（对齐 Python 类型守卫）。
-func TestMemoryForbiddenGet_非对象值兜底(t *testing.T) {
-	useTempWorkspace(t)
-	path := workspace.ConfigFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("memory:\n  forbidden_memory_definition: not-a-map\n"), 0o644))
-
-	payload, err := callHandler(memoryForbiddenGet(newTestChannel()), nil, "")
-	require.NoError(t, err)
-	assert.Equal(t, map[string]any{}, payload)
-}

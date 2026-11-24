@@ -3,12 +3,21 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 )
+
+// logComponentAgentServer server 包配置分派日志组件。
+const logComponentAgentServer = logger.ComponentAgentServer
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -102,6 +111,187 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 			"reloaded": true,
 		}),
 	), nil
+}
+
+// handleConfigPanelRequest 配置面板 RPC 分派（27.4；Python: config_adapter.py:175
+// ConfigAdapter.handle）。分支顺序与 Python 一致：CONFIG_MOA_STATUS →
+// MODELS_ZEN_ENTRIES → MODELS_ZEN_WARM → LOCALE_GET/SET → PATH_GET/SET →
+// PERMISSIONS_OWNER_SCOPES_GET/SET → MEMORY_FORBIDDEN_GET/SET →
+// config.get/set/save_all/validate_model、models.list/validate/replace_all。
+// 写链（config.set/save_all/validate_model、locale.set_conf、models.validate/
+// replace_all、memory/permissions 的 set）随 configpanel 写入层落地，未落地前
+// 进入 default 回 BAD_REQUEST（IMPLEMENTATION_PLAN.md 27.4 行 ⤵️ 登记）。
+// command.model 按 spec D-1 豁免（既有 handleCommandModel 为 TUI 独立链，不属本分派）。
+func (s *AgentServer) handleConfigPanelRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params map[string]any
+	if len(request.Params) > 0 {
+		_ = json.Unmarshal(request.Params, &params)
+	}
+	okResp := func(payload map[string]any) *schema.AgentResponse {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(payload))
+	}
+
+	// Python: config_adapter.py:180-189 CONFIG_MOA_STATUS → moa_status(get_config(), selection)。
+	// 依赖 moa_runtime（build_moa_runtime/resolve_moa_settings，Python
+	// server/runtime/moa_runtime.py 222 行），Go 侧无对应物 → 本批按 Python
+	// except 兜底形返回 {"configured": false}；缺口在 IMPLEMENTATION_PLAN.md
+	// 27.4 行登记 ⤵️ 待回填（回填点=MOA 运行时域落地节）。
+	if request.ReqMethod == schema.ReqMethodConfigMoaStatus {
+		return okResp(map[string]any{"configured": false}), nil
+	}
+
+	// Python: config_adapter.py:191-200 MODELS_ZEN_ENTRIES → public_zen_free_model_rows()
+	if request.ReqMethod == schema.ReqMethodModelsZenEntries {
+		return okResp(map[string]any{"models": configpanel.PublicZenFreeModelRows()}), nil
+	}
+	// Python: config_adapter.py:202-210 MODELS_ZEN_WARM → warm_zen_free_models(reason="config-toggle")
+	if request.ReqMethod == schema.ReqMethodModelsZenWarm {
+		configpanel.WarmZenFreeModels("config-toggle", false)
+		return okResp(map[string]any{"ok": true}), nil
+	}
+
+	// Python: config_set_handlers.py:2224 _config_set / :2233 _config_save_all
+	// （apply_config_payload + apply_config_change_set）。
+	if request.ReqMethod == schema.ReqMethodConfigSet || request.ReqMethod == schema.ReqMethodConfigSaveAll {
+		force := request.ReqMethod == schema.ReqMethodConfigSaveAll
+		result, applyErr := configpanel.ApplyConfigSet(ctx, params, resolveServerCrypto())
+		if applyErr != nil {
+			return applyErrorResponse(request, applyErr), nil
+		}
+		if err := configpanel.CommitPendingPermissionProfile(result); err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		changeSet := configpanel.ConfigChangeSet{
+			EnvUpdates:  result.EnvUpdates,
+			YAMLUpdated: result.YAMLUpdated,
+			Force:       force,
+		}
+		// Python: apply_config_change_set → _clear_agent_config_cache / on_config_saved
+		// （AgentServer 进程内直调 AgentManager 重载，对齐 reload_options 语义）
+		scopes := changeSet.ReloadScopes()
+		if changeSet.Changed() && configpanel.NeedsAgentReload(scopes) {
+			opts := rt.ReloadOptions{ReloadScopes: scopes}
+			if err := s.agentManager.ReloadAgentsConfig(ctx, nil, result.EnvUpdates, opts); err != nil {
+				logger.Warn(logComponentAgentServer).Err(err).Msg("config reload after save failed")
+			}
+		}
+		payload := map[string]any{"ok": true}
+		if result.CanonicalConfig != nil {
+			for k, v := range result.CanonicalConfig {
+				payload[k] = v
+			}
+		}
+		return okResp(payload), nil
+	}
+
+	// Python: models_handlers.py:803/667/911 models.list / models.validate /
+	// config.validate_model / models.replace_all（实现在 configpanel 包单文件）
+	if request.ReqMethod == schema.ReqMethodModelsList {
+		return okResp(configpanel.ModelsListPayload(s.configData())), nil
+	}
+	if request.ReqMethod == schema.ReqMethodModelsValidate || request.ReqMethod == schema.ReqMethodConfigValidateModel {
+		payload, err := configpanel.ModelsValidate(ctx, params)
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(payload), nil
+	}
+	if request.ReqMethod == schema.ReqMethodModelsReplaceAll {
+		payload, err := configpanel.ModelsReplaceAll(ctx, params, resolveServerCrypto(),
+			func() error {
+				// Python: _apply_models_change(["models.defaults"], force=True)
+				return s.agentManager.ReloadAgentsConfig(ctx, nil, nil, rt.ReloadOptions{ReloadScopes: []string{"model"}})
+			})
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(payload), nil
+	}
+
+	// Python: config_adapter.py:212-236 LOCALE_SET_CONF
+	if request.ReqMethod == schema.ReqMethodLocaleSetConf {
+		if err := configpanel.LocaleSetConf(params); err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(map[string]any{"preferred_language": orStr(params["preferred_language"])}), nil
+	}
+	// Python: config_adapter.py:333-388 PATH_SET（decision 族字段 ⤵️ 待回填）
+	if request.ReqMethod == schema.ReqMethodPathSet {
+		chromePath, headless, err := configpanel.PathSet(params)
+		if err != nil {
+			return applyErrorResponse(request, err), nil
+		}
+		return okResp(map[string]any{"chrome_path": chromePath, "headless": headless}), nil
+	}
+	// Python: config_adapter.py:393-427 PERMISSIONS_OWNER_SCOPES_GET/SET
+	if request.ReqMethod == schema.ReqMethodPermissionsOwnerScopesGet {
+		return okResp(configpanel.GetPermissionsOwnerScopes()), nil
+	}
+	if request.ReqMethod == schema.ReqMethodPermissionsOwnerScopesSet {
+		if params == nil {
+			return applyErrorResponse(request, &configpanel.ConfigPanelBadRequest{Message: "params must be object"}), nil
+		}
+		configpanel.UpdatePermissionsOwnerScopes(params["owner_scopes"], params["deny_guidance_message"])
+		// Python: A5 写入后 server 侧 in-process reload（reload_scopes=["permissions"]）
+		if err := s.agentManager.ReloadAgentsConfig(ctx, nil, nil, rt.ReloadOptions{ReloadScopes: []string{"permissions"}}); err != nil {
+			logger.Warn(logComponentAgentServer).Err(err).Msg("permissions scope reload failed")
+		}
+		return okResp(map[string]any{"ok": true, "applied_without_restart": true}), nil
+	}
+	// Python: config_adapter.py:431-446 MEMORY_FORBIDDEN_SET
+	if request.ReqMethod == schema.ReqMethodMemoryForbiddenSet {
+		if params == nil {
+			return applyErrorResponse(request, &configpanel.ConfigPanelBadRequest{Message: "params must be object"}), nil
+		}
+		configpanel.MemoryForbiddenSet(params)
+		return okResp(map[string]any{"ok": true}), nil
+	}
+
+	// 其余读链方法经 control.HandleConfigRequest 分派（config.get / locale.get_conf /
+	// path.get / memory.forbidden.get；其余 unsupported → BAD_REQUEST）。
+	payload, readErr := control.HandleConfigRequest(string(request.ReqMethod), params)
+	if readErr != nil {
+		return applyErrorResponse(request, readErr), nil
+	}
+	return okResp(payload), nil
+}
+
+// orStr any→string（nil 回空串）。
+func orStr(v any) string {
+	if s, isStr := v.(string); isStr {
+		return s
+	}
+	return ""
+}
+
+// applyErrorResponse 错误分类响应：400 类回 ok=false+error 文案，500 类同形
+// （Python build_error_response / ConfigPanelBadRequest→BAD_REQUEST、
+// ConfigPanelInternalError→INTERNAL_ERROR）。
+func applyErrorResponse(request *schema.AgentRequest, err error) *schema.AgentResponse {
+	code := "INTERNAL_ERROR"
+	var badReq *configpanel.ConfigPanelBadRequest
+	if errors.As(err, &badReq) {
+		code = "BAD_REQUEST"
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(false),
+		schema.WithPayload(map[string]any{"error": err.Error(), "code": code}))
+}
+
+// configData 取当前配置表（serverCatalog 同源）。
+func (s *AgentServer) configData() map[string]any {
+	data, err := s.config.Load()
+	if err != nil {
+		return map[string]any{}
+	}
+	return data
+}
+
+// resolveServerCrypto server 侧 crypto provider（Python: _get_crypto_provider
+// 经 common 钩子取，未注册回 nil → 明文落库，spec D-3）。
+func resolveServerCrypto() crypto.CryptoProvider {
+	return crypto.GetCryptoProvider()
 }
 
 // anyMapToStringMap 将 map[string]any 转为 map[string]string，

@@ -158,7 +158,7 @@ func TestBuildHeartbeatRail_门控矩阵(t *testing.T) {
 	view7.ChannelID = "web"
 	out7, err7 := provider(nil, view7)
 	require.NoError(t, err7)
-	// 15.20 ⑫：骨架已回填——正常渠道返回 rail（工具注册缝 ⤴️9.11b）
+	// 15.20 ⑫：骨架已回填——正常渠道返回 rail（工具注册缝 ⤴️16.4）
 	require.NotNil(t, out7, "service/context 绑定段已随 15.20 ⑫ 回填")
 	hb := out7.(*coderails.HeartbeatRail)
 	assert.Equal(t, "web", hb.ToolContext()["channel_id"])
@@ -285,8 +285,10 @@ func TestBuildSymphonyOrchestration_leaderOnly(t *testing.T) {
 	assert.Nil(t, out)
 }
 
-// TestBuildSkillRetrievalPrompt_开关门控 检索开关门控（9.11b 缝）。
+// TestBuildSkillRetrievalPrompt_开关门控 检索开关门控（9.11b 桩缝已随
+// 16.4b 转真身：开关开产出 SkillRetrievalPromptRail，关返回 nil）。
 func TestBuildSkillRetrievalPrompt_开关门控(t *testing.T) {
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
 	providers.RegisterMemberRailProviders()
 	provider, ok := hschema.LookupRailProvider("swarm.skill_retrieval_prompt")
 	require.True(t, ok)
@@ -295,7 +297,7 @@ func TestBuildSkillRetrievalPrompt_开关门控(t *testing.T) {
 	view.Config = map[string]any{"skill_retrieval": map[string]any{"enabled": true}}
 	out, err := provider(nil, view)
 	require.NoError(t, err)
-	assert.Nil(t, out, "开关开但基座 ⤴️9.11b，返回 nil")
+	assert.NotNil(t, out, "开关开 → 16.4b 真身 rail")
 
 	view.Config = map[string]any{}
 	out2, err2 := provider(nil, view)

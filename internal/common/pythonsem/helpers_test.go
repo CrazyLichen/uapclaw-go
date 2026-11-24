@@ -129,3 +129,54 @@ func TestMapValue(t *testing.T) {
 		t.Fatal("MapValue 语义错误")
 	}
 }
+
+// TestPyStr_str语义 str() 与 repr() 分野：str 原样、bool/None/数值、容器回退 repr
+func TestPyStr_str语义(t *testing.T) {
+	if PyStr("s") != "s" {
+		t.Fatal("str 应原样不加引号")
+	}
+	if PyStr(true) != "True" || PyStr(nil) != "None" || PyStr(8080) != "8080" {
+		t.Fatal("标量 str 漂移")
+	}
+	if PyStr(2.0) != "2.0" {
+		t.Fatal("float str 应走 PyFloatRepr")
+	}
+	if PyStr([]any{"a"}) != "['a']" {
+		t.Fatal("容器 str 应回退 repr")
+	}
+}
+
+// TestValidateAndConvertType 复刻 Python questioner_comp.py validate_and_convert_type
+// :309-377 的四类转换语义（bool≠int、整值 float 才算 int、str 解析、未知类型回落 str）
+func TestValidateAndConvertType(t *testing.T) {
+	cases := []struct {
+		val  any
+		typ  string
+		want any
+		ok   bool
+	}{
+		{nil, "string", nil, false},          // Python :322-323
+		{"abc", "string", "abc", true},       // str(value)
+		{123, "string", "123", true},
+		{true, "integer", nil, false},        // bool≠int :332-334
+		{int64(5), "integer", int64(5), true},
+		{5.0, "integer", int64(5), true},     // 整值 float :337-340
+		{5.5, "integer", nil, false},
+		{" 7 ", "integer", int64(7), true},   // str 解析 :342-345
+		{"x", "integer", nil, false},
+		{true, "number", nil, false},         // :350-351
+		{int64(3), "number", 3.0, true},      // :352-353
+		{2.5, "number", 2.5, true},
+		{"3.5", "number", 3.5, true},
+		{true, "boolean", true, true},        // :361-362
+		{" True ", "boolean", true, true},    // strip+lower :363-368
+		{"yes", "boolean", nil, false},
+		{int64(9), "unknown", "9", true},     // 未知类型回落 str :372-374
+	}
+	for _, c := range cases {
+		got, ok := ValidateAndConvertType(c.val, c.typ)
+		if ok != c.ok || (ok && !PyDeepEqual(got, c.want)) {
+			t.Errorf("ValidateAndConvertType(%v,%q) = (%v,%v), want (%v,%v)", c.val, c.typ, got, ok, c.want, c.ok)
+		}
+	}
+}

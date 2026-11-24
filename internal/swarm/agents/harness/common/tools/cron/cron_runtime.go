@@ -3,6 +3,7 @@ package cronbridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -49,10 +50,31 @@ type CronRuntimeBridge struct {
 	mu sync.Mutex
 }
 
+// restrictedCronBackend 禁止变更类 cron 操作的 backend 包装。
+// Python: _RestrictedCronBackend（cron_runtime.py:937-984）——create/update
+// 按开关拒绝，其余操作经接口嵌入委托内层 backend（Python __getattr__ 等价物）。
+type restrictedCronBackend struct {
+	// inner 内层 backend（其余操作委托）
+	agentcron.CronToolBackend
+	// allowCreate 是否允许 create_job
+	allowCreate bool
+	// allowUpdate 是否允许 update_job
+	allowUpdate bool
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件
 const logComponent = logger.ComponentAgentCore
+
+const (
+	// restrictedCreateMessage create 拒绝文案（Python :956-958 逐字节）。
+	restrictedCreateMessage = "Creating new cron jobs from a cron session is not allowed; " +
+		"manage existing jobs (list/get/delete/toggle/run) instead"
+	// restrictedUpdateMessage update 拒绝文案（Python :973-975 逐字节）。
+	restrictedUpdateMessage = "Updating cron jobs from a cron session is not allowed; " +
+		"manage existing jobs (list/get/delete/toggle/run) instead"
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -181,6 +203,16 @@ func (b *CronRuntimeBridge) EnsureSchedulerStarted() {
 // BuildTools 构建 cron 工具集。
 // 对齐 Python: build_tools（create_cron_tools 调用 agentcore 工厂）。
 func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agentID string, language string) []tool.Tool {
+	return b.BuildToolsWithPolicy(cronCtx, agentID, language, true, true)
+}
+
+// BuildToolsWithPolicy 按开关构建 cron 工具。
+// Python: build_tools（:1060-1103）——allowCreate/allowUpdate 任一关闭时
+// 经 _RestrictedCronBackend 包装 backend（create/update 运行时拒绝），
+// 并下架独立工具 cron_create_job / cron_update_job；统一 cron 工具保留
+// （list/get 等管理能力仍可用），schema 层摘除被禁动作由 CreateCronTools
+// 分发层在受限 backend 上报错承接。
+func (b *CronRuntimeBridge) BuildToolsWithPolicy(cronCtx *agentcron.CronToolContext, agentID string, language string, allowCreate, allowUpdate bool) []tool.Tool {
 	backend := b.GetBackend()
 	if backend == nil {
 		logger.Warn(logComponent).Msg("[CronRuntimeBridge] cron backend is not ready, skip builtin cron tools")
@@ -189,8 +221,12 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 	logger.Info(logComponent).
 		Str("tool_scope", cronCtx.ToolScope()).
 		Msg("[CronRuntimeBridge] Building cron tools for context")
+	effectiveBackend := backend
+	if !allowCreate || !allowUpdate {
+		effectiveBackend = NewRestrictedCronBackend(backend, allowCreate, allowUpdate)
+	}
 	tools := agentcron.CreateCronTools(
-		backend,
+		effectiveBackend,
 		cronCtx,
 		language,
 		gwcron.AllTargetChannels(),
@@ -198,6 +234,25 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 		true,
 		agentID,
 	)
+	// cron 执行会话下架的独立工具：cron_create_job / cron_update_job
+	// （Python :1093-1100）。
+	disabledToolNames := map[string]struct{}{}
+	if !allowCreate {
+		disabledToolNames["cron_create_job"] = struct{}{}
+	}
+	if !allowUpdate {
+		disabledToolNames["cron_update_job"] = struct{}{}
+	}
+	if len(disabledToolNames) > 0 {
+		kept := make([]tool.Tool, 0, len(tools))
+		for _, tl := range tools {
+			if _, disabled := disabledToolNames[tl.Card().Name]; disabled {
+				continue
+			}
+			kept = append(kept, tl)
+		}
+		tools = kept
+	}
 	// 尾部汇总（对齐 Python L396-398 "Built %d cron tools: %s"）
 	names := make([]string, 0, len(tools))
 	for _, tl := range tools {
@@ -205,9 +260,71 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 	}
 	logger.Info(logComponent).
 		Int("count", len(tools)).
+		Bool("create_enabled", allowCreate).
+		Bool("update_enabled", allowUpdate).
 		Strs("tools", names).
 		Msg("[CronRuntimeBridge] Built cron tools")
 	return tools
+}
+
+// NewRestrictedCronBackend 包装内层 backend 为受限视图。
+// Python: _RestrictedCronBackend.__init__。
+func NewRestrictedCronBackend(inner agentcron.CronToolBackend, allowCreate, allowUpdate bool) agentcron.CronToolBackend {
+	return &restrictedCronBackend{
+		CronToolBackend: inner,
+		allowCreate:     allowCreate,
+		allowUpdate:     allowUpdate,
+	}
+}
+
+// IsRestrictedCronBackend 判定 backend 是否受限视图。
+// Python: type(backend) is _RestrictedCronBackend（readonly_tool_bindings.py:288）
+// 的等价物——Go 无 `type(x) is` 语法，以类型断言相等替代（语言边界偏差，
+// 行为等价；登记 spec §7）。
+func IsRestrictedCronBackend(backend agentcron.CronToolBackend) bool {
+	_, ok := backend.(*restrictedCronBackend)
+	return ok
+}
+
+// RestrictedInnerBackend 取受限视图的内层 backend（未包装时原样返回）。
+// Python: readonly_tool_bindings 的 delegate 挖取（:288-300 校验链）。
+func RestrictedInnerBackend(backend agentcron.CronToolBackend) agentcron.CronToolBackend {
+	if restricted, ok := backend.(*restrictedCronBackend); ok {
+		return restricted.CronToolBackend
+	}
+	return backend
+}
+
+// RestrictedPolicy 取受限视图的开关（未包装时全允许）。
+func RestrictedPolicy(backend agentcron.CronToolBackend) (allowCreate, allowUpdate bool, isRestricted bool) {
+	if restricted, ok := backend.(*restrictedCronBackend); ok {
+		return restricted.allowCreate, restricted.allowUpdate, true
+	}
+	return true, true, false
+}
+
+// CreateJob 按开关拒绝或委托（受限视图覆写）。
+// Python: create_job（:951-961）——不允许时抛 ValueError，params/context
+// 显式丢弃（_ = (params, context)）。
+func (r *restrictedCronBackend) CreateJob(ctx context.Context, params map[string]any, cronCtx *agentcron.CronToolContext) (map[string]any, error) {
+	if !r.allowCreate {
+		_ = params
+		_ = cronCtx
+		return nil, errors.New(restrictedCreateMessage)
+	}
+	return r.CronToolBackend.CreateJob(ctx, params, cronCtx)
+}
+
+// UpdateJob 按开关拒绝或委托（受限视图覆写）。
+// Python: update_job（:963-980）。
+func (r *restrictedCronBackend) UpdateJob(ctx context.Context, jobID string, patch map[string]any, cronCtx *agentcron.CronToolContext) (map[string]any, error) {
+	if !r.allowUpdate {
+		_ = jobID
+		_ = patch
+		_ = cronCtx
+		return nil, errors.New(restrictedUpdateMessage)
+	}
+	return r.CronToolBackend.UpdateJob(ctx, jobID, patch, cronCtx)
 }
 
 // ──────────────────────────── 非导出函数（backend 11 方法） ────────────────────────────

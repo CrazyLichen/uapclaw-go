@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"context"
 	"errors"
 	"testing"
@@ -368,11 +369,11 @@ func (f *fakeCoordinator) QuiesceSession(
 
 // RunStream/RunTeamStream 接口扩展后的 fake 兜底（fake 接线用例不覆盖流式执行）。
 func (f *fakeCoordinator) RunStream(context.Context, string, string, sessionpkg.SessionWorkKind,
-	func(context.Context) (<-chan any, error), sessionpkg.StreamOptions, func(any) bool) error {
+	func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error), sessionpkg.StreamOptions, func(*swarmschema.AgentResponseChunk) bool) error {
 	return nil
 }
 
 func (f *fakeCoordinator) RunTeamStream(context.Context, string, string, sessionpkg.SessionWorkKind,
-	func(context.Context, sessionpkg.TeamExecutionContext) (<-chan any, error), sessionpkg.StreamOptions, func(any) bool) error {
+	func(context.Context, sessionpkg.TeamExecutionContext) (<-chan *swarmschema.AgentResponseChunk, error), sessionpkg.StreamOptions, func(*swarmschema.AgentResponseChunk) bool) error {
 	return nil
 }

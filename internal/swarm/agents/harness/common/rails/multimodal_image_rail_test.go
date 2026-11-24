@@ -149,3 +149,14 @@ func newMemModelContextForImage() *imageStubModelContext {
 	))
 	return &imageStubModelContext{messages: []llmschema.BaseMessage{msg}}
 }
+
+// TestMultimodalImageRail_InitUninit 补齐 Init/Uninit 覆盖（15.20 遗留）。
+func TestMultimodalImageRail_InitUninit(t *testing.T) {
+	rail := &MultimodalImageRail{}
+	if err := rail.Init(context.Background(), nil); err != nil {
+		t.Fatalf("Init 应无错: %v", err)
+	}
+	if err := rail.Uninit(nil); err != nil {
+		t.Fatalf("Uninit 应无错: %v", err)
+	}
+}

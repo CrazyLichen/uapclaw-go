@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"reflect"
 	"context"
 	"strings"
 
@@ -99,6 +100,10 @@ func CreateCronTools(
 	// 1. 统一 cron 工具（使用 MapFunction）
 	// Python: L243-248: LocalFunction(card=build_tool_card("cron", ...), func=cron_tool_wrapper)
 	cronCard, _ := ptools.BuildToolCard("cron", "cron_"+scope, language, nil, finalAgentID)
+	// V-6 绑定身份锚点：backend/cronCtx 显式登记到卡片属性（Python 侧经
+	// _closure(func, create_cron_tools, ...) 挖闭包；Go 函数闭包不可枚举，
+	// 以装配期登记等价替代，行为等价——登记 spec 已知偏差）。
+	cronCard.Properties = map[string]any{"cron_backend": backend, "cron_context": cronCtx}
 	cronFn := func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
 		return dispatchCronAction(ctx, backend, inputs, cronCtx)
 	}
@@ -121,6 +126,8 @@ func CreateCronTools(
 		}
 		return map[string]any{"jobs": jobs}, nil
 	}
+	registerCardProperties(listFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
+	registerCardProperties(listFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_list_jobs", scope, language, finalAgentID, listFn, nil))
 
 	// cron_get_job — 对齐 Python L225-227: get_job_wrapper(job_id)
@@ -131,6 +138,7 @@ func CreateCronTools(
 		}
 		return map[string]any{"job": job}, nil
 	}
+	registerCardProperties(getFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_get_job", scope, language, finalAgentID, getFn, nil))
 
 	// cron_create_job — 对齐 Python L228-230: create_job_wrapper(**kwargs)
@@ -151,6 +159,7 @@ func CreateCronTools(
 		}
 		return created, nil
 	}
+	registerCardProperties(createFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_create_job", scope, language, finalAgentID, createFn, tgtSchema))
 
 	// cron_update_job — 对齐 Python L231-233: update_job_wrapper(job_id, patch)
@@ -161,6 +170,7 @@ func CreateCronTools(
 		}
 		return updated, nil
 	}
+	registerCardProperties(updateFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_update_job", scope, language, finalAgentID, updateFn, nil))
 
 	// cron_delete_job — 对齐 Python L234-236: delete_job_wrapper(job_id)
@@ -171,6 +181,7 @@ func CreateCronTools(
 		}
 		return map[string]any{"deleted": deleted}, nil
 	}
+	registerCardProperties(deleteFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_delete_job", scope, language, finalAgentID, deleteFn, nil))
 
 	// cron_toggle_job — 对齐 Python L237-239: toggle_job_wrapper(job_id, enabled)
@@ -181,6 +192,7 @@ func CreateCronTools(
 		}
 		return toggled, nil
 	}
+	registerCardProperties(toggleFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_toggle_job", scope, language, finalAgentID, toggleFn, nil))
 
 	// cron_preview_job — 对齐 Python L240-242: preview_job_wrapper(job_id, count=5)
@@ -195,6 +207,7 @@ func CreateCronTools(
 		}
 		return map[string]any{"runs": runs}, nil
 	}
+	registerCardProperties(previewFn, map[string]any{cronBackendPropertiesKey: backend, cronContextPropertiesKey: cronCtx})
 	result = append(result, makeLegacyTool("cron_preview_job", scope, language, finalAgentID, previewFn, nil))
 
 	return result
@@ -240,8 +253,37 @@ func makeLegacyTool[I any](
 		}
 	}
 
+	if properties, hasProperties := cardPropertiesOf(fn); hasProperties {
+		if card.Properties == nil {
+			card.Properties = map[string]any{}
+		}
+		for key, value := range properties {
+			card.Properties[key] = value
+		}
+	}
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
+}
+
+// cronBackendPropertiesKey 闭包 backend 身份在卡片属性中的键名。
+const cronBackendPropertiesKey = "cron_backend"
+
+// cronContextPropertiesKey 调用上下文在卡片属性中的键名。
+const cronContextPropertiesKey = "cron_context"
+
+// cardPropertiesOf 从工具函数的注册闭包中挖取身份属性。
+// Go 无法枚举闭包捕获；改用包级登记表：factory 内每个闭包构造时登记自身
+// backend/context，此处按函数指针取回（V-6 绑定链，行为等价于 Python 的
+// closure 挖取）。
+var cardPropertyRegistry = map[uintptr]map[string]any{}
+
+func registerCardProperties(fn any, properties map[string]any) {
+	cardPropertyRegistry[reflect.ValueOf(fn).Pointer()] = properties
+}
+
+func cardPropertiesOf(fn any) (map[string]any, bool) {
+	properties, ok := cardPropertyRegistry[reflect.ValueOf(fn).Pointer()]
+	return properties, ok
 }
 
 // targetSchema 构造 targets 字段的 JSON Schema。

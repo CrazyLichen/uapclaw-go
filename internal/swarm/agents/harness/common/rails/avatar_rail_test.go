@@ -434,3 +434,12 @@ func TestAvatarPromptRail_嵌入DeepAgentRail(t *testing.T) {
 	// 确认嵌入的 DeepAgentRail 可以当作 *rails.DeepAgentRail 使用
 	_ = (*rails.DeepAgentRail)(&rail.DeepAgentRail)
 }
+
+// TestAvatarRail_GetCallbacks 补齐回调分发覆盖（15.20 遗留）。
+func TestAvatarRail_GetCallbacks(t *testing.T) {
+	rail := &AvatarPromptRail{}
+	callbacks := rail.GetCallbacks()
+	if _, ok := callbacks[agentinterfaces.CallbackBeforeModelCall]; !ok {
+		t.Fatal("应注册 BeforeModelCall 回调")
+	}
+}

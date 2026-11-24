@@ -97,6 +97,9 @@ const (
 	StoreTypeChroma StoreType = "chroma"
 	// StoreTypePGVector PGVector 向量库
 	StoreTypePGVector StoreType = "pgvector"
+	// StoreTypeSqlite SQLite 向量库（Go 侧私有 provider，spec D-25-7：
+	// 上游无此类型；FTS5 bm25 + sqlite-vec dense；回收条件见 spec）
+	StoreTypeSqlite StoreType = "sqlite"
 )
 
 const (
@@ -130,6 +133,7 @@ var (
 		StoreTypeMilvus:   true,
 		StoreTypeChroma:   true,
 		StoreTypePGVector: true,
+		StoreTypeSqlite:   true, // Go 侧私有 provider（spec D-25-7）
 	}
 	// validDistanceMetrics 有效的距离度量集合
 	validDistanceMetrics = map[DistanceMetricKind]bool{

@@ -511,6 +511,8 @@ var ToolWhitelist = map[string]bool{
 	"generate_image": true, "audio_transcription": true, "audio_question_answering": true,
 	"audio_metadata": true, "video_understanding": true, "search_skill": true,
 	"install_skill": true, "uninstall_skill": true, "user_todos": true,
+	// "skill_index" Python TOOL_WHITELIST :127——16.4b 实施对齐补录（此前缺失）。
+	"skill_index": true,
 	"get_user_location": true, "create_note": true, "search_notes": true,
 	"modify_note": true, "create_calendar_event": true, "search_calendar_event": true,
 	"search_contact": true, "search_photo_gallery": true, "upload_photo": true,

@@ -250,8 +250,15 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 	compressionPrompt := fillTemplate(template, templateKV{key: "history", value: rawText})
 
 	// Python L369-373: invoke(model=..., SystemMessage, temperature=构造期已固定 0.0)
+	// D-25-10 有意偏差（用户拍板 2026-11-24）：Python 为 system-only 单条消息，
+	// 部分兼容端点（如 zhipu 免费 1214）拒 system-only——追加 user 消息承载
+	// history 原文保证端点通用性；system 内提示词保持 Python 字节形态不变。
+	// 回收条件：上游修改消息形态时跟随。
 	resp, err := q.llm.Invoke(ctx,
-		model_clients.NewMessagesParam(llmschema.NewSystemMessage(compressionPrompt)),
+		model_clients.NewMessagesParam(
+			llmschema.NewSystemMessage(compressionPrompt),
+			llmschema.NewUserMessage(rawText),
+		),
 		model_clients.WithInvokeTemperature(0.0))
 	if err != nil {
 		// Python L374-379: 155605
@@ -373,8 +380,14 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 	)
 
 	// Python L484-488: invoke（temperature 构造期已固定 0.0）
+	// D-25-10 有意偏差（用户拍板 2026-11-24）：system-only → system(prompt)+user(query)
+	// 双消息，端点通用性（zhipu 1214 实证拒 system-only）；system 内提示词保持
+	// Python 字节形态不变，user 承载原始 query。回收条件：上游修改消息形态时跟随。
 	resp, err := q.llm.Invoke(ctx,
-		model_clients.NewMessagesParam(llmschema.NewSystemMessage(completionPrompt)),
+		model_clients.NewMessagesParam(
+			llmschema.NewSystemMessage(completionPrompt),
+			llmschema.NewUserMessage(query),
+		),
 		model_clients.WithInvokeTemperature(0.0))
 	if err != nil {
 		// Python L489-494: 155605

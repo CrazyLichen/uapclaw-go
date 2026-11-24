@@ -130,8 +130,8 @@ func (s *RunnerLifeCycleSuite) TestRunner_注销Tool_不可获取() {
 //
 // 对齐 Python: test_runner.py test_runner_agent_resource_management（@skip 状态）。
 // 注：Python 原测试的交互中断恢复部分（Questioner __interaction__ → 二次调用恢复）
-// 依赖 WorkflowAgent/IntentDetection/Questioner（计划 8.14-8.24 未移植，A 类缺口），
-// 此处对齐其资源管理核心链路；交互恢复场景待工作流组件移植后补充。
+// 已随 8.24 QuestionerComp 移植补齐（tests/integration/agentcore/workflow_questioner
+// 端到端中断恢复用例）。
 func (s *RunnerLifeCycleSuite) TestRunner_Agent资源管理_完整生命周期() {
 	rm := s.GetResourceMgr()
 	s.Require().NotNil(rm)

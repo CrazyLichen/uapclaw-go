@@ -39,7 +39,10 @@
 //	├── mcp_command_other.go      # 非 Windows 平台进程组实现 + Windows 函数桩（build tag 隔离）
 //	├── command_runtime.go        # 命令工作目录运行时契约（9.90d-1 Task 2）
 //	├── pdf_tools.go              # read_pdf 页级 PDF 读取（9.90d-1 Task 6）
-//	└── todo_compat.go            # compatibleUpdateTodos + NewCompatibleTodoModifyTool
+//	├── todo_compat.go            # compatibleUpdateTodos + NewCompatibleTodoModifyTool
+//	├── tool_discovery_catalog.go # 内置工具双语检索投影表（9.11b；tool_discovery_catalog.py）
+//	├── tool_retrieval_toolkits.go# ToolRetrievalToolkit 静态分类表 + tool_search（9.11b）
+//	└── skill_retrieval_toolkits.go# SkillRetrievalToolkit 会话技能检索装配（16.4b；skill_retrieval_toolkits.py）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/tools/
 package tools

@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -156,9 +157,9 @@ type SwarmBuildContext struct {
 	HeartbeatJobService HeartbeatJobService
 	// Config 已解析 config.yaml（context.py:124）
 	Config map[string]any
-	// SkillRetrievalToolkit 成员级 Symphony 发现运行时（context.py:125，
-	// Go 侧 skill_index 消费面 ⤴️，暂以 any 占位）
-	SkillRetrievalToolkit any
+	// SkillRetrievalToolkit 成员级 Symphony 发现运行时（context.py:125）。
+	// 16.4b 兑现：any 占位收窄为具体类型（15.16c 回填项闭合）。
+	SkillRetrievalToolkit *swarmtools.SkillRetrievalToolkit
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
