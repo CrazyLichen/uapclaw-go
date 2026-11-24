@@ -103,7 +103,7 @@ func (s *SkillRetrievalSuite) TestProgressiveSmallFull() {
 	s.Assert().Contains(read.ModelContent, "alpha reads pdf files")
 
 	// sidecar 五重校验往返
-	payload, found := d.LoadSkillRetrievalSessionProfileForTest("prog-small")
+	payload, found := d.LoadSkillRetrievalSessionProfile("prog-small")
 	s.Require().True(found)
 	s.Assert().Empty(payload["profile_recovery_error"])
 }
@@ -151,12 +151,12 @@ func (s *SkillRetrievalSuite) TestProgressiveLargeFlat() {
 	s.Require().NoError(rail.Init(nil, nil))
 	s.writeSkill(root, "delta", "freshly installed delta skill")
 	reminder, err := discovery.ConsumeIncrementalSkillReminder(
-		tk.SessionScope(), rail.ScanSelectionCardsForTest(), 4000)
+		tk.SessionScope(), tk.Environment().SelectionCards(true), 4000)
 	s.Require().NoError(err)
 	s.Assert().Contains(reminder, "delta")
 	// 基线推进：二次消费无通知
 	reminder2, err := discovery.ConsumeIncrementalSkillReminder(
-		tk.SessionScope(), rail.ScanSelectionCardsForTest(), 4000)
+		tk.SessionScope(), tk.Environment().SelectionCards(true), 4000)
 	s.Require().NoError(err)
 	s.Assert().Empty(reminder2)
 }
@@ -175,12 +175,12 @@ func (s *SkillRetrievalSuite) TestRecoveryChain() {
 	d.PersistSkillRetrievalSessionProfile()
 
 	// 完好恢复
-	payload, found := d.LoadSkillRetrievalSessionProfileForTest("rec-1")
+	payload, found := d.LoadSkillRetrievalSessionProfile("rec-1")
 	s.Require().True(found)
 	s.Assert().Empty(payload["profile_recovery_error"])
 
 	// 破坏 checksum → 降级 dict（enabled=false + recovery_error）不中断
-	path := d.SkillRetrievalProfilePathForTest("rec-1")
+	path := d.SkillRetrievalProfilePath("rec-1")
 	raw, err := os.ReadFile(path)
 	s.Require().NoError(err)
 	var mutated map[string]any
@@ -188,7 +188,7 @@ func (s *SkillRetrievalSuite) TestRecoveryChain() {
 	mutated["profile_checksum"] = "0000000000000000000000000000000000000000000000000000000000000000"
 	corrupted, _ := json.Marshal(mutated)
 	s.Require().NoError(os.WriteFile(path, corrupted, 0o600))
-	degraded, found2 := d.LoadSkillRetrievalSessionProfileForTest("rec-1")
+	degraded, found2 := d.LoadSkillRetrievalSessionProfile("rec-1")
 	s.Require().True(found2)
 	s.Assert().Equal("profile_checksum_mismatch", degraded["profile_recovery_error"])
 	s.Assert().Equal(false, degraded["enabled"])
@@ -227,12 +227,12 @@ func (s *SkillRetrievalSuite) TestSwitchOff() {
 	d.SetSessionScopedForTest("off-1")
 	d.SetSkillRetrievalSessionEnabledForTest(false)
 	d.PersistSkillRetrievalSessionProfile()
-	payload, found := d.LoadSkillRetrievalSessionProfileForTest("off-1")
+	payload, found := d.LoadSkillRetrievalSessionProfile("off-1")
 	s.Require().True(found)
 	s.Assert().Equal(false, payload["enabled"])
 	// workspace/config 子系统联动：workspace 派生路径仍可达
-	s.Assert().True(filepath.IsAbs(filepath.Dir(d.SkillRetrievalProfilePathForTest("off-1"))) ||
-		filepath.Dir(d.SkillRetrievalProfilePathForTest("off-1")) != "")
+	s.Assert().True(filepath.IsAbs(filepath.Dir(d.SkillRetrievalProfilePath("off-1"))) ||
+		filepath.Dir(d.SkillRetrievalProfilePath("off-1")) != "")
 	_ = workspace.ConfigDir()
 }
 

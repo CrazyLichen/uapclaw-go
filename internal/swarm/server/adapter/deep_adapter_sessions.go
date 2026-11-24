@@ -1309,7 +1309,8 @@ func sortedCopy(in []string) []string {
 // ──────────────────────────── 16.4b 集成测试缝 ────────────────────────────
 
 // Python 侧集成测试直接戳实例属性（adapter._skill_retrieval_toolkit 等）；
-// Go 跨包不可见，以下导出缝承接集成套件的等价触达（生产路径不走）。
+// Go 跨包不可见，以下三条纯属性注入缝承接集成套件的等价触达
+// （偏差 D-16-4-9；生产路径不走——懒创建/RestoreSkillRetrievalSession 是正规入口）。
 
 // SetSkillRetrievalToolkitForTest 注入工具包缓存（integration 缝）。
 func (d *DeepAdapter) SetSkillRetrievalToolkitForTest(tk *swarmtools.SkillRetrievalToolkit) {
@@ -1328,13 +1329,15 @@ func (d *DeepAdapter) SetSkillRetrievalSessionEnabledForTest(enabled bool) {
 	d.skillRetrievalSessionEnabled = &v
 }
 
-// LoadSkillRetrievalSessionProfileForTest 导出读 sidecar（integration 缝；
-// Python _load_skill_retrieval_session_profile 的跨包触达口）。
-func (d *DeepAdapter) LoadSkillRetrievalSessionProfileForTest(sessionID string) (map[string]any, bool) {
+// LoadSkillRetrievalSessionProfile 导出读 sidecar。
+// Python: get_skill_retrieval_status_profile 的 load 消费面（:3270-3303）
+// + _load_skill_retrieval_session_profile 校验链的跨包出口。
+func (d *DeepAdapter) LoadSkillRetrievalSessionProfile(sessionID string) (map[string]any, bool) {
 	return d.loadSkillRetrievalSessionProfile(sessionID)
 }
 
-// SkillRetrievalProfilePathForTest 导出 sidecar 路径（integration 缝）。
-func (d *DeepAdapter) SkillRetrievalProfilePathForTest(sessionID string) string {
+// SkillRetrievalProfilePath 导出 sidecar 路径派生。
+// Python: _skill_retrieval_profile_path（:2474-2483）。
+func (d *DeepAdapter) SkillRetrievalProfilePath(sessionID string) string {
 	return d.skillRetrievalProfilePath(sessionID)
 }
