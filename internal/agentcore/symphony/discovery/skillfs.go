@@ -274,14 +274,14 @@ func validateTaxonomyNodes(nodes []map[string]any, expectedWorkerIDs map[string]
 
 // SkillDirectoryView 标准 RetrieverNode 树的路径投影
 type SkillDirectoryView struct {
-	root              common.RetrieverNode
-	recordByID        map[string]SkillRecord
-	catalogByPayload  map[string]artifacts.CatalogRecord
-	nodeByPath        map[string]common.RetrieverNode
-	recordPathByID    map[string]string
+	root               common.RetrieverNode
+	recordByID         map[string]SkillRecord
+	catalogByPayload   map[string]artifacts.CatalogRecord
+	nodeByPath         map[string]common.RetrieverNode
+	recordPathByID     map[string]string
 	recordIDByMetaPath map[string]string
-	children          map[string][]DirectoryEntry
-	skillCounts       map[string]int
+	children           map[string][]DirectoryEntry
+	skillCounts        map[string]int
 }
 
 // NewSkillDirectoryView 构建路径投影（对齐 skillfs.py:149-164）。
@@ -301,6 +301,23 @@ func NewSkillDirectoryView(root common.RetrieverNode, records []SkillRecord, cat
 	}
 	v.indexPaths()
 	return v
+}
+
+// RecordByID 按 worker_id 取记录（对齐 Python view.record_by_id 公有属性）。
+func (v *SkillDirectoryView) RecordByID(workerID string) (SkillRecord, bool) {
+	r, ok := v.recordByID[workerID]
+	return r, ok
+}
+
+// NodeByPath 取树节点（对齐 Python view.node_by_path 公有属性）。
+func (v *SkillDirectoryView) NodeByPath(path string) (common.RetrieverNode, bool) {
+	n, ok := v.nodeByPath[path]
+	return n, ok
+}
+
+// RecordPathByID 取技能记录路径（对齐 Python view.record_path_by_id 公有属性）。
+func (v *SkillDirectoryView) RecordPathByID(workerID string) string {
+	return v.recordPathByID[workerID]
 }
 
 // NormalizePath 路径规范化（拒绝 ..，根为 "/"）。
@@ -1519,4 +1536,9 @@ func sameStringSet(list []string, set map[string]bool) bool {
 		}
 	}
 	return true
+}
+
+// NodeByPathMap 暴露路径→节点映射（对齐 Python view.node_by_path 公有属性的只读遍历需求）。
+func (v *SkillDirectoryView) NodeByPathMap() map[string]common.RetrieverNode {
+	return v.nodeByPath
 }
