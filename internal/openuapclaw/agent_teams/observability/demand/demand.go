@@ -39,4 +39,3 @@ func GetTrajectorySpanProcessor() sdktrace.SpanProcessor {
 	trajectorySpanProcessor = trajectory.NewTrajectorySpanProcessor(0)
 	return trajectorySpanProcessor
 }
-

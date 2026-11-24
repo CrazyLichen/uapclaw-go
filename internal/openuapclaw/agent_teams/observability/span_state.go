@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -26,6 +27,47 @@ type LlmSpanState struct {
 	FirstChunkNs int64
 	// ChunkCount stream chunk 计数
 	ChunkCount int
+	// CallID 本次 LLM 请求的调用标识（开 span 时从 call scope 读出；
+	// 空=请求未经 call scope 到达回调框架，span 不入索引）
+	// Python: call_id
+	CallID string
+	// IsStreaming 是否流式（逐 chunk）调用
+	// Python: is_streaming
+	IsStreaming bool
+	// ResponseStartedNs 响应头到达（首字节）的单调时间（0 表示未上报）
+	// Python: response_started_ns
+	ResponseStartedNs int64
+	// RequestPurpose 请求用途（assistant / compaction）
+	// Python: request_purpose（缺省 "assistant"）
+	RequestPurpose string
+	// MessageOccurrenceIDs 每条消息的出现 id（开 span 时计算）
+	// Python: message_occurrence_ids
+	MessageOccurrenceIDs []string
+	// MessageMetadata 每条消息的 metadata 载荷（开 span 时收集）
+	// Python: message_metadata
+	MessageMetadata []map[string]any
+	// InitialTrajectoryMessages 开 span 时投影的初始轨迹消息
+	// Python: initial_trajectory_messages
+	InitialTrajectoryMessages []map[string]any
+	// ContextWindowCommitted 是否已为本次请求发出 context.window.commit
+	// Python: context_window_committed
+	ContextWindowCommitted bool
+	// RoutedInputOriginal 路由改名前记录的输入属性原文（键=属性名）。
+	// Python 在首次 fill 时惰性从 span.attributes 读；Go 的 trace.Span 接口
+	// 不支持属性回读，改为开 span 时一次性捕获（语义等价：属性此后只被
+	// fill 改写，首记值即原值）。偏差登记 spec §4。
+	RoutedInputOriginal map[string]string
+	// parentAttributes 开 span 时捕获的父属性快照（会话标识等），
+	// 供 context.window.commit 等价 Python 读 span.attributes 的路径使用。
+	parentAttributes map[string]attribute.Value
+	// initialInputMessagesJSON 开 span 时记录的 gen_ai.input.messages 原文
+	// （路由占位符回填用，Python 惰性从 span.attributes 读，Go 开期捕获）。
+	initialInputMessagesJSON string
+	// initialSystemInstructionsJSON 开 span 时记录的 gen_ai.system_instructions 原文。
+	initialSystemInstructionsJSON string
+	// trajectoryMessagesCommitted LLM_INPUT 时随 context.window.commit 提交的
+	// 轨迹消息（Python 在 on_llm_input 内局部变量，Go 侧留档便于测试断言）。
+	trajectoryMessagesCommitted []map[string]any
 }
 
 // OtelSpanState 每-DeepAgent 的可变 span 追踪状态容器。
@@ -129,6 +171,17 @@ func (s *OtelSpanState) CurrentLLMSpanContext() trace.SpanContext {
 		return trace.SpanContext{}
 	}
 	return s.llmStack[len(s.llmStack)-1].Span.SpanContext()
+}
+
+// CurrentLLMSpan 返回当前栈顶 LLM span（Python: get_current_llm_span）。
+// 返回 nil 表示无当前 LLM span。
+func (s *OtelSpanState) CurrentLLMSpan() trace.Span {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.llmStack) == 0 {
+		return nil
+	}
+	return s.llmStack[len(s.llmStack)-1].Span
 }
 
 // PushToolSpan 将 tool span 压入 map。

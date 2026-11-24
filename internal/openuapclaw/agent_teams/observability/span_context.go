@@ -3,6 +3,7 @@ package observability
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -194,4 +195,39 @@ func hexUUID() string {
 	u := uuid.Must(uuid.NewRandom())
 	b, _ := u.MarshalText()
 	return string(b[:])
+}
+
+// contextCompactionNumbers 每 (session, subject) 的压缩操作序号表。
+// Python: span_context.py:533-534
+var (
+	contextCompactionNumbers     = make(map[subjectKey]map[string]int)
+	contextCompactionNumbersLock sync.Mutex
+)
+
+// ContextCompactionNumber 返回一次压缩操作在其主体内的序号（1 起）。
+// 序号属于操作本身而非承载它的模型调用：被限流的压缩会重试，每次尝试必须
+// 陈述同一序号，读者看到的才是一次多试的压缩而非多次压缩。
+// Python: span_context.py:568-602 context_compaction_number。
+// 返回 0 表示调用方无法命名会话、主体或操作。
+func ContextCompactionNumber(sessionID, subjectID, operationID string) int {
+	normalizedOperation := strings.TrimSpace(operationID)
+	normalizedSubject := strings.TrimSpace(subjectID)
+	session := NormalizeSessionID(sessionID)
+	if normalizedOperation == "" || normalizedSubject == "" || session == "" {
+		return 0
+	}
+	key := subjectKey{sessionID: session, subjectID: normalizedSubject}
+	contextCompactionNumbersLock.Lock()
+	defer contextCompactionNumbersLock.Unlock()
+	assigned, ok := contextCompactionNumbers[key]
+	if !ok {
+		assigned = make(map[string]int)
+		contextCompactionNumbers[key] = assigned
+	}
+	if existing, ok := assigned[normalizedOperation]; ok {
+		return existing
+	}
+	number := len(assigned) + 1
+	assigned[normalizedOperation] = number
+	return number
 }

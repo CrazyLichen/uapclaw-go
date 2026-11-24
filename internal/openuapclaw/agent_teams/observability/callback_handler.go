@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	intellirouter "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/intellirouter"
 	"reflect"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
@@ -79,6 +82,193 @@ func (h *OtelCallbackHandler) OnLLMStreamInput(ctx context.Context, data *cb.LLM
 	}
 	h.openLlmSpan(ctx, data, spanState)
 	return nil
+}
+
+// OnLLMInput 用 provider 归一后的请求增强已开的 LLM span。
+// Python: on_llm_input（callback_handler.py:529-564）——LLM_*_INPUT 在
+// 模型客户端归一请求前开 span，provider 的 LLM_INPUT 事件是附加结构化
+// 请求字段的权威来源；它不关闭也不替换 span，不动旧扁平索引字段。
+func (h *OtelCallbackHandler) OnLLMInput(ctx context.Context, data *cb.LLMCallEventData) any {
+	defer recoverCallback("on_llm_input")
+	spanState := SpanStateFromCtx(ctx)
+	if spanState == nil {
+		return nil
+	}
+	// Python: span = get_current_llm_span(); state = span.otel_llm_state
+	state := spanState.PopLlmSpanState(true)
+	if state == nil || !state.Span.IsRecording() {
+		return nil
+	}
+	if data.Messages == nil || state.ContextWindowCommitted {
+		return nil
+	}
+	providerMessages := normalizeMessages(data.Messages)
+	if len(providerMessages) == len(state.MessageOccurrenceIDs) {
+		h.recordStandardStructuredInput(state.Span, providerMessages)
+		state.trajectoryMessagesCommitted = h.trajectoryMessages(providerMessages,
+			state.MessageOccurrenceIDs, state.MessageMetadata)
+	} else {
+		state.trajectoryMessagesCommitted = cloneMessageMaps(state.InitialTrajectoryMessages)
+	}
+	// Python: publish_span_snapshot(state.span, "attributes")——span_record
+	// 落盘域未移植（偏差 spec §4），跳过。
+	// Python: emit_context_window_commit(tracer, llm_span, messages, request_purpose)
+	EmitContextWindowCommit(h.tracer(), state.Span, state.trajectoryMessagesCommitted,
+		state.RequestPurpose, state.parentAttributes)
+	state.ContextWindowCommitted = true
+	return nil
+}
+
+// OnLLMResponseStarted 响应头到达时记录首字节时延与 SDK 重试次数。
+// Python: on_llm_response_started（callback_handler.py:608-624）。
+func (h *OtelCallbackHandler) OnLLMResponseStarted(ctx context.Context, data *cb.LLMCallEventData) any {
+	defer recoverCallback("on_llm_response_started")
+	spanState := SpanStateFromCtx(ctx)
+	if spanState == nil {
+		return nil
+	}
+	state := spanState.PopLlmSpanState(true)
+	if state == nil || !state.Span.IsRecording() || state.ResponseStartedNs != 0 {
+		return nil
+	}
+	state.ResponseStartedNs = time.Now().UnixNano()
+	state.Span.SetAttributes(attribute.Float64(OJGenAIResponseTimeToFirstByteMs,
+		float64(state.ResponseStartedNs-state.StartNs)/1_000_000.0))
+	if data.RetryCount != nil {
+		state.Span.SetAttributes(attribute.Int(OJRequestRetryCount, *data.RetryCount))
+	}
+	return nil
+}
+
+// OnLLMRoute 把模型组请求实际路由到的模型名写在已开的 span 上。
+// Python: on_llm_route（callback_handler.py:626-664）——span 在路由器选定
+// 部署前打开，初名是逻辑 "*" 模型；LLM_ROUTE_ATTEMPT（请求发出，无论成败）
+// 与 LLM_ROUTE（有路由应答）都在同一次调用内为 span 改名并回填记录的输入。
+func (h *OtelCallbackHandler) OnLLMRoute(ctx context.Context, data map[string]any) any {
+	defer recoverCallback("on_llm_route")
+	spanState := SpanStateFromCtx(ctx)
+	if spanState == nil {
+		return nil
+	}
+	state := spanState.PopLlmSpanState(true)
+	if state == nil || !state.Span.IsRecording() {
+		return nil
+	}
+	routeMetadata, _ := data["route_metadata"].(map[string]any)
+	if routeMetadata == nil {
+		return nil
+	}
+	// Python: group_id = str(route_metadata.get("model_group_id") or "").strip()
+	groupID := trimmedString(routeMetadata["model_group_id"])
+	if groupID != "" {
+		state.Span.SetAttributes(attribute.String(OJModelGroupID, groupID))
+	}
+	modelName := trimmedString(routeMetadata["model_name"])
+	if modelName == "" {
+		return nil
+	}
+	// Python: state.span.update_name(f"chat {model_name}")
+	if namer, ok := state.Span.(interface{ SetName(string) }); ok {
+		namer.SetName(fmt.Sprintf("chat %s", modelName))
+	}
+	state.Span.SetAttributes(attribute.String(GenAIRequestModel, modelName))
+	routeID := trimmedString(routeMetadata["route_id"])
+	if routeID != "" {
+		state.Span.SetAttributes(attribute.String(OJModelGroupRouteID, routeID))
+	}
+	routedModel := trimmedString(routeMetadata["routed_model"])
+	if routedModel == "" {
+		return nil
+	}
+	// Python: self._fill_routed_model_in_input(state, routed_model)
+	h.fillRoutedModelInInput(state, routedModel)
+	return nil
+}
+
+// fillRoutedModelInInput 把 span 记录的输入中的路由模型占位符回填为实际路由。
+// Python: _fill_routed_model_in_input（callback_handler.py:652-676）——覆盖
+// 记录输入的两个位置：输入消息与（动态上下文以 system 文本发送的厂商的）
+// system instructions；始终按首次记录的原值回填，每次尝试陈述它实际发往的模型。
+func (h *OtelCallbackHandler) fillRoutedModelInInput(state *LlmSpanState, routedModel string) {
+	if state.RoutedInputOriginal == nil {
+		state.RoutedInputOriginal = map[string]string{}
+		for key, value := range map[string]string{
+			GenAIInputMessages:      state.initialInputMessagesJSON,
+			GenAISystemInstructions: state.initialSystemInstructionsJSON,
+		} {
+			if value != "" && intellirouter.HasRoutedModelPlaceholder(value) {
+				state.RoutedInputOriginal[key] = value
+			}
+		}
+	}
+	for key, value := range state.RoutedInputOriginal {
+		state.Span.SetAttributes(attribute.String(key, intellirouter.FillRoutedModel(value, routedModel)))
+	}
+}
+
+// OnLLMStreamCompleted 以累计结果关闭一次自然耗尽的流式调用。
+// Python: on_llm_stream_completed（callback_handler.py:749-777）。
+func (h *OtelCallbackHandler) OnLLMStreamCompleted(ctx context.Context, data *cb.LLMCallEventData) any {
+	defer recoverCallback("on_llm_stream_completed")
+	spanState := SpanStateFromCtx(ctx)
+	if spanState == nil {
+		return data.Response
+	}
+	state := spanState.PopLlmSpanState(false)
+	if state == nil {
+		return data.Response
+	}
+	h.closeLlmSpan(ctx, state, data.Response)
+	return data.Response
+}
+
+// OnLLMOutput 应用 provider 输出事实并保留旧式终态事件行为。
+// Python: on_llm_output（callback_handler.py:684-748）——经 Model 走统一
+// 收尾的调用只增强未关 span；旧式手工开 span 的路径仍视其为终态。
+func (h *OtelCallbackHandler) OnLLMOutput(ctx context.Context, data *cb.LLMCallEventData) any {
+	defer recoverCallback("on_llm_output")
+	spanState := SpanStateFromCtx(ctx)
+	if spanState == nil {
+		return nil
+	}
+	state := spanState.PopLlmSpanState(true)
+	if state == nil {
+		return nil
+	}
+	if !state.Span.IsRecording() {
+		return nil
+	}
+	// Python: if usage_from_trigger is not None: self._record_usage_attrs(state, usage, skip_existing=True)
+	if data.Usage != nil {
+		h.recordUsageAttrs(state, data.Usage)
+	}
+	// Python: if expects_unified_llm_completion(): return
+	if llm.ExpectsUnifiedLLMCompletion(ctx) {
+		return nil
+	}
+	// 旧式手工开 span 路径：LLM_OUTPUT 仍为终态。
+	state = spanState.PopLlmSpanState(false)
+	if state == nil || !state.Span.IsRecording() {
+		return nil
+	}
+	completionText := fmt.Sprintf("%v", data.Response)
+	reasoningText := extractReasoningContent(data.Response)
+	h.finalizeLlmSpanOutput(ctx, state, completionText, reasoningText, data.Response, data.Usage)
+	return nil
+}
+
+// OnAgentStreamInput agent stream 调用前：与 invoke_input 同逻辑。
+// Python: on_agent_stream_input（callback_handler.py:1052-1054）。
+func (h *OtelCallbackHandler) OnAgentStreamInput(ctx context.Context, data *cb.GlobalAgentEventData) any {
+	defer recoverCallback("on_agent_stream_input")
+	return h.OnAgentInvokeInput(ctx, data)
+}
+
+// OnAgentStreamOutput agent stream 输出：与 invoke_output 同逻辑。
+// Python: on_agent_stream_output（callback_handler.py:1056-1059）。
+func (h *OtelCallbackHandler) OnAgentStreamOutput(ctx context.Context, data *cb.GlobalAgentEventData) any {
+	defer recoverCallback("on_agent_stream_output")
+	return h.OnAgentInvokeOutput(ctx, data)
 }
 
 // OnLLMStreamOutput LLM stream 每个 chunk：记录 per-chunk 事件和 TTFT。
@@ -342,6 +532,9 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 	_, llmSpan := h.tracer().Start(parentCtx, "llm.call", trace.WithSpanKind(trace.SpanKindClient))
 	// Python: span.set_attribute(GEN_AI_SYSTEM, _GEN_AI_SYSTEM_VALUE)
 	llmSpan.SetAttributes(attribute.String(GenAISystem, genAISystemValue))
+	// 开 span 时捕获供后续 fill/commit 使用的属性值（Go 的 trace.Span 接口
+	// 不支持属性回读，等价偏差登记 spec §4）。
+	var structuredInputJSON, structuredSystemJSON string
 	// Python: span.set_attribute(GEN_AI_REQUEST_MODEL, str(model_name))
 	llmSpan.SetAttributes(attribute.String(GenAIRequestModel, modelName))
 	// Python: temperature / top_p / max_tokens
@@ -357,16 +550,10 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 	// Python: 遍历 messages
 	// 扁平 gen_ai.prompt.N.* 为 15.11 子集残留（v2 已改写标准结构化属性，
 	// 全量删除随 22.4 对齐批回收）。
-	var normalized []map[string]any
-	if data.Messages != nil {
-		if msgSlice, ok := toMessageSlice(data.Messages); ok {
-			normalized = make([]map[string]any, 0, len(msgSlice))
-			for i, msg := range msgSlice {
-				if m, ok := msg.(map[string]any); ok {
-					normalized = append(normalized, m)
-				} else if bm, ok := msg.(llmschema.BaseMessage); ok {
-					normalized = append(normalized, llmschema.BaseMessageToMap(bm))
-				}
+	normalized := normalizeMessages(data.Messages)
+	if len(normalized) > 0 {
+		{
+			for i, msg := range normalized {
 				role := messageRole(msg)
 				content := coerceMessageContent(messageContent(msg))
 				llmSpan.SetAttributes(
@@ -387,13 +574,73 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 		// Python: self._record_standard_structured_input(span, messages)
 		// callback_handler.py:1116 —— 标准结构化输入属性是轨迹消息重放
 		// （ReadLLMExchange）的数据源，缺它 TrajectoryToMessages 恒空。
-		h.recordStandardStructuredInput(llmSpan, normalized)
+		structuredInputJSON, structuredSystemJSON = h.recordStandardStructuredInput(llmSpan, normalized)
 	}
-	// Python: push_llm_span_state(LlmSpanState(span=span, start_ns=time.monotonic_ns()))
+	// Python: call_id = get_current_llm_call_id()
+	callID := llm.GetCurrentLLMCallID(ctx)
+	if callID != "" {
+		llmSpan.SetAttributes(attribute.String(OJRequestID, callID))
+	}
+	// Python: span.set_attribute(OJ_INFERENCE_ID, f"{span.context.span_id:016x}")
+	llmSpan.SetAttributes(attribute.String(OJInferenceID, fmt.Sprintf("%016x", llmSpan.SpanContext().SpanID())))
+	// Python: span.set_attribute(GEN_AI_OPERATION_NAME, "chat")
+	llmSpan.SetAttributes(attribute.String(GenAIOperationName, "chat"))
+	// Python: span.set_attribute(OJ_TRAJECTORY_SCHEMA_VERSION, TRAJECTORY_SPAN_SCHEMA_VERSION)
+	llmSpan.SetAttributes(attribute.String(OJTrajectorySchemaVersion, TrajectorySpanSchemaVersion))
+	// Python: span.set_attribute(OJ_TRAJECTORY_RECORD_KIND, "inference")
+	llmSpan.SetAttributes(attribute.String(OJTrajectoryRecordKind, TrajectoryRecordKindInference))
+	// Python: span.set_attribute(GEN_AI_REQUEST_STREAM, is_streaming)
+	llmSpan.SetAttributes(attribute.Bool(GenAIRequestStream, data.IsStream))
+	// Python: request_purpose 归一（assistant / compaction）
+	requestPurpose := "assistant"
+	if v, ok := data.Extra["request_purpose"].(string); ok && (v == "assistant" || v == "compaction") {
+		requestPurpose = v
+	}
+	llmSpan.SetAttributes(attribute.String(OJRequestPurpose, requestPurpose))
+	// Python: session_id = span.attributes.get(GEN_AI_CONVERSATION_ID) or get_current_session_id()
+	if sessionID := GetCurrentSessionID(); sessionID != "" {
+		llmSpan.SetAttributes(attribute.String(GenAIConversationID, sessionID))
+	}
+	// 开 span 时捕获供后续 fill/commit 使用的属性值（Go 的 trace.Span 接口
+	// 不支持属性回读，等价偏差登记 spec §4）。
+	parentAttributes := map[string]attribute.Value{}
+	if sessionID := GetCurrentSessionID(); sessionID != "" {
+		parentAttributes[GenAIConversationID] = attribute.StringValue(sessionID)
+	}
+	// Python: self._record_input_message_provenance(span, messages)
+	if len(normalized) > 0 {
+		h.recordInputMessageProvenance(llmSpan, normalized)
+	}
+	if len(normalized) > 0 {
+		h.recordInputMessageProvenance(llmSpan, normalized)
+	}
+	// Python: message_occurrence_ids = self._message_occurrence_ids(messages)
+	//         message_metadata = tuple(_get_field(message, "metadata") for message in messages)
+	//         initial_trajectory_messages = self._trajectory_messages(messages, ...)
+	occurrenceIDs := messageOccurrenceIDs(normalized)
+	messageMetadata := make([]map[string]any, 0, len(normalized))
+	for _, msg := range normalized {
+		if md, ok := msg["metadata"].(map[string]any); ok {
+			messageMetadata = append(messageMetadata, md)
+		} else {
+			messageMetadata = append(messageMetadata, nil)
+		}
+	}
+	initialTrajectoryMessages := h.trajectoryMessages(normalized, occurrenceIDs, messageMetadata)
+	// Python: push_llm_span_state(LlmSpanState(span=span, start_ns=time.monotonic_ns(), ...))
 	// Go 不需要 context_token（不做 otel_context.attach/detach）
 	spanState.PushLlmSpanState(&LlmSpanState{
-		Span:    llmSpan,
-		StartNs: time.Now().UnixNano(),
+		Span:                          llmSpan,
+		StartNs:                       time.Now().UnixNano(),
+		CallID:                        callID,
+		IsStreaming:                   data.IsStream,
+		RequestPurpose:                requestPurpose,
+		MessageOccurrenceIDs:          occurrenceIDs,
+		MessageMetadata:               messageMetadata,
+		InitialTrajectoryMessages:     initialTrajectoryMessages,
+		parentAttributes:              parentAttributes,
+		initialInputMessagesJSON:      structuredInputJSON,
+		initialSystemInstructionsJSON: structuredSystemJSON,
 	})
 }
 
@@ -800,11 +1047,22 @@ func normalizeMessages(messages any) []map[string]any {
 		return []map[string]any{{"role": "user", "content": v}}
 	case []map[string]any:
 		return v
+	case []llmschema.BaseMessage:
+		// BaseMessage 列表（模型客户端直传路径）：归一为 dict 形态，
+		// role/content 经 BaseMessageToMap 保留（Python 对象消息的 getattr
+		// 分支等价——15.24a 集成首跑实证该分支可达）。
+		result := make([]map[string]any, 0, len(v))
+		for _, item := range v {
+			result = append(result, llmschema.BaseMessageToMap(item))
+		}
+		return result
 	case []any:
 		result := make([]map[string]any, 0, len(v))
 		for _, item := range v {
 			if m, ok := item.(map[string]any); ok {
 				result = append(result, m)
+			} else if bm, ok := item.(llmschema.BaseMessage); ok {
+				result = append(result, llmschema.BaseMessageToMap(bm))
 			} else {
 				result = append(result, map[string]any{"value": item})
 			}
@@ -1074,7 +1332,11 @@ func (h *OtelCallbackHandler) trajectoryMessages(messages any, occurrenceIDs []s
 // system prompt）；注入对话的 system 轮（prompt-attachment history）保留在
 // gen_ai.input.messages 的 system 条目里，其边界与历史标记得以存活。
 // Python: callback_handler.py:1730-1766 _record_standard_structured_input
-func (h *OtelCallbackHandler) recordStandardStructuredInput(span trace.Span, messages []map[string]any) {
+// recordStandardStructuredInput 记录标准结构化输入属性并返回两个属性的原文
+// （gen_ai.input.messages / gen_ai.system_instructions），供路由占位符回填
+// 捕获首记值（Python 惰性从 span.attributes 读，Go 的 trace.Span 接口不支持
+// 属性回读，改为返回值捕获——偏差登记 spec §4）。
+func (h *OtelCallbackHandler) recordStandardStructuredInput(span trace.Span, messages []map[string]any) (inputMessagesJSON, systemInstructionsJSON string) {
 	var systemParts []map[string]any
 	var inputMessages []map[string]any
 	for _, message := range messages {
@@ -1087,11 +1349,14 @@ func (h *OtelCallbackHandler) recordStandardStructuredInput(span trace.Span, mes
 		inputMessages = append(inputMessages, h.structuredMessage(message, false))
 	}
 	if len(systemParts) > 0 {
-		span.SetAttributes(attribute.String(GenAISystemInstructions, marshalJSONString(systemParts)))
+		systemInstructionsJSON = marshalJSONString(systemParts)
+		span.SetAttributes(attribute.String(GenAISystemInstructions, systemInstructionsJSON))
 	}
 	if len(inputMessages) > 0 {
-		span.SetAttributes(attribute.String(GenAIInputMessages, marshalJSONString(inputMessages)))
+		inputMessagesJSON = marshalJSONString(inputMessages)
+		span.SetAttributes(attribute.String(GenAIInputMessages, inputMessagesJSON))
 	}
+	return inputMessagesJSON, systemInstructionsJSON
 }
 
 // recordInputMessageProvenance 记录输入消息来源（prompt 附件等）。
@@ -1385,9 +1650,68 @@ func redactSystemPromptFn(config *ObservabilityConfig) func(string) string {
 // marshalJSONString JSON 序列化（ensure_ascii=False 语义：Go 默认不转义非 ASCII）。
 // Python: json.dumps(value, ensure_ascii=False, default=str)
 func marshalJSONString(value any) string {
-	data, err := json.Marshal(value)
+	// Python: json.dumps(value, ensure_ascii=False)——< > & 不转义为 \u00XX，
+	// 路由占位符 <routed-model/> 才能以原文进属性并被 fill_routed_model 匹配
+	//（15.24a 集成实证：json.Marshal 的 HTML 转义让占位符匹配恒失败）。
+	data, err := utils.MarshalNoEscape(value)
 	if err != nil {
 		return fmt.Sprintf("%v", value)
 	}
 	return string(data)
+}
+
+// recordUsageAttrs 记录 provider 用量属性（usage tokens / 缓存计数）。
+// Python: _record_usage_attrs（callback_handler.py:1353-1396）。
+// skip_existing 语义（Python 按已写属性跳过）无法在 Go 的 trace.Span 接口上
+// 实现（不支持属性回读），Go 恒为覆盖写——重复记录的是同一事实，等价偏差
+// 登记 spec §4。
+func (h *OtelCallbackHandler) recordUsageAttrs(state *LlmSpanState, usage *llmschema.UsageMetadata) {
+	if usage == nil {
+		return
+	}
+	state.Span.SetAttributes(
+		attribute.Int(GenAIUsagePromptTokens, usage.InputTokens),
+		attribute.Int(GenAIUsageCompletionTokens, usage.OutputTokens),
+	)
+	if usage.TotalTokens > 0 {
+		state.Span.SetAttributes(attribute.Int(GenAIUsageTotalTokens, usage.TotalTokens))
+	}
+}
+
+// cloneMessageMaps 深拷贝消息 map 列表（Python dict(item) 逐条浅拷贝等价）。
+func cloneMessageMaps(messages []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(messages))
+	for _, m := range messages {
+		copied := make(map[string]any, len(m))
+		for k, v := range m {
+			copied[k] = v
+		}
+		out = append(out, copied)
+	}
+	return out
+}
+
+// trimmedString 取 map 值的去除空白字符串形态（Python str(v or "").strip()）。
+func trimmedString(v any) string {
+	s, _ := v.(string)
+	return strings.TrimSpace(s)
+}
+
+// finalizeLlmSpanOutput 输出收尾共享路径。
+// Python: _finalize_llm_span_output（callback_handler.py:1230-1295）——由
+// _close_llm_span（非流式）与 on_llm_output（流式终态）共用：结构化输出、
+// 响应详情、总时延，随后主 llm span 恒被关闭（即使写属性出错也不成孤儿）；
+// reasoning 子 span 在主 span 安全关闭后尽力创建。
+func (h *OtelCallbackHandler) finalizeLlmSpanOutput(ctx context.Context, state *LlmSpanState, completionText, reasoningText string, response any, usage *llmschema.UsageMetadata) {
+	if usage != nil {
+		// Python: self._record_usage_attrs(state, usage, skip_existing=False)
+		h.recordUsageAttrs(state, usage)
+	}
+	// Python: total_latency_ms = (time.monotonic_ns() - state.start_ns) / 1_000_000.0
+	state.Span.SetAttributes(attribute.Float64(OJGenAIResponseTotalLatencyMs,
+		float64(time.Now().UnixNano()-state.StartNs)/1_000_000.0))
+	// 复用 closeLlmSpan：结构化输出 + completion 索引 + reasoning 子 span + OK 终态 + End。
+	h.closeLlmSpan(ctx, state, response)
+	_ = completionText
+	_ = reasoningText
 }
