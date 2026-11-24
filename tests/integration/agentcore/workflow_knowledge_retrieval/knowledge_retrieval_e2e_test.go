@@ -16,6 +16,9 @@ package workflow_knowledge_retrieval
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -55,6 +58,26 @@ func TestKnowledgeRetrievalE2E(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// chdirRepoRoot vec0.so 相对路径 third_party/... 按 CWD 解析（lite.ResolveVec0Path），
+// go test 二进制目录无 third_party → 从测试文件位置向上找仓库根并 Chdir。
+func (s *KnowledgeRetrievalE2ESuite) chdirRepoRoot(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join("third_party", "sqlite-vec")); err == nil {
+		return
+	}
+	_, file, _, ok := runtime.Caller(0)
+	s.Require().True(ok)
+	dir := filepath.Dir(file)
+	for i := 0; i < 8; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "third_party", "sqlite-vec")); err == nil {
+			s.Require().NoError(os.Chdir(dir))
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
+	s.T().Skipf("third_party/sqlite-vec 不存在，vec0 依赖用例跳过")
+}
 
 // zhipuEntries 内置免费档（env ZHIPU_BUILTIN_API_KEY 优先，内置常量兜底）
 func (s *KnowledgeRetrievalE2ESuite) zhipuEntries() []map[string]any {
@@ -277,6 +300,131 @@ func (s *KnowledgeRetrievalE2ESuite) TestKB_Graph模式_图库链路() {
 	// 空索引 → results 空 → context 空串（结构契约，与检索排序无关）
 	answer, _ := result["answer"].(string)
 	s.T().Logf("graph empty-index answer=%q", answer)
+}
+
+// ──────────────────────────── SQLite 真链用例（D-25-7，2026-11-24 用户拍板） ────────────────────────────
+//
+// StoreTypeSqlite（Go 私有 provider）解除 chroma 本地 155508 约束：
+// bm25/hybrid/graph 三模式补齐「写入→检索命中」真链断言。
+
+// newSQLiteKBComponentWithPrewrite 构造 sqlite 组件 + store 层预写与读回验证。
+// 存储侧：经 CreateVectorStore 直写（bm25-only 无向量 / vector|hybrid 带真 embedding），
+// store 原生检索读回命中；检索侧：组件在同 db 上建 KB 走 workflow 全链。
+func (s *KnowledgeRetrievalE2ESuite) newSQLiteKBComponentWithPrewrite(
+	indexType retrievalcommon.IndexTypeKind, embedCfg *retrievalembedding.EmbeddingConfig,
+	docs []string, useGraph bool,
+) *resource.KnowledgeRetrievalComponent {
+	s.chdirRepoRoot(s.T())
+	dbPath := filepath.Join(s.T().TempDir(), "kb_e2e.db")
+	vsCfg := retrievalcommon.VectorStoreConfig{
+		StoreProvider:  retrievalcommon.StoreTypeSqlite,
+		DatabaseName:   "kb_e2e",
+		CollectionName: "kb_kb-e2e_chunks",
+		DistanceMetric: retrievalcommon.DistanceMetricEuclidean,
+	}
+	connCfg := map[string]any{"sqlite_path": dbPath}
+
+	var em storeembedding.BaseEmbedding
+	if embedCfg != nil {
+		em = retrievalembedding.NewOpenAIEmbedding(*embedCfg)
+	}
+
+	// 存储侧预写：store 直写（AddDocuments 链的落库终态等价物）+ store 原生检索读回
+	if len(docs) > 0 {
+		store, err := vector_store.CreateVectorStore(vsCfg, vector_store.WithStoreSQLitePath(dbPath))
+		s.Require().NoError(err, "sqlite store 构造失败")
+		switch indexType {
+		case retrievalcommon.IndexTypeBM25:
+			// bm25-only：无向量写入（FTS 可用）
+			rows := make([]map[string]any, 0, len(docs))
+			for i, d := range docs {
+				rows = append(rows, map[string]any{"id": fmt.Sprintf("d%d", i), "content": d})
+			}
+			s.Require().NoError(store.Add(context.Background(), rows), "sqlite store bm25 写入失败")
+			hits, err := store.SparseSearch(context.Background(), docs[0], 3, nil)
+			s.Require().NoError(err, "sqlite store sparse 读回失败")
+			s.Require().NotEmpty(hits, "存储侧 sparse 读回应命中写入文档")
+		case retrievalcommon.IndexTypeHybrid, retrievalcommon.IndexTypeVector:
+			s.Require().NotNil(embedCfg, "vector/hybrid 预写需要 embedding 配置")
+			vecs, err := em.EmbedDocuments(context.Background(), docs)
+			s.Require().NoError(err, "真 embedding 失败")
+			rows := make([]map[string]any, 0, len(docs))
+			for i, d := range docs {
+				rows = append(rows, map[string]any{
+					"id": fmt.Sprintf("d%d", i), "content": d, "embedding": vecs[i],
+				})
+			}
+			s.Require().NoError(store.Add(context.Background(), rows), "sqlite store 向量写入失败")
+			qv, err := em.EmbedQuery(context.Background(), docs[0])
+			s.Require().NoError(err, "真 embedding query 失败")
+			hits, err := store.Search(context.Background(), qv, 3, nil)
+			s.Require().NoError(err, "sqlite store vector 读回失败")
+			s.Require().NotEmpty(hits, "存储侧 vector 读回应命中写入文档")
+		}
+		s.T().Logf("存储侧验证通过：provider=sqlite index=%s docs=%d", indexType, len(docs))
+		_ = store.Close()
+	}
+
+	cfg := &resource.KnowledgeRetrievalCompConfig{
+		ComponentKBConfigs: []resource.ComponentKBConfig{{
+			KBConfig: retrievalcommon.KnowledgeBaseConfig{
+				KBID:      "kb-e2e",
+				IndexType: indexType,
+			},
+			VectorStoreConfig: vsCfg,
+			EmbedConfig:       embedCfg,
+		}},
+		VectorStoreConnectionConfig: connCfg,
+		RetrievalConfig: retrievalcommon.RetrievalConfig{
+			TopK:     3,
+			UseGraph: boolPtr(useGraph),
+		},
+	}
+	comp, err := resource.NewKnowledgeRetrievalComponent(cfg)
+	s.Require().NoError(err)
+	return comp
+}
+
+// TestKB_BM25模式_sqlite真链 bm25 稀疏检索真链（FTS5 真 BM25）
+func (s *KnowledgeRetrievalE2ESuite) TestKB_BM25模式_sqlite真链() {
+	docs := []string{
+		"workflow engine executes knowledge retrieval nodes",
+		"sqlite vector store provides bm25 sparse search",
+	}
+	comp := s.newSQLiteKBComponentWithPrewrite(retrievalcommon.IndexTypeBM25, nil, docs, false)
+	w := s.buildWorkflow(comp)
+	result := s.runWorkflow(w, "workflow engine")
+	s.Contains(fmt.Sprintf("%v", result["raw"]), "workflow",
+		"bm25 真链 context 应含命中文档关键词，got: %v", result["raw"])
+}
+
+// TestKB_Hybrid模式_sqlite真链 hybrid 向量+BM25 双路真链（真 embedding + FTS5）
+func (s *KnowledgeRetrievalE2ESuite) TestKB_Hybrid模式_sqlite真链() {
+	embedCfg := s.newRealEmbedding()
+	docs := []string{
+		"hybrid retrieval fuses dense vectors with bm25 sparse ranking",
+		"the rrf fusion merges both ranked lists into one",
+	}
+	comp := s.newSQLiteKBComponentWithPrewrite(retrievalcommon.IndexTypeHybrid, embedCfg, docs, false)
+	w := s.buildWorkflow(comp)
+	result := s.runWorkflow(w, "hybrid retrieval fusion")
+	s.Contains(fmt.Sprintf("%v", result["raw"]), "hybrid",
+		"hybrid 真链 context 应含命中文档关键词，got: %v", result["raw"])
+}
+
+// TestKB_Graph模式_sqlite真链 use_graph=true 图库 chunk 路真链
+// （GraphKB chunk 检索走 sqlite 向量真链；三元组路无 LLM 抽取时为空、不阻断）
+func (s *KnowledgeRetrievalE2ESuite) TestKB_Graph模式_sqlite真链() {
+	embedCfg := s.newRealEmbedding()
+	docs := []string{
+		"graph knowledge base extends chunk retrieval with triple relations",
+		"the graph expansion pulls related entities into context",
+	}
+	comp := s.newSQLiteKBComponentWithPrewrite(retrievalcommon.IndexTypeVector, embedCfg, docs, true)
+	w := s.buildWorkflow(comp)
+	result := s.runWorkflow(w, "graph knowledge base")
+	s.Contains(fmt.Sprintf("%v", result["raw"]), "graph",
+		"graph 模式 chunk 路真链 context 应含命中文档关键词，got: %v", result["raw"])
 }
 
 // TestKB_Agentic模式_真LLM agentic 多跳检索真链（免费档 LLM）

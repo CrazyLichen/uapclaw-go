@@ -325,7 +325,7 @@ func (s *SQLiteVectorStore) loadVec0() error {
 // ensureBaseTables 建 chunks 主表（FTS/vec 表建表延迟到首次使用）。
 func (s *SQLiteVectorStore) ensureBaseTables() error {
 	ddl := fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %s_chunks (id TEXT PRIMARY KEY, content TEXT, metadata TEXT, doc_id TEXT, chunk_id TEXT)",
+		"CREATE TABLE IF NOT EXISTS \"%s_chunks\" (id TEXT PRIMARY KEY, content TEXT, metadata TEXT, doc_id TEXT, chunk_id TEXT)",
 		s.collectionName)
 	_, err := s.conn.ExecContext(context.Background(), ddl)
 	if err != nil {
@@ -341,7 +341,7 @@ func (s *SQLiteVectorStore) ensureBaseTables() error {
 // ensureFTSTable 建 FTS5 虚拟表（id UNINDEXED 便于按 id 删除）。
 func (s *SQLiteVectorStore) ensureFTSTable(ctx context.Context) error {
 	ddl := fmt.Sprintf(
-		"CREATE VIRTUAL TABLE IF NOT EXISTS %s_fts USING fts5(content, id UNINDEXED)",
+		"CREATE VIRTUAL TABLE IF NOT EXISTS \"%s_fts\" USING fts5(content, id UNINDEXED)",
 		s.collectionName)
 	_, err := s.conn.ExecContext(ctx, ddl)
 	if err != nil {
@@ -356,7 +356,7 @@ func (s *SQLiteVectorStore) ensureFTSTable(ctx context.Context) error {
 
 // ensureVecTable 建 vec0 虚拟表（惰性：首条带向量写入时按实际维度建）+ rowid 映射表。
 func (s *SQLiteVectorStore) ensureVecTable(ctx context.Context, dims int) error {
-	ddl := fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s_vec USING vec0(embedding float[%d])",
+	ddl := fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS \"%s_vec\" USING vec0(embedding float[%d])",
 		s.collectionName, dims)
 	if _, err := s.conn.ExecContext(ctx, ddl); err != nil {
 		return exception.BuildError(
@@ -366,7 +366,7 @@ func (s *SQLiteVectorStore) ensureVecTable(ctx context.Context, dims int) error 
 		)
 	}
 	mapDDL := fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %s_vec_map (vec_rowid INTEGER PRIMARY KEY, id TEXT UNIQUE)",
+		"CREATE TABLE IF NOT EXISTS \"%s_vec_map\" (vec_rowid INTEGER PRIMARY KEY, id TEXT UNIQUE)",
 		s.collectionName)
 	if _, err := s.conn.ExecContext(ctx, mapDDL); err != nil {
 		return exception.BuildError(
@@ -431,7 +431,7 @@ func (s *SQLiteVectorStore) addLocked(ctx context.Context, data []map[string]any
 
 		// ① chunks 主表（UPSERT：同 id 覆写）
 		upsert := fmt.Sprintf(
-			"INSERT INTO %s_chunks (id, content, metadata, doc_id, chunk_id) VALUES (?,?,?,?,?) "+
+			"INSERT INTO \"%s_chunks\" (id, content, metadata, doc_id, chunk_id) VALUES (?,?,?,?,?) "+
 				"ON CONFLICT(id) DO UPDATE SET content=excluded.content, metadata=excluded.metadata, "+
 				"doc_id=excluded.doc_id, chunk_id=excluded.chunk_id",
 			s.collectionName)
@@ -448,7 +448,7 @@ func (s *SQLiteVectorStore) addLocked(ctx context.Context, data []map[string]any
 			return err
 		}
 		if _, err := s.conn.ExecContext(ctx,
-			fmt.Sprintf("DELETE FROM %s_fts WHERE id = ?", s.collectionName), nodeID); err != nil {
+			fmt.Sprintf("DELETE FROM \"%s_fts\" WHERE id = ?", s.collectionName), nodeID); err != nil {
 			return exception.BuildError(
 				exception.StatusRetrievalVectorStoreProviderInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("sqlite store: 清理 FTS 旧记录失败: %s", err)),
@@ -456,7 +456,7 @@ func (s *SQLiteVectorStore) addLocked(ctx context.Context, data []map[string]any
 			)
 		}
 		if _, err := s.conn.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s_fts (content, id) VALUES (?, ?)", s.collectionName), text, nodeID); err != nil {
+			fmt.Sprintf("INSERT INTO \"%s_fts\" (content, id) VALUES (?, ?)", s.collectionName), text, nodeID); err != nil {
 			return exception.BuildError(
 				exception.StatusRetrievalVectorStoreProviderInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("sqlite store: 写入 FTS 失败: %s", err)),
@@ -486,16 +486,16 @@ func (s *SQLiteVectorStore) addLocked(ctx context.Context, data []map[string]any
 		// 同 id 覆写：删旧 vec 行与映射
 		var oldRowid sql.NullInt64
 		err := s.conn.QueryRowContext(ctx,
-			fmt.Sprintf("SELECT vec_rowid FROM %s_vec_map WHERE id = ?", s.collectionName), nodeID).Scan(&oldRowid)
+			fmt.Sprintf("SELECT vec_rowid FROM \"%s_vec_map\" WHERE id = ?", s.collectionName), nodeID).Scan(&oldRowid)
 		if err == nil && oldRowid.Valid {
 			_, _ = s.conn.ExecContext(ctx,
-				fmt.Sprintf("DELETE FROM %s_vec WHERE rowid = ?", s.collectionName), oldRowid.Int64)
+				fmt.Sprintf("DELETE FROM \"%s_vec\" WHERE rowid = ?", s.collectionName), oldRowid.Int64)
 			_, _ = s.conn.ExecContext(ctx,
-				fmt.Sprintf("DELETE FROM %s_vec_map WHERE id = ?", s.collectionName), nodeID)
+				fmt.Sprintf("DELETE FROM \"%s_vec_map\" WHERE id = ?", s.collectionName), nodeID)
 		}
 		// vec0 写入：f32 blob + vec_f32()（harness manager.go:1271 同款形态）
 		if _, err := s.conn.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s_vec (rowid, embedding) VALUES (NULL, vec_f32(?))", s.collectionName),
+			fmt.Sprintf("INSERT INTO \"%s_vec\" (rowid, embedding) VALUES (NULL, vec_f32(?))", s.collectionName),
 			f32Blob(embedding)); err != nil {
 			return exception.BuildError(
 				exception.StatusRetrievalVectorStoreProviderInvalid,
@@ -512,7 +512,7 @@ func (s *SQLiteVectorStore) addLocked(ctx context.Context, data []map[string]any
 			)
 		}
 		if _, err := s.conn.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s_vec_map (vec_rowid, id) VALUES (?, ?)", s.collectionName),
+			fmt.Sprintf("INSERT INTO \"%s_vec_map\" (vec_rowid, id) VALUES (?, ?)", s.collectionName),
 			newRowid, nodeID); err != nil {
 			return exception.BuildError(
 				exception.StatusRetrievalVectorStoreProviderInvalid,
@@ -544,7 +544,7 @@ func (s *SQLiteVectorStore) searchLocked(ctx context.Context, queryVector []floa
 		)
 	}
 	knn := fmt.Sprintf(
-		"SELECT m.id, v.distance FROM %s_vec v JOIN %s_vec_map m ON m.vec_rowid = v.rowid "+
+		"SELECT m.id, v.distance FROM \"%s_vec\" v JOIN \"%s_vec_map\" m ON m.vec_rowid = v.rowid "+
 			"WHERE v.embedding MATCH ? AND k = ? ORDER BY distance LIMIT ?",
 		s.collectionName, s.collectionName)
 	rows, err := s.conn.QueryContext(ctx, knn, f32Blob(queryVector), topK, topK)
@@ -587,7 +587,7 @@ func (s *SQLiteVectorStore) sparseSearchLocked(ctx context.Context, queryText st
 		return []retrievalcommon.SearchResult{}, nil
 	}
 	q := fmt.Sprintf(
-		"SELECT id, content, -bm25(%s_fts) AS score FROM %s_fts WHERE %s_fts MATCH ? "+
+		"SELECT id, content, -bm25(\"%s_fts\") AS score FROM \"%s_fts\" WHERE \"%s_fts\" MATCH ? "+
 			"ORDER BY score LIMIT ?",
 		s.collectionName, s.collectionName, s.collectionName)
 	rows, err := s.conn.QueryContext(ctx, q, match, topK)
@@ -695,20 +695,20 @@ func (s *SQLiteVectorStore) deleteLocked(ctx context.Context, ids []string, filt
 	for _, id := range ids {
 		var oldRowid sql.NullInt64
 		err := s.conn.QueryRowContext(ctx,
-			fmt.Sprintf("SELECT vec_rowid FROM %s_vec_map WHERE id = ?", s.collectionName), id).Scan(&oldRowid)
+			fmt.Sprintf("SELECT vec_rowid FROM \"%s_vec_map\" WHERE id = ?", s.collectionName), id).Scan(&oldRowid)
 		if err == nil && oldRowid.Valid {
 			_, _ = s.conn.ExecContext(ctx,
-				fmt.Sprintf("DELETE FROM %s_vec WHERE rowid = ?", s.collectionName), oldRowid.Int64)
+				fmt.Sprintf("DELETE FROM \"%s_vec\" WHERE rowid = ?", s.collectionName), oldRowid.Int64)
 			_, _ = s.conn.ExecContext(ctx,
-				fmt.Sprintf("DELETE FROM %s_vec_map WHERE id = ?", s.collectionName), id)
+				fmt.Sprintf("DELETE FROM \"%s_vec_map\" WHERE id = ?", s.collectionName), id)
 		}
 		r1, err := s.conn.ExecContext(ctx,
-			fmt.Sprintf("DELETE FROM %s_chunks WHERE id = ?", s.collectionName), id)
+			fmt.Sprintf("DELETE FROM \"%s_chunks\" WHERE id = ?", s.collectionName), id)
 		if err != nil {
 			return false, err
 		}
 		_, _ = s.conn.ExecContext(ctx,
-			fmt.Sprintf("DELETE FROM %s_fts WHERE id = ?", s.collectionName), id)
+			fmt.Sprintf("DELETE FROM \"%s_fts\" WHERE id = ?", s.collectionName), id)
 		if n, err := r1.RowsAffected(); err == nil && n > 0 {
 			deleted = true
 		}
@@ -732,7 +732,7 @@ func (s *SQLiteVectorStore) tableExistsLocked(ctx context.Context, tableName str
 func (s *SQLiteVectorStore) deleteTableLocked(ctx context.Context, tableName string) error {
 	for _, suffix := range []string{"_vec", "_vec_map", "_fts", "_chunks"} {
 		if _, err := s.conn.ExecContext(ctx,
-			"DROP TABLE IF EXISTS "+tableName+suffix); err != nil {
+			`DROP TABLE IF EXISTS "`+tableName+suffix+`"`); err != nil {
 			return exception.BuildError(
 				exception.StatusRetrievalVectorStoreProviderInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("sqlite store: 删表失败 %s%s: %s", tableName, suffix, err)),
@@ -751,7 +751,7 @@ func (s *SQLiteVectorStore) hydrateResults(ctx context.Context, ids []string, ra
 	for i, id := range ids {
 		var content, metaJSON string
 		err := s.conn.QueryRowContext(ctx,
-			fmt.Sprintf("SELECT content, metadata FROM %s_chunks WHERE id = ?", s.collectionName), id).
+			fmt.Sprintf("SELECT content, metadata FROM \"%s_chunks\" WHERE id = ?", s.collectionName), id).
 			Scan(&content, &metaJSON)
 		if err != nil {
 			continue // vec/fts 有但 chunks 缺（异常态）：跳过
