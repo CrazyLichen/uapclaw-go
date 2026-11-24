@@ -18,6 +18,7 @@
 //	├── span_state.go        # OtelSpanState + ctx 注入
 //	├── span_context.go     # 轨迹上下文窗口规范状态（⤴️22.3a，15.11）
 //	├── trajectory_events.go # 轨迹 v2 事件发射链（⤴️22.4，15.11）
+//	├── context_compression_bridge.go # 压缩观测桥（context_compression_handler.py）
 //	├── callback_handler.go  # OtelCallbackHandler
 //	├── monitor_handler.go   # OtelTeamMonitorHandler
 //	├── demand.go            # 全局 trajectory span processor 单例面（15.16c）

@@ -36,7 +36,6 @@ func TestNewTeamSkillEvolutionRail(t *testing.T) {
 	assert.NotNil(t, r.EvolutionStore(), "EvolutionStore 不应为 nil")
 	assert.NotNil(t, r.Scorer(), "Scorer 不应为 nil")
 	assert.NotNil(t, r.Generator(), "Generator 不应为 nil")
-	assert.NotNil(t, r.TeamSignalDetector(), "TeamSignalDetector 不应为 nil")
 	assert.NotNil(t, r.ApprovalRuntime(), "ApprovalRuntime 不应为 nil")
 }
 
@@ -48,10 +47,9 @@ func TestTeamSkillEvolutionRail_Setters(t *testing.T) {
 		assert.False(t, r.HasPendingApprovalSnapshot("no-such-request"))
 	})
 
-	t.Run("UpdateLLM 更新三处组件且不 panic", func(t *testing.T) {
+	t.Run("UpdateLLM 更新组件且不 panic", func(t *testing.T) {
 		r := newTeamRail(t)
-		r.UpdateLLM(newTestLLMModel(t), "new-model")
-		assert.NotNil(t, r.TeamSignalDetector(), "更新后探测器不应为 nil")
+		assert.NotPanics(t, func() { r.UpdateLLM(newTestLLMModel(t), "new-model") })
 	})
 
 	t.Run("SetSysOperation 同时下发给基类与 store", func(t *testing.T) {
@@ -154,14 +152,6 @@ func TestTeamRail_SnapshotForEvolution_autoScan开(t *testing.T) {
 	require.NotNil(t, snap.SkillName, "SkillName 不应为 nil")
 	assert.Equal(t, "team-skill", *snap.SkillName)
 	assert.Equal(t, "sess-snap", snap.SessionID)
-}
-
-// TestTeamRail_DetectUserRequest_空消息 验证无消息时返回 nil 且无错误。
-func TestTeamRail_DetectUserRequest_空消息(t *testing.T) {
-	r := newTeamRail(t)
-	got, err := r.detectUserRequest(context.Background(), nil, "")
-	assert.NoError(t, err)
-	assert.Nil(t, got)
 }
 
 // TestTeamRail_BuildRecordApprovalEvent_Nil请求 验证 request 为 nil 时返回 nil。

@@ -57,8 +57,6 @@ type TeamSkillEvolutionRail struct {
 	onlineUpdater *single_dim.SingleDimUpdater
 	// orchestrator 在线演进编排器
 	orchestrator *experience.OnlineEvolutionOrchestrator
-	// teamSignalDetector 团队信号检测器
-	teamSignalDetector *signal.TeamSignalDetector
 	// experienceTracker 经验展示追踪器
 	experienceTracker *experience.ExperienceTracker
 
@@ -310,17 +308,6 @@ func NewTeamSkillEvolutionRail(
 		r.experienceSkillOps,
 		"team_skill_evolve",
 		"team_skill_experience_updater",
-	)
-
-	// 初始化 TeamSignalDetector
-	// Python: self._team_signal_detector = TeamSignalDetector(
-	//   llm=llm, model=model, language=language,
-	//   trajectory_issue_llm_policy=..., user_intent_llm_policy=...,
-	// )
-	r.teamSignalDetector = signal.NewTeamSignalDetector(
-		llmModel, model, language,
-		&r.trajectoryIssueLLMPolicy,
-		&r.userRequestLLMPolicy,
 	)
 
 	// 初始化 ExperienceTracker
@@ -632,13 +619,12 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 // RunEvolution 执行团队技能演化。
 // 对齐 Python: TeamSkillEvolutionRail.run_evolution(trajectory, ctx=None, *, snapshot=None)
 //
-//	核心流程：
+//	新版核心流程（08-13）：
 //	1. 从 snapshot 或 ctx 获取 messages 和 presentedEntries
-//	2. 聚合团队轨迹（aggregateTeamTrajectory）
-//	3. 检测使用的团队技能（detectUsedTeamSkill）
-//	4. 运行 TeamSignalDetector（trajectory signals + user intent）
-//	5. handleEvolutionFromSignals（从信号触发演化）
-//	6. evaluatePresentedEntries（评估已呈现条目）
+//	2. detectUsedTeamSkill（SKILL.md 读迹归属，仅 team/swarm kind）
+//	3. DetectRuleSignals（确定性规则信号，固定 signal_types）
+//	4. HandleEvolutionFromSignalsWithResult（staging+审批/outcome）
+//	5. evaluatePresentedEntries（评估已呈现条目）
 func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
 	if !r.signalTrigger {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan disabled, skipping")
@@ -985,10 +971,6 @@ func (r *TeamSkillEvolutionRail) Generator() *skillopt.TeamSkillExperienceOptimi
 
 // TeamSignalDetector 返回团队信号检测器。
 // Python: TeamSkillEvolutionRail.team_signal_detector (lazy property)
-func (r *TeamSkillEvolutionRail) TeamSignalDetector() *signal.TeamSignalDetector {
-	return r.teamSignalDetector
-}
-
 // ApprovalRuntime 返回审批运行时。
 // Python: TeamSkillEvolutionRail.approval_runtime (lazy property)
 func (r *TeamSkillEvolutionRail) ApprovalRuntime() *EvolutionApprovalRuntime {
@@ -1062,13 +1044,6 @@ func (r *TeamSkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 	}
 	if r.scorer != nil {
 		r.scorer.UpdateLLM(llmModel, model)
-	}
-	if r.teamSignalDetector != nil {
-		r.teamSignalDetector = signal.NewTeamSignalDetector(
-			llmModel, model, r.language,
-			&r.trajectoryIssueLLMPolicy,
-			&r.userRequestLLMPolicy,
-		)
 	}
 }
 
@@ -1187,15 +1162,6 @@ func (r *TeamSkillEvolutionRail) aggregateTeamTrajectory(traj *trajectory.Trajec
 	return teamTraj
 }
 
-// detectUserRequest 桥接 TeamSignalDetector 检测用户意图。
-// 对齐 Python: TeamSkillEvolutionRail._detect_user_request(messages, team_skill_content)
-func (r *TeamSkillEvolutionRail) detectUserRequest(ctx context.Context, messages []map[string]any, skillContent string) (*signal.UserIntent, error) {
-	if len(messages) == 0 {
-		return nil, nil
-	}
-	return r.teamSignalDetector.DetectUserIntent(ctx, messages, skillContent)
-}
-
 // detectActiveRequestSignals 检测显式请求的活跃信号。
 // 对齐 Python: TeamSkillEvolutionRail._detect_active_request_signals(skill_name, trajectory)
 func (r *TeamSkillEvolutionRail) detectActiveRequestSignals(
@@ -1203,28 +1169,8 @@ func (r *TeamSkillEvolutionRail) detectActiveRequestSignals(
 	skillName string,
 	traj *trajectory.Trajectory,
 ) ([]*signal.EvolutionSignal, error) {
-	// Python: current_content = await self._store.read_skill_content(skill_name)
-	currentContent, err := r.evolutionStore.ReadSkillContent(ctx, skillName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Python: detected = await self.team_signal_detector.detect_trajectory_signals(...)
-	detected, err := r.teamSignalDetector.DetectTrajectorySignals(ctx, traj, skillName, currentContent)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request trajectory detection failed")
-		return nil, nil
-	}
-
-	// Python: 过滤非目标技能的信号
-	signals := make([]*signal.EvolutionSignal, 0, len(detected))
-	for _, sig := range detected {
-		if sig.SkillName != nil && *sig.SkillName != "" && *sig.SkillName != skillName {
-			continue
-		}
-		r.teamAppendUniqueSignal(&signals, sig)
-	}
-	return signals, nil
+	// Python: _detect_active_request_signals 委托 _detect_rule_signals（:948-951）
+	return r.DetectRuleSignals(ctx, traj, skillName), nil
 }
 
 // detectExperienceDetailRead 检测经验详情读取操作（团队技能变体）。

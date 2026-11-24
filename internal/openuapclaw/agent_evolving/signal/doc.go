@@ -10,6 +10,7 @@
 //	├── signal.go        # EvolutionSignal 核心类型、工厂函数、去重指纹
 //	├── from_eval.go     # EvaluatedCase → EvolutionSignal 转换
 //	├── from_conv.go     # ConversationSignalDetector 对话信号检测、ParseMessages 消息归一化
+//	├── skill_creation.go # SkillCreationSignalDetector 技能创建信号（skill_creation.py）
 //	└── team.go          # TeamSignalDetector 团队域信号检测
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/signal/
