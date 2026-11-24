@@ -213,7 +213,11 @@ func NewToolRetrievalPromptRail(
 func (r *ToolRetrievalPromptRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.agent = agent
 	if agent != nil {
-		r.systemPromptBuilder = agent.SystemPromptBuilder()
+		// nil 保护：裸 NewDeepAgent 无 builder（生产路径 CreateDeepAgent 装配），
+		// 保留既有引用不被置空。
+		if builder := agent.SystemPromptBuilder(); builder != nil {
+			r.systemPromptBuilder = builder
+		}
 		r.attachmentManager = prompts.ManagerFor(agent)
 	}
 	// 冻结失败不阻断会话（Python try/except debug 日志）。
