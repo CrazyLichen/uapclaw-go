@@ -174,7 +174,10 @@ func (s *SkillEvolutionTriggerSuite) newEvolutionRail(
 	)
 	s.Require().NoError(err)
 
-	rail := evolution.NewSkillEvolutionRail([]string{s.skillsDir}, model, "mock-model", "cn", opts...)
+	// signal_trigger 显式开启：after_invoke→SnapshotForEvolution→RunEvolution
+	// 触发链的门槛（Python 新版缺省 False，测试构造处显式开）。
+	rail := evolution.NewSkillEvolutionRail([]string{s.skillsDir}, model, "mock-model", "cn",
+		append([]evolution.SkillEvolutionRailOption{evolution.WithSignalTrigger(true)}, opts...)...)
 	return client, rail
 }
 

@@ -225,6 +225,8 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 		return origErr
 	}
 
+	if re.After == interfaces.CallbackAfterModelCall {
+	}
 	// 触发 after 钩子
 	afterErr := cbc.Fire(ctx, re.After)
 	if afterErr != nil {
