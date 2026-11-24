@@ -1253,11 +1253,17 @@ func (am *AbilityManager) executeWorkflow(
 	wf := wfs[0]
 
 	// 步骤 3：创建 workflow session（对齐 Python L707: workflow_session = session.create_workflow_session()）
+	// Python create_workflow_session 仅内部 AgentSession 持有（internal/agent.py:74）；
+	// Go 补 NodeSessionFacade 桥接（偏差 D-26-7）：react-in-workflow 场景 react agent
+	// 的会话面是 workflow 节点会话，按同语义建 WorkflowSession（session_id 对齐、
+	// workflow_id 取节点所属 workflow）——8.26 层 2 中断桥 e2e 实证缺口。
 	var workflowSess *session.WorkflowSession
 	if sess != nil {
-		// 创建 workflow session 需要断言 *session.Session 具体类型
 		if agentSess, ok := sess.(*session.Session); ok {
 			workflowSess = agentSess.CreateWorkflowSession()
+		} else if nodeSess, ok := sess.(interface{ GetWorkflowID() string }); ok {
+			// NodeSessionFacade 面（GetWorkflowID，Python session.workflow_id() 同语义）
+			workflowSess = session.NewWorkflowSessionFacade(nodeSess.GetWorkflowID(), sess.GetSessionID(), nil)
 		}
 	}
 

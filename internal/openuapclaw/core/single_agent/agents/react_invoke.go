@@ -7,23 +7,23 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	mcptool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -779,14 +779,30 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			// 工作流中断恢复分支（8.26 层 2 中断桥；Python react_agent.py
 			// L3062-13078：_handle_resume workflow 路径，与 HITL 分派互斥——
 			// ResumeStartIterationKey 双链共用但同一时刻只有一链活跃，D-26-4）
+			// 恢复输入来源：交互队列优先（workflow-in-workflow 场景引擎恢复按
+			// 节点 executable ID 路由反馈进节点状态 InteractiveInputKey——
+			// 与 questioner 的 InteractWithResult 恢复消费同机制）；队列空回退
+			// curInputs.Query（独立 agent 场景恢复输入走 query 通道）。
+			resumeInput := a.popWorkflowResumeInput(sess)
+			if resumeInput == nil {
+				resumeInput = curInputs.Query
+			}
 			resumeResult, resumeErr := a.handleResumeWorkflow(
-				ctx, workflowState, curInputs.Query, cbc, modelCtx, sess, curInputs,
+				ctx, workflowState, resumeInput, cbc, modelCtx, sess, curInputs,
 			)
 			if resumeErr != nil {
 				return resumeErr
 			}
 			if resumeResult != nil {
-				// 仍有中断（轮转或恢复后再中断），invokeInputs.result 已设置
+				// 仍有中断（轮转或恢复后再中断），invokeInputs.result 已设置；
+				// 与首调同语义挂起外层 workflow（D-26-8：批式恢复轮的中断帧
+				// 同样须经 GraphInterrupt 引擎暂停 + 写交互帧，否则外层 workflow
+				// 误判节点完成直接 COMPLETED）
+				if rt, _ := resumeResult["result_type"].(string); rt == "interrupt" && sess != nil {
+					if value, ok := pendingInteractionValue(resumeResult); ok {
+						a.suspendWorkflowInteraction(ctx, sess, value)
+					}
+				}
 				result = resumeResult
 				return nil
 			}
@@ -1257,6 +1273,22 @@ func (a *ReActAgent) reactLoop(
 
 	if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
 		invokeInputs.Result = iterResult
+	}
+
+	// D-26-8：批式 invoke 收尾挂起外层 workflow 图执行（复刻
+	// WorkflowInteraction.WaitUserInputs 挂起三步：commitCMP + 写交互帧 +
+	// PanicGraphInterrupt——Python L3398-1631 仅 stream 路径写帧且批式不挂起，
+	// 上游批式 react 节点的中断帧不达外层 workflow 流扫描（workflow.py:370-377），
+	// 批式场景该链路不可用；Go 按 8.24 已验证的 GraphInterrupt 引擎暂停 +
+	// INTERACTION 扫描机制在 invoke 收尾补齐，使层 2 中断桥在批式 workflow
+	// 中可用）。挂起交互载荷取 pending 帧的 Value（问题文本），帧 ID 由
+	// SuspendNodeInteraction 按本节点 executable ID 写（恢复按节点路由）。
+	if iterResult != nil && sess != nil {
+		if rt, _ := iterResult["result_type"].(string); rt == "interrupt" {
+			if value, ok := pendingInteractionValue(iterResult); ok {
+				a.suspendWorkflowInteraction(ctx, sess, value)
+			}
+		}
 	}
 
 	return iterResult, nil

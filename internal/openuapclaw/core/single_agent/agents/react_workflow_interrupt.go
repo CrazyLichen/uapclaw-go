@@ -16,7 +16,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	interfaces2 "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
@@ -205,9 +207,59 @@ func (a *ReActAgent) loadInterruptionState(sess sessioninterfaces.SessionFacade)
 	if val == nil {
 		return nil
 	}
-	st, ok := val.(*agentschema.InterruptionState)
-	if !ok {
+	if st, ok := val.(*agentschema.InterruptionState); ok {
+		return st
+	}
+	// checkpoint 持久化往返把结构体指针降级为 map（questioner_state 同款问题，
+	// 其用 Serialize/Deserialize 承载）——JSON 重建恢复语义。
+	data, err := json.Marshal(val)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("action", "load_interruption_state").
+			Msg("failed to marshal persisted interruption state for rebuild")
 		return nil
+	}
+	st := &agentschema.InterruptionState{}
+	if err := json.Unmarshal(data, st); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("action", "load_interruption_state").
+			Msg("failed to unmarshal persisted interruption state")
+		return nil
+	}
+	// WorkflowInterruptEntry.WorkflowExecutionState 同被降级为 map——
+	// 重建回 *workflow.WorkflowOutput（下游 isInterrupted/流写入断言依赖）。
+	for _, entry := range st.InterruptedWorkflows {
+		if entry == nil || entry.WorkflowExecutionState == nil {
+			continue
+		}
+		if _, isWfOut := entry.WorkflowExecutionState.(*workflow.WorkflowOutput); isWfOut {
+			continue
+		}
+		blob, err := json.Marshal(entry.WorkflowExecutionState)
+		if err != nil {
+			continue
+		}
+		out := &workflow.WorkflowOutput{}
+		if err := json.Unmarshal(blob, out); err != nil {
+			continue
+		}
+		// Result 里的帧同样是值形态 map/[]any——重建回 []stream.Schema
+		if rawList, ok := out.Result.([]any); ok {
+			schemas := make([]stream.Schema, 0, len(rawList))
+			for _, raw := range rawList {
+				b, err := json.Marshal(raw)
+				if err != nil {
+					continue
+				}
+				os := &stream.OutputSchema{}
+				if err := json.Unmarshal(b, os); err != nil {
+					continue
+				}
+				schemas = append(schemas, os)
+			}
+			out.Result = schemas
+		}
+		entry.WorkflowExecutionState = out
 	}
 	return st
 }
@@ -436,4 +488,102 @@ func deepCloneToolCall(tc *llmschema.ToolCall) *llmschema.ToolCall {
 		return tc
 	}
 	return clone
+}
+
+// ──────────────────────────── 批式 workflow 挂起桥（D-26-8） ────────────────────────────
+
+// popWorkflowResumeInput 从节点交互队列取恢复输入（nil = 队列空）。
+// workflow-in-workflow 恢复场景：引擎重放节点前 checkpointer 把用户反馈按节点
+// executable ID 路由进节点状态 InteractiveInputKey，队列消费与 questioner 的
+// InteractWithResult 恢复同机制。
+func (a *ReActAgent) popWorkflowResumeInput(sess sessioninterfaces.SessionFacade) any {
+	nodeSess, ok := sess.(interface {
+		InnerNodeSession() interfaces2.InnerSession
+	})
+	if !ok {
+		return nil
+	}
+	inner := nodeSess.InnerNodeSession()
+	wi := interaction.NewWorkflowInteraction(inner)
+	res := wi.PopPendingInteractiveInput()
+	if res != nil {
+		// 消费后同步清空节点状态中的交互队列（vertex.clearInteractive 同款）：
+		// 后续轮转挂起会以全新 interaction 实例重读 state 队列，不清空会被
+		// SuspendNodeInteraction 的"队列仍有待消费输入"防御分支拒绝。
+		_ = inner.State().Update(map[string]any{constants.InteractiveInputKey: []any{}})
+	}
+	return res
+}
+
+// pendingInteractionValue 从 interrupt 结果中提取 pending 交互帧的载荷值
+// （问题文本）。帧形态双收：workflow 收集的 chunk 值/指针都可能出现。
+func pendingInteractionValue(result map[string]any) (any, bool) {
+	workflowState, _ := result["workflow_execution_state"].(*workflow.WorkflowOutput)
+	if workflowState == nil {
+		return nil, false
+	}
+	componentIDs, _ := result["component_ids"].([]string)
+	if len(componentIDs) == 0 {
+		return nil, false
+	}
+	pendingID := componentIDs[0]
+	list, ok := workflowState.Result.([]stream.Schema)
+	if !ok {
+		return nil, false
+	}
+	for _, sch := range list {
+		if sch == nil || sch.SchemaType() != interaction.InteractionType {
+			continue
+		}
+		var payload any
+		switch t := sch.(type) {
+		case *stream.OutputSchema:
+			payload = t.Payload
+		case stream.OutputSchema:
+			payload = t.Payload
+		default:
+			continue
+		}
+		switch p := payload.(type) {
+		case interaction.InteractionOutput:
+			if p.ID == pendingID {
+				return p.Value, true
+			}
+		case *interaction.InteractionOutput:
+			if p.ID == pendingID {
+				return p.Value, true
+			}
+		case map[string]any:
+			// JSON 往返形态（checkpoint 恢复）
+			if fmt.Sprint(p["id"]) == pendingID {
+				return p["value"], true
+			}
+		}
+	}
+	return nil, false
+}
+
+// suspendWorkflowInteraction 挂起外层 workflow 图执行（节点会话面桥接）。
+// panic GraphInterrupt 向上冒泡穿过 Invoke → invokeEntry → graph 引擎捕获
+// （checkpoint + workflow 层 INPUT_REQUIRED），不经任何 recover 吞没
+// （ability 层 isInterruptPanic 只覆盖工具执行期 panic，此处不在其域内）。
+func (a *ReActAgent) suspendWorkflowInteraction(ctx context.Context, sess sessioninterfaces.SessionFacade, value any) {
+	nodeSess, ok := sess.(interface {
+		InnerNodeSession() interfaces2.InnerSession
+		GetExecutableID() string
+	})
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "workflow_interrupt_suspend_skipped").
+			Msg("session does not expose node inner session, workflow interrupt suspend skipped")
+		return
+	}
+	wi := interaction.NewWorkflowInteraction(nodeSess.InnerNodeSession())
+	if err := wi.SuspendNodeInteraction(ctx, value); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "workflow_interrupt_suspend_error").
+			Err(err).
+			Str("executable_id", nodeSess.GetExecutableID()).
+			Msg("failed to suspend workflow interaction for react interrupt")
+	}
 }
