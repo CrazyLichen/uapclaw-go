@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -404,5 +405,23 @@ func IsObservabilityInitialized() bool {
 // GetObservabilityConfig 返回当前生效的可观测性配置，未初始化返回 nil。
 // Python: extensions/observability/setup.py get_config()（⤴️15.11/22.1 最小面）
 func GetObservabilityConfig() *ObservabilityConfig {
+	return activeConfig
+}
+
+
+// demandMu provider/配置访问锁（extensions demand 层查询用）。
+var demandMu sync.Mutex
+
+// ProviderInitialized 共享 provider 是否已初始化（extensions demand 层查询用）。
+func ProviderInitialized() bool {
+	demandMu.Lock()
+	defer demandMu.Unlock()
+	return provider != nil
+}
+
+// ActiveConfig 当前生效的共享观测配置（extensions demand 层读取用）。
+func ActiveConfig() *ObservabilityConfig {
+	demandMu.Lock()
+	defer demandMu.Unlock()
 	return activeConfig
 }
