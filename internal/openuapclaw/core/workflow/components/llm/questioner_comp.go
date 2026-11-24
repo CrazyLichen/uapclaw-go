@@ -12,9 +12,13 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	"github.com/uapclaw/uapclaw-go/internal/common/security"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -590,6 +594,570 @@ func (e *QuestionerExecutable) initializeIfNeeded(ctx context.Context) error {
 // initPrompt 初始化提示词模板（Python _init_prompt :855-856）
 func (e *QuestionerExecutable) initPrompt() *prompt.PromptTemplate {
 	return prompt.NewPromptTemplate("", e.defaultCfg.promptTemplate)
+}
+
+// ──────────────────────────── Task 6 DirectReplyHandler ────────────────────────────
+
+// questionerDirectReplyHandler 直接回复处理器（Python QuestionerDirectReplyHandler
+// :380-741 字段一比一）
+type questionerDirectReplyHandler struct {
+	// cfg 配置（Python self._config）
+	cfg *QuestionerConfig
+	// llModel 模型实例（Python self._model）
+	llModel LLMInvoker
+	// state 当前状态（Python self._state）
+	state *QuestionerState
+	// promptT 提示词模板（Python self._prompt）
+	promptT *prompt.PromptTemplate
+	// query 当前输入（Python self._query，str 或 dict）
+	query any
+}
+
+// newQuestionerDirectReplyHandler 构造（Python __init__ :381-386 默认值 + 链式
+// 注入 config/model/state/prompt 的等价合并；get_state 经 handler.state 直读——D-24-8）
+func newQuestionerDirectReplyHandler(cfg *QuestionerConfig, llModel LLMInvoker,
+	st *QuestionerState, promptT *prompt.PromptTemplate) *questionerDirectReplyHandler {
+	return &questionerDirectReplyHandler{cfg: cfg, llModel: llModel, state: st, promptT: promptT}
+}
+
+// handle 状态分发（Python handle :407-414 一比一）
+func (h *questionerDirectReplyHandler) handle(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, context iface.ModelContext) (map[string]any, error) {
+	switch h.state.Status {
+	case QuestionerStatusStart:
+		return h.handleStartState(ctx, inputs, sess, context)
+	case QuestionerStatusUserInteract:
+		return h.handleUserInteractState(ctx, inputs, sess, context)
+	case QuestionerStatusEnd:
+		return h.handleEndState(), nil
+	}
+	return map[string]any{}, nil
+}
+
+// handleStartState START 态处理（Python :416-453 十步一比一）
+func (h *questionerDirectReplyHandler) handleStartState(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, context iface.ModelContext) (map[string]any, error) {
+	// 1. 输入校验
+	questionerInput, err := questionerValidateInputs(inputs)
+	if err != nil {
+		return nil, err
+	}
+	output := newQuestionerOutputCache()
+	// 2. query 取值（str/dict 两态；None/缺省回落 ""）
+	h.query = h.extractQuery(questionerInput)
+	// 3. START 态写 user 消息
+	if err := h.writeUserMessageToContext(ctx, h.query, context); err != nil {
+		return nil, err
+	}
+	// 4. 取对话历史
+	chatHistory, err := h.getLatestChatHistory(ctx, context)
+	if err != nil {
+		return nil, err
+	}
+	// 5a. question_content 分支：模板渲染发问 → USER_INTERACT
+	if h.isSetQuestionContent() {
+		userFields := h.inputFieldsExcludeQuery(questionerInput)
+		output.Question = questionerFormatTemplate(h.cfg.QuestionContent, userFields)
+		h.updateQuestionerStatesQuestion(output.Question)
+		h.state = h.state.HandleEvent(QuestionerEventUserInteract)
+		// 6. 写 assistant 消息（问题）
+		if err := h.writeAssistantMessageToContext(ctx, output.Question, context); err != nil {
+			return nil, err
+		}
+		return questionerFormatQuestionerOutput(output), nil
+	}
+	// 5b. 字段抽取分支
+	if h.needExtractFields() {
+		isContinueAsk, cerr := h.initialExtractFromChatHistory(ctx, chatHistory, output)
+		if cerr != nil {
+			return nil, cerr
+		}
+		event := QuestionerEventEnd
+		if isContinueAsk {
+			event = QuestionerEventUserInteract
+			h.updateQuestionerStatesQuestion(output.Question)
+			// 写 assistant 消息（追问）
+			if err := h.writeAssistantMessageToContext(ctx, output.Question, context); err != nil {
+				return nil, err
+			}
+		} else {
+			// 写 assistant 消息（抽取结果 JSON）
+			if err := h.writeAssistantMessageToContext(ctx, h.jsonDump(output.KeyFields), context); err != nil {
+				return nil, err
+			}
+		}
+		h.state = h.state.HandleEvent(event)
+	} else {
+		// question_content 为空且无抽取字段 → 101072
+		return nil, exception.BuildError(exception.StatusComponentQuestionerInputInvalid,
+			exception.WithMsg("question_content is empty and no extractable fields are configured"))
+	}
+	return questionerFormatQuestionerOutput(output), nil
+}
+
+// handleUserInteractState USER_INTERACT 态处理（Python :455-488 一比一）
+func (h *questionerDirectReplyHandler) handleUserInteractState(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, context iface.ModelContext) (map[string]any, error) {
+	// 1. 取最新用户反馈（重放语义）
+	if err := h.getLatestHumanFeedback(ctx, sess); err != nil {
+		return nil, err
+	}
+	output := newQuestionerOutputCache()
+	output.Question = h.state.Question
+	output.UserResponse = h.query
+	// 2. 写 user 反馈消息
+	if err := h.writeUserMessageToContext(ctx, h.query, context); err != nil {
+		return nil, err
+	}
+	// 3. 取历史
+	chatHistory, err := h.getLatestChatHistory(ctx, context)
+	if err != nil {
+		return nil, err
+	}
+	userResponse := ""
+	if len(chatHistory) > 0 {
+		userResponse = chatHistory[len(chatHistory)-1].GetContent().String()
+	}
+	// 4a. question_content 且无抽取 → 直接 END
+	if h.isSetQuestionContent() && !h.needExtractFields() {
+		output.UserResponse = userResponse
+		h.state = h.state.HandleEvent(QuestionerEventEnd)
+		return questionerFormatQuestionerOutput(output), nil
+	}
+	// 4b. 字段抽取分支
+	if h.needExtractFields() {
+		isContinueAsk, cerr := h.repeatExtractFromChatHistory(ctx, chatHistory, output)
+		if cerr != nil {
+			return nil, cerr
+		}
+		event := QuestionerEventEnd
+		if isContinueAsk {
+			event = QuestionerEventUserInteract
+			h.updateQuestionerStatesQuestion(output.Question)
+			if err := h.writeAssistantMessageToContext(ctx, output.Question, context); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := h.writeAssistantMessageToContext(ctx, h.jsonDump(output.KeyFields), context); err != nil {
+				return nil, err
+			}
+		}
+		h.state = h.state.HandleEvent(event)
+	} else {
+		return nil, exception.BuildError(exception.StatusComponentQuestionerInputInvalid,
+			exception.WithMsg("question_content is empty and no extractable fields are configured"))
+	}
+	return questionerFormatQuestionerOutput(output), nil
+}
+
+// handleEndState END 态处理（Python _handle_end_state :490-494 一比一）
+func (h *questionerDirectReplyHandler) handleEndState() map[string]any {
+	out := map[string]any{}
+	for k, v := range h.state.ExtractedKeyFields {
+		out[k] = v
+	}
+	if !pythonsem.PyEqual(h.state.UserResponse, "") {
+		out["user_response"] = h.state.UserResponse
+	}
+	if h.state.Question != "" {
+		out["question"] = h.state.Question
+	}
+	return out
+}
+
+// isSetQuestionContent Python :496-497
+func (h *questionerDirectReplyHandler) isSetQuestionContent() bool {
+	return len(h.cfg.QuestionContent) > 0
+}
+
+// needExtractFields Python :499-501（字段数 > 已抽取数）
+func (h *questionerDirectReplyHandler) needExtractFields() bool {
+	return h.cfg.IfExtractFields() && len(h.cfg.FieldNames) > len(h.state.ExtractedKeyFields)
+}
+
+// initialExtractFromChatHistory Python :503-509
+func (h *questionerDirectReplyHandler) initialExtractFromChatHistory(ctx context.Context,
+	chatHistory []llmschema.BaseMessage, output *QuestionerOutputCache) (bool, error) {
+	if err := h.invokeLLMAndParseResult(ctx, chatHistory, output); err != nil {
+		return false, err
+	}
+	h.updateParamDefaultValue(output)
+	h.updateStateOfKeyFields(output.KeyFields)
+	return h.checkIfContinueAsk(output), nil
+}
+
+// repeatExtractFromChatHistory Python :511-517（与 initial 体相同，按 Python 保持两方法）
+func (h *questionerDirectReplyHandler) repeatExtractFromChatHistory(ctx context.Context,
+	chatHistory []llmschema.BaseMessage, output *QuestionerOutputCache) (bool, error) {
+	if err := h.invokeLLMAndParseResult(ctx, chatHistory, output); err != nil {
+		return false, err
+	}
+	h.updateParamDefaultValue(output)
+	h.updateStateOfKeyFields(output.KeyFields)
+	return h.checkIfContinueAsk(output), nil
+}
+
+// getLatestChatHistory Python _get_latest_chat_history :519-532 一比一：
+// with_chat_history 且 context 非 nil → GetContextWindow(dialogue_round)；历史为空
+// 或末条 assistant → 追加 UserMessage(query)（dict query 包 [dict]，Python content
+// 为 List[Union[str, Dict]] 承载）
+func (h *questionerDirectReplyHandler) getLatestChatHistory(ctx context.Context,
+	context iface.ModelContext) ([]llmschema.BaseMessage, error) {
+	var result []llmschema.BaseMessage
+	if h.cfg.WithChatHistory && context != nil {
+		window, err := context.GetContextWindow(ctx, nil, nil, 0, h.cfg.ChatHistoryMaxRounds)
+		if err != nil {
+			return nil, err
+		}
+		if window != nil {
+			result = window.ContextMessages
+		}
+	}
+	if len(result) == 0 || result[len(result)-1].GetRole() == llmschema.RoleTypeAssistant {
+		result = append(result, llmschema.NewUserMessage(h.queryString()))
+	}
+	return result, nil
+}
+
+// buildLLMInputs 组装 LLM 输入（Python _build_llm_inputs :534-537）
+func (h *questionerDirectReplyHandler) buildLLMInputs(chatHistory []llmschema.BaseMessage) ([]llmschema.BaseMessage, error) {
+	templateInput := h.createPromptTemplateKeywords(chatHistory)
+	formatted, err := h.promptT.Format(templateInput)
+	if err != nil {
+		return nil, err
+	}
+	return formatted.ToMessages()
+}
+
+// createPromptTemplateKeywords 模板关键字（Python :539-555 一比一：params_list
+// 逐行 "field: desc"；required_name 中英分隔符 "、"/", " 与数量后缀；dialogue_history
+// 逐条 "role: content" 行拼接）
+func (h *questionerDirectReplyHandler) createPromptTemplateKeywords(chatHistory []llmschema.BaseMessage) map[string]any {
+	paramsList := make([]string, 0, len(h.cfg.FieldNames))
+	requiredNameList := make([]string, 0, len(h.cfg.FieldNames))
+	for _, param := range h.cfg.FieldNames {
+		paramsList = append(paramsList, fmt.Sprintf("%s: %s", param.FieldName, param.Description))
+		if param.Required {
+			if param.CnFieldName != "" {
+				requiredNameList = append(requiredNameList, param.CnFieldName)
+			} else {
+				requiredNameList = append(requiredNameList, param.Description)
+			}
+		}
+	}
+	lang := h.cfg.AcceptLanguage
+	var requiredNameStr, dialogueHistoryStr string
+	if lang == "en" {
+		requiredNameStr = strings.Join(requiredNameList, ", ") +
+			fmt.Sprintf(" (%d required field(s))", len(requiredNameList))
+		parts := make([]string, 0, len(chatHistory))
+		for _, m := range chatHistory {
+			parts = append(parts, fmt.Sprintf("%s: %s", m.GetRole(), m.GetContent().String()))
+		}
+		dialogueHistoryStr = strings.Join(parts, "\n")
+	} else {
+		requiredNameStr = strings.Join(requiredNameList, "、") +
+			fmt.Sprintf("%d个必要信息", len(requiredNameList))
+		parts := make([]string, 0, len(chatHistory))
+		for _, m := range chatHistory {
+			parts = append(parts, fmt.Sprintf("%s：", m.GetRole())+m.GetContent().String())
+		}
+		dialogueHistoryStr = strings.Join(parts, "\n")
+	}
+	return map[string]any{
+		"required_name":       requiredNameStr,
+		"required_params_list": strings.Join(paramsList, "\n"),
+		"extra_info":          h.cfg.ExtraPromptForFieldsExtraction,
+		"example":             h.cfg.ExampleContent,
+		"dialogue_history":    dialogueHistoryStr,
+	}
+}
+
+// invokeLLMForExtraction LLM 抽取与解析（Python :557-614 一比一）
+func (h *questionerDirectReplyHandler) invokeLLMForExtraction(ctx context.Context,
+	llmInputs []llmschema.BaseMessage) (map[string]any, error) {
+	response := ""
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_START").
+		Str("component_id", "QuestionerComponent").
+		Str("component_type_str", "QuestionerComponent").
+		Bool("has_inputs", len(llmInputs) > 0).
+		Int("input_count", len(llmInputs)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("Questioner LLM extraction started")
+
+	resp, invokeErr := h.llModel.Invoke(ctx, modelclients.NewMessagesParam(llmInputs...))
+	if invokeErr != nil {
+		return nil, exception.BuildError(exception.StatusComponentQuestionerInvokeCallFailed,
+			exception.WithMsg("failed to invoke llm for extraction"), exception.WithCause(invokeErr))
+	}
+	if resp != nil {
+		response = resp.GetContent().String()
+	}
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "WORKFLOW_COMPONENT_END").
+		Str("component_id", "QuestionerComponent").
+		Str("component_type_str", "QuestionerComponent").
+		Bool("has_response", response != "").
+		Int("response_length", len(response)).
+		Bool("sensitive_mode", security.IsSensitive()).
+		Msg("Questioner LLM extraction completed")
+
+	result := map[string]any{}
+	// 剥壳两正则（Python :593-594，flags=IGNORECASE）：```json 与 '''json
+	cleaned := response
+	cleaned = strings.TrimSpace(cleaned)
+	jsonFence := regexp.MustCompile("(?i)^\\s*```json\\s*|\\s*```\\s*$")
+	cleaned = jsonFence.ReplaceAllString(cleaned, "")
+	squoteFence := regexp.MustCompile("(?i)^\\s*'''json\\s*|\\s*'''\\s*$")
+	cleaned = squoteFence.ReplaceAllString(cleaned, "")
+	if err := json.Unmarshal([]byte(strings.TrimSpace(cleaned)), &result); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Str("event_type", "WORKFLOW_COMPONENT_ERROR").
+			Str("component_id", "QuestionerComponent").
+			Str("component_type_str", "QuestionerComponent").
+			Str("error", "Failed to parse JSON from LLM response").
+			Msg("Questioner JSON parse failed")
+		return result, nil // Python :596-603 解析失败返空 dict 不报错
+	}
+	// 非 dict：json.Unmarshal 到 map 已保证；数值化校验（Python :605-609 不可达分支
+	// 由 Unmarshal 目标类型承载）
+	// JSON 数字归一化（D-24-11）：Python json.loads 整数字面量→int、带小数→float；
+	// Go 全为 float64，整值归一 int64 对齐主流 LLM 输出（42→"42" 而非 "42.0"；
+	// 42.0 亦归一为 int，与 Python float(42.0) 偏差，登记 spec）
+	for k, v := range result {
+		if f, ok := v.(float64); ok && f == float64(int64(f)) {
+			result[k] = int64(f)
+		}
+	}
+	// is_valid_value 过滤（Python :610）
+	filtered := map[string]any{}
+	for k, v := range result {
+		if questionerIsValidValue(v) {
+			filtered[k] = v
+		}
+	}
+	// 类型校验转换（Python :612-614）
+	return h.validateAndConvertFields(filtered), nil
+}
+
+// validateAndConvertFields 字段类型校验转换（Python :616-654 一比一：field_type_map
+// 缺键回落 "string"；失败剔除 + warning log 含 field_name/value(敏感置 nil)/expected_type）
+func (h *questionerDirectReplyHandler) validateAndConvertFields(extracted map[string]any) map[string]any {
+	fieldTypeMap := map[string]string{}
+	for _, f := range h.cfg.FieldNames {
+		fieldTypeMap[f.FieldName] = f.Type
+	}
+	validated := map[string]any{}
+	for fieldName, value := range extracted {
+		expectedType := fieldTypeMap[fieldName]
+		if expectedType == "" {
+			expectedType = "string"
+		}
+		converted, ok := questionerValidateAndConvertType(value, expectedType)
+		if ok {
+			validated[fieldName] = converted
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event_type", "WORKFLOW_COMPONENT_ERROR").
+				Str("component_id", "QuestionerComponent").
+				Str("component_type_str", "QuestionerComponent").
+				Str("field_name", fieldName).
+				Str("value", questionerSensitiveValueRepr(value)).
+				Str("expected_type", expectedType).
+				Msg("Questioner field validation failed")
+		}
+	}
+	return validated
+}
+
+// questionerSensitiveValueRepr 敏感模式下的值脱敏（Python :649 `str(value) if not
+// UserConfig.is_sensitive() else None`——敏感时 None ≙ 空串占位）
+func questionerSensitiveValueRepr(v any) string {
+	if security.IsSensitive() {
+		return ""
+	}
+	return pythonsem.PyStr(v)
+}
+
+// filterNonExtractedKeyFields 缺失必填字段（Python :656-661）
+func (h *questionerDirectReplyHandler) filterNonExtractedKeyFields() []QuestionerFieldInfo {
+	var result []QuestionerFieldInfo
+	for _, item := range h.cfg.FieldNames {
+		if item.Required {
+			if _, ok := h.state.ExtractedKeyFields[item.FieldName]; !ok {
+				result = append(result, item)
+			}
+		}
+	}
+	return result
+}
+
+// updateStateOfKeyFields Python :663-666（truthy 才进——Python `if v:`）
+func (h *questionerDirectReplyHandler) updateStateOfKeyFields(keyFields map[string]any) {
+	for k, v := range keyFields {
+		if !pyFalsy(v) {
+			h.state.ExtractedKeyFields[k] = v
+		}
+	}
+}
+
+// updateParamDefaultValue 默认值兜底（Python :668-676：default_value 非零值
+// 且未抽到才兜底——Python `if default_value:` truthy 判定）
+func (h *questionerDirectReplyHandler) updateParamDefaultValue(output *QuestionerOutputCache) {
+	result := map[string]any{}
+	for _, param := range h.cfg.FieldNames {
+		if !pyFalsy(param.DefaultValue) {
+			if _, ok := h.state.ExtractedKeyFields[param.FieldName]; !ok {
+				result[param.FieldName] = param.DefaultValue
+			}
+		}
+	}
+	for k, v := range result {
+		output.KeyFields[k] = v
+	}
+}
+
+// incrementStateOfResponseNum Python :678-679
+func (h *questionerDirectReplyHandler) incrementStateOfResponseNum() {
+	h.state.ResponseNum++
+}
+
+// exceedMaxResponse Python :681-682
+func (h *questionerDirectReplyHandler) exceedMaxResponse() bool {
+	return h.state.ResponseNum >= h.cfg.MaxResponse
+}
+
+// checkIfContinueAsk 继续追问判定（Python :684-702 一比一：缺必填+未超限 →
+// 追问+key_fields.clear；缺必填+超限 → 101074；齐 → key_fields.update(state)）
+func (h *questionerDirectReplyHandler) checkIfContinueAsk(output *QuestionerOutputCache) bool {
+	isContinueAsk := false
+	nonExtracted := h.filterNonExtractedKeyFields()
+	if len(nonExtracted) > 0 {
+		if !h.exceedMaxResponse() {
+			output.Question = questionerFormatContinueAsk(nonExtracted, h.cfg.AcceptLanguage)
+			isContinueAsk = true
+		} else {
+			return false
+		}
+	}
+	if isContinueAsk {
+		output.KeyFields = map[string]any{}
+	} else {
+		for k, v := range h.state.ExtractedKeyFields {
+			output.KeyFields[k] = v
+		}
+	}
+	return isContinueAsk
+}
+
+// invokeLLMAndParseResult LLM 调用与结果合并（Python :704-711）
+func (h *questionerDirectReplyHandler) invokeLLMAndParseResult(ctx context.Context,
+	chatHistory []llmschema.BaseMessage, output *QuestionerOutputCache) error {
+	llmInputs, err := h.buildLLMInputs(chatHistory)
+	if err != nil {
+		return err
+	}
+	extracted, err := h.invokeLLMForExtraction(ctx, llmInputs)
+	if err != nil {
+		return err
+	}
+	for k, v := range extracted {
+		if !pyFalsy(v) {
+			output.KeyFields[k] = v
+		}
+	}
+	h.updateStateOfKeyFields(extracted)
+	return nil
+}
+
+// getLatestHumanFeedback 反馈重放（Python :713-716 一比一：循环 response_num+1 次
+// interact——恢复后重放已收集反馈、最后一轮取新反馈；尾 increment。InteractWithResult
+// 首次无待用输入时 PanicGraphInterrupt 向上传播 ≙ Python raise GraphInterrupt）
+func (h *questionerDirectReplyHandler) getLatestHumanFeedback(ctx context.Context,
+	sess *session.NodeSessionFacade) error {
+	for i := 0; i < h.state.ResponseNum+1; i++ {
+		res, err := sess.InteractWithResult(ctx, h.state.Question) // keep the last question
+		if err != nil {
+			return err
+		}
+		h.query = res
+	}
+	h.incrementStateOfResponseNum()
+	return nil
+}
+
+// updateQuestionerStatesQuestion Python :718-719
+func (h *questionerDirectReplyHandler) updateQuestionerStatesQuestion(question string) {
+	h.state.Question = question
+}
+
+// writeUserMessageToContext Python :721-730（with_chat_history 且 content 非空才写）
+func (h *questionerDirectReplyHandler) writeUserMessageToContext(ctx context.Context,
+	content any, context iface.ModelContext) error {
+	if context == nil || !h.cfg.WithChatHistory {
+		return nil
+	}
+	if content == nil || pythonsem.PyEqual(content, "") {
+		return nil
+	}
+	msg := llmschema.NewUserMessage(pythonsem.PyStr(content))
+	_, err := context.AddMessages(ctx, []llmschema.BaseMessage{msg})
+	return err
+}
+
+// writeAssistantMessageToContext Python :732-741
+func (h *questionerDirectReplyHandler) writeAssistantMessageToContext(ctx context.Context,
+	content string, context iface.ModelContext) error {
+	if context == nil || !h.cfg.WithChatHistory {
+		return nil
+	}
+	if content == "" {
+		return nil
+	}
+	msg := llmschema.NewAssistantMessage(content)
+	_, err := context.AddMessages(ctx, []llmschema.BaseMessage{msg})
+	return err
+}
+
+// extractQuery query 三态提取（Python :419 `questioner_input.query or ""`：
+// str/dict 保留，None/"" 回落 ""——D-24-3）
+func (h *questionerDirectReplyHandler) extractQuery(inputs map[string]any) any {
+	q, ok := inputs["query"]
+	if !ok || q == nil {
+		return ""
+	}
+	if s, isStr := q.(string); isStr && s == "" {
+		return ""
+	}
+	return q
+}
+
+// queryString query 的字符串形态（Python content 直接用 str；dict 场景 Python
+// 包 [dict] 作 content，Go MessageContent 暂以 str 承载——D-24-10 登记）
+func (h *questionerDirectReplyHandler) queryString() string {
+	return pythonsem.PyStr(h.query)
+}
+
+// inputFieldsExcludeQuery 输入除 query 外字段（Python :426 model_dump(exclude={'query'})）
+func (h *questionerDirectReplyHandler) inputFieldsExcludeQuery(inputs map[string]any) map[string]any {
+	fields := map[string]any{}
+	for k, v := range inputs {
+		if k != "query" {
+			fields[k] = v
+		}
+	}
+	return fields
+}
+
+// jsonDump JSON 序列化（Python json.dumps(ensure_ascii=False)）
+func (h *questionerDirectReplyHandler) jsonDump(v map[string]any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }
 
 // 以下为 Task 3-7 渐进实现区（状态机/Utils/Handler/Executable/Component）
