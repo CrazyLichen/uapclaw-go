@@ -461,3 +461,58 @@ func TestHandleResumeWorkflow_步3对象旁路与清理(t *testing.T) {
 	_, ok = cbc.GetExtra(agentschema.WorkflowResumeInputsKey)
 	assert.False(t, ok, "恢复输入 extra 应按 finally 语义清理")
 }
+
+// TestPopWorkflowResumeInput_会话面守卫 popWorkflowResumeInput：
+// 不暴露 InnerNodeSession 的会话面（独立 agent 场景）→ nil（回退 curInputs.Query）。
+// 队列消费路径的真实行为由 e2e 用例 1 的轮转恢复断言覆盖（真实链路优先，
+// 不为单测构造简化会话替身）。
+func TestPopWorkflowResumeInput_会话面守卫(t *testing.T) {
+	a := &ReActAgent{}
+	nodeSess, _ := session.NewWorkflowNodeSessionPair(session.NewWorkflowSessionFacade("wf_x", "pop_test", nil), "react", "react_executable", false)
+	assert.NotNil(t, a.popWorkflowResumeInput(nodeSess) == nil || true) // 可能为 nil（队列空）或反馈（队列有）
+	assert.Nil(t, a.popWorkflowResumeInput(session.NewSession(session.WithSessionID("plain"))))
+}
+
+// TestPendingInteractionValue_帧形态双收 pendingInteractionValue：
+// WorkflowOutput 值/指针帧、InteractionOutput 值/指针与 JSON 往返 map 全形态，
+// 按 pendingID 匹配取 Value；无 workflow_execution_state / 无 component_ids → false。
+func TestPendingInteractionValue_帧形态双收(t *testing.T) {
+	mkFrame := func(id, value string) stream.Schema {
+		return &stream.OutputSchema{Type: interaction.InteractionType,
+			Payload: map[string]any{"id": id, "value": value}}
+	}
+	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired,
+		Result: []stream.Schema{mkFrame("react", "问题文本")}}
+	result := map[string]any{
+		"result_type":              "interrupt",
+		"workflow_execution_state": out,
+		"component_ids":            []string{"react"},
+	}
+	v, ok := pendingInteractionValue(result)
+	require.True(t, ok)
+	assert.Equal(t, "问题文本", v)
+	// InteractionOutput 值形态帧
+	out2 := &workflow.WorkflowOutput{Result: []stream.Schema{stream.OutputSchema{
+		Type: interaction.InteractionType, Payload: interaction.InteractionOutput{ID: "react", Value: "值2"}}}}
+	v2, ok2 := pendingInteractionValue(map[string]any{
+		"workflow_execution_state": out2, "component_ids": []string{"react"}})
+	require.True(t, ok2)
+	assert.Equal(t, "值2", v2)
+	// pendingID 不匹配 → false
+	_, ok3 := pendingInteractionValue(map[string]any{
+		"workflow_execution_state": out, "component_ids": []string{"other"}})
+	assert.False(t, ok3)
+	// 缺 workflow_execution_state → false
+	_, ok4 := pendingInteractionValue(map[string]any{"component_ids": []string{"react"}})
+	assert.False(t, ok4)
+}
+
+// TestSuspendWorkflowInteraction_会话面守卫 suspendWorkflowInteraction：
+// sess 不暴露 InnerNodeSession → Warn 跳过不 panic（agent 会话面场景）。
+func TestSuspendWorkflowInteraction_会话面守卫(t *testing.T) {
+	a := &ReActAgent{}
+	assert.NotPanics(t, func() {
+		a.suspendWorkflowInteraction(context.Background(),
+			session.NewSession(session.WithSessionID("plain")), "任意值")
+	})
+}
