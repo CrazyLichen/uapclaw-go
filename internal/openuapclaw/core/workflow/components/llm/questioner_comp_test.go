@@ -1,10 +1,11 @@
 package llm
 
 import (
+	"context"
 	"strings"
+	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"testing"
 )
 
 // TestQuestionerDefaultTemplate 双语默认模板选择（Python :91-101）
@@ -200,3 +201,94 @@ func TestQuestionerValidateAndConvertTypeDelegation(t *testing.T) {
 		t.Fatalf("got %v %v", v, ok)
 	}
 }
+
+// TestQuestionerValidateConfig 配置校验三分支（Python :768-797）
+func TestQuestionerValidateConfig(t *testing.T) {
+	if err := validateQuestionerResponseType("bad"); err == nil {
+		t.Fatal("response_type 非法应报 101071")
+	}
+	if err := validateQuestionerResponseType(ResponseTypeReplyDirectly); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateQuestionerExtractKeyFields(true, nil); err == nil {
+		t.Fatal("extract_fields 且字段表空应报 101071")
+	}
+	if err := validateQuestionerExtractKeyFields(true, []QuestionerFieldInfo{{Description: "x"}}); err == nil {
+		t.Fatal("字段名空应报 101071")
+	}
+	if err := validateQuestionerExtractKeyFields(true, []QuestionerFieldInfo{{FieldName: "q"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateQuestionerExtractKeyFields(false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateQuestionerMaxResponse(0); err == nil {
+		t.Fatal("max_response<=0 应报 101071")
+	}
+	if err := validateQuestionerMaxResponse(3); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestQuestionerLoadStoreState 会话状态存取（Python :755-766）。
+// Python 语义实证：state().update() 进 staged _updates，get() 只读已提交
+// _state（base.py:186-189），同 invoke 内 store 后 load 不可见——恢复可见性由
+// WaitUserInputs 的 commitCMP 保证（interaction.go:128）。Go 同构。
+func TestQuestionerLoadStoreState(t *testing.T) {
+	sess := newTestNodeSession(t)
+	st := loadQuestionerStateFromSession(sess)
+	if st.Status != QuestionerStatusStart {
+		t.Fatal("want fresh")
+	}
+	st = st.HandleEvent(QuestionerEventUserInteract)
+	st.Question = "q"
+	storeQuestionerStateToSession(st, sess) // staged，不报错即通过
+	// staged 不可见：同 invoke 内 load 回 START 新建（Python get() 同语义）
+	got := loadQuestionerStateFromSession(sess)
+	if got.Status != QuestionerStatusStart {
+		t.Fatalf("staged should be invisible until commit: %+v", got)
+	}
+}
+
+// TestQuestionerExecutableConstruction 构造校验链（Python __init__ :745-753）
+func TestQuestionerExecutableConstruction(t *testing.T) {
+	if _, err := NewQuestionerExecutable(&QuestionerConfig{ResponseType: "bad"}); err == nil {
+		t.Fatal("want config error")
+	}
+	// 空配置（extract 默认 True 且字段表空）构造必失败——Python __init__ 同语义
+	if _, err := NewQuestionerExecutable(&QuestionerConfig{}); err == nil {
+		t.Fatal("empty config should fail 101071 (Python :777-782)")
+	}
+	e, err := NewQuestionerExecutable(&QuestionerConfig{ExtractFieldsFromResponse: boolPtr(false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.cfg.MaxResponse != 3 || e.cfg.AcceptLanguage != "zh" || e.promptTemplate == nil {
+		t.Fatalf("defaults not applied: %+v", e.cfg)
+	}
+	if e.initialized {
+		t.Fatal("should start uninitialized")
+	}
+}
+
+// TestQuestionerCreateLLMInstance 双路径（Python :831-841 + 8.23 D-23-3 防御）
+func TestQuestionerCreateLLMInstance(t *testing.T) {
+	// 皆缺 → 101075
+	e, errC := NewQuestionerExecutable(&QuestionerConfig{ExtractFieldsFromResponse: boolPtr(false)})
+	if errC != nil {
+		t.Fatal(errC)
+	}
+	_, err := e.createLLMInstance(context.Background())
+	if err == nil {
+		t.Fatal("want 101075")
+	}
+	// ModelID 路径且 mgr==nil → 错误（8.23 D-23-3 同款防御）
+	mid := "some-model"
+	e3, _ := NewQuestionerExecutable(&QuestionerConfig{ModelID: &mid, ExtractFieldsFromResponse: boolPtr(false)})
+	if _, err := e3.createLLMInstance(context.Background()); err == nil {
+		t.Fatal("mgr==nil should error")
+	}
+}
+
+// boolPtr *bool 便捷构造（D-24-9）
+func boolPtr(b bool) *bool { return &b }

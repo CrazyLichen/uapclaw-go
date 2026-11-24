@@ -5,6 +5,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -12,7 +13,13 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
+	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -446,6 +453,143 @@ func questionerIsValidValue(v any) bool {
 // 落 pythonsem.ValidateAndConvertType，包内禁止私抄）
 func questionerValidateAndConvertType(value any, expectedType string) (any, bool) {
 	return pythonsem.ValidateAndConvertType(value, expectedType)
+}
+
+// ──────────────────────────── Task 5 QuestionerExecutable ────────────────────────────
+
+// QuestionerExecutable 执行体（Python QuestionerExecutable :744-878 字段一比一）
+type QuestionerExecutable struct {
+	// WorkflowComponent 8.17 组件基座（InvokeFn 槽承载 invoke）
+	components.WorkflowComponent
+	// cfg 配置
+	cfg *QuestionerConfig
+	// defaultCfg 运行期默认配置（双语模板）
+	defaultCfg *questionerDefaultConfig
+	// llModel 懒初始化模型实例（Python self._llm）
+	llModel LLMInvoker
+	// initialized 懒初始化标志
+	initialized bool
+	// promptTemplate 提示词模板（Python self._prompt）
+	promptTemplate *prompt.PromptTemplate
+	// state 处理器传递态（Python self._state）
+	state *QuestionerState
+}
+
+// NewQuestionerExecutable 构造（Python __init__ :745-753 一比一：校验配置 →
+// 默认配置 → prompt 初始化）
+func NewQuestionerExecutable(cfg *QuestionerConfig) (*QuestionerExecutable, error) {
+	cfg = newQuestionerConfigDefaults(cfg)
+	if err := validateQuestionerResponseType(cfg.ResponseType); err != nil {
+		return nil, err
+	}
+	if err := validateQuestionerExtractKeyFields(cfg.IfExtractFields(), cfg.FieldNames); err != nil {
+		return nil, err
+	}
+	if err := validateQuestionerMaxResponse(cfg.MaxResponse); err != nil {
+		return nil, err
+	}
+	return &QuestionerExecutable{
+		cfg:            cfg,
+		defaultCfg:     questionerDefaultConfigFromLanguage(cfg.AcceptLanguage),
+		promptTemplate: prompt.NewPromptTemplate("", questionerDefaultTemplate(cfg.AcceptLanguage)),
+	}, nil
+}
+
+// validateQuestionerResponseType Python _validate_response_type_config :790-797
+func validateQuestionerResponseType(rt string) error {
+	if rt != ResponseTypeReplyDirectly {
+		return exception.BuildError(exception.StatusComponentQuestionerConfigError,
+			exception.WithMsg(fmt.Sprintf("response type %s is invalid", rt)))
+	}
+	return nil
+}
+
+// validateQuestionerExtractKeyFields Python _validate_extract_key_fields_config :776-788
+func validateQuestionerExtractKeyFields(ifExtract bool, fields []QuestionerFieldInfo) error {
+	if ifExtract && len(fields) == 0 {
+		return exception.BuildError(exception.StatusComponentQuestionerConfigError,
+			exception.WithMsg("extracted key fields cannot be empty"))
+	}
+	for _, item := range fields {
+		if item.FieldName == "" {
+			return exception.BuildError(exception.StatusComponentQuestionerConfigError,
+				exception.WithMsg("extracted key field name cannot be empty"))
+		}
+	}
+	return nil
+}
+
+// validateQuestionerMaxResponse Python _validate_max_response_num_config :768-774
+func validateQuestionerMaxResponse(n int) error {
+	if n <= 0 {
+		return exception.BuildError(exception.StatusComponentQuestionerConfigError,
+			exception.WithMsg("max response must be greater than 0"))
+	}
+	return nil
+}
+
+// loadQuestionerStateFromSession Python _load_state_from_session :755-761：
+// 状态字典存在则反序列化恢复；否则新建 START 态
+func loadQuestionerStateFromSession(sess *session.NodeSessionFacade) *QuestionerState {
+	raw, err := sess.GetState(state.StringKey(questionerStateKey))
+	if err == nil {
+		if m, ok := raw.(map[string]any); ok && len(m) > 0 {
+			if st, derr := QuestionerStateDeserialize(m); derr == nil {
+				return st
+			}
+		}
+	}
+	return NewQuestionerState()
+}
+
+// storeQuestionerStateToSession Python _store_state_to_session :763-766
+func storeQuestionerStateToSession(st *QuestionerState, sess *session.NodeSessionFacade) {
+	sess.UpdateState(map[string]any{questionerStateKey: st.Serialize()})
+}
+
+// createLLMInstance 双路径模型创建（Python _create_llm_instance :831-841 一比一；
+// 8.23 D-23-3 同款防御分支：mgr==nil / GetModel 未命中；皆缺 → 101075）
+func (e *QuestionerExecutable) createLLMInstance(ctx context.Context) (LLMInvoker, error) {
+	if e.cfg.ModelID == nil {
+		if e.cfg.ModelClientConfig == nil || e.cfg.ModelConfig == nil {
+			return nil, exception.BuildError(exception.StatusComponentQuestionerInvokeCallFailed,
+				exception.WithMsg("failed to create llm instance"))
+		}
+		return forllm.NewModel(e.cfg.ModelClientConfig, e.cfg.ModelConfig)
+	}
+	mgr := runner.GetResourceMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("resource mgr is not initialized")
+	}
+	clients, err := mgr.GetModel(ctx, []string{*e.cfg.ModelID})
+	if err != nil {
+		return nil, err
+	}
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("model %s not found", *e.cfg.ModelID)
+	}
+	return clients[0], nil
+}
+
+// initializeIfNeeded 懒初始化（Python _initialize_if_needed :843-853 一比一；
+// 异常包装 101075）
+func (e *QuestionerExecutable) initializeIfNeeded(ctx context.Context) error {
+	if e.initialized {
+		return nil
+	}
+	model, err := e.createLLMInstance(ctx)
+	if err != nil {
+		return exception.BuildError(exception.StatusComponentQuestionerInvokeCallFailed,
+			exception.WithMsg("failed to initialize llm if needed"), exception.WithCause(err))
+	}
+	e.llModel = model
+	e.initialized = true
+	return nil
+}
+
+// initPrompt 初始化提示词模板（Python _init_prompt :855-856）
+func (e *QuestionerExecutable) initPrompt() *prompt.PromptTemplate {
+	return prompt.NewPromptTemplate("", e.defaultCfg.promptTemplate)
 }
 
 // 以下为 Task 3-7 渐进实现区（状态机/Utils/Handler/Executable/Component）
