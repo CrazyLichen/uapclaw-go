@@ -168,7 +168,7 @@ func buildHeartbeatRail(params map[string]any, view *buildctx.SwarmBuildContext)
 	}
 	// Python: tool_context = SimpleNamespace(channel_id/session_id/metadata/
 	// user_id/mode/tool_scope)（:183-196）——15.20 ⑫ 已回填骨架
-	// （HeartbeatRuntimeBridge ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移））。
+	// （HeartbeatRuntimeBridge ⤴️9.11c：heartbeat 子系统整件随新节回填）。
 	memberCardID := ""
 	if v, ok := metadata["member_card_id"].(string); ok {
 		memberCardID = v
