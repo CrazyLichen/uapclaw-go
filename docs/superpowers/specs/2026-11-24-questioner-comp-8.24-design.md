@@ -21,7 +21,10 @@
 
 - **层 1（workflow 节点级）**：`wait_user_inputs` 写 `INTERACTION` 帧到 output writer（前端看到问题）→ raise GraphInterrupt；引擎顶层返回 `{TASK_STATUS_INTERRUPT}`（engine.py:269），checkpointer `post_workflow_execute` 存 checkpoint（reason=interaction_required，persistence.py:882-910 三分支：真异常才 re-raise 终止、正常完成才 clear）。GraphInterrupt 是控制流非异常终止。
 - **恢复**：用户回答包成 `InteractiveInput.update(node_id, answer)` → 同 session_id 二次调用 → checkpoint 恢复、pending 节点重执行 invoke → `_load_state_from_session` 见 status=USER_INTERACT 用恢复态 → `wait_user_inputs` 见 workflow_state[INTERACTIVE_INPUT] 有值直接返回（interaction.py:37-48）。`_get_latest_human_feedback` 的 `range(response_num+1)` 循环 = 重放已收集反馈、最后一轮等新反馈。
-- **层 2（ReAct 工具调用级）**：workflow 被 ReAct 当工具调用时，中断包装为 `{"result_type": "interrupt", "interrupt_ids": [...]}` tool result（single_agent/interrupt/handler.py:104），由 ToolInterruptHandler 收集暂停循环、经 `interrupt_answers[interrupt_id]` 映射回填。**此桥属 ReAct 侧能力，8.26 ReactComponent 实施时对齐；本节集成用例走 WorkflowAgent/Runner 直调路径（Python test_runner_agent_resource_management 同款），ReAct 包装路径 ⤴️8.26 回填登记。**
+- **层 2（ReAct 工具调用级）**：两种形状并存，勿混（2026-11-24 勘误，初版误写为单一 `result_type:interrupt` 形状）：
+  - **workflow-as-tool**（本组件作为 ReAct 工具）：`_run_workflow`（ability_manager.py:1511）经 `session.create_workflow_session()` 建**独立 StreamWriterManager**（agent.py:295 + internal/workflow.py:34 初始 None；workflow.py:720 新建 StreamEmitter，不接父 writer）→ `wait_user_inputs` 的 INTERACTION 帧写入 workflow 自有 emitter，ReAct tool 拓扑下无人消费、不外泄；返回形状为 `WorkflowOutput(state=INPUT_REQUIRED)`（ability_manager.py:1528），走 ReAct `interrupted_workflows` 状态机，最终 `_write_invoke_result_to_stream`（react_agent.py:3398）**按 pending_component_id 过滤单发**（注释："callers see exactly one interaction chunk"）——不发两遍。
+  - **agent-as-tool**（子代理）：显式共享父 writer（ability_manager.py:1685）直出；ReAct 仅补发 value 为 InterruptRequest 的载荷（handler.py:204 过滤）。
+  - 用户回复回填：`handle_resume` → `_build_sub_agent_resume_tool_call` / `tc.arguments = collected_input`（react_agent.py:2722）→ 重新执行 tool → `InteractiveInput` 经 workflow checkpointer `pre_workflow_execute` → `_process_interactive_inputs`（persistence.py:336-352）按节点 id 写入节点状态 INTERACTIVE_INPUT → 落 checkpoint。**此桥属 ReAct 侧能力，8.26 ReactComponent 实施时对齐；本节集成用例走 WorkflowAgent/Runner 直调路径（Python test_runner_agent_resource_management 同款，顶层路径：workflow 自有 emitter 直出前端），ReAct 包装路径 ⤴️8.26 回填登记。**
 
 ## 3. Go 侧实现方式（前置件全就绪）
 
