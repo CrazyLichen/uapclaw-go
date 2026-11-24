@@ -237,7 +237,19 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 	//   ⤵️ R-2 external harness binding 变化 Python :3974-4003
 	//   ⤵️ R-3 MoA 快照指纹变化              Python :4183-4195
 	//   ⤵️ R-4 权限隔离未完成                Python :4199-4212
-	//   ⤵️ R-5 tool_retrieval 开关翻转       Python :4214-4232
+	//   R-5 tool_retrieval 开关翻转（✅ 9.11b 回填）
+	//   Python: :4143-4164——优化开关与本会话冻结的披露画像不一致（开↔关任一
+	//   方向）时中途状态手术无法在两套披露系统间保证干净交接，重建会话
+	//   adapter（重建后重读 config 并从磁盘恢复会话上下文）。非 external
+	//   harness 绑定的 child 才走本判据。
+	if existing != nil && externalBinding == nil && d.toolRetrievalFlipPendingOfChild(existing) {
+		logger.Info(logComponent).
+			Str("event_type", "tool_retrieval_flip_rebuild").
+			Str("session_id", sid).
+			Msg("[JiuWenSwarmDeepAdapter] rebuilding session adapter for tool retrieval enable")
+		d.dropSessionAdapterCacheEntry(sid, false, false)
+		existing = nil
+	}
 	//   ⤵️ R-6 首次 MCP reconcile 需替换     Python :4124-4158
 	//   ⤵️ R-7 模型选择变更                  Python :4046-4182
 
@@ -1006,4 +1018,19 @@ func (d *DeepAdapter) EnsureLiveSessionInstance(ctx context.Context, sessionID s
 		return nil, err
 	}
 	return child.GetLiveSessionInstance(sessionID), nil
+}
+
+// toolRetrievalFlipPendingOfChild 判定 child 的披露层开关翻转（R-5）。
+// Python: existing._tool_retrieval_enable_flip_pending()（:7498-7517）——
+// 构建期冻结的 tool_retrieval_session_enabled 与 live 开关任一方向不一致
+// 即重建；frozen 未冻结（旧会话）恒 False。live 开关取父 adapter 当前
+// configBase（Python 侧 get_config() 的对应物）。
+func (d *DeepAdapter) toolRetrievalFlipPendingOfChild(child AgentAdapter) bool {
+	childAdapter, ok := child.(*DeepAdapter)
+	if !ok || childAdapter.toolRetrievalSessionEnabled == nil {
+		return false
+	}
+	frozen := *childAdapter.toolRetrievalSessionEnabled
+	live := config.ToolRetrievalEnabled(d.configBase)
+	return frozen != live
 }
