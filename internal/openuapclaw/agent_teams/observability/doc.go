@@ -2,7 +2,9 @@
 // 三层架构：
 //   - Callback 层：OtelCallbackHandler 注册到 CallbackFramework，拦截 LLM/Tool/Agent 事件
 //   - Monitor 层：OtelTeamMonitorHandler 消费 TeamAgent EventMessage 事件流
-//   - Rail 层：ObservabilityRail 覆盖 DeepAgent task_iteration 边界
+//   - Rail 层：AgentObservabilityRail 全量移植至 harness/observability 包
+//     （15.24a，含迭代/invoke/ReAct Step/工具四组钩子；本包残版 task_iteration
+//     边界实现已按规则 8 删除）
 //
 // SpanState 通过 context.Value 传播（同 SessionState 模式），
 // 每个 DeepAgent 有独立的 OtelSpanState 实例，天然并发隔离。
@@ -18,7 +20,6 @@
 //	├── trajectory_events.go # 轨迹 v2 事件发射链（⤴️22.4，15.11）
 //	├── callback_handler.go  # OtelCallbackHandler
 //	├── monitor_handler.go   # OtelTeamMonitorHandler
-//	├── rail.go              # ObservabilityRail
 //	├── demand.go            # 全局 trajectory span processor 单例面（15.16c）
 //	└── setup.go             # 生命周期管理 + EventListenerRegistrar 接口
 //
