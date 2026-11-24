@@ -10,11 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
@@ -23,6 +18,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater/single_dim"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -529,7 +529,7 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 	}
 
 	// 收集基础快照
-	messages := collectMessagesFromTrajectory(traj)
+	messages := trajectoryToMessages(traj)
 	skillName := "team-skill"
 
 	// Python: presented_entries = self._consume_presented_entries(session)
@@ -593,7 +593,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		messages = snapshot.Messages
 		presentedEntries = snapshot.PresentedEntries
 	} else {
-		messages = collectMessagesFromTrajectory(traj)
+		messages = trajectoryToMessages(traj)
 	}
 
 	// Python: team_trajectory = self._aggregate_team_trajectory(trajectory)
@@ -601,7 +601,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	if teamTrajectory != traj {
 		traj = teamTrajectory
 		if snapshot == nil {
-			messages = collectMessagesFromTrajectory(traj)
+			messages = trajectoryToMessages(traj)
 		}
 	}
 
@@ -749,7 +749,7 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 	// span 模型：以工作 span 存在性等价「steps 非空」判定。
 	messages := []map[string]any{}
 	if len(trajectory.IterSpans(traj)) > 0 {
-		messages = collectMessagesFromTrajectory(traj)
+		messages = trajectoryToMessages(traj)
 	}
 
 	// Python: signals = await self._detect_active_request_signals(...) if trajectory.steps else []

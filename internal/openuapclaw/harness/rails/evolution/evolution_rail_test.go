@@ -409,11 +409,11 @@ func TestIsSkillDisabled(t *testing.T) {
 	assert.False(t, rail.isSkillDisabled("bar"))
 }
 
-// ──────────────────────────── collectMessagesFromTrajectory 测试 ────────────────────────────
+// ──────────────────────────── trajectoryToMessages 测试 ────────────────────────────
 
 func TestCollectMessagesFromTrajectory(t *testing.T) {
 	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{llmStep(llmschema.NewUserMessage("hi"))})
-	msgs := collectMessagesFromTrajectory(traj)
+	msgs := trajectoryToMessages(traj)
 	assert.Len(t, msgs, 1)
 }
 
@@ -520,7 +520,7 @@ func (c *countingExtension) RunEvolution(_ context.Context, _ *trajectory.Trajec
 }
 
 func (c *countingExtension) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	messages := collectMessagesFromTrajectory(traj)
+	messages := trajectoryToMessages(traj)
 	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
 

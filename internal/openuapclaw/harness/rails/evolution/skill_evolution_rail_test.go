@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -629,7 +629,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_�
 	rail := s.newTestRail()
 	s.True(rail.AutoScan())
 
-	// 空轨迹（无 steps）→ collectMessagesFromTrajectory 返回空 → snapshot nil
+	// 空轨迹（无 steps）→ trajectoryToMessages 返回空 → snapshot nil
 	emptyTraj := trajectory.NewTestTrajectoryWithIDWithSession("test")
 	snapshot := rail.SnapshotForEvolution(s.Ctx, emptyTraj, nil)
 	s.Nil(snapshot)

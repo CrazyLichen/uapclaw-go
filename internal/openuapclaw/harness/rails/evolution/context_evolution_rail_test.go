@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
-	ceservice "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
+	ceservice "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
 )
 
 // ──────────────────────────── mock 实现 ────────────────────────────

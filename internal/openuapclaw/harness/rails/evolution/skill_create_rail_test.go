@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

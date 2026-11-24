@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── splitResponseTokenFields 测试 ────────────────────────────
@@ -89,51 +89,36 @@ func TestNormalizeMemberRole_空字符串(t *testing.T) {
 	assert.Nil(t, normalizeMemberRole(""))
 }
 
-// ──────────────────────────── collectMessagesFromTrajectory 测试 ────────────────────────────
+// ──────────────────────────── trajectoryToMessages 测试 ────────────────────────────
 
 func TestCollectMessagesFromTrajectory_nil(t *testing.T) {
-	assert.Equal(t, []map[string]any{}, collectMessagesFromTrajectory(nil))
+	assert.Equal(t, []map[string]any{}, trajectoryToMessages(nil))
 }
 
 func TestCollectMessagesFromTrajectory_空轨迹(t *testing.T) {
 	traj := testTrajectoryFromSteps("test", nil)
-	assert.Equal(t, []map[string]any{}, collectMessagesFromTrajectory(traj))
+	assert.Equal(t, []map[string]any{}, trajectoryToMessages(traj))
 }
 
 func TestCollectMessagesFromTrajectory_含LLM步骤(t *testing.T) {
 	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{
 		llmStep(llmschema.NewUserMessage("hi"), llmschema.NewAssistantMessage("hello")),
 	})
-	msgs := collectMessagesFromTrajectory(traj)
+	msgs := trajectoryToMessages(traj)
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, "user", msgs[0]["role"])
 	assert.Equal(t, "assistant", msgs[1]["role"])
 }
 
-func TestCollectMessagesFromTrajectory_去重(t *testing.T) {
+// TestTrajectoryToMessages_重复Prompt不去重 v2 span 重放按语义逐条投影，
+// 不做消息去重（旧 _collect_messages_from_trajectory 的去重已随 v2 切换删除）。
+// Python: _trajectory_to_messages → trajectory_to_messages（messages.py）。
+func TestTrajectoryToMessages_重复Prompt不去重(t *testing.T) {
 	traj := testTrajectoryFromSteps("test", []trajectory.TestStep{
 		llmStep(llmschema.NewUserMessage("hi"), llmschema.NewUserMessage("hi")),
 	})
-	msgs := collectMessagesFromTrajectory(traj)
-	assert.Len(t, msgs, 1)
-}
-
-// ──────────────────────────── normalizeCallbackMessages 测试 ────────────────────────────
-
-func TestNormalizeCallbackMessages_空(t *testing.T) {
-	result := normalizeCallbackMessages(nil)
-	assert.Equal(t, []map[string]any{}, result)
-}
-
-func TestNormalizeCallbackMessages_浅拷贝(t *testing.T) {
-	original := []map[string]any{
-		{"role": "user", "content": "hi"},
-	}
-	result := normalizeCallbackMessages(original)
-	assert.Len(t, result, 1)
-	// 修改 result 不应影响 original
-	result[0]["content"] = "changed"
-	assert.Equal(t, "hi", original[0]["content"])
+	msgs := trajectoryToMessages(traj)
+	assert.Len(t, msgs, 2)
 }
 
 // ──────────────────────────── baseMessageToMap 测试 ────────────────────────────

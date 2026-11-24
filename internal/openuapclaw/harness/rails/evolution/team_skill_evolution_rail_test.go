@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -617,7 +617,6 @@ func TestTeamSkillEvolutionRail_RunEvolution_禁用AutoScan(t *testing.T) {
 }
 
 // ─── 辅助 ───
-
 
 // fakeTrajectorySource 用于测试的模拟轨迹聚合源
 type fakeTrajectorySource struct{}

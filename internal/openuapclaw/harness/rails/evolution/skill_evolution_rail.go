@@ -12,11 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
@@ -28,6 +23,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater/single_dim"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -531,7 +531,7 @@ func (r *SkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *tra
 	}
 
 	// 基类快照：收集 messages
-	snapshot := collectMessagesFromTrajectory(traj)
+	snapshot := trajectoryToMessages(traj)
 	if len(snapshot) == 0 {
 		return nil
 	}
@@ -590,7 +590,7 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 		presentedEntries = snapshot.PresentedEntries
 	} else if traj != nil {
 		// 同步路径：从轨迹收集消息
-		messages = collectMessagesFromTrajectory(traj)
+		messages = trajectoryToMessages(traj)
 		// 对齐 Python: presented_entries = self._experience_tracker.consume_eval_state(session)
 		// 同步路径无 cbc，无法获取 sessionID，传空字符串
 		presentedEntries = r.experienceTracker.ConsumeEvalState("")
@@ -725,7 +725,7 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 	var signals []*signal.EvolutionSignal
 
 	if traj != nil && len(trajectory.IterSpans(traj)) > 0 {
-		messages = collectMessagesFromTrajectory(traj)
+		messages = trajectoryToMessages(traj)
 		detected := r.detectActiveRequestSignals(ctx, skillName, traj, messages)
 		signals = append(signals, detected...)
 	}

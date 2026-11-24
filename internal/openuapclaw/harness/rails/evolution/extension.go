@@ -144,7 +144,7 @@ func (noOpExtension) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *agentinte
 
 // SnapshotForEvolution 空实现，对齐 Python NoOpExtension.snapshot_for_evolution
 func (noOpExtension) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	messages := collectMessagesFromTrajectory(traj)
+	messages := trajectoryToMessages(traj)
 	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
 
