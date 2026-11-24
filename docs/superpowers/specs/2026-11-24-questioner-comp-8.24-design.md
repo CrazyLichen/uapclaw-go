@@ -87,6 +87,10 @@
 | D-24-4 | `is_valid_value` 的 "null"/"none" 字符串特判不属 PyFalsy 全 falsy 语义 | 语义边界 | pythonsem PyFalsy + 组件内字符串特判，不复刻为全 falsy（8.23 拍板②同口径） |
 | D-24-5 | 状态机四类在 Go 的多态形态（四结构体同方法 vs 单结构体 kind 字段） | 实施形态 | 待 writing-plans 实施时定，以可逐行对照优先；8.23 同款 Python 子类模式先例为四结构体 |
 | D-24-6 | ReAct→workflow 中断桥（层 2）Go 侧待 8.26 | 章节归属 | ⤴️8.26 回填，本节集成用例走 WorkflowAgent/Runner 直调路径 |
+| D-24-9 | `ExtractFieldsFromResponse` 改 `*bool`（实施中新增，2026-11-24 审查确认） | 语言层 | Python dataclass 默认 True ≠ Go bool 零值 false，裸 bool 会使"显式 false"与"未配置"不可区分；nil ≙ Python 默认 True。回收条件：无（终态偏差） |
+| D-24-10 | dict query content 暂以 str 承载（实施中新增，2026-11-24 审查确认） | 类型系统 | Go `MessageContent` 暂不支持结构化载体，`UserMessage(content=[dict])` 的 [dict] 形状以 str 承载；user_response 保真 str 直传不变。回收条件：MessageContent 支持结构化内容时改回 [dict] |
+| D-24-11 | LLM 抽取 JSON 数字归一化（实施中新增，2026-11-24 审查确认） | 语言层 | Python `json.loads` 整数字面量→int、带小数→float；Go `encoding/json` 统一 float64，解析后按 D-24-11 语义归一（整值→int64）再进 `validate_and_convert_type`。回收条件：无（终态偏差） |
+| D-24-12 | `DefaultValue any` 不另立类型（2026-11-24 讨论确认） | 契约映射 | Python `default_value: Any`（:126）为 pydantic Any 声明，用户可配任意类型；Go `any` 为唯一忠实映射，全链流转经契约 map[string]any，与数据契约型 any 纪律一致 |
 
 ## 6. 回填义务核查
 
