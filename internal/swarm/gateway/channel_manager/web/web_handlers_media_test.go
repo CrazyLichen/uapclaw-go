@@ -92,6 +92,8 @@ func TestUploadMediaItemViaE2A_nil客户端(t *testing.T) {
 func TestMediaPersist_注册齐全(t *testing.T) {
 	d := RegisterWebHandlers(nil)
 	for _, m := range []string{"media.persist", "media.discard",
+		"document.persist", "document.formats", "path.select_directory", "path.select_files",
+		"file.upload_chunk", "file.import_url",
 		"rsi.artifact.download", "rsi.artifact.files.list", "rsi.artifact.files.get"} {
 		if _, ok := d.methodHandlers[m]; !ok {
 			t.Fatalf("%s 未注册", m)

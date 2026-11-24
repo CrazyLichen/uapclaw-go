@@ -199,3 +199,139 @@ func firstStringOf(values ...any) string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 文档域分流与注册 ────────────────────────────
+
+// documentPersist 浏览器上传文档落盘（先做大文档分流再转发）。
+// Python: app_web_handlers.py:5813 register_method("document.persist", _document_persist)。
+func documentPersist(wc *WebChannel, ac *routing.AgentClient) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		if params != nil {
+			prePersistLargeDocuments(params, sessionID, ac)
+		}
+		sessionProxyForward(wc, ac, "document.persist")(ws, reqID, params, sessionID)
+	}
+}
+
+// registerWorkspaceFileProxies 注册文件域 web 通道代理全集（个人版八组；
+// workspace.* 四值归企业版挂账 27.11、im.file_persist 归 IM 渠道域，不注册）。
+// Python: app_web_handlers.py:5732-5733（path.select_*）+ :5802（file.upload_chunk）
+// + :5811-5814（media/document）+ :5815-5819（file.import_url proxy loop）。
+func registerWorkspaceFileProxies(wc *WebChannel, ac *routing.AgentClient) {
+	wc.registerMethod("path.select_directory", sessionProxyForward(wc, ac, "path.select_directory"), false)
+	wc.registerMethod("path.select_files", sessionProxyForward(wc, ac, "path.select_files"), false)
+	wc.registerMethod("file.upload_chunk", sessionProxyForward(wc, ac, "file.upload_chunk"), false)
+	wc.registerMethod("file.import_url", sessionProxyForward(wc, ac, "file.import_url"), false)
+	wc.registerMethod("media.persist", mediaPersist(wc, ac), false)
+	wc.registerMethod("media.discard", sessionProxyForward(wc, ac, "media.discard"), false)
+	wc.registerMethod("document.persist", documentPersist(wc, ac), false)
+	wc.registerMethod("document.formats", sessionProxyForward(wc, ac, "document.formats"), false)
+}
+
+// prePersistLargeDocuments 转发 document.persist 前，把超预算 base64 文档改为
+// E2A 分块上传。扫描范围与 AgentServer 侧 collectDocumentItems 对齐：同时处理
+// documents 列表与 media_items 中 type=="document" 的 base64 项。
+// Python: app_web_handlers.py:1929-2001 _pre_persist_large_documents。
+func prePersistLargeDocuments(params map[string]any, sessionID string, ac *routing.AgentClient) {
+	remaining := e2aPayloadMaxBytes
+	basePayload := make(map[string]any, len(params))
+	for k, v := range params {
+		if k != "documents" && k != "media_items" {
+			basePayload[k] = v
+		}
+	}
+	if b, err := json.Marshal(basePayload); err == nil {
+		remaining -= len(b)
+	} else {
+		remaining -= 4096
+	}
+	maybeUpload := func(item map[string]any, index int) map[string]any {
+		rawBase64 := firstStringOf(item["base64Data"], item["base64_data"])
+		if strings.TrimSpace(rawBase64) == "" {
+			return item
+		}
+		data, err := base64.StdEncoding.DecodeString(attachmentsafety.StripDataURIPrefix(rawBase64))
+		if err != nil || len(data) == 0 {
+			return item
+		}
+		if len(data) > remaining {
+			if persisted := uploadDocumentItemViaE2A(item, data, sessionID, index, ac); persisted != nil {
+				return persisted
+			}
+			// 上传失败：保留原 base64
+			return item
+		}
+		remaining -= len(data)
+		return item
+	}
+	if items, ok := params["documents"].([]any); ok {
+		newItems := make([]any, 0, len(items))
+		for index, raw := range items {
+			if item, isMap := raw.(map[string]any); isMap {
+				newItems = append(newItems, maybeUpload(item, index))
+			} else {
+				newItems = append(newItems, raw)
+			}
+		}
+		params["documents"] = newItems
+	}
+	if items, ok := params["media_items"].([]any); ok {
+		newItems := make([]any, 0, len(items))
+		for index, raw := range items {
+			if item, isMap := raw.(map[string]any); isMap && item["type"] == "document" {
+				newItems = append(newItems, maybeUpload(item, index))
+			} else {
+				newItems = append(newItems, raw)
+			}
+		}
+		params["media_items"] = newItems
+	}
+}
+
+// uploadDocumentItemViaE2A 把单个超预算文档经 E2A 分块上传到注入目录。
+// Python: app_web_handlers.py 的 _upload_document_item_via_http（命名与
+// AgentServer 侧 _store_document_item 一致：safe_upload_filename，无 mime 后缀补齐）。
+func uploadDocumentItemViaE2A(item map[string]any, data []byte, sessionID string, index int, ac *routing.AgentClient) map[string]any {
+	filenameHint := firstStringOf(item["filename"], item["name"])
+	if filenameHint == "" {
+		filenameHint = fmt.Sprintf("document-%d", index+1)
+	}
+	filename := attachmentsafety.SanitizeUploadFilename(filenameHint, fmt.Sprintf("document-%d", index+1))
+	relPath := fmt.Sprintf("agent/sessions/%s/uploads/%s",
+		attachmentsafety.SafeSessionDirname(sessionID), filename)
+	if len(data) == 0 {
+		return nil
+	}
+	uploadID := fmt.Sprintf("gw-doc-%d", time.Now().UnixNano())
+	resolvedPath := ""
+	for offset := 0; offset < len(data); offset += e2aUploadChunkBytes {
+		end := offset + e2aUploadChunkBytes
+		if end > len(data) {
+			end = len(data)
+		}
+		payload, ok := sendUploadChunk(ac, sessionID, map[string]any{
+			"upload_id":       uploadID,
+			"target_rel_path": relPath,
+			"resolved_path":   resolvedPath,
+			"data":            base64.StdEncoding.EncodeToString(data[offset:end]),
+			"final":           end >= len(data),
+		})
+		if !ok {
+			return nil
+		}
+		p, _ := payload["path"].(string)
+		if strings.TrimSpace(p) == "" {
+			return nil
+		}
+		resolvedPath = p
+	}
+	return map[string]any{
+		"type":          "document",
+		"filename":      filename,
+		"mime_type":     firstStringOf(item["mimeType"], item["mime_type"]),
+		"path":          resolvedPath,
+		"original_path": resolvedPath,
+		"size_bytes":    len(data),
+		"_persisted":    true,
+	}
+}

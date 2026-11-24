@@ -353,11 +353,10 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("chat.swarmflow_reply", chatSwarmflowReply(wc), false)
 
 	// ─── 媒体/文件域 + rsi.artifact 代理（27.8） ───
-	// Python: app_web_handlers.py:5811-5812（media.persist/discard）+
-	// :6492-6494（rsi.artifact 三薄代理）。media.persist 先做 _pre_persist_large_media
-	// 大图分流（app_web_handlers.py:4040-4069）再统一转发。
-	wc.registerMethod("media.persist", mediaPersist(wc, agentClient), false)
-	wc.registerMethod("media.discard", sessionProxyForward(wc, agentClient, "media.discard"), false)
+	// Python: app_web_handlers.py:5732-5733 + :5802 + :5811-5819（文件域注册全集）
+	// + :6492-6494（rsi.artifact 三薄代理）。media/document.persist 先做
+	// _pre_persist_large_media/_documents 大文件分流再统一转发。
+	registerWorkspaceFileProxies(wc, agentClient)
 	registerRSIArtifactProxies(wc, agentClient)
 
 	// ─── session 薄代理（B1b-7） ───
