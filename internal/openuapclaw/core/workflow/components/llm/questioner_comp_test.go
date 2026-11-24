@@ -155,7 +155,7 @@ func TestQuestionerFormatOutputExcludeDefaults(t *testing.T) {
 	if out["question"] != "q1" || out["name"] != "张三" {
 		t.Fatalf("out=%v", out)
 	}
-	empty := questionerFormatQuestionerOutput(&QuestionerOutputCache{KeyFields: map[string]any{}})
+	empty := questionerFormatQuestionerOutput(newQuestionerOutputCache())
 	if len(empty) != 0 {
 		t.Fatalf("want empty map, got %v", empty)
 	}
