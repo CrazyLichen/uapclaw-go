@@ -47,6 +47,8 @@ func (a *ReActAgent) isInterrupted(toolResult any) bool {
 // extractComponentIDs 从被中断的工作流结果提取组件 ID（sorted 稳定序）。
 // WorkflowOutput.result 扫 __interaction__ 取 payload.id；
 // list 分支取 payload["component_id"]。
+// 帧形态双收：workflow.go Invoke 收集的 chunk 值类型 stream.OutputSchema 与
+// 指针 *stream.OutputSchema 都会出现（8.24 questioner 套件实证值类型）。
 // Python: react_agent.py _extract_component_ids L2525-1552。
 func (a *ReActAgent) extractComponentIDs(toolResult any) []string {
 	if out, ok := toolResult.(*workflow.WorkflowOutput); ok {
@@ -57,10 +59,12 @@ func (a *ReActAgent) extractComponentIDs(toolResult any) []string {
 					continue
 				}
 				if os, ok := item.(*stream.OutputSchema); ok {
-					if p, ok := os.Payload.(*interaction.InteractionOutput); ok {
-						ids = append(ids, p.ID)
-					} else if m, ok := os.Payload.(map[string]any); ok {
-						ids = append(ids, fmt.Sprint(m["id"]))
+					if id, ok := interactionPayloadID(os.Payload); ok {
+						ids = append(ids, id)
+					}
+				} else if osv, ok := item.(stream.OutputSchema); ok {
+					if id, ok := interactionPayloadID(osv.Payload); ok {
+						ids = append(ids, id)
 					}
 				}
 			}
@@ -76,8 +80,12 @@ func (a *ReActAgent) extractComponentIDs(toolResult any) []string {
 				continue
 			}
 			if os, ok := item.(*stream.OutputSchema); ok {
-				if m, ok := os.Payload.(map[string]any); ok {
-					ids = append(ids, fmt.Sprint(m["component_id"]))
+				if id, ok := interactionPayloadComponentID(os.Payload); ok {
+					ids = append(ids, id)
+				}
+			} else if osv, ok := item.(stream.OutputSchema); ok {
+				if id, ok := interactionPayloadComponentID(osv.Payload); ok {
+					ids = append(ids, id)
 				}
 			}
 		}
@@ -85,6 +93,34 @@ func (a *ReActAgent) extractComponentIDs(toolResult any) []string {
 		return ids
 	}
 	return []string{}
+}
+
+// interactionPayloadID 从交互帧 payload 提取组件 ID（WorkflowOutput 分支，
+// Python payload.id 属性访问）。InteractionOutput 值/指针双形态 + map 兜底。
+func interactionPayloadID(payload any) (string, bool) {
+	switch p := payload.(type) {
+	case interaction.InteractionOutput:
+		return p.ID, true
+	case *interaction.InteractionOutput:
+		return p.ID, true
+	case map[string]any:
+		return fmt.Sprint(p["id"]), true
+	}
+	return "", false
+}
+
+// interactionPayloadComponentID 从交互帧 payload 提取组件 ID（list 分支，
+// Python payload["component_id"]）。双形态同 interactionPayloadID。
+func interactionPayloadComponentID(payload any) (string, bool) {
+	switch p := payload.(type) {
+	case interaction.InteractionOutput:
+		return p.ID, true
+	case *interaction.InteractionOutput:
+		return p.ID, true
+	case map[string]any:
+		return fmt.Sprint(p["component_id"]), true
+	}
+	return "", false
 }
 
 // extractWorkflowID 经 ability_manager 按 tool_call.name 反查 workflow_id。

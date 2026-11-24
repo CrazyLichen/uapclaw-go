@@ -299,16 +299,28 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 				}
 			}
 			for _, sch := range schemas {
-				os, ok := sch.(*stream.OutputSchema)
-				if !ok {
+				// 帧形态双收：workflow 收集的 chunk 值/指针都可能出现
+				//（8.24 questioner 套件实证值类型 stream.OutputSchema）
+				var os *stream.OutputSchema
+				switch t := sch.(type) {
+				case *stream.OutputSchema:
+					os = t
+				case stream.OutputSchema:
+					os = &t
+				default:
 					continue
 				}
 				if pendingID == "" {
 					_ = sess.WriteStream(ctx, os) // Python L3421-1423：pending_id 为 None → 全透传
 					continue
 				}
+				// Python L3425-1430：payload.id == pending_id 才写
 				if p, ok := os.Payload.(*interaction.InteractionOutput); ok && p.ID == pendingID {
-					_ = sess.WriteStream(ctx, os) // Python L3425-1430：payload.id == pending_id 才写
+					_ = sess.WriteStream(ctx, os)
+					continue
+				}
+				if p, ok := os.Payload.(interaction.InteractionOutput); ok && p.ID == pendingID {
+					_ = sess.WriteStream(ctx, os)
 				}
 			}
 		}
