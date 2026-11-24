@@ -5,6 +5,10 @@
 package llm
 
 import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -239,6 +243,103 @@ func QuestionerDefaultTemplate(acceptLanguage string) []llmschema.BaseMessage {
 // questionerDefaultTemplate 内部别名（Python 模块级函数，供 defaultConfig 消费）
 func questionerDefaultTemplate(acceptLanguage string) []llmschema.BaseMessage {
 	return QuestionerDefaultTemplate(acceptLanguage)
+}
+
+// ──────────────────────────── Task 3 状态机 ────────────────────────────
+
+// QuestionerState 组件状态（Python QuestionerState/Start/Interact/End :172-251；
+// D-24-5 定案：Python 三个子类仅重写 handle_event 与默认 status、from_state 恒为
+// 字段拷贝+置位，Go 以单结构体 status 分派逐行对照，序列化形状不变）
+type QuestionerState struct {
+	// ResponseNum 已收反馈轮数（每次 interact 反馈 +1）
+	ResponseNum int `json:"response_num"`
+	// UserResponse 用户回答（str/dict，默认 ""）
+	UserResponse any `json:"user_response"`
+	// Question 当前问题
+	Question string `json:"question"`
+	// ExtractedKeyFields 跨轮累积抽取结果
+	ExtractedKeyFields map[string]any `json:"extracted_key_fields"`
+	// Status 当前状态（字符串序列化 ≙ Python Enum.value）
+	Status QuestionerExecutionStatus `json:"status"`
+}
+
+// NewQuestionerState 新建状态（Python __init__ 默认值；map 零值防 nil）
+func NewQuestionerState() *QuestionerState {
+	return &QuestionerState{
+		ExtractedKeyFields: map[string]any{},
+		Status:             QuestionerStatusStart,
+	}
+}
+
+// HandleEvent 状态分派（Python 四类 handle_event :187-194/:212-217/:231-234/:248-251
+// 合流；分支表逐条对照：Start→{Interact,End}；Interact→{End}；End→{Start=回环新建}）
+func (s *QuestionerState) HandleEvent(event QuestionerEvent) *QuestionerState {
+	switch s.Status {
+	case QuestionerStatusStart:
+		switch event {
+		case QuestionerEventUserInteract:
+			return s.copyWithStatus(QuestionerStatusUserInteract) // QuestionerInteractState.from_state
+		case QuestionerEventEnd:
+			return s.copyWithStatus(QuestionerStatusEnd) // QuestionerEndState.from_state
+		}
+		return s
+	case QuestionerStatusUserInteract:
+		if event == QuestionerEventEnd {
+			return s.copyWithStatus(QuestionerStatusEnd)
+		}
+		return s
+	case QuestionerStatusEnd:
+		if event == QuestionerEventStart {
+			return NewQuestionerState().HandleEvent(event) // loop back to START :250
+		}
+		return s
+	}
+	return s
+}
+
+// copyWithStatus from_state 等价（字段拷贝+置位）
+func (s *QuestionerState) copyWithStatus(st QuestionerExecutionStatus) *QuestionerState {
+	c := *s
+	c.Status = st
+	if c.ExtractedKeyFields == nil {
+		c.ExtractedKeyFields = map[string]any{}
+	}
+	return &c
+}
+
+// IsUndergoingInteraction Python :196-197
+func (s *QuestionerState) IsUndergoingInteraction() bool {
+	return s.Status == QuestionerStatusUserInteract
+}
+
+// IsFreshState Python :199-200
+func (s *QuestionerState) IsFreshState() bool {
+	return s.Status == QuestionerStatusStart && s.ResponseNum == 0
+}
+
+// Serialize Python :184-185（model_dump ≙ JSON marshal 往返）
+func (s *QuestionerState) Serialize() map[string]any {
+	raw, _ := json.Marshal(s)
+	m := map[string]any{}
+	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+// QuestionerStateDeserialize Python deserialize :179-182（validate + handle_event
+// 按存量 status 恢复为对应子类形态；解析失败包装 101073）
+func QuestionerStateDeserialize(raw map[string]any) (*QuestionerState, error) {
+	b, _ := json.Marshal(raw)
+	st := &QuestionerState{}
+	if err := json.Unmarshal(b, st); err != nil {
+		return nil, exception.BuildError(exception.StatusComponentQuestionerStateInitFailed,
+			exception.WithMsg(fmt.Sprintf("failed to deserialize questioner state: %v", err)),
+			exception.WithCause(err))
+	}
+	if st.ExtractedKeyFields == nil {
+		st.ExtractedKeyFields = map[string]any{}
+	}
+	// Python deserialize 尾调 handle_event(QuestionerEvent(state.status.value))
+	return st.HandleEvent(QuestionerEvent(st.Status)), nil
 }
 
 // 以下为 Task 3-7 渐进实现区（状态机/Utils/Handler/Executable/Component）
