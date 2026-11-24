@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -81,6 +82,39 @@ func (s *AgentServer) handleUnaryImpl(ctx context.Context, request *schema.Agent
 			return
 		}
 		s.writeResponse(request.RequestID, request.ChannelID, resp)
+		return
+	}
+
+	// 1b. 文件域短路（27.8）：media/document/path/file 十 method 由
+	// WorkspaceFileAdapter 等价物承接，不经 agentRuntime.Invoke。
+	// Python: workspace_file_adapter.py:129 handle（GatewayAdapter 链先于 agent invoke）。
+	if adapter.HandlesWorkspaceFileMethod(request.ReqMethod) {
+		var params map[string]any
+		if len(request.Params) > 0 {
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				s.writeErrorResponse(request.RequestID, request.ChannelID, "invalid params", "BAD_REQUEST")
+				return
+			}
+		}
+		sessionID := ""
+		if request.SessionID != nil {
+			sessionID = *request.SessionID
+		}
+		payload, ok, code, fileErr := s.handleWorkspaceFiles(request.ReqMethod, params, sessionID)
+		if fileErr != nil {
+			s.writeErrorResponse(request.RequestID, request.ChannelID, fileErr.Error(), code)
+			return
+		}
+		if !ok {
+			s.writeErrorResponse(request.RequestID, request.ChannelID, "unsupported method", code)
+			return
+		}
+		s.writeResponse(request.RequestID, request.ChannelID, &schema.AgentResponse{
+			RequestID: request.RequestID,
+			ChannelID: request.ChannelID,
+			OK:        true,
+			Payload:   payload,
+		})
 		return
 	}
 
