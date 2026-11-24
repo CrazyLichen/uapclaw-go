@@ -9,6 +9,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -230,4 +231,159 @@ func (a *ReActAgent) CommitWorkflowInterrupt(
 		invokeInputs.Result = result
 	}
 	return result, nil
+}
+
+// handleResumeWorkflow 处理一轮工作流中断恢复。
+// 步1 记录当前 pending 反馈；步2 未全收齐 → 轮转下一个未收集 workflow 并再 commit；
+// 步3 全收齐 → 回写 ai_message + arguments=collected_input 并发恢复全部 workflow →
+// 再中断则再 commit；全完成设置 ResumeStartIterationKey 续跑循环并返回 nil。
+// Python: react_agent.py _handle_resume L2663-1740（workflow 分支；HITL 分支由
+// hitlHandler.HandleResume 承载，本方法只接 InterruptionState）。
+func (a *ReActAgent) handleResumeWorkflow(
+	ctx context.Context,
+	st *agentschema.InterruptionState,
+	userInput any,
+	cbc *interfaces.AgentCallbackContext,
+	modelCtx ceinterface.ModelContext,
+	sess sessioninterfaces.SessionFacade,
+	invokeInputs *interfaces.InvokeInputs,
+) (map[string]any, error) {
+	resumeIteration := st.BaseInterruptionState.Iteration
+	logger.Info(logComponent).Int("iteration", resumeIteration+1).
+		Msg("Resuming ReAct from iteration") // Python L2673
+
+	// 步1：记录当前 pending 反馈（Python L2679-1682）
+	pendingEntry := st.InterruptedWorkflows[st.PendingWorkflowID]
+	interactiveInput := a.buildInteractiveInput(userInput, []string{st.PendingComponentID})
+	pendingEntry.CollectedInput = interactiveInput
+
+	// 步2：检查是否全部收齐（Python L2684-1694）
+	// map 迭代序 Go 不确定，但判定只依赖"是否存在未收集项"，顺序无语义影响
+	allCollected := true
+	for _, entry := range st.InterruptedWorkflows {
+		if entry.CollectedInput == nil {
+			allCollected = false
+			break
+		}
+	}
+	if !allCollected {
+		// 轮转到下一个未收集 workflow（Python L2687-1694）
+		for wfID, entry := range st.InterruptedWorkflows {
+			if entry.CollectedInput != nil {
+				continue
+			}
+			nextCompID := ""
+			if len(entry.ComponentIDs) > 0 {
+				nextCompID = entry.ComponentIDs[0]
+			}
+			st.PendingWorkflowID = wfID
+			st.PendingComponentID = nextCompID
+			return a.CommitWorkflowInterrupt(ctx, st, modelCtx, sess, invokeInputs)
+		}
+	}
+
+	// 步3：全部收齐 → 回写 ai_message + 并发恢复全部 workflow（Python L2696-1734）
+	resumeAIMessage := deepCloneAssistantMessage(st.BaseInterruptionState.AIMessage) // D-26-2
+	if modelCtx != nil {
+		if _, err := modelCtx.AddMessages(ctx, []llmschema.BaseMessage{resumeAIMessage}); err != nil {
+			logger.Error(logComponent).Err(err).Msg("handle_resume: failed to add resume ai message")
+			return nil, fmt.Errorf("handle_resume: 回写 ai_message 失败: %w", err)
+		}
+	}
+	allToolCalls := make([]*llmschema.ToolCall, 0, len(st.InterruptedWorkflows))
+	for _, entry := range st.InterruptedWorkflows {
+		tc := deepCloneToolCall(entry.ToolCall) // D-26-2 深拷贝 + D-26-5 JSON string
+		if tc != nil {
+			args, err := json.Marshal(entry.CollectedInput)
+			if err != nil {
+				logger.Error(logComponent).Err(err).Str("workflow_id", st.PendingWorkflowID).
+					Msg("handle_resume: failed to marshal collected input")
+				return nil, fmt.Errorf("handle_resume: 序列化 collected_input 失败: %w", err)
+			}
+			tc.Arguments = string(args)
+		}
+		allToolCalls = append(allToolCalls, tc)
+	}
+	// 并发恢复由 executeToolCalls 内部并行承载（Python L2725 _execute_tool_call 并发；
+	// D-26-3：Go goroutine 并发语义与 executeToolCalls 既有实现一致）
+	results, err := a.executeToolCalls(ctx, cbc, allToolCalls, sess, modelCtx)
+	if err != nil {
+		return nil, err
+	}
+	// 恢复后再判中断（Python L2728-1733）
+	workflowInterrupt := a.afterExecuteToolCall(results, allToolCalls, resumeAIMessage, resumeIteration, st.BaseInterruptionState.OriginalQuery)
+	if workflowInterrupt != nil {
+		return a.CommitWorkflowInterrupt(ctx, workflowInterrupt, modelCtx, sess, invokeInputs)
+	}
+	// 全完成：设置续跑起点（Python L2736-1738）
+	cbc.SetExtra(agentschema.ResumeStartIterationKey, resumeIteration+1)
+	return nil, nil
+}
+
+// buildInteractiveInput 由用户反馈与组件 ID 构建交互输入。
+// 已是 InteractiveInput → 补缺失组件 ID（fallback 取现有首个值）；
+// 有组件 ID → 逐个绑定 str(userQuery)；无组件 ID → raw_inputs=str(userQuery)。
+// Python: react_agent.py _build_interactive_input L2754-1766。
+func (a *ReActAgent) buildInteractiveInput(userQuery any, componentIDs []string) any {
+	if ii, ok := userQuery.(*interaction.InteractiveInput); ok {
+		fallback := ""
+		for _, v := range ii.UserInputs {
+			fallback = fmt.Sprint(v)
+			break
+		}
+		for _, compID := range componentIDs {
+			if _, exists := ii.UserInputs[compID]; !exists {
+				ii.UserInputs[compID] = fallback
+			}
+		}
+		return ii
+	}
+	if len(componentIDs) > 0 {
+		ii, err := interaction.NewInteractiveInput()
+		if err != nil {
+			return nil
+		}
+		for _, compID := range componentIDs {
+			ii.UserInputs[compID] = fmt.Sprint(userQuery)
+		}
+		return ii
+	}
+	ii, err := interaction.NewInteractiveInput(fmt.Sprint(userQuery))
+	if err != nil {
+		return nil
+	}
+	return ii
+}
+
+// deepCloneAssistantMessage 深拷贝 AI 消息（Python copy.deepcopy，D-26-2）。
+// JSON 往返承载：AssistantMessage 全字段 JSON 序列化面与 Python deepcopy 语义等价。
+func deepCloneAssistantMessage(msg *llmschema.AssistantMessage) *llmschema.AssistantMessage {
+	if msg == nil {
+		return nil
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return msg // 序列化失败回退原引用（不中断主流程）
+	}
+	clone := &llmschema.AssistantMessage{}
+	if err := json.Unmarshal(data, clone); err != nil {
+		return msg
+	}
+	return clone
+}
+
+// deepCloneToolCall 深拷贝工具调用（Python copy.deepcopy，D-26-2）。
+func deepCloneToolCall(tc *llmschema.ToolCall) *llmschema.ToolCall {
+	if tc == nil {
+		return nil
+	}
+	data, err := json.Marshal(tc)
+	if err != nil {
+		return tc
+	}
+	clone := &llmschema.ToolCall{}
+	if err := json.Unmarshal(data, clone); err != nil {
+		return tc
+	}
+	return clone
 }

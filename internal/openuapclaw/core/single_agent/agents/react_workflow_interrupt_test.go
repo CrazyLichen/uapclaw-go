@@ -222,3 +222,87 @@ func TestCommitWorkflowInterrupt(t *testing.T) {
 	// 中断态已写入 session（Python L2657）
 	assert.NotNil(t, a.loadInterruptionState(sess))
 }
+
+// TestHandleResumeWorkflow_步2轮转 双 workflow 只反馈第一个 → 轮转第二个并 commit。
+// Python: react_agent.py _handle_resume L2679-1694 步1+步2。
+func TestHandleResumeWorkflow_步2轮转(t *testing.T) {
+	a := &ReActAgent{}
+	modelCtx := &fakeModelContext{}
+	sess := session.NewSession(session.WithSessionID("test_resume_rotate"))
+	invokeInputs := &interfaces.InvokeInputs{}
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+	mkEntry := func(name, compID string) *agentschema.WorkflowInterruptEntry {
+		return &agentschema.WorkflowInterruptEntry{
+			ToolCall:               &llmschema.ToolCall{ID: "t_" + name, Name: name},
+			ComponentIDs:           []string{compID},
+			WorkflowExecutionState: &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired},
+		}
+	}
+	st := &agentschema.InterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{
+			AIMessage:     llmschema.NewAssistantMessage("ai"),
+			Iteration:     2,
+			OriginalQuery: "orig",
+		},
+		InterruptedWorkflows: map[string]*agentschema.WorkflowInterruptEntry{
+			"wf_a": mkEntry("wf_a", "q1"),
+			"wf_b": mkEntry("wf_b", "q2"),
+		},
+		PendingWorkflowID:  "wf_a",
+		PendingComponentID: "q1",
+	}
+	result, err := a.handleResumeWorkflow(context.Background(), st, "用户反馈A", cbc, modelCtx, sess, invokeInputs)
+	require.NoError(t, err)
+	require.NotNil(t, result) // 仍有中断 → 返回 interrupt 结果
+	assert.Equal(t, "interrupt", result["result_type"])
+	// 步1：pending（wf_a）反馈已记录
+	assert.NotNil(t, st.InterruptedWorkflows["wf_a"].CollectedInput)
+	// 步2：pending 轮转到 wf_b
+	assert.Equal(t, "wf_b", st.PendingWorkflowID)
+	assert.Equal(t, "q2", st.PendingComponentID)
+	// commit 副作用：invokeInputs.result 已设置、中断态已存
+	assert.Equal(t, result, invokeInputs.Result)
+	assert.NotNil(t, a.loadInterruptionState(sess))
+	// ResumeStartIterationKey 未写入（步3 未走）
+	_, ok := cbc.GetExtra(agentschema.ResumeStartIterationKey)
+	assert.False(t, ok)
+}
+
+// TestHandleResumeWorkflow_步1输入补全 buildInteractiveInput 三形态。
+// Python: react_agent.py _build_interactive_input L2754-1766。
+func TestHandleResumeWorkflow_步1输入补全(t *testing.T) {
+	a := &ReActAgent{}
+	// 形态1：已是 InteractiveInput → 缺失组件补 fallback（取现有首个值）
+	ii, err := interaction.NewInteractiveInput()
+	require.NoError(t, err)
+	ii.UserInputs["q1"] = "答案1"
+	out := a.buildInteractiveInput(ii, []string{"q2", "q3"})
+	got := out.(*interaction.InteractiveInput)
+	assert.Equal(t, "答案1", got.UserInputs["q2"])
+	assert.Equal(t, "答案1", got.UserInputs["q3"])
+	// 形态2：非 InteractiveInput + 有组件 ID → 逐个绑定 str(query)
+	out = a.buildInteractiveInput("纯文本反馈", []string{"q9"})
+	got = out.(*interaction.InteractiveInput)
+	assert.Equal(t, "纯文本反馈", got.UserInputs["q9"])
+	// 形态3：非 InteractiveInput + 无组件 ID → raw_inputs
+	out = a.buildInteractiveInput("纯文本反馈", nil)
+	got = out.(*interaction.InteractiveInput)
+	assert.Equal(t, "纯文本反馈", got.RawInputs)
+}
+
+// TestDeepCloneHelpers 深拷贝助手（D-26-2：JSON 往返等价 deepcopy）。
+func TestDeepCloneHelpers(t *testing.T) {
+	msg := llmschema.NewAssistantMessage("hello")
+	clone := deepCloneAssistantMessage(msg)
+	assert.Equal(t, msg.Content.String(), clone.Content.String())
+	assert.NotSame(t, msg, clone)
+	tc := &llmschema.ToolCall{ID: "t1", Name: "wf", Arguments: `{"k":"v"}`}
+	tcClone := deepCloneToolCall(tc)
+	assert.Equal(t, tc.ID, tcClone.ID)
+	assert.Equal(t, tc.Name, tcClone.Name)
+	assert.Equal(t, tc.Arguments, tcClone.Arguments)
+	assert.NotSame(t, tc, tcClone)
+	// nil 守卫
+	assert.Nil(t, deepCloneAssistantMessage(nil))
+	assert.Nil(t, deepCloneToolCall(nil))
+}
