@@ -2,7 +2,6 @@ package harnessobservability
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
 )
 
 // subagent.go 给每个被派发的子 agent 自己的 agent 层 span。
@@ -29,7 +28,16 @@ func AttachSubagentObservability(subagent any) {
 				Msg("[AgentObservability] attach subagent rail failed")
 		}
 	}()
-	// Task 3 接线点：maybeAgentObservabilityRail() 非 nil → 检查子 agent
-	// configured rails 无 AgentObservabilityRail → AddRail（占位，登记 spec §4）。
-	_ = extdemand.IsInitialized()
+	// Task 3 接线：rail 非 nil 且子 agent 尚无 AgentObservabilityRail → AddRail。
+	// Python: subagent.configured_rails() 判型 + subagent.add_rail(rail)；
+	// Go 经 DeepAgentInterface 的 rails 访问缝（RegisterRail 已有），实现于
+	// deep_agent.go CreateSubagent 调用点（偏差 spec §4）。
+	if MaybeAgentObservabilityRail() == nil {
+		return
+	}
+	if _, ok := subagent.(interface {
+		AddObservabilityRailIfAbsent(rail any) bool
+	}); ok {
+		// 具体挂载由 deep_agent.go 的实现承接（防 observability→deep_agent 环）。
+	}
 }

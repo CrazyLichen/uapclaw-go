@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	harnessobservability "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/observability"
 	"math"
 	"path/filepath"
 	"reflect"
@@ -929,7 +930,13 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 	overrideFn := d.createSubagentOverride
 	d.configMu.RUnlock()
 	if overrideFn != nil {
-		return overrideFn(ctx, subagentType, subSessionID)
+		subagent, err := overrideFn(ctx, subagentType, subSessionID)
+		if err == nil && subagent != nil {
+			// Python: install_subagent_observability_hook 包 create_subagent，
+			// 覆写路径同样补挂（attach 幂等）。Go 显式调用（偏差 spec §4）。
+			harnessobservability.AttachSubagentObservability(subagent)
+		}
+		return subagent, err
 	}
 
 	spec := d.findSubagentSpec(subagentType)
@@ -950,6 +957,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 		}
 		d.configMu.RUnlock()
 		deepAgent.InheritInvocationLogDir(parentLogDir)
+		harnessobservability.AttachSubagentObservability(deepAgent)
 		return deepAgent, nil
 	}
 
@@ -1003,6 +1011,8 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 		if createErr != nil {
 			return nil, fmt.Errorf("创建子 Agent 失败: %w", createErr)
 		}
+		// Python: create_subagent_with_observability 包裹层（subagent.py:70-77）。
+		harnessobservability.AttachSubagentObservability(subAgent)
 		return subAgent, nil
 	}
 }

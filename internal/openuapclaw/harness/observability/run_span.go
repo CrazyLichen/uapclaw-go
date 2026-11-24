@@ -12,7 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
 // run_span.go 单 agent 运行根 span。
@@ -27,6 +26,18 @@ import (
 //
 //	handle := OpenAgentRunSpan(sessionID, mode, ...)
 //	defer CloseAgentRunSpan(handle, sessionID, &answer, err, "", "")
+
+// RunSubject 单 agent 运行执行主体的轻量投影。
+// Python: run_span.py 直接收 execution_subject 对象；Go 侧本包不得 import
+// harness 包（deep_agent→observability 反向挂载成环，偏差 spec §4），
+// 调用方由 harness.ExecutionSubject 适配。
+type RunSubject struct {
+	SubjectID       string
+	DisplayName     string
+	Kind            string
+	ParentSubjectID string
+	SessionID       string
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -52,7 +63,7 @@ func BuildRunSpanName(mode, sessionID string) string {
 // Python: open_agent_run_span（run_span.py:69-175）。返回不透明句柄供
 // CloseAgentRunSpan 使用；tracing 未开 / provider 未初始化时返回 nil（关闭为
 // no-op）。属性对齐 Python base_attributes。
-func OpenAgentRunSpan(sessionID, mode, requestID, runID, turnID string, turnNumber int, subject *harness.ExecutionSubject) trace.Span {
+func OpenAgentRunSpan(sessionID, mode, requestID, runID, turnID string, turnNumber int, subject *RunSubject) trace.Span {
 	if !IsInitialized() || !IsTracingEnabled() {
 		return nil
 	}
