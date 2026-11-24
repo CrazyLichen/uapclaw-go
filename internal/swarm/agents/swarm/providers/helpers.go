@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	workspacepkg "github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	workspacepkg "github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	teamtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )

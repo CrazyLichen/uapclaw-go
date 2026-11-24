@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 )
 
 // mockUpdater 用于验证 Updater 接口兼容性

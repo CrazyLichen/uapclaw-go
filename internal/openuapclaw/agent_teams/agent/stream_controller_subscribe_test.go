@@ -8,9 +8,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	streambase "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // TestStreamController_mapState_RUNNING转BUSY 验证相位 RUNNING → 成员 BUSY。

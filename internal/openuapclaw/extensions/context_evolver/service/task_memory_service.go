@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 	op "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/op"
@@ -20,8 +22,6 @@ import (
 	acesummary "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/summary/task/ace"
 	rbsummary "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/summary/task/rb"
 	remesummary "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/summary/task/reme"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

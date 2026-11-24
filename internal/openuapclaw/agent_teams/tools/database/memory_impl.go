@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/fsm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

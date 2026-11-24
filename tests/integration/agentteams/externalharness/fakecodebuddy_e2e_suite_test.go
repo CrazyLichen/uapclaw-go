@@ -13,10 +13,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	adapter "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	session "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	schema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	adapter "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	session "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

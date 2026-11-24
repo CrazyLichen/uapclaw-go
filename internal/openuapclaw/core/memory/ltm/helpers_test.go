@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	kv "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	kv "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/kv"
 )
 
 // TestValidateKVStore 测试 KV 存储校验。

@@ -5,10 +5,10 @@ package reliability
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/detectors"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/remediation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

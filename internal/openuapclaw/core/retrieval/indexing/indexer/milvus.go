@@ -11,13 +11,13 @@ import (
 	"github.com/milvus-io/milvus/client/v2/index"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/utils"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

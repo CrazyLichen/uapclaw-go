@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // 本文件对应 Python openjiuwen/harness_providers/base.py（902 行）：

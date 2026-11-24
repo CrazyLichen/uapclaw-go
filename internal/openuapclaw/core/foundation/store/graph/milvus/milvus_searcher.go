@@ -11,10 +11,10 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 	querypkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

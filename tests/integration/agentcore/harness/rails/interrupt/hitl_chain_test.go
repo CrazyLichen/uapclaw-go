@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	rails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	interrupt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

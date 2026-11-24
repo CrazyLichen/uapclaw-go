@@ -9,16 +9,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -674,7 +674,7 @@ func TestTeamSkillExperienceOptimizer_Step(t *testing.T) {
 		SkillName:    skillName,
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr}},
-		Trajectory: mustTestTrajectoryWithToolSpan(),
+		Trajectory:   mustTestTrajectoryWithToolSpan(),
 	}
 	dummyOp := &dummyOperator{id: "skill_experience_team_skill"}
 	operators := map[string]operator.Operator{"skill_experience_team_skill": dummyOp}
@@ -703,7 +703,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_聚合路径(t *testing.T)
 		SkillName:    "team_skill",
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "failed"}},
-		Trajectory: mustTestTrajectoryWithToolSpan(),
+		Trajectory:   mustTestTrajectoryWithToolSpan(),
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -738,8 +738,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号patch(t *testing.
 		SkillName:    "team_skill",
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "issue"}},
-		Trajectory: &trajectory.Trajectory{
-					},
+		Trajectory:   &trajectory.Trajectory{},
 	}
 
 	_, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -1357,7 +1356,7 @@ func TestTeamSkillExperienceOptimizer_Backward_LLM失败(t *testing.T) {
 		SkillName:    skillName,
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr}},
-		Trajectory: mustTestTrajectoryWithToolSpan(),
+		Trajectory:   mustTestTrajectoryWithToolSpan(),
 	}
 	dummyOp := &dummyOperator{id: "skill_experience_team_fail"}
 	operators := map[string]operator.Operator{"skill_experience_team_fail": dummyOp}
@@ -1427,8 +1426,8 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_英文(t *testing.T) {
 		SkillName:    "team_skill",
 		SkillContent: "team skill content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "failed"}},
-		Trajectory: mustTestTrajectoryWithToolSpan(),
-		UserQuery: "How to collaborate better",
+		Trajectory:   mustTestTrajectoryWithToolSpan(),
+		UserQuery:    "How to collaborate better",
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -1445,10 +1444,10 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_已有记录(t *testing.T)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "team_skill",
-		SkillContent: "team skill content",
-		Signals:      []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "issue"}},
-		Trajectory: mustTestTrajectoryWithToolSpan(),
+		SkillName:             "team_skill",
+		SkillContent:          "team skill content",
+		Signals:               []signal.EvolutionSignal{{SignalType: "trajectory_issue", SkillName: &skillNamePtr, Excerpt: "issue"}},
+		Trajectory:            mustTestTrajectoryWithToolSpan(),
 		ExistingDescRecords:   []checkpointing.EvolutionRecord{{ID: "ev_1", Change: checkpointing.EvolutionPatch{Section: "Description"}}},
 		ExistingBodyRecords:   []checkpointing.EvolutionRecord{{ID: "ev_2", Change: checkpointing.EvolutionPatch{Section: "Instructions"}}},
 		ExistingScriptRecords: []checkpointing.EvolutionRecord{{ID: "ev_3", Change: checkpointing.EvolutionPatch{Section: "Scripts"}}},
@@ -1471,9 +1470,8 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号用户意图(t *t
 		SkillName:    "team_skill",
 		SkillContent: "content",
 		Signals:      []signal.EvolutionSignal{{SignalType: "user_intent", SkillName: &skillNamePtr, Excerpt: "更快完成分析"}},
-		Trajectory: &trajectory.Trajectory{
-					},
-		UserQuery: "快速分析",
+		Trajectory:   &trajectory.Trajectory{},
+		UserQuery:    "快速分析",
 	}
 
 	_, err := opt.GenerateRecords(context.Background(), evoCtx)

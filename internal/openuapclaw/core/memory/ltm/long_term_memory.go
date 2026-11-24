@@ -6,6 +6,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	db "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/db"
@@ -20,7 +21,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/search"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/process/extract"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -3,13 +3,13 @@ package swarm
 import (
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/providers"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -234,29 +234,29 @@ const (
 // 非测试代码不得消费）。
 func SwarmRailNamesForTest() map[string]bool {
 	return map[string]bool{
-		PersonalContext:              true,
-		RuntimePrompt:                true,
-		TeamSkillStoragePolicy:       true,
-		TeamSkillLibraryReload:       true,
-		TeamWorkspaceReportPath:      true,
-		OrganizationAvailability:     true,
-		OrganizationModel:            true,
-		OrganizationOwnerInbox:       true,
-		ContextProcessor:             true,
-		ModelAnomalyDetection:        true,
-		PluginRails:                  true,
-		SkillRetrievalPrompt:         true,
-		SymphonyOrchestrationPrompt:  true,
-		SwarmHeartbeat:               true,
-		SessionMessagingRoute:        true,
-		TeamPermissionPolicy:         true,
-		TeamPermission:               true,
-		TeamSkillEvolution:           true,
-		TeamSkillCreate:              true,
-		MemberSkillEvolution:         true,
-		DesignerAuthoring:            true,
-		DesignerExecution:            true,
-		DesignerSurfaceSanitizer:     true,
-		MemberSkillToolkit:           true,
+		PersonalContext:             true,
+		RuntimePrompt:               true,
+		TeamSkillStoragePolicy:      true,
+		TeamSkillLibraryReload:      true,
+		TeamWorkspaceReportPath:     true,
+		OrganizationAvailability:    true,
+		OrganizationModel:           true,
+		OrganizationOwnerInbox:      true,
+		ContextProcessor:            true,
+		ModelAnomalyDetection:       true,
+		PluginRails:                 true,
+		SkillRetrievalPrompt:        true,
+		SymphonyOrchestrationPrompt: true,
+		SwarmHeartbeat:              true,
+		SessionMessagingRoute:       true,
+		TeamPermissionPolicy:        true,
+		TeamPermission:              true,
+		TeamSkillEvolution:          true,
+		TeamSkillCreate:             true,
+		MemberSkillEvolution:        true,
+		DesignerAuthoring:           true,
+		DesignerExecution:           true,
+		DesignerSurfaceSanitizer:    true,
+		MemberSkillToolkit:          true,
 	}
 }

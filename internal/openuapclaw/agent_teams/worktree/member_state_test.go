@@ -29,7 +29,7 @@ type fakeConfigurator struct {
 }
 
 func (f *fakeConfigurator) TeamBackend() TeamBackendAccess { return f.backend }
-func (f *fakeConfigurator) TeamName() string                    { return f.teamName }
+func (f *fakeConfigurator) TeamName() string               { return f.teamName }
 
 // strPtr 测试字符串指针助手。
 func strPtr(s string) *string { return &s }

@@ -1,14 +1,15 @@
 package agent
 
 import (
-	awt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
 	"context"
 	"encoding/json"
 	"fmt"
+	awt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
@@ -20,7 +21,6 @@ import (
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	streambase "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -83,9 +83,9 @@ func NewSpawnManager(
 		configurator:      configurator,
 		worktreeLifecycle: newTeammateWorktreeLifecycle(configurator),
 		getTeamAgent:      teamAgentGetter,
-		baseCtx:        ctx,
-		spawnedHandles: make(map[string]spawn.SpawnHandle),
-		recoveryCancel: make(map[string]context.CancelFunc),
+		baseCtx:           ctx,
+		spawnedHandles:    make(map[string]spawn.SpawnHandle),
+		recoveryCancel:    make(map[string]context.CancelFunc),
 	}
 }
 

@@ -12,12 +12,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
-	harness_providers "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
@@ -27,7 +23,11 @@ import (
 	interruptpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
+	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
+	harness_providers "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

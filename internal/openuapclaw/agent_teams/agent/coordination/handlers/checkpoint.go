@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 
-	types "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
+	types "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

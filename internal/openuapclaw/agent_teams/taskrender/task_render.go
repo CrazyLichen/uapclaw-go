@@ -101,7 +101,6 @@ func RenderTaskBoard(tasks []TaskLike, isLeader bool, nowMs int64, memberName st
 	return agentteams.RenderEvent("task-board", join(lines, "\n"), agentteams.EventOptions{}), nil
 }
 
-
 // join 局部字符串拼接（本包不引入 strings 依赖面）。
 func join(parts []string, sep string) string {
 	if len(parts) == 0 {

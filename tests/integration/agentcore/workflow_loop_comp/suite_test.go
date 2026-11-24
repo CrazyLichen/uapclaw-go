@@ -54,7 +54,7 @@ func newAddTen() *addTenComp {
 }
 
 // gateComp ≙ 上游 AddTenNode4Cp（mock_nodes.py:136-148）：首两次执行抛错
-//（reason 携带真实输入），第三次放行返回 source+10——中断恢复重放载体。
+// （reason 携带真实输入），第三次放行返回 source+10——中断恢复重放载体。
 type gateComp struct {
 	components.WorkflowComponent
 	failures int
@@ -123,8 +123,8 @@ func (s *LoopCompSuite) TestLoopNumber_真实链() {
 	n := 12
 	w.AddWorkflowComp("loop", loopComp, nil,
 		map[string]any{
-			"loop_type":       "number",
-			"loop_number":     n,
+			"loop_type":        "number",
+			"loop_number":      n,
 			"intermediate_var": map[string]any{"user_num": "${start.input_num}"},
 		}, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	w.AddConnection([]string{"start"}, "loop")

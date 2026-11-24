@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/schema"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/vector_store"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

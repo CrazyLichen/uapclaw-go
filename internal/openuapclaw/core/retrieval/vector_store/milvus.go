@@ -13,13 +13,13 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"google.golang.org/grpc"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/utils"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────

@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	kvcache "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
@@ -17,6 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	sessionstream "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	hp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // ──────────────────────────── 测试替身 ────────────────────────────

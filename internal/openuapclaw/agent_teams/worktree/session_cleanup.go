@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	agent_teams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agent_teams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 )
 

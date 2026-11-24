@@ -1,8 +1,8 @@
 package memory_call
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

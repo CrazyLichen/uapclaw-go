@@ -202,7 +202,7 @@ func TestWorktreeRemoteHandler_Remove无仓库报错(t *testing.T) {
 }
 
 // TestResponseFromPayload_类型不符显式报错 载荷键类型漂移 → error 而非静默零值
-//（Python model_validate strict 语义；json tag 往返层防御）。
+// （Python model_validate strict 语义；json tag 往返层防御）。
 func TestResponseFromPayload_类型不符显式报错(t *testing.T) {
 	// success 键是字符串 → Unmarshal 报错
 	_, err := responseFromPayload(map[string]any{"success": "yes"})

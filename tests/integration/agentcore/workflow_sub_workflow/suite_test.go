@@ -9,9 +9,9 @@ package workflow_sub_workflow
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -179,7 +179,7 @@ func contains(s, sub string) bool {
 // ──────────────────────────── Task 7：cache 短路 + 中断恢复 ────────────────────────────
 
 // interruptGateComp 测试中断源组件：对齐上游 Node4Cp 真实形态
-//（test_workflow_with_interrupt.py:123-133——首次执行抛普通执行错误，
+// （test_workflow_with_interrupt.py:123-133——首次执行抛普通执行错误，
 // checkpointer 落图侧快照；InteractiveInput 恢复后二次执行放行）。
 // 全链路真实：错误经 Vertex→Pregel→checkpointer 快照→恢复重放，不发明机制。
 type interruptGateComp struct {
@@ -315,4 +315,3 @@ func (s *SubWorkflowSuite) TestInterruptResume_真实输入输出() {
 	s.Require().Equal(int32(2), gate.calls.Load(), "恢复时 gate 第二次执行放行")
 	s.Require().Equal("u7", gate.lastInputs["name"], "恢复重放仍携带真实输入")
 }
-

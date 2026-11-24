@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	intellirouter "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // fakeState 对齐 LocalRouterState 翻译层触碰的字段（上游 _FakeState）。

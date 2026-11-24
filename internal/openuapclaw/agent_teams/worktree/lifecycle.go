@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -171,13 +171,13 @@ func (l *TeammateWorktreeLifecycle) EnsureMemberWorktree(
 	isolation := "worktree"
 	uok := memberDB(teamBackend).UpdateMemberWorktree(ctx, memberName, teamName,
 		&database.MemberWorktreeOptions{
-			Isolation:     &isolation,
-			Path:          &result.WorktreePath,
-			SessionID:     &scope.SessionID,
-			ProjectHash:   &scope.ProjectHash,
-			ManagedRoot:   &scope.ManagedRoot,
+			Isolation:      &isolation,
+			Path:           &result.WorktreePath,
+			SessionID:      &scope.SessionID,
+			ProjectHash:    &scope.ProjectHash,
+			ManagedRoot:    &scope.ManagedRoot,
 			WorktreeBranch: strPtrOrNil(result.WorktreeBranch),
-			HeadCommit:    strPtrOrNil(result.HeadCommit),
+			HeadCommit:     strPtrOrNil(result.HeadCommit),
 		}, "", "")
 	if !uok {
 		return "", fmt.Errorf("member %s not found in team %s", memberName, teamName)

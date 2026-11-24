@@ -3,8 +3,8 @@ package skill_call
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
 )
 
 func TestNewSkillExperienceOperator(t *testing.T) {

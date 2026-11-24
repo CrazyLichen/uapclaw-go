@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
-	memoryrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
 	runner "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
+	memoryrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

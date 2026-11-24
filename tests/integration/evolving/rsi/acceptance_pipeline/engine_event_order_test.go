@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	rsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi"
+	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	harnessconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/evaluator"
-	harnessrsi "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/rsi/harness_rsi/singleharness"
 )
 
@@ -143,6 +143,7 @@ func (s *EngineEventOrderSuite) TestEngineEventOrder_一轮演进事件剧本() 
 		}
 	}
 }
+
 // accRealEvalRequest 打包直调编排器所需的请求与路径。
 type accRealEvalRequest struct {
 	req      *singleharness.IterativeSingleHarnessRequest

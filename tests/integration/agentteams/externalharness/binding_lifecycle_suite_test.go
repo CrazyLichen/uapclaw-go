@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	adapter "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/equipment"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -56,7 +56,9 @@ type idleExtHarness struct {
 func (h *idleExtHarness) Card() harnessprotocol.HarnessCard { return h.card }
 
 // State 恒 idle。
-func (h *idleExtHarness) State() harnessprotocol.HarnessState { return harnessprotocol.HarnessStateIdle }
+func (h *idleExtHarness) State() harnessprotocol.HarnessState {
+	return harnessprotocol.HarnessStateIdle
+}
 
 // ProviderSessionID 恒 nil。
 func (h *idleExtHarness) ProviderSessionID() *string { return nil }

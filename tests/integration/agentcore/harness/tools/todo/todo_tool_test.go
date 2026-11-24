@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	todo "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	todo "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

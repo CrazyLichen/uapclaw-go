@@ -3,8 +3,8 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/metadata"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

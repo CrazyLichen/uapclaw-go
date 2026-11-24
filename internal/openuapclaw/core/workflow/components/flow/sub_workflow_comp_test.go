@@ -324,7 +324,7 @@ func TestSubWorkflowComponent_Stream_dict帧合并缓存(t *testing.T) {
 }
 
 // TestSubWorkflowComponent_Invoke_非空缓存短路 非空缓存命中返回 {"output": merged}
-//（Python workflow_comp.py:81-83 逐字复刻；Quirk B 恢复场景的缓存命中形态）。
+// （Python workflow_comp.py:81-83 逐字复刻；Quirk B 恢复场景的缓存命中形态）。
 func TestSubWorkflowComponent_Invoke_非空缓存短路(t *testing.T) {
 	fw := &fakeWorkflow{invokeOut: map[string]any{"should": "not-called"}}
 	comp, _ := newSubWorkflowComponentForTest(fw, true)

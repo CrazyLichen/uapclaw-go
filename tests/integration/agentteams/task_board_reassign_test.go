@@ -14,17 +14,17 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/fsm"
-	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/core"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
+	reliabilitycore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/rails/reliability/core"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -61,15 +61,17 @@ type captureMessager struct {
 	published []*events.EventMessage
 }
 
-func (m *captureMessager) Start(context.Context) error  { return nil }
-func (m *captureMessager) Stop(context.Context) error   { return nil }
+func (m *captureMessager) Start(context.Context) error { return nil }
+func (m *captureMessager) Stop(context.Context) error  { return nil }
 func (m *captureMessager) Publish(_ context.Context, _ string, msg *events.EventMessage) error {
 	m.published = append(m.published, msg)
 	return nil
 }
-func (m *captureMessager) Subscribe(context.Context, string, messager.MessagerHandler) error { return nil }
-func (m *captureMessager) Unsubscribe(context.Context, string) error                         { return nil }
-func (m *captureMessager) Send(context.Context, string, *events.EventMessage) error          { return nil }
+func (m *captureMessager) Subscribe(context.Context, string, messager.MessagerHandler) error {
+	return nil
+}
+func (m *captureMessager) Unsubscribe(context.Context, string) error                { return nil }
+func (m *captureMessager) Send(context.Context, string, *events.EventMessage) error { return nil }
 func (m *captureMessager) RegisterDirectMessageHandler(context.Context, messager.MessagerHandler) error {
 	return nil
 }
@@ -80,14 +82,14 @@ type itestHost struct {
 	deliveries []string
 }
 
-func (h *itestHost) IsAgentReady() bool                  { return true }
-func (h *itestHost) IsAgentRunning() bool                { return false }
-func (h *itestHost) HasInFlightRound() bool              { return false }
-func (h *itestHost) HasPendingInterrupt() bool           { return false }
-func (h *itestHost) CancelAgent(context.Context) error   { return nil }
-func (h *itestHost) AutoStartMember(context.Context, string) bool { return true }
+func (h *itestHost) IsAgentReady() bool                                                   { return true }
+func (h *itestHost) IsAgentRunning() bool                                                 { return false }
+func (h *itestHost) HasInFlightRound() bool                                               { return false }
+func (h *itestHost) HasPendingInterrupt() bool                                            { return false }
+func (h *itestHost) CancelAgent(context.Context) error                                    { return nil }
+func (h *itestHost) AutoStartMember(context.Context, string) bool                         { return true }
 func (h *itestHost) ResumeInterrupt(context.Context, *interaction.InteractiveInput) error { return nil }
-func (h *itestHost) AnnounceTaskRevisions(context.Context) error { return nil }
+func (h *itestHost) AnnounceTaskRevisions(context.Context) error                          { return nil }
 func (h *itestHost) DeliverInput(_ context.Context, content string, _ bool, _ *agentinterfaces.RunContext) error {
 	h.deliveries = append(h.deliveries, content)
 	return nil
@@ -101,10 +103,10 @@ type itestBP struct {
 	member string
 }
 
-func (b *itestBP) Role() schema.TeamRole                                 { return b.role }
-func (b *itestBP) DispatcherMemberName() string                          { return b.member }
+func (b *itestBP) Role() schema.TeamRole                                     { return b.role }
+func (b *itestBP) DispatcherMemberName() string                              { return b.member }
 func (b *itestBP) DispatcherReliability() *reliabilitycore.ReliabilityConfig { return nil }
-func (b *itestBP) DispatcherSpec() *schema.TeamAgentSpec                 { return nil }
+func (b *itestBP) DispatcherSpec() *schema.TeamAgentSpec                     { return nil }
 
 // itestInfra infra 假实现。
 type itestInfra struct {
@@ -112,16 +114,16 @@ type itestInfra struct {
 	be *tools.TeamBackend
 }
 
-func (i *itestInfra) TaskManager() *tools.TeamTaskManager      { return i.tm }
+func (i *itestInfra) TaskManager() *tools.TeamTaskManager       { return i.tm }
 func (i *itestInfra) MessageManager() *tools.TeamMessageManager { return nil }
-func (i *itestInfra) TeamBackend() *tools.TeamBackend          { return i.be }
-func (i *itestInfra) Messager() messager.Messager              { return nil }
+func (i *itestInfra) TeamBackend() *tools.TeamBackend           { return i.be }
+func (i *itestInfra) Messager() messager.Messager               { return nil }
 
 // itestPoll poll 控制器假实现。
 type itestPoll struct{}
 
-func (p *itestPoll) PausePolls()                   {}
-func (p *itestPoll) ResumePolls(context.Context)   {}
+func (p *itestPoll) PausePolls()                 {}
+func (p *itestPoll) ResumePolls(context.Context) {}
 
 // newMemberSide 按成员视角装配 dispatcher（真实 EventDispatcher + 基类 handler）。
 func (s *TaskBoardReassignSuite) newMemberSide(member string, role schema.TeamRole,

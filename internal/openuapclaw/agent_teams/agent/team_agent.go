@@ -48,8 +48,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
-	spawnpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
@@ -63,13 +63,11 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
+	spawnpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	agentcoreharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
@@ -77,7 +75,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentcoreharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -332,7 +332,6 @@ func (a *TeamAgent) Harness() *harness.TeamHarness {
 	}
 	return nil
 }
-
 
 // MemberRuntime 返回外部成员运行时（external CLI 成员）；nil 表示 DeepAgent 路。
 // Python: TeamAgent.harness property（team_agent.py:325-333）——

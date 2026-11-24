@@ -8,13 +8,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	interrupt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
 	secpatterns "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

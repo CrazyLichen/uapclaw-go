@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	reranker "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	reranker "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

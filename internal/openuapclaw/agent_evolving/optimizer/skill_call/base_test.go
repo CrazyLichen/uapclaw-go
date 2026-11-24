@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
-	skillop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
+	skillop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

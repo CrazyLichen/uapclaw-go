@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	objectpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/object"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	objectpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/object"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

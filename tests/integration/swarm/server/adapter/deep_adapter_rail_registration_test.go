@@ -127,7 +127,7 @@ func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
 	s.Require().Len(found, 1, "计划模式冷启动后应已注册演进 rail")
 	before, ok := found[0].(*coreevolution.SkillEvolutionRail)
 	s.Require().True(ok)
-	s.False(before.AutoScan(), "初始 auto_scan 应为 false")
+	s.False(before.SignalTrigger(), "初始 auto_scan 应为 false")
 
 	s.env.WriteConfigYAML(s.T(), evolutionExtra(true, true, false))
 	s.Require().NoError(d.ReloadAgentConfig(s.Ctx, nil, nil))
@@ -137,7 +137,7 @@ func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
 	after, ok := found[0].(*coreevolution.SkillEvolutionRail)
 	s.Require().True(ok)
 	s.Same(before, after, "热重载不得替换演进 rail 实例")
-	s.True(after.AutoScan(), "auto_scan 应就地刷新为 true")
+	s.True(after.SignalTrigger(), "auto_scan 应就地刷新为 true")
 }
 
 // TestHotReload_PreservesStatefulRails 有状态 rail 不得被热重载重建。

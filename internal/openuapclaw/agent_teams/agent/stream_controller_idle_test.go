@@ -7,8 +7,8 @@ import (
 
 	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	streambase "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // 25.2a Task 7：idle 事件五函数专项单测（计划要求 injectable clock，

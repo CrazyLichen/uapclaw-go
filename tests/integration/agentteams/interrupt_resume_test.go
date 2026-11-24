@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/suite"
 	ateamharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	teamharness "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	aitsuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

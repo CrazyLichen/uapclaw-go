@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

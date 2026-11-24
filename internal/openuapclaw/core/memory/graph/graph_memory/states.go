@@ -23,12 +23,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/graph/extraction"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

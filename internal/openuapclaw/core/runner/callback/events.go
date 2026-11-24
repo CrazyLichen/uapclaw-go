@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

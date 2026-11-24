@@ -27,8 +27,8 @@ import (
 	"regexp"
 	"strings"
 
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool/mcp/types"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

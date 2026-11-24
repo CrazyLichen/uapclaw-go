@@ -13,8 +13,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"strings"
 	"os"
+	"strings"
 )
 
 // initFrame 标准会话初始化帧。

@@ -19,9 +19,9 @@ package handlers
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	ateamcoordtypes "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -117,7 +117,7 @@ func (h *ScheduledTaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event 
 }
 
 // OnTaskRevokedScheduled scheduled 变体的撤回 steer：i18n 键换 scheduled 版
-//（无池——指引等下一次指派，不指引回看板轮询）。
+// （无池——指引等下一次指派，不指引回看板轮询）。
 // Python: ScheduledTaskBoardHandler._REVOKED_FROM_SELF_KEY 覆写（L724）
 // + 继承的 on_task_revoked。
 func (h *ScheduledTaskBoardHandler) OnTaskRevokedScheduled(ctx context.Context, event ateamcoordtypes.CoordinationEvent) {

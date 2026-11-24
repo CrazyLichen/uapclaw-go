@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -374,7 +374,6 @@ func failFeedbackOf(tally map[string]any) map[string]string {
 	}
 	return map[string]string{}
 }
-
 
 // derefStr 字符串指针解引用。
 func derefStr(value *string) string {

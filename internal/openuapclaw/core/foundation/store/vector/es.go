@@ -14,10 +14,10 @@ import (
 	elasticsearch8 "github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

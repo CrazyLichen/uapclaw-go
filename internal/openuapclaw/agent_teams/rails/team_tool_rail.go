@@ -4,18 +4,18 @@ import (
 	"context"
 	experts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/experts"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
-	worktree "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/resources_manager"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	worktree "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

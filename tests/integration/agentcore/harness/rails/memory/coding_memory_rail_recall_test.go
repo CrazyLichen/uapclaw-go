@@ -16,16 +16,16 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
+	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/harness_config"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	hsections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
-	lite "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/lite"
-	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	// 空白导入：触发 GlobalRegistry 中 fs/shell/code 操作的 init 注册
 	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"

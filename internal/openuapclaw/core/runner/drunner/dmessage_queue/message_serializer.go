@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/message_queue"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/message_queue"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

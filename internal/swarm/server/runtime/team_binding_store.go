@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sessionpaths "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"

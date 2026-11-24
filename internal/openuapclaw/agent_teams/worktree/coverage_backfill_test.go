@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	hworktree "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	"os/exec"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // 覆盖率回填（改动行门禁）：lifecycle/member_state/session_cleanup/naming/
@@ -525,9 +525,8 @@ func TestRemoteHandle_create克隆失败(t *testing.T) {
 	assert.False(t, resp.Success)
 }
 
-
 // TestEnsureMemberWorktree_无行成员门 成员无 DB 行 → options nil → 门返回空
-//（覆盖 memberWorktreeOptions nil 分支 + memberNeedsWorktree false 门）。
+// （覆盖 memberWorktreeOptions nil 分支 + memberNeedsWorktree false 门）。
 func TestEnsureMemberWorktree_无行成员门(t *testing.T) {
 	repo := t.TempDir()
 	initGitRepoAt(t, repo)

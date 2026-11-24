@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sync"
 
-	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	harnessproviders "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_providers"
 )
 
 // customAgentRegistryLock 保护 agents.json 读写的进程内互斥。

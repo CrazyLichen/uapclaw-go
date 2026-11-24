@@ -7,9 +7,9 @@ import (
 
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

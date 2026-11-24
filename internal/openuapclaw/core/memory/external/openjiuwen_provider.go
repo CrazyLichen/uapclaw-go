@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	db "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
@@ -14,7 +15,6 @@ import (
 	memconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/ltm"
 	apiembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

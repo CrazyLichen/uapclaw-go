@@ -8,8 +8,8 @@ import (
 	"github.com/milvus-io/milvus/client/v2/index"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
-	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	graph "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/graph"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

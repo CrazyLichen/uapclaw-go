@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	db "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	storeindex "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/index"
@@ -12,8 +14,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/migration"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

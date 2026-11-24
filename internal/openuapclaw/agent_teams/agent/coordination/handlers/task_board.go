@@ -4,15 +4,15 @@ import (
 	"context"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	types "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 	schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/taskrender"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -61,8 +61,8 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 		// F_69 首启一次性板面普查（inner，kernel 入队）。
 		string(types.InnerEventTypeInitialPollTask): h.OnInitialTaskPoll,
 		// 定向所有权变更：steer 受影响成员。
-		events.TeamEventTaskClaimed:  h.OnTaskClaimed,
-		events.TeamEventTaskRevoked:  h.OnTaskRevoked,
+		events.TeamEventTaskClaimed:   h.OnTaskClaimed,
+		events.TeamEventTaskRevoked:   h.OnTaskRevoked,
 		events.TeamEventTaskCancelled: h.OnTaskCancelled,
 		events.TeamEventTaskUpdated:   h.OnTaskUpdated,
 		// verify 闸（F_59）：提交指向 reviewers，结论指向作者。
@@ -85,7 +85,7 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // teammateNudgeEvents 能**扩大**可认领池的看板事件：新 pending 任务出现
-//（TASK_CREATED）、阻塞任务的依赖清空翻回 pending（TASK_UNBLOCKED）、被认领
+// （TASK_CREATED）、阻塞任务的依赖清空翻回 pending（TASK_UNBLOCKED）、被认领
 // 的任务 reset 回 pending 重进池（TASK_RELEASED）。其他看板迁移都不会新增可
 // 处理的工作——TASK_UPDATED 只编辑既有 pending/blocked 任务的正文，
 // TASK_COMPLETED / TASK_CANCELLED 移除任务，TASK_CLAIMED / plan request 缩小
@@ -94,7 +94,7 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // 面级决策权，必须观察每一次迁移。
 // Python: TaskBoardHandler._TEAMMATE_NUDGE_EVENTS (task_board.py L66-78)
 var teammateNudgeEvents = map[string]bool{
-	events.TeamEventTaskCreated:  true,
+	events.TeamEventTaskCreated:   true,
 	events.TeamEventTaskUnblocked: true,
 	events.TeamEventTaskReleased:  true,
 }
@@ -111,19 +111,19 @@ var leaderCompletionEvents = map[string]bool{
 // 认领、启动、提交评审、返工请求都不需要 leader 决策。
 // Python: TaskBoardHandler._LEADER_QUIET_EVENTS (task_board.py L92-100)
 var leaderQuietEvents = map[string]bool{
-	events.TeamEventTaskClaimed:             true,
-	events.TeamEventTaskStarted:             true,
-	events.TeamEventTaskSubmittedForReview:  true,
-	events.TeamEventTaskRevisionRequested:   true,
+	events.TeamEventTaskClaimed:            true,
+	events.TeamEventTaskStarted:            true,
+	events.TeamEventTaskSubmittedForReview: true,
+	events.TeamEventTaskRevisionRequested:  true,
 }
 
 // 基类 i18n 键：autonomous 模式下有可认领池，撤回/取消后指引成员回看板找活。
 // scheduled 变体覆写（无池：等下一次指派，见 scheduled_task_board.go）。
 // Python: TaskBoardHandler._REVOKED_FROM_SELF_KEY / _CANCELLED_TO_SELF_KEY
-//（task_board.py L104-105；scheduled 覆写 L724-726）
+// （task_board.py L104-105；scheduled 覆写 L724-726）
 const (
-	baseRevokedFromSelfKey   = "dispatcher.task_revoked_from_self"
-	baseCancelledToSelfKey   = "dispatcher.task_cancelled_to_self"
+	baseRevokedFromSelfKey      = "dispatcher.task_revoked_from_self"
+	baseCancelledToSelfKey      = "dispatcher.task_cancelled_to_self"
 	scheduledRevokedFromSelfKey = "dispatcher.task_revoked_from_self_scheduled"
 	scheduledCancelledToSelfKey = "dispatcher.task_cancelled_to_self_scheduled"
 )
@@ -342,7 +342,7 @@ func (h *TaskBoardHandler) deliverOwnershipLoss(ctx context.Context, event types
 // OnTaskSubmittedForReview 任务进入 verify 闸；唤醒其 reviewers。
 // payload.member_name 是作者，reviewer 列出必须验证的成员。本成员是 reviewer
 // 之一时，steer 它去检查交付物并调 verify_task。其他成员落到看板 handler
-//（提交不扩大可认领池，非 reviewer 的 teammate 不被 nudge）。
+// （提交不扩大可认领池，非 reviewer 的 teammate 不被 nudge）。
 // Python: TaskBoardHandler.on_task_submitted_for_review (task_board.py L391-424)
 func (h *TaskBoardHandler) OnTaskSubmittedForReview(ctx context.Context, event types.CoordinationEvent) {
 	memberName := h.blueprint.DispatcherMemberName()
@@ -795,9 +795,9 @@ type taskBaseLike struct {
 	t *database.TeamTaskBase
 }
 
-func (a taskBaseLike) TaskID() string { return a.t.TaskID }
-func (a taskBaseLike) Status() string { return a.t.Status }
-func (a taskBaseLike) Title() string  { return a.t.Title }
+func (a taskBaseLike) TaskID() string  { return a.t.TaskID }
+func (a taskBaseLike) Status() string  { return a.t.Status }
+func (a taskBaseLike) Title() string   { return a.t.Title }
 func (a taskBaseLike) Content() string { return a.t.Content }
 func (a taskBaseLike) Assignee() string {
 	if a.t.Assignee != nil {

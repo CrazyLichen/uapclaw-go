@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	teamworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // TestEnrichTeamSpecForSwarmSeed_无项目分配产物目录 对齐 assembly.py:482-511。

@@ -3,8 +3,8 @@ package interrupt
 import (
 	"strings"
 
-	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 )
 
 // 本文件对应 Python openjiuwen/core/single_agent/interrupt/answers.py（129 行）：

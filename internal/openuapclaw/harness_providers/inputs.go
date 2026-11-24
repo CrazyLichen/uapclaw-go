@@ -3,8 +3,8 @@ package harness_providers
 import (
 	"strings"
 
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
 // 本文件对应 Python openjiuwen/harness_providers/inputs.py（34 行）：

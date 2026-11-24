@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // logComponent 日志组件（包级，与 lifecycle/session_cleanup 共用）
@@ -117,8 +117,8 @@ func TeammateMemberNames(ctx context.Context, teamBackend TeamBackendAccess, tea
 		return nil, err
 	}
 	coordinated := map[string]bool{
-		string(schema.TeamRoleTeammate):     true,
-		string(schema.TeamRoleExternalCLI):  true,
+		string(schema.TeamRoleTeammate):    true,
+		string(schema.TeamRoleExternalCLI): true,
 	}
 	names := make([]string, 0, len(members))
 	for _, m := range members {

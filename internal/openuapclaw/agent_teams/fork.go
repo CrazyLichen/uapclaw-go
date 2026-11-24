@@ -14,7 +14,6 @@ import (
 // 类型调用 DeepAgent——Python 侧为鸭子调用无 import，Go 静态类型的等价形态。
 // 若未来 harness 需要反向引用本包，此依赖图塌方，必须先走 spec 裁决。
 
-
 // ForkContext 可序列化的 fork 上下文快照（json-native，可跨进程传输）。
 // 抓取源成员的完整对话历史注入新成员的 context engine；SystemMessage 全程
 // 剥除——目标成员的角色由 TeamPolicyRail 注入，绝不从 fork 源泄漏。

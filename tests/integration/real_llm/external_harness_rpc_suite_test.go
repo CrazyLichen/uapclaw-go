@@ -23,10 +23,10 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	routing "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
-	transport "github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	gateway "github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
+	routing "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	server "github.com/uapclaw/uapclaw-go/internal/swarm/server"
+	transport "github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

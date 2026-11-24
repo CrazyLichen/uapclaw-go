@@ -3,20 +3,20 @@ package swarm
 import (
 	"errors"
 
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	experts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/experts"
 	externalPkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/external"
-	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	swschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 )
 
 // logComponent 组件级日志组件。

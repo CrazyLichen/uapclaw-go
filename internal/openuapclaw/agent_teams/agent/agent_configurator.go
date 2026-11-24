@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
 	harness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/memory"
@@ -20,14 +21,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/tracker"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	manifest "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
 	agentworktree "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/worktree"
-	"regexp"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	manifest "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
+	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
+	"regexp"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1266,9 +1266,13 @@ type worktreeLifecycleProvider struct {
 	c *AgentConfigurator
 }
 
-func (w worktreeLifecycleProvider) TeamBackend() agentworktree.TeamBackendAccess { return w.c.TeamBackend() }
-func (w worktreeLifecycleProvider) TeamName() string                            { return w.c.TeamName() }
-func (w worktreeLifecycleProvider) Spec() *atschema.TeamAgentSpec               { return w.c.Spec() }
-func (w worktreeLifecycleProvider) WorktreeManager() *worktree.WorktreeManager  { return w.c.WorktreeManager() }
+func (w worktreeLifecycleProvider) TeamBackend() agentworktree.TeamBackendAccess {
+	return w.c.TeamBackend()
+}
+func (w worktreeLifecycleProvider) TeamName() string              { return w.c.TeamName() }
+func (w worktreeLifecycleProvider) Spec() *atschema.TeamAgentSpec { return w.c.Spec() }
+func (w worktreeLifecycleProvider) WorktreeManager() *worktree.WorktreeManager {
+	return w.c.WorktreeManager()
+}
 
 var _ agentworktree.LifecycleProvider = worktreeLifecycleProvider{}

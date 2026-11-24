@@ -3,8 +3,8 @@ package prompts
 import (
 	"strings"
 
-	harnesssections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	harnesssections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"time"
 
-	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
-	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	tool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/result"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

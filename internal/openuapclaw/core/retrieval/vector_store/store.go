@@ -3,9 +3,9 @@ package vector_store
 import (
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

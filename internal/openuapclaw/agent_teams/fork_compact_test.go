@@ -10,9 +10,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 )
 
 // ──────────────────────────── 测试 ────────────────────────────
@@ -44,17 +44,17 @@ func (m *fakeModelContext) GetContextWindow(_ context.Context, _ []llmschema.Bas
 	_ []schema.ToolInfoInterface, _ int, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *fakeModelContext) Statistic() *ceinterface.ContextStats { return &ceinterface.ContextStats{} }
-func (m *fakeModelContext) SessionID() string                    { return "default_session_id" }
-func (m *fakeModelContext) ContextID() string                    { return "default_context_id" }
-func (m *fakeModelContext) TokenCounter() token.TokenCounter     { return nil }
-func (m *fakeModelContext) ReloaderTool() tool.Tool              { return nil }
-func (m *fakeModelContext) WorkspaceDir() string                 { return "" }
-func (m *fakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)  {}
-func (m *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade   { return nil }
+func (m *fakeModelContext) Statistic() *ceinterface.ContextStats                { return &ceinterface.ContextStats{} }
+func (m *fakeModelContext) SessionID() string                                   { return "default_session_id" }
+func (m *fakeModelContext) ContextID() string                                   { return "default_context_id" }
+func (m *fakeModelContext) TokenCounter() token.TokenCounter                    { return nil }
+func (m *fakeModelContext) ReloaderTool() tool.Tool                             { return nil }
+func (m *fakeModelContext) WorkspaceDir() string                                { return "" }
+func (m *fakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)     {}
+func (m *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade      { return nil }
 func (m *fakeModelContext) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
-func (m *fakeModelContext) SaveState() map[string]any            { return nil }
-func (m *fakeModelContext) LoadState(_ map[string]any)           {}
+func (m *fakeModelContext) SaveState() map[string]any                           { return nil }
+func (m *fakeModelContext) LoadState(_ map[string]any)                          {}
 func (m *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
 	return nil, nil
 }

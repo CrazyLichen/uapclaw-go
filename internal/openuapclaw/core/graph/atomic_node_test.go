@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // fakeAtomicState 测试用可提交状态：嵌入 SessionState + WorkflowState 两个接口补齐

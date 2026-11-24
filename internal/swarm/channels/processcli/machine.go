@@ -11,8 +11,8 @@ import (
 	"bytes"
 	"encoding/json"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	permissiontools "github.com/uapclaw/uapclaw-go/internal/common/permission_tools"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"

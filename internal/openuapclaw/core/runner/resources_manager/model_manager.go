@@ -3,10 +3,10 @@ package resources_manager
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer/decorator"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

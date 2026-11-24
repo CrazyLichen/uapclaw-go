@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/intellirouter/core"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

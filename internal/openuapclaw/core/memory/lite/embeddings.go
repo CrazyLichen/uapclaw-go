@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	baseEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

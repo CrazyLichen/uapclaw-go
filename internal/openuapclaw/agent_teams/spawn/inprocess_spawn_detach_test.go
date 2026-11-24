@@ -16,7 +16,7 @@ import (
 type fakeSpawnable struct{}
 
 // AgentCard 返回占位身份卡。
-func (f *fakeSpawnable) ForkDeep() *harness.DeepAgent      { return nil }
+func (f *fakeSpawnable) ForkDeep() *harness.DeepAgent { return nil }
 
 func (f *fakeSpawnable) AgentCard() *agentschema.AgentCard {
 	return agentschema.NewAgentCard(agentschema.WithAgentID("fake"), agentschema.WithAgentName("fake"))

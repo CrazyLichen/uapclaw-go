@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	evolving "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
@@ -16,6 +13,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	updaterpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"golang.org/x/sync/errgroup"
 )
 

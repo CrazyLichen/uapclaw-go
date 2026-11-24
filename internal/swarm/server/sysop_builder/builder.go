@@ -8,8 +8,8 @@ import (
 	// 必须有导入锚点（本包是 CreateLocalSysOpCard/CreateSysOperationFromCard
 	// 的必经点），否则 getOperation("fs") 查不到定义、Fs() 返回 BaseFsOperation
 	// 桩（"未实现: WriteFile"），所有走 sysOp.Fs() 的工具在生产中全部失败
-	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	_ "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation/local"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

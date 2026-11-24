@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/config"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/core/context"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/context_evolver/service"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
