@@ -1247,7 +1247,10 @@ func (t *InstalledSkillsDirectoryToolkit) read(view *SkillDirectoryView, skills 
 
 // ──────────────────────────── 工具卡 ────────────────────────────
 
-// toolEntry 工具暴露条目（Go 侧 LocalFunction 等价载体）。
+// ToolEntry 工具暴露条目（Go 侧 LocalFunction 等价载体，导出别名供跨包消费）。
+type ToolEntry = toolEntry
+
+// toolEntry 工具暴露条目。
 type toolEntry struct {
 	ToolID string
 	Name   string

@@ -11,6 +11,9 @@ import (
 const (
 	// maxContextWindowTokens 上下文窗口上限（2^53-1），超界视为非法
 	maxContextWindowTokens = 1<<53 - 1
+	// DefaultContextWindowTokens 默认上下文窗口（256Ki token）。
+	// Python: DEFAULT_CONTEXT_WINDOW_TOKENS（context_window.py:12）
+	DefaultContextWindowTokens = 256 * 1024
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -95,4 +98,71 @@ func toFloatFallback(value any) float64 {
 		return f
 	}
 	return 0
+}
+
+// NormalizeModelWindowMapping 归一「模型名 → 窗口」映射（非正/非法值剔除）。
+// 对齐 Python _normalize_model_window_mapping（context_window.py:63-76）：
+// 空映射返回 nil；键必须为字符串；值经 ParsePositiveTokens 过滤。
+func NormalizeModelWindowMapping(value any) map[string]int {
+	mapping, ok := value.(map[string]any)
+	if !ok || len(mapping) == 0 {
+		return nil
+	}
+	normalized := map[string]int{}
+	for modelName, window := range mapping {
+		parsed, ok := ParsePositiveTokens(window)
+		if !ok {
+			continue
+		}
+		normalized[modelName] = parsed
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+// ResolveContextWindowTokens 无需查询 provider 元数据即可解析模型窗口。
+// 对齐 Python resolve_context_window_tokens（context_window.py:79-120）。
+// 优先序：全局 context_window_tokens → 选中模型 context_window →
+// 显式模型映射（model_context_window_tokens）→ 固定默认值。
+// modelContextWindowOverride 由运行时路径在选中模型已转 ModelRequestConfig、
+// 内部 _source 标记不可得时传入。
+func ResolveContextWindowTokens(modelName string, contextEngineConfig, modelConfigObj, modelContextWindowOverride any) int {
+	config, _ := contextEngineConfig.(map[string]any)
+	if config == nil {
+		config = map[string]any{}
+	}
+	// Python: "context_engine_config" in config → 下钻一层
+	if nested, ok := config["context_engine_config"].(map[string]any); ok {
+		config = nested
+	}
+	modelConfig, _ := modelConfigObj.(map[string]any)
+	if modelConfig == nil {
+		modelConfig = map[string]any{}
+	}
+
+	globalWindow, _ := ParsePositiveTokens(config["context_window_tokens"])
+
+	configuredModelWindow, _ := ParsePositiveTokens(modelConfig["context_window"])
+	if configuredModelWindow == 0 {
+		configuredModelWindow, _ = ParsePositiveTokens(modelContextWindowOverride)
+	}
+
+	if globalWindow != 0 {
+		return globalWindow
+	}
+	if configuredModelWindow != 0 {
+		return configuredModelWindow
+	}
+
+	if modelName != "" {
+		mapped := NormalizeModelWindowMapping(config["model_context_window_tokens"])
+		if mapped != nil {
+			if window, ok := mapped[modelName]; ok {
+				return window
+			}
+		}
+	}
+	return DefaultContextWindowTokens
 }

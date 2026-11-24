@@ -35,3 +35,58 @@ func TestParsePositiveTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveContextWindowTokens_全局优先(t *testing.T) {
+	cfg := map[string]any{"context_window_tokens": "128k"}
+	got := ResolveContextWindowTokens("gpt-x", cfg, map[string]any{"context_window": 4096}, nil)
+	if got != 128*1024 {
+		t.Fatalf("want %d got %d", 128*1024, got)
+	}
+}
+
+func TestResolveContextWindowTokens_模型窗口次优(t *testing.T) {
+	got := ResolveContextWindowTokens("gpt-x", map[string]any{}, map[string]any{"context_window": 4096}, 8192)
+	if got != 4096 {
+		t.Fatalf("want 4096 got %d", got)
+	}
+}
+
+func TestResolveContextWindowTokens_覆盖回落(t *testing.T) {
+	got := ResolveContextWindowTokens("gpt-x", map[string]any{}, map[string]any{}, 8192)
+	if got != 8192 {
+		t.Fatalf("want 8192 got %d", got)
+	}
+}
+
+func TestResolveContextWindowTokens_显式模型映射(t *testing.T) {
+	cfg := map[string]any{"model_context_window_tokens": map[string]any{"gpt-x": "1m", "bad": "x"}}
+	got := ResolveContextWindowTokens("gpt-x", cfg, nil, nil)
+	if got != 1024*1024 {
+		t.Fatalf("want %d got %d", 1024*1024, got)
+	}
+}
+
+func TestResolveContextWindowTokens_嵌套下钻(t *testing.T) {
+	cfg := map[string]any{"context_engine_config": map[string]any{"context_window_tokens": 1024}}
+	got := ResolveContextWindowTokens("", cfg, nil, nil)
+	if got != 1024 {
+		t.Fatalf("want 1024 got %d", got)
+	}
+}
+
+func TestResolveContextWindowTokens_默认值(t *testing.T) {
+	got := ResolveContextWindowTokens("", nil, nil, nil)
+	if got != DefaultContextWindowTokens {
+		t.Fatalf("want %d got %d", DefaultContextWindowTokens, got)
+	}
+}
+
+func TestNormalizeModelWindowMapping_剔除非法值(t *testing.T) {
+	m := NormalizeModelWindowMapping(map[string]any{"a": "2k", "b": 0, "c": "abc", "d": true})
+	if len(m) != 1 || m["a"] != 2048 {
+		t.Fatalf("want {a:2048} got %v", m)
+	}
+	if NormalizeModelWindowMapping(map[string]any{}) != nil {
+		t.Fatal("empty mapping should be nil")
+	}
+}
