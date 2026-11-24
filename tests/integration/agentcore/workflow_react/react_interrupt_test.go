@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -61,16 +62,17 @@ func (s *ReactInterruptSuite) newQuestionerComp(responses ...string) *llmcomp.Qu
 
 func boolPtrR(b bool) *bool { return &b }
 
-// buildQuestionerWorkflow 装配 start → questioner → end 子 workflow。
-func (s *ReactInterruptSuite) buildQuestionerWorkflow(comp *llmcomp.QuestionerComponent) *workflow.Workflow {
+// buildQuestionerWorkflow 装配 start → questioner → end 子 workflow（包级助手，
+// MockLLM 与真链两套件共用）。
+func buildQuestionerWorkflow(t *testing.T, comp *llmcomp.QuestionerComponent) *workflow.Workflow {
 	inputsSchema := map[string]any{"query": "${query}"}
 	w := workflow.NewWorkflow(nil)
 	w.SetStartComp("start", flow.NewStart(), nil, nil, nil)
 	w.AddWorkflowComp("ask", comp, nil, inputsSchema, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	endCfg, err := flow.NewEndConfig("collected:{{name}}")
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	end, err := flow.NewEnd(endCfg)
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	w.SetEndComp("end", end, map[string]any{"name": "${ask.name}"}, nil, nil, nil, "batch", nil)
 	w.AddConnection([]string{"start"}, "ask")
 	w.AddConnection([]string{"ask"}, "end")
@@ -124,10 +126,15 @@ func (a *workflowIfaceAdapter) Card() *workflow.WorkflowCard { return a.card }
 
 // registerSubWorkflow 将子 workflow 注册进全局 ResourceMgr（react 内嵌 agent 的
 // abilityManager 经 runner.GetResourceMgr() 查找实例）。
-func (s *ReactInterruptSuite) registerSubWorkflow(name string, w *workflow.Workflow) *workflow.WorkflowCard {
+func registerSubWorkflow(t *testing.T, name string, w *workflow.Workflow) *workflow.WorkflowCard {
 	card := workflow.NewWorkflowCard(commonschema.WithName(name), commonschema.WithDescription("子工作流 "+name))
+	card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"query": map[string]any{"type": "string", "description": "待补齐的用户信息抽取任务"}},
+		"required":   []string{"query"},
+	}
 	adapter := &workflowIfaceAdapter{w: w, card: card}
-	s.Require().NoError(runner.GetResourceMgr().AddWorkflow(card,
+	require.NoError(t, runner.GetResourceMgr().AddWorkflow(card,
 		func(_ context.Context, _ *workflow.WorkflowCard) (sainterfaces.Workflow, error) {
 			return adapter, nil
 		}))
@@ -135,15 +142,15 @@ func (s *ReactInterruptSuite) registerSubWorkflow(name string, w *workflow.Workf
 }
 
 // buildOuterWorkflow 装配 start → react → end 外层 workflow。
-func (s *ReactInterruptSuite) buildOuterWorkflow(comp *react.ReActAgentComp) *workflow.Workflow {
+func buildOuterWorkflow(t *testing.T, comp *react.ReActAgentComp) *workflow.Workflow {
 	inputsSchema := map[string]any{"query": "${query}"}
 	w := workflow.NewWorkflow(nil)
 	w.SetStartComp("start", flow.NewStart(), nil, nil, nil)
 	w.AddWorkflowComp("react", comp, nil, inputsSchema, nil, nil, nil, nil, 0, -1.0, nil, nil)
 	endCfg, err := flow.NewEndConfig("done:{{output}}")
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	end, err := flow.NewEnd(endCfg)
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	w.SetEndComp("end", end, map[string]any{"output": "${react.output}"}, nil, nil, nil, "batch", nil)
 	w.AddConnection([]string{"start"}, "react")
 	w.AddConnection([]string{"react"}, "end")
@@ -151,10 +158,10 @@ func (s *ReactInterruptSuite) buildOuterWorkflow(comp *react.ReActAgentComp) *wo
 }
 
 // interactionFrames 提取 WorkflowOutput.Result 中的交互帧文本（8.24 套件同款）。
-func (s *ReactInterruptSuite) interactionFrames(wo *workflow.WorkflowOutput) []string {
+func interactionFrames(t *testing.T, wo *workflow.WorkflowOutput) []string {
 	out := make([]string, 0)
 	chunks, ok := wo.Result.([]stream.Schema)
-	s.Require().True(ok, "Result 应为 Schema 列表，got %T", wo.Result)
+	require.True(t, ok, "Result 应为 Schema 列表，got %T", wo.Result)
 	for _, c := range chunks {
 		switch t := c.(type) {
 		case stream.OutputSchema:
@@ -211,10 +218,10 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().NoError(mErr)
 
 	// 子 workflow：各自带 mock 提问组件（轮1 {} 抽取缺失 → 挂起；恢复轮抽齐）
-	wfA := s.buildQuestionerWorkflow(s.newQuestionerComp(`{}`, `{"name": "张三"}`))
-	wfB := s.buildQuestionerWorkflow(s.newQuestionerComp(`{}`, `{"name": "李四"}`))
-	cardA := s.registerSubWorkflow("wf_a", wfA)
-	cardB := s.registerSubWorkflow("wf_b", wfB)
+	wfA := buildQuestionerWorkflow(s.T(), s.newQuestionerComp(`{}`, `{"name": "张三"}`))
+	wfB := buildQuestionerWorkflow(s.T(), s.newQuestionerComp(`{}`, `{"name": "李四"}`))
+	cardA := registerSubWorkflow(s.T(), "wf_a", wfA)
+	cardB := registerSubWorkflow(s.T(), "wf_b", wfB)
 
 	// 外层 workflow 装配 + 向 react 内嵌 agent 注册 workflow 能力
 	reactCfg := &react.ReActAgentCompConfig{ReActAgentConfig: saconfig.NewReActAgentConfig(
@@ -222,7 +229,7 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 		saconfig.WithModelName("mock-react"),
 	)}
 	reactComp := react.NewReActAgentComp(reactCfg)
-	w := s.buildOuterWorkflow(reactComp)
+	w := buildOuterWorkflow(s.T(), reactComp)
 	exec, ok := reactComp.ToExecutableFn().(*react.ReActExecutable)
 	s.Require().True(ok, "executable 应为 *ReActExecutable")
 	exec.ReactAgent().SetLLM(mockModel)
@@ -236,7 +243,7 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().True(ok)
 	s.T().Logf("首调 result=%v mockCalls=%d", wo.Result, mockReact.InvokeCallCount())
 	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State, "双中断应使外层挂起")
-	frames := s.interactionFrames(wo)
+	frames := interactionFrames(s.T(), wo)
 	s.Require().Len(frames, 1, "过滤单发：调用方只看到恰好一个交互块（react_agent.py L3406 语义），got %v", frames)
 	s.Contains(frames[0], "react", "交互帧应携带挂起节点（react）的 executable ID——恢复按节点路由")
 
@@ -250,7 +257,7 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().True(ok)
 	s.T().Logf("二调 result=%v", wo2.Result)
 	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo2.State, "仅收齐一个反馈应轮转后再挂起")
-	frames2 := s.interactionFrames(wo2)
+	frames2 := interactionFrames(s.T(), wo2)
 	s.Require().Len(frames2, 1, "轮转后仍应单发")
 	s.Contains(frames2[0], "react")
 
@@ -265,4 +272,11 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().Equal(workflow.WorkflowExecutionStateCompleted, wo3.State,
 		"全收齐并发恢复后 ReAct 续跑至终态，got state=%v result=%v", wo3.State, wo3.Result)
 	s.Contains(fmt.Sprintf("%v", wo3.Result), "final done", "ReAct 恢复轮应产出 mock 终答")
+}
+
+// newModelRequestConfig 构造模型请求配置（真链/单测共用助手）。
+func newModelRequestConfig(modelName string) *schema.ModelRequestConfig {
+	mc := schema.NewModelRequestConfig()
+	mc.ModelName = modelName
+	return mc
 }

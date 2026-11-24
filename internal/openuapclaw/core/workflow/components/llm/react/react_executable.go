@@ -10,7 +10,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
@@ -70,6 +72,13 @@ func NewReActExecutable(cfg *ReActAgentCompConfig) *ReActExecutable {
 	if err := e.reactAgent.Configure(context.Background(), cfg.ReActAgentConfig); err != nil {
 		panic(err) // Python configure 异常上抛 → Go 构造期 panic 承载（8.18 同款）
 	}
+	// Python ReActAgent.__init__ 总是自建 ContextEngine（react_agent.py:
+	// self.context_engine = ContextEngine(...)，即使使用默认配置）——
+	// Go 由装配方注入（SetContextEngine），薄壳按同语义补齐（真链 e2e 实证
+	// 缺口：无 ContextEngine 时 messages 仅空 system、query 不入历史 →
+	// 智谱 400 "messages 参数非法"）
+	e.reactAgent.SetContextEngine(context_engine.NewContextEngine(
+		ceschema.NewContextEngineConfig()))
 	// 四槽装配
 	e.InvokeFn = e.invokeEntry
 	e.StreamFn = e.streamEntry
