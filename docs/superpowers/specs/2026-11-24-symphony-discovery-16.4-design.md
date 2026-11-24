@@ -58,6 +58,10 @@ discovery 触达的 retrieval 基础设施层，按规则 9 一比一移植；�
 | D-16-4-3 | notice 全局表：模块级 OrderedDict + LRU 1,024，Go 用包级 map+mutex 等价实现，key=tool_id(session_scope, toolName) | `discovery/toolkit.py:94-95` | discovery/toolkit.go | 无需回收（等价形态） |
 | D-16-4-4 | 五层扫描缓存：Go 用带锁 LRU + single-flight 等价实现，逐层保留 mtime 签名校验语义 | `discovery/models.py:23-35` | discovery/models.go | 无需回收（等价形态） |
 | D-16-4-5 | SkillTaxonomyRuntime ⤵️16.5：构建 SDK 本体 AgenticSkillRetrievalToolkit（symphony/agent/retrieval_toolkit.py ~1,000 行，含 LLM 聚类/build worker/发布锁）属 16.5 领地；16.4b 交付 flat 渐进式全链，indexed 两态代码路径照写（无索引恒 None 分支有单测） | `runtime/symphony/skill_retrieval/runtime.py`（154） | ⤵️16.5 | 16.5 落地后 indexed/indexed-stale 全链打通 |
+| D-16-4-6 | MCP 捆绑技能目录 ⤵️：Go SkillManager 无 `_mcp_skills_dirs`，`_skill_scan_dirs`（interface_deep.py:10200-10236）的「会话选中 MCP 捆绑目录」分支暂缺，扫描根=绑定包目录+agent skills 目录 | `skill_manager.py _mcp_skills_dirs` | adapter `skillScanDirs`（deep_adapter_skills.go，⤵️ 注释在位） | MCP 技能目录管理器落地时回填 |
+| D-16-4-7 | live 禁用名单跳过 `reload_state()`：Python 每次现查前重读 skills_state.json（多实例写者同步点，skill_manager.py reload_state docstring）；Go SkillManager 一次加载无 reload 方法，且当前无跨实例写者，风险低 | `interface_deep.py:7120-7145` | adapter `liveSkillRetrievalDisabledSkills`（D-16-4-7 注释） | Go SkillManager 引入显式状态重载方法或出现第二个 skills_state.json 写者时补 reload |
+| D-16-4-8 | sidecar 路径按最终产物形态直接构造：Python 借 per-session `runtime_state/<sid>.yaml` 改缀，Go runtime_state 为全进程单文件（既有 D-8 偏差连带），无法借缀 | `interface_deep.py:2474-2483` | adapter `skillRetrievalProfilePath` | 与 D-8 一并回收（Go runtime_state 改 per-session 时） |
+| D-16-4-9 | 集成缝三条纯属性注入：`SetSessionScopedForTest/SetSkillRetrievalSessionEnabledForTest/SetSkillRetrievalToolkitForTest`——Python 集成测试直接戳实例属性，Go 跨包不可见；均为最小注入面（生产入口=懒创建/RestoreSkillRetrievalSession）。冗余缝已修剪（ScanSelectionCardsForTest 删除，走 `toolkit.Environment().SelectionCards(true)`）；`LoadSkillRetrievalSessionProfile/SkillRetrievalProfilePath` 转正为导出 API | Python 集成用例属性触达惯例 | adapter deep_adapter_sessions.go 集成缝段 | 无需回收（等价形态） |
 
 ## 5. 回填台账（一条不丢）
 

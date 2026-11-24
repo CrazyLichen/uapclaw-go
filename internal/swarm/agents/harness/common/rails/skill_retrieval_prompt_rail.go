@@ -274,12 +274,6 @@ func (r *SkillRetrievalPromptRail) FrozenPromptSnapshot() discovery.SkillPromptS
 	return *r.promptSnapshot()
 }
 
-// ScanSelectionCardsForTest 现扫选择卡（integration 缝；
-// Python _scan_selection_cards 的跨包触达口）。
-func (r *SkillRetrievalPromptRail) ScanSelectionCardsForTest() map[string]map[string]string {
-	return r.scanSelectionCards()
-}
-
 // GetCallbacks 注册 BeforeInvoke + BeforeModelCall + AfterToolCall。
 // 对齐 DeepAgentRail 基类回调映射扩展（SkillUseRail 同款）。
 func (r *SkillRetrievalPromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
