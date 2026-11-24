@@ -60,7 +60,10 @@ type GatewayServer struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// gwReadLimit WebSocket 消息大小限制（8MB，对齐 Python ws_max_size 与 web_connect.go 先例）
+// gwReadLimit 内部腿（Gateway↔AgentServer）WS 帧上限。
+// Python: gateway/common/ws_limits.py AGENT_WS_MAX_MESSAGE_BYTES = 8MiB
+// （设计注释：streaming events, no large file base64——大文件由浏览器腿
+// 150MiB 承载，27.8 批与 webWSMaxMessageBytes 一并订正口径）。
 const gwReadLimit = 8 * 1024 * 1024
 
 // ──────────────────────────── 导出函数 ────────────────────────────
