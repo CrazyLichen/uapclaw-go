@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestAllReqMethods 验证 AllReqMethods 返回全部 153 个枚举值
+// TestAllReqMethods 验证 AllReqMethods 返回全部枚举值（27.8 批新增媒体/文件域十常量：164+10=174）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 164 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 164", len(methods))
+	if len(methods) != 174 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 174", len(methods))
 	}
 
 	// 验证无重复
