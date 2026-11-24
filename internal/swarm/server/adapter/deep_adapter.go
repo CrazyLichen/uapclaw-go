@@ -350,6 +350,24 @@ type DeepAdapter struct {
 	toolRetrievalPromptRail *commrails.ToolRetrievalPromptRail
 	// toolRetrievalSessionEnabled 构建期冻结的披露层开关（R-5 判据基线）
 	toolRetrievalSessionEnabled *bool
+	// skillRetrievalToolkit 会话技能检索工具包（懒创建缓存；16.4b）
+	skillRetrievalToolkit *swarmtools.SkillRetrievalToolkit
+	// skillRetrievalPromptRail 技能检索提示词边界 rail 句柄
+	skillRetrievalPromptRail *commrails.SkillRetrievalPromptRail
+	// skillRetrievalSessionEnabled 构建期冻结的检索开关（persist 供体）
+	skillRetrievalSessionEnabled *bool
+	// restoredSkillRetrievalProfile sidecar 恢复的 profile（nil=无恢复）
+	restoredSkillRetrievalProfile map[string]any
+	// initialSkillRetrievalModelName 初始请求模型名（Python :2156）
+	initialSkillRetrievalModelName string
+	// skillRetrievalContextModelName 恢复的上下文模型名（Python :2157）
+	skillRetrievalContextModelName string
+	// skillRetrievalContextWindowTokens 恢复的上下文窗口（0=未恢复，Python :2158）
+	skillRetrievalContextWindowTokens int
+	// initialSkillScanMCPNames 构造期 MCP 扫描名单（Python :2233）
+	initialSkillScanMCPNames []string
+	// pendingSkillScanMCPNames 构造期待消费的 MCP 扫描提示（Python :2230）
+	pendingSkillScanMCPNames []string
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11
 	autoHarnessService any
@@ -4021,4 +4039,88 @@ func clientToolRequestEventOf(payload map[string]any) map[string]any {
 		"arguments":    value["arguments"],
 		"client_tool":  value["client_request"],
 	}
+}
+
+// ──────────────────────────── 16.4b：技能检索接线 ────────────────────────────
+
+// liveSkillRetrievalDisabledSkills live 禁用名单（reload 后现查）。
+// Python: _live_skill_retrieval_disabled_skills（interface_deep.py:7113-7163）。
+func (d *DeepAdapter) liveSkillRetrievalDisabledSkills() []string {
+	if d.skillManager == nil {
+		return []string{}
+	}
+	// [Go 适配偏差 D-16-4-7] Python 每次现查前调 reload_state() 重读状态文件；
+	// Go SkillManager 无 reload_state（状态刷新由其自身更新路径驱动），
+	// 现查语义由 ListDisabledSkills 读当前内存状态承接。回填条件：
+	// Go SkillManager 引入显式状态重载方法时补 reload 调用。
+	names := d.skillManager.ListDisabledSkills()
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// getOrCreateSkillRetrievalToolkit 懒创建技能检索工具包。
+// Python: _get_or_create_skill_retrieval_toolkit（interface_deep.py:7165-7191）。
+func (d *DeepAdapter) getOrCreateSkillRetrievalToolkit(configBase map[string]any) *swarmtools.SkillRetrievalToolkit {
+	if d.skillRetrievalToolkit != nil {
+		return d.skillRetrievalToolkit
+	}
+	toolkit, err := swarmtools.NewSkillRetrievalToolkit(swarmtools.ToolkitOptions{
+		SkillDirectories:      d.skillScanDirs,
+		DisabledSkills:        d.liveSkillRetrievalDisabledSkills,
+		SourceByName:          func() map[string]string { return swarmtools.SkillSourcesFromManager(d.skillManager) },
+		IndexSkillDirectories: func() []string { return []string{workspace.AgentSkillsDir()} },
+		SessionScope:          d.sessionScope(),
+		ConfigBase:            configBase,
+		AutoBuildIndex:        true,
+		FrozenProfile:         d.restoredSkillRetrievalProfile,
+	})
+	if err != nil {
+		logger.Warn(logComponent).
+			Msg("[JiuWenSwarmDeepAdapter] failed to create Skill retrieval toolkit")
+		return nil
+	}
+	d.skillRetrievalToolkit = toolkit
+	// 构造完立刻持久化 sidecar（Python :7187）
+	d.persistSkillRetrievalSessionProfile()
+	return toolkit
+}
+
+// registerSkillRetrievalPromptRail 装配技能检索提示词边界 rail。
+// Python: _build_skill_retrieval_prompt_rail（interface_deep.py:11137-11151）
+// + 注册段（:7630-7680）。
+func (d *DeepAdapter) registerSkillRetrievalPromptRail(configBase map[string]any) {
+	if d.instance == nil {
+		return
+	}
+	enabled := swarmtools.IsSkillRetrievalEnabled(configBase)
+	frozen := enabled
+	d.skillRetrievalSessionEnabled = &frozen
+	if !enabled {
+		return
+	}
+	toolkit := d.getOrCreateSkillRetrievalToolkit(configBase)
+	if toolkit == nil {
+		return
+	}
+	rail, err := commrails.NewSkillRetrievalPromptRail(commrails.RailOptions{
+		Toolkit:     toolkit,
+		SessionScope: d.sessionScope(),
+		ConfigBase:  configBase,
+	})
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "skill_retrieval_rail_create_failed").
+			Msg("[JiuWenSwarmDeepAdapter] SkillRetrievalPromptRail create failed")
+		return
+	}
+	d.instance.QueuePendingRail(rail)
+	d.skillRetrievalPromptRail = rail
+	logger.Info(logComponent).
+		Str("event_type", "skill_retrieval_queued").
+		Msg("[JiuWenSwarmDeepAdapter] SkillRetrievalPromptRail registered")
 }

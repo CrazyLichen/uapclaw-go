@@ -2,9 +2,15 @@ package adapter
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,9 +18,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -1033,4 +1041,267 @@ func (d *DeepAdapter) toolRetrievalFlipPendingOfChild(child AgentAdapter) bool {
 	frozen := *childAdapter.toolRetrievalSessionEnabled
 	live := config.ToolRetrievalEnabled(d.configBase)
 	return frozen != live
+}
+
+// ──────────────────────────── 16.4b：技能检索 sidecar ────────────────────────────
+
+// skillRetrievalProfilePath 会话技能检索 profile sidecar 路径。
+// Python: _skill_retrieval_profile_path（interface_deep.py:2474-2483）：
+// <config_dir>/runtime_state/<sid-sanitized>.<sha256(sid)[:16]>.skill-retrieval.json。
+// [Go 适配偏差 D-16-4-8] Python runtime_path 取 per-session runtime_state/<sid>.yaml
+// 的同名目录改缀；Go runtime_state.yaml 为全进程单文件（drop() 注释 D-8），
+// 故直接按 Python 最终产物形态构造：runtime_state/<sid-sanitized>.<digest>.skill-retrieval.json，
+// 消费方只有本 sidecar，形态等价。
+func (d *DeepAdapter) skillRetrievalProfilePath(sessionID string) string {
+	sid := sessionAdapterKey(&sessionID)
+	sanitized := sanitizeSessionKey(sid)
+	digest := fmt.Sprintf("%x", sha256Sum16([]byte(sid)))
+	return filepath.Join(workspace.ConfigDir(), "runtime_state",
+		fmt.Sprintf("%s.%s.skill-retrieval.json", sanitized, digest))
+}
+
+// skillRetrievalProfileChecksum sidecar 校验和（去 checksum 键后 canonical JSON）。
+// Python: _skill_retrieval_profile_checksum（interface_deep.py:2485-2495）。
+func skillRetrievalProfileChecksum(profile map[string]any) string {
+	unsigned := map[string]any{}
+	for k, v := range profile {
+		if k == "profile_checksum" {
+			continue
+		}
+		unsigned[k] = v
+	}
+	// Python json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+	data, err := json.Marshal(unsigned)
+	if err != nil {
+		return ""
+	}
+	// Go json.Marshal 键序稳定且无空格，等价 sort_keys+紧凑分隔
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// loadSkillRetrievalSessionProfile 读 sidecar（五重校验，任一不过降级）。
+// Python: _load_skill_retrieval_session_profile（interface_deep.py:2497-2541）。
+// 返回 (payload, found)：payload==nil 且 found=false → 无文件（不降级）；
+// found=true 且 payload 含 profile_recovery_error → 降级 dict。
+func (d *DeepAdapter) loadSkillRetrievalSessionProfile(sessionID string) (map[string]any, bool) {
+	path := d.skillRetrievalProfilePath(sessionID)
+	sid := sessionAdapterKey(&sessionID)
+	unrecoverable := func(reason string) (map[string]any, bool) {
+		logger.Warn(logComponent).
+			Str("session_id", sid).
+			Str("reason", reason).
+			Msg("Skill retrieval profile is not recoverable")
+		return map[string]any{
+			"schema_version":         1,
+			"session_id":             sid,
+			"enabled":                false,
+			"profile_recovery_error": reason,
+		}, true
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, false
+	}
+	if info.Size() > 16*1024*1024 {
+		return unrecoverable("profile_too_large")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return unrecoverable("unreadable_profile")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
+		return unrecoverable("unreadable_profile")
+	}
+	if sv, _ := payload["schema_version"].(float64); int(sv) != 1 {
+		return unrecoverable("invalid_profile_schema")
+	}
+	checksum, _ := payload["profile_checksum"].(string)
+	if len(checksum) != 64 || checksum != skillRetrievalProfileChecksum(payload) {
+		return unrecoverable("profile_checksum_mismatch")
+	}
+	fileSID, _ := payload["session_id"].(string)
+	if fileSID != sid {
+		return unrecoverable("session_id_mismatch")
+	}
+	if !swarmtools.IsValidSkillRetrievalSessionProfile(payload) {
+		return unrecoverable("invalid_profile_payload")
+	}
+	return payload, true
+}
+
+// persistSkillRetrievalSessionProfile sidecar 原子写。
+// Python: _persist_skill_retrieval_session_profile（interface_deep.py:2543-2600）：
+// 会话级才写；toolkit 缺席时全局关闭会话冻结 legacy 选择（已恢复 profile 不覆盖）。
+func (d *DeepAdapter) persistSkillRetrievalSessionProfile() {
+	if !d.isSessionScoped {
+		return
+	}
+	var profile map[string]any
+	if d.skillRetrievalToolkit == nil {
+		if d.restoredSkillRetrievalProfile != nil {
+			// 已恢复 profile 不被新推导覆盖（Python :2549-2553）
+			return
+		}
+		profile = map[string]any{"schema_version": 1}
+	} else {
+		profile = d.skillRetrievalToolkit.SessionProfile()
+	}
+	enabled := true
+	if d.skillRetrievalSessionEnabled != nil {
+		enabled = *d.skillRetrievalSessionEnabled
+	}
+	profile["session_id"] = sessionAdapterKey(&d.parentSessionID)
+	profile["enabled"] = enabled
+	profile["requested_model_name"] = d.initialSkillRetrievalModelName
+	profile["model_name"] = d.skillRetrievalContextModelName
+	if d.skillRetrievalContextWindowTokens > 0 {
+		profile["context_window_tokens"] = d.skillRetrievalContextWindowTokens
+	} else {
+		profile["context_window_tokens"] = nil
+	}
+	profile["initial_mcp_names"] = sortedCopy(d.initialSkillScanMCPNames)
+	profile["profile_checksum"] = skillRetrievalProfileChecksum(profile)
+
+	path := d.skillRetrievalProfilePath(d.parentSessionID)
+	temporary := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
+	data, err := json.Marshal(profile)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("session_id", d.parentSessionID).
+			Msg("Unable to persist Skill retrieval profile")
+		return
+	}
+	defer func() { _ = os.Remove(temporary) }()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		logger.Warn(logComponent).
+			Str("session_id", d.parentSessionID).
+			Msg("Unable to persist Skill retrieval profile")
+		return
+	}
+	// O_EXCL 原子临时写 + os.replace 语义（Python :2577-2589；0o600）
+	if err := os.WriteFile(temporary, data, 0o600); err == nil {
+		if err := os.Rename(temporary, path); err != nil {
+			logger.Warn(logComponent).
+				Str("session_id", d.parentSessionID).
+				Msg("Unable to persist Skill retrieval profile")
+		} else {
+			_ = os.Chmod(path, 0o600)
+		}
+	} else {
+		logger.Warn(logComponent).
+			Str("session_id", d.parentSessionID).
+			Msg("Unable to persist Skill retrieval profile")
+	}
+}
+
+// discardSkillRetrievalSessionProfile 删除 sidecar。
+// Python: _discard_skill_retrieval_session_profile（interface_deep.py:2602-2609）。
+func (d *DeepAdapter) discardSkillRetrievalSessionProfile() {
+	if err := os.Remove(d.skillRetrievalProfilePath(d.parentSessionID)); err != nil && !os.IsNotExist(err) {
+		logger.Warn(logComponent).
+			Str("session_id", d.parentSessionID).
+			Msg("Unable to discard Skill retrieval profile")
+	}
+}
+
+// PersistSkillRetrievalSessionProfile 导出包装（Python persist_skill_retrieval_session_profile :2658-2661）。
+func (d *DeepAdapter) PersistSkillRetrievalSessionProfile() {
+	d.persistSkillRetrievalSessionProfile()
+}
+
+// DiscardTransientSkillRetrievalSessionProfile 乐观 sidecar 丢弃
+// （非恢复来源才删；Python discard_transient_... :2673-2677）。
+func (d *DeepAdapter) DiscardTransientSkillRetrievalSessionProfile() {
+	if d.restoredSkillRetrievalProfile == nil {
+		d.discardSkillRetrievalSessionProfile()
+	}
+}
+
+// RestoreSkillRetrievalSession 子构造前恢复不可变技能/MCP 输入。
+// Python: restore_skill_retrieval_session（interface_deep.py:2631-2652）。
+func (d *DeepAdapter) RestoreSkillRetrievalSession(profile map[string]any, initialMCPNames []string, requestedModelName string) {
+	d.pendingSkillScanMCPNames = append([]string{}, initialMCPNames...)
+	d.initialSkillScanMCPNames = append([]string{}, initialMCPNames...)
+	d.restoredSkillRetrievalProfile = profile
+	if profile != nil {
+		d.skillRetrievalContextModelName, _ = profile["model_name"].(string)
+		restoredWindow := intOfAny(profile["context_window_tokens"])
+		if restoredWindow > 0 {
+			d.skillRetrievalContextWindowTokens = restoredWindow
+		} else {
+			d.skillRetrievalContextWindowTokens = 0
+		}
+		req, _ := profile["requested_model_name"].(string)
+		d.setInitialSkillRetrievalModel(req)
+	} else {
+		d.setInitialSkillRetrievalModel(requestedModelName)
+	}
+}
+
+// ──────────────────────────── 16.4b sidecar 辅助 ────────────────────────────
+
+// setInitialSkillRetrievalModel 冻结新会话 1% 预算的请求模型名
+// （Python _set_initial_skill_retrieval_model :7061-7066：非空即锁）。
+func (d *DeepAdapter) setInitialSkillRetrievalModel(modelName string) {
+	if d.initialSkillRetrievalModelName != "" {
+		return
+	}
+	d.initialSkillRetrievalModelName = strings.TrimSpace(modelName)
+}
+
+// sanitizeSessionKey 会话键文件名净化（Python get_runtime_state_path 的
+// re.sub(r"[^A-Za-z0-9_.-]", "_")[:128] 语义）。
+func sanitizeSessionKey(sid string) string {
+	var b strings.Builder
+	for _, r := range sid {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	if len(out) > 128 {
+		out = out[:128]
+	}
+	if out == "" {
+		out = "default"
+	}
+	return out
+}
+
+// sha256Sum16 sha256 前 16 hex 字符。
+func sha256Sum16(data []byte) [16]byte {
+	sum := sha256.Sum256(data)
+	var out [16]byte
+	copy(out[:], sum[:8])
+	return out
+}
+
+// intOfAny 宽松整数化（Python int(...) 容错，失败回 0）。
+func intOfAny(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0
+		}
+		return n
+	}
+	return 0
+}
+
+// sortedCopy 字符串副本排序。
+func sortedCopy(in []string) []string {
+	out := append([]string{}, in...)
+	sort.Strings(out)
+	return out
 }
