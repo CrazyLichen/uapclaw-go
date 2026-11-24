@@ -366,6 +366,10 @@ type DeepAdapter struct {
 	skillRetrievalContextWindowTokens int
 	// initialSkillScanMCPNames 构造期 MCP 扫描名单（Python :2233）
 	initialSkillScanMCPNames []string
+	// sessionSelectedMcp 本会话经 chat.send mcp 字段选中的 MCP 名集合
+	// （Python _session_selected_mcp :2223；reconcile_session_mcp 写入侧
+	// ⤵️ 该章节，入口 SetSessionSelectedMcp 先行落地）
+	sessionSelectedMcp map[string]bool
 	// pendingSkillScanMCPNames 构造期待消费的 MCP 扫描提示（Python :2230）
 	pendingSkillScanMCPNames []string
 	// autoHarnessService 自动 Harness 服务
@@ -4049,10 +4053,10 @@ func (d *DeepAdapter) liveSkillRetrievalDisabledSkills() []string {
 	if d.skillManager == nil {
 		return []string{}
 	}
-	// [Go 适配偏差 D-16-4-7] Python 每次现查前调 reload_state() 重读状态文件；
-	// Go SkillManager 无 reload_state（状态刷新由其自身更新路径驱动），
-	// 现查语义由 ListDisabledSkills 读当前内存状态承接。回填条件：
-	// Go SkillManager 引入显式状态重载方法时补 reload 调用。
+	// Python: reload_state() 先重读 skills_state.json 再算禁用名单
+	// （外部流程经独立 SkillManager 实例落盘后本实例内存仍是旧值）。
+	// ✅ D-16-4-7 已回收：Go SkillManager.ReloadState 对齐 reload_state。
+	d.skillManager.ReloadState()
 	names := d.skillManager.ListDisabledSkills()
 	out := make([]string, 0, len(names))
 	for _, name := range names {

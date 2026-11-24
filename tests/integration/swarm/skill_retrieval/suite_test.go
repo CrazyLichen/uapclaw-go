@@ -19,6 +19,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/symphony/discovery"
+	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
@@ -260,4 +262,78 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// TestMcpBundledSkillVisibility D-16-4-6 回收集成：session-scoped adapter
+// 选中 MCP → 捆绑技能进 live 扫描（skill_index 可见）；根 adapter 恒隐藏。
+func (s *SkillRetrievalSuite) TestMcpBundledSkillVisibility() {
+	t := s.T()
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
+	// alpha 落在 agent skills 目录（扫描根之一）
+	root := workspace.AgentSkillsDir()
+	s.writeSkill(root, "alpha", "agent skills alpha")
+	// MCP 捆绑技能目录（状态存储拥有）+ state.json 连接记录
+	bundled := filepath.Join(mcpstate.McpRoot(), "skills", "mcp-demo")
+	s.writeSkill(bundled, "bundled-skill", "bundled by mcp-demo")
+	mcpstate.SaveState(map[string]any{"version": 1, "mcp": map[string]any{
+		"mcp-demo": map[string]any{"state": "connected"},
+	}, "mounts": map[string]any{}})
+
+	sm := skillruntime.NewSkillManager(root)
+	d := adapter.NewDeepAdapter()
+	d.SetSkillManager(sm)
+	d.SetSessionScopedForTest("sess-mcp")
+	d.SetSessionSelectedMcp([]string{"mcp-demo"})
+
+	tk, err := tools.NewSkillRetrievalToolkit(tools.ToolkitOptions{
+		SkillDirectories: d.SkillScanDirsForTest,
+		ConfigBase:       s.enabledConfig(),
+		SessionScope:     "sess-mcp",
+	})
+	s.Require().NoError(err)
+	// live 扫描含捆绑技能
+	cards := tk.Environment().SelectionCards(true)
+	s.Assert().Contains(cards, "alpha")
+	s.Assert().Contains(cards, "bundled-skill")
+	// skill_index list 可见
+	result, err := tk.SkillIndex(map[string]any{"operation": "list"})
+	s.Require().NoError(err)
+	s.Assert().Contains(result.ModelContent, "bundled-skill")
+}
+
+// TestDisabledSkillPerception D-16-4-7 回收集成：外部写者禁用 → live provider
+// 内部 ReloadState → skill_index/扫描立即反映（无需重建会话）。
+func (s *SkillRetrievalSuite) TestDisabledSkillPerception() {
+	t := s.T()
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
+	shared := t.TempDir()
+	// alpha 落 agent skills 目录（扫描根）；skills_state.json 由
+	// <shared>/skills/ 承载（两侧 manager 共享路径）
+	s.writeSkill(workspace.AgentSkillsDir(), "alpha", "alpha soon disabled")
+	sm := skillruntime.NewSkillManager(shared)
+	d := adapter.NewDeepAdapter()
+	d.SetSkillManager(sm)
+
+	tk, err := tools.NewSkillRetrievalToolkit(tools.ToolkitOptions{
+		SkillDirectories: d.SkillScanDirsForTest,
+		DisabledSkills:   d.LiveSkillRetrievalDisabledSkillsForTest,
+		ConfigBase:       s.enabledConfig(),
+		SessionScope:     "sess-perc",
+	})
+	s.Require().NoError(err)
+	s.Assert().Contains(tk.Environment().SelectionCards(true), "alpha")
+
+	// 外部写者（独立 manager 实例）禁用 alpha 落盘
+	_ = skillruntime.NewSkillManager(shared) // 外部写者实例（独立内存缓存）
+	sm2state := map[string]any{"skill_configs": map[string]any{
+		"alpha": map[string]any{"enabled": false},
+	}}
+	data, jsonErr := json.Marshal(sm2state)
+	s.Require().NoError(jsonErr)
+	s.Require().NoError(os.WriteFile(filepath.Join(shared, "skills", "skills_state.json"), data, 0o644))
+
+	// ✅ live provider 内部 ReloadState → 现查立即看到禁用（skill_index 消失）
+	s.Assert().Equal([]string{"alpha"}, d.LiveSkillRetrievalDisabledSkillsForTest())
+	cards := tk.Environment().SelectionCards(true)
+	s.Assert().NotContains(cards, "alpha")
 }

@@ -3,6 +3,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -104,6 +105,39 @@ func AgentMemoryDir() string {
 // AgentSkillsDir 返回 Agent 技能目录：WorkspaceDir()/agent/workspace/skills
 func AgentSkillsDir() string {
 	return path.AgentSkillsDir()
+}
+
+// RuntimeStatePath per-session runtime_state.yaml 路径。
+// Python: get_runtime_state_path（jiuwenswarm/common/utils.py:1758-1765）：
+// 每个 session 独占一份文件，避免心跳/定时/并发 session 共用单文件互相覆盖
+// channel/mode/model/git 等字段。session_id 为空时回退 default。
+// [16.4b] 此前 Go 侧 runtime_state 为全进程单文件（D-8），本 helper 按
+// Python 派生形态落地；既有单文件消费方（runtime_prompt_rail）迁移随 D-8。
+func RuntimeStatePath(sessionID string) string {
+	sid := sanitizeRuntimeStateKey(sessionID)
+	if sid == "" {
+		sid = "default"
+	}
+	return filepath.Join(ConfigDir(), "runtime_state", sid+".yaml")
+}
+
+// sanitizeRuntimeStateKey 会话键净化：非 [A-Za-z0-9_.-] 字符替换为 _，截 128。
+// Python: re.sub(r"[^A-Za-z0-9_.-]", "_", sid)[:128]。
+func sanitizeRuntimeStateKey(sessionID string) string {
+	sid := strings.TrimSpace(sessionID)
+	var b strings.Builder
+	for _, r := range sid {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	if len(out) > 128 {
+		out = out[:128]
+	}
+	return out
 }
 
 // AgentSessionsDir 返回 Agent 会话目录：WorkspaceDir()/agent/sessions

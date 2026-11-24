@@ -98,5 +98,26 @@ func (d *DeepAdapter) skillScanDirs() []string {
 	if ws := workspace.AgentSkillsDir(); ws != "" {
 		appendDir(ws)
 	}
+	// Python `_skill_scan_dirs`（interface_deep.py:10200-10236）MCP 会话分支：
+	// 仅 session-scoped 子 adapter 扫描选中的 MCP 捆绑技能目录（根 adapter 恒
+	// 不扫，防 cli/skill 技能泄漏进 rewind/cron/admin）。
+	// ✅ D-16-4-6 已回收：SkillManager.McpSkillsDirs 对齐 _mcp_skills_dirs
+	// （mcp/state.json 连接记录 ∩ 磁盘目录存在），过滤对齐
+	// _session_selected_mcp ∪ _pending_skill_scan_mcp_names。
+	if d.isSessionScoped && d.skillManager != nil {
+		selected := map[string]bool{}
+		for name := range d.sessionSelectedMcp {
+			selected[name] = true
+		}
+		for _, name := range d.pendingSkillScanMCPNames {
+			selected[name] = true
+		}
+		for _, entry := range d.skillManager.McpSkillsDirs() {
+			if !selected[entry["name"]] {
+				continue
+			}
+			appendDir(entry["dir"])
+		}
+	}
 	return dirs
 }

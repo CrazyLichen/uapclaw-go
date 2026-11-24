@@ -7,7 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 func enableSkillCfg() map[string]any {
@@ -268,4 +272,104 @@ func TestRestoreSkillRetrievalSession_不可变输入(t *testing.T) {
 	if d2.skillRetrievalContextWindowTokens != 0 {
 		t.Fatal("no profile → window 0")
 	}
+}
+
+// TestSkillScanDirs_MCP会话分支 对齐 Python _skill_scan_dirs :10200-10236
+func TestSkillScanDirs_MCP会话分支(t *testing.T) {
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
+	root := t.TempDir()
+	writeTestSkill(t, root, "alpha")
+	// state.json：mcp-a connected / mcp-b registered
+	// 捆绑技能目录由 mcp 状态存储拥有：<workspace>/mcp/skills/<name>/
+	bundledA := filepath.Join(mcpstate.McpRoot(), "skills", "mcp-a")
+	writeTestSkill(t, bundledA, "bundled-skill")
+	sm := skillruntime.NewSkillManager(root)
+	d := NewDeepAdapter()
+	d.SetSkillManager(sm)
+	d.skillManager = sm
+	// mcp/state.json：mcp-a connected / mcp-b registered
+	mcpstate.SaveState(map[string]any{"version": 1, "mcp": map[string]any{
+		"mcp-a": map[string]any{"state": "connected"},
+		"mcp-b": map[string]any{"state": "registered"},
+	}, "mounts": map[string]any{}})
+
+	// 根 adapter：恒单根（防 cli/skill 技能泄漏进 rewind/cron/admin）
+	// 注：绑定包目录为空时 roots = [agent skills dir]（workspace 派生），
+	// MCP 分支不参与。
+	roots := d.skillScanDirs()
+	for _, r := range roots {
+		assert.NotEqual(t, bundledA, r, "root adapter must not scan MCP dirs")
+	}
+
+	// session-scoped + 未选中 → 不含
+	d.SetSessionScopedForTest("sess-m")
+	roots = d.skillScanDirs()
+	for _, r := range roots {
+		assert.NotEqual(t, bundledA, r, "unselected MCP must stay hidden")
+	}
+
+	// 选中 mcp-a → 出现
+	d.SetSessionSelectedMcp([]string{"mcp-a"})
+	roots = d.skillScanDirs()
+	found := false
+	for _, r := range roots {
+		if strings.HasPrefix(r, bundledA) {
+			found = true
+		}
+	}
+	assert.True(t, found, "selected MCP bundled dir should be scanned: %v", roots)
+
+	// 构造期 pending 名单（Python _pending_skill_scan_mcp_names）也放行
+	d2 := NewDeepAdapter()
+	d2.SetSessionScopedForTest("sess-m")
+	d2.SetSkillManager(sm)
+	d2.skillManager = sm
+	d2.pendingSkillScanMCPNames = []string{"mcp-a"}
+	roots = d2.skillScanDirs()
+	found = false
+	for _, r := range roots {
+		if strings.HasPrefix(r, bundledA) {
+			found = true
+		}
+	}
+	assert.True(t, found, "pending scan names should pass cold-first-chat window")
+}
+
+// TestSkillRetrievalProfilePath_RuntimeStateDerivation D-16-4-8 回收：
+// sidecar 路径 = workspace.RuntimeStatePath(sid) 改缀（Python :2474-2483 逐字）
+func TestSkillRetrievalProfilePath_RuntimeStateDerivation(t *testing.T) {
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
+	d := NewDeepAdapter()
+	path := d.SkillRetrievalProfilePath("sess/1")
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	// 目录 = <config>/runtime_state
+	assert.True(t, strings.HasSuffix(dir, filepath.Join("runtime_state")), "dir=%s", dir)
+	// stem = 净化后的 sid + ".yaml" 去后缀 → "<sid>.<digest>.skill-retrieval.json"
+	assert.Regexp(t, `^sess_1\.[0-9a-f]{16}\.skill-retrieval\.json$`, base)
+}
+
+// TestLiveDisabledReload_外部写者后检索现查生效 D-16-4-7 回收集成面
+func TestLiveDisabledReload_外部写者后检索现查生效(t *testing.T) {
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
+	shared := t.TempDir()
+	writeTestSkill(t, shared, "alpha")
+	sm := skillruntime.NewSkillManager(shared)
+	d := NewDeepAdapter()
+	d.SetSkillManager(sm)
+	assert.Empty(t, d.liveSkillRetrievalDisabledSkills())
+	// 外部写者（独立实例，共享同一 skills_state.json 路径
+	// = <shared>/skills/skills_state.json）禁用 alpha 并落盘
+	writer := skillruntime.NewSkillManager(shared)
+	sm2state := map[string]any{
+		"skill_configs": map[string]any{
+			"alpha": map[string]any{"enabled": false},
+		},
+	}
+	stateData, _ := json.Marshal(sm2state)
+	require.NoError(t, os.MkdirAll(filepath.Join(shared, "skills"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(shared, "skills", "skills_state.json"), stateData, 0o644))
+	_ = writer
+	// live provider 内部 reload → 现查看到
+	assert.Equal(t, []string{"alpha"}, d.liveSkillRetrievalDisabledSkills())
 }
