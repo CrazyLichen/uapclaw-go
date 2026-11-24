@@ -798,8 +798,19 @@ func (m *ResourceMgr) GetMcpTool(ctx context.Context, name, serverID string, opt
 
 // GetMcpToolInfos 通过工具名和服务器 ID 获取 MCP 工具信息。
 // Python: ResourceManager.get_mcp_tool_infos(name, server_id, **kwargs)
+// name 为空对齐 Python name=None 分支（resource_manager.py:1143-1180
+// docstring：If None, returns info for all tools in specified servers）——
+// 返回该 server 的全量工具，而非拼接空工具名（否则恒"工具未找到"，
+// AbilityManager 懒加载将永远物化不出 MCP 工具）。
 func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string, opts ...McpOption) ([]schema.ToolInfoInterface, error) {
-	tools, err := m.GetMcpTool(ctx, name, serverID, opts...)
+	o := applyMcpOptions(opts...)
+	var tools []tool.Tool
+	var err error
+	if name == "" {
+		tools, err = m.registry.Tool().GetMcpTools(ctx, serverID, o.Session)
+	} else {
+		tools, err = m.GetMcpTool(ctx, name, serverID, opts...)
+	}
 	if err != nil {
 		return nil, err
 	}

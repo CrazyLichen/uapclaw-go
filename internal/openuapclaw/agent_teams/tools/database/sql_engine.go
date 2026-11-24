@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"sync"
 
+	"time"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -361,6 +364,14 @@ func (s *SqlTeamDatabase) WithTx(tx *gorm.DB) (TeamDao, MemberDao, TaskDao, Mess
 func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
+		// GORM 默认 logger 写 stdout——team MCP server 以 stdio 承载 JSON-RPC，
+		// SQL 日志会污染协议流（客户端 Parse error → transport closed）。
+		// 强制重定向到 stderr（record not found 级别静默，慢查询/错误照常）。
+		Logger: gormlogger.New(logWriter{}, gormlogger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  gormlogger.Warn,
+			IgnoreRecordNotFoundError: true,
+		}),
 	}
 
 	var db *gorm.DB
@@ -632,4 +643,12 @@ func containsString(slice []string, val string) bool {
 		}
 	}
 	return false
+}
+
+// logWriter 把 GORM logger 输出桥接到项目 logger（stderr），避免 stdout 协议流污染。
+type logWriter struct{}
+
+// Printf 实现 gormlogger.Writer 接口：经项目 logger Warn 输出（stderr）。
+func (logWriter) Printf(format string, args ...interface{}) {
+	logger.Warn(logger.ComponentCommon).Msgf(format, args...)
 }
