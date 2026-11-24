@@ -74,9 +74,16 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // zenFreeModelsEnabledFn 免费拉取开关（包级函数变量承载 Python 模块级函数
-// _zen_free_models_enabled；生产实现恒 false——登录模型替代后硬关闭，
-// 前端/config 无法重新打开探测）。
-var zenFreeModelsEnabledFn = func() bool { return false }
+// _zen_free_models_enabled）。
+//
+// ⤴️ 用户拍板偏差（2026-12-06）：上游自登录模型替代后硬关断（Python
+// opencode_zen.py:130 恒 return false、无视 models.enable_free_models）；
+// 本仓恢复读开关——models.enable_free_models（bool，缺省 false），config
+// 面板可重新打开免费模型探测。偏差性质=产品决策，回收条件=上游恢复开关。
+var zenFreeModelsEnabledFn = func() bool {
+	return boolOr(GetNestedConfigValue(ReadRawConfig(),
+		[]string{"models", "enable_free_models"}, false))
+}
 
 func zenFreeModelsEnabled() bool { return zenFreeModelsEnabledFn() }
 
@@ -462,6 +469,16 @@ func SetZenHTTPBaseURL(modelsDev, models string) {
 // ZenLastFetchError 供排查读取最后失败原因（Python _last_fetch_error）。
 func ZenLastFetchError() string { return zenLastFetchError }
 
+// ZenClientHeaders 返回免费档门禁头的拷贝（Python: opencode_zen.py:54-60
+// ZEN_CLIENT_HEADERS；真链冒烟与直连调用方需要同形请求头）。
+func ZenClientHeaders() map[string]string {
+	out := make(map[string]string, len(zenClientHeaders))
+	for k, v := range zenClientHeaders {
+		out[k] = v
+	}
+	return out
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // orEmptyAny Python `raw or ""`：nil/None 回空串。
@@ -524,10 +541,3 @@ func AppendZenFreeModels(models []map[string]any) []map[string]any {
 	return models
 }
 
-// SetZenFreeModelsEnabledOverride 测试接缝：覆写免费拉取开关。
-// 对齐 Python 测试对模块属性 _zen_free_models_enabled 的 monkeypatch 惯例
-// （Python: config_panel 各 handler「调用方可 monkeypatch 本模块属性以隔离测试」）；
-// 生产代码不得调用。
-func SetZenFreeModelsEnabledOverride(enabled bool) {
-	zenFreeModelsEnabledFn = func() bool { return enabled }
-}

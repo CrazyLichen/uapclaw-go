@@ -192,14 +192,13 @@ func (s *ZenSuite) SetupTest() {
 
 // TearDownTest 刷盘还原 + 还原 zen 开关。
 func (s *ZenSuite) TearDownTest() {
-	configpanel.SetZenFreeModelsEnabledOverride(false)
 	sessionpkg.FlushMetadataQueue(5.0)
 	sessionpkg.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 }
 
-// TestZen_默认关断 上游硬关断契约：未开启时 entries 恒空、warm 空转（Python
-// opencode_zen docstring: free models only when Zen is）。
+// TestZen_默认关断 开关读配置（用户拍板偏差：上游硬关断 → 本仓读
+// models.enable_free_models）：配置缺省时 entries 恒空、warm 空转。
 func (s *ZenSuite) TestZen_默认关断() {
 	payload := sendConfig(s.env, "models.zen.warm", nil)
 	s.Equal(true, payload["ok"])
@@ -225,10 +224,10 @@ func (s *ZenSuite) TestZen_fixture预热与list追加() {
 	}))
 	defer srv.Close()
 	configpanel.SetZenHTTPBaseURL(srv.URL, srv.URL+"/zen/models")
-	configpanel.SetZenFreeModelsEnabledOverride(true)
+	// 用户拍板：开关改读配置——写 models.enable_free_models 驱动
+	writePanelFixture(s.T(), "models:\n  enable_free_models: true\n")
 
 	// 直接调 warm（进程内同源），隔离 RPC 传输层
-	configpanel.SetZenFreeModelsEnabledOverride(true)
 	configpanel.WarmZenFreeModels("probe", false)
 	s.T().Logf("direct entries=%d fetchErr=%q", len(configpanel.GetZenFreeModelEntries()), configpanel.ZenLastFetchError())
 
