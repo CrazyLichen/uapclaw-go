@@ -97,8 +97,12 @@ const (
 	defaultWebPort = 19000
 	// defaultWSPath 默认 WebSocket 路径
 	defaultWSPath = "/ws"
-	// wsReadLimit WebSocket 消息大小限制（8MB）
-	wsReadLimit = 8 * 1024 * 1024
+	// webWSMaxMessageBytes 浏览器↔Gateway 腿 WebSocket 帧上限（150MiB）。
+	// Python: gateway/common/ws_limits.py WEB_WS_MAX_MESSAGE_BYTES = 150MiB
+	// （放宽以承载 document.persist 100MiB 文档 base64≈133MiB；27.8 批修正：
+	// 原 8MiB 是内部腿 AGENT_WS_MAX_MESSAGE_BYTES 的值，误用于浏览器腿会把
+	// 合规大图/大文档拒帧）。
+	webWSMaxMessageBytes = 150 * 1024 * 1024
 	// protocolVersion 帧协议版本
 	protocolVersion = "1.0"
 )
@@ -167,7 +171,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 设置消息大小限制
-	conn.SetReadLimit(wsReadLimit)
+	conn.SetReadLimit(webWSMaxMessageBytes)
 
 	// 加入连接集合（同时登记进程级写锁：读循环线程的 res 帧与派发线程的
 	// 广播/定向出站会并发写同一连接，gorilla WriteMessage 非并发安全）
