@@ -285,8 +285,10 @@ func TestBuildSymphonyOrchestration_leaderOnly(t *testing.T) {
 	assert.Nil(t, out)
 }
 
-// TestBuildSkillRetrievalPrompt_开关门控 检索开关门控（9.11b 缝）。
+// TestBuildSkillRetrievalPrompt_开关门控 检索开关门控（9.11b 桩缝已随
+// 16.4b 转真身：开关开产出 SkillRetrievalPromptRail，关返回 nil）。
 func TestBuildSkillRetrievalPrompt_开关门控(t *testing.T) {
+	t.Setenv("UAPCLAW_HOME", t.TempDir())
 	providers.RegisterMemberRailProviders()
 	provider, ok := hschema.LookupRailProvider("swarm.skill_retrieval_prompt")
 	require.True(t, ok)
@@ -295,7 +297,7 @@ func TestBuildSkillRetrievalPrompt_开关门控(t *testing.T) {
 	view.Config = map[string]any{"skill_retrieval": map[string]any{"enabled": true}}
 	out, err := provider(nil, view)
 	require.NoError(t, err)
-	assert.Nil(t, out, "开关开但基座 ⤴️16.4，返回 nil")
+	assert.NotNil(t, out, "开关开 → 16.4b 真身 rail")
 
 	view.Config = map[string]any{}
 	out2, err2 := provider(nil, view)

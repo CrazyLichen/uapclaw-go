@@ -258,6 +258,17 @@ func (r *SkillRetrievalPromptRail) AfterToolCall(_ context.Context, cbc *agentin
 	return nil
 }
 
+// Toolkit 来源工具包访问器（Python rail._source_toolkit 的 Go 出口；
+// V-6 skill 类绑定归属校验用）。
+func (r *SkillRetrievalPromptRail) Toolkit() *toolkits.SkillRetrievalToolkit {
+	return r.sourceToolkit
+}
+
+// Environment 环境访问器（Python rail._prompt_skillfs 的 Go 出口）。
+func (r *SkillRetrievalPromptRail) Environment() *discovery.SkillFS {
+	return r.promptSkillFS
+}
+
 // GetCallbacks 注册 BeforeInvoke + BeforeModelCall + AfterToolCall。
 // 对齐 DeepAgentRail 基类回调映射扩展（SkillUseRail 同款）。
 func (r *SkillRetrievalPromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {

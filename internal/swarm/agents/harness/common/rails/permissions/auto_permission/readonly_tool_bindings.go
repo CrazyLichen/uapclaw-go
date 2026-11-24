@@ -19,8 +19,8 @@
 // ## 范围（V-6 9.11b 回填后）
 //
 // 覆盖：tool_search（ProgressiveToolRail 9.11a + ToolRetrievalPromptRail
-// 9.11b 双归属）+ cron_*（含受限视图判定）。skill_index / list_skill
-// ⤴️16.4、heartbeat_* ⤴️9.11c、get_current_goal / recall_compressed_context
+// 9.11b 双归属）+ cron_*（含受限视图判定）+ skill_index（16.4b）。
+// list_skill / heartbeat_* ⤴️9.11c、get_current_goal / recall_compressed_context
 // 依赖既有未落地前置件，仍 fail-closed。
 
 package auto_permission
@@ -245,14 +245,18 @@ var (
 	toolRetrievalRailType = reflect.TypeOf((*commrails.ToolRetrievalPromptRail)(nil))
 	// toolRetrievalToolkitType 检索工具包的具体类型。
 	toolRetrievalToolkitType = reflect.TypeOf((*swarmtools.ToolRetrievalToolkit)(nil))
+	// skillRetrievalRailType 技能检索 rail 的具体类型（16.4b）。
+	skillRetrievalRailType = reflect.TypeOf((*commrails.SkillRetrievalPromptRail)(nil))
+	// skillRetrievalToolkitType 技能检索工具包的具体类型（16.4b）。
+	skillRetrievalToolkitType = reflect.TypeOf((*swarmtools.SkillRetrievalToolkit)(nil))
 	// cronBackendAdapterType cron backend 适配层的包级类型（cronbridge 内部
 	// 类型经 IsRestrictedCronBackend 判定，此处登记接口类型）。
 )
 
 // trustedReadonlyBindingV6 扩展分发：tool_search 双归属 + cron_* 绑定。
 // Python: _session_observation_binding 的 tool_retrieval 分支（:168-196）+
-// trusted_readonly_binding 的 cron_* 分支（:286-305）。skill_index/list_skill
-// ⤴️16.4、heartbeat_* ⤴️9.11c（前置件未落地，恒 false fail-closed）。
+// trusted_readonly_binding 的 cron_*（:286-305）与 skill_index（:191-218）分支。
+// list_skill / heartbeat_* ⤴️9.11c（前置件未落地，恒 false fail-closed）。
 func trustedReadonlyBindingV6(
 	invocation ToolInvocation,
 	sessionID string,
@@ -270,11 +274,14 @@ func trustedReadonlyBindingV6(
 		}
 		// 9.11b 新路径：ToolRetrievalPromptRail 持有的 tool_search
 		return toolRetrievalBinding(invocation, sessionID, ownerAgent)
+	case invocation.ToolName == "skill_index":
+		// 16.4b V-6 skill 类绑定兑现（9.11b 批一改指锚点）
+		return skillIndexBinding(invocation, sessionID, ownerAgent)
 	case strings.HasPrefix(invocation.ToolName, "cron_") || invocation.ToolName == "cron":
 		return cronReadonlyBinding(invocation, sessionID, ownerAgent)
 	default:
-		// heartbeat_* / skill_index / list_skill / get_current_goal /
-		// recall_compressed_context：前置件未落地（9.11c / 16.4 / 既有
+		// heartbeat_* / list_skill / get_current_goal /
+		// recall_compressed_context：前置件未落地（9.11c / 既有
 		// fail-closed 登记项），恒走正常审批。
 		return false
 	}
@@ -342,6 +349,77 @@ func toolRetrievalBinding(
 	_, searchArgs := tool_display.ExtractCallGoal(invocation.ToolArgs)
 	argsMap, _ := searchArgs.(map[string]any)
 	if argsMap == nil || !permissions.ToolSearchArgsValid(argsMap, false) {
+		return false
+	}
+	return true
+}
+
+// skillIndexBinding 校验 skill_index 由 SkillRetrievalPromptRail 持有。
+// Python: readonly_tool_bindings.py:191-218——rail 类型 + wrapper（
+// SkillRetrievalToolkit）session_scope 一致 + index toolkit 环境同一 +
+// 执行函数归属（Go 经 Toolkit()/Environment() 访问器回指，行为等价）。
+func skillIndexBinding(
+	invocation ToolInvocation,
+	sessionID string,
+	ownerAgent any,
+) bool {
+	if invocation.Ctx == nil || sessionID == "" {
+		return false
+	}
+	owner, ok := ownerAgent.(*harness.DeepAgent)
+	if !ok || owner == nil {
+		return false
+	}
+	callbackAgent := invocation.Ctx.Agent()
+	if callbackAgent == nil || !deepAgentBridgeMatches(owner, callbackAgent) {
+		return false
+	}
+	session := invocation.Ctx.Session()
+	if session == nil || session.GetSessionID() != sessionID {
+		return false
+	}
+
+	// ① 恰好一个 SkillRetrievalPromptRail，具体类型匹配 + V-4 受信构造
+	found := owner.FindRailsByType(skillRetrievalRailType)
+	if len(found) != 1 {
+		return false
+	}
+	rail, isConcrete := found[0].(*commrails.SkillRetrievalPromptRail)
+	if !isConcrete || reflect.TypeOf(found[0]) != skillRetrievalRailType {
+		return false
+	}
+	if !rail.IsTrusted() {
+		return false
+	}
+
+	// ② wrapper 类型精确匹配 + session_scope 一致
+	// （Python: type(wrapper) is SkillRetrievalToolkit and
+	//  wrapper._session_scope == session_id）
+	wrapper := rail.Toolkit()
+	if wrapper == nil || reflect.TypeOf(wrapper) != skillRetrievalToolkitType {
+		return false
+	}
+	if wrapper.SessionScope() != sessionID {
+		return false
+	}
+
+	// ③ 环境同一（Python: rail._prompt_skillfs is wrapper._environment and
+	//  toolkit._environment is wrapper._environment and not toolkit._closed）
+	if rail.Environment() == nil || rail.Environment() != wrapper.Environment() {
+		return false
+	}
+
+	// ④ 工具绑定：卡片由该 wrapper 的 index toolkit 构造（toolID 派生域核对）
+	abilityManager := callbackAgent.AbilityManager()
+	if abilityManager == nil {
+		return false
+	}
+	card, ok := abilityManager.Get(invocation.ToolName).(*tool.ToolCard)
+	if !ok || card == nil {
+		return false
+	}
+	tools := wrapper.GetTools()
+	if len(tools) == 0 || tools[0].ToolID != card.ID {
 		return false
 	}
 	return true

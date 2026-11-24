@@ -206,20 +206,32 @@ func buildPersonalContextRail(params map[string]any, view *buildctx.SwarmBuildCo
 }
 
 // buildSkillRetrievalPromptRail Skill 目录检索提示 rail（开关门控）。
-// 基座 SkillRetrievalPromptRail（skill_retrieval_prompt_rail.py 582 行）与
-// skill_retrieval_toolkit 消费段已有承接章节 16.4（前置件清单含同名文件）
-// ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移）；is_skill_retrieval_enabled 助手随 tools.go（Task 5）落地。
+// 16.4b 兑现：9.11b 留下的 `swarm.skill_retrieval_prompt` 工厂桩闭合转真身。
 // Python: _build_skill_retrieval_prompt_rail (member_rails.py:246-272)
-func buildSkillRetrievalPromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
+func BuildSkillRetrievalPromptRail(params map[string]any, view *buildctx.SwarmBuildContext) (any, error) {
 	_ = params
 	if !isSkillRetrievalEnabled(view.Config) {
 		return nil, nil
 	}
-	// Python: toolkit = skill_retrieval_toolkit_for_context(context);
-	// SkillRetrievalPromptRail(toolkit=..., session_scope=..., config_base=...)
-	// rail 582 + toolkit 651 两前置件整件 ⤴️16.4（9.11b 批一改指：skill 侧随 discovery 基础件后移）（用户裁决，须同批）。
-	return nil, nil
+	// Python: SkillRetrievalPromptInput.resolve(params, context)
+	resolveSkillRetrievalPromptInput(params, view)
+	// Python: toolkit = skill_retrieval_toolkit_for_context(context)
+	toolkit := skillRetrievalToolkitForContext(view)
+	if toolkit == nil {
+		return nil, nil
+	}
+	// Python: SkillRetrievalPromptRail(toolkit=..., session_scope=..., config_base=...)
+	return swarmrails.NewSkillRetrievalPromptRail(swarmrails.RailOptions{
+		Toolkit:      toolkit,
+		SessionScope: toolkit.SessionScope(),
+		ConfigBase:   view.Config,
+	})
 }
+
+// resolveSkillRetrievalPromptInput 工厂入参解析（Python SkillRetrievalPromptInput.resolve）。
+// 该 ConstructionInput 仅消费 context 字段（无 params 键），Go 侧无需动作，
+// 保留调用点对齐 Python 步骤序。
+func resolveSkillRetrievalPromptInput(_ map[string]any, _ *buildctx.SwarmBuildContext) {}
 
 // buildSymphonyOrchestrationRail leader-only Symphony 编排提示 rail。
 // 基座 SymphonyOrchestrationRail（symphony/orchestration_rail.py 1149 行）
@@ -484,7 +496,7 @@ func RegisterMemberRailProviders() {
 	hschema.RegisterRailProvider(constPersonalContext,
 		railProviderAdapter(buildPersonalContextRail))
 	hschema.RegisterRailProvider(constSkillRetrievalPrompt,
-		railProviderAdapter(buildSkillRetrievalPromptRail))
+		railProviderAdapter(BuildSkillRetrievalPromptRail))
 	hschema.RegisterRailProvider(constSymphonyOrchestration,
 		railProviderAdapter(buildSymphonyOrchestrationRail))
 	hschema.RegisterRailProvider(constRuntimePrompt,
