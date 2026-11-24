@@ -526,3 +526,111 @@ func TestQuestionerHandlerInputInvalid(t *testing.T) {
 		t.Fatal("want 101072")
 	}
 }
+
+// TestQuestionerInvokeSuspendResume 往返全链（Python invoke :803-829）
+func TestQuestionerInvokeSuspendResume(t *testing.T) {
+	sess := newTestNodeSession(t)
+	cfg := &QuestionerConfig{
+		ExtractFieldsFromResponse: boolPtr(true),
+		FieldNames: []QuestionerFieldInfo{
+			{FieldName: "name", Description: "姓名", Required: true},
+		},
+	}
+	e, errC := NewQuestionerExecutable(cfg)
+	if errC != nil {
+		t.Fatal(errC)
+	}
+	e.llModel = &fakeQuestionerLLM{content: `{"name": "张三"}`}
+	e.initialized = true
+	e.InvokeFn = e.invokeEntry
+	// 首调：抽齐 → END → 清状态（Python :824-827）
+	result, err := e.invokeEntry(context.Background(), map[string]any{"query": "我叫张三"}, sess, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["name"] != "张三" {
+		t.Fatalf("result: %v", result)
+	}
+	got := loadQuestionerStateFromSession(sess)
+	if got.Status != QuestionerStatusStart || got.ResponseNum != 0 {
+		t.Fatalf("state cleared: %+v", got)
+	}
+}
+
+// TestQuestionerInvokeSuspendOnMissing 挂起链：缺必填 → 存状态 → interact 中断（panic 传播）
+func TestQuestionerInvokeSuspendOnMissing(t *testing.T) {
+	sess := newTestNodeSession(t)
+	cfg := &QuestionerConfig{
+		ExtractFieldsFromResponse: boolPtr(true),
+		FieldNames: []QuestionerFieldInfo{
+			{FieldName: "id", CnFieldName: "身份证号", Description: "证件", Required: true},
+		},
+	}
+	e, errC := NewQuestionerExecutable(cfg)
+	if errC != nil {
+		t.Fatal(errC)
+	}
+	e.llModel = &fakeQuestionerLLM{content: `{}`}
+	e.initialized = true
+	e.InvokeFn = e.invokeEntry
+	func() {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("缺必填应经 InteractWithResult 抛 GraphInterrupt 挂起")
+			}
+			// 中断 payload 应含 INTERACTION 帧（5.7 语义）
+			s := fmt.Sprintf("%v", r)
+			if !strings.Contains(s, "__interaction__") {
+				t.Fatalf("interrupt payload unexpected: %s", s)
+			}
+		}()
+		_, _ = e.invokeEntry(context.Background(), map[string]any{"query": ""}, sess, nil)
+	}()
+	// 中断前状态已 staged（WaitUserInputs commitCMP 提交）——恢复可见
+	got := loadQuestionerStateFromSession(sess)
+	if got.Status != QuestionerStatusUserInteract {
+		t.Fatalf("state stored: %+v", got)
+	}
+}
+
+// TestQuestionerComponentCompose 组合面缓存（Python to_executable :887-888）
+func TestQuestionerComponentCompose(t *testing.T) {
+	cfg := &QuestionerConfig{
+		ExtractFieldsFromResponse: boolPtr(true), MaxResponse: 2,
+		FieldNames: []QuestionerFieldInfo{{FieldName: "q", Description: "问题", Required: false}},
+	}
+	comp := NewQuestionerComponent(cfg)
+	if comp.ToExecutableFn == nil {
+		t.Fatal("ToExecutableFn slot must be set")
+	}
+	a, b := comp.ToExecutableFn(), comp.ToExecutableFn()
+	if a != b {
+		t.Fatal("executable should be cached")
+	}
+}
+
+// TestQuestionerComponentWithLLMInjection 注入缝（D-24-7）
+func TestQuestionerComponentWithLLMInjection(t *testing.T) {
+	cfg := &QuestionerConfig{
+		ExtractFieldsFromResponse: boolPtr(true),
+		FieldNames: []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
+	}
+	comp := NewQuestionerComponent(cfg, WithQuestionerLLM(&fakeQuestionerLLM{content: `{"name": "李四"}`}))
+	exe := comp.ToExecutableFn()
+	qe, ok := exe.(*QuestionerExecutable)
+	if !ok {
+		t.Fatalf("type %T", exe)
+	}
+	if qe.llModel == nil || qe.initialized != true {
+		t.Fatal("injected llm should be set and initialized")
+	}
+	sess := newTestNodeSession(t)
+	result, err := qe.invokeEntry(context.Background(), map[string]any{"query": "x"}, sess, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["name"] != "李四" {
+		t.Fatalf("injected extraction: %v", result)
+	}
+}

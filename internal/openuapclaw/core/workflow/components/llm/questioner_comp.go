@@ -20,6 +20,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
+	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
@@ -594,6 +595,100 @@ func (e *QuestionerExecutable) initializeIfNeeded(ctx context.Context) error {
 // initPrompt 初始化提示词模板（Python _init_prompt :855-856）
 func (e *QuestionerExecutable) initPrompt() *prompt.PromptTemplate {
 	return prompt.NewPromptTemplate("", e.defaultCfg.promptTemplate)
+}
+
+// ──────────────────────────── Task 7 invoke 编排 + 组合面 ────────────────────────────
+
+// invokeEntry 批入批出槽（Python invoke :803-829 十一步一比一）
+func (e *QuestionerExecutable) invokeEntry(ctx context.Context, inputs map[string]any,
+	sess *session.NodeSessionFacade, context iface.ModelContext) (map[string]any, error) {
+	// 1. 从会话加载状态（Python :804）
+	stateFromSession := loadQuestionerStateFromSession(sess)
+	// 2. 交互中 → 恢复态；否则新建（Python :805-808）
+	var currentState *QuestionerState
+	if stateFromSession.IsUndergoingInteraction() {
+		currentState = stateFromSession
+	} else {
+		currentState = NewQuestionerState()
+	}
+	// 3. START 事件（Python :810）
+	currentState = currentState.HandleEvent(QuestionerEventStart)
+	// 4. 懒初始化（Python :811；异常包装 101075 已在 initializeIfNeeded）
+	if err := e.initializeIfNeeded(ctx); err != nil {
+		return nil, exception.BuildError(exception.StatusComponentQuestionerInvokeCallFailed,
+			exception.WithMsg("failed to initialize llm if needed"), exception.WithCause(err))
+	}
+	// 5. 直回复处理（Python _handle_questioner_direct_reply_safe :865-873；'_state'
+	// map 缝以 handler.state 直读承载——D-24-8）
+	invokeResult := map[string]any{}
+	handler := newQuestionerDirectReplyHandler(e.cfg, e.llModel, currentState, e.promptTemplate)
+	result, herr := handler.handle(ctx, inputs, sess, context)
+	if herr != nil {
+		return nil, herr
+	}
+	e.state = handler.state
+	for k, v := range result {
+		invokeResult[k] = v
+	}
+	currentState = handler.state
+	// 6. 交互中 → 存状态并发起交互（Python :820-822；InteractWithResult 首调
+	// PanicGraphInterrupt 挂起，恢复后返回反馈值——Python 同样丢弃返回值）
+	if currentState.IsUndergoingInteraction() {
+		storeQuestionerStateToSession(currentState, sess)
+		_, _ = sess.InteractWithResult(ctx, invokeResult["question"])
+	} else {
+		// 7. 正常完成清状态支持重入（Python :824-827）
+		newState := NewQuestionerState()
+		e.state = newState
+		storeQuestionerStateToSession(newState, sess)
+	}
+	return invokeResult, nil
+}
+
+// QuestionerComponent 组合面（Python QuestionerComponent :881-888）
+type QuestionerComponent struct {
+	// WorkflowComponent 8.17 组件基座（槽位模式，勿 override 基座两方法——8.20 拍板⚠️）
+	components.WorkflowComponent
+	// cfg 配置（Python self._questioner_config）
+	cfg *QuestionerConfig
+	// executable 缓存（Python self._executable）
+	executable *QuestionerExecutable
+	// testInvoker 测试注入缝（D-24-7，Python 所无）
+	testInvoker LLMInvoker
+}
+
+// NewQuestionerComponent 构造（Python __init__ :882-885；ToExecutableFn 槽首调构造）
+func NewQuestionerComponent(cfg *QuestionerConfig, opts ...func(*QuestionerComponent)) *QuestionerComponent {
+	c := &QuestionerComponent{cfg: cfg}
+	for _, opt := range opts {
+		opt(c)
+	}
+	c.ToExecutableFn = c.toExecutableCached
+	return c
+}
+
+// WithQuestionerLLM 测试注入缝（D-24-7，Python 所无；同 D-23-4 惯例——仅测试
+// 装配路径消费，替换懒初始化直构）
+func WithQuestionerLLM(inv LLMInvoker) func(*QuestionerComponent) {
+	return func(c *QuestionerComponent) { c.testInvoker = inv }
+}
+
+// toExecutableCached 可执行体供应槽（Python to_executable :887-888 + executable
+// 懒初始化合并承载；构造失败 panic 对齐 Python 同步抛错）
+func (c *QuestionerComponent) toExecutableCached() graphexe.GeneralExecutor {
+	if c.executable == nil {
+		e, err := NewQuestionerExecutable(c.cfg)
+		if err != nil {
+			panic(err)
+		}
+		if c.testInvoker != nil {
+			e.llModel = c.testInvoker
+			e.initialized = true
+		}
+		e.InvokeFn = e.invokeEntry
+		c.executable = e
+	}
+	return c.executable
 }
 
 // ──────────────────────────── Task 6 DirectReplyHandler ────────────────────────────
