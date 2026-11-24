@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 )
 
 // newV6Harness 构造 owner DeepAgent + ToolRetrievalPromptRail + 真注册表。
@@ -198,4 +198,6 @@ func (s echoV6Tool) Invoke(_ context.Context, inputs map[string]any, _ ...tool.T
 func (s echoV6Tool) Stream(context.Context, map[string]any, ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
-func (s echoV6Tool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 { return defaultTimeout }
+func (s echoV6Tool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}

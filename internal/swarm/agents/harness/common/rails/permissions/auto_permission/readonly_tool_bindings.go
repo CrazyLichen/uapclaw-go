@@ -31,14 +31,14 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/tool_display"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/cron"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 )
