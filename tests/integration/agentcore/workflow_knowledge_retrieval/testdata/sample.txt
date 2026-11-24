@@ -1,0 +1,2 @@
+Plain text import marker: text file parsing feeds the gateway knowledge base pipeline.
+Second line mentions embedding based retrieval quality.

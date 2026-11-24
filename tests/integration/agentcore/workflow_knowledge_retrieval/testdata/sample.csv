@@ -1,0 +1,3 @@
+name,description
+"CSV Import Marker","the csv parser feeds tabular rows into the gateway knowledge base"
+"sqlite vector store","tabular import keeps retrieval quality consistent"
