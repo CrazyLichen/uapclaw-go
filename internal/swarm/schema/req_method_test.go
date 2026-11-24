@@ -341,3 +341,27 @@ func TestReqMethod_推荐面板两方法(t *testing.T) {
 		t.Errorf("ParseReqMethod(prompt_suggestion.cancel) = %q, %v", string(m), err)
 	}
 }
+
+// TestReqMethod_MediaWireValues 媒体/文件域十常量 wire 值逐字断言。
+// Python: gateway/channel_manager/web/http_routes/mapped.py:796-811 +
+// server/runtime/gateway_adapter/workspace_file_adapter.py:109-127 methods frozenset。
+// im.file_persist 与 workspace.* 四值不注册（spec D-27.8-1/2：归 IM 渠道域与企业版挂账）。
+func TestReqMethod_MediaWireValues(t *testing.T) {
+	cases := map[ReqMethod]string{
+		ReqMethodMediaPersist:              "media.persist",
+		ReqMethodMediaDiscard:              "media.discard",
+		ReqMethodDocumentPersist:           "document.persist",
+		ReqMethodDocumentFormats:           "document.formats",
+		ReqMethodPathSelectDirectory:       "path.select_directory",
+		ReqMethodPathSelectFiles:           "path.select_files",
+		ReqMethodFileImportURL:             "file.import_url",
+		ReqMethodFileUploadChunk:           "file.upload_chunk",
+		ReqMethodFileReadUploadChunk:       "file.read_upload_chunk",
+		ReqMethodFileDownloadVerifiedChunk: "file.download_verified_chunk",
+	}
+	for m, want := range cases {
+		if string(m) != want {
+			t.Errorf("ReqMethod %q != 期望 wire 值 %q", string(m), want)
+		}
+	}
+}

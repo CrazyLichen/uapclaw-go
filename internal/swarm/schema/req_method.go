@@ -30,6 +30,30 @@ const (
 	// ReqMethodChatAnswer 用户回答 Agent 提问
 	ReqMethodChatAnswer ReqMethod = "chat.user_answer"
 
+	// ─── 媒体 / 文件域（27.8；Python: workspace_file_adapter.py:109-127 methods）───
+
+	// ReqMethodMediaPersist 浏览器上传图片落盘会话 uploads
+	ReqMethodMediaPersist ReqMethod = "media.persist"
+	// ReqMethodMediaDiscard 删除未发送的会话 uploads 副本
+	ReqMethodMediaDiscard ReqMethod = "media.discard"
+	// ReqMethodDocumentPersist 浏览器上传文档校验落盘（扩展名黑名单）
+	ReqMethodDocumentPersist ReqMethod = "document.persist"
+	// ReqMethodDocumentFormats 读取禁止上传的格式列表
+	ReqMethodDocumentFormats ReqMethod = "document.formats"
+	// ReqMethodPathSelectDirectory workspace 内目录选择
+	ReqMethodPathSelectDirectory ReqMethod = "path.select_directory"
+	// ReqMethodPathSelectFiles workspace 内文件枚举（图片 ≤4MB 附 base64）
+	ReqMethodPathSelectFiles ReqMethod = "path.select_files"
+	// ReqMethodFileImportURL chat.send 上行外部 url 文件由 AgentServer 下载落盘
+	ReqMethodFileImportURL ReqMethod = "file.import_url"
+	// ReqMethodFileUploadChunk 分块上传（首块 O_EXCL 认领 + 后续 append）
+	ReqMethodFileUploadChunk ReqMethod = "file.upload_chunk"
+	// ReqMethodFileReadUploadChunk 读取会话 uploads 内文件的有界分块
+	ReqMethodFileReadUploadChunk ReqMethod = "file.read_upload_chunk"
+	// ReqMethodFileDownloadVerifiedChunk Smart Approval sealed-asset 校验分块下载
+	ReqMethodFileDownloadVerifiedChunk ReqMethod = "file.download_verified_chunk"
+	// 注：im.file_persist 归 IM 渠道域、workspace.* 四值归企业版挂账（spec D-27.8-1/2），不注册。
+
 	// ─── 命令 ───
 
 	// ReqMethodCommandAddDir 添加目录
@@ -444,6 +468,17 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodChatResume,
 		ReqMethodChatCancel,
 		ReqMethodChatAnswer,
+		// 媒体 / 文件域（27.8）
+		ReqMethodMediaPersist,
+		ReqMethodMediaDiscard,
+		ReqMethodDocumentPersist,
+		ReqMethodDocumentFormats,
+		ReqMethodPathSelectDirectory,
+		ReqMethodPathSelectFiles,
+		ReqMethodFileImportURL,
+		ReqMethodFileUploadChunk,
+		ReqMethodFileReadUploadChunk,
+		ReqMethodFileDownloadVerifiedChunk,
 		// 命令
 		ReqMethodCommandAddDir,
 		ReqMethodCommandChrome,
