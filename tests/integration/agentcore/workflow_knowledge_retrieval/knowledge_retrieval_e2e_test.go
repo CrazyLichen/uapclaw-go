@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -173,6 +174,39 @@ func (s *KnowledgeRetrievalE2ESuite) newKBComponentNoWrite(indexType retrievalco
 	return s.newKBComponent(indexType, useGraph, nil, nil, false)
 }
 
+// isEmbeddingQuotaErr 免费档配额类错误判定（429 Too Many Requests / 1113 余额不足）。
+// 套件既有惯例：真端点不可用→Skip 留档（文件头注释同款），非功能性失败。
+// skipIfQuotaUnavailable 用例前置探测：embedding 或 LLM 免费档配额不可用 → Skip
+// （套件既有惯例：真端点不可用→Skip 留档，文件头注释同款）。
+func (s *KnowledgeRetrievalE2ESuite) skipIfQuotaUnavailable(embedCfg *retrievalembedding.EmbeddingConfig, withLLM bool) {
+	if embedCfg != nil {
+		em := retrievalembedding.NewOpenAIEmbedding(*embedCfg)
+		if _, err := em.EmbedQuery(context.Background(), "quota probe"); isEmbeddingQuotaErr(err) {
+			s.T().Skipf("embedding 免费档配额不可用，跳过: %v", err)
+		}
+	}
+	if withLLM {
+		mcc, mrc := s.newRealLLMConfigs()
+		m, err := llm.NewModel(mcc, mrc)
+		s.Require().NoError(err)
+		resp, err := m.Invoke(context.Background(), modelclients.NewMessagesParam(
+			llmschema.NewUserMessage("ping")))
+		if isEmbeddingQuotaErr(err) {
+			s.T().Skipf("LLM 免费档配额不可用，跳过: %v", err)
+		}
+		s.Require().NotNil(resp)
+	}
+}
+
+func isEmbeddingQuotaErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "429") || strings.Contains(msg, "1113") ||
+		strings.Contains(msg, "余额不足") || strings.Contains(msg, "访问量过大")
+}
+
 // buildStandaloneKB 与组件同配置的独立 KB 实例（存储侧验证用，不入 workflow；
 // 构造原语与组件 createKnowledgeBases 同构：CreateVectorStore + 按索引类型检索器）
 func (s *KnowledgeRetrievalE2ESuite) buildStandaloneKB(cfg *resource.KnowledgeRetrievalCompConfig) (knowledgebase.KnowledgeBase, error) {
@@ -273,6 +307,7 @@ func (s *KnowledgeRetrievalE2ESuite) TestKB_BM25模式_chroma本地约束() {
 // TestKB_Vector模式_真embedding vector 索引真链（免费档 embedding-3）
 func (s *KnowledgeRetrievalE2ESuite) TestKB_Vector模式_真embedding() {
 	embedCfg := s.newRealEmbedding()
+	s.skipIfQuotaUnavailable(embedCfg, false)
 	docs := []string{
 		"knowledge retrieval component searches multiple knowledge bases",
 		"the pregel engine executes workflow nodes concurrently",
@@ -347,6 +382,9 @@ func (s *KnowledgeRetrievalE2ESuite) newSQLiteKBComponentWithPrewrite(
 		case retrievalcommon.IndexTypeHybrid, retrievalcommon.IndexTypeVector:
 			s.Require().NotNil(embedCfg, "vector/hybrid 预写需要 embedding 配置")
 			vecs, err := em.EmbedDocuments(context.Background(), docs)
+			if isEmbeddingQuotaErr(err) {
+				s.T().Skipf("embedding 免费档配额不可用（429/1113），跳过: %v", err)
+			}
 			s.Require().NoError(err, "真 embedding 失败")
 			rows := make([]map[string]any, 0, len(docs))
 			for i, d := range docs {
@@ -356,6 +394,9 @@ func (s *KnowledgeRetrievalE2ESuite) newSQLiteKBComponentWithPrewrite(
 			}
 			s.Require().NoError(store.Add(context.Background(), rows), "sqlite store 向量写入失败")
 			qv, err := em.EmbedQuery(context.Background(), docs[0])
+			if isEmbeddingQuotaErr(err) {
+				s.T().Skipf("embedding 免费档配额不可用（429/1113），跳过: %v", err)
+			}
 			s.Require().NoError(err, "真 embedding query 失败")
 			hits, err := store.Search(context.Background(), qv, 3, nil)
 			s.Require().NoError(err, "sqlite store vector 读回失败")
@@ -430,6 +471,7 @@ func (s *KnowledgeRetrievalE2ESuite) TestKB_Graph模式_sqlite真链() {
 // TestKB_Agentic模式_真LLM agentic 多跳检索真链（免费档 LLM）
 func (s *KnowledgeRetrievalE2ESuite) TestKB_Agentic模式_真LLM() {
 	embedCfg := s.newRealEmbedding()
+	s.skipIfQuotaUnavailable(embedCfg, true)
 	docs := []string{
 		"agentic retrieval performs multi hop search with llm guided rewriting",
 		"the retrieval loop stops when the rewrite step reports sufficient context",
