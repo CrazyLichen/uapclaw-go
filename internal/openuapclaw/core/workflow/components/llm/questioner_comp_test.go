@@ -9,6 +9,7 @@ import (
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 )
 
@@ -632,5 +633,87 @@ func TestQuestionerComponentWithLLMInjection(t *testing.T) {
 	}
 	if result["name"] != "李四" {
 		t.Fatalf("injected extraction: %v", result)
+	}
+}
+
+// TestQuestionerHandlerEndState END 态输出（Python :490-494：extracted_key_fields
+// 展开 + user_response/question + exclude_defaults）
+func TestQuestionerHandlerEndState(t *testing.T) {
+	h := &questionerDirectReplyHandler{state: NewQuestionerState()}
+	h.state.ExtractedKeyFields = map[string]any{"name": "张三"}
+	h.state.UserResponse = "我叫张三"
+	h.state.Question = "请您提供姓名相关的信息"
+	h.state.Status = QuestionerStatusEnd
+	result, err := h.handle(context.Background(), map[string]any{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["name"] != "张三" || result["user_response"] != "我叫张三" ||
+		result["question"] != "请您提供姓名相关的信息" {
+		t.Fatalf("end state: %v", result)
+	}
+}
+
+// TestQuestionerInitPrompt 提示词模板初始化（Python _init_prompt :855-856）
+func TestQuestionerInitPrompt(t *testing.T) {
+	e, errC := NewQuestionerExecutable(&QuestionerConfig{ExtractFieldsFromResponse: boolPtr(false)})
+	if errC != nil {
+		t.Fatal(errC)
+	}
+	pt := e.initPrompt()
+	if pt == nil {
+		t.Fatal("prompt template nil")
+	}
+	msgs, err := pt.ToMessages()
+	if err != nil || len(msgs) != 2 {
+		t.Fatalf("template messages: %v %v", msgs, err)
+	}
+}
+
+// TestQuestionerInitializeIfNeeded 懒初始化包装（Python :843-853：失败包装 101075）
+func TestQuestionerInitializeIfNeeded(t *testing.T) {
+	e, errC := NewQuestionerExecutable(&QuestionerConfig{ExtractFieldsFromResponse: boolPtr(false)})
+	if errC != nil {
+		t.Fatal(errC)
+	}
+	// 皆缺 → createLLMInstance 101075 → 包装后仍 101075
+	if err := e.initializeIfNeeded(context.Background()); err == nil {
+		t.Fatal("want 101075")
+	}
+	// 已初始化 → 幂等短路（Python :844 if not self._initialized）
+	e2, _ := NewQuestionerExecutable(&QuestionerConfig{ExtractFieldsFromResponse: boolPtr(false)})
+	e2.initialized = true
+	e2.llModel = &fakeQuestionerLLM{content: "{}"}
+	if err := e2.initializeIfNeeded(context.Background()); err != nil {
+		t.Fatalf("idempotent: %v", err)
+	}
+}
+
+// TestQuestionerCreateLLMInstanceModelIDPath model_id 路径（Python :840-841；
+// 8.23 D-23-3 防御：未命中 → 错误）
+func TestQuestionerCreateLLMInstanceModelIDPath(t *testing.T) {
+	mgr := runner.GetResourceMgr()
+	if mgr == nil {
+		t.Skip("resource mgr unavailable in test env")
+	}
+	mid := "no-such-model-q"
+	e, _ := NewQuestionerExecutable(&QuestionerConfig{ModelID: &mid, ExtractFieldsFromResponse: boolPtr(false)})
+	if _, err := e.createLLMInstance(context.Background()); err == nil {
+		t.Fatal("model not found should error")
+	}
+	// 注册后命中（批量签名取 clients[0]，8.18 llm_comp 同款）
+	if err := mgr.AddModel("q-model", func(ctx context.Context, modelID string) (modelclients.BaseModelClient, error) {
+		return &fakeModelClient{respContent: "{}"}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mid2 := "q-model"
+	e2, _ := NewQuestionerExecutable(&QuestionerConfig{ModelID: &mid2, ExtractFieldsFromResponse: boolPtr(false)})
+	inv, err := e2.createLLMInstance(context.Background())
+	if err != nil {
+		t.Fatalf("model hit: %v", err)
+	}
+	if inv == nil {
+		t.Fatal("invoker nil")
 	}
 }
