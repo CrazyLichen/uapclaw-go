@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +22,10 @@ const logComponent = logger.ComponentAgentServer
 // ZenAPIBase Zen 网关（OpenAI 兼容）；免费模型匿名可调，bearer 键为字面量 "public"
 // （Python: opencode_zen.py:45-47）。
 const (
-	ZenAPIBase      = "https://opencode.ai/zen/v1"
-	ZenModelsURL    = ZenAPIBase + "/models"
+	ZenAPIBase   = "https://opencode.ai/zen/v1"
+	ZenModelsURL = ZenAPIBase + "/models"
+	// ZenAnonAPIKey 匿名 bearer（字面量 "public"；Python: opencode_zen.py:45-47）。
+	// 免费档对第三方客户端限额（FreeUsageLimitError 与账号无关）。
 	ZenAnonAPIKey   = "public"
 	ModelsDevURL    = "https://models.opencode.ai/api.json"
 	zenFetchTimeout = 10 * time.Second
@@ -32,6 +35,19 @@ const (
 	// DefaultFreeModelID 用户默认模型仍为 .env 占位符时的免费兜底模型
 	DefaultFreeModelID = "deepseek-v4-flash-free"
 )
+
+// resolveZenAPIKey 解析 Zen bearer 键：环境变量 OPENCODE_ZEN_API_KEY 优先
+// （用户拍板偏差 2026-12-06：上游写死匿名 "public"；本仓允许注入账号 key
+// 以解锁 Zen 按量付费模型），未配置回匿名 "public"。
+func resolveZenAPIKey() string {
+	if k := os.Getenv("OPENCODE_ZEN_API_KEY"); k != "" {
+		return k
+	}
+	return ZenAnonAPIKey
+}
+
+// ZenAPIKey 导出访问器（真链冒烟与装配消费方同源取键）。
+func ZenAPIKey() string { return resolveZenAPIKey() }
 
 // zenClientHeaders Zen 免费档门禁头：必须与 opencode 客户端同形，否则 429
 // （Python: opencode_zen.py:54-60 ZEN_CLIENT_HEADERS）。
@@ -131,7 +147,7 @@ func buildZenModelEntry(modelID, name string, context int) map[string]any {
 	return map[string]any{
 		"model_client_config": map[string]any{
 			"api_base":                   ZenAPIBase,
-			"api_key":                    ZenAnonAPIKey,
+			"api_key":                    resolveZenAPIKey(),
 			"model_name":                 modelID,
 			"client_provider":            "OpenAI",
 			"timeout":                    360,
@@ -540,4 +556,3 @@ func AppendZenFreeModels(models []map[string]any) []map[string]any {
 	}
 	return models
 }
-

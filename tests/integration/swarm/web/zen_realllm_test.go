@@ -20,9 +20,9 @@ package web_test
 
 import (
 	"bytes"
-	"fmt"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -67,7 +67,11 @@ func TestZenFreeModel_真实链冒烟(t *testing.T) {
 	require.Contains(t, entries[0], "model_client_config", "缓存条目应为 models.defaults 形状")
 	mcc := entries[0]["model_client_config"].(map[string]any)
 	modelID := mcc["model_name"].(string)
-	require.Equal(t, configpanel.ZenAnonAPIKey, fmt.Sprintf("%v", mcc["api_key"]), "免费档匿名 bearer 应为 public")
+	wantKey := configpanel.ZenAnonAPIKey
+	if os.Getenv("OPENCODE_ZEN_API_KEY") != "" {
+		wantKey = os.Getenv("OPENCODE_ZEN_API_KEY")
+	}
+	require.Equal(t, wantKey, fmt.Sprintf("%v", mcc["api_key"]), "缓存条目 bearer 应与开关解析键一致")
 	t.Logf("选用免费模型：%s", modelID)
 
 	// 2. 真实 chat completion（Zen OpenAI 兼容端点）
@@ -84,7 +88,7 @@ func TestZenFreeModel_真实链冒烟(t *testing.T) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		configpanel.ZenAPIBase+"/chat/completions", bytes.NewReader(body))
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+configpanel.ZenAnonAPIKey)
+	req.Header.Set("Authorization", "Bearer "+configpanel.ZenAPIKey())
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range configpanel.ZenClientHeaders() {
 		req.Header.Set(k, v)
@@ -105,7 +109,45 @@ func TestZenFreeModel_真实链冒烟(t *testing.T) {
 		t.Logf("真实响应：%s", strings.TrimSpace(string(raw))[:min(120, len(raw))])
 		return
 	}
-	// 非确定性失败按守卫处理：免费档额度/地域/下线随时间变化，不算 FAIL
+	// 免费档失败（额度/地域/下线，与账号无关——服务端对第三方客户端限额）：
+	// 注入过个人 key（OPENCODE_ZEN_API_KEY）时兜底尝试付费模型（按量计费）。
+	freeErr := strings.TrimSpace(string(raw))
+	if key := os.Getenv("OPENCODE_ZEN_API_KEY"); key != "" {
+		for _, paid := range []string{"glm-5.3-flash", "deepseek-v4.1-flash"} {
+			pbody, perr := json.Marshal(map[string]any{
+				"model": paid,
+				"messages": []map[string]string{
+					{"role": "user", "content": "回复一个字：好"},
+				},
+				"max_tokens": 8,
+			})
+			require.NoError(t, perr)
+			preq, perr := http.NewRequestWithContext(ctx, http.MethodPost,
+				configpanel.ZenAPIBase+"/chat/completions", bytes.NewReader(pbody))
+			require.NoError(t, perr)
+			preq.Header.Set("Authorization", "Bearer "+key)
+			preq.Header.Set("Content-Type", "application/json")
+			for k, v := range configpanel.ZenClientHeaders() {
+				preq.Header.Set(k, v)
+			}
+			presp, perr := http.DefaultClient.Do(preq)
+			require.NoError(t, perr)
+			praw, _ := io.ReadAll(presp.Body)
+			_ = presp.Body.Close()
+			if presp.StatusCode == http.StatusOK {
+				var ppayload struct {
+					Choices []map[string]any `json:"choices"`
+				}
+				require.NoError(t, json.Unmarshal(praw, &ppayload))
+				require.NotEmpty(t, ppayload.Choices, "付费模型真实推理应返回 choices")
+				t.Logf("免费档 %s 限额，付费兜底 %s 成功", modelID, paid)
+				return
+			}
+			if strings.Contains(string(praw), "Insufficient balance") {
+				t.Skipf("免费档 %s 限额 + 付费模型余额不足（Zen 按量：充值少量 credits 或订 Go $10/月后重跑）", modelID)
+			}
+		}
+	}
 	t.Skipf("免费模型 %s 当前不可调（HTTP %d：%s）；额度与地域为服务端硬约束，环境可用时重跑",
-		modelID, resp.StatusCode, strings.TrimSpace(string(raw))[:min(160, len(raw))])
+		modelID, resp.StatusCode, freeErr[:min(160, len(freeErr))])
 }
