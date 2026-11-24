@@ -124,7 +124,12 @@ KnowledgeRetrievalComp 是 workflow 图叶子执行节点（非子图容器）�
 5. 8.13 drawable 缝继续压后不动；8.26 ReAct 中断桥 ⤴️ 留待 8.26
 6. `resource/` 子包 doc.go 登记（规则 1）；`components/doc.go` 文件树同步加 resource/ 条目
 
-## 五、已知偏差（登记区，实施中按 9.6 补充）
+## 五、已知偏差（实施后固化，2026-11-24 实施轮）
 
-- D-25-1（预设）：`Runner.resource_mgr.get_model(id)` 返回单实例 vs Go `ResourceMgr.GetModel(ctx, []string)` 收窄取 [0]，单元素适配不改变语义
-- 其余偏差实施中逐条登记，经用户确认后固化
+- D-25-1：`Runner.resource_mgr.get_model(id)` 单实例 vs Go `ResourceMgr.GetModel(ctx, []string)` 收窄取 [0]（8.18 getModel 先例）
+- D-25-2：Python 组件向 KB 传 vector_store/embed_model/llm_client、agentic 包装由 KB 内部组装；Go 侧组件按 index_type 显式组装基础检索器（Sparse/Vector/Hybrid），agentic 包装仍留 KB 层 Retrieve 时按 RetrievalConfig.Agentic 自动 wrapAgenticRetriever（simple_kb.go:142/graph_kb.go:192，13.27 语义）——构造归属显式化，检索行为等价
+- D-25-3：Python OpenAIEmbedding 构造可抛异常（wrap 101101）；Go NewOpenAIEmbedding 无 error——101101 收窄为「embed_config 缺失且 index_type∈{vector,hybrid}」配置校验分支，运行期 embed 失败经 RetrieveMultiKBWithSource 传播 wrap 101100
+- D-25-4：pydantic ValidationError → Go 类型断言直校（pythonsem "string" 是 str() 宽松语义不适用字段校验），消息对齐 pydantic "Field required / Input should be a valid string" 形态
+- D-25-5：直构路径 `*forllm.Model` 缺 TranscribeAudio 不满足 model_clients.BaseModelClient——resource 包内 modelClientAdapter 嵌入 + 显式不支持（Python Model 本无转写能力，语义一致）
+- D-25-6：Python `**vector_store_connection_config` kwargs 透传未知键；Go storeOptionsFromConnection 仅映射已支持键、未知键忽略（chroma/milvus 已覆盖 7 键；类型不符忽略）
+- 实施注记：chroma 本地模式不支持 sparse/hybrid 检索（155508 库层既有约束）——bm25/hybrid 真链完整验证需 milvus 服务，集成测试按约束契约断言
