@@ -94,10 +94,15 @@ func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string,
 		)
 	}
 
+	// D-25-11 对齐修复（Python sql_message_store.py:164）：session_id None = 不过滤
+	// （查全部会话），非 IS NULL——空字符串语义回归 Python None；&"" IS NULL
+	// 仅在显式空指针场景保留。
 	filter := &db.MessageFilter{
-		UserID:    userID,
-		ScopeID:   scopeID,
-		SessionID: &sessionID,
+		UserID:  userID,
+		ScopeID: scopeID,
+	}
+	if sessionID != "" {
+		filter.SessionID = &sessionID
 	}
 
 	// 倒序获取
