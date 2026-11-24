@@ -186,8 +186,12 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 			return nil, bgErr // Python except BaseError: raise（workflow.py:399-408）
 		}
 		// workflow.py:370-377：扫 INTERACTION chunk → INPUT_REQUIRED
+		// 8.24 修正（基座缺陷）：Python 扫描比较的是常量 INTERACTION="__interaction__"
+		// （constant.py:13），非 WorkflowChunkType 枚举值 "interaction"——原用枚举值
+		// 比对恒不命中，交互挂起被误判 COMPLETED（集成测试 workflow_questioner 实证）
 		for _, chunk := range chunks {
-			if sc, ok := chunk.(stream.Schema); ok && sc.SchemaType() == string(WorkflowChunkTypeInteraction) {
+			if sc, ok := chunk.(stream.Schema); ok &&
+				sc.SchemaType() == interaction.InteractionType {
 				return &WorkflowOutput{Result: chunks, State: WorkflowExecutionStateInputRequired}, nil
 			}
 		}
