@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -16,9 +16,9 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/messager"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -407,7 +407,6 @@ func IsObservabilityInitialized() bool {
 func GetObservabilityConfig() *ObservabilityConfig {
 	return activeConfig
 }
-
 
 // demandMu provider/配置访问锁（extensions demand 层查询用）。
 var demandMu sync.Mutex

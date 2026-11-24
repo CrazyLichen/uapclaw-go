@@ -21,9 +21,9 @@ import (
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // logComponent 日志组件。

@@ -1,8 +1,8 @@
 package harnessobservability
 
 import (
-	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
 )
 
 // subagent.go 给每个被派发的子 agent 自己的 agent 层 span。

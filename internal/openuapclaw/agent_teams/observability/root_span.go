@@ -67,14 +67,14 @@ type ActiveSpanTracker struct {
 var (
 	// activeSpanTracker 进程级活动 span 跟踪器单例。
 	// Python: _active_span_tracker（get/set_active_span_tracker）。
-	activeSpanTracker     *ActiveSpanTracker
-	rootRegistryLock      sync.RWMutex
+	activeSpanTracker *ActiveSpanTracker
+	rootRegistryLock  sync.RWMutex
 	// rootRegistry 以 session id 为键的运行根 span 注册表。
 	// Python: _root_registry。
-	rootRegistry          = map[string]trace.Span{}
+	rootRegistry = map[string]trace.Span{}
 	// ambientRootSpan 无上下文传播能力的宿主的进程级兜底根。
 	// Python: _ambient_root_span。
-	ambientRootSpan       trace.Span
+	ambientRootSpan trace.Span
 	// rootSpanFallback 根 span 解析兜底钩子。
 	// Python: install_root_span_fallback 猴子补丁 get_root_span（span_context.py:139-176）；
 	// Go 无猴子补丁，改为钩子注入（harness/observability 注册 session 注册表回退），

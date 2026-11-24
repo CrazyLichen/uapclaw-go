@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	obs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability"
 	extdemand "github.com/uapclaw/uapclaw-go/internal/openuapclaw/extensions/observability/demand"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 )
 
