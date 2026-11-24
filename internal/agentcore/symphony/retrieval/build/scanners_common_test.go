@@ -59,8 +59,8 @@ func TestParseFrontmatter(t *testing.T) {
 	// 正常解析
 	content := "---\nname: my-skill\nversion: 1.0\n---\nBODY TEXT"
 	m, body = ParseFrontmatter(content, true)
-	if m["name"] != "my-skill" || m["version"] != "1.0" {
-		t.Fatalf("frontmatter 解析不符: %v", m)
+	if m["name"] != "my-skill" || m["version"] != float64(1) {
+		t.Fatalf("frontmatter 解析不符: %v", m) // YAML 1.0→float，Python 同为 float
 	}
 	if body != "BODY TEXT" {
 		t.Fatalf("body 不符: %q", body)
@@ -129,7 +129,7 @@ func TestSHA256File(t *testing.T) {
 func TestFirstParagraph(t *testing.T) {
 	// 首个非空块、行内合并
 	got := FirstParagraph("first  line\nsecond line\n\nsecond para", 0)
-	if got != "first line second line" {
+	if got != "first  line second line" { // Python line.strip() 不去行内空格
 		t.Fatalf("首段不符: %q", got)
 	}
 	// 前导空白块跳过
@@ -208,7 +208,7 @@ func TestParseSimpleFrontmatter(t *testing.T) {
 	}
 	// 无冒号且无缩进行并入上一字符串键（缩进行被跳过，见 Python :109-111）
 	m = parseSimpleFrontmatter("name: abc\ncontinuation")
-	if m["name"] != "abc continuation" {
+	if m["name"] != "abc\ncontinuation" { // Python f"...\n{stripped}".strip() 保换行
 		t.Fatalf("续行并入不符: %v", m)
 	}
 	// 块标量 |：缩进行收集
