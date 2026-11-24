@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmSchema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	common "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
@@ -634,6 +634,16 @@ func modelsListRows(cfg map[string]any) []map[string]any {
 		result = append(result, row)
 		existing[name] = true
 	}
+	// 用户拍板（2026-12-06）：内置智谱免费模型域（key/api_base 预置，零配置
+	// 可用）；zen 默认关断后此域为免费档唯一展示来源。
+	for _, row := range AppendZhipuFreeModels(nil) {
+		name := strings.TrimSpace(orString(row["model_name"]))
+		if name == "" || existing[name] {
+			continue
+		}
+		result = append(result, row)
+		existing[name] = true
+	}
 	return result
 }
 
@@ -763,7 +773,7 @@ func ModelsReplaceAll(ctx context.Context, params map[string]any, cryptoProv cry
 		}
 	}
 	return map[string]any{
-		"count":                    len(newModels),
+		"count":                   len(newModels),
 		"applied_without_restart": true,
 	}, nil
 }
