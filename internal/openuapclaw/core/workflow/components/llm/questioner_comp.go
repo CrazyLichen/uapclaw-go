@@ -104,9 +104,10 @@ type QuestionerOutputCache struct {
 }
 
 // newQuestionerOutputCache 新建缓存（Python dataclass 默认值：user_response=""/
-// question=""/key_fields={}）
+// question=""/key_fields={}；UserResponse 起始为 "" 而非 nil，PyEqual 才能命中
+// exclude_defaults 语义）
 func newQuestionerOutputCache() *QuestionerOutputCache {
-	return &QuestionerOutputCache{KeyFields: map[string]any{}}
+	return &QuestionerOutputCache{UserResponse: "", KeyFields: map[string]any{}}
 }
 
 // QuestionerOutput 节点输出（Python QuestionerOutput :166-169；key_fields 经
