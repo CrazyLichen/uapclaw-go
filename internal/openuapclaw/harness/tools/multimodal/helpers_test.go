@@ -24,14 +24,32 @@ import (
 
 // mockVisionClient 用于测试的 mock 视觉模型客户端
 // stubModelClient 把 modelClientFactory 指到测试桩（对齐 Python 测试
-// monkeypatch OpenAI 客户端的手法）；注册 t.Cleanup 恢复。
+// monkeypatch OpenAI 客户端的手法）；同时把转写接缝 audioTranscribeFn
+// 指到 mock 的 TranscribeAudio（若 mock 有该能力，匿名接口鸭子断言，
+// 无能力的 mock 自动落到"不支持"）。注册 t.Cleanup 恢复。
 func stubModelClient(t *testing.T, mock modelclients.BaseModelClient) {
 	t.Helper()
-	orig := modelClientFactory
+	origFactory := modelClientFactory
 	modelClientFactory = func(string, string, string, int) modelclients.BaseModelClient {
 		return mock
 	}
-	t.Cleanup(func() { modelClientFactory = orig })
+	origTranscribe := audioTranscribeFn
+	audioTranscribeFn = func(ctx context.Context, config *hschema.AudioModelConfig,
+		audioPath string, opts ...llmschema.TranscribeAudioOption,
+	) (*llmschema.TranscriptionResponse, error) {
+		tr, ok := mock.(interface {
+			TranscribeAudio(context.Context, string, ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error)
+		})
+		if !ok {
+			return nil, exception.NewBaseError(exception.StatusModelCallFailed,
+				exception.WithMsg("mock does not support audio transcription"))
+		}
+		return tr.TranscribeAudio(ctx, audioPath, opts...)
+	}
+	t.Cleanup(func() {
+		modelClientFactory = origFactory
+		audioTranscribeFn = origTranscribe
+	})
 }
 
 type mockVisionClient struct {

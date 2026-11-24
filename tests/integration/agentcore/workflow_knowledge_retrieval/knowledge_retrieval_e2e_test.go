@@ -184,7 +184,7 @@ func (s *KnowledgeRetrievalE2ESuite) buildStandaloneKB(cfg *resource.KnowledgeRe
 			return nil, err
 		}
 		// 直构 *llm.Model 缺 TranscribeAudio（组件 modelClientAdapter 同款，D-25-5）
-		llmClient = &testModelClientAdapter{Model: m}
+		llmClient = m
 	}
 	kbCfg := cfg.ComponentKBConfigs[0]
 	vs, err := vector_store.CreateVectorStore(kbCfg.VectorStoreConfig,
@@ -452,17 +452,6 @@ func (s *KnowledgeRetrievalE2ESuite) TestKB_空query_组件层拒绝() {
 }
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
-
-// testModelClientAdapter D-25-5 测试侧同款适配（直构 Model 能力面对齐）
-type testModelClientAdapter struct {
-	*llm.Model
-}
-
-func (a *testModelClientAdapter) TranscribeAudio(ctx context.Context,
-	audioPath string, opts ...llmschema.TranscribeAudioOption,
-) (*llmschema.TranscriptionResponse, error) {
-	return nil, fmt.Errorf("transcribe audio not supported")
-}
 
 func boolPtr(b bool) *bool { return &b }
 

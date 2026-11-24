@@ -7,6 +7,7 @@ import (
 
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients/openai"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
@@ -78,14 +79,13 @@ func NewAudioTranscriptionTool(
 			}()
 
 			// 调用转写（对齐 Python: _call_with_retries(config,
-			// _invoke_audio_transcription, audio_path)；client 调用期自建）
-			client := clientFromAudioConfig(config)
+			// _invoke_audio_transcription, audio_path)；转写调用点为函数级接缝，
+			// Python monkeypatch OpenAI 客户端同款注入手法）
 			var resp *llmschema.TranscriptionResponse
 			retryErr := callWithRetries(config.MaxRetries, func() error {
 				var invokeErr error
-				resp, invokeErr = client.TranscribeAudio(ctx, audioPath,
-					llmschema.WithTranscriptionModel(config.TranscriptionModel),
-				)
+				resp, invokeErr = audioTranscribeFn(ctx, config, audioPath,
+					llmschema.WithTranscriptionModel(config.TranscriptionModel))
 				return invokeErr
 			})
 			if retryErr != nil {
@@ -343,10 +343,28 @@ var modelClientFactory = func(apiKey, apiBase, model string, maxRetries int) mod
 
 // clientFromAudioConfig 音频模型客户端（invoke 期自建）。
 // Python: _build_openai_client(audio_model_config)（invoke 内）——Go 镜像
-// 该语义。
+// 该语义。仅 QA/对话路使用；转写走 audioTranscribeFn 接缝。
 func clientFromAudioConfig(config *hschema.AudioModelConfig) modelclients.BaseModelClient {
 	if config == nil {
 		return nil
 	}
 	return modelClientFactory(config.APIKey, config.BaseURL, config.QAModel, config.MaxRetries)
+}
+
+// audioTranscribeFn 音频转写调用点（函数级接缝，测试注入点）。
+// Python: _invoke_audio_transcription(config, audio_path)——工具层直接调
+// OpenAI 兼容端点的转写 API，不经模型客户端公共接口（Python Model 无
+// transcribe 能力，对齐后 BaseModelClient 亦不再含 TranscribeAudio）。
+var audioTranscribeFn = func(ctx context.Context, config *hschema.AudioModelConfig,
+	audioPath string, opts ...llmschema.TranscribeAudioOption,
+) (*llmschema.TranscriptionResponse, error) {
+	client := clientFromAudioConfig(config)
+	oc, ok := client.(*openai.OpenAIModelClient)
+	if !ok {
+		return nil, exception.NewBaseError(
+			exception.StatusToolMultimodalAudioConfigInvalid,
+			exception.WithMsg("audio transcription requires an OpenAI-compatible model client"),
+		)
+	}
+	return oc.TranscribeAudio(ctx, audioPath, opts...)
 }
