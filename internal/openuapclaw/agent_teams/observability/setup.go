@@ -39,6 +39,12 @@ type ObservabilityOption func(*observabilityOptions)
 type observabilityOptions struct {
 	// spanExporterOverride span 导出器覆盖（测试用）
 	spanExporterOverride sdktrace.SpanExporter
+	// additionalSpanProcessors 附加挂载的 SpanProcessor（provider 构造时挂入）。
+	// Python: init_observability(config, additional_span_processors=(...))——
+	// demand.py:158 各 runtime 初始化时传入 (get_trajectory_span_processor(), ...)。
+	// 由调用方（harness/observability 或 team 侧 ensure）显式传入，
+	// 本包不得 import demand（demand→trajectory→本包构成环）。
+	additionalSpanProcessors []sdktrace.SpanProcessor
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -76,6 +82,17 @@ var (
 	// Python: extensions/observability/setup.py 的模块级 config（get_config() 返回值）
 	activeConfig *ObservabilityConfig
 )
+
+// WithAdditionalSpanProcessors 附加挂载的 SpanProcessor 选项。
+// Python: init_observability(config, additional_span_processors=(...))（demand.py:158 传入）。
+// 调用方须传 demand.GetTrajectorySpanProcessor()（trajectory processor 单例）；
+// 本包 import demand 会构成环（demand→trajectory→本包），故由调用方显式传入。
+// 挂载前经 newSafeProcessor 包装并对齐 Python 的 same-instance 去重。
+func WithAdditionalSpanProcessors(processors ...sdktrace.SpanProcessor) ObservabilityOption {
+	return func(o *observabilityOptions) {
+		o.additionalSpanProcessors = append(o.additionalSpanProcessors, processors...)
+	}
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -140,6 +157,20 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)))
 	} else {
 		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(exporter)))
+	}
+
+	// Python: demand.py:158 把 (get_trajectory_span_processor(), get_span_record_processor())
+	// 作为 additional_span_processors 传入，经 runtime._register_span_processors →
+	// add_span_processor(SafeSpanProcessor(processor)) 挂进 provider；
+	// existing is processor 同实例去重对齐 runtime.py:225-228。
+	// get_span_record_processor 在 Go 无对应物（span_record 落盘域未移植），偏差登记 spec §4。
+	mounted := map[sdktrace.SpanProcessor]bool{}
+	for _, proc := range o.additionalSpanProcessors {
+		if proc == nil || mounted[proc] {
+			continue
+		}
+		mounted[proc] = true
+		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(newSafeProcessor(proc)))
 	}
 
 	tp := sdktrace.NewTracerProvider(tpOpts...)
