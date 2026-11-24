@@ -10,7 +10,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	ceengine "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	ceengschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -136,6 +137,18 @@ func TestPostProcessIntentDetection_全分支(t *testing.T) {
 	class, reason = e.postProcessIntentDetection(`{"reason": "r"}`)
 	if class != "分类0" || !strings.Contains(reason, "缺少必要的输出") {
 		t.Fatalf("分支3错误: %q %q", class, reason)
+	}
+
+	// 分支3b：class falsy 数值 0 → 同缺键路径（审查拍板②A，Python `not 0` 语义）
+	class, reason = e.postProcessIntentDetection(`{"class": 0, "reason": "r"}`)
+	if class != "分类0" || !strings.Contains(reason, "缺少必要的输出") {
+		t.Fatalf("分支3b falsy 数值错误: %q %q", class, reason)
+	}
+
+	// 分支3c：class 空容器 [] → 同缺键路径（Python `not []` 语义）
+	class, reason = e.postProcessIntentDetection(`{"class": [], "reason": "r"}`)
+	if class != "分类0" || !strings.Contains(reason, "缺少必要的输出") {
+		t.Fatalf("分支3c falsy 空容器错误: %q %q", class, reason)
 	}
 
 	// 分支4：类别不在列表（带杂音被规整成 分类9，不在表内）→ 默认分类 + validationFailReason
@@ -396,7 +409,7 @@ func (f *fakeLLMInvoker) Stream(_ context.Context, _ modelclients.MessagesParam,
 // newTestModelContext 真实 ModelContext（真实 ContextEngine + 真实 Session 管线）
 func newTestModelContext(t *testing.T) iface.ModelContext {
 	t.Helper()
-	ce := ceengine.NewContextEngine(ceschema.NewContextEngineConfig())
+	ce := ceengine.NewContextEngine(ceengschema.NewContextEngineConfig())
 	mc, err := ce.CreateContext(context.Background(), "ctx-itd",
 		session.NewSession(session.WithSessionID("s-itd")))
 	if err != nil || mc == nil {
@@ -457,8 +470,7 @@ func TestInvokeEntry_历史真实链(t *testing.T) {
 }
 
 // TestInvokeEntry_未开历史 不读不写 ModelContext（消息数执行前后不变）
-func TestInvokeEntry_未开历史(t *testing.T) {
-	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+func TestInvokeEntry_未开历史(t *testing.T) {	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
 	fake := &fakeLLMInvoker{content: `{"class": "分类1", "reason": "r"}`}
 	e.llModel = fake
 	e.initialized = true
@@ -488,6 +500,33 @@ func TestInvokeEntry_解析失败回落(t *testing.T) {
 	}
 	if _, ok := out["reason"]; !ok {
 		t.Fatalf("回落应带失败 reason: %v", out)
+	}
+}
+
+// errModelContext 故障注入包装（真实链错误传播语义钉子——审查拍板①A：
+// Python 无 try，GetContextWindow 失败异常直达调用方）
+type errModelContext struct {
+	iface.ModelContext
+	err error
+}
+
+func (m *errModelContext) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage,
+	_ []ceschema.ToolInfoInterface, _, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	return nil, m.err
+}
+
+// TestInvokeEntry_历史窗口失败传播 GetContextWindow 失败 → error 直达（不降级吞掉）
+func TestInvokeEntry_历史窗口失败传播(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{
+		CategoryNameList: []string{"退款"}, EnableHistory: true,
+	})
+	e.llModel = &fakeLLMInvoker{content: `{"class": "分类1"}`}
+	e.initialized = true
+	realMC := newTestModelContext(t)
+	mc := &errModelContext{ModelContext: realMC, err: errors.New("窗口引擎故障")}
+	_, err := e.invokeEntry(ctxBg(t), map[string]any{"query": "q"}, newTestNodeSession(t), mc)
+	if err == nil || !strings.Contains(err.Error(), "窗口引擎故障") {
+		t.Fatalf("窗口失败应传播: %v", err)
 	}
 }
 

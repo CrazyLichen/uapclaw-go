@@ -591,9 +591,10 @@ func (e *IntentDetectionExecutable) postProcessIntentDetection(result string) (s
 		return e.defaultCfg.DefaultClass, strings.ReplaceAll(jsonFailReason, "{result}", refixed)
 	}
 
-	// 步骤3：缺 class 键（falsy，Python :395-396；文案形参是解析后 dict 的 repr）
+	// 步骤3：缺 class 键（Python :395-396 `not parsed_dict.get(CLASS)` 全 falsy 语义——
+	// None/""/False/0/0.0/空容器均判缺，审查拍板②A；文案形参是解析后 dict 的 repr）
 	rawClass, hasClass := dict[classKey]
-	if !hasClass || rawClass == nil || rawClass == "" || rawClass == false {
+	if !hasClass || pyFalsy(rawClass) {
 		return e.defaultCfg.DefaultClass,
 			strings.ReplaceAll(classMissingReason, "{result}", pythonsem.PyRepr(dict))
 	}
@@ -644,6 +645,31 @@ func (e *IntentDetectionExecutable) validateLLMParsedResult(result string) bool 
 		}
 	}
 	return false
+}
+
+// pyFalsy Python falsy 判定（`not x` 等价面：nil/""/False/0/0.0/空 map/空 slice）。
+// 审查拍板②A——补齐 :395 `not parsed_dict.get(CLASS)` 的全 falsy 语义。
+func pyFalsy(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return true
+	case string:
+		return x == ""
+	case bool:
+		return !x
+	case int:
+		return x == 0
+	case int64:
+		return x == 0
+	case float64:
+		return x == 0
+	case map[string]any:
+		return len(x) == 0
+	case []any:
+		return len(x) == 0
+	default:
+		return false
+	}
 }
 
 // getIntentIDAndName 分类号与名字解析（Python :426-433 一比一）：顺序扫描命中返回
@@ -835,24 +861,20 @@ func (e *IntentDetectionExecutable) postCommit() bool {
 
 // getChatHistoryFromContext 取历史窗口（Python _get_chat_history_from_context :239-245
 // 一比一）：enable_history 且 context 非 nil → GetContextWindow(dialogue_round=max_turn)
-// → 窗口非 nil 取消息；否则空表
-func (e *IntentDetectionExecutable) getChatHistoryFromContext(ctx context.Context, context iface.ModelContext) []llmschema.BaseMessage {
+// → 窗口非 nil 取消息；否则空表。窗口取数失败按 Python 语义**直接传播 error**
+// （Python 无 try，异常直达组件调用方——2026-11-23 审查拍板①A）
+func (e *IntentDetectionExecutable) getChatHistoryFromContext(ctx context.Context, context iface.ModelContext) ([]llmschema.BaseMessage, error) {
 	chatHistory := []llmschema.BaseMessage{}
 	if e.cfg.EnableHistory && context != nil {
 		window, err := context.GetContextWindow(ctx, nil, nil, 0, e.cfg.ChatHistoryMaxTurn)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
-				Err(err).
-				Str("event_type", "LLM_CALL_ERROR").
-				Str("method", "getChatHistoryFromContext").
-				Msg("failed to get context window")
-			return chatHistory
+			return nil, err
 		}
 		if window != nil {
 			chatHistory = window.ContextMessages
 		}
 	}
-	return chatHistory
+	return chatHistory, nil
 }
 
 // invokeEntry 批入批出槽（Python invoke :207-230 十步一比一）
@@ -869,8 +891,11 @@ func (e *IntentDetectionExecutable) invokeEntry(ctx context.Context, inputs map[
 	if err := e.initializeIfNeeded(ctx); err != nil {
 		return nil, err
 	}
-	// 步骤4：取历史窗口（:212）
-	chatHistory := e.getChatHistoryFromContext(ctx, modelContext)
+	// 步骤4：取历史窗口（:212；失败按 Python 语义传播——审查拍板①A）
+	chatHistory, err := e.getChatHistoryFromContext(ctx, modelContext)
+	if err != nil {
+		return nil, err
+	}
 	// 步骤5：组装输入（:213）
 	currentInputs, err := e.prepareDetectionInputs(inputs, chatHistory)
 	if err != nil {
