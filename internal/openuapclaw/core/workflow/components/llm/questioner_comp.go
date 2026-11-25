@@ -17,8 +17,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
@@ -177,10 +177,10 @@ const ResponseTypeReplyDirectly = "reply_directly"
 
 // Python :27-36 模块级常量一比一（死常量 workflow_chat_history/template_name 仍复刻）
 const (
-	questionerStartStr              = "start"
-	questionerEndStr                = "end"
-	questionerUserInteractStr       = "user_interact"
-	questionerSubPlaceholderPattern = `\{\{([^}]*)\}\}`
+	questionerStartStr               = "start"
+	questionerEndStr                 = "end"
+	questionerUserInteractStr        = "user_interact"
+	questionerSubPlaceholderPattern  = `\{\{([^}]*)\}\}`
 	questionerContinueAskStatementZh = "请您提供{non_extracted_key_fields_names}相关的信息"
 	questionerContinueAskStatementEn = "Please provide information related to: {non_extracted_key_fields_names}"
 	questionerWorkflowChatHistory    = "workflow_chat_history"
@@ -960,11 +960,11 @@ func (h *questionerDirectReplyHandler) createPromptTemplateKeywords(chatHistory 
 		dialogueHistoryStr = strings.Join(parts, "\n")
 	}
 	return map[string]any{
-		"required_name":       requiredNameStr,
+		"required_name":        requiredNameStr,
 		"required_params_list": strings.Join(paramsList, "\n"),
-		"extra_info":          h.cfg.ExtraPromptForFieldsExtraction,
-		"example":             h.cfg.ExampleContent,
-		"dialogue_history":    dialogueHistoryStr,
+		"extra_info":           h.cfg.ExtraPromptForFieldsExtraction,
+		"example":              h.cfg.ExampleContent,
+		"dialogue_history":     dialogueHistoryStr,
 	}
 }
 

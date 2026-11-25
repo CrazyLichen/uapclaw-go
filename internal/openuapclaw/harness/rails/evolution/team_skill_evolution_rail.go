@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentevolving "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
@@ -18,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater/single_dim"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
@@ -1739,7 +1741,7 @@ func inferTeamSkillFromTrajectory(traj *trajectory.Trajectory, knownSkills []str
 		texts = append(texts, fmt.Sprintf("%v", call["output"]))
 	}
 
-	return inferSkillFromTexts(knownSkills, skillToolPayloads, texts)
+	return agentevolving.InferSkillFromTexts(knownSkills, skillToolPayloads, texts)
 }
 
 // ──────────────────────────── 评审反馈挂点（25.2b F_62） ────────────────────────────
@@ -1991,4 +1993,41 @@ func (r *TeamSkillEvolutionRail) HandleEvolutionFromSignalsWithResult(
 ) (*experience.ExperienceApprovalRequest, error) {
 	return r.handleEvolutionFromSignals(ctx, skillName, traj, signals,
 		autoApprove, userQuery, messages, emitHostEvents)
+}
+
+// loopController LoopController 接口子集。
+type loopController interface {
+	EnqueueFollowUp(prompt string)
+}
+
+// getLoopController 从 Agent 获取 LoopController。
+// 对齐 Python: controller = getattr(agent, "_loop_controller", None)
+//
+// 修复说明：DeepAgent.LoopController() 的返回类型是 controller.ControllerInterface，
+// 原先断言 `LoopController() loopController`（返回未导出接口）因方法签名不一致恒为 false，
+// 导致 TeamSkillCreateRail 的 follow-up 提议永不触发。此处改为断言公开接口类型，
+// 再对返回值二次断言 EnqueueFollowUp 能力。
+func getLoopController(agent agentinterfaces.BaseAgent) loopController {
+	if agent == nil {
+		return nil
+	}
+	// 类型断言获取 LoopController 提供者（返回类型必须与 DeepAgent 的实现完全一致）
+	type loopControllerProvider interface {
+		LoopController() controller.ControllerInterface
+	}
+	provider, ok := agent.(loopControllerProvider)
+	if !ok {
+		return nil
+	}
+	raw := provider.LoopController()
+	if raw == nil {
+		return nil
+	}
+	ctl, ok := raw.(loopController)
+	if !ok {
+		logger.Warn(logComponent).
+			Msg("TeamSkillCreateRail LoopController does not support EnqueueFollowUp")
+		return nil
+	}
+	return ctl
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -237,7 +238,7 @@ func TestSkillRegistration(t *testing.T) {
 	}
 
 	// TeamSkillCreateRail 团队技能创建轨道
-	createRail := &evolution.TeamSkillCreateRail{}
+	createRail := &skills.TeamSkillCreateRail{}
 	mgr.RegisterTeamSkillCreateRail("sess-1", createRail)
 	if mgr.GetTeamSkillCreateRail("sess-1") != createRail {
 		t.Error("GetTeamSkillCreateRail 应返回注册的 rail")

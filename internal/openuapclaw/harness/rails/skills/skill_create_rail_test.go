@@ -1,4 +1,4 @@
-package evolution
+package skills
 
 import (
 	"context"
@@ -109,7 +109,7 @@ func newSkillCreateRailForTest(t *testing.T, toolNames []string) (*SkillCreateRa
 	for _, name := range toolNames {
 		require.NoError(t, builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: name}))
 	}
-	rail.builder = builder
+	rail.SetBuilder(builder)
 
 	ctl := &fakeController{}
 	agent := &fakeLoopAgent{ctl: ctl}

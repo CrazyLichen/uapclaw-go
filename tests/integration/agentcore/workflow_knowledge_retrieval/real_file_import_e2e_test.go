@@ -2,11 +2,14 @@
 
 // 8.25 补充批（2026-11-24 用户拍板方案②）：
 // ① 真实文件导入真链——testdata 下 7 种真实格式样本（.md/.txt/.html/.json/.csv/
-//    .pdf/.docx，其中 pdf 为真实下载样本、docx 为真实 OOXML 包）经 AutoFileParser
-//    按扩展名路由解析 → 真 embedding → sqlite store 入库 → KB 检索命中 →
-//    workflow 全链消费，逐格式断言解析非空且含源文件特征标记。
+//
+//	.pdf/.docx，其中 pdf 为真实下载样本、docx 为真实 OOXML 包）经 AutoFileParser
+//	按扩展名路由解析 → 真 embedding → sqlite store 入库 → KB 检索命中 →
+//	workflow 全链消费，逐格式断言解析非空且含源文件特征标记。
+//
 // ② QueryRewriter 真链——真 LLM（glm 免费档）改写指代型 query，改写结果喂给
-//    workflow KB 检索链（Python 形态：rewriter 为编排前置独立组件）。
+//
+//	workflow KB 检索链（Python 形态：rewriter 为编排前置独立组件）。
 package workflow_knowledge_retrieval
 
 import (
@@ -16,10 +19,10 @@ import (
 	"runtime"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	retrievalcommon "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/parser"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/query_rewriter"

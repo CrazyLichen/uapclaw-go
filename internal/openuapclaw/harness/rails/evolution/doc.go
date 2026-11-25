@@ -29,8 +29,6 @@
 //	├── trajectory_rail.go              # TrajectoryRail 同步执行轨迹归档轨道（Priority=10，accumulator+身份去重+AfterInvoke 至多一次落盘）
 //	├── skill_evolution_rail.go         # SkillEvolutionRail 单 Agent 技能演进护栏（Priority=80）+ Sharing 集成
 //	├── team_skill_evolution_rail.go    # TeamSkillEvolutionRail 团队技能演进护栏（Priority=80）+ Slash 命令集成
-//	├── team_skill_create_rail.go     # TeamSkillCreateRail 团队技能创建护栏（检测 spawn_member 阈值→提议创建技能）
-//	├── skill_create_rail.go          # SkillCreateRail 单 Agent 技能创建护栏（Priority=85+工具阈值检测→follow_up）
 //	├── evolution_interrupt_rail.go  # EvolutionInterruptRail 演进工具审批中断（priority 89，evolve/simplify 映射）
 //	├── review/                      # 审查子包：runtime（scope 生命周期）+ result_schema（审查结果归一化）；subagent.go ⤴️15.24
 //	└── helpers.go                      # 辅助函数：splitResponseTokenFields / normalizeSkillNames / normalizeMemberRole 等

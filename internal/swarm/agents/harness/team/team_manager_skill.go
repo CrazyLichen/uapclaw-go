@@ -13,6 +13,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -65,7 +66,7 @@ func (m *TeamManager) RegisterTeamMemberSkillEvolutionRail(sessionID string, rai
 
 // RegisterTeamSkillCreateRail 注册 TeamSkillCreateRail 实例。
 // 对齐 Python: TeamManager.register_team_skill_create_rail(session_id, rail)
-func (m *TeamManager) RegisterTeamSkillCreateRail(sessionID string, rail *evolution.TeamSkillCreateRail) {
+func (m *TeamManager) RegisterTeamSkillCreateRail(sessionID string, rail *skills.TeamSkillCreateRail) {
 	m.teamSkillCreateRails[sessionID] = rail
 }
 
@@ -135,7 +136,7 @@ func (m *TeamManager) GetTeamSkillRail(sessionID string) *evolution.TeamSkillEvo
 
 // GetTeamSkillCreateRail 获取指定 session 的 TeamSkillCreateRail。
 // 对齐 Python: TeamManager.get_team_skill_create_rail(session_id)
-func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) *evolution.TeamSkillCreateRail {
+func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) *skills.TeamSkillCreateRail {
 	return m.teamSkillCreateRails[sessionID]
 }
 
@@ -285,7 +286,7 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 	mountTeamSkillRail bool,
 	mountTeamSkillCreateRail bool,
 	mountSkillEvolutionRail bool,
-) (*evolution.TeamSkillEvolutionRail, *evolution.TeamSkillCreateRail) {
+) (*evolution.TeamSkillEvolutionRail, *skills.TeamSkillCreateRail) {
 	// Python: get_config() 加载失败时抛异常中断；Go 侧对齐语义：
 	// 加载失败记日志后返回 nil（不中断调用方热更新循环）。
 	latestConfig, err := teamLoadConfig()
@@ -302,7 +303,7 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 	memberRails := BuildMemberRails(mountCtx.MemberInfo, mountCtx.Runtime, mountCtx.TeamWorkspace)
 
 	var teamSkillRail *evolution.TeamSkillEvolutionRail
-	var teamSkillCreateRail *evolution.TeamSkillCreateRail
+	var teamSkillCreateRail *skills.TeamSkillCreateRail
 	for _, rail := range memberRails {
 		if tsr, ok := rail.(*evolution.TeamSkillEvolutionRail); ok && mountTeamSkillRail {
 			mountCtx.Agent.AddRail(tsr)
@@ -311,7 +312,7 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 		} else if ser, ok := rail.(*evolution.SkillEvolutionRail); ok && mountSkillEvolutionRail {
 			mountCtx.Agent.AddRail(ser)
 			m.RegisterTeamMemberSkillEvolutionRail(sessionID, ser)
-		} else if scr, ok := rail.(*evolution.TeamSkillCreateRail); ok && mountTeamSkillCreateRail {
+		} else if scr, ok := rail.(*skills.TeamSkillCreateRail); ok && mountTeamSkillCreateRail {
 			mountCtx.Agent.AddRail(scr)
 			m.RegisterTeamLiveRail(sessionID, mountCtx.Agent, scr)
 			teamSkillCreateRail = scr

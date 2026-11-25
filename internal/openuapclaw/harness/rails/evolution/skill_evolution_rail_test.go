@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	agentevolving "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
@@ -192,12 +193,12 @@ func TestInferSkillFromTexts(t *testing.T) {
 	// skill_tool 参数中包含技能名
 	payloads := []string{`{"skill_name": "coding", "query": "test"}`}
 	texts := []string{}
-	result := inferSkillFromTexts(skillNames, payloads, texts)
+	result := agentevolving.InferSkillFromTexts(skillNames, payloads, texts)
 	assert.Equal(t, "coding", result)
 
 	// 无匹配
 	payloadsNoMatch := []string{`{"skill_name": "unknown", "query": "test"}`}
-	resultNoMatch := inferSkillFromTexts(skillNames, payloadsNoMatch, texts)
+	resultNoMatch := agentevolving.InferSkillFromTexts(skillNames, payloadsNoMatch, texts)
 	assert.Equal(t, "", resultNoMatch)
 }
 

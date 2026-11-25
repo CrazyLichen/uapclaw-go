@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	tokeniface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	kvcache "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/kv_cache"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -516,7 +516,6 @@ func catalogAttachments(manager *prompts.Manager) []*prompts.Attachment {
 	return list
 }
 
-
 // newSyncCBC 构造带历史快照桩的回调上下文（delta 路径可达）。
 func newSyncCBC(agent *fakeBaseAgent, sess *railStateSession) *agentinterfaces.AgentCallbackContext {
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, nil, sess)
@@ -619,7 +618,7 @@ func TestSyncDeferredToolCatalog_移除与指纹变化发Delta(t *testing.T) {
 	rail.attachmentManager = manager
 	state := map[string]any{
 		"initialized": true, "version": 1, "delta_count": 0, "language": "cn",
-		"tools":       map[string]any{"cron_create_job": "创建定时任务", "gone_tool": "已移除"},
+		"tools":        map[string]any{"cron_create_job": "创建定时任务", "gone_tool": "已移除"},
 		"fingerprints": map[string]any{"cron_create_job": "fp-old"},
 	}
 	sess := &railStateSession{state: map[string]any{}, id: "sess"}
@@ -687,7 +686,9 @@ func (h *snapshotHistoryStub) Len() int { return len(h.messages) }
 func (h *snapshotHistoryStub) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {
 	return h.messages, nil
 }
-func (h *snapshotHistoryStub) SetMessages(messages []llmschema.BaseMessage, _ bool) { h.messages = messages }
+func (h *snapshotHistoryStub) SetMessages(messages []llmschema.BaseMessage, _ bool) {
+	h.messages = messages
+}
 func (h *snapshotHistoryStub) PopMessages(_ int, _ bool) []llmschema.BaseMessage {
 	popped := h.messages
 	h.messages = nil
@@ -717,7 +718,7 @@ func (h *snapshotHistoryStub) WorkspaceDir() string    { return "" }
 func (h *snapshotHistoryStub) GetSessionRef() sessioninterfaces.SessionFacade { return nil }
 
 // SaveState/LoadState 空实现。
-func (h *snapshotHistoryStub) SaveState() map[string]any { return nil }
+func (h *snapshotHistoryStub) SaveState() map[string]any  { return nil }
 func (h *snapshotHistoryStub) LoadState(_ map[string]any) {}
 
 // OffloadMessages 空实现。

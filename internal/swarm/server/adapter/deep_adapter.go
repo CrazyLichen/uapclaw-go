@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
@@ -35,9 +36,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
@@ -271,7 +272,7 @@ type DeepAdapter struct {
 	skillEvolutionRail *evolution.SkillEvolutionRail
 	// skillCreateRail 技能创建护栏（单 Agent 版）
 	// 对齐 Python: _skill_create_rail: SkillCreateRail | None
-	skillCreateRail *evolution.SkillCreateRail
+	skillCreateRail *skills.SkillCreateRail
 	// subagentRail 子代理护栏
 	// ✅ 已回填：SubagentRail（对齐 Python: _subagent_rail: SubagentRail | None）
 	subagentRail *subagent.SubagentRail
@@ -4112,9 +4113,9 @@ func (d *DeepAdapter) registerSkillRetrievalPromptRail(configBase map[string]any
 		return
 	}
 	rail, err := commrails.NewSkillRetrievalPromptRail(commrails.RailOptions{
-		Toolkit:     toolkit,
+		Toolkit:      toolkit,
 		SessionScope: d.sessionScope(),
-		ConfigBase:  configBase,
+		ConfigBase:   configBase,
 	})
 	if err != nil {
 		logger.Warn(logComponent).

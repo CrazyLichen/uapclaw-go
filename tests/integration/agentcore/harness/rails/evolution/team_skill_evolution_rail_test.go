@@ -425,12 +425,6 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_Generator() {
 	s.NotNil(rail.Generator())
 }
 
-// TestTeamSkillEvolutionRail_TeamSignalDetector 测试 TeamSignalDetector 访问器。
-func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_TeamSignalDetector() {
-	rail := s.newTestRail()
-	s.NotNil(rail.TeamSignalDetector())
-}
-
 // TestTeamSkillEvolutionRail_ApprovalRuntime 测试 ApprovalRuntime 访问器。
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_ApprovalRuntime() {
 	rail := s.newTestRail()

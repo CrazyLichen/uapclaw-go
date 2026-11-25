@@ -155,23 +155,23 @@ func TestValidateAndConvertType(t *testing.T) {
 		want any
 		ok   bool
 	}{
-		{nil, "string", nil, false},          // Python :322-323
-		{"abc", "string", "abc", true},       // str(value)
+		{nil, "string", nil, false},    // Python :322-323
+		{"abc", "string", "abc", true}, // str(value)
 		{123, "string", "123", true},
-		{true, "integer", nil, false},        // bool≠int :332-334
+		{true, "integer", nil, false}, // bool≠int :332-334
 		{int64(5), "integer", int64(5), true},
-		{5.0, "integer", int64(5), true},     // 整值 float :337-340
+		{5.0, "integer", int64(5), true}, // 整值 float :337-340
 		{5.5, "integer", nil, false},
-		{" 7 ", "integer", int64(7), true},   // str 解析 :342-345
+		{" 7 ", "integer", int64(7), true}, // str 解析 :342-345
 		{"x", "integer", nil, false},
-		{true, "number", nil, false},         // :350-351
-		{int64(3), "number", 3.0, true},      // :352-353
+		{true, "number", nil, false},    // :350-351
+		{int64(3), "number", 3.0, true}, // :352-353
 		{2.5, "number", 2.5, true},
 		{"3.5", "number", 3.5, true},
-		{true, "boolean", true, true},        // :361-362
-		{" True ", "boolean", true, true},    // strip+lower :363-368
+		{true, "boolean", true, true},     // :361-362
+		{" True ", "boolean", true, true}, // strip+lower :363-368
 		{"yes", "boolean", nil, false},
-		{int64(9), "unknown", "9", true},     // 未知类型回落 str :372-374
+		{int64(9), "unknown", "9", true}, // 未知类型回落 str :372-374
 	}
 	for _, c := range cases {
 		got, ok := ValidateAndConvertType(c.val, c.typ)

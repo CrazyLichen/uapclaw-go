@@ -553,34 +553,6 @@ func TestFormatTimeoutSecs_去除尾点(t *testing.T) {
 	assert.Equal(t, "5", formatTimeoutSecs(5.0))
 }
 
-// ---------------------------------------------------------------------------
-// containsTeamSkillKind 技能类型匹配
-// ---------------------------------------------------------------------------
-
-// TestContainsTeamSkillKind_团队技能 测试 kind=team-skill 返回 true。
-func TestContainsTeamSkillKind_团队技能(t *testing.T) {
-	content := "---\nkind: team-skill\n---\nsome content"
-	assert.True(t, containsTeamSkillKind(content))
-}
-
-// TestContainsTeamSkillKind_群体技能 测试 kind=swarm-skill 返回 true。
-func TestContainsTeamSkillKind_群体技能(t *testing.T) {
-	content := "---\nkind: swarm-skill\n---\nsome content"
-	assert.True(t, containsTeamSkillKind(content))
-}
-
-// TestContainsTeamSkillKind_普通技能 测试 kind=skill 返回 false。
-func TestContainsTeamSkillKind_普通技能(t *testing.T) {
-	content := "---\nkind: skill\n---\nsome content"
-	assert.False(t, containsTeamSkillKind(content))
-}
-
-// TestContainsTeamSkillKind_无frontmatter 测试无 frontmatter 返回 false。
-func TestContainsTeamSkillKind_无frontmatter(t *testing.T) {
-	content := "just some content without frontmatter"
-	assert.False(t, containsTeamSkillKind(content))
-}
-
 // GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
 // Python: SessionFacade.get_cache_identity 的测试替身实现。
 func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {

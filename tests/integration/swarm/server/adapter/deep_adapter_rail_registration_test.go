@@ -11,6 +11,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -165,16 +166,16 @@ func (s *RailRegistrationSuite) TestHotReload_PreservesStatefulRails() {
 // TestSkillCreate_EnabledRegistersSingleAgentRail skill_create=true 挂单 Agent 版。
 func (s *RailRegistrationSuite) TestSkillCreate_EnabledRegistersSingleAgentRail() {
 	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, true))
-	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
+	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&skills.SkillCreateRail{}))),
 		"应注册单 Agent SkillCreateRail")
-	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.TeamSkillCreateRail{}))),
+	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&skills.TeamSkillCreateRail{}))),
 		"不应注册 TeamSkillCreateRail")
 }
 
 // TestSkillCreate_DisabledThenHotEnabled 关闭时不注册，热重载打开后生效。
 func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
 	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
-	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
+	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&skills.SkillCreateRail{}))),
 		"skill_create=false 不应注册")
 
 	s.env.WriteConfigYAML(s.T(), evolutionExtra(true, false, true))
@@ -186,6 +187,6 @@ func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
 		schema.WithAgentSessionID("itest-rail"))
 	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
-	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
+	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&skills.SkillCreateRail{}))),
 		"热重载打开 skill_create 后应注册")
 }

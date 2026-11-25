@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ltm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/memory/ltm"
-	)
+)
 
 // newTestLTM 真实链：真 ltm.LongTermMemory（未装配存储——错误传播路径真链可验；
 // 成功路径需完整向量库装配，见集成测试登记）

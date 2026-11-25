@@ -14,44 +14,6 @@ import (
 // Python 侧等价读法：iter_spans + span_category + read_tool_call
 //（agent_evolving/trajectory/{spans,team}.py）。
 
-// toolSpanInfo 一个工具 span 的规范化读面（名称 + 参数映射）。
-type toolSpanInfo struct {
-	// Name 工具名（gen_ai.tool.name，缺省回落 span 名）。
-	Name string
-	// Args 解码后的调用参数映射（gen_ai.tool.call.arguments）。
-	Args map[string]any
-	// Input 参数原始值（JSON 解码后的任意形态）。
-	Input any
-	// Output 结果原始值（gen_ai.tool.call.result，缺省 nil）。
-	Output any
-}
-
-// toolSpansOf 提取 builder 轨迹中的全部工具 span。
-// Python: iter_spans(traj) 过滤 category=="tool" 后 read_tool_call。
-func toolSpansOf(builder *trajectory.TrajectoryBuilder) []toolSpanInfo {
-	if builder == nil {
-		return nil
-	}
-	traj, err := builder.Build()
-	if err != nil || traj == nil {
-		return nil
-	}
-	var result []toolSpanInfo
-	for _, span := range trajectory.IterSpans(traj) {
-		if trajectory.SpanCategory(span) != "tool" {
-			continue
-		}
-		call := trajectory.ReadToolCall(span)
-		name, _ := call["name"].(string)
-		if name == "" {
-			name = strings.TrimSpace(fmtSprint(span["name"]))
-		}
-		args, _ := call["input"].(map[string]any)
-		result = append(result, toolSpanInfo{Name: name, Args: args, Input: call["input"], Output: call["output"]})
-	}
-	return result
-}
-
 // fmtSprint 格式化助手（nil 安全）。
 func fmtSprint(value any) string {
 	if value == nil {
@@ -156,13 +118,4 @@ func llmStep(messages ...llmschema.BaseMessage) trajectory.TestStep {
 // toolStep 工具测试步骤。
 func toolStep(toolName string, callArgs map[string]any) trajectory.TestStep {
 	return trajectory.TestStep{Kind: "tool", ToolName: toolName, CallArgs: callArgs}
-}
-
-// mustNewTestBuilder 测试用组装器构造（新签名简化封装）。
-func mustNewTestBuilder(sessionID, source string) *trajectory.TrajectoryBuilder {
-	builder, err := trajectory.NewTrajectoryBuilder(sessionID, source, nil, nil, nil, nil, 0, nil, nil)
-	if err != nil {
-		panic(err)
-	}
-	return builder
 }

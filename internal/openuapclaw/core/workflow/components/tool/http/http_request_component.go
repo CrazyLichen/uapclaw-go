@@ -563,7 +563,7 @@ func (e *HTTPRequestExecutable) MakeRequest(params map[string]any) (map[string]a
 			pu, perr := url.Parse(proxy)
 			if perr != nil {
 				return nil, exception.BuildError(exception.StatusComponentToolExecutionError,
-				exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", perr)))
+					exception.WithParam("error_msg", fmt.Sprintf("HTTP request failed: %v", perr)))
 			}
 			transport.Proxy = http.ProxyURL(pu)
 		}

@@ -34,7 +34,9 @@ func (s echoTool) Invoke(_ context.Context, inputs map[string]any, _ ...tool.Too
 func (s echoTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
-func (s echoTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 { return defaultTimeout }
+func (s echoTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
 
 // registerDeferredCards 注册 deferred/direct 测试卡。
 func registerDeferredCards(d *DeepAdapter) {

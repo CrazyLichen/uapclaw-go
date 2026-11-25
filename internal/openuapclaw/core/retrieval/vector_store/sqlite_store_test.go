@@ -52,7 +52,8 @@ func chdirRepoRoot(t *testing.T) {
 	t.Skipf("third_party/sqlite-vec 不存在，vec0 依赖用例跳过")
 }
 
-func TestSQLiteStore_构造_缺collection名报错(t *testing.T) {	cfg := retrievalcommon.VectorStoreConfig{StoreProvider: retrievalcommon.StoreTypeSqlite}
+func TestSQLiteStore_构造_缺collection名报错(t *testing.T) {
+	cfg := retrievalcommon.VectorStoreConfig{StoreProvider: retrievalcommon.StoreTypeSqlite}
 	_, err := NewSQLiteVectorStore(cfg, t.TempDir(), "", "", "", "", "")
 	require.Error(t, err)
 }

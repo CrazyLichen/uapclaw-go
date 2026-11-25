@@ -13,9 +13,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	gormsqlite "gorm.io/driver/sqlite"
@@ -153,7 +153,7 @@ func (s *LTMSuccessChainSuite) setScope(m *ltm.LongTermMemory) {
 	err := m.SetScopeConfig(s.ctx, s.scopeID, &config.MemoryScopeConfig{
 		ModelCfg:       reqCfg,
 		ModelClientCfg: clientCfg,
-		EmbeddingCfg: s.embedCfg,
+		EmbeddingCfg:   s.embedCfg,
 	})
 	s.Require().NoError(err, "SetScopeConfig 失败")
 }

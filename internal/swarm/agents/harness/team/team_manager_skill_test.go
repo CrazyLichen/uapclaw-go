@@ -11,6 +11,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 )
 
 // setupSkillTestEnv 隔离 workspace 根与 agent_teams home（测试辅助）。
@@ -232,7 +233,7 @@ func TestUpdateEvolutionConfig_热更新开关(t *testing.T) {
 	mgr.RegisterTeamMemberSkillEvolutionRail("sess-ue", memberRail) // 幂等
 
 	agent := newCustomizerFakeAgent("agent")
-	createRail := evolution.NewTeamSkillCreateRail(t.TempDir())
+	createRail := skills.NewTeamSkillCreateRail(t.TempDir())
 	mgr.RegisterTeamSkillCreateRail("sess-ue", createRail)
 	mgr.RegisterTeamLiveRail("sess-ue", agent, createRail)
 

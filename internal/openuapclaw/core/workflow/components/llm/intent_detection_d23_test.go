@@ -6,8 +6,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
 
-	condition "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	condition "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
 )
 
 // TestD23_2_表达式缺键实证 spec D-23-2：缺键 → GetGlobal nil → var 比较 false

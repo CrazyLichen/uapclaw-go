@@ -77,6 +77,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	agentcoreharness "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness_protocol"
 )
 
@@ -1685,7 +1686,7 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 	// 对齐 Python: for rail_type in (TeamSkillEvolutionRail, TeamSkillCreateRail):
 	for _, railType := range []reflect.Type{
 		reflect.TypeOf((*evolution.TeamSkillEvolutionRail)(nil)),
-		reflect.TypeOf((*evolution.TeamSkillCreateRail)(nil)),
+		reflect.TypeOf((*skills.TeamSkillCreateRail)(nil)),
 	} {
 		for _, railAny := range harness.FindRails(railType) {
 			// TeamSkillEvolutionRail 的完成回调签名为 NotifyTeamCompleted(ctx) (bool, error)，此处包装成仅返回 error 的回调
@@ -1698,7 +1699,7 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 				continue
 			}
 			// TeamSkillCreateRail 的完成回调签名为 NotifyTeamCompleted(cbc *AgentCallbackContext) bool，无返回错误，包装为恒返回 nil 的回调
-			if createRail, ok := railAny.(*evolution.TeamSkillCreateRail); ok {
+			if createRail, ok := railAny.(*skills.TeamSkillCreateRail); ok {
 				cb := func(ctx context.Context) error {
 					createRail.NotifyTeamCompleted(nil)
 					return nil

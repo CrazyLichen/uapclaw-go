@@ -1,4 +1,4 @@
-package evolution
+package skills
 
 import (
 	"context"
@@ -7,7 +7,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
+
+// logComponent 日志组件（skills rail 系）。
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -20,7 +24,7 @@ type SkillCreateRailOption func(*SkillCreateRail)
 // 与 TeamSkillCreateRail 的区别：不依赖团队完成信号，纯阈值驱动。
 // 对齐 Python: openjiuwen/harness/rails/skills/skill_create_rail.py::SkillCreateRail
 type SkillCreateRail struct {
-	*EvolutionRail
+	*evolution.EvolutionRail
 
 	// skillsDir 技能根目录（写入 follow-up 文案）
 	skillsDir string
@@ -71,8 +75,8 @@ const skillCreatePromptEN = "**Important: You MUST confirm with the user first. 
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// _ 编译期验证 SkillCreateRail 满足 EvolutionExtension 接口
-var _ EvolutionExtension = (*SkillCreateRail)(nil)
+// _ 编译期验证 SkillCreateRail 满足 evolution.EvolutionExtension 接口
+var _ evolution.EvolutionExtension = (*SkillCreateRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -88,7 +92,7 @@ func NewSkillCreateRail(skillsDir string, opts ...SkillCreateRailOption) *SkillC
 		toolDiversityThreshold: defaultToolDiversityThreshold,
 	}
 	// evolution_trigger=NONE：不自动触发演化，只在迭代回调里做阈值检测
-	r.EvolutionRail = NewEvolutionRail(r, WithEvolutionTrigger(TriggerNone))
+	r.EvolutionRail = evolution.NewEvolutionRail(r, evolution.WithEvolutionTrigger(evolution.TriggerNone))
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -152,17 +156,17 @@ func (r *SkillCreateRail) OnAfterEvolutionTriggered(_ context.Context, _ *trajec
 }
 
 // AllowEvolutionTrigger 始终返回 true（NONE 模式下不会被自动触发）。
-func (r *SkillCreateRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
+func (r *SkillCreateRail) AllowEvolutionTrigger(_ evolution.EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
 	return true
 }
 
 // SnapshotForEvolution 返回 nil（本 rail 不参与演化快照）。
-func (r *SkillCreateRail) SnapshotForEvolution(_ context.Context, _ *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
+func (r *SkillCreateRail) SnapshotForEvolution(_ context.Context, _ *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *evolution.EvolutionSnapshot {
 	return nil
 }
 
 // RunEvolution 空实现。
-func (r *SkillCreateRail) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _ *EvolutionSnapshot) error {
+func (r *SkillCreateRail) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _ *evolution.EvolutionSnapshot) error {
 	return nil
 }
 

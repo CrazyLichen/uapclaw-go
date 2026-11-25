@@ -223,7 +223,9 @@ func TestMcpConnectorGroups_最长前缀拆分(t *testing.T) {
 	}
 	tk := NewToolRetrievalToolkit(
 		fakeProvider(infos...), "s", nil,
-		func() map[string]any { return map[string]any{"github_ci": "CI 服务器", "github": map[string]any{"zh": "GitHub 服务器", "en": "GitHub server"}} },
+		func() map[string]any {
+			return map[string]any{"github_ci": "CI 服务器", "github": map[string]any{"zh": "GitHub 服务器", "en": "GitHub server"}}
+		},
 		"zh",
 	)
 	groups := tk.McpConnectorGroups()

@@ -1002,3 +1002,17 @@ func (r *EvolutionRail) SetExtension(ext EvolutionExtension) { r.ext = ext }
 
 // GetExtension 读取当前扩展点实现。
 func (r *EvolutionRail) GetExtension() EvolutionExtension { return r.ext }
+
+// TrajectoryToMessages 基类级轨迹消息投影（子类跨包访问入口）。
+// Python: EvolutionRail._trajectory_to_messages（evolution_rail.py:1008）——
+// Python 子类经继承访问；Go 跨包（rails/skills 子 rail）以导出方法承载同一归属。
+func (r *EvolutionRail) TrajectoryToMessages(traj *trajectory.Trajectory) []map[string]any {
+	return trajectoryToMessages(traj)
+}
+
+// SetBuilder 注入轨迹组装器（跨包子类的测试注入缝）。
+// Python: 测试同模块白盒写 rail._trajectory；Go 白盒访问不跨包，以导出
+// setter 承载同语义（规则 12.3 偏差：Python 无对应公共方法）。
+func (r *EvolutionRail) SetBuilder(builder *trajectory.TrajectoryBuilder) {
+	r.builder = builder
+}

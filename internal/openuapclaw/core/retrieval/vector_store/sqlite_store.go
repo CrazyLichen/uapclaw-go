@@ -29,8 +29,8 @@ import (
 	"strings"
 	"sync"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/google/uuid"
+	sqlite3 "github.com/mattn/go-sqlite3"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

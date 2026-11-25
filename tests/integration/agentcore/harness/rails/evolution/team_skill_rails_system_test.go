@@ -19,6 +19,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 
 	"github.com/stretchr/testify/require"
@@ -73,8 +74,8 @@ func TestTeamSkillRailsSystemSuite(t *testing.T) {
 // 对齐 Python: test_team_skill_create_rail_queues_follow_up_after_spawn_threshold
 func (s *TeamSkillRailsSystemSuite) TestTeamSkillCreateRail_达阈值入队followup() {
 	skillsDir := s.T().TempDir()
-	rail := evolution.NewTeamSkillCreateRail(skillsDir,
-		evolution.WithTeamSkillCreateMinTeamMembers(2),
+	rail := skills.NewTeamSkillCreateRail(skillsDir,
+		skills.WithTeamSkillCreateMinTeamMembers(2),
 	)
 
 	ctl := &recordingController{}
@@ -114,8 +115,8 @@ func (s *TeamSkillRailsSystemSuite) TestTeamSkillCreateRail_达阈值入队follo
 // TestTeamSkillCreateRail_未达阈值不入队 对齐 Python 阈值语义的反向用例
 func (s *TeamSkillRailsSystemSuite) TestTeamSkillCreateRail_未达阈值不入队() {
 	skillsDir := s.T().TempDir()
-	rail := evolution.NewTeamSkillCreateRail(skillsDir,
-		evolution.WithTeamSkillCreateMinTeamMembers(2),
+	rail := skills.NewTeamSkillCreateRail(skillsDir,
+		skills.WithTeamSkillCreateMinTeamMembers(2),
 	)
 
 	ctl := &recordingController{}

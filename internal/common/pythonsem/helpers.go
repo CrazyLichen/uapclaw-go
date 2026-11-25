@@ -183,7 +183,7 @@ func PyRepr(value any) string {
 
 // PyStr 复刻 Python str() 的字符串化语义：str 原样（不加引号，与 PyRepr 的
 // repr 语义区分）、bool True/False、None→None、数值十进制、容器回退 repr
-//（Python str(list/dict) 即其 repr）。8.22 HTTP 组件占位符替换 str(value) 先例。
+// （Python str(list/dict) 即其 repr）。8.22 HTTP 组件占位符替换 str(value) 先例。
 func PyStr(value any) string {
 	switch v := value.(type) {
 	case nil:

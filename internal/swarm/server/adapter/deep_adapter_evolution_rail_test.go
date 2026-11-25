@@ -7,6 +7,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
@@ -32,7 +33,7 @@ func TestBuildAgentRails_不构建演进与创建rail(t *testing.T) {
 	}
 	for _, r := range railsList {
 		switch r.(type) {
-		case *coreevolution.SkillEvolutionRail, *coreevolution.TeamSkillCreateRail:
+		case *coreevolution.SkillEvolutionRail, *skillrails.TeamSkillCreateRail:
 			t.Fatalf("冷启动 railsList 不应包含 %T", r)
 		}
 	}

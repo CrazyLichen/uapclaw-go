@@ -19,12 +19,12 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/symphony/discovery"
-	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
-	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	adapter "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // SkillRetrievalSuite 16.4b 渐进式全链端到端。
@@ -83,9 +83,9 @@ func (s *SkillRetrievalSuite) TestProgressiveSmallFull() {
 
 	// rail 层：构造期冻结快照
 	rail, err := rails.NewSkillRetrievalPromptRail(rails.RailOptions{
-		Toolkit:     tk,
+		Toolkit:      tk,
 		SessionScope: "prog-small",
-		ConfigBase:  s.enabledConfig(),
+		ConfigBase:   s.enabledConfig(),
 	})
 	s.Require().NoError(err)
 	snapshot := rail.FrozenPromptSnapshot()
@@ -145,9 +145,9 @@ func (s *SkillRetrievalSuite) TestProgressiveLargeFlat() {
 
 	// 漂移通知：基线初始化 → 新增技能 → 非 skill_index 工具钩子消费
 	rail, err := rails.NewSkillRetrievalPromptRail(rails.RailOptions{
-		Toolkit:     tk,
+		Toolkit:      tk,
 		SessionScope: tk.SessionScope(),
-		ConfigBase:  cfg,
+		ConfigBase:   cfg,
 	})
 	s.Require().NoError(err)
 	s.Require().NoError(rail.Init(nil, nil))

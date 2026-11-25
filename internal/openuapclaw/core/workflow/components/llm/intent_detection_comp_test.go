@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	ceengine "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	ceengschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -470,7 +470,8 @@ func TestInvokeEntry_历史真实链(t *testing.T) {
 }
 
 // TestInvokeEntry_未开历史 不读不写 ModelContext（消息数执行前后不变）
-func TestInvokeEntry_未开历史(t *testing.T) {	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
+func TestInvokeEntry_未开历史(t *testing.T) {
+	e := NewIntentDetectionExecutable(&IntentDetectionCompConfig{CategoryNameList: []string{"退款"}})
 	fake := &fakeLLMInvoker{content: `{"class": "分类1", "reason": "r"}`}
 	e.llModel = fake
 	e.initialized = true

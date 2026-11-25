@@ -14,7 +14,7 @@ import (
 // TestIntegration_HTTPRequestComponent_真链 ExecuteSingleComponent 十步全链：
 // config 静态 URL → 三步链 → 输出信封贯通（对齐 8.18 llm 集成套件惯例）。
 // 注：单组件直调的 inputs 走 commit_user_inputs 进 session state
-//（Python _workflow.py:78-79），组件 inputs 形参为空 map——与 Python
+// （Python _workflow.py:78-79），组件 inputs 形参为空 map——与 Python
 // vertex.call(None) 语义一致，占位符 inputs 注入在 InvokeFn 层直测（见单测）。
 func TestIntegration_HTTPRequestComponent_真链(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

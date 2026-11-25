@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentevolving "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
@@ -1876,7 +1877,7 @@ func (r *SkillEvolutionRail) inferPrimarySkill(messages []map[string]any, skillN
 
 	// Python: infer_skill_from_texts(skill_names, skill_tool_payloads=..., texts=...)
 	// Go 中暂未实现 infer_skill_from_texts，使用内联简化逻辑
-	return inferSkillFromTexts(skillNames, skillToolPayloads, texts)
+	return agentevolving.InferSkillFromTexts(skillNames, skillToolPayloads, texts)
 }
 
 // attributeSignalsToSkills 将信号归属到技能，处理无归属信号。
@@ -2314,33 +2315,6 @@ func str(v any) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
-}
-
-// inferSkillFromTexts 从消息文本推断技能。
-// 对齐 Python: utils.infer_skill_from_texts(skill_names, skill_tool_payloads=..., texts=...)
-// 简化实现：搜索 skill_tool 参数中的技能名称
-func inferSkillFromTexts(skillNames []string, skillToolPayloads []string, texts []string) string {
-	// 在 skill_tool_payloads 中搜索已知技能名
-	for _, payload := range skillToolPayloads {
-		for _, name := range skillNames {
-			if strings.Contains(payload, name) {
-				return name
-			}
-		}
-	}
-	// 在工具内容中搜索 SKILL.md 路径中的技能名
-	skillMDRe := regexp.MustCompile(`[/\\]([^/\\]+)[/\\]SKILL\.md`)
-	for _, text := range texts {
-		matches := skillMDRe.FindAllStringSubmatch(text, -1)
-		for _, match := range matches {
-			for _, name := range skillNames {
-				if match[1] == name {
-					return name
-				}
-			}
-		}
-	}
-	return ""
 }
 
 // parseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段。

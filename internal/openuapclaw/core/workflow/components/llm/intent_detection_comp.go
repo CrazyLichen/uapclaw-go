@@ -14,9 +14,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/pythonsem"
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	forllm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
-	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
@@ -208,12 +208,12 @@ const (
 
 // 六段失败 reason 文案（Python :55-63 逐字；按 accept_language 二选一）
 const (
-	jsonParseFailReasonZH    = "当前意图识别的输出:'{result}'格式不符合有效的JSON规范，导致解析失败，因此返回默认分类。"
-	jsonParseFailReasonEN    = "The intent detection output '{result}' does not conform to valid JSON format, parsing failed, therefore default category is returned."
-	classKeyMissingReasonZH  = "当前意图识别的输出 '{result}' 缺少必要的输出'class'分类信息，因此返回默认分类。"
-	classKeyMissingReasonEN  = "The intent detection output '{result}' is missing the required 'class' classification field, therefore default category is returned."
-	validationFailReasonZH   = "当前意图识别的输出类别 '{intent_class}' 不在预定义的分类列表: '{category_list}'中，因此系统返回默认分类。"
-	validationFailReasonEN   = "The intent detection output class '{intent_class}' is not in the predefined category list: '{category_list}', therefore default category is returned."
+	jsonParseFailReasonZH   = "当前意图识别的输出:'{result}'格式不符合有效的JSON规范，导致解析失败，因此返回默认分类。"
+	jsonParseFailReasonEN   = "The intent detection output '{result}' does not conform to valid JSON format, parsing failed, therefore default category is returned."
+	classKeyMissingReasonZH = "当前意图识别的输出 '{result}' 缺少必要的输出'class'分类信息，因此返回默认分类。"
+	classKeyMissingReasonEN = "The intent detection output '{result}' is missing the required 'class' classification field, therefore default category is returned."
+	validationFailReasonZH  = "当前意图识别的输出类别 '{intent_class}' 不在预定义的分类列表: '{category_list}'中，因此系统返回默认分类。"
+	validationFailReasonEN  = "The intent detection output class '{intent_class}' is not in the predefined category list: '{category_list}', therefore default category is returned."
 )
 
 // 默认提示词（Python :89-132 逐字复制，双语双段）

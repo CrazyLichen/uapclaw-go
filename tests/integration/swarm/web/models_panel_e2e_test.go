@@ -18,7 +18,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -289,7 +288,7 @@ func (s *ConfigPanelSuite) TestResolverRestore_FallbackOnDeletedModel() {
 
 	// 2. 保存 B 的会话选择（session.selection.set）
 	payload := sendConfig(s.env, "session.selection.set", map[string]any{
-		"session_id": "sess-resolve-1",
+		"session_id":      "sess-resolve-1",
 		"model_selection": map[string]any{"type": "model", "id": modelB},
 	})
 	s.Require().NotNil(payload["model_selection"], "保存选择应回显 selection，payload=%v", payload)

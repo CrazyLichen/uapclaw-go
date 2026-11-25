@@ -73,8 +73,8 @@ func (s *stubLLMClient) TranscribeAudio(_ context.Context, _ string, _ ...llmsch
 func (s *stubLLMClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }
-func (s *stubLLMClient) SupportsKVCacheRelease() bool     { return false }
-func (s *stubLLMClient) SupportsKVCacheAffinity() bool    { return false }
+func (s *stubLLMClient) SupportsKVCacheRelease() bool  { return false }
+func (s *stubLLMClient) SupportsKVCacheAffinity() bool { return false }
 func (s *stubLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
 	return nil
 }
@@ -411,14 +411,14 @@ func TestInvokeEntry_validate失败路径(t *testing.T) {
 
 func TestStoreOptionsFromConnection_全部键与类型不符忽略(t *testing.T) {
 	opts := storeOptionsFromConnection(map[string]any{
-		"chroma_path":        "/tmp/c",
-		"milvus_uri":         "http://m",
-		"milvus_token":       "tok",
-		"vector_field_name":  "vec",
+		"chroma_path":         "/tmp/c",
+		"milvus_uri":          "http://m",
+		"milvus_token":        "tok",
+		"vector_field_name":   "vec",
 		"sparse_vector_field": "sp",
-		"metadata_field":     "md",
-		"doc_id_field":       "did",
-		"chroma_path_bad":    1, // 类型不符忽略
+		"metadata_field":      "md",
+		"doc_id_field":        "did",
+		"chroma_path_bad":     1, // 类型不符忽略
 	})
 	assert.Len(t, opts, 7)
 }

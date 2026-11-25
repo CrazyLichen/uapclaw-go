@@ -56,7 +56,7 @@ func (s *QuestionerRealLLMSuite) newRealQuestionerComp() *llmcomp.QuestionerComp
 	cfg := &llmcomp.QuestionerConfig{
 		ModelClientConfig: &schema.ModelClientConfig{
 			ClientID:       "zhipu-free-realchain", // registry 强制非空（181002）
-			ClientProvider: "OpenAI",                       // 智谱 OpenAI 兼容端点
+			ClientProvider: "OpenAI",               // 智谱 OpenAI 兼容端点
 			APIKey:         mcc["api_key"].(string),
 			APIBase:        mcc["api_base"].(string),
 			Timeout:        120,

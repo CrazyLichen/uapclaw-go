@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -545,7 +546,7 @@ func (s *SkillManagerSuite) TestTeamSharedSkills_全局到团队共享复制() {
 	s.Require().NoError(statErr, "marker 文件应存在")
 
 	// 团队技能创建 rail 注册到 TeamManager（团队技能链路的下游锚点）
-	rail := evolution.NewTeamSkillCreateRail(sharedDir)
+	rail := skills.NewTeamSkillCreateRail(sharedDir)
 	mgr.RegisterTeamSkillCreateRail("itest-session", rail)
 	s.Same(rail, mgr.GetTeamSkillCreateRail("itest-session"), "rail 应可按键取回")
 

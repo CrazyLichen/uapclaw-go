@@ -1,7 +1,8 @@
-package evolution
+package skills
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,7 +110,7 @@ func TestTeamSkillCreateRail_RunEvolution(t *testing.T) {
 // TestTeamSkillCreateRail_AllowEvolutionTrigger 验证始终允许
 func TestTeamSkillCreateRail_AllowEvolutionTrigger(t *testing.T) {
 	r := NewTeamSkillCreateRail("/tmp/skills")
-	assert.True(t, r.AllowEvolutionTrigger(TriggerNone, nil))
+	assert.True(t, r.AllowEvolutionTrigger(evolution.TriggerNone, nil))
 }
 
 // TestTeamSkillCreateRail_GetEvolutionTotalTimeoutSecs 验证返回 0
@@ -137,7 +138,7 @@ func TestCountSpawnMemberCalls_有Builder(t *testing.T) {
 	builder.RecordTestStep(trajectory.TestStep{Kind: "tool", ToolName: "spawn_member_team_a"})
 
 	// 需要设置 builder — 同包测试可直接访问非导出字段
-	r.EvolutionRail.builder = builder
+	r.SetBuilder(builder)
 
 	count := r.countSpawnMemberCalls()
 	assert.Equal(t, 2, count) // "spawn_member" 和 "spawn_member_team_a"

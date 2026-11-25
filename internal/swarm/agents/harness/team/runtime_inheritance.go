@@ -18,6 +18,7 @@ import (
 	ce "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
 	swarmSchema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -531,10 +532,10 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	// 12. Leader-only: TeamSkillCreateRail（需 skill_create 配置启用；env SKILL_CREATE 优先）
 	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && GetSkillCreateEnabled(config) {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
-			rail := evolution.NewTeamSkillCreateRail(
+			rail := skills.NewTeamSkillCreateRail(
 				teamWsSkillsDir,
-				evolution.WithTeamSkillCreateAutoTrigger(true),
-				evolution.WithTeamSkillCreateLanguage(language),
+				skills.WithTeamSkillCreateAutoTrigger(true),
+				skills.WithTeamSkillCreateLanguage(language),
 			)
 			logger.Info(logComponent).Str("skills_dir", teamWsSkillsDir).
 				Msg("[TeamRuntime] TeamSkillCreateRail created")

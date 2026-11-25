@@ -3,9 +3,9 @@ package resource
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
 	retrievalcommon "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessionconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
@@ -23,14 +23,14 @@ type fakeInnerSession struct {
 	id  string
 }
 
-func (f *fakeInnerSession) Config() sessionconfig.SessionConfig                     { return f.cfg }
-func (f *fakeInnerSession) State() state.SessionState                              { return state.NewInMemoryWorkflowState() }
-func (f *fakeInnerSession) Tracer() *tracer.Tracer                                 { return nil }
-func (f *fakeInnerSession) StreamWriterManager() *stream.StreamWriterManager       { return nil }
-func (f *fakeInnerSession) SessionID() string                                      { return f.id }
-func (f *fakeInnerSession) Checkpointer() sessioninterfaces.Checkpointer           { return nil }
-func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager               { return nil }
-func (f *fakeInnerSession) Close() error                                           { return nil }
+func (f *fakeInnerSession) Config() sessionconfig.SessionConfig              { return f.cfg }
+func (f *fakeInnerSession) State() state.SessionState                        { return state.NewInMemoryWorkflowState() }
+func (f *fakeInnerSession) Tracer() *tracer.Tracer                           { return nil }
+func (f *fakeInnerSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
+func (f *fakeInnerSession) SessionID() string                                { return f.id }
+func (f *fakeInnerSession) Checkpointer() sessioninterfaces.Checkpointer     { return nil }
+func (f *fakeInnerSession) ActorManager() *stream_actor.ActorManager         { return nil }
+func (f *fakeInnerSession) Close() error                                     { return nil }
 
 // newTestNodeSession 构造真实 NodeSessionFacade（经 NewComponentSession 管线）
 func newTestNodeSession(t interface{ Fatal(args ...any) }) *session.NodeSessionFacade {

@@ -497,7 +497,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 // 对齐 Python: _build_skill_create_rail() (interface_deep.py:1972-1997)
 //
 // Python 语义：skill_create 未启用时返回 None 且不写字段；启用时 auto_trigger 恒 True。
-func (d *DeepAdapter) buildSkillCreateRail() *evolution.SkillCreateRail {
+func (d *DeepAdapter) buildSkillCreateRail() *skillrails.SkillCreateRail {
 	if !d.getSkillCreateEnabled() {
 		logger.Debug(logComponent).Msg("skill_create disabled by config, skipping SkillCreateRail")
 		return nil
@@ -509,9 +509,9 @@ func (d *DeepAdapter) buildSkillCreateRail() *evolution.SkillCreateRail {
 		return nil
 	}
 
-	rail := evolution.NewSkillCreateRail(skillsDir,
-		evolution.WithSkillCreateAutoTrigger(true),
-		evolution.WithSkillCreateLanguage(d.getLanguage()),
+	rail := skillrails.NewSkillCreateRail(skillsDir,
+		skillrails.WithSkillCreateAutoTrigger(true),
+		skillrails.WithSkillCreateLanguage(d.getLanguage()),
 	)
 	logger.Info(logComponent).
 		Str("skills_dir", skillsDir).

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	)
+)
 
 func TestMemoryWrite_validateInputs_messages缺失报错(t *testing.T) {
 	_, err := validateMemoryWriteInputs(map[string]any{})

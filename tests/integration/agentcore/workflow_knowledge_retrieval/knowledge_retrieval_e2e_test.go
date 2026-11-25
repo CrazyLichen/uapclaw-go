@@ -27,15 +27,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	storeembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
+	retrievalcommon "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/retriever"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/indexer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/chunker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/knowledgebase"
-	retrievalcommon "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/retriever"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
@@ -124,7 +124,7 @@ func (s *KnowledgeRetrievalE2ESuite) newKBComponent(indexType retrievalcommon.In
 	cfg := &resource.KnowledgeRetrievalCompConfig{
 		ComponentKBConfigs: []resource.ComponentKBConfig{{
 			KBConfig: retrievalcommon.KnowledgeBaseConfig{
-				KBID: "kb-e2e",
+				KBID:      "kb-e2e",
 				IndexType: indexType,
 			},
 			VectorStoreConfig: retrievalcommon.VectorStoreConfig{

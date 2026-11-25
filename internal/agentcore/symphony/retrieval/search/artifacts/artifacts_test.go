@@ -241,5 +241,5 @@ func TestSearchResultStruct(t *testing.T) {
 		t.Fatalf("零值不符: %+v", r)
 	}
 	var _ = common.RetrieverNode{} // common 包引用保持
-	var _ = json.Marshal          // json 引用保持
+	var _ = json.Marshal           // json 引用保持
 }

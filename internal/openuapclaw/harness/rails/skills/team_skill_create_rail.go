@@ -1,4 +1,4 @@
-package evolution
+package skills
 
 import (
 	"context"
@@ -7,10 +7,17 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentevolving "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 )
+
+// teamSkillKinds 团队技能 kind 闭集。
+// Python: team_skill_create_rail.py 模块级常量。
+var teamSkillKinds = map[string]bool{"team-skill": true, "swarm-skill": true}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -32,7 +39,7 @@ type loopController interface {
 // TeamSkillCreateRail 负责检测是否应创建新的团队技能。
 // 对齐 Python: openjiuwen/harness/rails/skills/team_skill_create_rail.py
 type TeamSkillCreateRail struct {
-	*EvolutionRail
+	*evolution.EvolutionRail
 
 	// skillsDir 技能目录路径
 	skillsDir string
@@ -86,8 +93,8 @@ const followUpPromptEN = "**Important: You MUST confirm with the user first. Do 
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// _ 编译时验证 TeamSkillCreateRail 满足 EvolutionExtension 接口
-var _ EvolutionExtension = (*TeamSkillCreateRail)(nil)
+// _ 编译时验证 TeamSkillCreateRail 满足 evolution.EvolutionExtension 接口
+var _ evolution.EvolutionExtension = (*TeamSkillCreateRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -106,8 +113,8 @@ func NewTeamSkillCreateRail(
 	}
 
 	// 创建 EvolutionRail 基类（evolution_trigger=NONE）
-	r.EvolutionRail = NewEvolutionRail(r,
-		WithEvolutionTrigger(TriggerNone),
+	r.EvolutionRail = evolution.NewEvolutionRail(r,
+		evolution.WithEvolutionTrigger(evolution.TriggerNone),
 	)
 
 	for _, opt := range opts {
@@ -142,7 +149,7 @@ func (r *TeamSkillCreateRail) NotifyTeamCompleted(cbc *agentinterfaces.AgentCall
 	return true
 }
 
-// ──────────────────────────── EvolutionExtension 接口实现 ────────────────────────────
+// ──────────────────────────── evolution.EvolutionExtension 接口实现 ────────────────────────────
 
 // OnAfterTaskIteration 任务迭代后检测是否应提议创建。
 // 对齐 Python: _on_after_task_iteration(ctx)
@@ -159,18 +166,18 @@ func (r *TeamSkillCreateRail) OnAfterInvoke(_ context.Context, cbc *agentinterfa
 }
 
 // AllowEvolutionTrigger 始终返回 true（NONE 模式下不会被自动触发）。
-func (r *TeamSkillCreateRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
+func (r *TeamSkillCreateRail) AllowEvolutionTrigger(_ evolution.EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
 	return true
 }
 
 // SnapshotForEvolution 返回基本快照。
-func (r *TeamSkillCreateRail) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
-	messages := trajectoryToMessages(traj)
-	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
+func (r *TeamSkillCreateRail) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *evolution.EvolutionSnapshot {
+	messages := r.TrajectoryToMessages(traj)
+	return &evolution.EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
 
 // RunEvolution 空实现（TeamSkillCreateRail 不使用演化逻辑）。
-func (r *TeamSkillCreateRail) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _ *EvolutionSnapshot) error {
+func (r *TeamSkillCreateRail) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _ *evolution.EvolutionSnapshot) error {
 	return nil
 }
 
@@ -309,7 +316,7 @@ func (r *TeamSkillCreateRail) detectUsedTeamSkill() string {
 		skillNames = append(skillNames, name)
 	}
 
-	usedSkill := inferSkillFromTexts(skillNames, skillToolPayloads, texts)
+	usedSkill := agentevolving.InferSkillFromTexts(skillNames, skillToolPayloads, texts)
 	if usedSkill != "" {
 		logger.Info(logComponent).
 			Str("used_skill", usedSkill).
@@ -378,7 +385,7 @@ func (r *TeamSkillCreateRail) knownTeamSkillNames() map[string]bool {
 // containsTeamSkillKind 检查 SKILL.md 内容是否包含团队技能 kind。
 // 对齐 Python: frontmatter = parse_top_level_frontmatter(content); frontmatter.get("kind") in _TEAM_SKILL_KINDS
 func containsTeamSkillKind(content string) bool {
-	frontmatter := parseTopLevelFrontmatter(content)
+	frontmatter := checkpointing.ParseTopLevelFrontmatter(content)
 	kind := frontmatter["kind"]
 	_, ok := teamSkillKinds[kind]
 	return ok

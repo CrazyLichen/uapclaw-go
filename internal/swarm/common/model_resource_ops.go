@@ -376,7 +376,9 @@ func EnsureModelBusinessIDs(models map[string]any) bool { return ensureModelBusi
 func NormalizeLegacyModelNulls(models map[string]any) { normalizeLegacyModelNulls(models) }
 
 // RecoverExistingModelFields 导出包装（Python _recover_existing_model_fields）。
-func RecoverExistingModelFields(models map[string]any) bool { return recoverExistingModelFields(models) }
+func RecoverExistingModelFields(models map[string]any) bool {
+	return recoverExistingModelFields(models)
+}
 
 func UpsertModelResource(cfg *config.Config, entry map[string]any) (map[string]any, error) {
 	saved, err := normalizeModelEntry(entry)

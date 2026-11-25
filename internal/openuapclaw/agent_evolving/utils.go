@@ -1,6 +1,7 @@
 package evolving
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/prompt"
@@ -27,4 +28,31 @@ func GetContentStringFromTemplate(tpl *prompt.PromptTemplate) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// inferSkillFromTexts 从消息文本推断技能。
+// 对齐 Python: utils.infer_skill_from_texts(skill_names, skill_tool_payloads=..., texts=...)
+// 简化实现：搜索 skill_tool 参数中的技能名称
+func InferSkillFromTexts(skillNames []string, skillToolPayloads []string, texts []string) string {
+	// 在 skill_tool_payloads 中搜索已知技能名
+	for _, payload := range skillToolPayloads {
+		for _, name := range skillNames {
+			if strings.Contains(payload, name) {
+				return name
+			}
+		}
+	}
+	// 在工具内容中搜索 SKILL.md 路径中的技能名
+	skillMDRe := regexp.MustCompile(`[/\\]([^/\\]+)[/\\]SKILL\.md`)
+	for _, text := range texts {
+		matches := skillMDRe.FindAllStringSubmatch(text, -1)
+		for _, match := range matches {
+			for _, name := range skillNames {
+				if match[1] == name {
+					return name
+				}
+			}
+		}
+	}
+	return ""
 }

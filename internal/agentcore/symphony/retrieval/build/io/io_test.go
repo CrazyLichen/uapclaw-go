@@ -133,12 +133,12 @@ func TestNormalizeItemPaths(t *testing.T) {
 // TestIsPassthroughItemURI 判定
 func TestIsPassthroughItemURI(t *testing.T) {
 	cases := map[string]bool{
-		"https://x/y":      true,
-		"http://x":         true,
-		"s3://b/k":         true,
-		"JSONL://skill/1":  true,
-		"/local/path":      false,
-		"":                 false,
+		"https://x/y":     true,
+		"http://x":        true,
+		"s3://b/k":        true,
+		"JSONL://skill/1": true,
+		"/local/path":     false,
+		"":                false,
 	}
 	for in, want := range cases {
 		if got := IsPassthroughItemURI(in); got != want {
@@ -151,11 +151,11 @@ func TestIsPassthroughItemURI(t *testing.T) {
 func TestParseJSONLScannedItems(t *testing.T) {
 	content := "\ufeff" +
 		`{"contentExtendParam": {"skillId": "a", "skillName": "A", "skillDesc": "da", "stars": 5, "isOfficial": true, "contentHash": "h1"}}` + "\n" +
-		`{"contentExtendParam": {"skillId": "b"}}` + "\n" +              // 无 name 回落 skillId
-		`{"nope": 1}` + "\n" +                                            // 缺 contentExtendParam → 剔除
-		`{"contentExtendParam": {"skillId": ""}}` + "\n" +                // 空 skillId → 剔除
+		`{"contentExtendParam": {"skillId": "b"}}` + "\n" + // 无 name 回落 skillId
+		`{"nope": 1}` + "\n" + // 缺 contentExtendParam → 剔除
+		`{"contentExtendParam": {"skillId": ""}}` + "\n" + // 空 skillId → 剔除
 		`{"contentExtendParam": {"skillId": "a", "skillName": "dup"}}` + "\n" + // 重复 → 忽略
-		`broken{json` + "\n" +                                            // 坏项 → 重同步
+		`broken{json` + "\n" + // 坏项 → 重同步
 		`{"contentExtendParam": {"skillId": "c", "skillName": "C", "skillPath": "/p", "content": "body"}}`
 	scanned, ordered := ParseJSONLScannedItems(content)
 	if len(scanned) != 3 {

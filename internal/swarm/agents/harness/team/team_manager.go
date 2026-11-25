@@ -10,6 +10,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -91,7 +92,7 @@ type TeamManager struct {
 	//             _team_rail_contexts, _team_live_rails, _team_skill_sync_targets
 	teamSkillRails          map[string]*evolution.TeamSkillEvolutionRail // sessionID → TeamSkillEvolutionRail
 	teamMemberSkillEvoRails map[string][]*evolution.SkillEvolutionRail   // sessionID → []SkillEvolutionRail
-	teamSkillCreateRails    map[string]*evolution.TeamSkillCreateRail    // sessionID → TeamSkillCreateRail
+	teamSkillCreateRails    map[string]*skills.TeamSkillCreateRail       // sessionID → TeamSkillCreateRail
 	teamRailContexts        map[string]*TeamRailMountContext             // sessionID → TeamRailMountContext
 	teamLiveRails           map[string][]LiveRailEntry                   // sessionID → []LiveRailEntry
 	teamSkillSyncTargets    map[string]SkillSyncTarget                   // sessionID → SkillSyncTarget
@@ -181,7 +182,7 @@ func NewTeamManager() *TeamManager {
 		streamTasks:             make(map[string]*streamTaskEntry),
 		teamSkillRails:          make(map[string]*evolution.TeamSkillEvolutionRail),
 		teamMemberSkillEvoRails: make(map[string][]*evolution.SkillEvolutionRail),
-		teamSkillCreateRails:    make(map[string]*evolution.TeamSkillCreateRail),
+		teamSkillCreateRails:    make(map[string]*skills.TeamSkillCreateRail),
 		teamRailContexts:        make(map[string]*TeamRailMountContext),
 		teamLiveRails:           make(map[string][]LiveRailEntry),
 		teamSkillSyncTargets:    make(map[string]SkillSyncTarget),

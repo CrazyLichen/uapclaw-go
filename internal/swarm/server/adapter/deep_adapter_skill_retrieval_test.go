@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	mcpstate "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/mcp"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 

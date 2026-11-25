@@ -8,9 +8,9 @@ import (
 
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 )
 
 // TestQuestionerDefaultTemplate 双语默认模板选择（Python :91-101）
@@ -422,7 +422,7 @@ func TestQuestionerHandlerMaxResponseExceeded(t *testing.T) {
 func TestQuestionerHandlerJSONParseFailure(t *testing.T) {
 	cfg := &QuestionerConfig{
 		ExtractFieldsFromResponse: boolPtr(true),
-		FieldNames: []QuestionerFieldInfo{{FieldName: "q", Description: "问题", Required: true}},
+		FieldNames:                []QuestionerFieldInfo{{FieldName: "q", Description: "问题", Required: true}},
 	}
 	h, sess := newTestHandler(t, cfg, "这不是 JSON", NewQuestionerState())
 	result, err := h.handle(context.Background(), map[string]any{"query": "x"}, sess, nil)
@@ -441,7 +441,7 @@ func TestQuestionerHandlerJSONParseFailure(t *testing.T) {
 func TestQuestionerHandlerJSONFenceStripping(t *testing.T) {
 	cfg := &QuestionerConfig{
 		ExtractFieldsFromResponse: boolPtr(true),
-		FieldNames: []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
+		FieldNames:                []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
 	}
 	h, sess := newTestHandler(t, cfg, "```json\n{\"name\": \"张三\"}\n```", NewQuestionerState())
 	result, err := h.handle(context.Background(), map[string]any{"query": "x"}, sess, nil)
@@ -506,7 +506,7 @@ func TestQuestionerHandlerDefaultValueFallback(t *testing.T) {
 func TestQuestionerHandlerUnknownFieldStringFallback(t *testing.T) {
 	cfg := &QuestionerConfig{
 		ExtractFieldsFromResponse: boolPtr(true),
-		FieldNames: []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
+		FieldNames:                []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
 	}
 	h, sess := newTestHandler(t, cfg, `{"name": "张三", "unknown_num": 42}`, NewQuestionerState())
 	result, err := h.handle(context.Background(), map[string]any{"query": "x"}, sess, nil)
@@ -615,7 +615,7 @@ func TestQuestionerComponentCompose(t *testing.T) {
 func TestQuestionerComponentWithLLMInjection(t *testing.T) {
 	cfg := &QuestionerConfig{
 		ExtractFieldsFromResponse: boolPtr(true),
-		FieldNames: []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
+		FieldNames:                []QuestionerFieldInfo{{FieldName: "name", Description: "姓名", Required: true}},
 	}
 	comp := NewQuestionerComponent(cfg, WithQuestionerLLM(&fakeQuestionerLLM{content: `{"name": "李四"}`}))
 	exe := comp.ToExecutableFn()
