@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	lifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -458,6 +459,12 @@ func (c *RuntimeSessionCoordinator) ResumeWaitingForInput(sessionID string, gene
 // requireOpenSession 校验会话已注册且可接受工作。
 // Python: RuntimeSessionCoordinator._require_open_session
 func (c *RuntimeSessionCoordinator) requireOpenSession(sessionID string) (*sessionRecord, error) {
+	// server 侧 lifecycle guard 先行（Python _require_open_session 首行
+	// `from ... import guard; guard(session_id)`——归档/删除/进行中的会话
+	// 在查账本前就被拒收；25.6 批接线，此前 Go 直查账本）。
+	if err := lifecycle.Guard(sessionID, ""); err != nil {
+		return nil, err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.accepting {
@@ -879,22 +886,19 @@ func (c *RuntimeSessionCoordinator) runStream(
 // 语义等价（只针对单个已知执行）。
 func (c *RuntimeSessionCoordinator) cancelExecutionInternal(
 	sessionID, executionID string,
-	_ *time.Duration,
+	waitTimeout *time.Duration,
 ) error {
-	handle := c.registry.Get(executionID)
-	if handle == nil {
+	// [25.6 对齐] Python runStream 异常清理调的是完整 cancel_execution
+	// （展开后代 + timed_out 归类），Go 曾只清单条——复用公开取消机器。
+	eid := executionID
+	if c.registry.Get(executionID) == nil {
 		return nil
 	}
-	if handle.Cancel != nil {
-		handle.Cancel()
-	}
-	if !handle.State.Terminal() {
-		c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, "")
-	}
-	if record, ok := c.sessionByID(sessionID); ok {
-		c.refreshSessionState(record)
-	}
-	return nil
+	_, err := c.CancelExecution(sessionID, CancelExecutionOptions{
+		ExecutionID: &eid,
+		WaitTimeout: waitTimeout,
+	})
+	return err
 }
 
 // sessionByID 取会话记录。
