@@ -52,7 +52,16 @@ const (
 	ReqMethodFileReadUploadChunk ReqMethod = "file.read_upload_chunk"
 	// ReqMethodFileDownloadVerifiedChunk Smart Approval sealed-asset 校验分块下载
 	ReqMethodFileDownloadVerifiedChunk ReqMethod = "file.download_verified_chunk"
-	// 注：im.file_persist 归 IM 渠道域、workspace.* 四值归企业版挂账（spec D-27.8-1/2），不注册。
+	// ReqMethodWorkspaceTree 列工作区目录树（含 zone / deletable）
+	ReqMethodWorkspaceTree ReqMethod = "workspace.tree"
+	// ReqMethodWorkspacePreview 预览文件正文（二进制 content=null；目录 400）
+	ReqMethodWorkspacePreview ReqMethod = "workspace.preview"
+	// ReqMethodWorkspaceEntriesDelete 删除可清理文件或目录（zones 白名单）
+	ReqMethodWorkspaceEntriesDelete ReqMethod = "workspace.entries.delete"
+	// ReqMethodWorkspaceUsage 查询本人工作区用量（单机 du 快照）
+	ReqMethodWorkspaceUsage ReqMethod = "workspace.usage"
+	// 注：im.file_persist 归 IM 渠道域不注册；workspace.* 四值 27-A B2 起承接
+	//（个人版面板，裁决 2026-11-25；Python 侧 _handle_workspace 个人版 adapter 也分发）。
 
 	// ─── 命令 ───
 
@@ -507,6 +516,11 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodFileUploadChunk,
 		ReqMethodFileReadUploadChunk,
 		ReqMethodFileDownloadVerifiedChunk,
+		// workspace 面板（27-A B2）
+		ReqMethodWorkspaceTree,
+		ReqMethodWorkspacePreview,
+		ReqMethodWorkspaceEntriesDelete,
+		ReqMethodWorkspaceUsage,
 		// 命令
 		ReqMethodCommandAddDir,
 		ReqMethodCommandChrome,

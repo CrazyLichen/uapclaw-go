@@ -63,6 +63,10 @@
 //	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
 //	├── agent_tool.go             # AgentTool 自定义 Agent 调度工具（10.3.7）
 //	├── code_agent_rail.go        # CodeAgentRail Code 模式自定义 Agent 护栏 + 常量 + 辅助函数（10.3.7）
+//	├── workspace_file_adapter.go      # 27.8：文件域八 method 短路承接（27-A B2 后含 workspace 面板分发）
+//	├── workspace_panel_zones.go       # 27-A B2：workspace zones（白名单/防穿越/前缀规则）
+//	├── workspace_panel_service.go     # 27-A B2：workspace 面板服务（tree/preview/delete/du）
+//	├── workspace_panel_adapter.go     # 27-A B2：_handle_workspace 四方法分发
 //	└── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/interface_deep.py

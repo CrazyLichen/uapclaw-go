@@ -3012,13 +3012,27 @@ func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string)
 			wc.sendResponse(ws, reqID, true, resp.Payload, "", "")
 			return
 		}
+		// 错误提取：Python 侧 payload 为扁平 {"error": str, "code": str}
+		//（control/responses.py build_error_response）；Go server 的
+		// writeErrorResponse 写嵌套 {"error":{code,message}}，两形状都解。
 		errMsg := "request failed"
-		if e, ok := resp.Payload["error"].(string); ok && e != "" {
-			errMsg = e
+		switch ev := resp.Payload["error"].(type) {
+		case string:
+			if ev != "" {
+				errMsg = ev
+			}
+		case map[string]any:
+			if m, ok := ev["message"].(string); ok && m != "" {
+				errMsg = m
+			}
 		}
 		code := WsErrBadRequest
 		if c, ok := resp.Payload["code"].(string); ok && c != "" {
 			code = c
+		} else if nested, ok := resp.Payload["error"].(map[string]any); ok {
+			if c, ok := nested["code"].(string); ok && c != "" {
+				code = c
+			}
 		}
 		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
 	}

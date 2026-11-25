@@ -35,6 +35,12 @@ var workspaceFileMethods = map[schema.ReqMethod]struct{}{
 	schema.ReqMethodFileUploadChunk:           {},
 	schema.ReqMethodFileReadUploadChunk:       {},
 	schema.ReqMethodFileDownloadVerifiedChunk: {},
+	// workspace 面板四方法（27-A B2；Python: workspace_file_adapter.py:118-126
+	// methods 注册表 + :199-238 _handle_workspace；个人版 adapter 同样分发）。
+	schema.ReqMethodWorkspaceTree:          {},
+	schema.ReqMethodWorkspacePreview:       {},
+	schema.ReqMethodWorkspaceEntriesDelete: {},
+	schema.ReqMethodWorkspaceUsage:         {},
 }
 
 // HandlesWorkspaceFileMethod 判断请求是否由文件域 adapter 短路承接。
@@ -71,6 +77,14 @@ func HandleWorkspaceFileRequest(method schema.ReqMethod, params map[string]any, 
 		return handleReadUploadChunk(params, sessionID)
 	case schema.ReqMethodFileDownloadVerifiedChunk:
 		return handleVerifiedDownloadChunk(params, sessionID)
+	case schema.ReqMethodWorkspaceTree:
+		return handleWorkspacePanel(method, params)
+	case schema.ReqMethodWorkspacePreview:
+		return handleWorkspacePanel(method, params)
+	case schema.ReqMethodWorkspaceEntriesDelete:
+		return handleWorkspacePanel(method, params)
+	case schema.ReqMethodWorkspaceUsage:
+		return handleWorkspacePanel(method, params)
 	default:
 		return nil, false, "BAD_REQUEST", fmt.Errorf("unsupported method: %s", method)
 	}

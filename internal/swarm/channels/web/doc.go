@@ -20,6 +20,7 @@
 //	├── app_web.go      # file-api 路由装配
 //	├── dist.go         # 前端产物来源解析（工作区优先 → 内嵌兜底）+ SPA 处理器
 //	├── file_api.go     # 本地文件接口实现（读/写/列目录/下载/索引重建）
+//	├── file_download_verified.go # 27-A B2：verified-asset 下载半区（验签分块 + HEAD/Range/416）
 //	├── embed.go        # 前端构建产物嵌入
 //	└── frontend/       # React 前端源码与 dist 构建产物
 //

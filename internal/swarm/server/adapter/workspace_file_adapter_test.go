@@ -61,11 +61,16 @@ func TestHandlesWorkspaceFileMethod_集合(t *testing.T) {
 			t.Fatalf("%s 应由文件域承接", m)
 		}
 	}
-	no := []schema.ReqMethod{"workspace.tree", "im.file_persist", schema.ReqMethodChatSend}
+	// workspace.tree 原按 D-27.8-1/2 挂账 27.11；2026-11-25 B2 裁决 6 改判
+	// 个人版面板随 B2 交付，已入方法表（见 workspace_panel_adapter.go）。
+	no := []schema.ReqMethod{"im.file_persist", schema.ReqMethodChatSend}
 	for _, m := range no {
 		if HandlesWorkspaceFileMethod(m) {
-			t.Fatalf("%s 不应由文件域承接（D-27.8-1/2）", m)
+			t.Fatalf("%s 不应由文件域承接（im.file_persist 归 IM 渠道域）", m)
 		}
+	}
+	if !HandlesWorkspaceFileMethod("workspace.tree") {
+		t.Fatalf("workspace.tree 应由 workspace 面板承接（27-A B2 裁决 6）")
 	}
 }
 
