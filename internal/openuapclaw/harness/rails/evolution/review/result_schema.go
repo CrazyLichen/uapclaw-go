@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -45,7 +45,7 @@ type EvolutionReviewProposal struct {
 // Python: EvolutionReviewResult (result_schema.py:29-36)
 type EvolutionReviewResult struct {
 	// Subject 归一化 subject。
-	Subject experience.EvolutionSubject `json:"subject"`
+	Subject evoschema.EvolutionSubject `json:"subject"`
 	// Outcome 结论（recommend_evolve / no_evolution）。
 	Outcome string `json:"outcome"`
 	// EvidenceRefs 聚合证据引用（排序后）。
@@ -68,7 +68,7 @@ func NormalizeReviewResult(raw map[string]any, scopeSubject map[string]any) (Evo
 	if !hasSubject {
 		subjectRaw = nil
 	}
-	normalizedSubject, err := experience.NormalizeSubject(subjectRaw, nil)
+	normalizedSubject, err := evoschema.NormalizeSubject(subjectRaw, nil)
 	if err != nil {
 		return EvolutionReviewResult{}, err
 	}
@@ -115,13 +115,13 @@ func NormalizeReviewResult(raw map[string]any, scopeSubject map[string]any) (Evo
 // 校验 proposal_id 唯一性、experience 存在性，experience 草稿经
 // normalize_evolve_draft 归一化。
 // Python: normalize_review_proposals (result_schema.py:81-133)
-func NormalizeReviewProposals(subject experience.EvolutionSubject, proposals any) ([]EvolutionReviewProposal, error) {
+func NormalizeReviewProposals(subject evoschema.EvolutionSubject, proposals any) ([]EvolutionReviewProposal, error) {
 	list, ok := proposals.([]any)
 	if !ok {
 		return nil, fmt.Errorf("proposals must be a list")
 	}
-	if len(list) > experience.MaxEvolutionReviewProposals {
-		return nil, fmt.Errorf("proposals must contain at most %d items", experience.MaxEvolutionReviewProposals)
+	if len(list) > evoschema.MaxEvolutionReviewProposals {
+		return nil, fmt.Errorf("proposals must contain at most %d items", evoschema.MaxEvolutionReviewProposals)
 	}
 
 	proposalIDs := make(map[string]bool)
@@ -158,7 +158,7 @@ func NormalizeReviewProposals(subject experience.EvolutionSubject, proposals any
 	}
 
 	// Python: normalize_evolve_draft 异常转 ValueError（消息透传）
-	draft, err := experience.NormalizeEvolveDraft(subject, mapSliceToAnySlice(draftItems))
+	draft, err := evoschema.NormalizeEvolveDraft(subject, draftItems)
 	if err != nil {
 		return nil, fmt.Errorf("%v", err)
 	}
@@ -247,14 +247,6 @@ func toAnySlice(v any) []any {
 }
 
 // mapSliceToAnySlice []map[string]any → []any。
-func mapSliceToAnySlice(items []map[string]any) []any {
-	out := make([]any, len(items))
-	for i, item := range items {
-		out[i] = item
-	}
-	return out
-}
-
 // sortedStrings 排序去重后的字符串集合转切片。
 func sortedStrings(set map[string]bool) []string {
 	out := make([]string, 0, len(set))

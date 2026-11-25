@@ -1,4 +1,4 @@
-package experience
+package evoschema
 
 import (
 	"strings"
@@ -103,41 +103,37 @@ func TestNormalizeEvolveDraft(t *testing.T) {
 		}
 	})
 
-	t.Run("非对象项报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{"bad"})
-		if err == nil || !strings.Contains(err.Error(), "experience at index 0 must be an object") {
-			t.Fatalf("期望 index 报错, got %v", err)
-		}
-	})
+	// 注：Python L170 "must be an object" 运行时守卫由 Go []map[string]any
+	// 静态类型保证（签名收窄后分支删除），无对应用例。
 
 	t.Run("content 缺失报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s"}})
 		if err == nil || !strings.Contains(err.Error(), "experience content is required") {
 			t.Fatalf("期望 content 报错, got %v", err)
 		}
 	})
 
 	t.Run("非法 target 报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "target": "head"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "target": "head"}})
 		if err == nil || !strings.Contains(err.Error(), "invalid target: head") {
 			t.Fatalf("期望 target 报错, got %v", err)
 		}
 	})
 
 	t.Run("summary 缺失/超限报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"content": "c"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"content": "c"}})
 		if err == nil || !strings.Contains(err.Error(), "experience summary is required") {
 			t.Fatalf("期望 summary 报错, got %v", err)
 		}
 		long := strings.Repeat("a", 161)
-		_, err = NormalizeEvolveDraft(subject, []any{map[string]any{"summary": long, "content": "c"}})
+		_, err = NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": long, "content": "c"}})
 		if err == nil || !strings.Contains(err.Error(), "at most 160 characters") {
 			t.Fatalf("期望 summary 超限报错, got %v", err)
 		}
 	})
 
 	t.Run("section 默认值与校验", func(t *testing.T) {
-		d, err := NormalizeEvolveDraft(subject, []any{
+		d, err := NormalizeEvolveDraft(subject, []map[string]any{
 			map[string]any{"summary": "s1", "content": "c1", "target": "description"},
 			map[string]any{"summary": "s2", "content": "c2", "target": "body"},
 			map[string]any{"summary": "s3", "content": "c3", "target": "script"},
@@ -161,33 +157,33 @@ func TestNormalizeEvolveDraft(t *testing.T) {
 	})
 
 	t.Run("非法 section 报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "section": "Nope"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "section": "Nope"}})
 		if err == nil || !strings.Contains(err.Error(), "invalid section: Nope") {
 			t.Fatalf("期望 section 报错, got %v", err)
 		}
 	})
 
 	t.Run("script_filename 校验", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "script_filename": "/abs/run.sh"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "script_filename": "/abs/run.sh"}})
 		if err == nil || !strings.Contains(err.Error(), "script_filename must be a file name") {
 			t.Fatalf("期望绝对路径报错, got %v", err)
 		}
-		_, err = NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "script_filename": ".."}})
+		_, err = NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "script_filename": ".."}})
 		if err == nil || !strings.Contains(err.Error(), "script_filename must be a file name") {
 			t.Fatalf("期望 .. 报错, got %v", err)
 		}
-		_, err = NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "script_filename": "a/b.sh"}})
+		_, err = NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "script_filename": "a/b.sh"}})
 		if err == nil || !strings.Contains(err.Error(), "script_filename must be a file name") {
 			t.Fatalf("期望含目录报错, got %v", err)
 		}
-		d, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "script_filename": "run.sh"}})
+		d, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "script_filename": "run.sh"}})
 		if err != nil || d.Experiences[0]["script_filename"] != "run.sh" {
 			t.Fatalf("期望合法文件名保留, got %v %v", d, err)
 		}
 	})
 
 	t.Run("script_language/script_purpose/source_refs 保留", func(t *testing.T) {
-		d, err := NormalizeEvolveDraft(subject, []any{map[string]any{
+		d, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{
 			"summary": "s", "content": "c", "script_language": "python", "script_purpose": "deploy",
 			"source_refs": []any{"ref1", " ", "ref2"},
 		}})
@@ -204,7 +200,7 @@ func TestNormalizeEvolveDraft(t *testing.T) {
 	})
 
 	t.Run("source_refs 非列表报错", func(t *testing.T) {
-		_, err := NormalizeEvolveDraft(subject, []any{map[string]any{"summary": "s", "content": "c", "source_refs": "bad"}})
+		_, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{"summary": "s", "content": "c", "source_refs": "bad"}})
 		if err == nil || !strings.Contains(err.Error(), "source_refs must be a list") {
 			t.Fatalf("期望 source_refs 报错, got %v", err)
 		}
@@ -215,7 +211,7 @@ func TestNormalizeEvolveDraft(t *testing.T) {
 // Python: EvolveDraft.approval_view / persistence_view (draft_schema.py:150-163)
 func TestNormalizeEvolveDraft_ApprovalPersistenceViews(t *testing.T) {
 	subject := EvolutionSubject{Kind: "skill", Name: "demo"}
-	d, err := NormalizeEvolveDraft(subject, []any{map[string]any{
+	d, err := NormalizeEvolveDraft(subject, []map[string]any{map[string]any{
 		"summary": "s", "content": "c", "source_refs": []any{"ref1"},
 	}})
 	if err != nil {
@@ -244,56 +240,56 @@ func TestNormalizeSimplifyDraft(t *testing.T) {
 	})
 
 	t.Run("非法 action 报错", func(t *testing.T) {
-		_, err := NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "DROP", "record_id": "r1"}})
+		_, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "DROP", "record_id": "r1"}})
 		if err == nil || !strings.Contains(err.Error(), "invalid simplify action: DROP") {
 			t.Fatalf("期望 action 报错, got %v", err)
 		}
 	})
 
 	t.Run("action 小写归一大写", func(t *testing.T) {
-		d, err := NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "delete", "record_id": "r1"}})
+		d, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "delete", "record_id": "r1"}})
 		if err != nil || d.Actions[0]["action"] != "DELETE" {
 			t.Fatalf("期望归一为 DELETE, got %v %v", d, err)
 		}
 	})
 
 	t.Run("record_id 缺失报错", func(t *testing.T) {
-		_, err := NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "DELETE"}})
+		_, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "DELETE"}})
 		if err == nil || !strings.Contains(err.Error(), "record_id is required") {
 			t.Fatalf("期望 record_id 报错, got %v", err)
 		}
 	})
 
 	t.Run("REFINE 缺 new_content 报错", func(t *testing.T) {
-		_, err := NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "REFINE", "record_id": "r1"}})
+		_, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "REFINE", "record_id": "r1"}})
 		if err == nil || !strings.Contains(err.Error(), "REFINE requires new_content") {
 			t.Fatalf("期望 REFINE 报错, got %v", err)
 		}
 	})
 
 	t.Run("MERGE 缺 new_content/merge_remove_ids 报错", func(t *testing.T) {
-		_, err := NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "MERGE", "record_id": "r1"}})
+		_, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "MERGE", "record_id": "r1"}})
 		if err == nil || !strings.Contains(err.Error(), "MERGE requires new_content") {
 			t.Fatalf("期望 MERGE new_content 报错, got %v", err)
 		}
-		_, err = NormalizeSimplifyDraft(subject, []any{map[string]any{"action": "MERGE", "record_id": "r1", "new_content": "c"}})
+		_, err = NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{"action": "MERGE", "record_id": "r1", "new_content": "c"}})
 		if err == nil || !strings.Contains(err.Error(), "MERGE requires merge_remove_ids") {
 			t.Fatalf("期望 MERGE merge_remove_ids 报错, got %v", err)
 		}
 	})
 
 	t.Run("merge_remove_ids 校验", func(t *testing.T) {
-		_, err := NormalizeSimplifyDraft(subject, []any{map[string]any{
+		_, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{
 			"action": "MERGE", "record_id": "r1", "new_content": "c", "merge_remove_ids": []any{"r1"}}})
 		if err == nil || !strings.Contains(err.Error(), "merge_remove_ids must not contain record_id") {
 			t.Fatalf("期望自包含报错, got %v", err)
 		}
-		_, err = NormalizeSimplifyDraft(subject, []any{map[string]any{
+		_, err = NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{
 			"action": "MERGE", "record_id": "r1", "new_content": "c", "merge_remove_ids": []any{"r2", "r2"}}})
 		if err == nil || !strings.Contains(err.Error(), "duplicate merge_remove_id") {
 			t.Fatalf("期望重复报错, got %v", err)
 		}
-		d, err := NormalizeSimplifyDraft(subject, []any{map[string]any{
+		d, err := NormalizeSimplifyDraft(subject, []map[string]any{map[string]any{
 			"action": "MERGE", "record_id": "r1", "new_content": "c", "merge_remove_ids": []any{"r2"}}})
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
@@ -309,7 +305,7 @@ func TestNormalizeSimplifyDraft(t *testing.T) {
 // Python: validate_simplify_record_refs (draft_schema.py:233-243)
 func TestValidateSimplifyRecordRefs(t *testing.T) {
 	subject := EvolutionSubject{Kind: "skill", Name: "demo"}
-	d, err := NormalizeSimplifyDraft(subject, []any{
+	d, err := NormalizeSimplifyDraft(subject, []map[string]any{
 		map[string]any{"action": "DELETE", "record_id": "r1"},
 		map[string]any{"action": "MERGE", "record_id": "r2", "new_content": "c", "merge_remove_ids": []any{"r3"}},
 	})

@@ -1,4 +1,4 @@
-package experience
+package evoschema
 
 import (
 	"fmt"
@@ -193,16 +193,14 @@ func NormalizeSubject(raw any, allowedKinds map[string]bool) (EvolutionSubject, 
 
 // NormalizeEvolveDraft 归一化 agent 提交的 evolve 草稿条目。
 // Python: normalize_evolve_draft (draft_schema.py:139-180)
-func NormalizeEvolveDraft(subject EvolutionSubject, experiences []any) (EvolveDraft, error) {
+// experiences 形态对齐 Python list[dict[str, Any]]（draft_schema.py:130）；
+// Python L170 isinstance dict 守卫由 Go 静态类型保证（偏差 D-15.24b-5 免登记说明）。
+func NormalizeEvolveDraft(subject EvolutionSubject, experiences []map[string]any) (EvolveDraft, error) {
 	if len(experiences) == 0 {
 		return EvolveDraft{}, validationError("experiences must be a non-empty list")
 	}
 	normalized := make([]map[string]any, 0, len(experiences))
-	for index, raw := range experiences {
-		rawMap, isMap := raw.(map[string]any)
-		if !isMap {
-			return EvolveDraft{}, validationError(fmt.Sprintf("experience at index %d must be an object", index))
-		}
+	for _, rawMap := range experiences {
 		content := strings.TrimSpace(asString(rawMap["content"]))
 		if content == "" {
 			return EvolveDraft{}, validationError("experience content is required")
@@ -255,16 +253,13 @@ func NormalizeEvolveDraft(subject EvolutionSubject, experiences []any) (EvolveDr
 
 // NormalizeSimplifyDraft 归一化 agent 提交的精简动作草稿。
 // Python: normalize_simplify_draft (draft_schema.py:183-230)
-func NormalizeSimplifyDraft(subject EvolutionSubject, actions []any) (SimplifyDraft, error) {
+// actions 形态对齐 Python list[dict[str, Any]]（draft_schema.py:166）。
+func NormalizeSimplifyDraft(subject EvolutionSubject, actions []map[string]any) (SimplifyDraft, error) {
 	if len(actions) == 0 {
 		return SimplifyDraft{}, validationError("actions must be a non-empty list")
 	}
 	normalized := make([]map[string]any, 0, len(actions))
-	for index, raw := range actions {
-		rawMap, isMap := raw.(map[string]any)
-		if !isMap {
-			return SimplifyDraft{}, validationError(fmt.Sprintf("action at index %d must be an object", index))
-		}
+	for _, rawMap := range actions {
 		action := strings.ToUpper(strings.TrimSpace(asString(rawMap["action"])))
 		if !simplifyActionValid(action) {
 			return SimplifyDraft{}, validationError(fmt.Sprintf("invalid simplify action: %s", action))

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	promptsTool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
@@ -558,7 +559,7 @@ func submitInputParams(language string) map[string]any {
 			},
 			"proposals": map[string]any{
 				"type":        "array",
-				"maxItems":    experience.MaxEvolutionReviewProposals,
+				"maxItems":    evoschema.MaxEvolutionReviewProposals,
 				"description": EvolutionTextOf(language, "recommend_evolve 结论下已审查通过的 experience proposal。", "Reviewed experience proposals for recommend_evolve outcomes."),
 				"items": map[string]any{
 					"type": "object",

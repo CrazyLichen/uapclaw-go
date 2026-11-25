@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -117,7 +118,7 @@ func (s *ExperienceQueryService) ListExperiences(
 	query string,
 	sortOrder string,
 ) (map[string]any, error) {
-	normalizedSubject, err := NormalizeSubject(subject, nil)
+	normalizedSubject, err := evoschema.NormalizeSubject(subject, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (s *ExperienceQueryService) ReadExperiences(
 	recordIDs []string,
 	maxContentChars int,
 ) (map[string]any, error) {
-	normalizedSubject, err := NormalizeSubject(subject, nil)
+	normalizedSubject, err := evoschema.NormalizeSubject(subject, nil)
 	if err != nil {
 		return nil, err
 	}
