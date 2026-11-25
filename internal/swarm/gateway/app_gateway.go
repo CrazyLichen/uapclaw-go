@@ -681,6 +681,10 @@ func (s *AppGatewayServer) setupRouter() {
 	// WebSocket 路由
 	r.Get("/ws", s.webChannel.HandleWebSocket)
 
+	// /api/v1 HTTP 面：CORE + mapped 表路由（27-A B2；与 /ws 同端口同进程，
+	// 对齐 Python uvicorn 同端口承载）。
+	web.RegisterWebHTTPAPIRoutes(r, s.webChannel)
+
 	// 文件 API 与静态资源：实现位于 channels/web（对齐 Python channels/web/app_web.py），
 	// 本层只做挂载，保持单进程单端口。
 	r.Mount("/file-api", webapp.FileAPIRouter())

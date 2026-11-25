@@ -148,7 +148,9 @@ func dispatchHTTPRequest(
 	}
 
 	// 连接级身份挂到 outbound（Python: setattr _WEB_CONNECTION_USER_ID_ATTR /
-	// _jiuwen_app_id，dispatch.py:143-144）。
+	// _jiuwen_app_id，dispatch.py:143-144）；session_id 对齐 Python 构造期传入
+	// （dispatch.py:122-137 outbound=HttpJsonOutbound(session_id=session_id)）。
+	outbound.sessionID = sessionID
 	outbound.connectionUserID = userID
 	outbound.appID = appID
 	peer := wc.RegisterRequestOutbound(outbound)
