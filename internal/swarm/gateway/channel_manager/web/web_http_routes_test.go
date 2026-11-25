@@ -153,7 +153,7 @@ func TestHistoryGetCursor协议(t *testing.T) {
 	req2 := httptest.NewRequest("GET", "/api/v1/sessions/s1/history?page_idx=2", nil)
 	rec2 := httptest.NewRecorder()
 	router.ServeHTTP(rec2, req2)
-	require.Equal(t, map[string]any{"session_id": "s1", "page_idx": 2}, state.lastForwardParams)
+	require.Equal(t, map[string]any{"session_id": "s1", "page_idx": float64(2)}, state.lastForwardParams)
 
 	// Accept SSE → 走流式（此处仅验证进入流分支：响应 Content-Type）
 	req3 := httptest.NewRequest("GET", "/api/v1/sessions/s1/history?page_idx=1", nil)
