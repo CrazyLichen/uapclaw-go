@@ -149,6 +149,39 @@ func (s *EvolutionStore) SkillExists(ctx context.Context, name string) bool {
 	return s.ResolveSkillDir(ctx, name) != ""
 }
 
+// SkillExistsForKind 按 subject_kind 过滤判定技能存在（空串 = None 不过滤）。
+// Python: skill_exists(name, subject_kind=...) (evolution_store.py:122-123)。
+func (s *EvolutionStore) SkillExistsForKind(ctx context.Context, name, subjectKind string) bool {
+	return s.ResolveSkillDirForKind(ctx, name, false, subjectKind) != ""
+}
+
+// LoadFullEvolutionLogForKind 按 subject_kind 过滤加载完整演进日志。
+// Python: load_full_evolution_log(name, subject_kind=...)。
+func (s *EvolutionStore) LoadFullEvolutionLogForKind(ctx context.Context, name, subjectKind string) (*EvolutionLog, error) {
+	lock := s.getSkillLock(name)
+	lock.RLock()
+	defer lock.RUnlock()
+	return s.records.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
+}
+
+// GetRecordsByScoreForKind 按 subject_kind 过滤按分数获取记录。
+// Python: get_records_by_score(name, min_score, subject_kind=...) (evolution_store.py:507)。
+func (s *EvolutionStore) GetRecordsByScoreForKind(ctx context.Context, name string, minScore *float64, subjectKind string) []EvolutionRecord {
+	lock := s.getSkillLock(name)
+	lock.RLock()
+	defer lock.RUnlock()
+	return s.records.GetRecordsByScoreForKind(ctx, name, minScore, subjectKind)
+}
+
+// LoadRecordsByIdsForKind 按 subject_kind 过滤按 id 加载记录（保序）。
+// Python: load_records_by_ids(name, record_ids, subject_kind=...) (evolution_store.py:516-524)。
+func (s *EvolutionStore) LoadRecordsByIdsForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) []EvolutionRecord {
+	lock := s.getSkillLock(name)
+	lock.RLock()
+	defer lock.RUnlock()
+	return s.records.LoadRecordsByIdsForKind(ctx, name, recordIDs, subjectKind)
+}
+
 // ResolveSkillDir 查找技能目录路径，create=true 时返回第一个 baseDir/name。
 // Python: EvolutionStore.resolve_skill_dir(name, create)
 func (s *EvolutionStore) ResolveSkillDir(ctx context.Context, name string, create ...bool) string {
@@ -163,6 +196,56 @@ func (s *EvolutionStore) ResolveSkillDir(ctx context.Context, name string, creat
 		return filepath.Join(s.baseDirs[0], name)
 	}
 	return ""
+}
+
+// ResolveSkillDirForKind 按 subject_kind 过滤查找技能目录（空串 = None 不过滤）。
+// Python: resolve_skill_dir(name, create, subject_kind=...) (evolution_store.py:253-279)——
+// kind 非空时：存在目录须 kind 匹配；create 时仅允许落到不存在的候选目录。
+func (s *EvolutionStore) ResolveSkillDirForKind(ctx context.Context, name string, create bool, subjectKind string) string {
+	type candidateDir struct {
+		path   string
+		exists bool
+	}
+	candidates := make([]candidateDir, 0, len(s.baseDirs))
+	for _, base := range s.baseDirs {
+		path := filepath.Join(base, name)
+		candidates = append(candidates, candidateDir{path: path, exists: isDir(path)})
+	}
+	if subjectKind != "" {
+		// Python: normalized_kind = self._normalize_subject_kind(subject_kind)
+		normalizedKind := NormalizeSubjectKind(subjectKind)
+		for _, candidate := range candidates {
+			// Python L266: candidate.is_dir() and matches kind
+			if candidate.exists && s.skillDirMatchesSubjectKind(ctx, candidate.path, normalizedKind) {
+				return candidate.path
+			}
+		}
+		if create {
+			for _, candidate := range candidates {
+				// Python L269-271: 仅落到不存在的候选
+				if !candidate.exists {
+					return candidate.path
+				}
+			}
+		}
+		return ""
+	}
+	for _, candidate := range candidates {
+		if candidate.exists {
+			return candidate.path
+		}
+	}
+	if create && len(candidates) > 0 {
+		return candidates[0].path
+	}
+	return ""
+}
+
+// skillDirMatchesSubjectKind 判别技能目录的 subject kind 是否匹配。
+// Python: _skill_dir_matches_subject_kind (evolution_store.py:296-297)。
+// 复用既有 readSkillDirSubjectKind/NormalizeSubjectKind（15.21 已落）。
+func (s *EvolutionStore) skillDirMatchesSubjectKind(ctx context.Context, skillDir, subjectKind string) bool {
+	return s.readSkillDirSubjectKind(ctx, skillDir) == subjectKind
 }
 
 // FindSkillMD 查找技能的 Markdown 入口文件。

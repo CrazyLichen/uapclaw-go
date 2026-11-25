@@ -329,7 +329,6 @@ func (t *listSkillExperiencesTool) Invoke(ctx context.Context, inputs map[string
 	}
 	result, err := t.queryService.ListExperiences(
 		ctx, subject,
-		subjectKindArg(args),
 		floatPtrArg(args, "min_score"),
 		intArgOr(args, "limit", 20),
 		stringArg(args, "cursor"),
@@ -356,7 +355,6 @@ func (t *readSkillExperiencesTool) Invoke(ctx context.Context, inputs map[string
 	recordIDs := stringSliceArg(args, "record_ids")
 	result, err := t.queryService.ReadExperiences(
 		ctx, subject,
-		subjectKindArg(args),
 		recordIDs,
 		intArgOr(args, "max_content_chars", 2000),
 	)
@@ -443,7 +441,7 @@ func (t *simplifySkillExperiencesTool) Invoke(ctx context.Context, inputs map[st
 	if _, err := experience.NormalizeSimplifyDraft(normalizedSubject, rawActions); err != nil {
 		return Failure(err).ToMap(), nil
 	}
-	result, err := t.submissionService.ApplySimplifyActions(ctx, subject, subjectKindArg(args), rawActions)
+	result, err := t.submissionService.ApplySimplifyActions(ctx, subject, rawActions)
 	if err != nil {
 		return Failure(err).ToMap(), nil
 	}
@@ -571,16 +569,6 @@ func stringSliceArg(args map[string]any, key string) []string {
 		out = append(out, fmt.Sprintf("%v", v))
 	}
 	return out
-}
-
-// subjectKindArg 取 subject kind（Python subject payload 内的 kind 优先）。
-func subjectKindArg(args map[string]any) string {
-	if subject, ok := args["subject"].(map[string]any); ok {
-		if kind, ok := subject["kind"].(string); ok {
-			return kind
-		}
-	}
-	return ""
 }
 
 // buildTaskDescription 构建审查子代理任务描述。

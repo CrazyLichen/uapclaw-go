@@ -106,11 +106,9 @@ func NewExperienceQueryService(store *checkpointing.EvolutionStore) *ExperienceQ
 
 // ListExperiences 返回有界的结构化经验元数据（游标分页）。
 // Python: list_experiences (query.py:83-125)。
-// subjectKind 按 Task 0 裁决预留（空串=None 语义，⤴️15.24c 补 store 透传）。
 func (s *ExperienceQueryService) ListExperiences(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	minScore *float64,
 	limit int,
 	cursor string,
@@ -124,15 +122,15 @@ func (s *ExperienceQueryService) ListExperiences(
 		return nil, err
 	}
 	skillName := normalizedSubject.Name
-	if !s.store.SkillExists(ctx, skillName) {
+	// Python list_experiences: skill_exists(skill_name, subject_kind=normalized_subject.kind)
+	if !s.store.SkillExistsForKind(ctx, skillName, normalizedSubject.Kind) {
 		return nil, fmt.Errorf("skill not found: %s", skillName)
 	}
 	if limit < 1 || limit > 100 {
 		return nil, fmt.Errorf("limit must be between 1 and 100")
 	}
-	_ = subjectKind // ⤴️15.24c：store subject_kind 透传（偏差登记 spec）
 
-	records := s.store.GetRecordsByScore(ctx, skillName, minScore)
+	records := s.store.GetRecordsByScoreForKind(ctx, skillName, minScore, normalizedSubject.Kind)
 	filtered, err := FilterExperienceIndexRecords(records, target, section, query, sortOrder)
 	if err != nil {
 		return nil, err
@@ -163,7 +161,6 @@ func (s *ExperienceQueryService) ListExperiences(
 func (s *ExperienceQueryService) ReadExperiences(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	recordIDs []string,
 	maxContentChars int,
 ) (map[string]any, error) {
@@ -172,7 +169,7 @@ func (s *ExperienceQueryService) ReadExperiences(
 		return nil, err
 	}
 	skillName := normalizedSubject.Name
-	if !s.store.SkillExists(ctx, skillName) {
+	if !s.store.SkillExistsForKind(ctx, skillName, normalizedSubject.Kind) {
 		return nil, fmt.Errorf("skill not found: %s", skillName)
 	}
 	if len(recordIDs) == 0 {
@@ -181,9 +178,8 @@ func (s *ExperienceQueryService) ReadExperiences(
 	if maxContentChars < 1 || maxContentChars > 20000 {
 		return nil, fmt.Errorf("max_content_chars must be between 1 and 20000")
 	}
-	_ = subjectKind // ⤴️15.24c：store subject_kind 透传（偏差登记 spec）
 
-	records := s.store.LoadRecordsByIds(ctx, skillName, recordIDs)
+	records := s.store.LoadRecordsByIdsForKind(ctx, skillName, recordIDs, normalizedSubject.Kind)
 	foundIDs := make(map[string]bool, len(records))
 	for i := range records {
 		foundIDs[records[i].ID] = true

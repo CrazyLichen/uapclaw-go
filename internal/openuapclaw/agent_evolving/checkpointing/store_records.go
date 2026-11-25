@@ -86,7 +86,13 @@ func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string,
 //
 // Python: 异常语义：错误场景返回 (nil, error)，首次无记录返回 (EmptyEvolutionLog, nil)
 func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name string) (*EvolutionLog, error) {
-	skillDir := h.store.ResolveSkillDir(ctx, name)
+	return h.LoadFullEvolutionLogForKind(ctx, name, "")
+}
+
+// LoadFullEvolutionLogForKind 按 subject_kind 过滤加载完整演进日志。
+// Python: StoreRecordsHelper.load_full_evolution_log(name, subject_kind=...)。
+func (h *StoreRecordsHelper) LoadFullEvolutionLogForKind(ctx context.Context, name, subjectKind string) (*EvolutionLog, error) {
+	skillDir := h.store.ResolveSkillDirForKind(ctx, name, false, subjectKind)
 	if skillDir == "" {
 		return nil, fmt.Errorf("skill %s not found in evolution store", name)
 	}
@@ -176,7 +182,13 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 // GetRecordsByScore 按分数获取记录。
 // Python: StoreRecordsHelper.get_records_by_score(name, min_score)
 func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
-	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	return h.GetRecordsByScoreForKind(ctx, name, minScore, "")
+}
+
+// GetRecordsByScoreForKind 按 subject_kind 过滤按分数获取记录。
+// Python: StoreRecordsHelper.get_records_by_score(name, min_score, subject_kind=...)。
+func (h *StoreRecordsHelper) GetRecordsByScoreForKind(ctx context.Context, name string, minScore *float64, subjectKind string) []EvolutionRecord {
+	evoLog, err := h.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
 	if err != nil {
 		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] get_records_by_score:  load failed")
 		return nil
@@ -200,10 +212,16 @@ func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string,
 // Python: StoreRecordsHelper.load_records_by_ids (store_records.py:312-324)——
 // 空 id 列表直接返回；缺失 id 静默跳过（unknown 检测由上层负责）。
 func (h *StoreRecordsHelper) LoadRecordsByIds(ctx context.Context, name string, recordIDs []string) []EvolutionRecord {
+	return h.LoadRecordsByIdsForKind(ctx, name, recordIDs, "")
+}
+
+// LoadRecordsByIdsForKind 按 subject_kind 过滤按 id 加载记录（保序）。
+// Python: StoreRecordsHelper.load_records_by_ids(name, record_ids, subject_kind=...)。
+func (h *StoreRecordsHelper) LoadRecordsByIdsForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) []EvolutionRecord {
 	if len(recordIDs) == 0 {
 		return []EvolutionRecord{}
 	}
-	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
 	if err != nil {
 		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] load_records_by_ids: load failed")
 		return []EvolutionRecord{}

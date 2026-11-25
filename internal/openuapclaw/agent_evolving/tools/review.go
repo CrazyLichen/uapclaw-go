@@ -286,7 +286,6 @@ func (t *reviewListSkillExperiencesTool) Invoke(ctx context.Context, inputs map[
 	}
 	result, err := qs.ListExperiences(
 		ctx, scope.Subject,
-		subjectKindArg(args),
 		floatPtrArg(args, "min_score"),
 		intArgOr(args, "limit", 50),
 		stringArg(args, "cursor"),
@@ -321,7 +320,6 @@ func (t *reviewReadSkillExperiencesTool) Invoke(ctx context.Context, inputs map[
 	}
 	result, err := qs.ReadExperiences(
 		ctx, scope.Subject,
-		subjectKindArg(args),
 		stringSliceArg(args, "record_ids"),
 		intArgOr(args, "max_content_chars", 2000),
 	)

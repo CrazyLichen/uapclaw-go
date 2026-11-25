@@ -68,5 +68,5 @@ func (a *ExperienceSubmissionServiceAdapter) PrepareSimplifySubmission(subject m
 	for _, action := range actions {
 		anyActions = append(anyActions, action)
 	}
-	return a.svc.PrepareSimplifySubmission(context.Background(), subject, "", anyActions)
+	return a.svc.PrepareSimplifySubmission(context.Background(), subject, anyActions)
 }

@@ -66,7 +66,7 @@ func TestExperienceSubmissionServiceAdapter_Preflight(t *testing.T) {
 
 	// 提交服务侧：ApplyExperienceDrafts 落盘链（bindings 共享 pending 表）
 	adapter2 := experience.NewExperienceSubmissionService(store)
-	_, err = adapter2.ApplyExperienceDrafts(ctx, subject, "", []any{map[string]any{
+	_, err = adapter2.ApplyExperienceDrafts(ctx, subject, []any{map[string]any{
 		"summary": "部署失败先查端口占用",
 		"content": "deploy 前先检查端口占用",
 		"target":  "body",

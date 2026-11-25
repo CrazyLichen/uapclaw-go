@@ -82,7 +82,6 @@ func (s *ExperienceSubmissionService) BindPendingApprovalSnapshots(pendingApprov
 func (s *ExperienceSubmissionService) ApplyExperienceDrafts(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	drafts []any,
 	source string,
 ) (map[string]any, error) {
@@ -90,7 +89,6 @@ func (s *ExperienceSubmissionService) ApplyExperienceDrafts(
 	if err != nil {
 		return nil, err
 	}
-	_ = subjectKind // ⤴️15.24c：store subject_kind 透传（偏差登记 spec）
 	return s.applyDrafts(ctx, normalizedSubject, draft.Experiences, source)
 }
 
@@ -99,10 +97,9 @@ func (s *ExperienceSubmissionService) ApplyExperienceDrafts(
 func (s *ExperienceSubmissionService) ApplySimplifyActions(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	actions []any,
 ) (map[string]any, error) {
-	normalizedSubject, draft, err := s.ValidateSimplifyActions(ctx, subject, subjectKind, actions)
+	normalizedSubject, draft, err := s.ValidateSimplifyActions(ctx, subject, actions)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +131,8 @@ func (s *ExperienceSubmissionService) ValidateExperienceDrafts(
 		return EvolutionSubject{}, EvolveDraft{}, err
 	}
 	skillName := normalizedSubject.Name
-	if !s.store.SkillExists(ctx, skillName) {
+	// Python L118: skill_exists(skill_name, subject_kind=normalized_subject.kind)
+	if !s.store.SkillExistsForKind(ctx, skillName, normalizedSubject.Kind) {
 		return EvolutionSubject{}, EvolveDraft{}, fmt.Errorf("skill not found: %s", skillName)
 	}
 	draft, err := NormalizeEvolveDraft(normalizedSubject, drafts)
@@ -149,19 +147,19 @@ func (s *ExperienceSubmissionService) ValidateExperienceDrafts(
 func (s *ExperienceSubmissionService) ValidateSimplifyActions(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	actions []any,
 ) (EvolutionSubject, SimplifyDraft, error) {
 	normalizedSubject, err := NormalizeSubject(subject, nil)
 	if err != nil {
 		return EvolutionSubject{}, SimplifyDraft{}, err
 	}
-	_ = subjectKind // ⤴️15.24c：store subject_kind 透传（偏差登记 spec）
 	skillName := normalizedSubject.Name
-	if !s.store.SkillExists(ctx, skillName) {
+	// Python L130: subject_kind = normalized_subject.kind
+	subjectKind := normalizedSubject.Kind
+	if !s.store.SkillExistsForKind(ctx, skillName, subjectKind) {
 		return EvolutionSubject{}, SimplifyDraft{}, fmt.Errorf("skill not found: %s", skillName)
 	}
-	evoLog, err := s.store.LoadFullEvolutionLog(ctx, skillName)
+	evoLog, err := s.store.LoadFullEvolutionLogForKind(ctx, skillName, subjectKind)
 	if err != nil {
 		return EvolutionSubject{}, SimplifyDraft{}, err
 	}
@@ -221,10 +219,9 @@ func (s *ExperienceSubmissionService) ApplyPreparedEvolveSubmission(
 func (s *ExperienceSubmissionService) PrepareSimplifySubmission(
 	ctx context.Context,
 	subject map[string]any,
-	subjectKind string,
 	actions []any,
 ) error {
-	_, _, err := s.ValidateSimplifyActions(ctx, subject, subjectKind, actions)
+	_, _, err := s.ValidateSimplifyActions(ctx, subject, actions)
 	return err
 }
 

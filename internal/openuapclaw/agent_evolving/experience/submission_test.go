@@ -57,7 +57,7 @@ func TestApplyExperienceDrafts_成功(t *testing.T) {
 	store, svc := newSubmissionFixture(t)
 	ctx := context.Background()
 
-	result, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", submissionDrafts(), "agent_evolve_tool")
+	result, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), submissionDrafts(), "agent_evolve_tool")
 	require.NoError(t, err)
 	assert.Equal(t, true, result["success"])
 	assert.Equal(t, "evolve", result["operation"])
@@ -81,7 +81,7 @@ func TestApplyExperienceDrafts_技能不存在(t *testing.T) {
 	_, svc := newSubmissionFixture(t)
 	_, err := svc.ApplyExperienceDrafts(
 		context.Background(),
-		map[string]any{"kind": "skill", "name": "nope"}, "", submissionDrafts(), "agent_evolve_tool")
+		map[string]any{"kind": "skill", "name": "nope"}, submissionDrafts(), "agent_evolve_tool")
 	require.Error(t, err)
 	assert.Equal(t, "skill not found: nope", err.Error())
 }
@@ -150,7 +150,7 @@ func TestApplySimplifyActions(t *testing.T) {
 	ctx := context.Background()
 
 	// 先落一条记录供 refine
-	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", submissionDrafts(), "agent_evolve_tool")
+	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), submissionDrafts(), "agent_evolve_tool")
 	require.NoError(t, err)
 	log, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestApplySimplifyActions(t *testing.T) {
 		"record_id":   recordID,
 		"new_content": "deploy 前先检查端口占用与防火墙",
 	}}
-	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), "", actions)
+	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), actions)
 	require.NoError(t, err)
 	assert.Equal(t, true, result["success"])
 	assert.Equal(t, "simplify", result["operation"])
@@ -174,7 +174,7 @@ func TestApplySimplifyActions(t *testing.T) {
 
 	// 引用不存在的 record_id → 校验失败（ValidateSimplifyRecordRefs）
 	badActions := []any{map[string]any{"action": "refine", "record_id": "ev_nope", "new_content": "x"}}
-	_, err = svc.ApplySimplifyActions(ctx, submissionSubject(), "", badActions)
+	_, err = svc.ApplySimplifyActions(ctx, submissionSubject(), badActions)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "ev_nope") || strings.Contains(err.Error(), "record"))
 }
@@ -184,7 +184,7 @@ func TestValidateSimplifyActions_技能不存在(t *testing.T) {
 	_, svc := newSubmissionFixture(t)
 	err := svc.PrepareSimplifySubmission(
 		context.Background(),
-		map[string]any{"kind": "skill", "name": "nope"}, "", []any{map[string]any{}})
+		map[string]any{"kind": "skill", "name": "nope"}, []any{map[string]any{}})
 	require.Error(t, err)
 	assert.Equal(t, "skill not found: nope", err.Error())
 }
@@ -210,7 +210,7 @@ func TestBindPendingApprovalSnapshots(t *testing.T) {
 func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	store, svc := newSubmissionFixture(t)
 	ctx := context.Background()
-	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", []any{
+	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), []any{
 		map[string]any{"summary": "经验一", "content": "内容一", "target": "body", "section": "Troubleshooting"},
 		map[string]any{"summary": "经验二", "content": "内容二", "target": "body", "section": "Troubleshooting"},
 	}, "agent_evolve_tool")
@@ -221,7 +221,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	keepID, removeID := log.Entries[0].ID, log.Entries[1].ID
 
 	// MERGE：keep 主体 + remove 另一条
-	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), "", []any{map[string]any{
+	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), []any{map[string]any{
 		"action": "MERGE", "record_id": keepID,
 		"merge_remove_ids": []any{removeID},
 		"new_content":      "合并后的内容",
@@ -236,7 +236,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	log2, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
 	require.NoError(t, err)
 	remaining := log2.Entries[0].ID
-	result, err = svc.ApplySimplifyActions(ctx, submissionSubject(), "", []any{map[string]any{
+	result, err = svc.ApplySimplifyActions(ctx, submissionSubject(), []any{map[string]any{
 		"action": "DELETE", "record_id": remaining,
 	}})
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	assert.Equal(t, 1, counts["deleted"])
 
 	// 全部删完后再校验引用 → not found
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{
 		"action": "DELETE", "record_id": remaining,
 	}})
 	require.Error(t, err)
@@ -258,16 +258,16 @@ func TestSubmissionValidateErrorPaths(t *testing.T) {
 
 	// 非法 subject（缺 kind）→ NormalizeSubject 失败
 	badSubject := map[string]any{"name": "demo_skill"}
-	_, err := svc.ApplyExperienceDrafts(ctx, badSubject, "", submissionDrafts(), "agent_evolve_tool")
+	_, err := svc.ApplyExperienceDrafts(ctx, badSubject, submissionDrafts(), "agent_evolve_tool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "subject")
 
 	// ApplySimplifyActions 技能不存在（L133 return）
-	_, err = svc.ApplySimplifyActions(ctx, map[string]any{"kind": "skill", "name": "nope"}, "", []any{map[string]any{"action": "DELETE", "record_id": "ev_x"}})
+	_, err = svc.ApplySimplifyActions(ctx, map[string]any{"kind": "skill", "name": "nope"}, []any{map[string]any{"action": "DELETE", "record_id": "ev_x"}})
 	require.Error(t, err)
 
 	// ValidateSimplifyActions 非法动作（NormalizeSimplifyDraft 失败）
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{"action": "bogus", "record_id": "ev_x"}})
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{"action": "bogus", "record_id": "ev_x"}})
 	require.Error(t, err)
 
 	// ValidateExperienceDrafts 草稿为空
@@ -275,12 +275,12 @@ func TestSubmissionValidateErrorPaths(t *testing.T) {
 	require.Error(t, err)
 
 	// store 引用存在性：PrepareSimplify 成功路径
-	_, err = svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", submissionDrafts(), "agent_evolve_tool")
+	_, err = svc.ApplyExperienceDrafts(ctx, submissionSubject(), submissionDrafts(), "agent_evolve_tool")
 	require.NoError(t, err)
 	log, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
 	require.NoError(t, err)
 	require.NotEmpty(t, log.Entries)
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{
 		"action": "DELETE", "record_id": log.Entries[0].ID,
 	}})
 	assert.NoError(t, err)
