@@ -160,9 +160,10 @@ func (d *DeepAdapter) deliverSessionInputImpl(
 // Python: interface_deep.py deliver_active_session_input（:18743-18830）
 //
 // false 仅在"发送前需要新输出宿主"时返回。竞态三层防线：
-//   ① 前置判定（active_round/output stream）
-//   ② await 准备后复核（图片准备期间目标轮可能结束）
-//   ③ 与校验同一临界区内同步入队（无任何可让渡点）
+//
+//	① 前置判定（active_round/output stream）
+//	② await 准备后复核（图片准备期间目标轮可能结束）
+//	③ 与校验同一临界区内同步入队（无任何可让渡点）
 func (d *DeepAdapter) deliverActiveSessionInput(
 	ctx context.Context, request *schema.AgentRequest, inputs map[string]any,
 ) (bool, error) {

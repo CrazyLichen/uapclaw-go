@@ -13,8 +13,8 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -151,7 +151,6 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 	}
 	return entry, nil
 }
-
 
 // ──────────────────────────── 以下为 agent_adapter/session_input.py 的两守卫 rail 与账本 ────────────────────────────
 

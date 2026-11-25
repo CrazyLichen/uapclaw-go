@@ -23,8 +23,10 @@ type fakeSteerTarget struct {
 	enqueueErr  error
 }
 
-func (f *fakeSteerTarget) ActiveRoundIs(bound any) bool { return f.activeRound != nil && f.activeRound == bound }
-func (f *fakeSteerTarget) HasOutputStream() bool        { return f.hasStream }
+func (f *fakeSteerTarget) ActiveRoundIs(bound any) bool {
+	return f.activeRound != nil && f.activeRound == bound
+}
+func (f *fakeSteerTarget) HasOutputStream() bool { return f.hasStream }
 func (f *fakeSteerTarget) EnqueueSteerEntry(display string) error {
 	if f.enqueueErr != nil {
 		return f.enqueueErr
