@@ -162,3 +162,45 @@ func TestExecuteUnaryTracked_取消仍CANCELLED(t *testing.T) {
 		t.Errorf("取消应终态 CANCELLED，实际 %v", handle.State)
 	}
 }
+
+// TestSubmitUnary_取消后仍执行 [25.6 回退] 调用方 ctx 取消不静默吞任务。
+func TestSubmitUnary_取消后仍执行(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 提交前就取消
+	done := make(chan struct{})
+	_, err := c.SubmitUnary(ctx, "s1", "req-cu", SessionWorkKindChatUnary,
+		func(context.Context) (any, error) { close(done); return "ok", nil }, UnaryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("ctx 取消后任务仍应执行（回退对齐 Python）")
+	}
+}
+
+// TestSubmitAndWait_放弃等待不吞排队项 [25.6 回退] 提交方弃等后排队项照常执行。
+func TestSubmitAndWait_放弃等待不吞排队项(t *testing.T) {
+	s := NewSessionWorkScheduler()
+	h := NewSessionExecutionHandle("exec-1", "s1", "req-1", 1, SessionWorkKindChatUnary, "ch")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+	}()
+	_, _ = s.SubmitAndWait(ctx, h, func(context.Context) (any, error) {
+		time.Sleep(50 * time.Millisecond)
+		return "done", nil
+	})
+	// 排队项应仍可执行：等待器释放后重跑同一 handle 的操作应成功
+	value, err := s.SubmitAndWait(context.Background(), h, func(context.Context) (any, error) {
+		return "done2", nil
+	})
+	if err == nil && value != "done2" {
+		t.Errorf("重跑应成功，实际 %v", value)
+	}
+	_ = cancel
+}

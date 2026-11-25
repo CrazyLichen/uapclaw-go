@@ -209,14 +209,8 @@ func (s *SessionWorkScheduler) SubmitAndWait(
 		}
 		return res.value, res.err
 	case <-ctx.Done():
-		// 提交方放弃等待：把排队项标记取消，processor 取出后跳过
-		s.mu.Lock()
-		if idx := s.queuedIndex[h.SessionID]; idx != nil {
-			if stillQueued, ok := idx[h.ExecutionID]; ok && stillQueued == item {
-				item.markCancelled()
-			}
-		}
-		s.mu.Unlock()
+		// [25.6 回退] Python 无"调用方放弃等待 → 吞掉排队项"路径：
+		// 排队项照常执行或经显式 CancelHandles 摘除，这里只放弃等待。
 		return nil, ctx.Err()
 	}
 }

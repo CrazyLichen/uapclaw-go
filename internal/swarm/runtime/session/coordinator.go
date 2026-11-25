@@ -301,12 +301,10 @@ func (c *RuntimeSessionCoordinator) SubmitUnary(
 	}
 	snapshot := c.registry.SnapshotValue(handle.ExecutionID)
 	go func() {
+		// [25.6 回退] Python 无"调用方 ctx 取消 → 静默不执行"路径；
+		// 任务一经提交必须执行，取消只走显式 CancelExecution。
 		if workKind == SessionWorkKindSessionMessage {
-			select {
-			case <-record.controlReady.Wait():
-			case <-ctx.Done():
-				return
-			}
+			<-record.controlReady.Wait()
 		}
 		_, _ = c.runUnary(ctx, record, handle, operation, opts)
 	}()
