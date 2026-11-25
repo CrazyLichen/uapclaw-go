@@ -2342,6 +2342,16 @@ func (r *AgentRuntime) RunStream(ctx context.Context, sessionID, requestID strin
 	return r.coordinator.RunStream(ctx, sessionID, requestID, kind, operation, options, emit)
 }
 
+// StreamSessionInput 补充输入分流接线转发（三守卫+parent 绑定+idle 分流）。
+// Python: service.py:2304-2359 self._session_coordinator.stream_session_input(...)。
+func (r *AgentRuntime) StreamSessionInput(ctx context.Context,
+	opts sessionpkg.StreamSessionInputOptions, emit func(*schema.AgentResponseChunk) bool) error {
+	if r.coordinator == nil {
+		return ErrCoordinatorUnavailable
+	}
+	return r.coordinator.StreamSessionInput(ctx, opts, emit)
+}
+
 // RunTeamStream 团队流式执行接线转发。
 // Python: service.py:2399 self._session_coordinator.run_team_stream(...)。
 func (r *AgentRuntime) RunTeamStream(ctx context.Context, sessionID, requestID string,

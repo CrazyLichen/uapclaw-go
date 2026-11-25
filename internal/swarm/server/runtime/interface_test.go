@@ -824,6 +824,11 @@ func (h *testRuntimeHandle) RunTeamStream(context.Context, string, string, swses
 	return nil
 }
 
+func (h *testRuntimeHandle) StreamSessionInput(context.Context,
+	swsession.StreamSessionInputOptions, func(*agentschema.AgentResponseChunk) bool) error {
+	return nil
+}
+
 func (h *testRuntimeHandle) SessionWorkKindOf(*schema.AgentRequest) *swsession.SessionWorkKind {
 	return nil
 }

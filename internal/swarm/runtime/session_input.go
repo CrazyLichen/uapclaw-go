@@ -33,6 +33,27 @@ type SessionInputTargetError = sessionpkg.SessionInputTargetError
 // SessionInputQueueRequiredError 跨会话输入须等普通任务准入（别名）。
 type SessionInputQueueRequiredError = sessionpkg.SessionInputQueueRequiredError
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// sessionInputRejectedCode 已知拒收错误码（别名）。
+	sessionInputRejectedCode = sessionpkg.SessionInputRejectedCode
+	// sessionInputTargetChangedCode 目标变更错误码（别名）。
+	sessionInputTargetChangedCode = sessionpkg.SessionInputTargetChangedCode
+	// sessionInputQueueRequiredCode 跨会话排队错误码（别名）。
+	sessionInputQueueRequiredCode = sessionpkg.SessionInputQueueRequiredCode
+)
+
+// isTruthySessionInputValue 复刻 Python 真值判断（别名转发，既有调用方不动）。
+func isTruthySessionInputValue(value any) bool {
+	return sessionpkg.IsTruthySessionInputValue(value)
+}
+
+// normalizeSessionInputRaw 归一化输入意图取值（别名转发，既有测试不动）。
+func normalizeSessionInputRaw(value any) string {
+	return sessionpkg.NormalizeSessionInputRaw(value)
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 var (

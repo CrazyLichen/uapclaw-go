@@ -377,3 +377,8 @@ func (f *fakeCoordinator) RunTeamStream(context.Context, string, string, session
 	func(context.Context, sessionpkg.TeamExecutionContext) (<-chan *swarmschema.AgentResponseChunk, error), sessionpkg.StreamOptions, func(*swarmschema.AgentResponseChunk) bool) error {
 	return nil
 }
+
+func (f *fakeCoordinator) StreamSessionInput(context.Context,
+	sessionpkg.StreamSessionInputOptions, func(*swarmschema.AgentResponseChunk) bool) error {
+	return nil
+}

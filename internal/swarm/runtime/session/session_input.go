@@ -215,3 +215,15 @@ func isTruthySessionInputValue(value any) bool {
 		return true
 	}
 }
+
+// IsTruthySessionInputValue 复刻 Python 真值判断的导出包装。
+// [Go 归属] runtime 侧既有测试与调用方经别名使用；本体 normalizeSessionInputRaw
+// 同包非导出。
+func IsTruthySessionInputValue(value any) bool {
+	return isTruthySessionInputValue(value)
+}
+
+// NormalizeSessionInputRaw 归一化输入意图取值的导出包装（runtime 侧既有测试用）。
+func NormalizeSessionInputRaw(value any) string {
+	return normalizeSessionInputRaw(value)
+}
