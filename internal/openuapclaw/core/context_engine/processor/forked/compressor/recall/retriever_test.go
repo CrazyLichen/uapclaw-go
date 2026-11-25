@@ -204,5 +204,4 @@ func TestRecallError_Message(t *testing.T) {
 		t.Errorf("错误消息不符，实际 %s", err.Error())
 	}
 	var _ error = err
-	fmt.Sprint(err)
 }
