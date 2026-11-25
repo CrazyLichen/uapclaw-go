@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -272,6 +272,11 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	}
 	if v, ok := metadata["_input_parts"]; ok {
 		coreTask.Metadata["_input_parts"] = v
+	}
+	// 透传本轮图片附件（23.8 步骤 2.5；ctx 不跨队列，metadata 为载体，
+	// executor.go 消费侧写轮次 ctx；对齐 Python contextvar 语义）。
+	if v, ok := metadata["_multimodal_image_files"]; ok {
+		coreTask.Metadata["_multimodal_image_files"] = v
 	}
 
 	logger.Info(logComponent).

@@ -61,6 +61,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/worktree"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/workspace"
 )
 
@@ -421,6 +422,13 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 	if normErr != nil {
 		return nil, normErr
 	}
+	// 23.8 步骤 2.5（消费侧）：本轮图片附件从 inputs pop 后挂进 ctx——本 ctx
+	// 即本轮模型调用 rail 回调的 ctx 链起点（对齐 Python interface_deep.py
+	// :18412/:19177 inputs.pop("_multimodal_image_files") + set contextvar；
+	// D-23.8-1 修订：ctx 由消费侧重建，适配器侧改以 inputs 为载体）。
+	if files := turnctx.PopTurnMultimodalImageFiles(inputs); len(files) > 0 {
+		ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
+	}
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 	// ownsSession 标记会话是否由本次调用创建：创建方负责 post_run 收尾。
@@ -509,6 +517,13 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	invokeInputs, normErr := d.normalizeInputs(inputs)
 	if normErr != nil {
 		return nil, normErr
+	}
+	// 23.8 步骤 2.5（消费侧）：本轮图片附件从 inputs pop 后挂进 ctx——本 ctx
+	// 即本轮模型调用 rail 回调的 ctx 链起点（对齐 Python interface_deep.py
+	// :18412/:19177 inputs.pop("_multimodal_image_files") + set contextvar；
+	// D-23.8-1 修订：ctx 由消费侧重建，适配器侧改以 inputs 为载体）。
+	if files := turnctx.PopTurnMultimodalImageFiles(inputs); len(files) > 0 {
+		ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
 	}
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
@@ -1998,6 +2013,13 @@ func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem
 	if normErr != nil {
 		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: normErr.Error()}
 	}
+	// 23.8 步骤 2.5（消费侧，SendInput work loop 路径）：图片附件从 inputs pop
+	// 后经任务元数据过队列（ctx 不跨队列边界），executor 侧写轮次 ctx。
+	// Python: interface_deep.py:18412（inputs.pop → set contextvar）。
+	var turnImageMeta map[string]any
+	if files := turnctx.PopTurnMultimodalImageFiles(inputs); len(files) > 0 {
+		turnImageMeta = map[string]any{"_multimodal_image_files": files}
+	}
 
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 	var result map[string]any
@@ -2022,10 +2044,14 @@ func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem
 				}
 				d.configMu.RUnlock()
 
+				submitOpts := []task_loop.RoundOption{task_loop.WithTaskID(taskID)}
+				if turnImageMeta != nil {
+					submitOpts = append(submitOpts, task_loop.WithRoundMetadata(turnImageMeta))
+				}
 				if submitErr := ctrl.SubmitRound(ctx, sess, fmt.Sprintf("%v", work.Query()),
 					work.IsFollowUp, true,
 					invokeInputs.RunKind, invokeInputs.RunContext,
-					task_loop.WithTaskID(taskID)); submitErr != nil {
+					submitOpts...); submitErr != nil {
 					return submitErr
 				}
 				result = ctrl.WaitRoundCompletion(ctx, &timeout)
@@ -3262,6 +3288,16 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 
 	effectiveInputs := toEffectiveInputs(modified)
 
+	// 23.8 步骤 2.5（消费侧）：本轮图片附件从 inputs pop 后挂进 turn ctx。
+	// Python: inputs.pop("_multimodal_image_files") → set_current_multimodal_image_files
+	// （interface_deep.py:18412/:19177/:19681 三处调用点的共同语义）。
+	// Go 的 SendInput 队列解耦了适配器 goroutine 与交互消费 goroutine，
+	// 适配器侧写 request ctx 到不了 rail（D-23.8-1 修订），故对齐 Python
+	// 在消费侧（本函数即每轮模型调用的 ctx 起点）pop + 写 ctx。
+	if files := turnctx.PopTurnMultimodalImageFiles(effectiveInputs); len(files) > 0 {
+		ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
+	}
+
 	// Python: run_single_round_invoke 的 streaming 参数（默认 False）决定是否
 	// 传 _streaming=True：仅 resume 路径传 streaming=True（deep_agent.py:3789），
 	// 普通 Invoke 不传（deep_agent.py:3393 → 走非流式分支）。
@@ -3289,6 +3325,16 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 // runTaskLoopInvoke 执行外层任务循环，返回最后一轮结果。
 // Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112-2144)
 func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+	// 23.8 步骤 2.5（消费侧，task loop 路径）：图片附件从 invoke inputs pop 后
+	// 挂进 ctx——ctx 贯穿 loop 全部轮次（等价 Python task 级 contextvar 继承），
+	// executor 各轮的 before_model_call rail 均可读取。
+	// Python: interface_deep.py:18412（_multimodal_image_files pop + set）。
+	if modified2, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok {
+		eff := toEffectiveInputs(modified2)
+		if files := turnctx.PopTurnMultimodalImageFiles(eff); len(files) > 0 {
+			ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
+		}
+	}
 	sessConcrete, ok := sess.(*session.Session)
 	if !ok || sessConcrete == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
@@ -3542,6 +3588,12 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	if !ok || sessConcrete == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
 			exception.WithMsg("任务循环模式需要 *session.Session 类型会话"))
+	}
+
+	// 23.8 步骤 2.5（消费侧，task loop stream 路径）：与 runTaskLoopInvoke
+	// 同款 pop + 写 ctx（interface_deep.py:18412/:19177 双调用点对齐）。
+	if files := turnctx.PopTurnMultimodalImageFiles(toEffectiveInputs(invokeInputs)); len(files) > 0 {
+		ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
 	}
 
 	// 构建 AgentCallbackContext

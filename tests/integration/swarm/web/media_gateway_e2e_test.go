@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	webfiledownload "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	vda "github.com/uapclaw/uapclaw-go/internal/swarm/common/verified_download_assets"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
@@ -91,6 +93,10 @@ models:
         api_key: mock-api-key
         api_base: http://127.0.0.1:1
         client_id: %s
+        # U5 图片全链依赖四级判定的「模型声明」档（resolveImageMultimodal，
+        # internal/openuapclaw/harness/rails/multimodal.go:69）：
+        # Python ModelClientConfig extra="allow" 的 supports_vision → Go 显式字段。
+        supports_vision: true
       is_default: true
 `, s.dataDir, s.providerName, s.providerName)
 	s.Require().NoError(os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(yaml), 0o644))
@@ -276,6 +282,103 @@ func (s *MediaGatewayE2ESuite) TestU4_Steer_引用校验() {
 	s.Require().Contains(err.Error(), "outside the current session uploads")
 }
 
+// TestU5_ChatSend_图片全链 真实 WS 帧全链：media.persist 落盘 → chat.send
+// 只带 path（与前端 steerImageMediaRecords 同形）→ adapter 入口
+// ExtractMultimodalImageFiles → WithMultimodalImageFiles(ctx)（D-23.8-1）→
+// MultimodalImageRail.BeforeModelCall 装窗口变形器 → mock LLM 收到的 user
+// 消息同时含文本与 image_url part（图片字节内联）。
+// 补齐「分段验证」的接缝：params→ctx→rail→窗口组装→模型入参一条用例打穿。
+// Python: interface_deep.py:18412 set_current_multimodal_image_files +
+// multimodal_image_rail.py:40-59 before_model_call。
+func (s *MediaGatewayE2ESuite) TestU5_ChatSend_图片全链() {
+	conn := s.dial()
+	defer conn.Close()
+	sid := fmt.Sprintf("img_full_%d", time.Now().UnixNano())
+
+	// 1) media.persist 落盘拿 path（复用 U1 链路）
+	resp := s.wsRequest(conn, "req-u5a", "media.persist", map[string]any{
+		"session_id": sid,
+		"content":    "",
+		"media_items": []any{
+			map[string]any{"type": "image", "filename": "cat.png", "mime_type": "image/png",
+				"base64_data": base64.StdEncoding.EncodeToString(tinyPNG1x1)},
+		},
+	})
+	s.Require().True(resp.OK, "media.persist 应成功: %v", resp.Payload)
+	stored := resp.Payload["media_items"].([]any)[0].(map[string]any)
+	path, _ := stored["path"].(string)
+	s.Require().NotEmpty(path)
+
+	// 2) chat.send：media_items 只带 path（前端 steerImageMediaRecords 同形，
+	//    base64 不再随消息走），query 为纯文本
+	chatReq := map[string]any{
+		"type":   "req",
+		"id":     "req-u5b",
+		"method": "chat.send",
+		"params": map[string]any{
+			"session_id": sid,
+			"query":      "describe this image",
+			"media_items": []any{
+				map[string]any{"type": "image", "path": path,
+					"filename": "cat.png", "mime_type": "image/png"},
+			},
+		},
+	}
+	payload, err := json.Marshal(chatReq)
+	s.Require().NoError(err)
+	s.Require().NoError(conn.SetWriteDeadline(time.Now().Add(10 * time.Second)))
+	s.Require().NoError(conn.WriteMessage(websocket.TextMessage, payload))
+
+	// 3) 读帧到终态（chat.final / execution.error / chat.error，单次截止防
+	//    连接死后重复读 panic——与 wsRequest 同款教训）
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	terminal := ""
+	for terminal == "" {
+		_, raw, err := conn.ReadMessage()
+		s.Require().NoError(err, "读流式帧失败")
+		var frame map[string]any
+		if json.Unmarshal(raw, &frame) != nil {
+			continue
+		}
+		switch evt, _ := frame["event"].(string); evt {
+		case "chat.final", "execution.error", "chat.error":
+			terminal = evt
+		}
+	}
+	s.Equal("chat.final", terminal, "chat.send 应正常终态（收到 %s）", terminal)
+
+	// 4) 断言 mock LLM 实收 user 消息：文本 + image_url part（data URI 承载
+	//    图片字节），证明 params→ctx→rail→窗口组装→模型入参全缝打通
+	s.Require().Greater(s.MockLLM.StreamCallCount(), 0, "应发生流式模型调用")
+	rec := s.MockLLM.LastStreamCall()
+	s.Require().NotNil(rec)
+	foundText, foundImage := false, false
+	for _, m := range rec.Messages.Messages() {
+		if m.GetRole() != llmschema.RoleTypeUser {
+			continue
+		}
+		parts := m.GetContent().Parts()
+		if len(parts) == 0 {
+			continue
+		}
+		for _, p := range parts {
+			switch p.Type {
+			case "text":
+				if strings.Contains(p.Text, "describe this image") {
+					foundText = true
+				}
+			case "image_url":
+				if p.ImageURL != nil && strings.HasPrefix(p.ImageURL.URL, "data:image/png;base64,") {
+					foundImage = true
+				}
+			}
+		}
+	}
+	s.True(foundText, "user 消息应含原始 query 文本 part")
+	s.True(foundImage, "user 消息应含 data URI image_url part（图片字节内联进模型输入）")
+}
+
+
 // ──────────────────────────── 下行 ────────────────────────────
 
 // TestD1_DownloadVerifiedChunk_分块下载 sealed-asset 令牌 → server 侧
@@ -404,8 +507,6 @@ func (s *MediaGatewayE2ESuite) wsRequest(conn *websocket.Conn, id, method string
 		}
 		return frame
 	}
-	s.FailNow("等待响应帧超时: " + id)
-	return nil
 }
 
 // pickFreePort 取空闲端口。

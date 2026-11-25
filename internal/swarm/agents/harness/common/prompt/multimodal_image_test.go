@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -314,25 +315,78 @@ func TestStripImageContentFromModelContext(t *testing.T) {
 
 // ──────────────────────────── EnsureMultimodalImageWindowMutator（D-23.8-3） ────────────────────────────
 
-// TestEnsureMultimodalImageWindowMutator 对齐 :277-305。
+// ensureStubContext 不实现 WindowMutatorsRegistrar 的载体（getattr 失败路径）。
+type ensureStubContext struct {
+	ceiface.ModelContext
+}
+
+// ensureRegistrarStub 实现注册器的最小载体。
+type ensureRegistrarStub struct {
+	ceiface.ModelContext
+	mutators []ceiface.WindowMutator
+}
+
+func (s *ensureRegistrarStub) WindowMutators() []ceiface.WindowMutator { return s.mutators }
+func (s *ensureRegistrarStub) SetWindowMutators(ms []ceiface.WindowMutator) { s.mutators = ms }
+
+// TestEnsureMultimodalImageWindowMutator 对齐 :277-294（替换式安装进持久投影链）。
 func TestEnsureMultimodalImageWindowMutator(t *testing.T) {
-	if mutator, ok := EnsureMultimodalImageWindowMutator(nil); ok || mutator != nil {
-		t.Fatal("空图列表应 (nil,false)")
-	}
 	img := mkImageFile(t, "w.png")
-	mutator, ok := EnsureMultimodalImageWindowMutator([]MultimodalImageFile{img})
-	if !ok {
-		t.Fatal("有图应返回闭包")
+
+	// 载体未实现注册器 → false（Python getattr(context, "_window_mutators") 非 list）
+	if EnsureMultimodalImageWindowMutator(&ensureStubContext{}, []MultimodalImageFile{img}) {
+		t.Fatal("载体不支持注册器应返回 false")
 	}
-	msgs := []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "q")}
-	updated := mutator(msgs)
-	if updated[0].GetContent().IsText() {
-		t.Fatal("闭包执行后应注入图片块")
+
+	reg := &ensureRegistrarStub{}
+	// 空图列表：只清标记项、不安装
+	if EnsureMultimodalImageWindowMutator(reg, nil) {
+		t.Fatal("空图列表应返回 false")
 	}
-	// 重复调用返回各自独立闭包（Python 替换式由 rail 持有层保证）
-	_, ok = EnsureMultimodalImageWindowMutator([]MultimodalImageFile{img})
-	if !ok {
-		t.Fatal("重复构造应成功")
+	if len(reg.WindowMutators()) != 0 {
+		t.Fatal("空图安装后列表应为空")
+	}
+
+	// 有图：安装 1 个带标记投影
+	if !EnsureMultimodalImageWindowMutator(reg, []MultimodalImageFile{img}) {
+		t.Fatal("有图应安装成功")
+	}
+	if len(reg.WindowMutators()) != 1 {
+		t.Fatalf("应安装 1 个 mutator，got %d", len(reg.WindowMutators()))
+	}
+
+	// 投影执行：最后一条 user 消息被注入图片块（窗口级，历史不改）
+	window := &ceiface.ContextWindow{
+		ContextMessages: []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "q")},
+	}
+	projected := reg.WindowMutators()[0].MutateWindow(window)
+	if projected.ContextMessages[0].GetContent().IsText() {
+		t.Fatal("投影执行后应注入图片块")
+	}
+	if window.ContextMessages[0].GetContent().IsText() == false && window != projected {
+		t.Fatal("原窗口不得被修改")
+	}
+
+	// 替换式：非标记项保留、标记项清旧挂新（Python :288-292）
+	other := ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow { return w })
+	reg.SetWindowMutators([]ceiface.WindowMutator{other})
+	if !EnsureMultimodalImageWindowMutator(reg, []MultimodalImageFile{img}) {
+		t.Fatal("替换式安装应成功")
+	}
+	got := reg.WindowMutators()
+	if len(got) != 2 {
+		t.Fatalf("应保留非标记项并追加新项，got %d", len(got))
+	}
+	if !IsMultimodalImageMutator(got[1]) || IsMultimodalImageMutator(got[0]) {
+		t.Fatal("标记识别错误：新项应带标记、保留项不带")
+	}
+
+	// 再装一次：标记项被清、总数不变
+	if !EnsureMultimodalImageWindowMutator(reg, []MultimodalImageFile{img}) {
+		t.Fatal("重复安装应成功")
+	}
+	if len(reg.WindowMutators()) != 2 {
+		t.Fatalf("替换式安装不得累积标记项，got %d", len(reg.WindowMutators()))
 	}
 }
 

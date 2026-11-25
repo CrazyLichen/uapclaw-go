@@ -27,12 +27,12 @@ func TestGetContextWindow_应用Mutator(t *testing.T) {
 	_, err := mc.AddMessages(context.Background(), []llmschema.BaseMessage{llmschema.NewUserMessage("hi")})
 	require.NoError(t, err)
 
-	appendMutator := func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
+	appendMutator := ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
 		cp := *w
 		cp.ContextMessages = append([]llmschema.BaseMessage{}, w.ContextMessages...)
 		cp.ContextMessages = append(cp.ContextMessages, llmschema.NewUserMessage("mutated"))
 		return &cp
-	}
+	})
 	window, err := mc.GetContextWindow(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewSystemMessage("sys")},
@@ -56,14 +56,14 @@ func TestGetContextWindow_Mutator链顺序(t *testing.T) {
 	require.NoError(t, err)
 
 	order := []string{}
-	first := func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
+	first := ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
 		order = append(order, "first")
 		return w
-	}
-	second := func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
+	})
+	second := ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
 		order = append(order, "second")
 		return w
-	}
+	})
 	_, err = mc.GetContextWindow(context.Background(), nil, nil, 0, 0,
 		ceiface.WithWindowMutators(first, second))
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestGetContextWindow_Mutator返回nil与空项(t *testing.T) {
 	_, err := mc.AddMessages(context.Background(), []llmschema.BaseMessage{llmschema.NewUserMessage("hi")})
 	require.NoError(t, err)
 
-	drop := func(w *ceiface.ContextWindow) *ceiface.ContextWindow { return nil }
+	drop := ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow { return nil })
 	window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0,
 		ceiface.WithWindowMutators(nil, drop))
 	require.NoError(t, err)

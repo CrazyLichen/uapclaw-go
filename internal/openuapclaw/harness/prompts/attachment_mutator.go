@@ -52,7 +52,7 @@ var (
 // BuildWindowMutator 构造附件消息的窗口投影（session 隔离 + role 替换）。
 // Python: build_model_window_mutator。useSystemRole=false 时原样返回，便于调用方统一装配。
 func BuildWindowMutator(sessionID string, useSystemRole bool) ceiface.WindowMutator {
-	return func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
+	return ceiface.WindowMutatorFunc(func(w *ceiface.ContextWindow) *ceiface.ContextWindow {
 		if w == nil || !useSystemRole {
 			return w
 		}
@@ -77,5 +77,5 @@ func BuildWindowMutator(sessionID string, useSystemRole bool) ceiface.WindowMuta
 		cp := *w
 		cp.ContextMessages = out
 		return &cp
-	}
+	})
 }

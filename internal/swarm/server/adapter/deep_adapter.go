@@ -1146,7 +1146,21 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
-	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
+	// 23.8 步骤 2.5（适配器侧）：本轮图片清单塞进 inputs，随 SendInput 队列
+	// 过河；消费侧（harness runSingleRoundInvoke）pop 后写 turn ctx。
+	// Python: inputs["_multimodal_image_files"] 由入站构建（interface_deep.py
+	// :18412 消费侧 pop）；Go 的 SendInput 解耦了两侧 goroutine，request ctx
+	// 不跨队列（D-23.8-1 修订），故对齐 Python 以 inputs 为载体。
+	if imgs := commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)); len(imgs) > 0 && inputs != nil {
+		raw := make([]map[string]any, 0, len(imgs))
+		for _, f := range imgs {
+			raw = append(raw, map[string]any{
+				"type": f.Type, "path": f.Path, "filename": f.Filename,
+				"mime_type": f.MimeType, "size_bytes": f.SizeBytes,
+			})
+		}
+		inputs["_multimodal_image_files"] = raw
+	}
 	// attach-only 被动订阅跳过模型校验（Python _model_config_error :8947-8955）：
 	// 纯观察者不提交输入、不建运行时，模型配置与它无关——不跳过则每次切会话/
 	// 刷新都被误拒（"spurious login-required error on every session switch or
@@ -1440,7 +1454,21 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
-	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
+	// 23.8 步骤 2.5（适配器侧）：本轮图片清单塞进 inputs，随 SendInput 队列
+	// 过河；消费侧（harness runSingleRoundInvoke）pop 后写 turn ctx。
+	// Python: inputs["_multimodal_image_files"] 由入站构建（interface_deep.py
+	// :18412 消费侧 pop）；Go 的 SendInput 解耦了两侧 goroutine，request ctx
+	// 不跨队列（D-23.8-1 修订），故对齐 Python 以 inputs 为载体。
+	if imgs := commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)); len(imgs) > 0 && inputs != nil {
+		raw := make([]map[string]any, 0, len(imgs))
+		for _, f := range imgs {
+			raw = append(raw, map[string]any{
+				"type": f.Type, "path": f.Path, "filename": f.Filename,
+				"mime_type": f.MimeType, "size_bytes": f.SizeBytes,
+			})
+		}
+		inputs["_multimodal_image_files"] = raw
+	}
 	// attach-only 被动订阅分流（Python :8947 模型检查跳过 + :19110 team 流内
 	// attach 短路的组合落点）：纯观察者不提交输入、不建运行时，模型配置与它
 	// 无关——不先分流则每次切会话/刷新都被误拒（"spurious login-required
@@ -2026,7 +2054,9 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx（Python: interface_deep.py :19684，D-23.8-1）
-	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
+	// 23.8 步骤 2.5（中断恢复路径）：无 inputs 载体；恢复轮经 resume inputs
+	// 重建（runSingleRoundInvoke），此处无 ctx 可写——恢复轮图片由 resume
+	// inputs 携带（D-23.8-1 修订：随队列载体），本入口不再直写。
 
 	// 步骤 3-4: session 规范化 + 活跃检查
 	normalizedSID := "default"

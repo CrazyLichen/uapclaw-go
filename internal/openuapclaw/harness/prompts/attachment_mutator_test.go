@@ -59,7 +59,7 @@ func TestBuildWindowMutator_只换附件消息(t *testing.T) {
 	window := ceiface.NewContextWindow()
 	window.ContextMessages = []llmschema.BaseMessage{attach, otherSession, plain}
 
-	out := BuildWindowMutator("s1", true)(window)
+	out := BuildWindowMutator("s1", true).MutateWindow(window)
 	require.IsType(t, &llmschema.SystemMessage{}, out.ContextMessages[0], "本会话附件换 System")
 	require.IsType(t, &llmschema.UserMessage{}, out.ContextMessages[1], "他会话附件保持 User")
 	require.IsType(t, &llmschema.UserMessage{}, out.ContextMessages[2], "普通消息保持 User")
@@ -70,6 +70,6 @@ func TestBuildWindowMutator_只换附件消息(t *testing.T) {
 func TestBuildWindowMutator_关闭时原样返回(t *testing.T) {
 	window := ceiface.NewContextWindow()
 	window.ContextMessages = []llmschema.BaseMessage{llmschema.NewUserMessage("hi")}
-	require.Same(t, window, BuildWindowMutator("s1", false)(window))
-	require.Same(t, window, BuildWindowMutator("s1", true)(window), "无附件消息时返回原窗口引用")
+	require.Same(t, window, BuildWindowMutator("s1", false).MutateWindow(window))
+	require.Same(t, window, BuildWindowMutator("s1", true).MutateWindow(window), "无附件消息时返回原窗口引用")
 }

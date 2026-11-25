@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 )
 
@@ -18,13 +19,26 @@ func mkImageParams(path string) map[string]any {
 	}
 }
 
+// rawOf 把强类型清单转成 core ctx 键的 raw 载体形态（模拟适配器塞 inputs 的
+// JSON 往返产物）。
+func rawOf(files []prompt.MultimodalImageFile) []map[string]any {
+	out := make([]map[string]any, 0, len(files))
+	for _, f := range files {
+		out = append(out, map[string]any{
+			"type": f.Type, "path": f.Path, "filename": f.Filename,
+			"mime_type": f.MimeType, "size_bytes": f.SizeBytes,
+		})
+	}
+	return out
+}
+
 // TestWithMultimodalImageFiles_带图写入 对齐 Python set_current_multimodal_image_files。
 func TestWithMultimodalImageFiles_带图写入(t *testing.T) {
 	files := prompt.ExtractMultimodalImageFiles(mkImageParams("/tmp/x.png"))
 	if len(files) != 1 {
 		t.Fatalf("提取数 = %d", len(files))
 	}
-	ctx := prompt.WithMultimodalImageFiles(context.Background(), files)
+	ctx := turnctx.WithTurnMultimodalImageFiles(context.Background(), rawOf(files))
 	got := prompt.MultimodalImageFilesFromContext(ctx)
 	if len(got) != 1 || got[0].Path != "/tmp/x.png" {
 		t.Fatalf("ctx 读取错: %+v", got)
@@ -36,7 +50,7 @@ func TestWithMultimodalImageFiles_无图不写key(t *testing.T) {
 	if got := prompt.MultimodalImageFilesFromContext(context.Background()); got != nil {
 		t.Fatalf("未设置应 nil: %+v", got)
 	}
-	ctx := prompt.WithMultimodalImageFiles(context.Background(), nil)
+	ctx := turnctx.WithTurnMultimodalImageFiles(context.Background(), rawOf(nil))
 	if got := prompt.MultimodalImageFilesFromContext(ctx); got != nil {
 		t.Fatalf("空列表应不写 key: %+v", got)
 	}
@@ -45,8 +59,8 @@ func TestWithMultimodalImageFiles_无图不写key(t *testing.T) {
 // TestMultimodalImageFiles_跨轮防串 用户硬要求：第 N 轮 ctx 不携带第 N-1 轮图片。
 func TestMultimodalImageFiles_跨轮防串(t *testing.T) {
 	// 第 1 轮：带图
-	round1 := prompt.WithMultimodalImageFiles(context.Background(),
-		prompt.ExtractMultimodalImageFiles(mkImageParams("/tmp/round1.png")))
+	round1 := turnctx.WithTurnMultimodalImageFiles(context.Background(),
+		rawOf(prompt.ExtractMultimodalImageFiles(mkImageParams("/tmp/round1.png"))))
 	if got := prompt.MultimodalImageFilesFromContext(round1); len(got) != 1 {
 		t.Fatal("第 1 轮应有图")
 	}

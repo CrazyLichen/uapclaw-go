@@ -16,16 +16,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// multimodalImageFilesCtxKey ctx 袋子键（图片附件列表）。
 // D-23.8-1：Python contextvars「隐形袋子」→ Go request context 携带，
 // 每次 invoke 一个新 ctx，作用域即生命周期（Python set→reset 区间的等价物）。
-type multimodalImageFilesCtxKey struct{}
-
 // ImageContentOmitted 图片内容全量剥离后留下的占位文本。
 // Python: IMAGE_CONTENT_OMITTED:15-18（协议字符串，不本地化）
 const ImageContentOmitted = "[Image content omitted from chat-model context. Use the original image " +
@@ -69,25 +68,43 @@ type MultimodalImageFile struct {
 	SizeBytes int64 `json:"size_bytes,omitempty"`
 }
 
-// WithMultimodalImageFiles 把本轮图片附件列表写入 ctx（adapter invoke 入口调用）。
-// Python: set_current_multimodal_image_files（interface_deep.py :18409/:19174/:19681 三处）。
-// files 为空时原样返回 ctx（等价 Python set 空袋子）。
-// 清空无需显式 reset：ctx 随本轮 invoke 结束被丢弃（D-23.8-1）。
-func WithMultimodalImageFiles(ctx context.Context, files []MultimodalImageFile) context.Context {
-	if len(files) == 0 {
-		return ctx
-	}
-	return context.WithValue(ctx, multimodalImageFilesCtxKey{}, files)
-}
-
-// MultimodalImageFilesFromContext 从 ctx 读取本轮图片附件列表；未设置返回 nil。
+// MultimodalImageFilesFromContext 从 turn ctx 读取本轮图片附件列表；未设置返回 nil。
 // Python: current_multimodal_image_files
+// 读取 core 侧 harness.TurnMultimodalImageFilesFromContext 的 raw 清单
+// （消费侧 runSingleRoundInvoke 写入；D-23.8-1 修订：ctx 载体随 SendInput
+// 队列在消费侧重建，见 harness/turn_multimodal_ctx.go 包注释）。
 func MultimodalImageFilesFromContext(ctx context.Context) []MultimodalImageFile {
 	if ctx == nil {
 		return nil
 	}
-	files, _ := ctx.Value(multimodalImageFilesCtxKey{}).([]MultimodalImageFile)
-	return files
+	raw := turnctx.TurnMultimodalImageFilesFromContext(ctx)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]MultimodalImageFile, 0, len(raw))
+	for _, m := range raw {
+		f := MultimodalImageFile{
+			Type:     stringValue(m["type"]),
+			Filename: stringValue(m["filename"]),
+			Path:     stringValue(m["path"]),
+			MimeType: stringValue(m["mime_type"]),
+		}
+		if v, ok := m["size_bytes"].(int64); ok {
+			f.SizeBytes = v
+		} else if v, ok := m["size_bytes"].(int); ok {
+			f.SizeBytes = int64(v)
+		} else if v, ok := m["size_bytes"].(float64); ok {
+			f.SizeBytes = int64(v)
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// stringValue 取 map 的字符串值（nil 安全）。
+func stringValue(v any) string {
+	s, _ := v.(string)
+	return s
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -113,7 +130,8 @@ func PrepareMultimodalImageMessages(messages []llmschema.BaseMessage, imageFiles
 
 	updatedMessages := make([]llmschema.BaseMessage, len(messages))
 	copy(updatedMessages, messages)
-	copyMessageWithContent(updatedMessages[targetIndex], updatedContent)
+	// 副本替换槽位：原消息（含历史持有的同一指针）不受投影影响
+	updatedMessages[targetIndex] = copyMessageWithContent(messages[targetIndex], updatedContent)
 	return updatedMessages, injected
 }
 
@@ -283,24 +301,61 @@ func ImageDataURIFromPath(pathText string, mimeType string) string {
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
-// MultimodalImageWindowMutator 多模态图片窗口变形器签名。
-// Python: multimodal_image_window_mutator 闭包（ensure_multimodal_image_window_mutator:277-305）。
-// D-23.8-3：Python 的 _window_mutators 列表在 Go 无等价挂点，改为返回闭包由
-// MultimodalImageRail 持有、上下文窗口组装点调用。
-type MultimodalImageWindowMutator func(messages []llmschema.BaseMessage) []llmschema.BaseMessage
+// multimodalImageWindowMutator 多模态图片窗口投影（闭包捕获图片清单）。
+// Python: multimodal_image_window_mutator 闭包 + _MULTIMODAL_IMAGE_WINDOW_MUTATOR_ATTR
+// 标记（user_prompt_builder.py:28/291）——Go 以私有接口实现类型承载同一标记，
+// IsMultimodalImageMutator 用接口断言识别（替换式安装的旧项识别）。
+// 作用层级：ContextWindow 级（对 ContextMessages 应用注入，历史不改），
+// 经 context 的持久投影链消费（session_model_context.go 窗口投影段）。
+type multimodalImageWindowMutator struct {
+	images []MultimodalImageFile
+}
 
-// EnsureMultimodalImageWindowMutator 构造把图片注入窗口消息列表的变形器闭包。
-// Python: ensure_multimodal_image_window_mutator:277-305
-// 空图列表返回 (nil, false)（对齐 Python 不安装 mutator）。
-func EnsureMultimodalImageWindowMutator(imageFiles []MultimodalImageFile) (MultimodalImageWindowMutator, bool) {
-	images := NormalizeImageFiles(imageFiles)
-	if len(images) == 0 {
-		return nil, false
+// MutateWindow 实现 ceiface.WindowMutator：向最后一条 user 消息注入图片块。
+func (m multimodalImageWindowMutator) MutateWindow(window *ceiface.ContextWindow) *ceiface.ContextWindow {
+	if window == nil {
+		return nil
 	}
-	return func(messages []llmschema.BaseMessage) []llmschema.BaseMessage {
-		updated, _ := PrepareMultimodalImageMessages(messages, images)
-		return updated
-	}, true
+	updated, _ := PrepareMultimodalImageMessages(window.ContextMessages, m.images)
+	next := *window
+	next.ContextMessages = updated
+	return &next
+}
+
+// IsMultimodalImageMutator 判断投影是否为多模态图片投影（替换式安装的旧项识别）。
+// Python: getattr(mutator, _MULTIMODAL_IMAGE_WINDOW_MUTATOR_ATTR, False)（:291）。
+func IsMultimodalImageMutator(m ceiface.WindowMutator) bool {
+	_, ok := m.(multimodalImageWindowMutator)
+	return ok
+}
+
+// EnsureMultimodalImageWindowMutator 把多模态图片投影替换式安装进 context 的
+// 持久投影链：先清全部带标记旧项，图片非空时追加新投影。
+// Python: ensure_multimodal_image_window_mutator:277-294——
+// mutators[:] = [非图片 mutator]；if images: mutators.append(闭包)。
+// context 须实现 ceiface.WindowMutatorsRegistrar（SessionModelContext 实现）；
+// 未实现或空图列表返回 false（对齐 Python getattr 失败/不安装）。
+func EnsureMultimodalImageWindowMutator(context ceiface.ModelContext, imageFiles []MultimodalImageFile) bool {
+	registrar, ok := context.(ceiface.WindowMutatorsRegistrar)
+	if !ok {
+		return false
+	}
+	images := NormalizeImageFiles(imageFiles)
+	// Python: 先清旧图片 mutator（:288-292）
+	kept := make([]ceiface.WindowMutator, 0, len(registrar.WindowMutators()))
+	for _, m := range registrar.WindowMutators() {
+		if !IsMultimodalImageMutator(m) {
+			kept = append(kept, m)
+		}
+	}
+	if len(images) == 0 {
+		registrar.SetWindowMutators(kept)
+		return false
+	}
+	// Python: mutators.append(mutator)，闭包对窗口应用图片注入
+	kept = append(kept, multimodalImageWindowMutator{images: images})
+	registrar.SetWindowMutators(kept)
+	return true
 }
 
 // ImageInputStatusMessage 用同一段图片输入能力描述服务提示词与降级通知。
@@ -526,8 +581,20 @@ func appendImageURLPart(dataURI string) (llmschema.ContentPart, bool) {
 
 // copyMessageWithContent 用新 content 替换消息内容（就地 SetContent）。
 // Python: _copy_message_with_content:456-464
-func copyMessageWithContent(message llmschema.BaseMessage, content llmschema.MessageContent) {
-	message.SetContent(content)
+// copyMessageWithContent 构造携带新内容的消息副本（不改原消息）。
+// Python 消息为 dict，注入是「新列表 + 改写副本」；Go 侧 BaseMessage 为指针，
+// 直接 SetContent 会穿透投影改写历史——违反窗口投影「不得修改入参」契约
+// （window.go 约定 / context.py:737 投影语义）。目标恒为 user 消息
+// （PrepareMultimodalImageMessages 只定位 LatestUserMessageIndex），
+// 无 tool_call 等派生字段需要保留，role + metadata 透传即完整。
+func copyMessageWithContent(message llmschema.BaseMessage, content llmschema.MessageContent) llmschema.BaseMessage {
+	opts := make([]llmschema.MessageOption, 0, 1)
+	if meta := message.GetMetadata(); len(meta) > 0 {
+		opts = append(opts, llmschema.WithMetadata(meta))
+	}
+	cloned := llmschema.NewDefaultMessage(message.GetRole(), "", opts...)
+	cloned.SetContent(content)
+	return cloned
 }
 
 // ──────────────────────────── 归一化辅助（同文件前段） ────────────────────────────
