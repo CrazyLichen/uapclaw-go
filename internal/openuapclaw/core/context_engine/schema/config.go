@@ -35,6 +35,42 @@ type ContextEngineConfig struct {
 	EnableOpenRouterModelContextWindowTokens bool `json:"enable_openrouter_model_context_window_tokens"`
 	// OpenRouterRequestTimeout OpenRouter 拉取超时（秒），<=0 使用默认 3 秒
 	OpenRouterRequestTimeout float64 `json:"openrouter_request_timeout"`
+	// CompressionRecall 压缩归档与召回的全局配置（Python: schema/config.py:11）
+	// nil 时按"未配置"处理，消费方回退默认值
+	CompressionRecall *CompressionRecallConfig `json:"compression_recall"`
+}
+
+// CompressionRecallConfig 压缩归档与召回的全局配置，控制被压缩消息的
+// 归档切分粒度（forked 压缩器的 recall 半区消费）。
+// Python: openjiuwen/core/context_engine/schema/config.py:11 (CompressionRecallConfig)
+type CompressionRecallConfig struct {
+	// Enabled 是否启用压缩归档/召回（默认关）
+	Enabled bool `json:"enabled"`
+	// ChunkSizeTokens 归档切分的单块 token 上限，设置时必须 > 0
+	ChunkSizeTokens int `json:"chunk_size_tokens"`
+	// ChunkOverlapTokens 相邻块的 token 重叠，必须小于 ChunkSizeTokens
+	ChunkOverlapTokens int `json:"chunk_overlap_tokens"`
+}
+
+// NewCompressionRecallConfig 创建压缩召回配置，字段使用 Python 默认值。
+func NewCompressionRecallConfig() *CompressionRecallConfig {
+	return &CompressionRecallConfig{
+		Enabled:            false,
+		ChunkSizeTokens:    3000,
+		ChunkOverlapTokens: 300,
+	}
+}
+
+// Validate 校验召回配置字段合法性。
+// Python: CompressionRecallConfig._validate_chunk_tokens (config.py:18)
+func (c CompressionRecallConfig) Validate() error {
+	if c.ChunkSizeTokens <= 0 {
+		return fmt.Errorf("chunk_size_tokens 必须 > 0，当前值: %d", c.ChunkSizeTokens)
+	}
+	if c.ChunkOverlapTokens >= c.ChunkSizeTokens {
+		return fmt.Errorf("chunk_overlap_tokens 必须小于 chunk_size_tokens，当前值: %d >= %d", c.ChunkOverlapTokens, c.ChunkSizeTokens)
+	}
+	return nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -44,6 +80,7 @@ type ContextEngineConfig struct {
 func NewContextEngineConfig() ContextEngineConfig {
 	return ContextEngineConfig{
 		ModelContextWindowTokens: make(map[string]int),
+		CompressionRecall:        NewCompressionRecallConfig(),
 	}
 }
 
@@ -68,6 +105,11 @@ func (c ContextEngineConfig) Validate() error {
 	}
 	if c.OpenRouterRequestTimeout < 0 {
 		return fmt.Errorf("openrouter_request_timeout 不能为负数，当前值: %v", c.OpenRouterRequestTimeout)
+	}
+	if c.CompressionRecall != nil {
+		if err := c.CompressionRecall.Validate(); err != nil {
+			return fmt.Errorf("compression_recall: %w", err)
+		}
 	}
 	for model, tokens := range c.ModelContextWindowTokens {
 		if tokens <= 0 {

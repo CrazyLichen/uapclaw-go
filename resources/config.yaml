@@ -221,6 +221,12 @@ react:
     enable_reload: true
     # 是否释放 KV 缓存
     enable_kv_cache_release: false
+    # 压缩归档与召回（forked 压缩链的 recall 半区：被替换消息归档 + [[COMPRESSION_RECALL]] 标记）
+    # Python: schema/config.py CompressionRecallConfig；默认关
+    compression_recall:
+      enabled: false
+      chunk_size_tokens: 3000
+      chunk_overlap_tokens: 300
     # 大消息卸载（per-message 语义，不参与比例缩放）
     message_summary_offloader_config:
       large_message_threshold: 60000

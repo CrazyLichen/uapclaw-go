@@ -2930,6 +2930,24 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 		}
 	}
 
+	// 压缩召回全局配置（Python: cec.compression_recall 由 pydantic 解析；
+	// Go 侧在此手工解析三字段，缺省键保留 NewCompressionRecallConfig 默认值）
+	if raw, ok := cecMap["compression_recall"]; ok {
+		if m, ok := raw.(map[string]any); ok {
+			recallCfg := ceschema.NewCompressionRecallConfig()
+			if v, ok := m["enabled"].(bool); ok {
+				recallCfg.Enabled = v
+			}
+			if v, ok := m["chunk_size_tokens"].(int); ok && v > 0 {
+				recallCfg.ChunkSizeTokens = v
+			}
+			if v, ok := m["chunk_overlap_tokens"].(int); ok && v > 0 {
+				recallCfg.ChunkOverlapTokens = v
+			}
+			result.CompressionRecall = recallCfg
+		}
+	}
+
 	// 收集各模型条目声明的上下文窗口（同模型多条目冲突时默认条目优先）
 	defaultModelName := ""
 	firstModelName := ""

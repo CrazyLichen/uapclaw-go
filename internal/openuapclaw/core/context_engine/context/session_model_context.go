@@ -80,6 +80,9 @@ type SessionModelContext struct {
 	// windowMutatorsMu 保护 windowMutators 的并发读写
 	// （Python 依赖 asyncio 单线程安全，Go 需显式锁——asyncio→Go 惯例偏差）
 	windowMutatorsMu sync.Mutex
+	// compressionRecall 压缩召回全局配置快照（热重载时整体替换）
+	// Python: SessionModelContext 读 config.compression_recall
+	compressionRecall *ceschema.CompressionRecallConfig
 }
 
 // WindowMutators 返回持久投影链快照。
@@ -177,6 +180,7 @@ func NewSessionModelContext(
 		sessionRef:                sessionRef,
 		tokenCounter:              tokenCounter,
 		processors:                processors,
+		compressionRecall:         config.CompressionRecall,
 	}
 	mc.contextWindowTokens = mc.effectiveGlobalWindow()
 
@@ -234,6 +238,7 @@ func (mc *SessionModelContext) ApplyRuntimeConfig(config ceschema.ContextEngineC
 	mc.defaultDialogueRound = config.DefaultWindowRoundNum
 	mc.messageBuffer.SetMaxSize(config.MaxContextMessageNum)
 	mc.processors = processors
+	mc.compressionRecall = config.CompressionRecall
 
 	logger.Info(logComponent).
 		Str("event_type", "SESSION_MODEL_CONTEXT_REFRESHED").
@@ -248,6 +253,13 @@ func (mc *SessionModelContext) ApplyRuntimeConfig(config ceschema.ContextEngineC
 // Processors 返回当前处理器实例切片（只读，供诊断与测试断言）。
 func (mc *SessionModelContext) Processors() []iface.ContextProcessor {
 	return mc.processors
+}
+
+// CompressionRecallConfig 返回压缩召回全局配置（未配置时返回 nil）。
+// 实现 iface.CompressionRecallConfigProvider 可选能力面。
+// Python: getattr(context, "compression_recall_config", None) 可选协议
+func (mc *SessionModelContext) CompressionRecallConfig() *ceschema.CompressionRecallConfig {
+	return mc.compressionRecall
 }
 
 // ContextMaxTokens 返回当前生效的上下文窗口上限（诊断与测试用）。
