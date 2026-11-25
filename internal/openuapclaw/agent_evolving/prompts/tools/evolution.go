@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	harnessprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/tools"
 )
 
@@ -106,6 +107,13 @@ func GetEvolutionToolInputParams(name string, language string) (map[string]any, 
 		return nil, fmt.Errorf("Evolution tool '%s' not registered", name)
 	}
 	return provider.GetInputParams(language), nil
+}
+
+// BuildEvolutionToolCard 由演进自有元数据构建工具卡。
+// Python: build_evolution_tool_card (evolution.py:411-425)——
+// agent_id 非空拼后缀，否则随机 8 位 hex（BuildToolCard 内同规则）。
+func BuildEvolutionToolCard(name string, toolID string, language string, agentID string) (*tool.ToolCard, error) {
+	return harnessprompts.BuildToolCard(name, toolID, language, nil, agentID)
 }
 
 // registerEvolutionProviders 注册六个演进工具元数据提供者。
