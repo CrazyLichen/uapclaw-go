@@ -262,6 +262,24 @@ func (mc *SessionModelContext) CompressionRecallConfig() *ceschema.CompressionRe
 	return mc.compressionRecall
 }
 
+// ModelName 当前模型名（forked compressor support 的 ContextWindowProvider 能力面）。
+// Python: getattr(context, "_model_name", None)
+func (mc *SessionModelContext) ModelName() string {
+	return mc.modelName
+}
+
+// ContextWindowTokens 生效的全局上下文窗口 token 数（0=未设置）。
+// Python: getattr(context, "_context_window_tokens", None)
+func (mc *SessionModelContext) ContextWindowTokens() int {
+	return mc.contextWindowTokens
+}
+
+// ModelContextWindowTokens 模型名到窗口 token 的映射表。
+// Python: getattr(context, "_model_context_window_tokens", None)
+func (mc *SessionModelContext) ModelContextWindowTokens() map[string]int {
+	return mc.modelContextWindowTokens
+}
+
 // ContextMaxTokens 返回当前生效的上下文窗口上限（诊断与测试用）。
 // 取值为 modelName / contextWindowTokens / modelContextWindowTokens 三者现算结果，
 // 热重载刷新上述原料后本方法立即反映新窗口。
