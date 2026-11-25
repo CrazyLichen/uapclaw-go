@@ -47,6 +47,8 @@ type TeamSkillEvolutionRail struct {
 
 	// evolutionStore 技能演进数据存储
 	evolutionStore *checkpointing.EvolutionStore
+	// submissionAdapter 审批提交服务适配器（懒构造，身份稳定；15.24b）
+	submissionAdapter EvolutionSubmissionService
 	// generator 团队技能经验优化器
 	generator *skillopt.TeamSkillExperienceOptimizer
 	// scorer 经验评分器
@@ -1805,9 +1807,13 @@ func (r *TeamSkillEvolutionRail) AsAgentRail() agentinterfaces.AgentRail { retur
 
 // ApprovalSubmissionService 返回审批提交服务（审批中断 rail 绑定用）。
 // Python: TeamSkillEvolutionRail.approval_submission_service property。
-// 提交服务缝 ⤴️ 15.24b，当前返回 nil。
+// 2026-12-24 15.24b：submission.go 真实现随批落地，替换原 nil 占位（⤴️ 销账）。
 func (r *TeamSkillEvolutionRail) ApprovalSubmissionService() EvolutionSubmissionService {
-	return nil
+	// 对象身份稳定（Python 返回 manager 持有的同一服务实例；幂等复用按身份比较）。
+	if r.submissionAdapter == nil {
+		r.submissionAdapter = NewExperienceSubmissionServiceAdapter(r.evolutionStore, r.pendingApprovalSnapshots)
+	}
+	return r.submissionAdapter
 }
 
 // ReviewStore 演进存储（协调器证据面消费）。

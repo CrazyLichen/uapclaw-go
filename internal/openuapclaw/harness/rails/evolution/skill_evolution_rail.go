@@ -119,6 +119,8 @@ type SkillEvolutionRail struct {
 	pendingGovernance map[string]*experience.PendingGovernance
 	// pendingApprovalSnapshots 暂存审批快照映射
 	pendingApprovalSnapshots map[string]*experience.PendingChange
+	// submissionAdapter 审批提交服务适配器（懒构造，身份稳定）
+	submissionAdapter EvolutionSubmissionService
 	// skillsDir 技能目录
 	skillsDir []string
 	// reviewRuntime 审查运行时（configure 注入，供活动演化工具共享）
@@ -509,10 +511,14 @@ func (r *SkillEvolutionRail) AsAgentRail() agentinterfaces.AgentRail { return r 
 
 // ApprovalSubmissionService 返回审批提交服务（审批中断 rail 绑定用）。
 // Python: SkillEvolutionRail.approval_submission_service property（:673，
-// 返回 self._manager.experience_submission_service）。Go 的提交服务缝
-// ⤴️ 15.24b（ExperienceSubmissionService 随批落地），当前返回 nil。
+// 返回 self._manager.experience_submission_service）。
+// 2026-12-24 15.24b：submission.go 真实现随批落地，替换原 nil 占位（⤴️ 销账）。
 func (r *SkillEvolutionRail) ApprovalSubmissionService() EvolutionSubmissionService {
-	return nil
+	// 对象身份稳定（Python 返回 manager 持有的同一服务实例；幂等复用按身份比较）。
+	if r.submissionAdapter == nil {
+		r.submissionAdapter = NewExperienceSubmissionServiceAdapter(r.evolutionStore, r.pendingApprovalSnapshots)
+	}
+	return r.submissionAdapter
 }
 
 // SetAutoSave 设置是否自动保存。

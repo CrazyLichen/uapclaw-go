@@ -45,9 +45,9 @@ type EvolutionInterruptRail struct {
 	// review 为本包子包，父→子导入无环（2026-11-23 审查修正：原空结构体占位废除）。
 	reviewRuntime *review.EvolutionReviewRuntime
 	// submissionService 提交服务（configure 经 SkillEvolutionRail 绑定；可为 nil）。
-	// ⤴️ 工具链回填章节（15.24）：submission_service 依赖 agent_evolving
-	// ExperienceSubmissionService（submission.py 229 行，Go 未移植），
-	// 此处以接口缝占位，preflight 对两者 nil 时按 Python 语义报未配置错误。
+	// 2026-12-24 15.24b：真实现 ExperienceSubmissionServiceAdapter 随批接线
+	//（submission.go 229 行 1:1 移植完成），preflight 对两者 nil 时按 Python
+	// 语义报未配置错误。
 	submissionService EvolutionSubmissionService
 	// autoSave 活跃演进工具是否绕过用户审批
 	autoSave bool
@@ -55,9 +55,10 @@ type EvolutionInterruptRail struct {
 	language string
 }
 
-// EvolutionSubmissionService 演进提交服务缝（submission.py 移植前的占位接口）。
+// EvolutionSubmissionService 演进提交服务缝。
 // 方法签名对齐 Python submission_service.prepare_evolve_submission /
-// prepare_simplify_submission；具体实现随 15.24 工具链回填。
+// prepare_simplify_submission；真实现 = ExperienceSubmissionServiceAdapter
+//（submission_adapter.go，2026-12-24 15.24b 接线）。
 type EvolutionSubmissionService interface {
 	// PrepareEvolveSubmission 预检 evolve 提交（对齐 prepare_evolve_submission）。
 	PrepareEvolveSubmission(reviewRuntime *review.EvolutionReviewRuntime, evolutionReviewRef string, subject map[string]any, selectedProposalIDs []string, sessionID string) (*review.EvolutionProposalSelection, error)
