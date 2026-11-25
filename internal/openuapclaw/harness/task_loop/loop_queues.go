@@ -1,6 +1,8 @@
 package task_loop
 
 import (
+	"fmt"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -111,5 +113,18 @@ func (q *LoopQueues) DrainFollowUp() []string {
 		default:
 			return msgs
 		}
+	}
+}
+
+// PushSteerErr 同步推入引导指令，满队报错而非丢弃。
+// [Go 扩展] 25.6 steer 接线批：host 侧 enqueue_bound_session_input 要求
+// 入队失败必须上抛（Python put_nowait 在无限 list 语义下不会失败，
+// Go 有界 chan 满队等价于"目标轮不再接受"，必须让投递链感知）。
+func (q *LoopQueues) PushSteerErr(msg string) error {
+	select {
+	case q.steering <- msg:
+		return nil
+	default:
+		return fmt.Errorf("steering queue is full; supplemental input was not sent")
 	}
 }

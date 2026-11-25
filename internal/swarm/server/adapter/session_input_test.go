@@ -203,3 +203,86 @@ func TestQueuedSessionInput_BoundaryBoundaryFail(t *testing.T) {
 		t.Error("失败路径应关闭边界信号")
 	}
 }
+
+// mkReq 构造指定 params 的请求。
+func mkReq(params map[string]any) *schema.AgentRequest {
+	raw, _ := json.Marshal(params)
+	sid := "s1"
+	return &schema.AgentRequest{RequestID: "req-x", ChannelID: "ch", SessionID: &sid, Params: raw}
+}
+
+// TestClassifyNotAccepted_跨会话键 拒收 queue the message。
+func TestClassifyNotAccepted_跨会话键(t *testing.T) {
+	err := classifyNotAccepted(map[string]any{sessionMessageKey: map[string]any{"a": 1}}, false)
+	var rejected *sessionpkg.SessionInputRejectedError
+	if !errors.As(err, &rejected) {
+		t.Fatalf("应 REJECTED，实际 %v", err)
+	}
+	if rejected.Message != "target execution changed before submission; queue the message" {
+		t.Errorf("文案不符: %s", rejected.Message)
+	}
+}
+
+// TestClassifyNotAccepted_锚定失配 TARGET_CHANGED。
+func TestClassifyNotAccepted_锚定失配(t *testing.T) {
+	err := classifyNotAccepted(map[string]any{"expected_execution_id": "exec-9"}, false)
+	var target *sessionpkg.SessionInputTargetError
+	if !errors.As(err, &target) {
+		t.Fatalf("应 TARGET_CHANGED，实际 %v", err)
+	}
+	if target.Message != "the targeted execution has ended; supplemental input was not sent" {
+		t.Errorf("文案不符: %s", target.Message)
+	}
+}
+
+// TestClassifyNotAccepted_输出收尾 finishing 错误。
+func TestClassifyNotAccepted_输出收尾(t *testing.T) {
+	err := classifyNotAccepted(map[string]any{}, true)
+	if err == nil || err.Error() != "session output is finishing; supplemental input was not sent, retry after it settles" {
+		t.Fatalf("应 finishing 文案，实际 %v", err)
+	}
+}
+
+// TestClassifyNotAccepted_idle兜底 全空 → nil。
+func TestClassifyNotAccepted_idle兜底(t *testing.T) {
+	if err := classifyNotAccepted(map[string]any{}, false); err != nil {
+		t.Fatalf("应允许 idle 兜底，实际 %v", err)
+	}
+}
+
+// TestDisplayContentOf content 优先、回落 query、再回落 inputs。
+func TestDisplayContentOf(t *testing.T) {
+	if got := displayContentOf(map[string]any{"content": "c", "query": "q"}, nil); got != "c" {
+		t.Errorf("content 优先: %s", got)
+	}
+	if got := displayContentOf(map[string]any{"query": "q"}, nil); got != "q" {
+		t.Errorf("回落 query: %s", got)
+	}
+	if got := displayContentOf(map[string]any{}, map[string]any{"query": "iq"}); got != "iq" {
+		t.Errorf("回落 inputs: %s", got)
+	}
+}
+
+// TestIsInterruptResumePayload answers 非空即 resume。
+func TestIsInterruptResumePayload(t *testing.T) {
+	if !isInterruptResumePayload(map[string]any{"answers": []any{"a"}}) {
+		t.Error("answers 非空应为 resume")
+	}
+	if isInterruptResumePayload(map[string]any{"answers": []any{}}) {
+		t.Error("answers 空不应为 resume")
+	}
+}
+
+// TestSteerMediaItemsOf 提取与容错。
+func TestSteerMediaItemsOf(t *testing.T) {
+	items := steerMediaItemsOf(map[string]any{"media_items": []any{
+		map[string]any{"type": "image", "path": "p"},
+		map[string]any{"type": "image", "path": "q"},
+	}})
+	if len(items) != 2 {
+		t.Fatalf("应提取 2 项，实际 %d", len(items))
+	}
+	if got := steerMediaItemsOf(map[string]any{"media_items": "bad"}); got != nil {
+		t.Errorf("非 list 应 nil，实际 %v", got)
+	}
+}

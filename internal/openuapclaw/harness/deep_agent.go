@@ -4425,6 +4425,32 @@ func (d *DeepAgent) ensureInteractionRunning() error {
 	return nil
 }
 
+// WithInteractionLock 在交互控制锁内执行 fn（无 await 语义：Go 无让渡点，
+// 同步闭包天然满足"校验与入队不分隔"）。
+// [Go 扩展] Python 由 asyncio 单线程保证；Go 真并行下补充输入投递链的
+// 校验-入队原子性经本锁承载（25.6 steer 接线批）。
+func (d *DeepAgent) WithInteractionLock(fn func() error) error {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	return fn()
+}
+
+// EnqueueSteerEntry 同步入队 steering 显示文本（返回错误而非静默丢弃）。
+// Python: TaskLoopController.enqueue_steer（host 侧 enqueue_bound_session_input
+// 要求入队失败必须上抛，LoopQueues.PushSteer 的满队丢弃语义不适用）。
+// 调用方应持交互锁（WithInteractionLock）。
+func (d *DeepAgent) EnqueueSteerEntry(display string) error {
+	ctrl := d.currentLoopController()
+	if ctrl == nil {
+		return fmt.Errorf("active execution has no steering queue; supplemental input was not sent")
+	}
+	queues := ctrl.Queues()
+	if queues == nil {
+		return fmt.Errorf("active execution has no steering queue; supplemental input was not sent")
+	}
+	return queues.PushSteerErr(display)
+}
+
 // attachOutputLocked 领取租约并包成输出句柄（调用方持 controlMu）。
 // Python: _attach_output_locked (L4213)
 func (d *DeepAgent) attachOutputLocked() *hschema.InteractionOutputStream {

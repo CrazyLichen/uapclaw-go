@@ -110,6 +110,10 @@ type DeepAdapter struct {
 	// streamContentRunKind 上一个可见内容块的归属（判断 user→goal 切换点）。
 	// Python: interface_deep.py _stream_content_run_kind
 	streamContentRunKind string
+	// interactionSuspensionProbe 交互挂起探测（deliver 链 suspended 判定）。
+	// Python: _stream_completion_state 读 loop_session INTERRUPTION_KEY；
+	// Go 挂起事实源在协调器账本，门面装配注入（25.6 steer 接线批）。
+	interactionSuspensionProbe func() bool
 	// interactionOutputHandoff 上一次输出的排空屏障（宿主自持，不碰 Core 私有字段）。
 	// Python: interface_deep.py:16029 _interaction_output_handoff
 	interactionOutputHandoff *outputHandoff
