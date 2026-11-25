@@ -229,6 +229,12 @@ func (tc *TaskLoopController) EnqueueSteer(msg string) {
 	logger.Warn(logComponent).Str("msg", msg).Msg("EnqueueSteer: no InteractionQueues, message discarded")
 }
 
+// Queues 返回底层双队列（nil 安全；投递链需直接判定 steering 队列存在性）。
+// [Go 扩展] Python duck-typing getattr(handler, "interaction_queues", None)。
+func (tc *TaskLoopController) Queues() *LoopQueues {
+	return tc.getInteractionQueues()
+}
+
 // HasFollowUp 检查是否有待处理的 follow-up 消息。
 // Python: TaskLoopController.has_follow_up
 func (tc *TaskLoopController) HasFollowUp() bool {

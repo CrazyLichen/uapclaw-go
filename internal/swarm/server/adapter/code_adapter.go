@@ -474,6 +474,15 @@ func (c *CodeAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 }
 
 // ProcessMessageStreamImpl 委托 DeepAdapter。
+// DeliverSessionInput Code 模式不支持补充输入语义，统一拒绝。
+// [Go 归属] Python deliver_session_input 只挂 DeepAdapter 侧；接口面收口后
+// Code 侧给出明确错误（与 deliverSessionInputImpl 能力守卫文案一致）。
+func (c *CodeAdapter) DeliverSessionInput(
+	_ context.Context, _ *schema.AgentRequest, _ map[string]any,
+) (<-chan *schema.AgentResponseChunk, error) {
+	return nil, fmt.Errorf("active agent does not support supplemental input")
+}
+
 func (c *CodeAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
 	return c.deep.ProcessMessageStreamImpl(ctx, req, inputs)
 }

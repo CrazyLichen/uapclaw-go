@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"context"
 	"sort"
 	"sync"
@@ -66,18 +67,20 @@ func NewSessionExecutionRegistry(terminalCapacity int, terminalTTL float64) *Ses
 	}
 }
 
-// Register 登记一个新执行，重复标识 panic。
+// Register 登记一个新执行；重复标识返回 error（Python: register 的
+// ValueError 可捕获语义，25.6 批由 panic 改 error）。
 // Python: SessionExecutionRegistry.register
-func (r *SessionExecutionRegistry) Register(h *SessionExecutionHandle) {
+func (r *SessionExecutionRegistry) Register(h *SessionExecutionHandle) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.evictTerminalLocked()
 	if _, exists := r.executions[h.ExecutionID]; exists {
-		panic("duplicate execution_id: " + h.ExecutionID)
+		return fmt.Errorf("duplicate execution id: %s", h.ExecutionID)
 	}
 	r.executions[h.ExecutionID] = h
 	indexBySession(r.bySession, h.SessionID, h.ExecutionID)
 	indexByRequest(r.byRequest, [2]string{h.SessionID, h.RequestID}, h.ExecutionID)
+	return nil
 }
 
 // MarkRunning 把 QUEUED 置为 RUNNING 并记录 StartedAt。

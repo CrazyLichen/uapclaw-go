@@ -102,6 +102,10 @@ type AgentRuntimeHandle interface {
 	RunTeamStream(ctx context.Context, sessionID, requestID string,
 		kind swsession.SessionWorkKind, operation func(context.Context, swsession.TeamExecutionContext) (<-chan *agentschema.AgentResponseChunk, error),
 		options swsession.StreamOptions, emit func(*agentschema.AgentResponseChunk) bool) error
+	// StreamSessionInput 补充输入分流（三守卫+parent 绑定+idle 分流）。
+	// Python: _session_coordinator.stream_session_input。
+	StreamSessionInput(ctx context.Context,
+		opts swsession.StreamSessionInputOptions, emit func(*agentschema.AgentResponseChunk) bool) error
 	// SessionWorkKindOf 会话执行种类判定（nil=非会话执行型，走原队列路径）
 	SessionWorkKindOf(request *schema.AgentRequest) *swsession.SessionWorkKind
 	// TeamDetailsOf 团队 Details 四键构造（仅 team kind 调用）

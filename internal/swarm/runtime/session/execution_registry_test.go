@@ -15,22 +15,32 @@ func newRunningHandle(t *testing.T, r *SessionExecutionRegistry, eid, sid, rid s
 	t.Helper()
 	h := NewSessionExecutionHandle(eid, sid, rid, gen, SessionWorkKindChatStream, "web")
 	h.Cancel = func() {}
-	r.Register(h)
+	if err := r.Register(h); err != nil {
+		t.Fatal(err)
+	}
 	r.MarkRunning(h)
 	return h
 }
 
-// TestRegistry_Register重复panic 校验同一 execution_id 不能登记两次。
-func TestRegistry_Register重复panic(t *testing.T) {
+// TestRegistry_Register重复error 校验同一 execution_id 不能登记两次。
+// [25.6 批] panic 改 error（Python register 的 ValueError 可捕获语义）。
+func TestRegistry_Register重复error(t *testing.T) {
 	r := newTestRegistry()
 	h := NewSessionExecutionHandle("e1", "s1", "r1", 1, SessionWorkKindChatStream, "web")
-	r.Register(h)
-	defer func() {
-		if recover() == nil {
-			t.Fatal("重复登记应 panic（对齐上游 raise ValueError）")
-		}
-	}()
-	r.Register(h)
+	if err := r.Register(h); err != nil {
+		t.Fatal(err)
+	}
+	err := r.Register(h)
+	if err == nil {
+		t.Fatal("重复登记应返回 error")
+	}
+	if got := err.Error(); got != "duplicate execution id: e1" {
+		t.Fatalf("文案不符: %s", got)
+	}
+}
+
+func TestRegistry_Register重复errorUnused(t *testing.T) {
+	t.Skip("合并占位，见 TestRegistry_Register重复error")
 }
 
 // TestRegistry_MarkRunning仅QUEUED生效 校验非 QUEUED 不改变状态。
@@ -38,7 +48,9 @@ func TestRegistry_MarkRunning仅QUEUED生效(t *testing.T) {
 	r := newTestRegistry()
 	h := NewSessionExecutionHandle("e1", "s1", "r1", 1, SessionWorkKindChatStream, "web")
 	h.Cancel = func() {}
-	r.Register(h)
+	if err := r.Register(h); err != nil {
+		t.Fatal(err)
+	}
 	r.MarkTerminal(h, SessionExecutionStateSucceeded, "")
 	r.MarkRunning(h)
 	if h.State != SessionExecutionStateSucceeded {
