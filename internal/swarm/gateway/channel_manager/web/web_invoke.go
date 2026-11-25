@@ -13,8 +13,8 @@ import (
 var localRoutingIdentityPrefixes = []string{"cron.", "skills.enterprise.", "workspace."}
 
 var localRoutingIdentityMethods = map[string]bool{
-	"models.list":             true,
-	"project.get_sessions":    true,
+	"models.list":               true,
+	"project.get_sessions":      true,
 	"project.get_cron_sessions": true,
 }
 
@@ -25,9 +25,9 @@ type httpOutboundAdapter struct {
 	base *httpOutboundBase
 }
 
-func (a httpOutboundAdapter) getOutboundID() string      { return a.base.outboundID }
-func (a httpOutboundAdapter) getSessionID() string       { return a.base.sessionID }
-func (a httpOutboundAdapter) isClosedOutbound() bool     { return a.base.isClosed() }
+func (a httpOutboundAdapter) getOutboundID() string  { return a.base.outboundID }
+func (a httpOutboundAdapter) getSessionID() string   { return a.base.sessionID }
+func (a httpOutboundAdapter) isClosedOutbound() bool { return a.base.isClosed() }
 func (a httpOutboundAdapter) acceptFrame(f map[string]any) {
 	a.base.acceptFrameBase(f, "HttpOutbound")
 }
