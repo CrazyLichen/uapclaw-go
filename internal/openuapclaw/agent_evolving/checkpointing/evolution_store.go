@@ -560,6 +560,15 @@ func (s *EvolutionStore) GetRecordsByScore(ctx context.Context, name string, min
 	return s.records.GetRecordsByScore(ctx, name, minScore)
 }
 
+// LoadRecordsByIds 按 id 批量加载记录，保持调用方传入顺序。
+// Python: EvolutionStore.load_records_by_ids (evolution_store.py:516-524)。
+func (s *EvolutionStore) LoadRecordsByIds(ctx context.Context, name string, recordIDs []string) []EvolutionRecord {
+	lock := s.getSkillLock(name)
+	lock.RLock()
+	defer lock.RUnlock()
+	return s.records.LoadRecordsByIds(ctx, name, recordIDs)
+}
+
 // DeleteRecords 删除记录（RMW 操作，加写锁）。
 func (s *EvolutionStore) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
 	lock := s.getSkillLock(name)
