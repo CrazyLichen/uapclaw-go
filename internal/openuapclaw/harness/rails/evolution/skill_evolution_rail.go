@@ -28,6 +28,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
@@ -158,10 +159,10 @@ type SkillEvolutionRail struct {
 	evolutionTools []any
 	// agentRef 绑定的 agent（init 时设置）
 	// Python: self._agent
-	agentRef any
+	agentRef agentinterfaces.BaseAgent
 	// systemPromptBuilder 系统提示词构建器（init 时抓取）
 	// Python: self._system_prompt_builder
-	systemPromptBuilder any
+	systemPromptBuilder saprompts.SystemPromptBuilderInterface
 }
 
 // SkillEvolutionRailOption SkillEvolutionRail 构造选项函数。
@@ -2591,7 +2592,10 @@ func (r *SkillEvolutionRail) SetReviewTrigger(v bool) { r.reviewTrigger = v }
 // 随工具面批落地；本实现先完成 agent 绑定与提示词构建器抓取。
 func (r *SkillEvolutionRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent) error {
 	r.agentRef = agent
-	r.systemPromptBuilder = systemPromptBuilderOf(agent)
+	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder")
+	if agent != nil {
+		r.systemPromptBuilder = agent.SystemPromptBuilder()
+	}
 	// Python: self._evolution_tools = self._register_evolution_tools(agent)
 	//        self._register_evolution_review_agent(agent)（⤴️ 15.24b/24c）
 	return nil
@@ -2963,29 +2967,6 @@ func (r *SkillEvolutionRail) buildEvaluationSnippet(messages []map[string]any, s
 		}
 	}
 	return r.formatMessagesSnippet(messages, start)
-}
-
-// systemPromptBuilderOf 从 agent 抓取系统提示词构建器
-// （Python getattr(agent, "system_prompt_builder")）。
-// 构建器类型面 ⤴️ 15.24b（evolution 协议段 sections/evolution.py 随批补），
-// 当前经反射读 SystemPromptBuilder 方法值（各实现返回类型不同，鸭子式取值）。
-func systemPromptBuilderOf(agent agentinterfaces.BaseAgent) any {
-	if agent == nil {
-		return nil
-	}
-	value := reflect.ValueOf(agent)
-	method := value.MethodByName("SystemPromptBuilder")
-	if !method.IsValid() {
-		return nil
-	}
-	results := method.Call(nil)
-	if len(results) == 0 {
-		return nil
-	}
-	if results[0].IsNil() {
-		return nil
-	}
-	return results[0].Interface()
 }
 
 // toolCallsOf 从消息提取 tool_calls 列表（signal.getToolCalls 的包内等价）。

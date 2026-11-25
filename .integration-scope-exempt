@@ -93,3 +93,57 @@ tests/integration/agentcore/workflow_loop_comp
 # AdvancedLoopComponent 小图→Pregel→session/state 链路全在 core 下，结构上
 # 不可能达 ≥3 二级子系统）；测试深度真实（四条端到端真实输入输出），保留为
 # 集成深度用例。2026-11-22 8.20 实施登记。
+
+# ── C. 单模块深度测试（2026-12-24 统一登记，15.24a 门禁收口） ──────────────
+# 背景：b39f7d8d2 顶层目录改名（11-21）后子系统粒度变化，以下目录的覆盖交叉
+# 验证均为 2 个二级子系统（≥30 行/个，覆盖行数真实），不足 ≥3 门槛；改名批仅
+# 验证静态层未暴露，gofmt 全仓提交（c2eccc868）使指纹失效后全量重验方才显形。
+# 手工复算（如 harness/rails/mcp：harness 176 行 + core 98 行）确认覆盖真实、
+# 非基线污染。性质与既有 C 类条目（harness/rails/tools、workflow_sub_workflow）
+# 相同：被测对象为单一 rail/模块的深度行为测试，保留于 integration 目录作过渡，
+# 后续应补跨子系统链路或迁回 internal 单测（C 类登记时的既定回收路径）。
+
+# MCP rail 深测：被测边界 = harness/rails/mcp 与 harness_config 装配契约
+tests/integration/agentcore/harness/rails/mcp
+# memory rail 深测：coding-memory rail 行为 + store 读写契约
+tests/integration/agentcore/harness/rails/memory
+# planning rail 深测：任务规划 rail 行为
+tests/integration/agentcore/harness/rails/planning
+# progressive（延迟工具目录）rail 深测
+tests/integration/agentcore/harness/rails/progressive
+# skills rail 深测：技能工具 rail 行为
+tests/integration/agentcore/harness/rails/skills
+# subagent rail 深测：子 agent 派生/回填 rail 行为
+tests/integration/agentcore/harness/rails/subagent
+# sys_operation rail 深测：系统操作 rail 行为
+tests/integration/agentcore/harness/rails/sys_operation
+# heartbeat rail 深测：心跳 rail 行为
+tests/integration/agentcore/harness/rails/heartbeat
+# agent_mode rail 深测：agent 模式 rail 行为
+tests/integration/agentcore/harness/rails/agent_mode
+# context_engineer rail 深测：上下文工程 rail 行为
+tests/integration/agentcore/harness/rails/context_engineer
+# harness/skills 深测：技能生命周期管理行为
+tests/integration/agentcore/harness/skills
+# harness/extension 深测：扩展插件生命周期行为
+tests/integration/agentcore/harness/extension
+# harness/tools/browser_move 深测：浏览器操作工具行为
+tests/integration/agentcore/harness/tools/browser_move
+# harness/tools/todo 深测：todo 工具行为
+tests/integration/agentcore/harness/tools/todo
+# harness/tools/worktree 深测：worktree 工具行为
+tests/integration/agentcore/harness/tools/worktree
+# context_engine 深测：上下文引擎行为（单子系统）
+tests/integration/agentcore/context_engine
+# llm_routing 深测：路由编译器/客户端包装行为
+tests/integration/agentcore/foundation/llm_routing
+# model_anomaly 深测：模型异常护栏行为
+tests/integration/agentcore/model_anomaly
+# memory 顶层深测：memory 管理器行为
+tests/integration/agentcore/memory
+# memory/external 深测：外部记忆适配行为
+tests/integration/agentcore/memory/external
+# memory/lite 深测：轻量记忆行为
+tests/integration/agentcore/memory/lite
+# memory/ltm 深测：LTM 检索/生成行为
+tests/integration/agentcore/memory/ltm
