@@ -103,6 +103,10 @@ type DeepAgent struct {
 
 	// deepConfig Harness 编排配置
 	deepConfig *hschema.DeepAgentConfig
+	// innerReactMaxIterations 内层 ReAct 迭代上限（0=不限）。
+	// [25.6 steer 批] SessionInputGuard 准入窗口消费（Python _bind_inner_react_max_iterations
+	// 挂在实例上的等价物）。
+	innerReactMaxIterations int
 	// systemPromptBuilder 系统提示词构建器（与 ReActAgent 共享同一实例）
 	systemPromptBuilder *hprompts.SystemPromptBuilder
 
@@ -1826,6 +1830,24 @@ func (d *DeepAgent) EventManager() *task_loop.EventManager {
 	return d.interactionEvents
 }
 
+// MaxIterations 返回内层 ReAct 迭代上限（0=不限；SessionInputGuard 准入窗口用）。
+// Python: agent.max_iterations 经 _bind_inner_react_max_iterations 绑定。
+func (d *DeepAgent) MaxIterations() int { return d.innerReactMaxIterations }
+
+// SteeringQueueChan 返回活跃轮的 steering 通道（nil=无交互队列）。
+// Python: handler.interaction_queues.steering 的鸭子访问等价物。
+func (d *DeepAgent) SteeringQueueChan() chan string {
+	ctrl := d.currentLoopController()
+	if ctrl == nil {
+		return nil
+	}
+	q := ctrl.Queues()
+	if q == nil {
+		return nil
+	}
+	return q.SteeringChan()
+}
+
 // HasOutputStream 返回是否已有输出消费者。
 // Python: DeepAgent.has_output_stream (L3909)
 func (d *DeepAgent) HasOutputStream() bool {
@@ -2445,6 +2467,7 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	newReactConfig.MaxIterations = config.ResolveInnerReactMaxIterations()
+	d.innerReactMaxIterations = newReactConfig.MaxIterations
 	logInnerReactMaxIterations(config.MaxIterations, newReactConfig.MaxIterations)
 
 	if config.ContextEngineConfig != nil {
@@ -2645,6 +2668,7 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	reactConfig.MaxIterations = cfg.ResolveInnerReactMaxIterations()
+	d.innerReactMaxIterations = reactConfig.MaxIterations
 	logInnerReactMaxIterations(cfg.MaxIterations, reactConfig.MaxIterations)
 
 	if cfg.ContextEngineConfig != nil {

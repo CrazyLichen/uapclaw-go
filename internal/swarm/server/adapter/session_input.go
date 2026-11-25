@@ -4,11 +4,10 @@
 package adapter
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
-	"sync"
-	"sync/atomic"
+
+	"context"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -167,117 +166,6 @@ type SessionInputBoundaryGuard struct {
 	ledger *SessionInputLedger
 }
 
-// SessionInputGuard 守卫准入并在交互恢复时重接 SDK 队列。
-// Python: session_input.py SessionInputGuard —— 只用公开回调；既不排空
-// steering 队列也不驱动循环。被拒的输入没有提交到 SDK。
-type SessionInputGuard struct {
-	agentinterfaces.BaseRail
-	// owner 持有的实例（deliver 链 require_open_input 校验归属一致性）
-	owner atomic.Pointer[any]
-	// accepting 准入开关：false = 会话正在收尾或切换执行状态
-	accepting atomic.Bool
-	// mu 保护 owner 与 accepting 的组合判定
-	mu sync.Mutex
-}
-
-// SessionInputLedger 在途补充输入条目账本（display 文本 → 条目）。
-// Go 侧承载 Python 对象 part 的元数据（D-25.6-s3）。
-type SessionInputLedger struct {
-	mu      sync.Mutex
-	entries map[string]*hschema.QueuedSessionInput
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// NewSessionInputLedger 创建空账本。
-func NewSessionInputLedger() *SessionInputLedger {
-	return &SessionInputLedger{entries: make(map[string]*hschema.QueuedSessionInput)}
-}
-
-// Register 登记在途条目（入队前调用）。
-func (l *SessionInputLedger) Register(entry *hschema.QueuedSessionInput) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.entries[entry.DisplayContent] = entry
-}
-
-// Lookup 按 display 文本查条目（无则 nil）。
-func (l *SessionInputLedger) Lookup(display string) *hschema.QueuedSessionInput {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.entries[display]
-}
-
-// Remove 清理条目（边界收尾后调用）。
-func (l *SessionInputLedger) Remove(entry *hschema.QueuedSessionInput) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	delete(l.entries, entry.DisplayContent)
-}
-
-// NewSessionInputBoundaryGuard 创建边界守卫（默认优先级 1000）。
-func NewSessionInputBoundaryGuard(ledger *SessionInputLedger) *SessionInputBoundaryGuard {
-	return &SessionInputBoundaryGuard{BaseRail: *agentinterfaces.NewBaseRail(), ledger: ledger}
-}
-
-// Priority 返回 1000（先于一切默认 rail 执行）。
-func (g *SessionInputBoundaryGuard) Priority() int { return 1000 }
-
-// OnUserMessage 等待每条在途条目的边界结果并剔除失败项。
-// Python: on_user_message —— admitted 列表保持原顺序。
-func (g *SessionInputBoundaryGuard) OnUserMessage(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	inputs, ok := cbc.Inputs().(*agentinterfaces.UserMessageInputs)
-	if !ok || g.ledger == nil {
-		return nil
-	}
-	admitted := make([]string, 0, len(inputs.Parts))
-	for _, part := range inputs.Parts {
-		if entry := g.ledger.Lookup(part); entry != nil {
-			<-entry.BoundaryReady // 等待边界结果
-			if entry.BoundaryError != nil {
-				continue
-			}
-		}
-		admitted = append(admitted, part)
-	}
-	inputs.Parts = admitted
-	return nil
-}
-
-// GetCallbacks 声明 ON_USER_MESSAGE 钩子覆盖。
-func (g *SessionInputBoundaryGuard) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
-	return g.BaseRail.BuildCallbacks(g.BaseRail.CallbackFrom(
-		agentinterfaces.CallbackOnUserMessage,
-		func(ctx context.Context, railCtx any) error {
-			return g.OnUserMessage(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
-		},
-	))
-}
-
-// NewSessionInputGuard 创建准入守卫（默认 accepting=true）。
-func NewSessionInputGuard(owner any) *SessionInputGuard {
-	g := &SessionInputGuard{BaseRail: *agentinterfaces.NewBaseRail()}
-	g.owner.Store(&owner)
-	g.accepting.Store(true)
-	return g
-}
-
-// Owner 返回持有的实例。
-func (g *SessionInputGuard) Owner() any { return g.owner.Load() }
-
-// Accepting 报告准入开关状态。
-func (g *SessionInputGuard) Accepting() bool { return g.accepting.Load() }
-
-// SetAccepting 切换准入开关（会话收尾/切换执行状态时关闸）。
-func (g *SessionInputGuard) SetAccepting(v bool) { g.accepting.Store(v) }
-
-// OwnedBy 报告 guard 是否仍归属给定实例（deliver 链 require_open_input 用）。
-// Python: guard is None or guard.owner is instance
-func (g *SessionInputGuard) OwnedBy(instance any) bool {
-	held := g.owner.Load()
-	return held != nil && *held == instance
-}
-
 // sessionMessageKey 跨会话消息内部参数键（runtime 侧常量的 adapter 侧别名；
 // adapter 不能 import swarm/runtime，常量值逐字对齐 _jiuwenswarm_cross_session）。
 const sessionMessageKey = "_jiuwenswarm_cross_session"
@@ -312,4 +200,44 @@ func sessionIDOf(req *schema.AgentRequest) string {
 		return ""
 	}
 	return strings.TrimSpace(*req.SessionID)
+}
+
+// NewSessionInputBoundaryGuard 创建边界守卫（默认优先级 1000）。
+func NewSessionInputBoundaryGuard(ledger *SessionInputLedger) *SessionInputBoundaryGuard {
+	return &SessionInputBoundaryGuard{BaseRail: *agentinterfaces.NewBaseRail(), ledger: ledger}
+}
+
+// Priority 返回 1000（先于一切默认 rail 执行）。
+// Python: SessionInputBoundaryGuard.priority = 1000
+func (g *SessionInputBoundaryGuard) Priority() int { return 1000 }
+
+// OnUserMessage 等待每条在途条目的边界结果并剔除失败项。
+// Python: SessionInputBoundaryGuard.on_user_message —— admitted 保持原顺序。
+func (g *SessionInputBoundaryGuard) OnUserMessage(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	inputs, ok := cbc.Inputs().(*agentinterfaces.UserMessageInputs)
+	if !ok || g.ledger == nil {
+		return nil
+	}
+	admitted := make([]string, 0, len(inputs.Parts))
+	for _, part := range inputs.Parts {
+		if entry := g.ledger.Lookup(part); entry != nil {
+			<-entry.BoundaryReady // 等待边界结果
+			if entry.BoundaryError != nil {
+				continue
+			}
+		}
+		admitted = append(admitted, part)
+	}
+	inputs.Parts = admitted
+	return nil
+}
+
+// GetCallbacks 声明 ON_USER_MESSAGE 钩子覆盖。
+func (g *SessionInputBoundaryGuard) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return g.BaseRail.BuildCallbacks(g.BaseRail.CallbackFrom(
+		agentinterfaces.CallbackOnUserMessage,
+		func(ctx context.Context, railCtx any) error {
+			return g.OnUserMessage(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+		},
+	))
 }

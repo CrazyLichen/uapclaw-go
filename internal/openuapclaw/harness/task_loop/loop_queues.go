@@ -128,3 +128,9 @@ func (q *LoopQueues) PushSteerErr(msg string) error {
 		return fmt.Errorf("steering queue is full; supplemental input was not sent")
 	}
 }
+
+// SteeringChan 返回 steering 原始通道（守卫绑定用；nil 判定由调用方做）。
+// [Go 扩展] Python 鸭子访问 queues.steering。
+func (q *LoopQueues) SteeringChan() chan string {
+	return q.steering
+}

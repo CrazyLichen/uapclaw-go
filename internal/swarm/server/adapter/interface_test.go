@@ -1,9 +1,9 @@
 package adapter
 
 import (
-	"fmt"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"

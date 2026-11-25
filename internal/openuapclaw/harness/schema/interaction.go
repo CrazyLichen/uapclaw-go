@@ -633,6 +633,19 @@ type QueuedSessionInput struct {
 	// BoundaryError 入队/边界失败原因（nil=成功）
 	BoundaryError error
 
+	// DeliveryRound 条目归属的活跃轮（publish 时登记；跨轮失效判定）
+	// Python: entry.delivery_round = owner.active_round
+	DeliveryRound *ActiveInteractionRound
+	// UndeliveredResponseText 未交付回复累积文本（上限截断）
+	// Python: entry.undelivered_response_text
+	UndeliveredResponseText string
+	// UndeliveredResponseFullText 最近一次完整回复（上下文匹配用，单条）
+	// Python: entry.undelivered_response_full_text
+	UndeliveredResponseFullText string
+	// UndeliveredResponseTruncated 是否发生截断
+	// Python: entry.undelivered_response_truncated
+	UndeliveredResponseTruncated bool
+
 	// boundaryClosed 边界信号是否已关闭（幂等标记，非导出）
 	boundaryClosed bool
 }

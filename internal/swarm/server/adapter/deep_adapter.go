@@ -110,6 +110,9 @@ type DeepAdapter struct {
 	// streamContentRunKind 上一个可见内容块的归属（判断 user→goal 切换点）。
 	// Python: interface_deep.py _stream_content_run_kind
 	streamContentRunKind string
+	// sessionInputGuard 补充输入守卫（SessionInputGuard 全状态机；惰性创建，
+	// owner=本适配器 instance——deliver 链 require_open_input 消费）。
+	sessionInputGuard *SessionInputGuard
 	// interactionSuspensionProbe 交互挂起探测（deliver 链 suspended 判定）。
 	// Python: _stream_completion_state 读 loop_session INTERRUPTION_KEY；
 	// Go 挂起事实源在协调器账本，门面装配注入（25.6 steer 接线批）。

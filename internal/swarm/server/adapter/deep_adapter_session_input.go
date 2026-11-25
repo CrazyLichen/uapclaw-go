@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
@@ -189,6 +188,20 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 			Message: "session is waiting for an interaction answer; supplemental input was not sent",
 		}
 	}
+	// require_open_input：guard 归属与准入窗口（Python SessionInputGuard.accepting）
+	// Python: if guard is None or guard.owner is not instance: accepting=False;
+	//         if not accepting: raise REJECTED "session is finishing or changing execution state..."
+	guard := d.sessionInputGuard
+	accepting := false
+	if guard != nil && guard.OwnedBy(d.instance) {
+		accepting = guard.Accepting()
+	}
+	if !accepting {
+		return false, &session.SessionInputRejectedError{
+			Message: "session is finishing or changing execution state; " +
+				"supplemental input was not sent, retry after it settles",
+		}
+	}
 	// 捕获绑定轮（入队复核的锚）
 	// Python: bound_round = instance.active_round
 	boundRound := d.instance.ActiveRound()
@@ -221,12 +234,12 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 		return false, enqueueErr
 	}
 	sessionInputLedger.Register(entry)
-	entry.CompleteBoundary()
-
-	// ④ 经 DeepAgent.SendInput 的 STEER 分支语义入队（display 文本进 steering
-	// 通道——与 enqueueBoundLocked 二选一，这里只走结构化入队，避免双投）
-	// Python: await self._send_input_with_permission_resume_guard(...) → send(sdk_request)
-	_ = agentinterfaces.AgentCallbackEvent(CallbackOnUserMessageKind)
+	// ④ 发布输入边界（与模型输出同队列；失败→DeliveryUnknown，输入被丢弃
+	// 而不拖垮原任务）
+	// Python: await self._session_input_guard.publish_input_received(entry)
+	if pubErr := guard.PublishInputReceived(ctx, entry); pubErr != nil {
+		return false, pubErr
+	}
 	return true, nil
 }
 
