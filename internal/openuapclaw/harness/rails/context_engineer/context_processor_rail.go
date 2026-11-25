@@ -7,6 +7,7 @@ import (
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor"
+	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -70,6 +71,10 @@ const (
 	sessionMemoryProcessorToolResultBudget = "ToolResultBudgetProcessor"
 	sessionMemoryProcessorMicroCompact     = "MicroCompactProcessor"
 	sessionMemoryProcessorFullCompact      = "FullCompactProcessor"
+
+	// forked 链的会话记忆物化压缩器（24.2；Python: _SESSION_MEMORY_PROCESSOR_KEY，
+	// _build_preset_processors 中 SessionMemoryCompressorConfig(enabled=False)）
+	sessionMemoryProcessorSessionMemory = "SessionMemoryCompressor"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -85,6 +90,7 @@ var allPresetProcessorTypes = map[string]struct{}{
 	sessionMemoryProcessorToolResultBudget: {},
 	sessionMemoryProcessorMicroCompact:     {},
 	sessionMemoryProcessorFullCompact:      {},
+	sessionMemoryProcessorSessionMemory:    {},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -306,7 +312,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 ) []ceiface.ProcessorSpec {
 	specs := make([]ceiface.ProcessorSpec, 0, 7)
 	specs = append(specs, defaultPresetProcessors(modelConfig, modelClientConfig)...)
-	specs = append(specs, sessionMemoryPresetProcessors(modelConfig, modelClientConfig)...)
+	specs = append(specs, sessionMemoryPresetProcessors(r, modelConfig, modelClientConfig)...)
 	return specs
 }
 
@@ -426,6 +432,7 @@ func defaultPresetProcessors(
 //     TriggerThreshold/TriggerTotalTokens 等必填字段导致初始化失败
 //     （"初始化处理器类型失败"错误），必须用 New*Config 构造器
 func sessionMemoryPresetProcessors(
+	r *ContextProcessorRail,
 	modelConfig *llmschema.ModelRequestConfig,
 	modelClientConfig *llmschema.ModelClientConfig,
 ) []ceiface.ProcessorSpec {
@@ -447,6 +454,18 @@ func sessionMemoryPresetProcessors(
 				cfg := compressor.NewFullCompactProcessorConfig()
 				cfg.Model = modelConfig
 				cfg.ModelClient = modelClientConfig
+				return cfg
+			}(),
+		},
+		{
+			Type: sessionMemoryProcessorSessionMemory,
+			// Python: SessionMemoryCompressorConfig(enabled=False, memory=SessionMemoryConfig(...))，
+			// rail 已解析的 session_memory_config 透传给内嵌 memory 子配置
+			Config: func() *forkedcompressor.SessionMemoryCompressorConfig {
+				cfg := forkedcompressor.NewSessionMemoryCompressorConfig()
+				if r.sessionMemoryConfig != nil {
+					cfg.Memory = r.sessionMemoryConfig
+				}
 				return cfg
 			}(),
 		},
