@@ -901,6 +901,13 @@ func (c *RuntimeSessionCoordinator) cancelExecutionInternal(
 	return err
 }
 
+// MarkAwaitingControlForTest 登记等待交互标识（跨包集成测试专用）。
+func (c *RuntimeSessionCoordinator) MarkAwaitingControlForTest(executionID string, ids map[string]struct{}) {
+	if h := c.registry.Get(executionID); h != nil {
+		c.registry.MarkAwaitingControl(h, ids)
+	}
+}
+
 // sessionByID 取会话记录。
 func (c *RuntimeSessionCoordinator) sessionByID(sessionID string) (*sessionRecord, bool) {
 	c.mu.Lock()
