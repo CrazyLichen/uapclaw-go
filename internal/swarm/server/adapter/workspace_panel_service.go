@@ -24,9 +24,9 @@ const (
 	defaultMaxDeleteDepth   = 32
 	defaultMaxDeleteEntries = 5000
 	defaultPreviewMaxBytes  = 65536
-	// download 半区（Python service.py:311-384 download_payload）已由 27.8
-	// sealed-asset 下载链覆盖，本批不移植（spec D-B2-13）。
-	defaultDownloadMaxBytes = 100 * 1024 * 1024
+	// download 半区（Python service.py:311-384 download_payload）由 27.8
+	// sealed-asset 下载链覆盖（分块读，无 OOM 风险），未移植且无等价消费方
+	// ——Python 侧 maxDownloadBytes 的唯一消费者就是 download_payload。
 )
 
 // WorkspaceError 业务错误；code 对齐 Web HTTP error.code。
@@ -54,8 +54,6 @@ type WorkspaceService struct {
 	maxDeleteDepth int
 	// maxDeleteEntries 目录删除条目上限
 	maxDeleteEntries int
-	// maxDownloadBytes 下载字节上限（保留字段，对齐 Python 构造签名）
-	maxDownloadBytes int
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -66,7 +64,6 @@ func NewWorkspaceService(tenantRoot string) *WorkspaceService {
 		tenantRoot:       tenantRoot,
 		maxDeleteDepth:   defaultMaxDeleteDepth,
 		maxDeleteEntries: defaultMaxDeleteEntries,
-		maxDownloadBytes: defaultDownloadMaxBytes,
 	}
 }
 

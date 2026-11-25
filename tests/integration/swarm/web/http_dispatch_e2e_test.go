@@ -5,6 +5,7 @@ package web_test
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	verifieddownloadassets "github.com/uapclaw/uapclaw-go/internal/swarm/common/verified_download_assets"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
@@ -200,16 +203,78 @@ func (s *HTTPDispatchE2ESuite) TestHTTP带附件() {
 	s.Require().Equal(200, fStatus)
 	s.Require().True(fBody["ok"].(bool))
 
-	// 建会话 + media.persist（JSON body，base64 字段）
+	// 建会话 + media.persist（media_items 形状对齐 27.8 e2e：base64_data）
 	_, sBody := s.postJSON(base+"/api/v1/sessions", []byte("{}"))
 	sid := sBody["data"].(map[string]any)["session_id"].(string)
 	tinyPNG := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 	mStatus, mBody := s.postJSON(base+"/api/v1/sessions/"+sid+"/media",
-		[]byte(fmt.Sprintf(`{"file_name":"tiny.png","mime_type":"image/png","file_base64":%q}`, tinyPNG)))
+		[]byte(fmt.Sprintf(`{"content":"","media_items":[{"type":"image","filename":"tiny.png","mime_type":"image/png","base64_data":%q}]}`, tinyPNG)))
 	s.Require().Equal(200, mStatus)
-	if ok, isBool := mBody["ok"].(bool); isBool && ok {
-		s.Require().NotNil(mBody["data"])
-	}
+	s.Require().True(mBody["ok"].(bool), "media.persist 应成功: %v", mBody)
+	items, _ := mBody["data"].(map[string]any)["media_items"].([]any)
+	s.Require().Len(items, 1)
+	stored := items[0].(map[string]any)
+	diskPath, _ := stored["path"].(string)
+	s.Require().NotEmpty(diskPath, "回执应带 path: %v", stored)
+	// 磁盘断言：真实经过 server adapter 落盘到会话 uploads 且字节一致
+	raw, rerr := os.ReadFile(diskPath)
+	s.Require().NoError(rerr)
+	decoded, _ := base64.StdEncoding.DecodeString(tinyPNG)
+	s.Require().Equal(decoded, raw, "落盘字节应与上行 base64 一致")
+	s.Require().Equal(filepath.Join(s.dataDir, "agent", "sessions", sid, "uploads"), filepath.Dir(diskPath))
+}
+
+// TestHTTPVerifiedDownload全链 verified-asset 下载：真实网关 /file-api/download →
+// HandleFileDownload verified 分支 → 注入的真实 AgentClient → E2A →
+// server adapter readVerifiedAssetChunk 分块回传 → 字节一致 + Range 206。
+// 签发侧走 27.8 全链（Stage/Commit/GenerateVerifiedAssetToken，同进程单例密钥）。
+func (s *HTTPDispatchE2ESuite) TestHTTPVerifiedDownload全链() {
+	base := s.baseURL()
+	content := bytes.Repeat([]byte("0123456789abcdef"), 64) // 1024 字节
+
+	// 签发侧：sealed 资产 + verified_asset_v1 令牌（27.8 产物语义）
+	root := s.T().TempDir()
+	assetPath := filepath.Join(root, "asset.bin")
+	s.Require().NoError(os.WriteFile(assetPath, content, 0o644))
+	owner, oerr := verifieddownloadassets.NewVerifiedDownloadAssetOwner(
+		s.T().TempDir(), verifieddownloadassets.OwnerOptions{StartSweeper: false})
+	s.Require().NoError(oerr)
+	asset, serr := owner.Stage(assetPath, verifieddownloadassets.StageOptions{
+		FileName: "report.pdf", ExpiresAt: float64(time.Now().Add(time.Hour).Unix())})
+	s.Require().NoError(serr)
+	s.Require().NoError(owner.Commit(asset))
+	swarmtools.SetWebFileDownloadAssetOwner(owner)
+	s.T().Cleanup(func() { swarmtools.SetWebFileDownloadAssetOwner(nil) })
+	info := swarmtools.BuildVerifiedAssetDownloadInfo(asset, "report.pdf", "e2e-s1", "u1")
+	token := info["download_token"].(string)
+
+	// ① 全量流：200 + Content-Disposition + 字节一致
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, rerr := client.Get(base + "/file-api/download?token=" + token + "&user_id=u1")
+	s.Require().NoError(rerr)
+	defer func() { _ = resp.Body.Close() }()
+	s.Require().Equal(200, resp.StatusCode)
+	s.Require().Equal("attachment; filename*=UTF-8''report.pdf", resp.Header.Get("Content-Disposition"))
+	body, _ := io.ReadAll(resp.Body)
+	s.Require().Equal(content, body, "E2A 分块回传应拼装出完整资产")
+
+	// ② Range 断点：206 + 局部字节
+	req2, _ := http.NewRequestWithContext(s.Ctx, "GET",
+		base+"/file-api/download?token="+token+"&user_id=u1", nil)
+	req2.Header.Set("Range", "bytes=0-15")
+	resp2, rerr2 := client.Do(req2)
+	s.Require().NoError(rerr2)
+	defer func() { _ = resp2.Body.Close() }()
+	s.Require().Equal(206, resp2.StatusCode)
+	s.Require().Equal("bytes 0-15/1024", resp2.Header.Get("Content-Range"))
+	body2, _ := io.ReadAll(resp2.Body)
+	s.Require().Equal(content[:16], body2)
+
+	// ③ 缺 user_id → 400（分流前拦截）
+	resp3, rerr3 := client.Get(base + "/file-api/download?token=" + token)
+	s.Require().NoError(rerr3)
+	defer func() { _ = resp3.Body.Close() }()
+	s.Require().Equal(400, resp3.StatusCode)
 }
 
 // ──────────────────────────── workspace 操作 ────────────────────────────

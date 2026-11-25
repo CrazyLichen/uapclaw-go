@@ -575,8 +575,8 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 			})
 			return
 		}
-		handleUnaryBindFalse(w, req, wc, "harness.import",
-			map[string]any{"file_content": base64.StdEncoding.EncodeToString(raw)})
+		handleUnary(w, req, wc, "harness.import",
+			map[string]any{"file_content": base64.StdEncoding.EncodeToString(raw)}, false, false)
 	})
 
 	registerMappedRoutes(r, wc, mappedRoutesList)
@@ -682,11 +682,6 @@ func requestClientHost(req *http.Request) string {
 func handleUnary(w http.ResponseWriter, req *http.Request, wc *WebChannel, method string, params map[string]any, created bool, bindSessionParam bool) {
 	result := runUnaryInternal(req, wc, method, params, created, bindSessionParam)
 	writeJSONResponse(w, result.headers, result.status, result.body)
-}
-
-// handleUnaryBindFalse bind_session_param=false 的 unary（harness.import）。
-func handleUnaryBindFalse(w http.ResponseWriter, req *http.Request, wc *WebChannel, method string, params map[string]any) {
-	handleUnary(w, req, wc, method, params, false, false)
 }
 
 // handleMappedUnary mapped 表行的 unary 处理。
