@@ -129,16 +129,27 @@ func ConfigureSkillEvolution(
 		}
 		carrier = existingRegular
 	case team:
+		// Python: TeamSkillEvolutionRail(..., **rail_kwargs)（configuration.py:241-254）
+		// ——signal_trigger/review_trigger 经 rail_kwargs 全量转发进构造器。
 		carrier = NewTeamSkillEvolutionRail(skillsDir, llmModel, model, language,
 			WithTeamEvolutionReviewRuntime(runtime),
 			WithTeamEvolutionTrajectorySpanProcessor(trajectorySpanProcessor),
-			WithTeamSkillAutoSave(autoSave))
+			WithTeamSkillAutoSave(autoSave),
+			WithTeamSkillSignalTrigger(signalTrigger),
+			WithTeamSkillReviewTrigger(reviewTrigger))
 		created = true
 	default:
+		// Python: SkillEvolutionRail(..., **rail_kwargs)（:257-266）——同上全量转发。
 		carrier = NewSkillEvolutionRail(skillsDir, llmModel, model, language,
 			WithEvolutionReviewRuntime(runtime),
 			WithEvolutionTrajectorySpanProcessor(trajectorySpanProcessor),
-			WithAutoSave(autoSave))
+			WithAutoSave(autoSave),
+			WithSignalTrigger(signalTrigger),
+			WithReviewTrigger(reviewTrigger))
+		// rail_kwargs 其余成员（two_stage/subject_kind/review_interval/
+		// review_agent_max_iterations）：无生产调用方传参（Python 全仓仅
+		// examples 传 signal/review_trigger）；two_stage 依赖 optimizer 双段
+		// 管线（⤴️ 独立批），落地时随批补形参转发。
 		created = true
 	}
 
