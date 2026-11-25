@@ -138,7 +138,7 @@ func TestExecuteUnaryTracked_超时FAILED(t *testing.T) {
 			return nil, ctx.Err()
 		}, UnaryOptions{TimeoutScope: scope, TimeoutError: "session unary timed out"})
 	if handle.State != SessionExecutionStateFailed {
-		t.Errorf("超时应终态 FAILED，实际 %v", handle.State())
+		t.Errorf("超时应终态 FAILED，实际 %v", handle.State)
 	}
 }
 
@@ -159,6 +159,6 @@ func TestExecuteUnaryTracked_取消仍CANCELLED(t *testing.T) {
 			return nil, ctx.Err()
 		}, UnaryOptions{})
 	if handle.State != SessionExecutionStateCancelled {
-		t.Errorf("取消应终态 CANCELLED，实际 %v", handle.State())
+		t.Errorf("取消应终态 CANCELLED，实际 %v", handle.State)
 	}
 }
