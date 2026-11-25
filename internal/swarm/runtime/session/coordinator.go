@@ -1422,6 +1422,172 @@ func (c *RuntimeSessionCoordinator) ControlTargetWorkKind(sessionID, requestID s
 	return "", false
 }
 
+// RecoverableControl 在其执行血缘内解析未认领的控制。
+// Python: RuntimeSessionCoordinator.recoverable_control（:425-442）
+//
+// 仅沿 parent 链向上、且每代 generation 与会话当前代次一致时才认血缘；
+// 已认领（deliveries 命中）或目标不在 owner 血缘内 → nil。
+func (c *RuntimeSessionCoordinator) RecoverableControl(sessionID, requestID, executionID string) *SessionExecutionSnapshot {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || record.state == RuntimeSessionStateClosed || record.state == RuntimeSessionStateQuiescing {
+		c.mu.Unlock()
+		return nil
+	}
+	gen := record.generation
+	// 已认领 → 不再可恢复（Python _is_control_claimed）
+	if _, claimed := c.claimedExecutionIDLocked(record, requestID); claimed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Unlock()
+	owner := c.controlParent(sessionID, []string{requestID})
+	if owner == nil {
+		return nil
+	}
+	// owner 已有在飞投递登记 → 不可恢复（Python: owner.execution_id in record.deliveries）
+	c.mu.Lock()
+	_, ownerClaimed := record.deliveries[owner.ExecutionID]
+	c.mu.Unlock()
+	if ownerClaimed {
+		return nil
+	}
+	// 沿 parent 链向上找目标执行
+	ancestor := owner
+	for ancestor != nil {
+		if ancestor.SessionID != sessionID || ancestor.Generation != gen {
+			return nil
+		}
+		if ancestor.ExecutionID == executionID {
+			snap := owner.Snapshot()
+			return &snap
+		}
+		if ancestor.ParentExecutionID == "" {
+			return nil
+		}
+		ancestor = c.registry.Get(ancestor.ParentExecutionID)
+	}
+	return nil
+}
+
+// DeliverControlStream 流式控制投递：ask_user 答案边跑边可见（含二次提问挂起）。
+// Python: RuntimeSessionCoordinator.deliver_control_stream（:473-541）
+//
+// 与 unary 兼容 API 不同：观察在操作结束前即可见。输出消费者持有本流，
+// 退出时必须停止消费（emit 返回 false 即收尾）。
+func (c *RuntimeSessionCoordinator) DeliverControlStream(
+	ctx context.Context, sessionID string, answered []string,
+	operation func(context.Context) (<-chan *schema.AgentResponseChunk, error),
+	opts ControlDeliveryOptions, emit func(*schema.AgentResponseChunk) bool,
+) error {
+	// 认领父执行（与 unary 同一互斥：同一执行只允许一条控制输入在飞）
+	record, parent, requestID, err := c.claimControlParent(sessionID, answered,
+		"interaction answer is already in progress")
+	if err != nil {
+		return err
+	}
+	claimed := c.registry.WaitingControlIDsOf(parent.ExecutionID)
+	parentWasWaiting := c.registry.StateOf(parent.ExecutionID) == SessionExecutionStateWaitingForControl
+	defer func() {
+		c.releaseControlParent(record, parent)
+		c.refreshSessionState(record)
+	}()
+
+	// 新执行句柄（CONTROL_INPUT，挂父执行）
+	handle, err := c.newExecution(record, requestID, SessionWorkKindControlInput, parent.ExecutionID, nil)
+	if err != nil {
+		return err
+	}
+	if parentWasWaiting {
+		c.registry.ResumeWaiting(parent)
+	}
+	opCtx, cancel := context.WithCancel(ctx)
+	handle.Cancel = cancel
+	defer func() {
+		cancel()
+		handle.MarkDone()
+	}()
+	c.registry.MarkRunning(handle)
+	if opts.OnExecution != nil {
+		opts.OnExecution(handle.Snapshot())
+	}
+
+	// 逐 chunk 转发：每项提取交互标识并即时挂起标记（边跑边可见）
+	opCh, opErr := operation(opCtx)
+	if opErr != nil {
+		c.registry.MarkTerminal(handle, SessionExecutionStateFailed, opErr.Error())
+		if parentWasWaiting && !c.registry.StateOf(parent.ExecutionID).Terminal() {
+			c.registry.MarkWaiting(parent)
+		}
+		return opErr
+	}
+	for chunk := range opCh {
+		if emitErr := c.emitChunkStreamTerminal(handle, parent, parentWasWaiting, chunk, opts, emit); emitErr != nil {
+			return emitErr
+		}
+		if emit != nil && !emit(chunk) {
+			// 消费者停流：按取消收尾（Python GeneratorExit 分支）
+			c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, "consumer closed control stream")
+			if parentWasWaiting && !c.registry.StateOf(parent.ExecutionID).Terminal() {
+				c.registry.MarkWaiting(parent)
+			}
+			return nil
+		}
+	}
+
+	// 收尾分类（与 unary 同构）
+	c.mu.Lock()
+	recordEnded := c.sessions[sessionID] != record ||
+		record.state == RuntimeSessionStateQuiescing ||
+		record.state == RuntimeSessionStateClosed
+	c.mu.Unlock()
+	if c.registry.StateOf(parent.ExecutionID).Terminal() || recordEnded {
+		c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, "")
+		return &SessionExecutionEndedError{
+			Message: fmt.Sprintf("control input arrived after its execution ended: session=%s request=%s",
+				sessionID, requestID),
+		}
+	}
+	var controlIDs map[string]struct{}
+	if opts.InteractionIDs != nil {
+		controlIDs = opts.InteractionIDs(&schema.AgentResponseChunk{})
+	}
+	// 流式版：交互标识在转发期已即时标记（此处收尾只做 answered/终态）
+	c.answered(parent, claimed, parentWasWaiting)
+	if len(handle.WaitingControlIDs) > 0 {
+		c.registry.MarkWaiting(handle)
+	} else {
+		c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
+	}
+	_ = controlIDs
+	return nil
+}
+
+// emitChunkStreamTerminal 单 chunk 的即时挂起标记（流式转发循环内联辅助）。
+func (c *RuntimeSessionCoordinator) emitChunkStreamTerminal(
+	handle *SessionExecutionHandle, parent *SessionExecutionHandle,
+	parentWasWaiting bool, chunk *schema.AgentResponseChunk,
+	opts ControlDeliveryOptions, emit func(*schema.AgentResponseChunk) bool,
+) error {
+	var controlIDs map[string]struct{}
+	if opts.InteractionIDs != nil {
+		controlIDs = opts.InteractionIDs(chunk)
+	}
+	if len(controlIDs) > 0 {
+		c.registry.MarkAwaitingControl(handle, controlIDs)
+		// Python: self._refresh_control_gate(record)——闸门刷新的既有锁定版本
+		c.mu.Lock()
+		if rec, ok := c.sessions[handle.SessionID]; ok {
+			active := c.registry.Select(SelectOptions{
+				SessionID: handle.SessionID, Generation: &rec.generation, ActiveOnly: true,
+			})
+			c.refreshControlGateLocked(rec, active)
+		}
+		c.mu.Unlock()
+	}
+	return nil
+}
+
 // DeliverControl 向运行中的会话工作投递输入，不占用其 lane。
 // Python: RuntimeSessionCoordinator.deliver_control
 func (c *RuntimeSessionCoordinator) DeliverControl(
