@@ -56,14 +56,14 @@ func (s *MultimodalToolSuite) SetupSuite() {
 // TestAudioToolRegistration 测试音频工具注册。
 // 对齐 Python: create_audio_tools 返回 3 个工具实例。
 func (s *MultimodalToolSuite) TestAudioToolRegistration() {
-	tools := multimodal.CreateAudioTools(s.mockClient, s.audioConfig, "cn", "test-agent")
+	tools := multimodal.CreateAudioTools(s.audioConfig, "cn", "test-agent")
 	s.Len(tools, 3, "应创建 3 个音频工具")
 }
 
 // TestAudioToolSchemaRequiredFields 测试音频工具 Schema 包含必填字段。
 // 对齐 Python: AudioTranscriptionTool.input_schema 包含 audio_path_or_url。
 func (s *MultimodalToolSuite) TestAudioToolSchemaRequiredFields() {
-	tools := multimodal.CreateAudioTools(s.mockClient, s.audioConfig, "cn", "test-agent")
+	tools := multimodal.CreateAudioTools(s.audioConfig, "cn", "test-agent")
 	for _, t := range tools {
 		card := t.Card()
 		s.NotNil(card, "工具 Card 不应为 nil")
@@ -77,14 +77,14 @@ func (s *MultimodalToolSuite) TestAudioToolSchemaRequiredFields() {
 // TestVisionToolRegistration 测试视觉工具注册。
 // 对齐 Python: create_vision_tools 返回 2 个工具实例。
 func (s *MultimodalToolSuite) TestVisionToolRegistration() {
-	tools := multimodal.CreateVisionTools(s.mockClient, s.visionConfig, "cn", "test-agent")
+	tools := multimodal.CreateVisionTools(s.visionConfig, "cn", "test-agent")
 	s.Len(tools, 2, "应创建 2 个视觉工具")
 }
 
 // TestVisionToolSchemaRequiredFields 测试视觉工具 Schema 包含必填字段。
 // 对齐 Python: ImageOCRTool.input_schema 包含 image_path_or_url。
 func (s *MultimodalToolSuite) TestVisionToolSchemaRequiredFields() {
-	tools := multimodal.CreateVisionTools(s.mockClient, s.visionConfig, "cn", "test-agent")
+	tools := multimodal.CreateVisionTools(s.visionConfig, "cn", "test-agent")
 	for _, t := range tools {
 		card := t.Card()
 		s.NotNil(card, "工具 Card 不应为 nil")
@@ -117,8 +117,8 @@ func (s *MultimodalToolSuite) TestToolDescriptionsNonEmpty() {
 // TestMultipleToolsCoexist 测试音频+视觉工具可共存。
 // 对齐 Python: 同时注册 audio_tools + vision_tools 无冲突。
 func (s *MultimodalToolSuite) TestMultipleToolsCoexist() {
-	audioTools := multimodal.CreateAudioTools(s.mockClient, s.audioConfig, "cn", "test-agent")
-	visionTools := multimodal.CreateVisionTools(s.mockClient, s.visionConfig, "cn", "test-agent")
+	audioTools := multimodal.CreateAudioTools(s.audioConfig, "cn", "test-agent")
+	visionTools := multimodal.CreateVisionTools(s.visionConfig, "cn", "test-agent")
 	allTools := append(audioTools, visionTools...)
 	s.Len(allTools, 5, "音频3+视觉2 共 5 个工具应共存")
 
@@ -136,8 +136,8 @@ func (s *MultimodalToolSuite) TestMultipleToolsCoexist() {
 
 // allMultimodalTools 返回所有音频+视觉工具。
 func (s *MultimodalToolSuite) allMultimodalTools() []tool.Tool {
-	audioTools := multimodal.CreateAudioTools(s.mockClient, s.audioConfig, "cn", "test-agent")
-	visionTools := multimodal.CreateVisionTools(s.mockClient, s.visionConfig, "cn", "test-agent")
+	audioTools := multimodal.CreateAudioTools(s.audioConfig, "cn", "test-agent")
+	visionTools := multimodal.CreateVisionTools(s.visionConfig, "cn", "test-agent")
 	return append(audioTools, visionTools...)
 }
 

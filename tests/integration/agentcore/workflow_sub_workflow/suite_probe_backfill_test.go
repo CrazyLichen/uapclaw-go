@@ -16,6 +16,7 @@ import (
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
@@ -143,7 +144,7 @@ type echoComp struct {
 func NewEchoComp() *echoComp {
 	c := &echoComp{}
 	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
-		sess *sessionpkg.NodeSessionFacade) (map[string]any, error) {
+		sess *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		return map[string]any{"answer": fmt.Sprint(inputs)}, nil
 	}
 	return c
@@ -164,7 +165,7 @@ type echoStreamComp struct {
 func NewEchoStreamComp() *echoStreamComp {
 	c := &echoStreamComp{}
 	c.StreamFn = func(ctx context.Context, inputs map[string]any,
-		sess *sessionpkg.NodeSessionFacade) (<-chan graphexe.StreamChunk[any], error) {
+		sess *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (<-chan graphexe.StreamChunk[any], error) {
 		out := make(chan graphexe.StreamChunk[any])
 		go func() {
 			defer close(out)

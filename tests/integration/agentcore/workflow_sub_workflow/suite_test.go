@@ -23,6 +23,7 @@ import (
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
@@ -195,7 +196,7 @@ type interruptGateComp struct {
 func NewInterruptGateComp() *interruptGateComp {
 	c := &interruptGateComp{}
 	c.InvokeFn = func(ctx context.Context, inputs map[string]any,
-		sess *sessionpkg.NodeSessionFacade) (map[string]any, error) {
+		sess *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		n := c.calls.Add(1)
 		c.lastInputs = inputs
 		if n == 1 {

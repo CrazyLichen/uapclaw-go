@@ -28,6 +28,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 	rails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -67,20 +68,37 @@ func (s *MultimodalImageRailSuite) TestMultimodalImageRailSuite_带图轮全链(
 	params := map[string]any{"media_items": []any{
 		map[string]any{"type": "image", "path": img.Path, "mime_type": img.MimeType, "filename": img.Filename},
 	}}
-	ctx := prompt.WithMultimodalImageFiles(context.Background(), prompt.ExtractMultimodalImageFiles(params))
+	// 27.8 修订：ctx 袋子改 turnctx 通道（raw 清单），rail 内经
+	// MultimodalImageFilesFromContext 归一化读取
+	mediaItems, _ := params["media_items"].([]any)
+	rawItems := make([]map[string]any, 0, len(mediaItems))
+	for _, item := range mediaItems {
+		if m, ok := item.(map[string]any); ok {
+			rawItems = append(rawItems, m)
+		}
+	}
+	ctx := turnctx.WithTurnMultimodalImageFiles(context.Background(), rawItems)
 
-	// 2) rail 开启路径
+	// 2) rail 开启路径（27.8 修订：mutator 装进 ModelContext 持久投影链）
 	rail := rails.NewMultimodalImageRail(boolPtr(true))
-	rail.BeforeModelCall(ctx, &agentinterfaces.AgentCallbackContext{})
-	mutator := rail.ImageMutator()
-	s.Require().NotNil(mutator, "带图轮应安装 mutator")
+	mc := &imageItestStubModelContext{}
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetModelContext(mc)
+	s.Require().NoError(rail.BeforeModelCall(ctx, cbc))
+	var mutator ceiface.WindowMutator
+	for _, m := range mc.WindowMutators() {
+		if prompt.IsMultimodalImageMutator(m) {
+			mutator = m
+		}
+	}
+	s.Require().NotNil(mutator, "带图轮应安装投影")
 
-	// 3) 窗口组装点执行变形器：最后一条 user 消息被注入
-	messages := []llmschema.BaseMessage{
+	// 3) 窗口组装点执行投影：最后一条 user 消息被注入
+	window := &ceiface.ContextWindow{ContextMessages: []llmschema.BaseMessage{
 		llmschema.NewDefaultMessage(llmschema.RoleTypeSystem, "sys"),
 		llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "看图"),
-	}
-	updated := mutator(messages)
+	}}
+	updated := mutator.MutateWindow(window).ContextMessages
 	content := updated[1].GetContent()
 	parts := content.Parts()
 	s.Require().Len(parts, 2)
@@ -106,19 +124,23 @@ func (s *MultimodalImageRailSuite) TestMultimodalImageRailSuite_带图轮全链(
 func (s *MultimodalImageRailSuite) TestMultimodalImageRailSuite_无图轮与跨轮防串() {
 	rail := rails.NewMultimodalImageRail(boolPtr(true))
 
-	// 第 3 轮带图
+	// 第 3 轮带图（27.8 修订：turnctx 通道 + 投影链安装）
 	img := s.writeImage("r3.png")
-	ctx3 := prompt.WithMultimodalImageFiles(context.Background(), []prompt.MultimodalImageFile{img})
-	rail.BeforeModelCall(ctx3, &agentinterfaces.AgentCallbackContext{})
-	s.Require().NotNil(rail.ImageMutator())
+	ctx3 := turnctx.WithTurnMultimodalImageFiles(context.Background(),
+		[]map[string]any{{"type": "image", "path": img.Path, "mime_type": "image/png", "filename": "r3.png"}})
+	mc := &imageItestStubModelContext{}
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetModelContext(mc)
+	s.Require().NoError(rail.BeforeModelCall(ctx3, cbc))
+	s.Require().Len(mc.WindowMutators(), 1, "带图轮应安装投影")
 
-	// 第 4 轮新 ctx 无图：残留 mutator 被清（Python 每轮窗口全新，旧 mutator 不带入本轮）
+	// 第 4 轮新 ctx 无图：残留投影被清（替换式安装的空图清理路径，Python ensure 空图同款）
 	ctx4 := context.Background()
-	rail.BeforeModelCall(ctx4, &agentinterfaces.AgentCallbackContext{})
-	s.Nil(rail.ImageMutator(), "无图轮应清掉上一轮 mutator")
+	s.Require().NoError(rail.BeforeModelCall(ctx4, cbc))
+	s.Len(mc.WindowMutators(), 0, "无图轮应清掉上一轮投影")
 
 	// 第 5 轮全新会话 ctx：读不到第 3 轮图片（防串）
-	s.Nil(prompt.MultimodalImageFilesFromContext(context.Background()))
+	s.Nil(turnctx.TurnMultimodalImageFilesFromContext(context.Background()))
 }
 
 // TestMultimodalImageRailSuite_开关关闭剥离路径 关闭原生输入时历史图片块被剥光。
@@ -162,7 +184,13 @@ func boolPtr(b bool) *bool { return &b }
 type imageItestStubModelContext struct {
 	ceiface.ModelContext
 	messages []llmschema.BaseMessage
+	mutators []ceiface.WindowMutator
 }
+
+// WindowMutators/SetWindowMutators 实现 ceiface.WindowMutatorsRegistrar
+// （27.8 修订：mutator 装进 ModelContext 持久投影链，非 rail 自持）。
+func (m *imageItestStubModelContext) WindowMutators() []ceiface.WindowMutator { return m.mutators }
+func (m *imageItestStubModelContext) SetWindowMutators(ms []ceiface.WindowMutator) { m.mutators = ms }
 
 func (m *imageItestStubModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {
 	return m.messages, nil

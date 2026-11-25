@@ -19,6 +19,7 @@ import (
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
@@ -44,7 +45,7 @@ type addTenComp struct {
 func newAddTen() *addTenComp {
 	c := &addTenComp{}
 	c.InvokeFn = func(_ context.Context, inputs map[string]any,
-		_ *sessionpkg.NodeSessionFacade) (map[string]any, error) {
+		_ *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		src, ok := inputs["source"].(int)
 		if !ok {
 			return nil, fmt.Errorf("source must be int, got %T", inputs["source"])
@@ -64,7 +65,7 @@ type gateComp struct {
 func newGate(failures int) *gateComp {
 	g := &gateComp{failures: failures}
 	g.InvokeFn = func(_ context.Context, inputs map[string]any,
-		_ *sessionpkg.NodeSessionFacade) (map[string]any, error) {
+		_ *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		src, _ := inputs["source"].(int)
 		if g.failures > 0 {
 			g.failures--
@@ -85,7 +86,7 @@ type breakComp struct {
 func newBreakAt(atRound int) *breakComp {
 	b := &breakComp{atRound: atRound}
 	b.InvokeFn = func(_ context.Context, _ map[string]any,
-		_ *sessionpkg.NodeSessionFacade) (map[string]any, error) {
+		_ *sessionpkg.NodeSessionFacade, _ iface.ModelContext) (map[string]any, error) {
 		b.count++
 		return map[string]any{}, nil
 	}
