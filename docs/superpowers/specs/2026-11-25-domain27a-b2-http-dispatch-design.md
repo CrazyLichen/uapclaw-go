@@ -145,3 +145,99 @@ server 侧（workspace 面板）落 `internal/swarm/server/runtime/gateway_adapt
 ## 9. 方法清单对照验收
 
 实施完成后逐 Python 文件做方法清单对照（规则 12.4），产物补入本节；任何 Go 侧多出/缺失的函数逐条列偏差或说明。
+
+## 9. 方法清单对照（实施完结，2026-11-25 逐文件核对）
+
+### 9.1 web_http_routes.py → web_http_routes.go（925 行一文件一文件）
+
+| Python | Go | 备注 |
+|---|---|---|
+| `_HEADER_TO_PARAM` :36 | `headerToParam` | 一比一 |
+| `_STREAM_RPC_METHODS` :54 | `streamRPCMethods` | 一比一 |
+| `_request_client_host` :47 | `requestClientHost` | 一比一 |
+| `_body_dict` :119 | `readJSONBodyOptional` | 一比一 |
+| `_history_params` :127 / `_history_params_from_request` :131 | `historyParamsFromRequest` | 两函数合一（Python _history_params 仅单行分页构造，Go 内联同分支） |
+| `_web_http_metadata` :166 | `webHTTPMetadata` | 一比一 |
+| `_response_headers` :170 | `responseHeaders` | 一比一 |
+| `_envelope_from_res` :177 | `envelopeFromRes` | 一比一（映射表全分支） |
+| `_sse_pack` :211 | `ssePack` | 一比一 |
+| `register_web_http_api_routes` :216 | `RegisterWebHTTPAPIRoutes` | 路由逐条对齐；cron.runs_live/live 的 live_bus 订阅段为占位 SSE（D-B2-9） |
+| `_history_json` :522 | `handleHistoryJSON` | 一比一 |
+| `_chat_identity_error` :640 | `chatIdentityError` | 一比一 |
+| `_unary` :669 | `runUnaryInternal`+`handleUnary` | 一比一（audit 异常段对齐为 Error 日志） |
+| `_stream` :743 | `handleStream` | 一比一（帧语义/响应头/断连 break） |
+| `_coerce_query_value` :823 | `coerceQueryValue` | 一比一（"1"→int 不截胡） |
+| `_merge_header_params` :840 | `mergeHeaderParams` | 一比一 |
+| `_params_from_mapped_route` :851 | `paramsFromMappedRoute` | 一比一 |
+| `_register_mapped_routes` :880 | `registerMappedRoutes`+`mappedHandler` | 一比一 |
+| SessionCreateBody/SessionPatchBody/ChatSendBody pydantic | 直接 map params | 偏差 D-B2-17：Go 无 pydantic，body 字段透传（校验语义由下游等价承担） |
+
+### 9.2 http_routes/mapped.py → http_routes_mapped.go
+
+| Python | Go |
+|---|---|
+| `WebHttpMappedRoute` :16-41（含 `__post_init__`） | `webHTTPMappedRoute` + `newWebHTTPMappedRoute`（三条校验一比一） |
+| 12 组路由表（config/a2a/models/locale/cron/im_hosting/permissions/session_lifecycle/projects/skills/harness/workspace_file，130 条） | `buildMappedRoutes`（生成自 mapped.py 机器对拍 JSON，行序一致） |
+| `mapped_routes_for_edition` :855 | `mappedRoutesForEdition`（恒个人版，D-B2-5） |
+| `CORE_ROUTE_CATALOG` :870 | `coreRouteCatalog` |
+| `validate_mapped_routes` + `_normalize_path_key` :886-903 | `validateMappedRoutes` + `normalizePathKey`+`splitPath` |
+| `catalog_entries` :918-962 | `catalogEntries`（含 multipart 专行） |
+
+### 9.3 web_http_dispatch.py → web_http_dispatch.go
+
+| Python :行 | Go |
+|---|---|
+| `_header_map` :28 / `_get_header` :40 | `flattenHeaders` / `headerGet` |
+| `_trust_client_tenant_headers` :48 | `trustClientTenantHeaders`（企业段恒 false，D-B2-5） |
+| `_build_http_ext` :63 | `buildHTTPExt`（企业 X-User-Token 段不移植，D-B2-6） |
+| `resolve_http_routing_identity` :82 | `resolveHTTPRoutingIdentity` |
+| `dispatch_http_request` :97 | `dispatchHTTPRequest`（逐段对齐；outbound 由调用方构造、sessionID 回填等价 Python 构造期传入；Message.agent_ref 落 metadata.agent_ref，D-B2-11；session.create 审计段对齐为 logger.Info） |
+
+### 9.4 outbound.py + web_delivery_registry.py + invoke.py
+
+| Python | Go | 备注 |
+|---|---|---|
+| `_shared_user_route_session_id` :21 / `bind_http_session` :32 | `sharedUserRouteSessionID` / `bindHTTPSession` | 一比一（`_METHODS_WITHOUT_PARAM_SESSION_ID`={session.create}） |
+| `_is_sse_end_frame` :73 | `isSSEEndFrame` | 个人版分支（D-B2-5） |
+| `_normalize_frame` :96 | `normalizeFrame` | 一比一 |
+| `_HttpOutboundBase` :128-199 | `httpOutboundBase`（reply/emit/send/close + WriteJSON wsSender 适配） | 一比一 |
+| `HttpJsonOutbound` :201-278 | `httpJSONOutbound`（waitResponse 全分支：TIMEOUT 帧/chat.error 转换） | 一比一 |
+| `HttpSseOutbound` :281-374 | `httpSSEOutbound`（iterSSEFrames：total/idle/keepalive/idle 超窗 chat.error） | 一比一 |
+| `WebDeliveryRegistry` :15-122 | `webDeliveryRegistry`（register/unregister/clear/lookup/peersForSession/prune） | 一比一 |
+| `is_enterprise_write_forbidden` :62-75 | `isEnterpriseWriteForbidden` | 恒 false（D-B2-5），企业封禁名单不移植 |
+| `_LOCAL_ROUTING_IDENTITY_*` :26-32 | `localRoutingIdentityPrefixes/Methods` | 一比一 |
+| `dispatch_web_request` :114-211 | `(*WebChannel).dispatchWebRequest` | 一比一（guard 调用位/路由身份读取/本地 handler 合并/HANDLER_BEFORE/回调/ METHOD_NOT_FOUND） |
+
+### 9.5 web_http_timeouts.py → web_http_timeouts.go
+
+五个 resolve 函数 + `_env_float` 一比一（50 行）。
+
+### 9.6 container_file_http.py 下载半区 → channels/web/file_download_verified.go
+
+| Python | Go | 备注 |
+|---|---|---|
+| `_error_json` | `writeFileAPIError`+`fileAPIError` | 形状对齐 |
+| `_resolve_user_id` :845 | `resolveDownloadUserID` | 一比一 |
+| `serve_verified_download` :483 | `serveVerifiedDownload` | E2A fetch_agent_unary → 直接调 server/adapter（D-B2-16）；`_decode_verified_chunk` 校验并入 `fetchVerifiedChunk` |
+| `serve_file_chunks` :527 | `serveFileChunks`+`streamRange` | HEAD/Range/416/206/Content-Disposition 一比一 |
+| `/download` 路由 :838 分流 | `HandleFileDownload` verified 分支 | 挂载点差异 D-B2-16（Go 路由在 channels/web/app_web.go） |
+| `_parse_single_byte_range` | `parseSingleByteRange` | 一比一（多区间不可满足） |
+| `download_container_file` 普通 location 分支 | 不移植（D-B2-2） | verified 走本批；location 分支回 BAD_REQUEST 常态 |
+
+### 9.7 workspace 面板（zones.py + service.py + adapter）
+
+| Python | Go | 备注 |
+|---|---|---|
+| zones.py 全量（WorkspaceZone 9 成员/DELETABLE_ZONES/_ROLE_MD_NAMES/_PREFIX_RULES/normalize/classify/is_deletable） | `workspace_panel_zones.go` 全量 | 一比一；mimetypes guess 用内置小表（D-B2-12） |
+| service.py WorkspaceError/WorkspaceService/resolve/list_tree/delete_entries/_delete_one/_assert_dir_delete_budget/_rmtree_nofollow/preview_file/_looks_binary/measure_used_bytes | `workspace_panel_service.go` | 一比一；download_payload 不移植（D-B2-13）；du 子进程不移植直接 walk（D-B2-15）；st_ctime 用 mtime（D-B2-14） |
+| workspace_file_adapter.py `_handle_workspace` :199-238 | `workspace_panel_adapter.go handleWorkspacePanel` | 一比一（max_bytes min(·,1MiB)）；quota 快照段单机化（D-B2-4） |
+| schema ReqMethod WORKSPACE_* | `ReqMethodWorkspaceTree/Preview/Usage/EntriesDelete` | canonical 值对齐 jiuwenswarm/common/schema/message.py:83-86（entries.delete 带点） |
+
+### 9.8 Go 侧多出（Python 无对应物）
+
+| 符号 | 理由 |
+|---|---|
+| `httpOutboundAdapter`/`outboundSenderOf`/`outboundBaseOf` | Go 无 duck typing，路由面/发送面显式适配 |
+| `requestidentity` 包 | Python 在 openjiuwen_protocol.identity（wheel），Go 缺件补齐（D-B2-10） |
+| `requestext` 包 | gateway/common/request_ext.py 一比一移植（B2 分发前置件） |
+| `WriteJSON`（outbound） | wsSender 接口适配（对齐 Python _enqueue_send http 分支） |
