@@ -2,8 +2,6 @@ package web
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -13,7 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/common/verified_download_assets"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	serveradapter "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
+
+// 下载半区单测：verifiedChunkFetcher 覆盖为直取 server/adapter（跳过 E2A 中转，
+// 中转路径由 e2e 集成覆盖）；HEAD/Range/416 语义逐项断言。
 
 // buildVerifiedAssetForTest 构造真实 sealed 资产（Stage+Commit）与
 // verified_asset_v1 令牌（走 27.8 签发侧全链）。
@@ -42,29 +46,60 @@ func buildVerifiedAssetForTest(t *testing.T, content []byte, fileName, sessionID
 	return token, payload, assetPath
 }
 
+// withDirectFetcher 测试期把分块读取缝覆盖为直取 server/adapter。
+func withDirectFetcher(t *testing.T) {
+	t.Helper()
+	orig := verifiedChunkFetcher
+	verifiedChunkFetcher = func(_ *routing.AgentClient, token, sessionID string, offset, limit int) (*verifiedChunkResult, *fileAPIError) {
+		result, ok, code, err := serveradapter.HandleWorkspaceFileRequest(
+			schema.ReqMethodFileDownloadVerifiedChunk,
+			map[string]any{"token": token, "offset": offset, "limit": limit},
+			sessionID,
+		)
+		if !ok || err != nil {
+			errMsg := "verified download failed"
+			if err != nil {
+				errMsg = err.Error()
+			}
+			return nil, &fileAPIError{Error: errMsg, Code: code}
+		}
+		totalSize, hasSize := intFromAnyNum(result["size"])
+		require.True(t, hasSize)
+		data, derr := decodeBase64Field(result["data_base64"])
+		require.NoError(t, derr)
+		name, _ := result["name"].(string)
+		mimeType, _ := result["mime_type"].(string)
+		eof, _ := result["eof"].(bool)
+		return &verifiedChunkResult{data: data, totalSize: totalSize, name: name, mimeType: mimeType, eof: eof}, nil
+	}
+	t.Cleanup(func() { verifiedChunkFetcher = orig })
+}
+
 // TestServeVerifiedDownload全量流 sealed 资产 → 全量拼装一致。
 func TestServeVerifiedDownload全量流(t *testing.T) {
+	withDirectFetcher(t)
 	content := bytes.Repeat([]byte("0123456789"), 1000) // 10000 字节
 	token, payload, _ := buildVerifiedAssetForTest(t, content, "report.pdf", "s1")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/file-api/download?token="+token+"&user_id=u1", nil)
-	serveVerifiedDownload(rec, req, "u1", token, payload)
+	ServeVerifiedDownload(rec, req, nil, "u1", token, payload)
 	require.Equal(t, 200, rec.Code)
 	require.Equal(t, "attachment; filename*=UTF-8''report.pdf", rec.Header().Get("Content-Disposition"))
-	require.Equal(t, strconvI64(len(content)), rec.Header().Get("Content-Length"))
+	require.Equal(t, "10000", rec.Header().Get("Content-Length"))
 	require.Equal(t, content, rec.Body.Bytes())
 }
 
 // TestServeFileChunksRange断点 Range 206 / 越界 416。
 func TestServeFileChunksRange断点(t *testing.T) {
+	withDirectFetcher(t)
 	content := bytes.Repeat([]byte("abcdefghij"), 50) // 500 字节
 	token, payload, _ := buildVerifiedAssetForTest(t, content, "a.bin", "s1")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/file-api/download?token="+token, nil)
 	req.Header.Set("Range", "bytes=100-199")
-	serveVerifiedDownload(rec, req, "u1", token, payload)
+	ServeVerifiedDownload(rec, req, nil, "u1", token, payload)
 	require.Equal(t, 206, rec.Code)
 	require.Equal(t, "bytes 100-199/500", rec.Header().Get("Content-Range"))
 	require.Equal(t, content[100:200], rec.Body.Bytes())
@@ -72,19 +107,20 @@ func TestServeFileChunksRange断点(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest("GET", "/file-api/download?token="+token, nil)
 	req2.Header.Set("Range", "bytes=99999-")
-	serveVerifiedDownload(rec2, req2, "u1", token, payload)
+	ServeVerifiedDownload(rec2, req2, nil, "u1", token, payload)
 	require.Equal(t, 416, rec2.Code)
 	require.Equal(t, "bytes */500", rec2.Header().Get("Content-Range"))
 }
 
 // TestServeFileChunksHEAD HEAD 只回头不回体。
 func TestServeFileChunksHEAD(t *testing.T) {
+	withDirectFetcher(t)
 	content := []byte("hello world")
 	token, payload, _ := buildVerifiedAssetForTest(t, content, "a.bin", "s1")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("HEAD", "/file-api/download?token="+token, nil)
-	serveVerifiedDownload(rec, req, "u1", token, payload)
+	ServeVerifiedDownload(rec, req, nil, "u1", token, payload)
 	require.Equal(t, 200, rec.Code)
 	require.Empty(t, rec.Body.Bytes())
 }
@@ -93,29 +129,9 @@ func TestServeFileChunksHEAD(t *testing.T) {
 func TestServeVerifiedDownload缺sid(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/file-api/download", nil)
-	serveVerifiedDownload(rec, req, "u1", "faketoken", map[string]any{"kind": verifiedAssetTokenKind})
+	ServeVerifiedDownload(rec, req, nil, "u1", "faketoken", map[string]any{"kind": VerifiedAssetTokenKind})
 	require.Equal(t, 400, rec.Code)
 	require.Contains(t, rec.Body.String(), "invalid_download_token")
-}
-
-// TestHandleFileDownload分流 verified 分支接入 HandleFileDownload。
-func TestHandleFileDownload分流(t *testing.T) {
-	content := []byte("abc")
-	token, _, _ := buildVerifiedAssetForTest(t, content, "a.bin", "s1")
-
-	// 缺 user_id → 400 "user_id is required"（Python :852-856）
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/file-api/download?token="+token, nil)
-	HandleFileDownload(rec, req)
-	require.Equal(t, 400, rec.Code)
-	require.Contains(t, rec.Body.String(), "user_id is required")
-
-	// 带 user_id → 200 全量
-	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest("GET", "/file-api/download?token="+token+"&user_id=u1", nil)
-	HandleFileDownload(rec2, req2)
-	require.Equal(t, 200, rec2.Code)
-	require.Equal(t, content, rec2.Body.Bytes())
 }
 
 // TestParseSingleByteRange 单区间解析边界。
@@ -145,15 +161,9 @@ func TestParseSingleByteRange(t *testing.T) {
 
 // TestDecodeBase64Field 解码往返。
 func TestDecodeBase64Field(t *testing.T) {
-	got, err := decodeBase64Field(base64.StdEncoding.EncodeToString([]byte("hi")))
+	got, err := decodeBase64Field("aGk=")
 	require.NoError(t, err)
 	require.Equal(t, []byte("hi"), got)
 	_, err = decodeBase64Field(123)
 	require.Error(t, err)
-}
-
-// strconvI64 int → string。
-func strconvI64(n int) string {
-	raw, _ := json.Marshal(n)
-	return string(raw)
 }

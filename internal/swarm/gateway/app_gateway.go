@@ -687,6 +687,9 @@ func (s *AppGatewayServer) setupRouter() {
 
 	// 文件 API 与静态资源：实现位于 channels/web（对齐 Python channels/web/app_web.py），
 	// 本层只做挂载，保持单进程单端口。
+	// 下载链 AgentClient 注入（verified-asset 分块 E2A 中转，对齐 Python
+	// attach_container_file_routes 的 AgentOSRouterClient 装配缝）。
+	webapp.SetFileDownloadAgentClient(s.agentClient)
 	r.Mount("/file-api", webapp.FileAPIRouter())
 
 	// 静态文件（SPA fallback）

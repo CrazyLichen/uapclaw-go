@@ -75,6 +75,9 @@ type E2AEnvelope struct {
 	SessionUpdateKind string `json:"session_update_kind"`
 	// IsStream 是否流式响应
 	IsStream bool `json:"is_stream"`
+	// AgentRef Agent 引用（对齐 Python E2AEnvelope.agent_ref；agent_compat.py:87-88
+	// 透传 AgentServer 供响应侧 chunk/response 回带）。
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 
 	// ─── 期望输出 ───
 	// ExpectedOutputModes 对齐 A2A acceptedOutputModes

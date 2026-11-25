@@ -41,6 +41,45 @@ var httpErrorCodeStatus = map[string]int{
 	"WORKSPACE_QUOTA_EXCEEDED": 403,
 }
 
+// ──────────────────────────── 结构体（body 模型，json tag 承载） ────────────────────────────
+
+// sessionCreateBody POST /api/v1/sessions body。
+// Python: web_http_routes.py:72-90 SessionCreateBody（extra=allow，全字段可选）。
+type sessionCreateBody struct {
+	// Mode 可选运行模式
+	Mode *string `json:"mode,omitempty"`
+	// ProjectID 可选；省略绑定默认项目
+	ProjectID *string `json:"project_id,omitempty"`
+	// ProjectDir 可选
+	ProjectDir *string `json:"project_dir,omitempty"`
+	// WorkMode 可选（work / code）
+	WorkMode *string `json:"work_mode,omitempty"`
+	// CreateToken 可选幂等令牌；省略 Gateway 自动生成
+	CreateToken *string `json:"create_token,omitempty"`
+}
+
+// sessionPatchBody PATCH /api/v1/sessions/{id} body。
+// Python: web_http_routes.py:92-95 SessionPatchBody。
+type sessionPatchBody struct {
+	// Title 重命名标题
+	Title *string `json:"title,omitempty"`
+	// Pinned 置顶
+	Pinned *bool `json:"pinned,omitempty"`
+}
+
+// chatSendBody POST /api/v1/chat/completions body。
+// Python: web_http_routes.py:97-110 ChatSendBody（session_id/query 必填）。
+type chatSendBody struct {
+	// SessionID 已有会话 id（必填，先 POST /sessions）
+	SessionID string `json:"session_id"`
+	// Query 用户消息（必填，对齐 RPC chat.send）
+	Query string `json:"query"`
+	// Mode 可选；省略 agent
+	Mode *string `json:"mode,omitempty"`
+	// EnableStreaming 可选；默认 true
+	EnableStreaming *bool `json:"enable_streaming,omitempty"`
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // webHTTPMetadata transport 元数据。
@@ -339,8 +378,18 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 
 	// POST /api/v1/sessions 建会话，201（Python :294-315）
 	r.Post("/api/v1/sessions", func(w http.ResponseWriter, req *http.Request) {
-		body := readJSONBodyOptional(req)
-		handleMappedUnary(w, req, wc, "session.create", body, true, true)
+		params, perr := bodyParams(readRawBody(req), &sessionCreateBody{},
+			[]string{"mode", "project_id", "project_dir", "work_mode", "create_token"})
+		if perr != nil {
+			rid := requestIDOrUUID(req)
+			writeJSONResponse(w, responseHeaders(rid, "session.create"), 400, map[string]any{
+				"request_id": rid, "ok": false,
+				"error":    map[string]any{"code": "BAD_REQUEST", "message": "invalid JSON body", "details": map[string]any{}},
+				"metadata": webHTTPMetadata("session.create"),
+			})
+			return
+		}
+		handleMappedUnary(w, req, wc, "session.create", params, true, true)
 	})
 
 	// GET /api/v1/sessions/{session_id} 会话元数据（Python :317-325）
@@ -351,7 +400,14 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 
 	// PATCH /api/v1/sessions/{session_id} 重命名/置顶双分流（Python :327-335）
 	r.Patch("/api/v1/sessions/{session_id}", func(w http.ResponseWriter, req *http.Request) {
-		payload := readJSONBodyOptional(req)
+		payload, perr := bodyParams(readRawBody(req), &sessionPatchBody{}, []string{"title", "pinned"})
+		if perr != nil {
+			writeJSONResponse(w, map[string]string{}, 400, map[string]any{
+				"ok":    false,
+				"error": map[string]any{"code": "BAD_REQUEST", "message": "invalid JSON body", "details": map[string]any{}},
+			})
+			return
+		}
 		payload["session_id"] = chi.URLParam(req, "session_id")
 		if _, hasPinned := payload["pinned"]; hasPinned {
 			handleMappedUnary(w, req, wc, "session.pin", payload, false, true)
@@ -401,7 +457,18 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 
 	// POST /api/v1/chat/completions 发消息，默认 SSE（Python :410-429）
 	r.Post("/api/v1/chat/completions", func(w http.ResponseWriter, req *http.Request) {
-		payload := readJSONBodyOptional(req)
+		payload, perr := bodyParams(readRawBody(req), &chatSendBody{},
+			[]string{"session_id", "query", "mode", "enable_streaming"})
+		if perr != nil || payload["session_id"] == "" || payload["query"] == "" {
+			// Python pydantic 必填缺失回 422；Go envelope 统一 400 BAD_REQUEST
+			rid := requestIDOrUUID(req)
+			writeJSONResponse(w, responseHeaders(rid, "chat.send"), 400, map[string]any{
+				"request_id": rid, "ok": false,
+				"error":    map[string]any{"code": "BAD_REQUEST", "message": "session_id and query are required", "details": map[string]any{}},
+				"metadata": webHTTPMetadata("chat.send"),
+			})
+			return
+		}
 		accept := strings.ToLower(req.Header.Get("accept"))
 		wantStream := strings.Contains(accept, "text/event-stream")
 		if v, ok := payload["enable_streaming"].(bool); ok && v {
@@ -415,7 +482,17 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 	})
 	// POST /api/v1/chat/send 兼容路径（不进 OpenAPI，Python :415-420）
 	r.Post("/api/v1/chat/send", func(w http.ResponseWriter, req *http.Request) {
-		payload := readJSONBodyOptional(req)
+		payload, perr := bodyParams(readRawBody(req), &chatSendBody{},
+			[]string{"session_id", "query", "mode", "enable_streaming"})
+		if perr != nil || payload["session_id"] == "" || payload["query"] == "" {
+			rid := requestIDOrUUID(req)
+			writeJSONResponse(w, responseHeaders(rid, "chat.send"), 400, map[string]any{
+				"request_id": rid, "ok": false,
+				"error":    map[string]any{"code": "BAD_REQUEST", "message": "session_id and query are required", "details": map[string]any{}},
+				"metadata": webHTTPMetadata("chat.send"),
+			})
+			return
+		}
 		accept := strings.ToLower(req.Header.Get("accept"))
 		wantStream := strings.Contains(accept, "text/event-stream")
 		if v, ok := payload["enable_streaming"].(bool); ok && v {
@@ -503,6 +580,58 @@ func RegisterWebHTTPAPIRoutes(r chi.Router, wc *WebChannel) {
 	})
 
 	registerMappedRoutes(r, wc, mappedRoutesList)
+}
+
+// bodyParams 解析 body 为 typed struct（json tag 承载已知字段，exclude_none
+// 语义经指针 omitempty）+ 未声明字段 extra 透传（对齐 Python extra="allow" +
+// model_dump(exclude_none=True)，web_http_routes.py:112-117 _body_dict）。
+func bodyParams(raw []byte, typed any, declared []string) (map[string]any, error) {
+	extra := map[string]any{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &extra); err != nil {
+			return nil, err
+		}
+	}
+	if err := json.Unmarshal(raw, typed); err != nil {
+		return nil, err
+	}
+	// 已知字段经 typed 序列化（nil 指针被 omitempty 排除 = exclude_none）
+	typedJSON, err := json.Marshal(typed)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if len(typedJSON) > 0 {
+		_ = json.Unmarshal(typedJSON, &out)
+	}
+	declaredSet := map[string]bool{}
+	for _, key := range declared {
+		declaredSet[key] = true
+	}
+	for key, value := range extra {
+		if !declaredSet[key] {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+// readRawBody 读完整 body（空 body 返回 nil）。
+func readRawBody(req *http.Request) []byte {
+	if req.Body == nil {
+		return nil
+	}
+	raw, _ := io.ReadAll(req.Body)
+	return raw
+}
+
+// requestIDOrUUID X-Request-Id 缺省时生成 uuid hex。
+func requestIDOrUUID(req *http.Request) string {
+	rid := req.Header.Get("x-request-id")
+	if rid == "" {
+		rid = hexUUID()
+	}
+	return rid
 }
 
 // ──────────────────────────── 非导出函数（分发通道） ────────────────────────────

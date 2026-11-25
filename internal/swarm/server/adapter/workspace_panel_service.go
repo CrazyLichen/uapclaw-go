@@ -1,10 +1,15 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -129,7 +134,7 @@ func (s *WorkspaceService) ListTree(relativePath string) (map[string]any, *Works
 			"is_dir":        isDir,
 			"size_bytes":    size,
 			"mtime_ms":      cst.ModTime().UnixMilli(),
-			"ctime_ms":      cst.ModTime().UnixMilli(), // Go 无 st_ctime 等价，偏差 D-B2-14
+			"ctime_ms":      fileCTimeMs(cst), // 对齐 Python st_ctime
 			"zone":          string(zone),
 			"deletable":     workspaceIsDeletable(childRel),
 			"mime_hint":     mimeHint,
@@ -205,18 +210,37 @@ func (s *WorkspaceService) PreviewFile(relativePath string, maxBytes any) (map[s
 	return map[string]any{"relative_path": rel, "truncated": truncated, "content": text}, nil
 }
 
-// MeasureUsedBytes 全量 du（du -s -B1 不可用时 walk 兜底）。
-// Python: service.py:386-391 + :407-434 measure_used_bytes；
-// 偏差 D-B2-15：du 子进程不移植，直接 walk 累加。
+// MeasureUsedBytes 全量 du（du -s -B1 优先；不可用时 walk 兜底）。
+// Python: service.py:386-391 + :407-434 measure_used_bytes。
 func (s *WorkspaceService) MeasureUsedBytes() int64 {
 	root := filepath.Clean(s.tenantRoot)
 	st, err := os.Stat(root)
 	if err != nil || !st.IsDir() {
 		return 0
 	}
+	return measureUsedBytes(root)
+}
+
+// measureUsedBytes 运行 /usr/bin/du -s -B1；失败走 walk 兜底。
+// Python: service.py:407-434 measure_used_bytes。
+func measureUsedBytes(root string) int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/usr/bin/du", "-s", "-B1", root)
+	output, err := cmd.Output()
+	if err == nil {
+		line := strings.TrimSpace(strings.SplitN(string(output), "\n", 2)[0])
+		token := strings.TrimSpace(strings.SplitN(line, "\t", 2)[0])
+		if n, perr := strconv.ParseInt(token, 10, 64); perr == nil && n > 0 {
+			return n
+		}
+	} else {
+		logger.Debug(logComponentWorkspace).Err(err).
+			Str("root", root).Msg("[workspace] du unavailable, walk fallback")
+	}
 	var total int64
-	_ = filepath.Walk(root, func(pathValue string, info os.FileInfo, err error) error {
-		if err != nil || info == nil || info.IsDir() {
+	_ = filepath.Walk(root, func(pathValue string, info os.FileInfo, ferr error) error {
+		if ferr != nil || info == nil || info.IsDir() {
 			return nil
 		}
 		total += info.Size()
@@ -462,6 +486,15 @@ func walkNoFollowDir(root, dir string, depth int, fn func(pathValue string, info
 		}
 	}
 	return nil
+}
+
+// fileCTimeMs 从 Stat_t 取 inode 变更时间（对齐 Python st_ctime；
+// 平台无 Stat_t.Ctim 时回退 mtime）。
+func fileCTimeMs(fi os.FileInfo) int64 {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return st.Ctim.Sec*1000 + st.Ctim.Nsec/1e6
+	}
+	return fi.ModTime().UnixMilli()
 }
 
 // rmtreeNoFollow 删除目录树（文件/目录 symlink 都不跟随）。

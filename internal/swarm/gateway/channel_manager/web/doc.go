@@ -23,6 +23,7 @@
 //	├── web_outbound_http.go    # 27-A B2：outbound 三符号（JSON/SSE outbound + bind_http_session）
 //	├── web_delivery_registry.go# 27-A B2：请求级 outbound 注册表（B3 前置）
 //	├── web_invoke.go           # 27-A B2：dispatch_web_request 共享入站管线
+//	├── container_file_http_download.go # 27-A B2：verified-asset 下载半区（E2A 分块 + HEAD/Range/416）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/web/
 // （前端源码与静态/文件服务在 channels/web，对齐 Python channels/web/）

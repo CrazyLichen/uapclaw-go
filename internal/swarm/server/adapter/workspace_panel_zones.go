@@ -1,8 +1,9 @@
 package adapter
 
 import (
-	"fmt"
+	"mime"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -153,39 +154,10 @@ func workspaceIsDeletable(relativePath string) bool {
 	return deletableZones[workspaceClassifyZone(relativePath)]
 }
 
-// workspaceMimeHint 依据扩展名猜测 mime（对齐 Python mimetypes.guess_type 的
-// 常用子集；其余返回空串）。Python 侧无第三方表，Go 用内置小表覆盖
-// workspace 面板可见文件类型，登记偏差 D-B2-12。
+// workspaceMimeHint 依据扩展名猜测 mime（对齐 Python mimetypes.guess_type：
+// 系统 mime 数据库 + 内建小表；未识别返回空串）。
 func workspaceMimeHint(name string) string {
-	lower := strings.ToLower(name)
-	switch {
-	case strings.HasSuffix(lower, ".txt"), strings.HasSuffix(lower, ".md"):
-		return "text/plain"
-	case strings.HasSuffix(lower, ".json"):
-		return "application/json"
-	case strings.HasSuffix(lower, ".png"):
-		return "image/png"
-	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
-		return "image/jpeg"
-	case strings.HasSuffix(lower, ".webp"):
-		return "image/webp"
-	case strings.HasSuffix(lower, ".gif"):
-		return "image/gif"
-	case strings.HasSuffix(lower, ".pdf"):
-		return "application/pdf"
-	case strings.HasSuffix(lower, ".zip"):
-		return "application/zip"
-	case strings.HasSuffix(lower, ".mp3"):
-		return "audio/mpeg"
-	case strings.HasSuffix(lower, ".mp4"):
-		return "video/mp4"
-	case strings.HasSuffix(lower, ".html"), strings.HasSuffix(lower, ".htm"):
-		return "text/html"
-	case strings.HasSuffix(lower, ".csv"):
-		return "text/csv"
-	default:
-		return ""
-	}
+	return mime.TypeByExtension(filepath.Ext(name))
 }
 
 // workspaceSortedChildren 目录项排序：目录优先、名称小写序。
@@ -212,9 +184,4 @@ func workspaceCommonPathPrefix(root, candidate string) bool {
 		return true
 	}
 	return strings.HasPrefix(candidate, root+"/")
-}
-
-// fmtWorkspaceError 占位错误消息构造（保持与 Python str(exc) 风格一致）。
-func fmtWorkspaceError(err error) string {
-	return fmt.Sprint(err)
 }

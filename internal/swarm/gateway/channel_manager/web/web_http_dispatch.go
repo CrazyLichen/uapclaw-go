@@ -204,9 +204,6 @@ func dispatchHTTPRequest(
 		"method":    method,
 		"ws_id":     outbound.jiuwenWsID,
 		"transport": "web-http",
-		// 偏差 D-B2-11：Python Message.agent_ref={"mode":mode,"id":agent_id}
-		// 在 Go schema.Message 无对应字段，落 metadata.agent_ref 保数据不丢。
-		"agent_ref": map[string]any{"mode": mode, "id": agentID},
 	}, routing)
 
 	reqMethod, _ := schema.ParseReqMethod(method)
@@ -223,9 +220,8 @@ func dispatchHTTPRequest(
 		IsStream:  isStream,
 		AppID:     appID,
 		UserID:    userID,
-		// 偏差：Python Message.agent_ref={mode,id} 在 Go schema.Message 无对应字段，
-		// 已落 metadata.agent_ref（见 D-B2-11）。
-		Metadata: requestext.AttachToMetadata(meta, ext),
+		AgentRef:  map[string]any{"mode": mode, "id": agentID}, // 对齐 Python :213
+		Metadata:  requestext.AttachToMetadata(meta, ext),
 	}
 
 	wc.dispatchWebRequest(httpOutboundAdapter{base: outbound}, method, reqID, params, sessionID, userMessage)

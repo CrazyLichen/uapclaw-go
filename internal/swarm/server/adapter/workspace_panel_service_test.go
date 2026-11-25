@@ -130,12 +130,27 @@ func TestWorkspaceEntriesDelete(t *testing.T) {
 	require.NoError(t, err) // 禁删项仍在
 }
 
-// TestWorkspaceUsage单机 du 快照。
+// TestWorkspaceUsage单机 du 快照（du 统计目录块 + 文件，恒 ≥ 文件字节和）。
 func TestWorkspaceUsage单机(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "f.txt"), []byte("0123456789"), 0o644))
 	svc := NewWorkspaceService(root)
-	require.Equal(t, int64(10), svc.MeasureUsedBytes())
+	used := svc.MeasureUsedBytes()
+	require.GreaterOrEqual(t, used, int64(10))
+	require.Equal(t, int64(10), svc.measureUsedBytesWalkOnly(root))
+}
+
+// measureUsedBytesWalkOnly walk 兜底路径的字节和（du 不可用语义）。
+func (s *WorkspaceService) measureUsedBytesWalkOnly(root string) int64 {
+	var total int64
+	_ = filepath.Walk(root, func(pathValue string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
 }
 
 // TestAdapter分发四方法 adapter 方法表与 WorkspaceError → code。

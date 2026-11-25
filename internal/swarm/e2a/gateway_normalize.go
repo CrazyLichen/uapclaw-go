@@ -123,6 +123,10 @@ func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 		"is_stream":  msg.IsStream,
 		"timestamp":  msg.Timestamp,
 	}
+	// agent_ref 透传（对齐 Python Message.agent_ref → env.agent_ref）
+	if msg.AgentRef != nil {
+		d["agent_ref"] = msg.AgentRef
+	}
 
 	if msg.ReqMethod != "" {
 		d["method"] = string(msg.ReqMethod)

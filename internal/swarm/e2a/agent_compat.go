@@ -107,6 +107,9 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		IsStream:  env.IsStream,
 		Timestamp: e2aTimestampToFloat(env.Timestamp),
 		Metadata:  metadata,
+		// V2: 透传 agent_ref 到 AgentServer，供响应侧 chunk/response 回带
+		// （对齐 Python agent_compat.py:87-88 agent_ref=env.agent_ref）。
+		AgentRef: env.AgentRef,
 	}, nil
 }
 

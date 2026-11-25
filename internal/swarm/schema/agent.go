@@ -39,6 +39,10 @@ type AgentRequest struct {
 	IsStream bool `json:"is_stream"`
 	// Timestamp Unix 秒时间戳（含小数精度，对齐 Python time.time()）
 	Timestamp float64 `json:"timestamp"`
+	// AgentRef Agent 引用（27-A B2 对齐 Python Message.agent_ref，
+	// web_http_dispatch.py:213 构造期传入 {"mode": mode, "id": agent_id}；
+	// 经 agent_compat.py:87-88 透传 AgentServer 供响应侧回带）。
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 	// Metadata 扩展元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableMemory 是否启用记忆（三态：nil/true/false，对齐 Python bool | None）

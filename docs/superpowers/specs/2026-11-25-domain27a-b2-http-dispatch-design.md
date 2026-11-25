@@ -104,6 +104,14 @@ server 侧（workspace 面板）落 `internal/swarm/server/runtime/gateway_adapt
 | D-B2-6 | 企业版 X-User-Token federation 段（`_build_http_ext` :75-79）不移植 | 无企业登录集成 | 同 D-B2-5 |
 | D-B2-7 | Go 无 `jiuwenswarm_auth` cookie / `X-Auth-Session` 会话体系 | 依赖 D-B2-1 | 同 D-B2-1 |
 | D-B2-8 | enterprise_files.py 的 `/file-api/raw-file` OBS 分支、share_jobs 路由（B6/B4 范围）不随本批 | 归属 B4/B6 | 各自批次 |
+| D-B2-9 | `cron.runs/live` 与 `sessions/{id}/live` 两条 SSE 路由只落所有权校验 + SSE 形状（keepalive），无帧源 | Go 侧 cron live_bus 未对齐到可订阅形态（领域二十 cron 事件总线缺口），本批无法接帧 | cron live bus 对齐节（⤵️ 挂账） |
+| D-B2-10 | requestext 请求级 ext 载体：Python contextvars.ContextVar（Token set/reset）→ Go context.Context 值载体（WithRequestExt/RequestExtFromContext） | Go 无 contextvars；语义差异：ext 需调用方显式随 ctx 传递，AgentServer 入口抬升时漏调则静默丢失 | 出现对齐 contextvars 语义的统一载体 |
+| ~~D-B2-11~~ | ✅ 已对齐（2026-11-25 复核裁决）：Message.AgentRef 字段补入 schema.Message + E2AEnvelope.AgentRef + E2AToAgentRequest/MessageToE2A 双向映射（对齐 Python agent_compat.py:87-88 链） | 原落 metadata.agent_ref 为保数据不丢的过渡形 | — |
+| ~~D-B2-12~~ | ✅ 已对齐：workspaceMimeHint 改用标准库 mime.TypeByExtension（与 Python mimetypes 同读系统 mime 数据库），删除手写小表 | 原手写 12 项小表覆盖不足 | — |
+| ~~D-B2-14~~ | ✅ 已对齐：ctime_ms 经 syscall.Stat_t.Ctim 取真实 st_ctime（仓库先例 upload_storage.go Nlink 同法），非 Linux 回退 mtime | 原用 mtime 顶替 | — |
+| ~~D-B2-15~~ | ✅ 已对齐：MeasureUsedBytes 先跑 /usr/bin/du -s -B1（120s 超时）失败走 walk 兜底，与 Python 一比一 | 原 walk 直取 | — |
+| ~~D-B2-16~~ | ✅ 已对齐（2026-11-25 复核裁决）：下载半区实现落 gateway/channel_manager/web/container_file_http_download.go；分块经 E2A AgentClient.SendRequest 跨缝取（对齐 fetch_agent_unary）；channels/web 仅保留路由入口 + AgentClient 注入缝（SetFileDownloadAgentClient，app_gateway 装配） | 原直调 server/adapter 无跨缝 | — |
+| ~~D-B2-17~~ | ✅ 已对齐（json tag 裁决）：sessionCreateBody/sessionPatchBody/chatSendBody 类型化（json tag + 指针 omitempty = exclude_none）+ 未声明字段 extra 透传（对齐 extra="allow" + model_dump）；chat.send session_id/query 必填校验（pydantic 422 → Go 统一 400 BAD_REQUEST，形状偏差见上） | 原裸 map 直透传 | — |
 
 ## 7. 测试策略
 

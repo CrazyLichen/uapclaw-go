@@ -42,6 +42,9 @@ type Message struct {
 	UserID string `json:"user_id"`
 	// BotID 机器人标识
 	BotID string `json:"bot_id"`
+	// AgentRef Agent 引用（27-A B2 对齐 Python Message.agent_ref，
+	// web_http_dispatch.py:213 构造期传入 {"mode": mode, "id": agent_id}）
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 	// AppID 应用标识（对齐 Python Message.app_id；IM 通知回包按 app_id 路由）
 	AppID string `json:"app_id"`
 	// ReqMethod 请求方法（仅 req 使用）
