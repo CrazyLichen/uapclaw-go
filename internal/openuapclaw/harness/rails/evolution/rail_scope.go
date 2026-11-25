@@ -125,6 +125,57 @@ func (r *EvolutionRail) beginScopeCapture(sessionID, memberID, teamID string) *i
 	return capture
 }
 
+// captureMatches 判定采集是否匹配全部给定 scope 定位符。
+// Python: evolution_rail.py _capture_matches（:623-637，staticmethod）。
+// Python 还要求采集仍在活跃表内（subscription is capture）；Go 的 currentCapture
+// 在 endScopeCapture 时同步清空，等价承载该活性判定。
+func captureMatches(capture *invokeCapture, sessionID, memberID, teamID string) bool {
+	if sessionID != "" && capture.sessionID != sessionID {
+		return false
+	}
+	if memberID != "" && capture.memberID != memberID {
+		return false
+	}
+	if teamID != "" && capture.teamID != teamID {
+		return false
+	}
+	return true
+}
+
+// findActiveCapture 返回精确 scope 键下唯一的活跃采集（无则 nil）。
+// Python: evolution_rail.py _find_active_capture（:639-646）。
+func (r *EvolutionRail) findActiveCapture(scopeKey string) *invokeCapture {
+	r.scopeMu.Lock()
+	defer r.scopeMu.Unlock()
+	for capture := range r.activeCaptures {
+		if capture.scopeKey == scopeKey {
+			return capture
+		}
+	}
+	return nil
+}
+
+// resolveCaptureByScope 显式 scope 定位解析活跃采集。
+// Python: evolution_rail.py _resolve_capture（:658-711）——先匹配当前采集，
+// 再按 scope_key 查活跃采集表；都未命中返回 nil。
+func (r *EvolutionRail) resolveCaptureByScope(sessionID, memberID, teamID string) *invokeCapture {
+	if capture := r.currentCapture; capture != nil {
+		if captureMatches(capture, sessionID, memberID, teamID) {
+			return capture
+		}
+	}
+	if sessionID == "" {
+		return nil
+	}
+	scopeKey := ""
+	if teamID != "" {
+		scopeKey = scopeKeyOf("team", sessionID, "")
+	} else {
+		scopeKey = scopeKeyOf("agent", sessionID, memberID)
+	}
+	return r.findActiveCapture(scopeKey)
+}
+
 // endScopeCapture 收口：释放订阅，窗口保留（上游同语义）。
 // Python: evolution_rail.py after_invoke finally 段 + uninit。
 func (r *EvolutionRail) endScopeCapture(capture *invokeCapture) {

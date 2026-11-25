@@ -2602,6 +2602,67 @@ func (r *SkillEvolutionRail) unregisterEvolutionReviewAgent(agent agentinterface
 	_ = agent
 }
 
+// PrepareEvolutionReviewScope 以当前干净轨迹窗口创建审查 scope。
+// Python: _prepare_evolution_review_scope（skill_evolution_rail.py:455-493）。
+// 三条 RuntimeError 分支 + 成功路径置 skipSignalTriggerThisInvoke=true。
+func (r *SkillEvolutionRail) PrepareEvolutionReviewScope(source string, subject map[string]any, sessionID, memberID, teamID, userIntent string) (review.EvolutionReviewLaunch, error) {
+	capture := r.resolveCaptureByScope(sessionID, memberID, teamID)
+	if capture == nil {
+		// Python: with self._subscription_lock: has_active_capture = bool(self._active_captures)
+		r.scopeMu.Lock()
+		hasActiveCapture := len(r.activeCaptures) > 0
+		r.scopeMu.Unlock()
+		if hasActiveCapture {
+			return review.EvolutionReviewLaunch{}, fmt.Errorf("review session does not match the active trajectory scope")
+		}
+		return review.EvolutionReviewLaunch{}, fmt.Errorf("evolution review must be prepared during an active invoke")
+	}
+
+	// Python: capture 命中后用 capture 的定位符取轨迹（session/member/team 以采集为准）
+	traj, err := r.GetTrajectory(capture.sessionID, capture.memberID, capture.teamID)
+	if err != nil {
+		return review.EvolutionReviewLaunch{}, err
+	}
+	if traj == nil {
+		return review.EvolutionReviewLaunch{}, fmt.Errorf("no clean trajectory is available for evolution review")
+	}
+
+	scope, err := r.reviewRuntime.CreateScope(source, subject, capture.sessionID, userIntent, traj)
+	if err != nil {
+		return review.EvolutionReviewLaunch{}, err
+	}
+	// Python: self._skip_signal_trigger_this_invoke = True
+	r.skipSignalTriggerThisInvoke = true
+	return scope, nil
+}
+
+// isEvolveReviewTaskAvailable 判定 agent 能力面是否已注册 evolve_review_task。
+// Python: _is_evolve_review_task_available（:436-443）。
+func (r *SkillEvolutionRail) isEvolveReviewTaskAvailable(agent agentinterfaces.BaseAgent) bool {
+	if agent == nil {
+		return false
+	}
+	am := agent.AbilityManager()
+	if am == nil {
+		return false
+	}
+	return am.Get("evolve_review_task") != nil
+}
+
+// EnsureEvolveReviewTaskAvailable 避免返回引用缺失工具的 follow-up 提示词。
+// Python: _ensure_evolve_review_task_available（:445-452）。
+func (r *SkillEvolutionRail) EnsureEvolveReviewTaskAvailable() error {
+	if r.agentRef == nil {
+		return nil
+	}
+	if r.isEvolveReviewTaskAvailable(r.agentRef) {
+		return nil
+	}
+	return fmt.Errorf(
+		"SkillEvolutionRail active review requires evolve_review_task to be registered. " +
+			"Ensure SkillEvolutionRail.init() registered its rail-owned active review tools.")
+}
+
 // isBackgroundRun 判定是否后台运行（心跳/定时），后台轮不做信号触发与 follow-up。
 // Python: _is_background_run（:631-648）。
 func (r *SkillEvolutionRail) isBackgroundRun(cbc *agentinterfaces.AgentCallbackContext) bool {
