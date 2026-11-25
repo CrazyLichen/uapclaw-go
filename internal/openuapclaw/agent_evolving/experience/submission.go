@@ -32,6 +32,8 @@ type ProposalResolver interface {
 // Python: resolve_selected_proposals 的返回 + apply_prepared_evolve_submission
 // 消费的 subject/experience_drafts/record_source 三字段（submission.py:162-199）。
 type PreparedEvolveSubmission struct {
+	// EvolutionReviewRef 审查引用（消费 ref 用）。
+	EvolutionReviewRef string
 	// Subject 归一化 subject payload。
 	Subject map[string]any
 	// ExperienceDrafts 执行用经验草稿（reason 注入后）。
