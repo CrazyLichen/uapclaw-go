@@ -391,6 +391,20 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// verified-asset 分支（27-A B2 回填 D-27.8-7）：
+	// kind=verified_asset_v1 → serve_verified_download（E2A 分块 + Range 语义）；
+	// 普通 location 分支维持既有本地流式实现。
+	// Python: container_file_http.py:838-856 download_sent_file 分流。
+	if payload["kind"] == verifiedAssetTokenKind {
+		uid := resolveDownloadUserID(r)
+		if uid == "" {
+			writeJSONError(w, http.StatusBadRequest, "user_id is required")
+			return
+		}
+		serveVerifiedDownload(w, r, uid, token, payload)
+		return
+	}
+
 	filePath, _ := payload["path"].(string)
 	if filePath == "" || !isRegularFile(filePath) {
 		writeJSONError(w, http.StatusNotFound, "file_not_found")
