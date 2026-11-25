@@ -196,6 +196,31 @@ func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string,
 	return records
 }
 
+// LoadRecordsByIds 按 id 批量加载记录，保持调用方传入顺序。
+// Python: StoreRecordsHelper.load_records_by_ids (store_records.py:312-324)——
+// 空 id 列表直接返回；缺失 id 静默跳过（unknown 检测由上层负责）。
+func (h *StoreRecordsHelper) LoadRecordsByIds(ctx context.Context, name string, recordIDs []string) []EvolutionRecord {
+	if len(recordIDs) == 0 {
+		return []EvolutionRecord{}
+	}
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] load_records_by_ids: load failed")
+		return []EvolutionRecord{}
+	}
+	recordsByID := make(map[string]EvolutionRecord, len(evoLog.Entries))
+	for _, record := range evoLog.Entries {
+		recordsByID[record.ID] = record
+	}
+	result := make([]EvolutionRecord, 0, len(recordIDs))
+	for _, recordID := range recordIDs {
+		if record, ok := recordsByID[recordID]; ok {
+			result = append(result, record)
+		}
+	}
+	return result
+}
+
 // DeleteRecords 删除记录。
 // Python: StoreRecordsHelper.delete_records(name, record_ids)
 func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
