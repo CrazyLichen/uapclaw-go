@@ -57,7 +57,7 @@ const (
 	// ReqMethodWorkspacePreview 预览文件正文（二进制 content=null；目录 400）
 	ReqMethodWorkspacePreview ReqMethod = "workspace.preview"
 	// ReqMethodWorkspaceEntriesDelete 删除可清理文件或目录（zones 白名单）
-	ReqMethodWorkspaceEntriesDelete ReqMethod = "workspace.entries_delete"
+	ReqMethodWorkspaceEntriesDelete ReqMethod = "workspace.entries.delete"
 	// ReqMethodWorkspaceUsage 查询本人工作区用量（单机 du 快照）
 	ReqMethodWorkspaceUsage ReqMethod = "workspace.usage"
 	// 注：im.file_persist 归 IM 渠道域不注册；workspace.* 四值 27-A B2 起承接

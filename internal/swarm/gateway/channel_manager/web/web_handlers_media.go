@@ -213,8 +213,10 @@ func documentPersist(wc *WebChannel, ac *routing.AgentClient) methodHandler {
 	}
 }
 
-// registerWorkspaceFileProxies 注册文件域 web 通道代理全集（个人版八组；
-// workspace.* 四值归企业版挂账 27.11、im.file_persist 归 IM 渠道域，不注册）。
+// registerWorkspaceFileProxies 注册文件域 web 通道代理全集（个人版八组 +
+// workspace 面板四组；im.file_persist 归 IM 渠道域不注册）。
+// workspace.* 原挂账 27.11（D-27.8-1/2），2026-11-25 27-A B2 裁决 6 改判
+// 个人版面板随 B2 交付，以 sessionProxyForward 同款 E2A 转发承接。
 // Python: app_web_handlers.py:5732-5733（path.select_*）+ :5802（file.upload_chunk）
 // + :5811-5814（media/document）+ :5815-5819（file.import_url proxy loop）。
 func registerWorkspaceFileProxies(wc *WebChannel, ac *routing.AgentClient) {
@@ -226,6 +228,11 @@ func registerWorkspaceFileProxies(wc *WebChannel, ac *routing.AgentClient) {
 	wc.registerMethod("media.discard", sessionProxyForward(wc, ac, "media.discard"), false)
 	wc.registerMethod("document.persist", documentPersist(wc, ac), false)
 	wc.registerMethod("document.formats", sessionProxyForward(wc, ac, "document.formats"), false)
+	// workspace 面板四方法（27-A B2；Python: workspace_file_adapter.py:118-126）
+	wc.registerMethod("workspace.tree", sessionProxyForward(wc, ac, "workspace.tree"), false)
+	wc.registerMethod("workspace.preview", sessionProxyForward(wc, ac, "workspace.preview"), false)
+	wc.registerMethod("workspace.entries.delete", sessionProxyForward(wc, ac, "workspace.entries.delete"), false)
+	wc.registerMethod("workspace.usage", sessionProxyForward(wc, ac, "workspace.usage"), false)
 }
 
 // prePersistLargeDocuments 转发 document.persist 前，把超预算 base64 文档改为
