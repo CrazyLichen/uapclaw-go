@@ -1777,9 +1777,33 @@ func (uc *UapClawSwarm) runViaSessionInputCoordinator(ctx context.Context,
 	go func() {
 		defer close(out)
 		operation := func(opCtx context.Context, channelID string) (<-chan *schema.AgentResponseChunk, error) {
-			// Python: lambda owner_channel: self._stream_session_input_started(request, owner_channel)
-			// Go 对应：借宿主渠道直调既有流路径（宿主解析由 runMessageStreamDirect 内部完成）
-			return uc.runMessageStreamDirect(opCtx, request)
+			// Python: _stream_session_input_started（service.py:2765-2790）：
+			// ① 借宿主查活跃 agent（nowait）→ 无则 REJECTED
+			// ② agent 无投递能力 → REJECTED
+			// ③ deliver(request) 逐 chunk 转 AgentResponseChunk
+			mode := uc.adapterModeForRequest(request)
+			a, err := uc.ensureAdapter(mode)
+			if err != nil {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "session has no active agent: " + sessionID,
+				}
+			}
+			deep, ok := a.(*adapter.DeepAdapter)
+			if !ok {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "active agent does not support supplemental input",
+				}
+			}
+			sid := session.NormalizeSessionID(uc.extractSessionID(request))
+			if deep.CachedSessionAdapter(sid) == nil {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "session has no active agent: " + sid,
+				}
+			}
+			// inputs 由门面构建（Python 在 adapter 内 _build_inputs；层级映射差异，
+			// 见 adapter/deep_adapter_session_input.go 头注）
+			inputs, _, _ := uc.BuildInputs(request)
+			return deep.DeliverSessionInput(opCtx, request, inputs)
 		}
 		idleOperation := func(opCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
 			// Python idle_input 闭包（service.py:2309-2348）：

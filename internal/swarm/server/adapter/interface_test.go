@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"fmt"
 	"context"
 	"errors"
 	"testing"
@@ -186,3 +187,10 @@ func (s *stubAdapter) DispatchGoalControl(
 func (s *stubAdapter) HasActiveGoal(string) bool { return false }
 
 func (s *stubAdapter) StartInteraction(_ context.Context, _ string) error { return nil }
+
+// DeliverSessionInput stub 兜底（接口扩面后占位）。
+func (s *stubAdapter) DeliverSessionInput(
+	_ context.Context, _ *schema.AgentRequest, _ map[string]any,
+) (<-chan *schema.AgentResponseChunk, error) {
+	return nil, fmt.Errorf("active agent does not support supplemental input")
+}
