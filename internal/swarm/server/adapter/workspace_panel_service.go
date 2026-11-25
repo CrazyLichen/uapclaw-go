@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -202,9 +203,9 @@ func (s *WorkspaceService) PreviewFile(relativePath string, maxBytes any) (map[s
 	if looksBinary(sample) {
 		return map[string]any{"relative_path": rel, "truncated": truncated, "content": nil}, nil
 	}
+	// 对齐 Python decode("utf-8")（严格）失败后 decode("utf-8", errors="replace")
 	text := string(sample)
-	if !utf8Valid(sample) {
-		// 对齐 Python errors="replace"
+	if !utf8.Valid(sample) {
 		text = strings.ToValidUTF8(string(sample), "\uFFFD")
 	}
 	return map[string]any{"relative_path": rel, "truncated": truncated, "content": text}, nil
@@ -409,46 +410,6 @@ func looksBinary(sample []byte) bool {
 		}
 	}
 	return float64(textish)/float64(len(sample)) < 0.85
-}
-
-// utf8Valid UTF-8 有效性判定（对齐 Python decode 失败路径）。
-func utf8Valid(b []byte) bool {
-	for i := 0; i < len(b); {
-		r, size := decodeRune(b[i:])
-		if r == 0xFFFD && size == 1 {
-			return false
-		}
-		i += size
-	}
-	return true
-}
-
-// decodeRune 简单 UTF-8 解码（非法序列回 0xFFFD, 1）。
-func decodeRune(b []byte) (rune, int) {
-	c := b[0]
-	switch {
-	case c < 0x80:
-		return rune(c), 1
-	case c < 0xC2:
-		return 0xFFFD, 1
-	case c < 0xE0:
-		if len(b) >= 2 && b[1]&0xC0 == 0x80 {
-			return rune(c&0x1F)<<6 | rune(b[1]&0x3F), 2
-		}
-		return 0xFFFD, 1
-	case c < 0xF0:
-		if len(b) >= 3 && b[1]&0xC0 == 0x80 && b[2]&0xC0 == 0x80 {
-			return rune(c&0x0F)<<12 | rune(b[1]&0x3F)<<6 | rune(b[2]&0x3F), 3
-		}
-		return 0xFFFD, 1
-	case c < 0xF5:
-		if len(b) >= 4 && b[1]&0xC0 == 0x80 && b[2]&0xC0 == 0x80 && b[3]&0xC0 == 0x80 {
-			return rune(c&0x07)<<18 | rune(b[1]&0x3F)<<12 | rune(b[2]&0x3F)<<6 | rune(b[3]&0x3F), 4
-		}
-		return 0xFFFD, 1
-	default:
-		return 0xFFFD, 1
-	}
 }
 
 // isSymlink 判断路径是否为符号链接（lstat 判定，不跟随）。

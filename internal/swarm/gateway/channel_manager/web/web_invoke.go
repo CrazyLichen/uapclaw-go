@@ -20,19 +20,6 @@ var localRoutingIdentityMethods = map[string]bool{
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// httpOutboundAdapter 把 httpOutboundBase 适配成 webDeliveryRegistry 的路由面。
-type httpOutboundAdapter struct {
-	base *httpOutboundBase
-}
-
-func (a httpOutboundAdapter) getOutboundID() string  { return a.base.outboundID }
-func (a httpOutboundAdapter) getSessionID() string   { return a.base.sessionID }
-func (a httpOutboundAdapter) isClosedOutbound() bool { return a.base.isClosed() }
-func (a httpOutboundAdapter) acceptFrame(f map[string]any) {
-	a.base.acceptFrameBase(f, "HttpOutbound")
-}
-func (a httpOutboundAdapter) closeOutbound() { a.base.closeBase() }
-
 // WriteJSON 实现 wsSender（handler 经 sendResponse 下发帧时走此入口，
 // Python: web_connect.py:414-428 _enqueue_send 的 http outbound 分支）。
 func (b *httpOutboundBase) WriteJSON(v any) error {
@@ -69,18 +56,18 @@ func needsLocalRoutingIdentity(method string) bool {
 // RegisterRequestOutbound 注册请求级 HTTP outbound，返回 id。
 // Python: web_connect.py:429-431 register_request_outbound。
 func (wc *WebChannel) RegisterRequestOutbound(outbound *httpOutboundBase) string {
-	return wc.delivery.register(httpOutboundAdapter{base: outbound})
+	return wc.delivery.register(outbound)
 }
 
 // UnregisterRequestOutbound 从路由表移除请求 outbound 并关闭。
 // Python: web_connect.py:433-435 unregister_request_outbound。
 func (wc *WebChannel) UnregisterRequestOutbound(outbound *httpOutboundBase) {
-	wc.delivery.unregister(httpOutboundAdapter{base: outbound})
+	wc.delivery.unregister(outbound)
 }
 
 // LookupPeer 解析 WS peer 或 HTTP outbound（metadata.ws_id / delivery.ws_id）。
 // Python: web_connect.py:437-444 _lookup_peer。
-func (wc *WebChannel) LookupPeer(peerID string) httpOutboundPeer {
+func (wc *WebChannel) LookupPeer(peerID string) *httpOutboundBase {
 	return wc.delivery.lookup(peerID)
 }
 
@@ -89,7 +76,7 @@ func (wc *WebChannel) LookupPeer(peerID string) httpOutboundPeer {
 // outbound 是回复目标：真实 WebSocket 对端或请求级 HTTP Outbound。
 // Python: invoke.py:114-211 dispatch_web_request（一比一）。
 func (wc *WebChannel) dispatchWebRequest(
-	outbound httpOutboundPeer,
+	outbound *httpOutboundBase,
 	method string,
 	reqID string,
 	params map[string]any,
@@ -98,8 +85,7 @@ func (wc *WebChannel) dispatchWebRequest(
 ) {
 	// 企业写禁守卫：个人版恒 false（D-B2-5），调用位置与 Python 对齐。
 	if isEnterpriseWriteForbidden(method) {
-		base := outboundBaseOf(outbound)
-		base.reply(reqID, false, nil, "企业版配置由管理面统一下发", "FORBIDDEN")
+		outbound.reply(reqID, false, nil, "企业版配置由管理面统一下发", "FORBIDDEN")
 		return
 	}
 
@@ -124,7 +110,7 @@ func (wc *WebChannel) dispatchWebRequest(
 
 	handlerAlreadyCalled := false
 	if handlerBeforeCallbackMethods[method] && hasHandler {
-		handlerAlreadyCalled = wc.invokeMethodHandler(outboundSenderOf(outbound), handler, method, reqID, handlerParams, sessionID)
+		handlerAlreadyCalled = wc.invokeMethodHandler(outbound, handler, method, reqID, handlerParams, sessionID)
 		if !handlerAlreadyCalled {
 			return
 		}
@@ -146,26 +132,10 @@ func (wc *WebChannel) dispatchWebRequest(
 	}
 
 	if hasHandler {
-		wc.invokeMethodHandler(outboundSenderOf(outbound), handler, method, reqID, handlerParams, sessionID)
+		wc.invokeMethodHandler(outbound, handler, method, reqID, handlerParams, sessionID)
 	} else {
-		outboundBaseOf(outbound).reply(reqID, false, nil, "unknown method: "+method, "METHOD_NOT_FOUND")
+		outbound.reply(reqID, false, nil, "unknown method: "+method, "METHOD_NOT_FOUND")
 	}
-}
-
-// outboundSenderOf 取 outbound 的 wsSender 面（WriteJSON）。
-func outboundSenderOf(outbound httpOutboundPeer) wsSender {
-	if base := outboundBaseOf(outbound); base != nil {
-		return base
-	}
-	return nil
-}
-
-// outboundBaseOf 从路由面取回底层 base。
-func outboundBaseOf(outbound httpOutboundPeer) *httpOutboundBase {
-	if adapter, ok := outbound.(httpOutboundAdapter); ok {
-		return adapter.base
-	}
-	return nil
 }
 
 // deliverHTTPFrames 把 Agent 事件帧投递给绑定会话的 HTTP outbound。
@@ -175,7 +145,7 @@ func outboundBaseOf(outbound httpOutboundPeer) *httpOutboundBase {
 func (wc *WebChannel) deliverHTTPFrames(event string, payload map[string]any, sessionID string) {
 	frame := map[string]any{"type": "event", "event": event, "payload": payload}
 	for _, peer := range wc.delivery.peersForSession(sessionID) {
-		peer.acceptFrame(frame)
+		peer.acceptFrameBase(frame, "HttpOutbound")
 	}
 }
 
@@ -184,11 +154,11 @@ func (wc *WebChannel) deliverHTTPFrames(event string, payload map[string]any, se
 func (wc *WebChannel) deliverHTTPRes(res map[string]any, sessionID string) {
 	if wsID, ok := res["id"].(string); ok && wsID != "" {
 		if peer := wc.delivery.lookup(wsID); peer != nil {
-			peer.acceptFrame(res)
+			peer.acceptFrameBase(res, "HttpOutbound")
 			return
 		}
 	}
 	for _, peer := range wc.delivery.peersForSession(sessionID) {
-		peer.acceptFrame(res)
+		peer.acceptFrameBase(res, "HttpOutbound")
 	}
 }

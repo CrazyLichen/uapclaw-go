@@ -116,7 +116,7 @@ func dispatchHTTPRequest(
 	useSSE bool,
 	bindSessionParam bool,
 	clientHost string,
-) (httpOutboundPeer, string, string) {
+) (*httpOutboundBase, string, string) {
 	hdrs := flattenHeaders(headers)
 	copied := make(map[string]any, len(params)+1)
 	for key, value := range params {
@@ -153,9 +153,6 @@ func dispatchHTTPRequest(
 	outbound.sessionID = sessionID
 	outbound.connectionUserID = userID
 	outbound.appID = appID
-	peer := wc.RegisterRequestOutbound(outbound)
-	_ = peer
-
 	// 仅新建会话且解析到 user_id 时打 http_resolve_identity 审计日志。
 	if method == "session.create" && userID != "" {
 		logger.Info(logComponent).
@@ -224,8 +221,8 @@ func dispatchHTTPRequest(
 		Metadata:  requestext.AttachToMetadata(meta, ext),
 	}
 
-	wc.dispatchWebRequest(httpOutboundAdapter{base: outbound}, method, reqID, params, sessionID, userMessage)
-	return httpOutboundAdapter{base: outbound}, reqID, sessionID
+	wc.dispatchWebRequest(outbound, method, reqID, params, sessionID, userMessage)
+	return outbound, reqID, sessionID
 }
 
 // marshalParams params → JSON（对齐 BuildUserMessage 的 params 编码习惯）。

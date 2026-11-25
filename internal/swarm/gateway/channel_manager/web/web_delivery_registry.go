@@ -13,22 +13,8 @@ import (
 // WebDeliveryRegistry（一比一；B3 前置件，随 27-A B2 回收，见 spec 风险 1）。
 type webDeliveryRegistry struct {
 	mu                      sync.RWMutex
-	requestOutbounds        map[string]httpOutboundPeer
+	requestOutbounds        map[string]*httpOutboundBase
 	sessionRequestOutbounds map[string]map[string]bool
-}
-
-// httpOutboundPeer 请求级 outbound 的最小路由面（JSON/SSE 共用）。
-type httpOutboundPeer interface {
-	// getOutboundID 返回 outbound 标识
-	getOutboundID() string
-	// getSessionID 返回绑定会话号
-	getSessionID() string
-	// isClosedOutbound 返回 closed 标志
-	isClosedOutbound() bool
-	// acceptFrame 接收一帧
-	acceptFrame(frame map[string]any)
-	// closeOutbound 关闭 outbound
-	closeOutbound()
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -37,22 +23,22 @@ type httpOutboundPeer interface {
 // Python: web_delivery_registry.py:19-23 __init__。
 func newWebDeliveryRegistry() *webDeliveryRegistry {
 	return &webDeliveryRegistry{
-		requestOutbounds:        map[string]httpOutboundPeer{},
+		requestOutbounds:        map[string]*httpOutboundBase{},
 		sessionRequestOutbounds: map[string]map[string]bool{},
 	}
 }
 
 // register 注册请求级 HTTP outbound（不 register_ws），返回 outbound id。
 // Python: web_delivery_registry.py:32-48 register。
-func (r *webDeliveryRegistry) register(outbound httpOutboundPeer) string {
-	oid := outbound.getOutboundID()
+func (r *webDeliveryRegistry) register(outbound *httpOutboundBase) string {
+	oid := outbound.outboundID
 	if oid == "" {
 		oid = uuid.NewString()
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.requestOutbounds[oid] = outbound
-	sid := outbound.getSessionID()
+	sid := outbound.sessionID
 	if sid != "" {
 		bucket, ok := r.sessionRequestOutbounds[sid]
 		if !ok {
@@ -66,9 +52,9 @@ func (r *webDeliveryRegistry) register(outbound httpOutboundPeer) string {
 
 // unregister 从路由表移除请求 outbound 并关闭它。
 // Python: web_delivery_registry.py:50-72 unregister。
-func (r *webDeliveryRegistry) unregister(outbound httpOutboundPeer) {
-	oid := outbound.getOutboundID()
-	sid := outbound.getSessionID()
+func (r *webDeliveryRegistry) unregister(outbound *httpOutboundBase) {
+	oid := outbound.outboundID
+	sid := outbound.sessionID
 	r.mu.Lock()
 	if oid != "" {
 		delete(r.requestOutbounds, oid)
@@ -82,28 +68,28 @@ func (r *webDeliveryRegistry) unregister(outbound httpOutboundPeer) {
 		}
 	}
 	r.mu.Unlock()
-	outbound.closeOutbound()
+	outbound.closeBase()
 }
 
 // clear 关闭并清空全部 HTTP 请求 outbound（channel 停止 / shutdown）。
 // Python: web_delivery_registry.py:74-95 clear。
 func (r *webDeliveryRegistry) clear() {
 	r.mu.Lock()
-	outs := make([]httpOutboundPeer, 0, len(r.requestOutbounds))
+	outs := make([]*httpOutboundBase, 0, len(r.requestOutbounds))
 	for _, out := range r.requestOutbounds {
 		outs = append(outs, out)
 	}
-	r.requestOutbounds = map[string]httpOutboundPeer{}
+	r.requestOutbounds = map[string]*httpOutboundBase{}
 	r.sessionRequestOutbounds = map[string]map[string]bool{}
 	r.mu.Unlock()
 	for _, out := range outs {
-		out.closeOutbound()
+		out.closeBase()
 	}
 }
 
 // lookup 按 id 返回存活 HTTP outbound，否则 nil。
 // Python: web_delivery_registry.py:97-110 lookup。
-func (r *webDeliveryRegistry) lookup(outboundID string) httpOutboundPeer {
+func (r *webDeliveryRegistry) lookup(outboundID string) *httpOutboundBase {
 	oid := trimWSID(outboundID)
 	if oid == "" {
 		return nil
@@ -114,7 +100,7 @@ func (r *webDeliveryRegistry) lookup(outboundID string) httpOutboundPeer {
 	if !ok {
 		return nil
 	}
-	if out.isClosedOutbound() {
+	if out.isClosed() {
 		r.pruneLocked(oid, out)
 		return nil
 	}
@@ -123,9 +109,9 @@ func (r *webDeliveryRegistry) lookup(outboundID string) httpOutboundPeer {
 
 // pruneLocked 移除已关闭 outbound（调用方须持写锁）。
 // Python: web_delivery_registry.py:112-126 _prune_outbound。
-func (r *webDeliveryRegistry) pruneLocked(oid string, outbound httpOutboundPeer) {
+func (r *webDeliveryRegistry) pruneLocked(oid string, outbound *httpOutboundBase) {
 	delete(r.requestOutbounds, oid)
-	sid := outbound.getSessionID()
+	sid := outbound.sessionID
 	if sid == "" {
 		return
 	}
@@ -140,9 +126,9 @@ func (r *webDeliveryRegistry) pruneLocked(oid string, outbound httpOutboundPeer)
 // peersForSession 返回绑定到 session_id 的存活 HTTP outbound 集合
 // （WS 客户端由传输层另行加入）。
 // Python: web_delivery_registry.py:128-141 peers_for_session。
-func (r *webDeliveryRegistry) peersForSession(sessionID string) []httpOutboundPeer {
+func (r *webDeliveryRegistry) peersForSession(sessionID string) []*httpOutboundBase {
 	sid := trimWSID(sessionID)
-	peers := []httpOutboundPeer{}
+	peers := []*httpOutboundBase{}
 	if sid == "" {
 		return peers
 	}
@@ -153,7 +139,7 @@ func (r *webDeliveryRegistry) peersForSession(sessionID string) []httpOutboundPe
 		if !ok {
 			continue
 		}
-		if out.isClosedOutbound() {
+		if out.isClosed() {
 			r.pruneLocked(oid, out)
 			continue
 		}
