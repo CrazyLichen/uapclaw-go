@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
@@ -23,6 +24,7 @@ import (
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams/observability/demand"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/security"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -512,12 +514,28 @@ func (d *DeepAdapter) buildSkillCreateRail() *skillrails.SkillCreateRail {
 	rail := skillrails.NewSkillCreateRail(skillsDir,
 		skillrails.WithSkillCreateAutoTrigger(true),
 		skillrails.WithSkillCreateLanguage(d.getLanguage()),
+		// ②：对齐 Python interface_deep.py:10713-10718
+		// trajectory_span_processor=get_trajectory_span_processor()
+		// （15.24c：新版检测链要求 processor 必传）
+		skillrails.WithSkillCreateTrajectorySpanProcessor(demandSpanProcessorOf()),
 	)
 	logger.Info(logComponent).
 		Str("skills_dir", skillsDir).
 		Bool("auto_trigger", rail.AutoTrigger()).
 		Msg("SkillCreateRail created")
 	return rail
+}
+
+// demandSpanProcessorOf 取进程级 trajectory span processor（demand 单例，
+// 经类型断言转具体类型；Python: get_trajectory_span_processor()）。
+// Python: openjiuwen/extensions/observability/demand.get_trajectory_span_processor。
+func demandSpanProcessorOf() *trajectory.TrajectorySpanProcessor {
+	if p := demand.GetTrajectorySpanProcessor(); p != nil {
+		if tp, ok := p.(*trajectory.TrajectorySpanProcessor); ok {
+			return tp
+		}
+	}
+	return nil
 }
 
 // getSkillsDir 获取技能目录路径。
