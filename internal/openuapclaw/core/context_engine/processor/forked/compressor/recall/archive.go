@@ -138,15 +138,15 @@ func ArchiveCompressionMessages(
 			return err
 		}
 		manifest := map[string]any{
-			"schema_version":                  ArchiveSchemaVersion,
-			"memory_id":                       memoryID,
-			"session_id":                      sessionID,
-			"context_id":                      contextID,
-			"processor_type":                  processorType,
-			"created_at":                      time.Now().UTC().Format("2006-01-02T15:04:05.000000Z07:00"),
-			"source_message_count":            len(messagesToCompress),
-			"original_context_message_count":  len(originalMessages),
-			"turn_count":                      len(turnRecords),
+			"schema_version":                 ArchiveSchemaVersion,
+			"memory_id":                      memoryID,
+			"session_id":                     sessionID,
+			"context_id":                     contextID,
+			"processor_type":                 processorType,
+			"created_at":                     time.Now().UTC().Format("2006-01-02T15:04:05.000000Z07:00"),
+			"source_message_count":           len(messagesToCompress),
+			"original_context_message_count": len(originalMessages),
+			"turn_count":                     len(turnRecords),
 			"files": map[string]any{
 				"turns":        "turns.jsonl",
 				"raw_messages": "raw_messages.json",

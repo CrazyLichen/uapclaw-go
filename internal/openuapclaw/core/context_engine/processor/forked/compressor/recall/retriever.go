@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -319,12 +319,12 @@ func recallAllArchives(archives []map[string]any, query string) (map[string]any,
 		}
 	}
 	return map[string]any{
-		"memory_id":      "",
-		"archive_path":   archivePath,
-		"matched_turn":   matchedTurn,
-		"matched_turns":  toAnyList(mergedTurns),
-		"chunks":         toAnyList(chunks),
-		"truncated":      truncated,
+		"memory_id":       "",
+		"archive_path":    archivePath,
+		"matched_turn":    matchedTurn,
+		"matched_turns":   toAnyList(mergedTurns),
+		"chunks":          toAnyList(chunks),
+		"truncated":       truncated,
 		"returned_tokens": returnedTokens,
 	}, nil
 }
@@ -466,8 +466,8 @@ func collectChunkCandidates(archivePath string, matchedTurns []scoredTurn, query
 
 		chunkScores := RankBM25(query, chunkDocuments, 1.5, 0.75)
 		type scoredChunk struct {
-			score float64
-			index int
+			score  float64
+			index  int
 			record map[string]any
 		}
 		var rankedChunks []scoredChunk
