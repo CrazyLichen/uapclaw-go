@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -182,20 +183,43 @@ func TestOffloadMessages_WriteFail(t *testing.T) {
 }
 
 // TestRebindModelReference_配置回退 测试无缓存模型时的配置回填
+// 两条分支：实现 ModelBindingConfig 的配置走绑定回填；未实现的走"未绑定"分支
+// （等价 Python hasattr 为假，偏差 D-24.2-7）。
 func TestRebindModelReference_配置回退(t *testing.T) {
-	cfg := &testForkedConfig{}
-	p := NewContextProcessor(cfg)
-	// 无 model 且 config 缺 Model/ModelClient → 返回 false
-	if p.RebindModelReference(nil, nil, nil) {
-		t.Error("无可用模型配置时应返回 false")
+	// 分支 1：config 未实现 ModelBindingConfig → 断言失败，走未绑定分支
+	bare := NewContextProcessor(&testBareConfig{})
+	if bare.RebindModelReference(nil, nil, nil) {
+		t.Error("未实现 ModelBindingConfig 且无模型配置时应返回 false")
+	}
+
+	// 分支 2：config 实现 ModelBindingConfig → 携带缓存模型重绑时写回配置
+	// （不走 llm.NewModel 真实构造——provider 注册表依赖在单测中不铺开）
+	reqCfg := &llm_schema.ModelRequestConfig{ModelName: "test-model"}
+	clientCfg := &llm_schema.ModelClientConfig{ClientProvider: "test-provider"}
+	bound := NewContextProcessor(&testBoundConfig{})
+	if !bound.RebindModelReference(&llm.Model{ModelConfig: reqCfg, ClientConfig: clientCfg}, nil, nil) {
+		t.Fatal("实现 ModelBindingConfig 且传入缓存模型时应返回 true")
+	}
+	if bound.Model() == nil {
+		t.Error("缓存模型应被回填")
 	}
 }
 
-// testForkedConfig 反射字段访问测试用配置
-type testForkedConfig struct {
-	Model       any `json:"model"`
-	ModelClient any `json:"model_client"`
+// testBareConfig 未实现 ModelBindingConfig 的配置（等价 Python 无 model 属性）
+type testBareConfig struct{}
+
+// testBoundConfig 实现 ModelBindingConfig 的配置（15b forked 压缩器 config 形态预演）
+type testBoundConfig struct {
+	model       *llm_schema.ModelRequestConfig
+	modelClient *llm_schema.ModelClientConfig
 }
+
+var _ ModelBindingConfig = (*testBoundConfig)(nil)
+
+func (c *testBoundConfig) GetModel() *llm_schema.ModelRequestConfig       { return c.model }
+func (c *testBoundConfig) GetModelClient() *llm_schema.ModelClientConfig  { return c.modelClient }
+func (c *testBoundConfig) SetModel(v *llm_schema.ModelRequestConfig)      { c.model = v }
+func (c *testBoundConfig) SetModelClient(v *llm_schema.ModelClientConfig) { c.modelClient = v }
 
 // textOf 提取消息文本
 func textOf(msg llm_schema.BaseMessage) string {

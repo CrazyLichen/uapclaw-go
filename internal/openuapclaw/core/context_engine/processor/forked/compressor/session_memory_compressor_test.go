@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	forked "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -397,3 +398,13 @@ func TestSessionMemoryCompressor_StateStateless(t *testing.T) {
 }
 
 func ctx2() context.Context { return context.Background() }
+
+// TestSessionMemoryCompressorConfig_不实现ModelBinding 本批配置无模型字段
+// （模型在嵌套 memory.SessionMemoryConfig 中由 manager 绑定），不应实现
+// forked.ModelBindingConfig——偏差 D-24.2-7 的"未绑定"分支语义锚。
+func TestSessionMemoryCompressorConfig_不实现ModelBinding(t *testing.T) {
+	cfg := &SessionMemoryCompressorConfig{}
+	if _, ok := any(cfg).(forked.ModelBindingConfig); ok {
+		t.Error("SessionMemoryCompressorConfig 不应实现 ModelBindingConfig（模型由 manager 经嵌套 memory 配置绑定）")
+	}
+}

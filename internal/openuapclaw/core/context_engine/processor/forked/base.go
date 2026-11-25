@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 
 	"github.com/google/uuid"
 
@@ -30,6 +29,26 @@ const (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// ModelBindingConfig forked 处理器配置的模型绑定能力面。
+// Python: base.py:226-230 对 config.model / config.model_client 的鸭子类型读写
+// （hasattr/getattr）→ Go 窄接口等价表达（偏差 D-24.2-7，经用户裁决改窄接口）。
+// 有 Model/ModelClient 字段的 forked 配置（15b Dialogue/CurrentRound/RoundLevel
+// forked 压缩器 config）必须实现，并在各自文件加
+// `var _ ModelBindingConfig = (*XxxConfig)(nil)` 编译锚；
+// 无模型字段的配置（本批 SessionMemoryCompressorConfig，模型在其嵌套
+// memory.SessionMemoryConfig 中由 manager 绑定）不实现，
+// RebindModelReference 断言失败走"未绑定"分支，等价 Python hasattr 为假。
+type ModelBindingConfig interface {
+	// GetModel 返回配置携带的模型请求配置，未设置返回 nil
+	GetModel() *llm_schema.ModelRequestConfig
+	// GetModelClient 返回配置携带的模型客户端配置，未设置返回 nil
+	GetModelClient() *llm_schema.ModelClientConfig
+	// SetModel 写回模型请求配置
+	SetModel(*llm_schema.ModelRequestConfig)
+	// SetModelClient 写回模型客户端配置
+	SetModelClient(*llm_schema.ModelClientConfig)
+}
 
 // ContextEvent 处理器对上下文的变更事件。
 // Python: openjiuwen/core/context_engine/processor/forked/base.py:29 (ContextEvent)
@@ -57,7 +76,7 @@ type ContextProcessor struct {
 	// compressionUsage 累计的压缩用量（nil=尚未记录）
 	compressionUsage map[string]any
 	// model 缓存的模型实例（RebindModelReference 维护）
-	model any
+	model *llm.Model
 }
 
 // NewContextProcessor 创建基类实例。
@@ -72,6 +91,12 @@ func NewContextProcessor(config any) *ContextProcessor {
 // Python: ContextProcessor.config property (base.py:169)
 func (p *ContextProcessor) Config() any {
 	return p.config
+}
+
+// Model 返回缓存的模型实例（未回填时 nil）。
+// Python: base.py:209 经 getattr(model, ...) 访问的实例属性；Go 以访问器等价表达。
+func (p *ContextProcessor) Model() *llm.Model {
+	return p.model
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -107,7 +132,11 @@ func (p *ContextProcessor) CurrentCompressionUsage() map[string]any {
 
 // RebindModel 运行时模型切换后刷新模型态（forked 基类默认不处理）。
 // Python: ContextProcessor.rebind_model (base.py:189, @staticmethod)
-func RebindModel(model any, modelConfig any, modelClientConfig any) bool {
+func RebindModel(
+	model *llm.Model,
+	modelConfig *llm_schema.ModelRequestConfig,
+	modelClientConfig *llm_schema.ModelClientConfig,
+) bool {
 	_, _, _ = model, modelConfig, modelClientConfig
 	return false
 }
@@ -116,9 +145,9 @@ func RebindModel(model any, modelConfig any, modelClientConfig any) bool {
 // 返回是否发生了实际替换。
 // Python: ContextProcessor._rebind_model_reference (base.py:199)
 func (p *ContextProcessor) RebindModelReference(
-	model any,
-	modelConfig any,
-	modelClientConfig any,
+	model *llm.Model,
+	modelConfig *llm_schema.ModelRequestConfig,
+	modelClientConfig *llm_schema.ModelClientConfig,
 ) bool {
 	current := p.model
 	if model != nil {
@@ -134,11 +163,18 @@ func (p *ContextProcessor) RebindModelReference(
 			}
 		}
 	} else {
-		if modelConfig == nil {
-			modelConfig = configField(p.config, "Model")
+		// Python: hasattr(config, "model") 鸭子类型读写 → Go 用 ModelBindingConfig
+		// 窄接口类型断言等价表达（偏差 D-24.2-7，经用户裁决改窄接口）：有模型字段
+		// 的 forked 配置（15b Dialogue/CurrentRound/RoundLevel）必须实现并在各自
+		// 文件加 var _ ModelBindingConfig = (*XxxConfig)(nil) 编译锚；无模型字段的
+		// 配置（本批 SessionMemoryCompressorConfig）不实现，断言失败走"未绑定"
+		// 分支，等价 Python hasattr 为假。
+		binding, _ := p.config.(ModelBindingConfig)
+		if modelConfig == nil && binding != nil {
+			modelConfig = binding.GetModel()
 		}
-		if modelClientConfig == nil {
-			modelClientConfig = configField(p.config, "ModelClient")
+		if modelClientConfig == nil && binding != nil {
+			modelClientConfig = binding.GetModelClient()
 		}
 		if current != nil && sameModelIdentity(current, modelConfig, modelClientConfig) {
 			model = current
@@ -151,11 +187,9 @@ func (p *ContextProcessor) RebindModelReference(
 		return false
 	}
 
-	if configField(p.config, "Model") != nil {
-		setConfigField(p.config, "Model", modelConfig)
-	}
-	if configField(p.config, "ModelClient") != nil {
-		setConfigField(p.config, "ModelClient", modelClientConfig)
+	if binding, ok := p.config.(ModelBindingConfig); ok {
+		binding.SetModel(modelConfig)
+		binding.SetModelClient(modelClientConfig)
 	}
 
 	if model == current {
@@ -462,13 +496,14 @@ func mapStr(m map[string]any, key string) string {
 
 // llmNewModel 按客户端/请求配置创建 Model 实例。
 // Python: base.py:230 `Model(model_client_config, model_config)`
-func llmNewModel(modelClientConfig any, modelConfig any) any {
-	clientCfg, _ := modelClientConfig.(*llm_schema.ModelClientConfig)
-	reqCfg, _ := modelConfig.(*llm_schema.ModelRequestConfig)
-	if clientCfg == nil || reqCfg == nil {
+func llmNewModel(
+	modelClientConfig *llm_schema.ModelClientConfig,
+	modelConfig *llm_schema.ModelRequestConfig,
+) *llm.Model {
+	if modelClientConfig == nil || modelConfig == nil {
 		return nil
 	}
-	m, err := llm.NewModel(clientCfg, reqCfg)
+	m, err := llm.NewModel(modelClientConfig, modelConfig)
 	if err != nil {
 		return nil
 	}
@@ -477,61 +512,20 @@ func llmNewModel(modelClientConfig any, modelConfig any) any {
 
 // extractModelConfigs 从缓存的模型实例提取两份配置。
 // Python: base.py:209 getattr(model, "model_config") / getattr(model, "model_client_config")
-func extractModelConfigs(model any) (any, any) {
-	m, ok := model.(*llm.Model)
-	if !ok || m == nil {
+func extractModelConfigs(model *llm.Model) (*llm_schema.ModelRequestConfig, *llm_schema.ModelClientConfig) {
+	if model == nil {
 		return nil, nil
 	}
-	return m.ModelConfig, m.ClientConfig
+	return model.ModelConfig, model.ClientConfig
 }
 
 // sameModelIdentity 判断缓存模型的两份配置与目标配置是否一致。
 // Python: base.py:212 getattr(current, "model_config") == model_config and ... （指针等价）
-func sameModelIdentity(current any, modelConfig any, modelClientConfig any) bool {
-	mc, mcc := extractModelConfigs(current)
-	curReq, _ := mc.(*llm_schema.ModelRequestConfig)
-	curClient, _ := mcc.(*llm_schema.ModelClientConfig)
-	tgtReq, _ := modelConfig.(*llm_schema.ModelRequestConfig)
-	tgtClient, _ := modelClientConfig.(*llm_schema.ModelClientConfig)
-	return curReq == tgtReq && curClient == tgtClient
-}
-
-// configField 反射读取配置结构体的字段（Model / ModelClient）。
-// Python: base.py:226 hasattr(self._config, "model") / getattr(self._config, "model", None)
-func configField(config any, field string) any {
-	v := reflect.ValueOf(config)
-	if v.Kind() != reflect.Ptr || v.IsNil() {
-		v = reflect.ValueOf(config)
-	}
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-	f := v.FieldByName(field)
-	if !f.IsValid() {
-		return nil
-	}
-	return f.Interface()
-}
-
-// setConfigField 反射写配置结构体的字段。
-// Python: base.py:226-230 self._config.model = model_config
-func setConfigField(config any, field string, value any) {
-	v := reflect.ValueOf(config)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return
-	}
-	f := v.FieldByName(field)
-	if !f.IsValid() || !f.CanSet() {
-		return
-	}
-	rv := reflect.ValueOf(value)
-	if rv.IsValid() && rv.Type().AssignableTo(f.Type()) {
-		f.Set(rv)
-	}
+func sameModelIdentity(
+	current *llm.Model,
+	modelConfig *llm_schema.ModelRequestConfig,
+	modelClientConfig *llm_schema.ModelClientConfig,
+) bool {
+	curReq, curClient := extractModelConfigs(current)
+	return curReq == modelConfig && curClient == modelClientConfig
 }
