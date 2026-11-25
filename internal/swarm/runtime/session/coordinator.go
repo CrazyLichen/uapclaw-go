@@ -605,6 +605,9 @@ func (c *RuntimeSessionCoordinator) executeUnaryTracked(
 			panic(r)
 		}
 		switch {
+		case err != nil && opts.TimeoutScope != nil && opts.TimeoutScope.Err() != nil:
+			// 超时到期：FAILED + TimeoutError 文案（不得折叠进 CANCELLED）
+			c.registry.MarkTerminal(handle, SessionExecutionStateFailed, opts.TimeoutError)
 		case err != nil && errors.Is(err, context.Canceled):
 			c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, err.Error())
 		case err != nil:
@@ -622,7 +625,23 @@ func (c *RuntimeSessionCoordinator) executeUnaryTracked(
 		c.refreshSessionState(record)
 	}()
 
-	return operation(ctx)
+	// 超时链路：TimeoutScope 到期 → operation 的 ctx 被取消（监视 goroutine）；
+	// 终态归类在 defer 中按「scope 已到期 → FAILED+TimeoutError」判定
+	// （Python _run_unary timeout_scope.expired 分支一比一）。
+	opCtx := ctx
+	if opts.TimeoutScope != nil {
+		merged, cancel := context.WithCancel(ctx)
+		defer cancel()
+		opCtx = merged
+		go func() {
+			select {
+			case <-opts.TimeoutScope.Done():
+				cancel()
+			case <-opCtx.Done():
+			}
+		}()
+	}
+	return operation(opCtx)
 }
 
 // refreshSessionState 依据活跃执行数刷新会话状态。

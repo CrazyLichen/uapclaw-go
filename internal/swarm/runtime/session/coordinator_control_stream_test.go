@@ -120,3 +120,45 @@ func TestDeliverControlStream_重复在飞(t *testing.T) {
 		t.Fatal("已有在飞应答应拒收")
 	}
 }
+
+// TestExecuteUnaryTracked_超时FAILED TimeoutScope 到期 → FAILED+TimeoutError。
+func TestExecuteUnaryTracked_超时FAILED(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	record := func() *sessionRecord { c.mu.Lock(); defer c.mu.Unlock(); return c.sessions["s1"] }()
+	handle, err := c.newExecution(record, "req-t", SessionWorkKindChatUnary, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, _ = c.executeUnaryTracked(context.Background(), record, handle,
+		func(ctx context.Context) (any, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}, UnaryOptions{TimeoutScope: scope, TimeoutError: "session unary timed out"})
+	if handle.State != SessionExecutionStateFailed {
+		t.Errorf("超时应终态 FAILED，实际 %v", handle.State())
+	}
+}
+
+// TestExecuteUnaryTracked_取消仍CANCELLED 无 TimeoutScope 时 ctx 取消仍 CANCELLED。
+func TestExecuteUnaryTracked_取消仍CANCELLED(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	record := func() *sessionRecord { c.mu.Lock(); defer c.mu.Unlock(); return c.sessions["s1"] }()
+	handle, err := c.newExecution(record, "req-t2", SessionWorkKindChatUnary, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(10 * time.Millisecond); cancel() }()
+	_, _ = c.executeUnaryTracked(ctx, record, handle,
+		func(ctx context.Context) (any, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}, UnaryOptions{})
+	if handle.State != SessionExecutionStateCancelled {
+		t.Errorf("取消应终态 CANCELLED，实际 %v", handle.State())
+	}
+}
