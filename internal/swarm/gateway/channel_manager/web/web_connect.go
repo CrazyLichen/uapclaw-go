@@ -66,6 +66,9 @@ type WebChannel struct {
 	connectHooks []ConnectHook
 	// connectHooksMu 保护 connectHooks 的并发访问
 	connectHooksMu sync.RWMutex
+	// delivery HTTP 请求级 outbound 注册表（Agent 回复路由）。
+	// Python: WebChannel.__init__ self.delivery = WebDeliveryRegistry()（web_connect.py:259）。
+	delivery *webDeliveryRegistry
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -135,8 +138,9 @@ func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfig
 	}
 
 	wc := &WebChannel{
-		config:  cfg,
-		clients: make(map[*websocket.Conn]bool),
+		config:   cfg,
+		clients:  make(map[*websocket.Conn]bool),
+		delivery: newWebDeliveryRegistry(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
@@ -359,6 +363,9 @@ func (wc *WebChannel) Stop(ctx context.Context) error {
 	wc.running = false
 	wc.runningMu.Unlock()
 
+	// 关闭全部 HTTP 请求 outbound（对齐 Python web_connect.py:913 delivery.clear()）
+	wc.delivery.clear()
+
 	// 发送 WebSocket Close 帧后关闭所有客户端连接
 	wc.clientsMu.Lock()
 	for conn := range wc.clients {
@@ -422,6 +429,9 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 			}
 		}
 		resData, _ := json.Marshal(res)
+		// HTTP 请求级投递：metadata.ws_id 精确寻址，回退 session 桶
+		// （Python web_connect.py:1340-1358；WS 广播维持既有行为，D-B2-9）。
+		wc.deliverHTTPRes(res, msg.SessionID)
 		wc.broadcastRaw(resData)
 		return nil
 	}
@@ -443,10 +453,12 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 		if _, ok := payload["session_id"]; !ok {
 			payload["session_id"] = msg.SessionID
 		}
+		wc.deliverHTTPFrames(eventName, payload, msg.SessionID)
 		wc.broadcastEvent(eventName, payload)
 	} else {
 		// pure-text：提取核心字段
 		payload := extractPureTextPayload(msg, eventName)
+		wc.deliverHTTPFrames(eventName, payload, msg.SessionID)
 		wc.broadcastEvent(eventName, payload)
 	}
 
