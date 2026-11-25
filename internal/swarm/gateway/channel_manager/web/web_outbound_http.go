@@ -172,6 +172,11 @@ type httpOutboundBase struct {
 	outboundID string
 	// jiuwenWsID 兼容 WebChannel metadata.ws_id / _lookup_peer。
 	jiuwenWsID string
+	// connectionUserID 请求级解析出的 user_id（Python: setattr
+	// _WEB_CONNECTION_USER_ID_ATTR，dispatch.py:143）。
+	connectionUserID string
+	// appID 请求级 app 标识（Python: setattr _jiuwen_app_id，dispatch.py:144）。
+	appID string
 	// frames 帧队列（容量 256，对齐 Python asyncio.Queue(maxsize=256)）。
 	frames chan map[string]any
 }
