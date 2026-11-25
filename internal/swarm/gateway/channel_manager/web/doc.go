@@ -16,6 +16,13 @@
 //	├── doc.go              # 包文档
 //	├── web_connect.go      # WebChannel 核心（WS 服务端 + 连接管理 + 两层消息架构）
 //	├── app_web_handlers.go # 全部 RPC handler + 注册 + 配置写入 + 内存采集
+//	├── web_http_routes.go      # 27-A B2：/api/v1 CORE 路由 + envelope + 三分发通道（unary/stream/history）
+//	├── http_routes_mapped.go   # 27-A B2：mapped 路由表全量（130 行）+ catalog + 校验
+//	├── web_http_dispatch.go    # 27-A B2：HTTP 分发面（回环信任边界 + Message 构造）
+//	├── web_http_timeouts.go    # 27-A B2：五档超时 env 函数
+//	├── web_outbound_http.go    # 27-A B2：outbound 三符号（JSON/SSE outbound + bind_http_session）
+//	├── web_delivery_registry.go# 27-A B2：请求级 outbound 注册表（B3 前置）
+//	├── web_invoke.go           # 27-A B2：dispatch_web_request 共享入站管线
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/web/
 // （前端源码与静态/文件服务在 channels/web，对齐 Python channels/web/）
