@@ -384,3 +384,30 @@ func TestSkillToolsErrorPaths(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result["error"], "did not submit a review result")
 }
+
+// TestSkillToolCardWrappers 测试 promotion Card 包装器（tool.Tool 接口面）。
+func TestSkillToolCardWrappers(t *testing.T) {
+	tools, _, _ := newSkillTools(t)
+	for i, tt := range tools {
+		card := tt.Card()
+		require.NotNil(t, card, "tool=%d", i)
+		assert.NotEmpty(t, card.Name, "tool=%d", i)
+	}
+	// evolveReviewTaskTool.Card 显式调用
+	rt := review.NewEvolutionReviewRuntime(60)
+	created, err := CreateEvolveReviewTaskTool(EvolveReviewTaskToolDeps{ReviewRuntime: rt, Language: "cn"})
+	require.NoError(t, err)
+	assert.NotNil(t, created[0].Card())
+}
+
+// TestSimplifySkillExperiences_技能不存在 工具层报错分支补齐（skill.go:444）。
+func TestSimplifySkillExperiences_技能不存在(t *testing.T) {
+	tools, _, _ := newSkillTools(t)
+	args := skillSubjectArgs()
+	args["subject"] = map[string]any{"kind": "skill", "name": "nope"}
+	args["actions"] = []any{map[string]any{"action": "DELETE", "record_id": "ev_x"}}
+	result, err := tools[5].Invoke(context.Background(), args)
+	require.NoError(t, err)
+	assert.Equal(t, false, result["success"])
+	assert.Contains(t, result["error"], "skill not found: nope")
+}

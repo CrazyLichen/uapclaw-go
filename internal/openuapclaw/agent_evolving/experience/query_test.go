@@ -122,17 +122,17 @@ func TestExperienceQueryService_ListExperiences(t *testing.T) {
 	ctx := context.Background()
 
 	// 技能不存在（Python L99-100）
-	_, err := svc.ListExperiences(ctx, map[string]any{"kind": "skill", "name": "nope"}, "", nil, 20, "", "", "", "", "score_desc")
+	_, err := svc.ListExperiences(ctx, map[string]any{"kind": "skill", "name": "nope"}, nil, 20, "", "", "", "", "score_desc")
 	assert.EqualError(t, err, "skill not found: nope")
 
 	// limit 越界（Python L101-102）
-	_, err = svc.ListExperiences(ctx, querySubject(), "", nil, 0, "", "", "", "", "score_desc")
+	_, err = svc.ListExperiences(ctx, querySubject(), nil, 0, "", "", "", "", "score_desc")
 	assert.EqualError(t, err, "limit must be between 1 and 100")
-	_, err = svc.ListExperiences(ctx, querySubject(), "", nil, 101, "", "", "", "", "score_desc")
+	_, err = svc.ListExperiences(ctx, querySubject(), nil, 101, "", "", "", "", "score_desc")
 	assert.EqualError(t, err, "limit must be between 1 and 100")
 
 	// 正常列表：total/has_more/next_cursor/items
-	result, err := svc.ListExperiences(ctx, querySubject(), "", nil, 1, "", "", "", "", "score_desc")
+	result, err := svc.ListExperiences(ctx, querySubject(), nil, 1, "", "", "", "", "score_desc")
 	require.NoError(t, err)
 	assert.Equal(t, true, result["success"])
 	assert.Equal(t, "list", result["operation"])
@@ -145,14 +145,14 @@ func TestExperienceQueryService_ListExperiences(t *testing.T) {
 	assert.Equal(t, 0.9, items[0]["score"])
 
 	// 翻到末页：has_more=false、next_cursor=nil
-	result, err = svc.ListExperiences(ctx, querySubject(), "", nil, 1, "1", "", "", "", "score_desc")
+	result, err = svc.ListExperiences(ctx, querySubject(), nil, 1, "1", "", "", "", "score_desc")
 	require.NoError(t, err)
 	assert.Equal(t, false, result["has_more"])
 	assert.Nil(t, result["next_cursor"])
 
 	// minScore 过滤
 	minScore := 0.8
-	result, err = svc.ListExperiences(ctx, querySubject(), "", &minScore, 20, "", "", "", "", "score_desc")
+	result, err = svc.ListExperiences(ctx, querySubject(), &minScore, 20, "", "", "", "", "score_desc")
 	require.NoError(t, err)
 	assert.Equal(t, 1, result["total_count"])
 }
@@ -165,19 +165,19 @@ func TestExperienceQueryService_ReadExperiences(t *testing.T) {
 	ctx := context.Background()
 
 	// 空 record_ids（Python L140-141）
-	_, err := svc.ReadExperiences(ctx, querySubject(), "", []string{}, 2000)
+	_, err := svc.ReadExperiences(ctx, querySubject(), []string{}, 2000)
 	assert.EqualError(t, err, "record_ids must be a non-empty list")
 
 	// max_content_chars 越界（Python L142-143）
-	_, err = svc.ReadExperiences(ctx, querySubject(), "", []string{"ev_aaa"}, 0)
+	_, err = svc.ReadExperiences(ctx, querySubject(), []string{"ev_aaa"}, 0)
 	assert.EqualError(t, err, "max_content_chars must be between 1 and 20000")
 
 	// 未知 id（Python L150-153）
-	_, err = svc.ReadExperiences(ctx, querySubject(), "", []string{"ev_zzz"}, 2000)
+	_, err = svc.ReadExperiences(ctx, querySubject(), []string{"ev_zzz"}, 2000)
 	assert.EqualError(t, err, "unknown record_ids: ev_zzz")
 
 	// 正常读取 + content_truncated 标记
-	result, err := svc.ReadExperiences(ctx, querySubject(), "", []string{"ev_aaa", "ev_bbb"}, 2)
+	result, err := svc.ReadExperiences(ctx, querySubject(), []string{"ev_aaa", "ev_bbb"}, 2)
 	require.NoError(t, err)
 	assert.Equal(t, "read", result["operation"])
 	items := result["items"].([]map[string]any)
@@ -187,14 +187,14 @@ func TestExperienceQueryService_ReadExperiences(t *testing.T) {
 	assert.Equal(t, true, items[1]["content_truncated"]) // 中文 3 字节/字，2 字节同样截断
 
 	// 不截断分支
-	result, err = svc.ReadExperiences(ctx, querySubject(), "", []string{"ev_bbb"}, 20000)
+	result, err = svc.ReadExperiences(ctx, querySubject(), []string{"ev_bbb"}, 20000)
 	require.NoError(t, err)
 	items = result["items"].([]map[string]any)
 	assert.Equal(t, "内容乙", items[0]["content"])
 	assert.Equal(t, false, items[0]["content_truncated"])
 
 	// 保序：调用顺序 ev_bbb 在前
-	result, err = svc.ReadExperiences(ctx, querySubject(), "", []string{"ev_bbb", "ev_aaa"}, 20000)
+	result, err = svc.ReadExperiences(ctx, querySubject(), []string{"ev_bbb", "ev_aaa"}, 20000)
 	require.NoError(t, err)
 	items = result["items"].([]map[string]any)
 	assert.Equal(t, "ev_bbb", items[0]["record_id"])
