@@ -153,6 +153,9 @@ func dispatchHTTPRequest(
 	outbound.sessionID = sessionID
 	outbound.connectionUserID = userID
 	outbound.appID = appID
+	// 注册请求级 outbound（res 帧按 metadata.ws_id / session 桶路由的寻址前提；
+	// 22cf43a19 重构误删本行导致 unary 等帧挂死，已复现修复）。
+	wc.RegisterRequestOutbound(outbound)
 	// 仅新建会话且解析到 user_id 时打 http_resolve_identity 审计日志。
 	if method == "session.create" && userID != "" {
 		logger.Info(logComponent).
