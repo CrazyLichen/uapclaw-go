@@ -142,7 +142,7 @@ func TestDeepCloneHelpers_nil(t *testing.T) {
 // result 非 list 守卫
 func TestPendingInteractionValue_指针帧(t *testing.T) {
 	out := &workflow.WorkflowOutput{Result: []stream.Schema{&stream.OutputSchema{
-		Type: interaction.InteractionType,
+		Type:    interaction.InteractionType,
 		Payload: &interaction.InteractionOutput{ID: "react", Value: "指针值"}}}}
 	v, ok := pendingInteractionValue(map[string]any{
 		"workflow_execution_state": out, "component_ids": []string{"react"}})

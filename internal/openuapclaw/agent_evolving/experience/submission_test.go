@@ -204,3 +204,84 @@ func TestBindPendingApprovalSnapshots(t *testing.T) {
 	assert.NotNil(t, svc.pendingApprovalSnapshots)
 	svc.mu.Unlock()
 }
+
+// TestApplySimplifyActions_Merge与Delete 补齐 MERGE/DELETE 分支计数。
+// Python submission.py:99（counts 汇总 deleted+merged+refined）。
+func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
+	store, svc := newSubmissionFixture(t)
+	ctx := context.Background()
+	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", []any{
+		map[string]any{"summary": "经验一", "content": "内容一", "target": "body", "section": "Troubleshooting"},
+		map[string]any{"summary": "经验二", "content": "内容二", "target": "body", "section": "Troubleshooting"},
+	}, "agent_evolve_tool")
+	require.NoError(t, err)
+	log, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
+	require.NoError(t, err)
+	require.Len(t, log.Entries, 2)
+	keepID, removeID := log.Entries[0].ID, log.Entries[1].ID
+
+	// MERGE：keep 主体 + remove 另一条
+	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), "", []any{map[string]any{
+		"action": "MERGE", "record_id": keepID,
+		"merge_remove_ids": []any{removeID},
+		"new_content":      "合并后的内容",
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, true, result["success"])
+	counts := result["action_counts"].(map[string]int)
+	assert.Equal(t, 1, counts["merged"])
+	assert.Equal(t, 0, counts["errors"])
+
+	// DELETE 剩余记录
+	log2, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
+	require.NoError(t, err)
+	remaining := log2.Entries[0].ID
+	result, err = svc.ApplySimplifyActions(ctx, submissionSubject(), "", []any{map[string]any{
+		"action": "DELETE", "record_id": remaining,
+	}})
+	require.NoError(t, err)
+	counts = result["action_counts"].(map[string]int)
+	assert.Equal(t, 1, counts["deleted"])
+
+	// 全部删完后再校验引用 → not found
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{
+		"action": "DELETE", "record_id": remaining,
+	}})
+	require.Error(t, err)
+}
+
+// TestSubmissionValidateErrorPaths 校验错误分支补齐。
+// Python submission.py:110-137 各 return err。
+func TestSubmissionValidateErrorPaths(t *testing.T) {
+	store, svc := newSubmissionFixture(t)
+	ctx := context.Background()
+
+	// 非法 subject（缺 kind）→ NormalizeSubject 失败
+	badSubject := map[string]any{"name": "demo_skill"}
+	_, err := svc.ApplyExperienceDrafts(ctx, badSubject, "", submissionDrafts(), "agent_evolve_tool")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "subject")
+
+	// ApplySimplifyActions 技能不存在（L133 return）
+	_, err = svc.ApplySimplifyActions(ctx, map[string]any{"kind": "skill", "name": "nope"}, "", []any{map[string]any{"action": "DELETE", "record_id": "ev_x"}})
+	require.Error(t, err)
+
+	// ValidateSimplifyActions 非法动作（NormalizeSimplifyDraft 失败）
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{"action": "bogus", "record_id": "ev_x"}})
+	require.Error(t, err)
+
+	// ValidateExperienceDrafts 草稿为空
+	_, _, err = svc.ValidateExperienceDrafts(ctx, submissionSubject(), nil)
+	require.Error(t, err)
+
+	// store 引用存在性：PrepareSimplify 成功路径
+	_, err = svc.ApplyExperienceDrafts(ctx, submissionSubject(), "", submissionDrafts(), "agent_evolve_tool")
+	require.NoError(t, err)
+	log, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
+	require.NoError(t, err)
+	require.NotEmpty(t, log.Entries)
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), "", []any{map[string]any{
+		"action": "DELETE", "record_id": log.Entries[0].ID,
+	}})
+	assert.NoError(t, err)
+}

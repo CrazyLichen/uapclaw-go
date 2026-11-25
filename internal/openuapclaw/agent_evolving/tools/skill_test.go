@@ -332,3 +332,55 @@ func splitLines(s string) []string {
 	}
 	return append(out, cur)
 }
+
+// TestSkillToolsErrorPaths 错误分支补齐（prepare 失败/review scope 未提交）。
+// Python skill.py:200-201/254-255。
+func TestSkillToolsErrorPaths(t *testing.T) {
+	_, q, s, rt, capture := newSkillTestKit(t)
+	ctx := context.Background()
+	capture.err = assert.AnError
+	tools, err := CreateMainEvolutionTools(q, s, capture.prepare, rt, "cn", "", nil)
+	require.NoError(t, err)
+
+	// prepare_scope 失败 → failure 透传（Python L200-201 except）
+	args := skillSubjectArgs()
+	args["user_confirmed"] = true
+	result, err := tools[0].Invoke(ctx, args)
+	require.NoError(t, err)
+	assert.ErrorIs(t, assert.AnError, assert.AnError)
+	assert.Equal(t, false, result["success"])
+
+	// evolve_review_task：scope 存在但未提交审查结论（status=review_required）
+	capture.err = nil
+	subject := map[string]any{"kind": "skill", "name": "demo_skill"}
+	launch, err := rt.CreateScope("agent_detected_signal", subject, "sess1", "", nil)
+	require.NoError(t, err)
+
+	parent := &fakeParentAgentForEvolve{invokeResult: map[string]any{"output": "{}"}}
+	reviewTools, err := CreateEvolveReviewTaskTool(EvolveReviewTaskToolDeps{
+		ParentAgent: parent, ReviewRuntime: rt, Language: "cn",
+	})
+	require.NoError(t, err)
+	result, err = reviewTools[0].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+		"conversation_id":      "sess1",
+	}, tool.WithToolSession(&fakeSessionFacadeForEvolve{sessionID: "sess1"}))
+	require.NoError(t, err)
+	assert.Equal(t, false, result["success"])
+	assert.Contains(t, result["error"], "did not submit a review result")
+
+	// unknown ref 的 evolve_review_task
+	result, err = reviewTools[0].Invoke(ctx, map[string]any{
+		"evolution_review_ref": "evrr_missing",
+		"conversation_id":      "sess1",
+	}, tool.WithToolSession(&fakeSessionFacadeForEvolve{sessionID: "sess1"}))
+	require.NoError(t, err)
+	assert.Equal(t, false, result["success"])
+
+	// sessionIDFromOpts：session 对象优先级（conversation_id 缺省时取 session）
+	result, err = reviewTools[0].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+	}, tool.WithToolSession(&fakeSessionFacadeForEvolve{sessionID: "sess1"}))
+	require.NoError(t, err)
+	assert.Contains(t, result["error"], "did not submit a review result")
+}

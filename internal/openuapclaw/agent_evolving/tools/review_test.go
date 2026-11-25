@@ -307,3 +307,101 @@ func TestReviewToolsStoreFallback(t *testing.T) {
 	_, err = tool.runtimeForRef("ref_x")
 	assert.Error(t, err)
 }
+
+// TestReviewToolsErrorPaths 五工具错误分支表驱动。
+// Python 各 invoke 的 except 分支（runtime/查询失败透传 failure）。
+func TestReviewToolsErrorPaths(t *testing.T) {
+	tools, rt, store := newReviewTestKit(t)
+	ctx := context.Background()
+
+	// runtime nil → runtimeForRef 报错
+	noRT, err := agenttoolsCreateReview(nil, store)
+	require.NoError(t, err)
+	result, err := noRT[0].Invoke(ctx, map[string]any{"evolution_review_ref": "ref"})
+	require.NoError(t, err)
+	assert.Contains(t, result["error"], "unknown evolution review ref")
+
+	// ref 键缺失（Python args.pop KeyError）
+	result, err = tools[0].Invoke(ctx, map[string]any{})
+	require.NoError(t, err)
+	assert.Contains(t, result["error"], "evolution_review_ref is required")
+
+	// unknown ref 全工具
+	for i, tt := range tools {
+		result, err = tt.Invoke(ctx, map[string]any{
+			"evolution_review_ref": "evrr_missing",
+			"conversation_id":      "sess1",
+			"record_ids":           []any{"x"},
+			"refs":                 []any{"span:a:b"},
+		})
+		require.NoError(t, err, "tool=%d", i)
+		assert.Equal(t, false, result["success"], "tool=%d", i)
+	}
+
+	// subject 缺失触发 ResolveSelectedProposals 前？submit 缺 outcome（NormalizeReviewResult 失败）
+	subject := map[string]any{"kind": "skill", "name": "demo_skill"}
+	launch, err := rt.CreateScope("agent_detected_signal", subject, "sess1", "", nil)
+	require.NoError(t, err)
+	result, err = tools[0].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+		"conversation_id":      "sess1",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, false, result["success"])
+}
+
+// agenttoolsCreateReview 测试辅助：nil runtime 构造。
+func agenttoolsCreateReview(rt *review.EvolutionReviewRuntime, store *checkpointing.EvolutionStore) ([]tool.Tool, error) {
+	return CreateEvolutionReviewTools(EvolutionReviewToolsDeps{
+		Runtime: rt, Store: store, Language: "cn", AgentID: "x",
+	})
+}
+
+// TestReviewQueryServiceFallback 集成替身：query_service 缺省走 store 构造。
+// Python review.py:112（_query_service_from_store 回退）+ queryServiceForRef 分支。
+func TestReviewQueryServiceFallback(t *testing.T) {
+	store := checkpointing.NewEvolutionStore([]string{t.TempDir()})
+	ctx := context.Background()
+	_, err := store.CreateSkill(ctx, "demo_skill", "d", "body", "")
+	require.NoError(t, err)
+	rt := review.NewEvolutionReviewRuntime(60)
+	tools, err := CreateEvolutionReviewTools(EvolutionReviewToolsDeps{
+		Runtime: rt, Store: store, Language: "cn", AgentID: "",
+	})
+	require.NoError(t, err)
+	subject := map[string]any{"kind": "skill", "name": "demo_skill"}
+	launch, err := rt.CreateScope("agent_detected_signal", subject, "sess1", "", nil)
+	require.NoError(t, err)
+
+	// list 经 store 回落的 query service 成功
+	result, err := tools[1].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+		"conversation_id":      "sess1",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, true, result["success"])
+
+	// name_contains / tool_name 过滤命中空集
+	result, err = tools[3].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+		"conversation_id":      "sess1",
+		"name_contains":        "nomatch",
+	})
+	require.NoError(t, err)
+	data := result["data"].(map[string]any)
+	assert.Equal(t, 0, data["total"])
+
+	result, err = tools[3].Invoke(ctx, map[string]any{
+		"evolution_review_ref": launch.EvolutionReviewRef,
+		"conversation_id":      "sess1",
+		"tool_name":            "nomatch",
+	})
+	require.NoError(t, err)
+	data = result["data"].(map[string]any)
+	assert.Equal(t, 0, data["total"])
+
+	// store 缺失 → queryServiceFromStore 报错（L497-500）
+	_, err = CreateEvolutionReviewTools(EvolutionReviewToolsDeps{Runtime: rt, Language: "cn"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query_service or store is required")
+}

@@ -100,3 +100,9 @@ func TestInjectMappedContent(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, text, "e1")
 }
+
+// TestBaseEvolutionCard 测试配置卡访问（tool.Tool 接口面）。
+func TestBaseEvolutionCard(t *testing.T) {
+	base := newTestBaseTool()
+	assert.Nil(t, base.Card())
+}

@@ -96,3 +96,32 @@ func TestSixProvidersRegistered(t *testing.T) {
 		assert.NoError(t, ok)
 	}
 }
+
+// TestAllProvidersInputParams双语言 六提供者 GetInputParams 双语言遍历 + 建卡。
+// 覆盖 GetInputParams 全分支（对齐 Python 各 get_input_params）。
+func TestAllProvidersInputParams双语言(t *testing.T) {
+	providers := []interface {
+		GetName() string
+		GetDescription(language string) string
+		GetInputParams(language string) map[string]any
+	}{
+		&PrepareSkillEvolutionReviewMetadataProvider{},
+		&EvolveReviewTaskMetadataProvider{},
+		&ListSkillExperiencesMetadataProvider{},
+		&ReadSkillExperiencesMetadataProvider{},
+		&EvolveSkillExperiencesMetadataProvider{},
+		&SimplifySkillExperiencesMetadataProvider{},
+	}
+	for _, p := range providers {
+		for _, lang := range []string{"cn", "en"} {
+			desc := p.GetDescription(lang)
+			assert.NotEmpty(t, desc)
+			params := p.GetInputParams(lang)
+			assert.NotNil(t, params)
+			assert.Equal(t, "object", params["type"])
+			card, err := BuildEvolutionToolCard(p.GetName(), "X", lang, "")
+			require.NoError(t, err)
+			assert.Equal(t, p.GetName(), card.Name)
+		}
+	}
+}

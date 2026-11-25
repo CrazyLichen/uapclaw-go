@@ -326,7 +326,7 @@ type ensureRegistrarStub struct {
 	mutators []ceiface.WindowMutator
 }
 
-func (s *ensureRegistrarStub) WindowMutators() []ceiface.WindowMutator { return s.mutators }
+func (s *ensureRegistrarStub) WindowMutators() []ceiface.WindowMutator      { return s.mutators }
 func (s *ensureRegistrarStub) SetWindowMutators(ms []ceiface.WindowMutator) { s.mutators = ms }
 
 // TestEnsureMultimodalImageWindowMutator 对齐 :277-294（替换式安装进持久投影链）。

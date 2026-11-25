@@ -58,7 +58,7 @@ type EvolutionInterruptRail struct {
 // EvolutionSubmissionService 演进提交服务缝。
 // 方法签名对齐 Python submission_service.prepare_evolve_submission /
 // prepare_simplify_submission；真实现 = ExperienceSubmissionServiceAdapter
-//（submission_adapter.go，2026-12-24 15.24b 接线）。
+// （submission_adapter.go，2026-12-24 15.24b 接线）。
 type EvolutionSubmissionService interface {
 	// PrepareEvolveSubmission 预检 evolve 提交（对齐 prepare_evolve_submission）。
 	PrepareEvolveSubmission(reviewRuntime *review.EvolutionReviewRuntime, evolutionReviewRef string, subject map[string]any, selectedProposalIDs []string, sessionID string) (*review.EvolutionProposalSelection, error)
