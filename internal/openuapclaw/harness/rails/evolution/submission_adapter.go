@@ -47,26 +47,11 @@ func (a *ExperienceSubmissionServiceAdapter) PrepareEvolveSubmission(
 	selectedProposalIDs []string,
 	sessionID string,
 ) (*review.EvolutionProposalSelection, error) {
-	selection, err := reviewRuntime.ResolveSelectedProposals(evolutionReviewRef, subject, selectedProposalIDs, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	drafts := make([]any, 0, len(selection.ExperienceDrafts))
-	for _, item := range selection.ExperienceDrafts {
-		drafts = append(drafts, item)
-	}
-	if _, _, err := a.svc.ValidateExperienceDrafts(context.Background(), subject, drafts); err != nil {
-		return nil, err
-	}
-	return &selection, nil
+	return a.svc.PrepareEvolveSubmission(reviewRuntime, evolutionReviewRef, subject, selectedProposalIDs, sessionID)
 }
 
 // PrepareSimplifySubmission 预检 simplify 提交（不执行）。
 // Python: prepare_simplify_submission (submission.py:201-207)。
 func (a *ExperienceSubmissionServiceAdapter) PrepareSimplifySubmission(subject map[string]any, actions []map[string]any) error {
-	anyActions := make([]any, 0, len(actions))
-	for _, action := range actions {
-		anyActions = append(anyActions, action)
-	}
-	return a.svc.PrepareSimplifySubmission(context.Background(), subject, anyActions)
+	return a.svc.PrepareSimplifySubmission(context.Background(), subject, actions)
 }

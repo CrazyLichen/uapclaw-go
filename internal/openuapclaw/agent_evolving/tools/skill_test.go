@@ -280,7 +280,7 @@ func TestSimplifySkillExperiences(t *testing.T) {
 
 	// 非法 action（normalize 失败）
 	args := skillSubjectArgs()
-	args["actions"] = []any{map[string]any{"action": "bogus", "record_id": "ev_x"}}
+	args["actions"] = []map[string]any{{"action": "bogus", "record_id": "ev_x"}}
 	result, err = tools[5].Invoke(ctx, args)
 	require.NoError(t, err)
 	assert.Contains(t, result["error"], "invalid simplify action")

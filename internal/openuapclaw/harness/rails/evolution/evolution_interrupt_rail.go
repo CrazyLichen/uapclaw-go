@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
@@ -149,7 +149,7 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 	}
 	var (
 		args     map[string]any
-		subject  experience.EvolutionSubject
+		subject  evoschema.EvolutionSubject
 		resolved *review.EvolutionProposalSelection
 	)
 	// Python: try: args=_active_tool_args; subject=...to_payload(); resolved=await _preflight;
@@ -210,7 +210,7 @@ func (r *EvolutionInterruptRail) resolveInterrupt(
 // evolve 分支返回 submission 服务解析出的 proposal 选择载体（供审批消息渲染）；
 // simplify 分支返回 nil。偏差 ⤴️15.24：submission_service 的真实实现随工具链
 // 回填，接口实现方负责 evolution_review_ref 解析与动作校验语义。
-func (r *EvolutionInterruptRail) preflight(operation string, args map[string]any, subject experience.EvolutionSubject, cbc *agentinterfaces.AgentCallbackContext) (*review.EvolutionProposalSelection, error) {
+func (r *EvolutionInterruptRail) preflight(operation string, args map[string]any, subject evoschema.EvolutionSubject, cbc *agentinterfaces.AgentCallbackContext) (*review.EvolutionProposalSelection, error) {
 	if r.reviewRuntime == nil || r.submissionService == nil {
 		return nil, fmt.Errorf("EvolutionInterruptRail is not configured")
 	}
@@ -385,7 +385,7 @@ func activeToolCallID(cbc *agentinterfaces.AgentCallbackContext) string {
 
 // activeAutoConfirmKey 构造自动确认键。
 // Python: _active_auto_confirm_key (evolution_interrupt_rail.py:314-316)
-func activeAutoConfirmKey(toolName string, subject experience.EvolutionSubject) string {
+func activeAutoConfirmKey(toolName string, subject evoschema.EvolutionSubject) string {
 	return fmt.Sprintf("evolution:%s:%s:%s", toolName, subject.Kind, subject.Name)
 }
 
@@ -449,11 +449,11 @@ func (r *EvolutionInterruptRail) IsEnglish() bool { return r.isEnglish() }
 
 // normalizeSubject subject 归一化（要求已配置）。
 // Python: _normalize_subject (evolution_interrupt_rail.py:347-350)
-func (r *EvolutionInterruptRail) normalizeSubject(subject any) (experience.EvolutionSubject, error) {
+func (r *EvolutionInterruptRail) normalizeSubject(subject any) (evoschema.EvolutionSubject, error) {
 	if r.reviewRuntime == nil || r.submissionService == nil {
-		return experience.EvolutionSubject{}, fmt.Errorf("EvolutionInterruptRail is not configured")
+		return evoschema.EvolutionSubject{}, fmt.Errorf("EvolutionInterruptRail is not configured")
 	}
-	return experience.NormalizeSubject(subject, nil)
+	return evoschema.NormalizeSubject(subject, nil)
 }
 
 // errorData 错误数据载荷。

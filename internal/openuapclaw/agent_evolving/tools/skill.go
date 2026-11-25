@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	promptsTool "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
@@ -401,8 +402,7 @@ func (t *evolveSkillExperiencesTool) Invoke(ctx context.Context, inputs map[stri
 	}
 	sessionID := sessionIDFromOpts(args, opts)
 	// Python: except KeyError → "unknown evolution_review_ref"（L376-377）。
-	prepared, err := t.submissionService.PrepareEvolveSubmission(
-		newSubmissionResolver(t.reviewRuntime), ref, subject, selected, sessionID)
+	prepared, err := t.submissionService.PrepareEvolveSubmission(t.reviewRuntime, ref, subject, selected, sessionID)
 	if err != nil {
 		return Failure(fmt.Errorf("unknown evolution_review_ref")).ToMap(), nil
 	}
@@ -411,11 +411,8 @@ func (t *evolveSkillExperiencesTool) Invoke(ctx context.Context, inputs map[stri
 		return Failure(err).ToMap(), nil
 	}
 	if success, ok := result["success"].(bool); ok && success {
-		// Python L379-380: 成功才消费 prepared submission。
-		selection, err := t.reviewRuntime.ResolveSelectedProposals(ref, subject, selected, sessionID)
-		if err == nil {
-			_ = t.reviewRuntime.ConsumePreparedSubmission(selection, sessionID)
-		}
+		// Python L379-380: 成功才消费 prepared submission（一比一对象传递，零二次 resolve）。
+		_ = t.reviewRuntime.ConsumePreparedSubmission(*prepared, sessionID)
 	}
 	InjectMappedContent(result, t.ToOutput(result))
 	return result, nil
@@ -429,19 +426,35 @@ func (t *simplifySkillExperiencesTool) Invoke(ctx context.Context, inputs map[st
 	if err != nil {
 		return Failure(err).ToMap(), nil
 	}
-	rawActions, ok := args["actions"].([]any)
-	if !ok || len(rawActions) == 0 {
+	// JSON 入参形态 []any；Go 侧直连调用可为 []map[string]any（双形态归一）
+	var rawActions []any
+	var mapActions []map[string]any
+	if v, ok := args["actions"].([]map[string]any); ok {
+		mapActions = v
+	} else if v, ok := args["actions"].([]any); ok {
+		rawActions = v
+	}
+	if len(rawActions) == 0 && len(mapActions) == 0 {
 		return Failure(fmt.Errorf("actions must be a non-empty list")).ToMap(), nil
 	}
+	actions := make([]map[string]any, 0, len(rawActions)+len(mapActions))
+	for _, raw := range rawActions {
+		actionMap, isMap := raw.(map[string]any)
+		if !isMap {
+			return Failure(fmt.Errorf("actions must contain objects")).ToMap(), nil
+		}
+		actions = append(actions, actionMap)
+	}
+	actions = append(actions, mapActions...)
 	// Python L399-401: 先 normalize 校验，保证无 Interrupt rail 直连安全。
 	normalizedSubject, normErr := t.normalizeSubjectKind(subject)
 	if normErr != nil {
 		return Failure(normErr).ToMap(), nil
 	}
-	if _, err := experience.NormalizeSimplifyDraft(normalizedSubject, rawActions); err != nil {
+	if _, err := evoschema.NormalizeSimplifyDraft(normalizedSubject, actions); err != nil {
 		return Failure(err).ToMap(), nil
 	}
-	result, err := t.submissionService.ApplySimplifyActions(ctx, subject, rawActions)
+	result, err := t.submissionService.ApplySimplifyActions(ctx, subject, actions)
 	if err != nil {
 		return Failure(err).ToMap(), nil
 	}
@@ -497,8 +510,8 @@ func (t *evolutionTool) subjectFromInputs(args map[string]any) (map[string]any, 
 
 // normalizeSubjectKind 归一化 subject kind（ValidationError → ValueError 映射）。
 // Python: _normalize_subject_kind (skill.py:127-131)。
-func (t *evolutionTool) normalizeSubjectKind(subject map[string]any) (experience.EvolutionSubject, error) {
-	return experience.NormalizeSubject(subject, nil)
+func (t *evolutionTool) normalizeSubjectKind(subject map[string]any) (evoschema.EvolutionSubject, error) {
+	return evoschema.NormalizeSubject(subject, nil)
 }
 
 // sessionIDFromOpts 提取会话 id。
@@ -593,32 +606,4 @@ func buildTaskDescription(args map[string]any, ref string) string {
 		lines = append(lines[:2], append([]string{fmt.Sprintf("user_intent: %s", userIntent)}, lines[2:]...)...)
 	}
 	return strings.Join(lines, "\n")
-}
-
-// newSubmissionResolver 构造 proposal 解析协作面适配器。
-// Python 鸭子调用 review_runtime.resolve_selected_proposals 的 Go 适配
-// （review.EvolutionProposalSelection → experience.PreparedEvolveSubmission）。
-func newSubmissionResolver(rt *review.EvolutionReviewRuntime) experience.ProposalResolver {
-	return &reviewRuntimeResolver{runtime: rt}
-}
-
-// reviewRuntimeResolver ProposalResolver 的 review 运行时适配器。
-type reviewRuntimeResolver struct {
-	runtime *review.EvolutionReviewRuntime
-}
-
-// ResolveSelectedProposals 解析选定 proposals。
-func (r *reviewRuntimeResolver) ResolveSelectedProposals(
-	ref string, subject map[string]any, selected []string, sessionID string,
-) (*experience.PreparedEvolveSubmission, error) {
-	selection, err := r.runtime.ResolveSelectedProposals(ref, subject, selected, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return &experience.PreparedEvolveSubmission{
-		EvolutionReviewRef: selection.EvolutionReviewRef,
-		Subject:            selection.Subject,
-		ExperienceDrafts:   selection.ExperienceDrafts,
-		RecordSource:       selection.RecordSource,
-	}, nil
 }

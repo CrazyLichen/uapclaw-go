@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 )
 
 func sampleSubject() map[string]any {
@@ -110,7 +110,7 @@ func TestNormalizeReviewResult(t *testing.T) {
 // TestNormalizeReviewProposals 测试 proposals 归一化校验。
 // Python: normalize_review_proposals (result_schema.py:81-133)
 func TestNormalizeReviewProposals(t *testing.T) {
-	subject := experience.EvolutionSubject{Kind: "skill", Name: "demo"}
+	subject := evoschema.EvolutionSubject{Kind: "skill", Name: "demo"}
 	mk := func(id string) map[string]any {
 		return map[string]any{
 			"proposal_id": id,
@@ -126,12 +126,12 @@ func TestNormalizeReviewProposals(t *testing.T) {
 	})
 
 	t.Run("超上限报错", func(t *testing.T) {
-		items := make([]any, experience.MaxEvolutionReviewProposals+1)
+		items := make([]any, evoschema.MaxEvolutionReviewProposals+1)
 		for i := range items {
 			items[i] = mk(fmt.Sprintf("p%d", i))
 		}
 		_, err := NormalizeReviewProposals(subject, items)
-		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("proposals must contain at most %d items", experience.MaxEvolutionReviewProposals)) {
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("proposals must contain at most %d items", evoschema.MaxEvolutionReviewProposals)) {
 			t.Fatalf("期望上限报错, got %v", err)
 		}
 	})

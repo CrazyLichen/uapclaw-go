@@ -6,41 +6,12 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	review "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ProposalResolver 审查 proposal 解析协作面（窄接口，依赖倒置）。
-// Python: prepare_evolve_submission 的 review_runtime 鸭子参数
-// （submission.py:143-160 调 review_runtime.resolve_selected_proposals）。
-// 偏差说明：Python 为 Any 鸭子参数；Go 由 rail 层（15.21 接口缝）适配
-// review.EvolutionProposalSelection → PreparedEvolveSubmission，避免
-// experience → review 循环引用（review/runtime.go 已依赖本包）。
-type ProposalResolver interface {
-	// ResolveSelectedProposals 解析选定 proposals 并校验草稿，不消费 ref。
-	// 返回预检产物（prepared 载体）。
-	ResolveSelectedProposals(
-		evolutionReviewRef string,
-		subject map[string]any,
-		selectedProposalIDs []string,
-		sessionID string,
-	) (*PreparedEvolveSubmission, error)
-}
-
-// PreparedEvolveSubmission 预检产物载体（Python prepared 鸭子对象的 Go 形态）。
-// Python: resolve_selected_proposals 的返回 + apply_prepared_evolve_submission
-// 消费的 subject/experience_drafts/record_source 三字段（submission.py:162-199）。
-type PreparedEvolveSubmission struct {
-	// EvolutionReviewRef 审查引用（消费 ref 用）。
-	EvolutionReviewRef string
-	// Subject 归一化 subject payload。
-	Subject map[string]any
-	// ExperienceDrafts 执行用经验草稿（reason 注入后）。
-	ExperienceDrafts []map[string]any
-	// RecordSource 记录来源（user_intent / agent_inferred）。
-	RecordSource string
-}
 
 // ExperienceSubmissionService 结构化经验提交持久化服务。
 // Python: ExperienceSubmissionService (experience/submission.py:27-208)。
@@ -78,11 +49,10 @@ func (s *ExperienceSubmissionService) BindPendingApprovalSnapshots(pendingApprov
 
 // ApplyExperienceDrafts 持久化已批准的 agent 提交经验草稿（直接路径）。
 // Python: apply_experience_drafts (submission.py:43-82)。
-// subjectKind 按 Task 0 裁决预留（空串=None 语义，⤴️15.24c 补 store 透传）。
 func (s *ExperienceSubmissionService) ApplyExperienceDrafts(
 	ctx context.Context,
 	subject map[string]any,
-	drafts []any,
+	drafts []map[string]any,
 	source string,
 ) (map[string]any, error) {
 	normalizedSubject, draft, err := s.ValidateExperienceDrafts(ctx, subject, drafts)
@@ -97,7 +67,7 @@ func (s *ExperienceSubmissionService) ApplyExperienceDrafts(
 func (s *ExperienceSubmissionService) ApplySimplifyActions(
 	ctx context.Context,
 	subject map[string]any,
-	actions []any,
+	actions []map[string]any,
 ) (map[string]any, error) {
 	normalizedSubject, draft, err := s.ValidateSimplifyActions(ctx, subject, actions)
 	if err != nil {
@@ -124,20 +94,20 @@ func (s *ExperienceSubmissionService) ApplySimplifyActions(
 func (s *ExperienceSubmissionService) ValidateExperienceDrafts(
 	ctx context.Context,
 	subject map[string]any,
-	drafts []any,
-) (EvolutionSubject, EvolveDraft, error) {
-	normalizedSubject, err := NormalizeSubject(subject, nil)
+	drafts []map[string]any,
+) (evoschema.EvolutionSubject, evoschema.EvolveDraft, error) {
+	normalizedSubject, err := evoschema.NormalizeSubject(subject, nil)
 	if err != nil {
-		return EvolutionSubject{}, EvolveDraft{}, err
+		return evoschema.EvolutionSubject{}, evoschema.EvolveDraft{}, err
 	}
 	skillName := normalizedSubject.Name
 	// Python L118: skill_exists(skill_name, subject_kind=normalized_subject.kind)
 	if !s.store.SkillExistsForKind(ctx, skillName, normalizedSubject.Kind) {
-		return EvolutionSubject{}, EvolveDraft{}, fmt.Errorf("skill not found: %s", skillName)
+		return evoschema.EvolutionSubject{}, evoschema.EvolveDraft{}, fmt.Errorf("skill not found: %s", skillName)
 	}
-	draft, err := NormalizeEvolveDraft(normalizedSubject, drafts)
+	draft, err := evoschema.NormalizeEvolveDraft(normalizedSubject, drafts)
 	if err != nil {
-		return EvolutionSubject{}, EvolveDraft{}, err
+		return evoschema.EvolutionSubject{}, evoschema.EvolveDraft{}, err
 	}
 	return normalizedSubject, draft, nil
 }
@@ -147,63 +117,65 @@ func (s *ExperienceSubmissionService) ValidateExperienceDrafts(
 func (s *ExperienceSubmissionService) ValidateSimplifyActions(
 	ctx context.Context,
 	subject map[string]any,
-	actions []any,
-) (EvolutionSubject, SimplifyDraft, error) {
-	normalizedSubject, err := NormalizeSubject(subject, nil)
+	actions []map[string]any,
+) (evoschema.EvolutionSubject, evoschema.SimplifyDraft, error) {
+	normalizedSubject, err := evoschema.NormalizeSubject(subject, nil)
 	if err != nil {
-		return EvolutionSubject{}, SimplifyDraft{}, err
+		return evoschema.EvolutionSubject{}, evoschema.SimplifyDraft{}, err
 	}
 	skillName := normalizedSubject.Name
 	// Python L130: subject_kind = normalized_subject.kind
 	subjectKind := normalizedSubject.Kind
 	if !s.store.SkillExistsForKind(ctx, skillName, subjectKind) {
-		return EvolutionSubject{}, SimplifyDraft{}, fmt.Errorf("skill not found: %s", skillName)
+		return evoschema.EvolutionSubject{}, evoschema.SimplifyDraft{}, fmt.Errorf("skill not found: %s", skillName)
 	}
 	evoLog, err := s.store.LoadFullEvolutionLogForKind(ctx, skillName, subjectKind)
 	if err != nil {
-		return EvolutionSubject{}, SimplifyDraft{}, err
+		return evoschema.EvolutionSubject{}, evoschema.SimplifyDraft{}, err
 	}
 	existingRecordIDs := make(map[string]bool, len(evoLog.Entries))
 	for _, record := range evoLog.Entries {
 		existingRecordIDs[record.ID] = true
 	}
-	draft, err := NormalizeSimplifyDraft(normalizedSubject, actions)
+	draft, err := evoschema.NormalizeSimplifyDraft(normalizedSubject, actions)
 	if err != nil {
-		return EvolutionSubject{}, SimplifyDraft{}, err
+		return evoschema.EvolutionSubject{}, evoschema.SimplifyDraft{}, err
 	}
-	if err := ValidateSimplifyRecordRefs(draft, existingRecordIDs); err != nil {
-		return EvolutionSubject{}, SimplifyDraft{}, err
+	if err := evoschema.ValidateSimplifyRecordRefs(draft, existingRecordIDs); err != nil {
+		return evoschema.EvolutionSubject{}, evoschema.SimplifyDraft{}, err
 	}
 	return normalizedSubject, draft, nil
 }
 
 // PrepareEvolveSubmission 共享预检：解析选定 proposals 并校验草稿，不消费 ref。
-// Python: prepare_evolve_submission (submission.py:143-160)。
+// Python: prepare_evolve_submission (submission.py:143-160)——直传 review_runtime
+// 鸭子引用（方案 B 叶包后 Go 一比一形态，偏差 D-15.24b-4 回收）。
 func (s *ExperienceSubmissionService) PrepareEvolveSubmission(
-	resolver ProposalResolver,
+	reviewRuntime *review.EvolutionReviewRuntime,
 	evolutionReviewRef string,
 	subject map[string]any,
 	selectedProposalIDs []string,
 	sessionID string,
-) (*PreparedEvolveSubmission, error) {
-	resolved, err := resolver.ResolveSelectedProposals(evolutionReviewRef, subject, selectedProposalIDs, sessionID)
+) (*review.EvolutionProposalSelection, error) {
+	resolved, err := reviewRuntime.ResolveSelectedProposals(evolutionReviewRef, subject, selectedProposalIDs, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := s.ValidateExperienceDrafts(context.Background(), subject, toAnySlice(resolved.ExperienceDrafts)); err != nil {
+	if _, _, err := s.ValidateExperienceDrafts(context.Background(), subject, resolved.ExperienceDrafts); err != nil {
 		return nil, err
 	}
-	return resolved, nil
+	return &resolved, nil
 }
 
 // ApplyPreparedEvolveSubmission 持久化预检产物，不重复校验。
-// Python: apply_prepared_evolve_submission (submission.py:162-199)。
+// Python: apply_prepared_evolve_submission (submission.py:162-199)——
+// prepared 对象一比一传递（偏差 D-15.24b-3 回收：consume 零二次 resolve）。
 func (s *ExperienceSubmissionService) ApplyPreparedEvolveSubmission(
 	ctx context.Context,
-	prepared *PreparedEvolveSubmission,
+	prepared *review.EvolutionProposalSelection,
 	source string,
 ) (map[string]any, error) {
-	normalizedSubject, err := NormalizeSubject(prepared.Subject, nil)
+	normalizedSubject, err := evoschema.NormalizeSubject(prepared.Subject, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +191,7 @@ func (s *ExperienceSubmissionService) ApplyPreparedEvolveSubmission(
 func (s *ExperienceSubmissionService) PrepareSimplifySubmission(
 	ctx context.Context,
 	subject map[string]any,
-	actions []any,
+	actions []map[string]any,
 ) error {
 	_, _, err := s.ValidateSimplifyActions(ctx, subject, actions)
 	return err
@@ -232,7 +204,7 @@ func (s *ExperienceSubmissionService) PrepareSimplifySubmission(
 // 的公共形态（records 构建 → make_pending_change → commit）。
 func (s *ExperienceSubmissionService) applyDrafts(
 	ctx context.Context,
-	normalizedSubject EvolutionSubject,
+	normalizedSubject evoschema.EvolutionSubject,
 	experienceItems []map[string]any,
 	source string,
 ) (map[string]any, error) {
@@ -302,13 +274,4 @@ func buildRecordFromEvolveItem(item map[string]any, source string) checkpointing
 		change.ScriptPurpose = &v
 	}
 	return *checkpointing.MakeEvolutionRecord(source, summary, change, 0.6, nil, &summary)
-}
-
-// toAnySlice 将 map 切片转为 any 切片（校验入口 Normalize*Draft 的入参形态）。
-func toAnySlice(items []map[string]any) []any {
-	out := make([]any, 0, len(items))
-	for _, item := range items {
-		out = append(out, item)
-	}
-	return out
 }

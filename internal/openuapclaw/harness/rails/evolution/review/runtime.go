@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 )
 
@@ -454,10 +454,10 @@ func sessionMatchesScope(scopeSessionID string, sessionID string) bool {
 
 // normalizeSubjectOrError subject 归一化，异常透传为普通 error。
 // Python: EvolutionReviewRuntime._normalize_subject (runtime.py:264-268)
-func normalizeSubjectOrError(subject any) (experience.EvolutionSubject, error) {
-	normalized, err := experience.NormalizeSubject(subject, nil)
+func normalizeSubjectOrError(subject any) (evoschema.EvolutionSubject, error) {
+	normalized, err := evoschema.NormalizeSubject(subject, nil)
 	if err != nil {
-		return experience.EvolutionSubject{}, fmt.Errorf("%v", err)
+		return evoschema.EvolutionSubject{}, fmt.Errorf("%v", err)
 	}
 	return normalized, nil
 }

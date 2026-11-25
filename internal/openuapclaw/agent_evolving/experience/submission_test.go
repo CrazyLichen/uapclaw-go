@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
+	review "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
 
 // newSubmissionFixture 建临时 store + 服务 + 预置技能与一条已落盘记录。
@@ -25,30 +26,13 @@ func submissionSubject() map[string]any {
 	return map[string]any{"kind": "skill", "name": "demo_skill"}
 }
 
-func submissionDrafts() []any {
-	return []any{map[string]any{
+func submissionDrafts() []map[string]any {
+	return []map[string]any{{
 		"summary": "部署失败先查端口",
 		"content": "deploy 前先检查端口占用",
 		"target":  "body",
 		"section": "Troubleshooting",
 	}}
-}
-
-// fakeResolver 预检解析协作面桩（对应 review.EvolutionProposalSelection 的适配产物）。
-type fakeResolver struct {
-	calls    int
-	prepared *PreparedEvolveSubmission
-	err      error
-}
-
-func (f *fakeResolver) ResolveSelectedProposals(
-	_ string, _ map[string]any, _ []string, _ string,
-) (*PreparedEvolveSubmission, error) {
-	f.calls++
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.prepared, nil
 }
 
 // TestApplyExperienceDrafts_成功 测试直接路径成功落盘。
@@ -86,31 +70,42 @@ func TestApplyExperienceDrafts_技能不存在(t *testing.T) {
 	assert.Equal(t, "skill not found: nope", err.Error())
 }
 
-// TestPrepareEvolveSubmission_不消费Ref 测试预检不消费引用。
+// TestPrepareEvolveSubmission_不消费Ref 测试预检不消费引用（真实 runtime）。
 // Python submission.py:143-160（"without consuming the ref"）。
 func TestPrepareEvolveSubmission_不消费Ref(t *testing.T) {
-	_, svc := newSubmissionFixture(t)
-	resolver := &fakeResolver{prepared: &PreparedEvolveSubmission{
-		Subject:          submissionSubject(),
-		ExperienceDrafts: []map[string]any{submissionDrafts()[0].(map[string]any)},
-		RecordSource:     "user_intent",
-	}}
+	store, svc := newSubmissionFixture(t)
+	_ = store
+	rt := review.NewEvolutionReviewRuntime(60)
+	subject := submissionSubject()
+	launch, err := rt.CreateScope("agent_detected_signal", subject, "sess", "", nil)
+	require.NoError(t, err)
+	_, err = rt.RecordReviewResult(launch.EvolutionReviewRef, "sess", map[string]any{
+		"subject": subject, "outcome": "recommend_evolve", "evidence_refs": []any{},
+		"proposals": []any{map[string]any{
+			"proposal_id": "p1",
+			"experience":  map[string]any{"summary": "s", "content": "c", "target": "body", "section": "Troubleshooting"},
+			"reason":      "r", "evidence_refs": []any{},
+		}},
+		"summary": "done",
+	})
+	require.NoError(t, err)
+	_ = store
 
-	// 同一 ref 可重复 prepare（不消费）
+	// 同一 ref 可重复 prepare（不消费）；CreateScope userIntent 空 → agent_inferred
 	for i := 0; i < 2; i++ {
-		prepared, err := svc.PrepareEvolveSubmission(resolver, "ref_1", submissionSubject(), []string{"p1"}, "sess")
+		prepared, err := svc.PrepareEvolveSubmission(rt, launch.EvolutionReviewRef, subject, []string{"p1"}, "sess")
 		require.NoError(t, err)
-		assert.Equal(t, "user_intent", prepared.RecordSource)
+		assert.Equal(t, "agent_inferred", prepared.RecordSource)
 	}
-	assert.Equal(t, 2, resolver.calls)
 }
 
-// TestPrepareEvolveSubmission_解析失败透传 测试 resolver 错误透传。
+// TestPrepareEvolveSubmission_解析失败透传 测试 unknown ref 错误透传。
 func TestPrepareEvolveSubmission_解析失败透传(t *testing.T) {
 	_, svc := newSubmissionFixture(t)
-	resolver := &fakeResolver{err: assert.AnError}
-	_, err := svc.PrepareEvolveSubmission(resolver, "ref_x", submissionSubject(), []string{"p1"}, "sess")
-	assert.ErrorIs(t, err, assert.AnError)
+	rt := review.NewEvolutionReviewRuntime(60)
+	_, err := svc.PrepareEvolveSubmission(rt, "ref_x", submissionSubject(), []string{"p1"}, "sess")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scope not found")
 }
 
 // TestApplyPreparedEvolveSubmission_RecordSource覆写 测试来源覆写语义。
@@ -120,9 +115,9 @@ func TestApplyPreparedEvolveSubmission_RecordSource覆写(t *testing.T) {
 	ctx := context.Background()
 
 	// RecordSource 非空 → 覆写 source
-	prepared := &PreparedEvolveSubmission{
+	prepared := &review.EvolutionProposalSelection{
 		Subject:          submissionSubject(),
-		ExperienceDrafts: []map[string]any{submissionDrafts()[0].(map[string]any)},
+		ExperienceDrafts: []map[string]any{submissionDrafts()[0]},
 		RecordSource:     "user_intent",
 	}
 	_, err := svc.ApplyPreparedEvolveSubmission(ctx, prepared, "agent_evolve_tool")
@@ -132,9 +127,9 @@ func TestApplyPreparedEvolveSubmission_RecordSource覆写(t *testing.T) {
 	assert.Equal(t, "user_intent", log.Entries[0].Source)
 
 	// RecordSource 空 → 回落 source
-	prepared2 := &PreparedEvolveSubmission{
+	prepared2 := &review.EvolutionProposalSelection{
 		Subject:          submissionSubject(),
-		ExperienceDrafts: []map[string]any{submissionDrafts()[0].(map[string]any)},
+		ExperienceDrafts: []map[string]any{submissionDrafts()[0]},
 	}
 	_, err = svc.ApplyPreparedEvolveSubmission(ctx, prepared2, "agent_evolve_tool")
 	require.NoError(t, err)
@@ -158,7 +153,7 @@ func TestApplySimplifyActions(t *testing.T) {
 	recordID := log.Entries[0].ID
 
 	// refine 已有记录
-	actions := []any{map[string]any{
+	actions := []map[string]any{{
 		"action":      "refine",
 		"record_id":   recordID,
 		"new_content": "deploy 前先检查端口占用与防火墙",
@@ -173,7 +168,7 @@ func TestApplySimplifyActions(t *testing.T) {
 	assert.Equal(t, 0, counts["errors"])
 
 	// 引用不存在的 record_id → 校验失败（ValidateSimplifyRecordRefs）
-	badActions := []any{map[string]any{"action": "refine", "record_id": "ev_nope", "new_content": "x"}}
+	badActions := []map[string]any{{"action": "refine", "record_id": "ev_nope", "new_content": "x"}}
 	_, err = svc.ApplySimplifyActions(ctx, submissionSubject(), badActions)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "ev_nope") || strings.Contains(err.Error(), "record"))
@@ -184,7 +179,7 @@ func TestValidateSimplifyActions_技能不存在(t *testing.T) {
 	_, svc := newSubmissionFixture(t)
 	err := svc.PrepareSimplifySubmission(
 		context.Background(),
-		map[string]any{"kind": "skill", "name": "nope"}, []any{map[string]any{}})
+		map[string]any{"kind": "skill", "name": "nope"}, []map[string]any{})
 	require.Error(t, err)
 	assert.Equal(t, "skill not found: nope", err.Error())
 }
@@ -210,7 +205,7 @@ func TestBindPendingApprovalSnapshots(t *testing.T) {
 func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	store, svc := newSubmissionFixture(t)
 	ctx := context.Background()
-	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), []any{
+	_, err := svc.ApplyExperienceDrafts(ctx, submissionSubject(), []map[string]any{
 		map[string]any{"summary": "经验一", "content": "内容一", "target": "body", "section": "Troubleshooting"},
 		map[string]any{"summary": "经验二", "content": "内容二", "target": "body", "section": "Troubleshooting"},
 	}, "agent_evolve_tool")
@@ -221,7 +216,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	keepID, removeID := log.Entries[0].ID, log.Entries[1].ID
 
 	// MERGE：keep 主体 + remove 另一条
-	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), []any{map[string]any{
+	result, err := svc.ApplySimplifyActions(ctx, submissionSubject(), []map[string]any{map[string]any{
 		"action": "MERGE", "record_id": keepID,
 		"merge_remove_ids": []any{removeID},
 		"new_content":      "合并后的内容",
@@ -236,7 +231,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	log2, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
 	require.NoError(t, err)
 	remaining := log2.Entries[0].ID
-	result, err = svc.ApplySimplifyActions(ctx, submissionSubject(), []any{map[string]any{
+	result, err = svc.ApplySimplifyActions(ctx, submissionSubject(), []map[string]any{map[string]any{
 		"action": "DELETE", "record_id": remaining,
 	}})
 	require.NoError(t, err)
@@ -244,7 +239,7 @@ func TestApplySimplifyActions_Merge与Delete(t *testing.T) {
 	assert.Equal(t, 1, counts["deleted"])
 
 	// 全部删完后再校验引用 → not found
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []map[string]any{map[string]any{
 		"action": "DELETE", "record_id": remaining,
 	}})
 	require.Error(t, err)
@@ -263,11 +258,11 @@ func TestSubmissionValidateErrorPaths(t *testing.T) {
 	assert.Contains(t, err.Error(), "subject")
 
 	// ApplySimplifyActions 技能不存在（L133 return）
-	_, err = svc.ApplySimplifyActions(ctx, map[string]any{"kind": "skill", "name": "nope"}, []any{map[string]any{"action": "DELETE", "record_id": "ev_x"}})
+	_, err = svc.ApplySimplifyActions(ctx, map[string]any{"kind": "skill", "name": "nope"}, []map[string]any{map[string]any{"action": "DELETE", "record_id": "ev_x"}})
 	require.Error(t, err)
 
 	// ValidateSimplifyActions 非法动作（NormalizeSimplifyDraft 失败）
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{"action": "bogus", "record_id": "ev_x"}})
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []map[string]any{map[string]any{"action": "bogus", "record_id": "ev_x"}})
 	require.Error(t, err)
 
 	// ValidateExperienceDrafts 草稿为空
@@ -280,7 +275,7 @@ func TestSubmissionValidateErrorPaths(t *testing.T) {
 	log, err := store.LoadFullEvolutionLog(ctx, "demo_skill")
 	require.NoError(t, err)
 	require.NotEmpty(t, log.Entries)
-	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []any{map[string]any{
+	err = svc.PrepareSimplifySubmission(ctx, submissionSubject(), []map[string]any{map[string]any{
 		"action": "DELETE", "record_id": log.Entries[0].ID,
 	}})
 	assert.NoError(t, err)
