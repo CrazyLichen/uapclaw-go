@@ -15,8 +15,8 @@ func TestValidateMappedRoutes无重复面(t *testing.T) {
 	require.NotPanics(t, func() { validateMappedRoutes(mappedRoutes) })
 	require.Panics(t, func() {
 		validateMappedRoutes([]webHTTPMappedRoute{
-			*newWebHTTPMappedRoute("GET", "/a", "m.a", "t", "s", nil, nil, false, false, false, nil, mappedGroupSettings),
-			*newWebHTTPMappedRoute("GET", "/{id}", "m.b", "t", "s", nil, nil, false, false, false, nil, mappedGroupSettings),
+			*newWebHTTPMappedRoute("GET", "/sessions/{id}", "m.a", "t", "s", nil, nil, false, false, false, nil, mappedGroupSettings),
+			*newWebHTTPMappedRoute("GET", "/sessions/{sid}", "m.b", "t", "s", nil, nil, false, false, false, nil, mappedGroupSettings),
 		})
 	})
 }
