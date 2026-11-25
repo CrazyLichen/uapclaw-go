@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	recall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor/recall"
+	recall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor/recall"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	tool_discovery "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/tool_discovery"
