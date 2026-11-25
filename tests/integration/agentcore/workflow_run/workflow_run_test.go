@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 )
 
@@ -57,9 +58,9 @@ func (s *WorkflowRunSuite) TestInvoke_流式真实链() {
 		map[string]any{"name": "u1"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	chunks, ok := wo.Result.([]workflow.WorkflowChunk)
 	s.Require().True(ok, "流式工作流 result 应为 chunks")
 	s.Require().NotEmpty(chunks)
@@ -86,9 +87,9 @@ func (s *WorkflowRunSuite) TestInvoke_非流式真实链() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"name": "u2"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	// 非 streaming：result = get_outputs(end)（Python workflow.py:382）
 	s.NotNil(wo.Result)
 }

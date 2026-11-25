@@ -11,6 +11,7 @@ import (
 
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	conditionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 )
@@ -63,9 +64,9 @@ func (s *BranchCompSuite) Test双出口_表达式命中high出口() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"amount": 150, "items": []any{"x"}}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "invoke 应返回 *WorkflowOutput")
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(s.resultText(wo), "high", "命中 ${amount} > 100 应走 high 出口")
 }
 
@@ -83,8 +84,8 @@ func (s *BranchCompSuite) TestAlwaysTrue兜底走low出口() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"amount": 1}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo := out.(*workflow.WorkflowOutput)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	wo := out.(*workflowbase.WorkflowOutput)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(s.resultText(wo), "low", "表达式不命中应走 AlwaysTrue 兜底出口")
 }
 
@@ -129,13 +130,13 @@ func (s *BranchCompSuite) TestCNF屏障_互斥出口汇合() {
 	defer cancel()
 	out, err := w.Invoke(ctx, map[string]any{"amount": 150}, sess, nil, nil)
 	s.Require().NoError(err, "CNF 归并后单出口命中即触发 mid（否则屏障挂死/超时）")
-	wo := out.(*workflow.WorkflowOutput)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	wo := out.(*workflowbase.WorkflowOutput)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(s.resultText(wo), "final")
 }
 
 // resultText 提取 WorkflowOutput 的文本形态（End batch 输出 map/字符串双形态）。
-func (s *BranchCompSuite) resultText(wo *workflow.WorkflowOutput) string {
+func (s *BranchCompSuite) resultText(wo *workflowbase.WorkflowOutput) string {
 	switch v := wo.Result.(type) {
 	case string:
 		return v

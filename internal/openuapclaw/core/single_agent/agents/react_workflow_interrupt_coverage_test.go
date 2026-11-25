@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 )
 
 // interactionPayloadID/ComponentID 双形态辅助：值/指针/map 三形态 + 未知类型
@@ -55,7 +55,7 @@ func TestInteractionPayloadHelpers_双形态(t *testing.T) {
 func TestExtractComponentIDs_分支补齐(t *testing.T) {
 	a := &ReActAgent{}
 	// WorkflowOutput 分支：指针 InteractionOutput + 非 OutputSchema 项跳过
-	mixed := &workflow.WorkflowOutput{Result: []stream.Schema{
+	mixed := &workflowbase.WorkflowOutput{Result: []stream.Schema{
 		&stream.OutputSchema{Type: "answer"}, // 非交互块跳过
 		nil,                                  // nil 项守卫
 		&stream.OutputSchema{Type: interaction.InteractionType,
@@ -68,7 +68,7 @@ func TestExtractComponentIDs_分支补齐(t *testing.T) {
 	ids := a.extractComponentIDs(mixed)
 	assert.Equal(t, []string{"a", "b", "c"}, ids) // sorted 稳定序
 	// WorkflowOutput.result 非 list → 空列表
-	assert.Empty(t, a.extractComponentIDs(&workflow.WorkflowOutput{Result: "str"}))
+	assert.Empty(t, a.extractComponentIDs(&workflowbase.WorkflowOutput{Result: "str"}))
 	// 非 WorkflowOutput 非 list → 空列表
 	assert.Empty(t, a.extractComponentIDs(42))
 	// list 分支：指针帧 + 值帧混排，component_id 键提取
@@ -141,7 +141,7 @@ func TestDeepCloneHelpers_nil(t *testing.T) {
 // TestPendingInteractionValue_指针帧补齐：*InteractionOutput payload 形态 +
 // result 非 list 守卫
 func TestPendingInteractionValue_指针帧(t *testing.T) {
-	out := &workflow.WorkflowOutput{Result: []stream.Schema{&stream.OutputSchema{
+	out := &workflowbase.WorkflowOutput{Result: []stream.Schema{&stream.OutputSchema{
 		Type: interaction.InteractionType,
 		Payload: &interaction.InteractionOutput{ID: "react", Value: "指针值"}}}}
 	v, ok := pendingInteractionValue(map[string]any{
@@ -149,7 +149,7 @@ func TestPendingInteractionValue_指针帧(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "指针值", v)
 	// result 非 list → false
-	outStr := &workflow.WorkflowOutput{Result: "str"}
+	outStr := &workflowbase.WorkflowOutput{Result: "str"}
 	_, ok2 := pendingInteractionValue(map[string]any{
 		"workflow_execution_state": outStr, "component_ids": []string{"react"}})
 	assert.False(t, ok2)

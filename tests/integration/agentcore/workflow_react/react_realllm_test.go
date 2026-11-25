@@ -28,11 +28,11 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm/react"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
@@ -122,11 +122,11 @@ func (s *ReactRealLLMSuite) TestReactRealLLM_中断恢复() {
 	// ---- 首调：模型产出工具调用 → 子 workflow 抽取 → 追问挂起 ----
 	out, err := w.Invoke(ctx, map[string]any{"query": "请通过工具补齐用户姓名"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
 	s.T().Logf("首调 state=%v result=%v", wo.State, fmt.Sprintf("%v", wo.Result))
 
-	if wo.State == workflow.WorkflowExecutionStateCompleted {
+	if wo.State == workflowbase.WorkflowExecutionStateCompleted {
 		// 模型直通（未走工具/直接补全）——合法终局；但 ReAct 执行错误伪装成
 		// COMPLETED 必须显式失败（invokeEntry 吞错转 error output）
 		s.Require().NotContains(fmt.Sprintf("%v", wo.Result), "Error in ReAct execution",
@@ -134,7 +134,7 @@ func (s *ReactRealLLMSuite) TestReactRealLLM_中断恢复() {
 		s.T().Logf("模型直通终局（合法）：%v", wo.Result)
 		return
 	}
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo.State)
 	frames := interactionFrames(s.T(), wo)
 	s.Require().Len(frames, 1, "过滤单发：调用方只看到恰好一个交互块，got %v", frames)
 	s.Contains(frames[0], "react", "交互帧应携带挂起节点 executable ID")
@@ -145,12 +145,12 @@ func (s *ReactRealLLMSuite) TestReactRealLLM_中断恢复() {
 	s.Require().NoError(ii.Update("react", "张三"))
 	out2, err := w.Invoke(ctx, ii, sess, nil, nil)
 	s.Require().NoError(err)
-	wo2, ok := out2.(*workflow.WorkflowOutput)
+	wo2, ok := out2.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
 	s.T().Logf("二调 state=%v result=%v", wo2.State, fmt.Sprintf("%v", wo2.Result))
 	// 终态两可：恢复成功 → COMPLETED；子 workflow 模型仍缺必填（未超限）→ 再次追问挂起
-	s.Contains([]workflow.WorkflowExecutionState{
-		workflow.WorkflowExecutionStateCompleted,
-		workflow.WorkflowExecutionStateInputRequired,
+	s.Contains([]workflowbase.WorkflowExecutionState{
+		workflowbase.WorkflowExecutionStateCompleted,
+		workflowbase.WorkflowExecutionStateInputRequired,
 	}, wo2.State, "got state=%v result=%v", wo2.State, wo2.Result)
 }

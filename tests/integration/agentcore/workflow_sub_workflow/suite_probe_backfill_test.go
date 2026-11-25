@@ -16,6 +16,7 @@ import (
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
@@ -69,9 +70,9 @@ func (s *ProbeBackfillSuite) TestInvokeEchoTwoLayers() {
 	out, err := parent.Invoke(context.Background(), map[string]any{"name": "u9"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "顶层 invoke 应返回 *WorkflowOutput")
-	s.Require().Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	response := fmt.Sprint(wo.Result)
 	// 子工作流 echo 收到 name=u9，end 模板收敛为 child:...，父侧原样透传。
 	s.Require().True(strings.Contains(response, "child:"), "response 应含子工作流 end 模板前缀，实际 %q", response)
@@ -97,9 +98,9 @@ func (s *ProbeBackfillSuite) TestInvokeEnvelopePath() {
 	out, err := parent.Invoke(context.Background(), map[string]any{"name": "u9"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "顶层 invoke 应返回 *WorkflowOutput")
-	s.Require().Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	response := fmt.Sprint(wo.Result)
 	s.Require().True(strings.Contains(response, "u9"), "信封路径下输入值应到达子节点并回传，实际 %q", response)
 }

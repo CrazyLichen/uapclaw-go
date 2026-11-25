@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
 )
@@ -148,9 +149,9 @@ func (w *Workflow) AddConditionalConnection(srcCompID string, router graph.Route
 // inputs 运行时闭集（D-17-1 收窄注记）：map[string]any（常规）|
 // *interaction.InteractiveInput（交互恢复，workflow.py:747 isinstance 探测同形）；
 // 两形态均在 validateInputs/图执行内显式分发，any 仅作闭集外层承载。
-// 返回值：顶层 = *WorkflowOutput（Python invoke 返回 WorkflowOutput）；
+// 返回值：顶层 = *workflowbase.WorkflowOutput（Python invoke 返回 WorkflowOutput）；
 // is_sub = 裸 dict（Python _sub_invoke 返回 get_outputs 原始输出，workflow.py:626）。
-// 修复 R-14b-2：原 is_sub 分支把裸 dict 强转 *WorkflowOutput 失败后返回 nil——
+// 修复 R-14b-2：原 is_sub 分支把裸 dict 强转 *workflowbase.WorkflowOutput 失败后返回 nil——
 // SubWorkflowComponent（8.14b）为首个真实消费者，父侧 sub 节点输出恒空。
 func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterfaces.SessionFacade,
 	modelContext any, kwargs map[string]any) (any, error) {
@@ -192,7 +193,7 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 		for _, chunk := range chunks {
 			if sc, ok := chunk.(stream.Schema); ok &&
 				sc.SchemaType() == interaction.InteractionType {
-				return &WorkflowOutput{Result: chunks, State: WorkflowExecutionStateInputRequired}, nil
+				return &workflowbase.WorkflowOutput{Result: chunks, State: workflowbase.WorkflowExecutionStateInputRequired}, nil
 			}
 		}
 		var result any
@@ -201,13 +202,13 @@ func (w *Workflow) Invoke(ctx context.Context, inputs any, sess sessioninterface
 		} else {
 			result = workflowGetOutputs(ws, w.endCompID)
 		}
-		return &WorkflowOutput{Result: result, State: WorkflowExecutionStateCompleted}, nil
+		return &workflowbase.WorkflowOutput{Result: result, State: workflowbase.WorkflowExecutionStateCompleted}, nil
 	}, envDuration(ws.Config(), constants.WorkflowExecuteTimeoutEnvKey))
 	if err != nil {
 		logWorkflowError("invoke", w.card, err, ws.SessionID())
 		return nil, err
 	}
-	out, _ := result.(*WorkflowOutput)
+	out, _ := result.(*workflowbase.WorkflowOutput)
 	// 元类 transform_io(INVOKE_OUTPUT)（workflow.py:80-84）
 	out = transformWorkflowOutput(ctx, fw, callback.WorkflowInvokeOutput, out)
 	logWorkflowEnd("invoke", w.card, ws.SessionID())
@@ -759,12 +760,12 @@ func isEmptyMap(v any) bool {
 }
 
 func transformWorkflowOutput(ctx context.Context, fw *callback.CallbackFramework,
-	event callback.WorkflowEventType, out *WorkflowOutput) *WorkflowOutput {
+	event callback.WorkflowEventType, out *workflowbase.WorkflowOutput) *workflowbase.WorkflowOutput {
 	if out == nil {
 		return nil
 	}
 	if t := fw.TransformWorkflowIOOutput(ctx, event, out); t != nil {
-		if o, ok := t.(*WorkflowOutput); ok {
+		if o, ok := t.(*workflowbase.WorkflowOutput); ok {
 			return o
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -64,7 +65,7 @@ func (s *QuestionerSuite) buildWorkflow(comp *llmcomp.QuestionerComponent) *work
 }
 
 // resultText 提取 WorkflowOutput 的可读文本（8.23 套件同款）
-func (s *QuestionerSuite) resultText(wo *workflow.WorkflowOutput) string {
+func (s *QuestionerSuite) resultText(wo *workflowbase.WorkflowOutput) string {
 	return fmt.Sprintf("%v", wo.Result)
 }
 
@@ -82,9 +83,9 @@ func (s *QuestionerSuite) TestQuestioner_中断恢复端到端() {
 	// ---- 首调：必填缺失 → 追问挂起 INPUT_REQUIRED ----
 	out, err := w.Invoke(ctx, map[string]any{"query": "你好"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo.State)
 	// INTERACTION 帧在 Result chunks 中（Python _stream 帧 一帧两用语义）
 	chunks, ok := wo.Result.([]stream.Schema)
 	s.Require().True(ok, "Result 应为 Schema 列表，got %T", wo.Result)
@@ -105,9 +106,9 @@ func (s *QuestionerSuite) TestQuestioner_中断恢复端到端() {
 	s.Require().NoError(ii.Update("ask", "我叫张三"))
 	out2, err := w.Invoke(ctx, ii, sess, nil, nil)
 	s.Require().NoError(err)
-	wo2, ok := out2.(*workflow.WorkflowOutput)
+	wo2, ok := out2.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo2.State, "恢复后应完成")
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo2.State, "恢复后应完成")
 	// 下游 end 节点真实执行：模板渲染出抽取字段
 	s.Contains(s.resultText(wo2), "collected:张三")
 }
@@ -137,9 +138,9 @@ func (s *QuestionerSuite) TestQuestioner_直发问答不抽取() {
 	ctx := context.Background()
 	out, err := w.Invoke(ctx, map[string]any{"query": ""}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo.State)
 	s.Contains(s.resultText(wo), "请提供您的姓名")
 
 	ii, err := interaction.NewInteractiveInput()
@@ -147,9 +148,9 @@ func (s *QuestionerSuite) TestQuestioner_直发问答不抽取() {
 	s.Require().NoError(ii.Update("ask", "李四"))
 	out2, err := w.Invoke(ctx, ii, sess, nil, nil)
 	s.Require().NoError(err)
-	wo2, ok := out2.(*workflow.WorkflowOutput)
+	wo2, ok := out2.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo2.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo2.State)
 	s.Contains(s.resultText(wo2), "answered:李四")
 }
 
@@ -164,9 +165,9 @@ func (s *QuestionerSuite) TestQuestioner_超限报错() {
 
 	out, err := w.Invoke(ctx, map[string]any{"query": "q1"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo.State)
 
 	// response_num 计已收反馈数：3 次恢复后 response_num=3 ≥ max_response=3，
 	// 第 3 次恢复抽取仍缺即抛 101074（Python :681-697 语义链）
@@ -176,7 +177,7 @@ func (s *QuestionerSuite) TestQuestioner_超限报错() {
 		s.Require().NoError(ii.Update("ask", fmt.Sprintf("无关回答%d", i)))
 		out, err = w.Invoke(ctx, ii, sess, nil, nil)
 		s.Require().NoError(err)
-		wo, ok = out.(*workflow.WorkflowOutput)
+		wo, ok = out.(*workflowbase.WorkflowOutput)
 		s.Require().True(ok)
 	}
 	// 第三次恢复：response_num 已达 3，仍缺必填 → 101074

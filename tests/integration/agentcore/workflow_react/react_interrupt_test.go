@@ -21,6 +21,7 @@ import (
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
@@ -158,7 +159,7 @@ func buildOuterWorkflow(t *testing.T, comp *react.ReActAgentComp) *workflow.Work
 }
 
 // interactionFrames 提取 WorkflowOutput.Result 中的交互帧文本（8.24 套件同款）。
-func interactionFrames(t *testing.T, wo *workflow.WorkflowOutput) []string {
+func interactionFrames(t *testing.T, wo *workflowbase.WorkflowOutput) []string {
 	out := make([]string, 0)
 	chunks, ok := wo.Result.([]stream.Schema)
 	require.True(t, ok, "Result 应为 Schema 列表，got %T", wo.Result)
@@ -239,10 +240,10 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	// ---- 第一调：双 workflow 同时 INPUT_REQUIRED，交互帧单发（pending=wf_a）----
 	out, err := w.Invoke(ctx, map[string]any{"query": "请补齐两位用户信息"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
 	s.T().Logf("首调 result=%v mockCalls=%d", wo.Result, mockReact.InvokeCallCount())
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo.State, "双中断应使外层挂起")
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo.State, "双中断应使外层挂起")
 	frames := interactionFrames(s.T(), wo)
 	s.Require().Len(frames, 1, "过滤单发：调用方只看到恰好一个交互块（react_agent.py L3406 语义），got %v", frames)
 	s.Contains(frames[0], "react", "交互帧应携带挂起节点（react）的 executable ID——恢复按节点路由")
@@ -253,10 +254,10 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().NoError(ii1.Update("react", "张三"))
 	out2, err := w.Invoke(ctx, ii1, sess, nil, nil)
 	s.Require().NoError(err)
-	wo2, ok := out2.(*workflow.WorkflowOutput)
+	wo2, ok := out2.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
 	s.T().Logf("二调 result=%v", wo2.Result)
-	s.Require().Equal(workflow.WorkflowExecutionStateInputRequired, wo2.State, "仅收齐一个反馈应轮转后再挂起")
+	s.Require().Equal(workflowbase.WorkflowExecutionStateInputRequired, wo2.State, "仅收齐一个反馈应轮转后再挂起")
 	frames2 := interactionFrames(s.T(), wo2)
 	s.Require().Len(frames2, 1, "轮转后仍应单发")
 	s.Contains(frames2[0], "react")
@@ -267,9 +268,9 @@ func (s *ReactInterruptSuite) TestReactInterrupt_双workflow中断_轮转恢复(
 	s.Require().NoError(ii2.Update("react", "李四"))
 	out3, err := w.Invoke(ctx, ii2, sess, nil, nil)
 	s.Require().NoError(err)
-	wo3, ok := out3.(*workflow.WorkflowOutput)
+	wo3, ok := out3.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Require().Equal(workflow.WorkflowExecutionStateCompleted, wo3.State,
+	s.Require().Equal(workflowbase.WorkflowExecutionStateCompleted, wo3.State,
 		"全收齐并发恢复后 ReAct 续跑至终态，got state=%v result=%v", wo3.State, wo3.Result)
 	s.Contains(fmt.Sprintf("%v", wo3.Result), "final done", "ReAct 恢复轮应产出 mock 终答")
 }

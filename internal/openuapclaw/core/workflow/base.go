@@ -16,15 +16,6 @@ import (
 // WorkflowCard 工作流元数据卡片（叶包别名锚点，偏差 D-14-2）。
 type WorkflowCard = workflowconfig.WorkflowCard
 
-// WorkflowOutput 工作流执行结果。
-// Python: openjiuwen/core/workflow/base.py WorkflowOutput(BaseModel)
-type WorkflowOutput struct {
-	// Result 输出数据
-	Result any
-	// State 执行状态
-	State WorkflowExecutionState
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // WorkflowChunkType 工作流输出数据块类型。
@@ -40,20 +31,13 @@ const (
 	WorkflowChunkTypeError WorkflowChunkType = "error"
 )
 
-// WorkflowExecutionState 工作流执行状态。
-// Python: openjiuwen/core/workflow/base.py WorkflowExecutionState(str, Enum)
-type WorkflowExecutionState string
+// WorkflowExecutionState / WorkflowOutput 迁叶包 workflowbase（8.26 收窄回填，
+// 用户拍板直引不加别名锚点）；本包引用见各文件 import workflowbase。
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// WORKFLOW_DRAWABLE 工作流可绘制标记
 	WORKFLOW_DRAWABLE = "WORKFLOW_DRAWABLE"
-	// WorkflowExecutionStateCompleted 执行完成
-	WorkflowExecutionStateCompleted WorkflowExecutionState = "COMPLETED"
-	// WorkflowExecutionStateInputRequired 需要用户输入（中断）
-	WorkflowExecutionStateInputRequired WorkflowExecutionState = "INPUT_REQUIRED"
-	// WorkflowExecutionStateError 执行出错
-	WorkflowExecutionStateError WorkflowExecutionState = "ERROR"
 )
 
 // WorkflowChunk 工作流输出数据块类型别名。

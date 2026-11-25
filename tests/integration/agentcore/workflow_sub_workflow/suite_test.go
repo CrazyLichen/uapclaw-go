@@ -23,6 +23,7 @@ import (
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
@@ -83,9 +84,9 @@ func (s *SubWorkflowSuite) TestInvoke_两层真实嵌套输入输出贯通() {
 		map[string]any{"name": "u1"}, sess, nil, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(out)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok, "顶层 invoke 应返回 *WorkflowOutput")
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	// 真实输出断言：子工作流渲染产物 "child:u1" 贯穿到父 End
 	s.Contains(fmt.Sprint(wo.Result), "child:u1")
 }

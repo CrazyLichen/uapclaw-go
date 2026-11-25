@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 )
@@ -292,11 +293,11 @@ func TestInvoke_批式端到端(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke 失败: %v", err)
 	}
-	wo, ok := out.(*WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	if !ok {
 		t.Fatalf("应返回 *WorkflowOutput, got %T", out)
 	}
-	if wo.State != WorkflowExecutionStateCompleted {
+	if wo.State != workflowbase.WorkflowExecutionStateCompleted {
 		t.Fatalf("应 COMPLETED, got %v", wo.State)
 	}
 	if m, ok := wo.Result.(map[string]any); !ok || m["response"] != "hello" {
@@ -316,8 +317,8 @@ func TestInvoke_流式端到端(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke 失败: %v", err)
 	}
-	wo := out.(*WorkflowOutput)
-	if wo.State != WorkflowExecutionStateCompleted {
+	wo := out.(*workflowbase.WorkflowOutput)
+	if wo.State != workflowbase.WorkflowExecutionStateCompleted {
 		t.Fatalf("应 COMPLETED, got %v", wo.State)
 	}
 	chunks, ok := wo.Result.([]WorkflowChunk)
@@ -573,7 +574,7 @@ func TestSubInvokeReal_嵌套真实(t *testing.T) {
 	if err != nil {
 		t.Fatalf("真实嵌套 invoke 失败: %v", err)
 	}
-	wo := out.(*WorkflowOutput)
+	wo := out.(*workflowbase.WorkflowOutput)
 	if m, ok := wo.Result.(map[string]any); !ok || fmt.Sprint(m["response"]) != "parent" {
 		t.Fatalf("父 End 输出应渲染, got %v", wo.Result)
 	}

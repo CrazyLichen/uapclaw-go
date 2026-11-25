@@ -23,7 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -286,7 +286,7 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 			// 看到一个交互块。
 			// Python: react_agent.py _write_invoke_result_to_stream L3398-1631
 			// （8.26 层 2 中断桥回填，6.12 三条 ⤵️ 占位注释删除）
-			workflowState, _ := result["workflow_execution_state"].(*workflow.WorkflowOutput)
+			workflowState, _ := result["workflow_execution_state"].(*workflowbase.WorkflowOutput)
 			componentIDs, _ := result["component_ids"].([]string)
 			pendingID := ""
 			if len(componentIDs) > 0 {

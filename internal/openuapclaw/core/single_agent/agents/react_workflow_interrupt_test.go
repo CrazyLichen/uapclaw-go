@@ -21,15 +21,16 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // TestReActAgent_IsInterrupted_WorkflowOutput 判 WorkflowOutput INPUT_REQUIRED。
 // Python: react_agent.py _is_interrupted L2515-1522 WorkflowOutput 分支。
 func TestReActAgent_IsInterrupted_WorkflowOutput(t *testing.T) {
 	a := &ReActAgent{}
-	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired}
+	out := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired}
 	assert.True(t, a.isInterrupted(out))
-	outDone := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateCompleted}
+	outDone := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateCompleted}
 	assert.False(t, a.isInterrupted(outDone))
 	// 非 WorkflowOutput 非 list → false（Python L2521-1522）
 	assert.False(t, a.isInterrupted("plain"))
@@ -58,13 +59,13 @@ func TestReActAgent_ExtractComponentIDs_WorkflowOutput(t *testing.T) {
 			Payload: &interaction.InteractionOutput{ID: id},
 		}
 	}
-	out := &workflow.WorkflowOutput{Result: []stream.Schema{mk("c2"), mk("c1"), mk("c3")}}
+	out := &workflowbase.WorkflowOutput{Result: []stream.Schema{mk("c2"), mk("c1"), mk("c3")}}
 	ids := a.extractComponentIDs(out)
 	require.Len(t, ids, 3)
 	// sorted 稳定序（Python L2540 sort）
 	assert.Equal(t, []string{"c1", "c2", "c3"}, ids)
 	// 非 list Result → 空（Python L2537 isinstance 判定）
-	assert.Empty(t, a.extractComponentIDs(&workflow.WorkflowOutput{Result: "str"}))
+	assert.Empty(t, a.extractComponentIDs(&workflowbase.WorkflowOutput{Result: "str"}))
 }
 
 // TestReActAgent_ExtractComponentIDs_List list 版取 payload 的 component_id 键。
@@ -108,15 +109,15 @@ func TestAfterExecuteToolCall_WorkflowInterrupt(t *testing.T) {
 			Payload: &interaction.InteractionOutput{ID: id},
 		}
 	}
-	interruptedOut := &workflow.WorkflowOutput{
-		State:  workflow.WorkflowExecutionStateInputRequired,
+	interruptedOut := &workflowbase.WorkflowOutput{
+		State:  workflowbase.WorkflowExecutionStateInputRequired,
 		Result: []stream.Schema{mkInteraction("q1")},
 	}
-	interruptedOut2 := &workflow.WorkflowOutput{
-		State:  workflow.WorkflowExecutionStateInputRequired,
+	interruptedOut2 := &workflowbase.WorkflowOutput{
+		State:  workflowbase.WorkflowExecutionStateInputRequired,
 		Result: []stream.Schema{mkInteraction("q2")},
 	}
-	okOut := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateCompleted}
+	okOut := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateCompleted}
 	results := []agentschema.ExecuteResult{
 		{Result: okOut},
 		{Result: interruptedOut},
@@ -173,7 +174,7 @@ func TestInterruptionState_SaveLoadClearRoundtrip(t *testing.T) {
 // Python: react_agent.py _build_interrupt_result L2625-1631。
 func TestBuildInterruptResult(t *testing.T) {
 	a := &ReActAgent{}
-	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired}
+	out := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired}
 	st := &agentschema.InterruptionState{
 		InterruptedWorkflows: map[string]*agentschema.WorkflowInterruptEntry{
 			"wf_a": {WorkflowExecutionState: out},
@@ -194,7 +195,7 @@ func TestCommitWorkflowInterrupt(t *testing.T) {
 	modelCtx := &fakeModelContext{}
 	sess := session.NewSession(session.WithSessionID("test_commit_wf"))
 	invokeInputs := &interfaces.InvokeInputs{}
-	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired}
+	out := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired}
 	st := &agentschema.InterruptionState{
 		BaseInterruptionState: agentschema.BaseInterruptionState{
 			AIMessage: llmschema.NewAssistantMessage("ai"),
@@ -238,7 +239,7 @@ func TestHandleResumeWorkflow_步2轮转(t *testing.T) {
 		return &agentschema.WorkflowInterruptEntry{
 			ToolCall:               &llmschema.ToolCall{ID: "t_" + name, Name: name},
 			ComponentIDs:           []string{compID},
-			WorkflowExecutionState: &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired},
+			WorkflowExecutionState: &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired},
 		}
 	}
 	st := &agentschema.InterruptionState{
@@ -280,16 +281,16 @@ func TestHandleResumeWorkflow_步1输入补全(t *testing.T) {
 	require.NoError(t, err)
 	ii.UserInputs["q1"] = "答案1"
 	out := a.buildInteractiveInput(ii, []string{"q2", "q3"})
-	got := out.(*interaction.InteractiveInput)
+	got := out
 	assert.Equal(t, "答案1", got.UserInputs["q2"])
 	assert.Equal(t, "答案1", got.UserInputs["q3"])
 	// 形态2：非 InteractiveInput + 有组件 ID → 逐个绑定 str(query)
 	out = a.buildInteractiveInput("纯文本反馈", []string{"q9"})
-	got = out.(*interaction.InteractiveInput)
+	got = out
 	assert.Equal(t, "纯文本反馈", got.UserInputs["q9"])
 	// 形态3：非 InteractiveInput + 无组件 ID → raw_inputs
 	out = a.buildInteractiveInput("纯文本反馈", nil)
-	got = out.(*interaction.InteractiveInput)
+	got = out
 	assert.Equal(t, "纯文本反馈", got.RawInputs)
 }
 
@@ -321,8 +322,8 @@ func TestWriteInvokeResultToStream_WorkflowInterrupt(t *testing.T) {
 			Payload: &interaction.InteractionOutput{ID: id},
 		}
 	}
-	wfOut := &workflow.WorkflowOutput{
-		State:  workflow.WorkflowExecutionStateInputRequired,
+	wfOut := &workflowbase.WorkflowOutput{
+		State:  workflowbase.WorkflowExecutionStateInputRequired,
 		Result: []stream.Schema{mkSchema("q1"), mkSchema("q2"), mkSchema("q1")},
 	}
 	sess := newRecordingSessionFacade()
@@ -440,7 +441,7 @@ func TestHandleResumeWorkflow_步3对象旁路与清理(t *testing.T) {
 			"wf_a": {
 				ToolCall:               tcA,
 				ComponentIDs:           []string{"q1"},
-				WorkflowExecutionState: &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired},
+				WorkflowExecutionState: &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired},
 				CollectedInput:         iiA,
 			},
 		},
@@ -481,7 +482,7 @@ func TestPendingInteractionValue_帧形态双收(t *testing.T) {
 		return &stream.OutputSchema{Type: interaction.InteractionType,
 			Payload: map[string]any{"id": id, "value": value}}
 	}
-	out := &workflow.WorkflowOutput{State: workflow.WorkflowExecutionStateInputRequired,
+	out := &workflowbase.WorkflowOutput{State: workflowbase.WorkflowExecutionStateInputRequired,
 		Result: []stream.Schema{mkFrame("react", "问题文本")}}
 	result := map[string]any{
 		"result_type":              "interrupt",
@@ -492,7 +493,7 @@ func TestPendingInteractionValue_帧形态双收(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "问题文本", v)
 	// InteractionOutput 值形态帧
-	out2 := &workflow.WorkflowOutput{Result: []stream.Schema{stream.OutputSchema{
+	out2 := &workflowbase.WorkflowOutput{Result: []stream.Schema{stream.OutputSchema{
 		Type: interaction.InteractionType, Payload: interaction.InteractionOutput{ID: "react", Value: "值2"}}}}
 	v2, ok2 := pendingInteractionValue(map[string]any{
 		"workflow_execution_state": out2, "component_ids": []string{"react"}})

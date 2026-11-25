@@ -2,6 +2,8 @@ package schema
 
 import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -55,10 +57,12 @@ type WorkflowInterruptEntry struct {
 	ToolCall *llmschema.ToolCall
 	// ComponentIDs 工作流组件 ID 列表
 	ComponentIDs []string
-	// WorkflowExecutionState 工作流执行状态（WorkflowOutput）
-	WorkflowExecutionState any
-	// CollectedInput 已收集的用户输入（nil = 未收集）
-	CollectedInput any
+	// WorkflowExecutionState 工作流执行状态（8.26 收窄回填：原 any 破环承载，
+	// 叶包 workflowbase 抽取后直接强类型；运行时恒 *WorkflowOutput）
+	WorkflowExecutionState *workflowbase.WorkflowOutput
+	// CollectedInput 已收集的用户输入（nil = 未收集；8.26 收窄回填：强类型
+	// InteractiveInput，schema→session/interaction 无环已核）
+	CollectedInput *interaction.InteractiveInput
 }
 
 // InterruptionState 工作流中断状态。

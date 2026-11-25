@@ -12,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -82,9 +83,9 @@ func (s *IntentDetectionSuite) TestIntentDetection_端到端命中refund() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"query": "我买的东西坏了要退钱"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(s.resultText(wo), "refund-end")
 }
 
@@ -97,9 +98,9 @@ func (s *IntentDetectionSuite) TestIntentDetection_端到端命中logistics() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"query": "我的快递到哪了"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(s.resultText(wo), "logistics-end")
 }
 
@@ -123,9 +124,9 @@ func (s *IntentDetectionSuite) TestIntentDetection_解析失败回落默认分�
 	out, err := w.Invoke(context.Background(), map[string]any{"query": "q"}, sess, nil, nil)
 	// 无分支命中 → 101021（branch not found）——与 Python BranchRouter 语义一致
 	if err == nil {
-		wo, ok := out.(*workflow.WorkflowOutput)
+		wo, ok := out.(*workflowbase.WorkflowOutput)
 		s.Require().True(ok)
-		s.NotEqual(workflow.WorkflowExecutionStateCompleted, wo.State, "无命中分支不应完成")
+		s.NotEqual(workflowbase.WorkflowExecutionStateCompleted, wo.State, "无命中分支不应完成")
 	} else {
 		s.Require().Error(err, "无命中分支应报错（Python 101021 语义）")
 	}
@@ -163,7 +164,7 @@ func (s *IntentDetectionSuite) TestIntentDetection_同键覆盖() {
 	w1 := s.buildWorkflow(comp1, "refund-end", "logistics-end", "refund")
 	out1, err := w1.Invoke(context.Background(), map[string]any{"query": "退款"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo1 := out1.(*workflow.WorkflowOutput)
+	wo1 := out1.(*workflowbase.WorkflowOutput)
 	s.Contains(s.resultText(wo1), "refund-end")
 
 	// 同一 session 第二轮（mock 返回 分类2）
@@ -171,13 +172,13 @@ func (s *IntentDetectionSuite) TestIntentDetection_同键覆盖() {
 	w2 := s.buildWorkflow(comp2, "refund-end", "logistics-end", "logistics")
 	out2, err := w2.Invoke(context.Background(), map[string]any{"query": "查物流"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo2 := out2.(*workflow.WorkflowOutput)
+	wo2 := out2.(*workflowbase.WorkflowOutput)
 	// 第二轮结果反映最新分类（新组件实例同 session 复用其 io_state 快照语义）
 	s.Contains(s.resultText(wo2), "logistics-end")
 }
 
 // resultText 提取 WorkflowOutput 文本形态（End batch 输出 map/串/Chunk 双形态）
-func (s *IntentDetectionSuite) resultText(wo *workflow.WorkflowOutput) string {
+func (s *IntentDetectionSuite) resultText(wo *workflowbase.WorkflowOutput) string {
 	s.T().Helper()
 	var parts []string
 	switch v := wo.Result.(type) {

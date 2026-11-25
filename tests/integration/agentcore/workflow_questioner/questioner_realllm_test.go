@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
@@ -92,7 +93,7 @@ func (s *QuestionerRealLLMSuite) buildRealWorkflow(comp *llmcomp.QuestionerCompo
 }
 
 // interactionFrameText 提取 Result 中 INTERACTION 帧文本
-func (s *QuestionerRealLLMSuite) interactionFrameText(wo *workflow.WorkflowOutput) string {
+func (s *QuestionerRealLLMSuite) interactionFrameText(wo *workflowbase.WorkflowOutput) string {
 	chunks, ok := wo.Result.([]stream.Schema)
 	if !ok {
 		return ""
@@ -124,11 +125,11 @@ func (s *QuestionerRealLLMSuite) TestQuestioner_真实链冒烟() {
 	// 以 state 实际值分流断言，保持与模型行为无关）----
 	out, err := w.Invoke(ctx, map[string]any{"query": "你好"}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
 	s.T().Logf("首调 state=%v result=%v", wo.State, s.interactionFrameText(wo))
 
-	if wo.State == workflow.WorkflowExecutionStateInputRequired {
+	if wo.State == workflowbase.WorkflowExecutionStateInputRequired {
 		// 抽取模式主链：必填缺失 → 追问挂起
 		s.NotEmpty(s.interactionFrameText(wo), "INPUT_REQUIRED 应携带 INTERACTION 帧")
 
@@ -146,15 +147,15 @@ func (s *QuestionerRealLLMSuite) TestQuestioner_真实链冒烟() {
 				"恢复轮仅允许 COMPLETED / 追问挂起 / 101072（抽取键计数饱和），got: %v", err)
 			return
 		}
-		wo2, ok := out2.(*workflow.WorkflowOutput)
+		wo2, ok := out2.(*workflowbase.WorkflowOutput)
 		s.Require().True(ok)
 		// 终态两可：抽齐 → COMPLETED；模型仍缺必填（未超限）→ 再次追问挂起
-		s.Contains([]workflow.WorkflowExecutionState{
-			workflow.WorkflowExecutionStateCompleted,
-			workflow.WorkflowExecutionStateInputRequired,
+		s.Contains([]workflowbase.WorkflowExecutionState{
+			workflowbase.WorkflowExecutionStateCompleted,
+			workflowbase.WorkflowExecutionStateInputRequired,
 		}, wo2.State, "got state=%v result=%v", wo2.State, wo2.Result)
 	} else {
 		// 模型幻觉补全直通：仅验证 COMPLETED 契约与下游渲染链路
-		s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+		s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	}
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/resource"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
@@ -283,9 +284,9 @@ func (s *KnowledgeRetrievalE2ESuite) runWorkflow(w *workflow.Workflow, question 
 	sess := session.NewSession(session.WithEnvs(map[string]any{}))
 	out, err := w.Invoke(context.Background(), map[string]any{"question": question}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Require().Equal(workflow.WorkflowExecutionStateCompleted, wo.State, "result=%v", wo.Result)
+	s.Require().Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State, "result=%v", wo.Result)
 	resultStr := fmt.Sprintf("%v", wo.Result)
 	s.Require().NotEmpty(resultStr, "End 输出不应为空")
 	return map[string]any{"answer": resultStr, "raw": wo.Result}

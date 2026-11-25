@@ -24,7 +24,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -33,8 +33,8 @@ import (
 // WorkflowOutput 且 State==INPUT_REQUIRED；或 list 中存在 __interaction__ 块。
 // Python: react_agent.py _is_interrupted L2515-1522。
 func (a *ReActAgent) isInterrupted(toolResult any) bool {
-	if out, ok := toolResult.(*workflow.WorkflowOutput); ok {
-		return out.State == workflow.WorkflowExecutionStateInputRequired
+	if out, ok := toolResult.(*workflowbase.WorkflowOutput); ok {
+		return out.State == workflowbase.WorkflowExecutionStateInputRequired
 	}
 	if list, ok := toolResult.([]stream.Schema); ok {
 		for _, item := range list {
@@ -53,7 +53,7 @@ func (a *ReActAgent) isInterrupted(toolResult any) bool {
 // 指针 *stream.OutputSchema 都会出现（8.24 questioner 套件实证值类型）。
 // Python: react_agent.py _extract_component_ids L2525-1552。
 func (a *ReActAgent) extractComponentIDs(toolResult any) []string {
-	if out, ok := toolResult.(*workflow.WorkflowOutput); ok {
+	if out, ok := toolResult.(*workflowbase.WorkflowOutput); ok {
 		if list, ok := out.Result.([]stream.Schema); ok {
 			ids := make([]string, 0)
 			for _, item := range list {
@@ -161,10 +161,13 @@ func (a *ReActAgent) afterExecuteToolCall(
 		}
 		workflowID := a.extractWorkflowID(toolCalls[i])
 		componentIDs := a.extractComponentIDs(toolResult)
+		// 8.26 收窄回填：toolResult 边界仍 any（executeToolCalls 闭包），此处
+		// isInterrupted 已证 WorkflowOutput 形态，断言收窄后强类型入 entry
+		wfOut, _ := toolResult.(*workflowbase.WorkflowOutput)
 		interrupted[workflowID] = &agentschema.WorkflowInterruptEntry{
 			ToolCall:               toolCalls[i],
 			ComponentIDs:           componentIDs,
-			WorkflowExecutionState: toolResult,
+			WorkflowExecutionState: wfOut,
 		}
 		if firstWorkflowID == "" {
 			firstWorkflowID = workflowID
@@ -227,19 +230,23 @@ func (a *ReActAgent) loadInterruptionState(sess sessioninterfaces.SessionFacade)
 		return nil
 	}
 	// WorkflowInterruptEntry.WorkflowExecutionState 同被降级为 map——
-	// 重建回 *workflow.WorkflowOutput（下游 isInterrupted/流写入断言依赖）。
+	// 重建回 *workflowbase.WorkflowOutput（下游 isInterrupted/流写入断言依赖）。
 	for _, entry := range st.InterruptedWorkflows {
 		if entry == nil || entry.WorkflowExecutionState == nil {
 			continue
 		}
-		if _, isWfOut := entry.WorkflowExecutionState.(*workflow.WorkflowOutput); isWfOut {
-			continue
+		// 字段已强类型 *workflowbase.WorkflowOutput；此处处理 checkpoint JSON
+		// 往返把 Result 降级为 []any 的情形（帧重建）
+		if entry.WorkflowExecutionState.Result != nil {
+			if _, isList := entry.WorkflowExecutionState.Result.([]stream.Schema); isList {
+				continue
+			}
 		}
 		blob, err := json.Marshal(entry.WorkflowExecutionState)
 		if err != nil {
 			continue
 		}
-		out := &workflow.WorkflowOutput{}
+		out := &workflowbase.WorkflowOutput{}
 		if err := json.Unmarshal(blob, out); err != nil {
 			continue
 		}
@@ -426,7 +433,7 @@ func (a *ReActAgent) handleResumeWorkflow(
 // 已是 InteractiveInput → 补缺失组件 ID（fallback 取现有首个值）；
 // 有组件 ID → 逐个绑定 str(userQuery)；无组件 ID → raw_inputs=str(userQuery)。
 // Python: react_agent.py _build_interactive_input L2754-1766。
-func (a *ReActAgent) buildInteractiveInput(userQuery any, componentIDs []string) any {
+func (a *ReActAgent) buildInteractiveInput(userQuery any, componentIDs []string) *interaction.InteractiveInput {
 	if ii, ok := userQuery.(*interaction.InteractiveInput); ok {
 		fallback := ""
 		for _, v := range ii.UserInputs {
@@ -518,7 +525,7 @@ func (a *ReActAgent) popWorkflowResumeInput(sess sessioninterfaces.SessionFacade
 // pendingInteractionValue 从 interrupt 结果中提取 pending 交互帧的载荷值
 // （问题文本）。帧形态双收：workflow 收集的 chunk 值/指针都可能出现。
 func pendingInteractionValue(result map[string]any) (any, bool) {
-	workflowState, _ := result["workflow_execution_state"].(*workflow.WorkflowOutput)
+	workflowState, _ := result["workflow_execution_state"].(*workflowbase.WorkflowOutput)
 	if workflowState == nil {
 		return nil, false
 	}

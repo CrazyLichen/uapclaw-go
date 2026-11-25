@@ -28,7 +28,7 @@ import (
 	interruptpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	workflowroot "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	workflow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowconfig"
 )
 
@@ -1291,13 +1291,13 @@ func (am *AbilityManager) executeWorkflow(
 	}
 
 	// 步骤 6：检测 INPUT_REQUIRED 中断（对齐 Python L719-723: if WorkflowOutput.state == INPUT_REQUIRED → return (WorkflowOutput, None)）
-	if wfOut, ok := result.(*workflowroot.WorkflowOutput); ok && wfOut.State == workflowroot.WorkflowExecutionStateInputRequired {
+	if wfOut, ok := result.(*workflowbase.WorkflowOutput); ok && wfOut.State == workflowbase.WorkflowExecutionStateInputRequired {
 		return agentschema.ExecuteResult{Result: wfOut, ToolMsg: nil}, nil
 	}
 
 	// 步骤 7：正常完成 — 提取 result（对齐 Python L725: result = workflow_output.result）
 	actualResult := result
-	if wfOut, ok := result.(*workflowroot.WorkflowOutput); ok {
+	if wfOut, ok := result.(*workflowbase.WorkflowOutput); ok {
 		actualResult = wfOut.Result
 	}
 

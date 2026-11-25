@@ -19,6 +19,7 @@ import (
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	loop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow/loop"
@@ -134,9 +135,9 @@ func (s *LoopCompSuite) TestLoopNumber_真实链() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"array": []any{4, 5, 6}, "num": -3}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo, ok := out.(*workflow.WorkflowOutput)
+	wo, ok := out.(*workflowbase.WorkflowOutput)
 	s.Require().True(ok)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	// 上游断言：l_out1 = [10..21]，l_out2 = [7,17,...,117]，user_num = 117
 	res := fmt.Sprint(wo.Result)
 	for _, v := range []int{10, 11, 21} {
@@ -179,8 +180,8 @@ func (s *LoopCompSuite) TestLoopArray_三轮遍历收割() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"array": []any{1, 2, 3}, "num": 0}, sess, nil, nil)
 	s.Require().NoError(err)
-	wo := out.(*workflow.WorkflowOutput)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	wo := out.(*workflowbase.WorkflowOutput)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	res := fmt.Sprint(wo.Result)
 	// ArrayCondition tuple 分支逐轮写 item → body 逐元素 +10 → 收割 [11,12,13]
 	for _, v := range []string{"11", "12", "13"} {
@@ -224,8 +225,8 @@ func (s *LoopCompSuite) TestLoopAlwaysTrue_Break跳出() {
 	out, err := w.Invoke(context.Background(),
 		map[string]any{"array": []any{}, "num": 0}, sess, nil, nil)
 	s.Require().NoError(err, "break 后应正常收尾而非死循环")
-	wo := out.(*workflow.WorkflowOutput)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	wo := out.(*workflowbase.WorkflowOutput)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	res := fmt.Sprint(wo.Result)
 	// brk 作为 body 下游节点每轮末执行 → 第 1 轮末即置 BROKEN → 第 2 轮 condition 判定跳出
 	s.Contains(res, "10", "第 1 轮结果应收割（index=0+10）")
@@ -281,8 +282,8 @@ func (s *LoopCompSuite) TestLoopInterruptResume_真实重放() {
 	s.Require().NoError(iiErr2)
 	out3, err3 := w.Invoke(context.Background(), ii2, sess, nil, nil)
 	s.Require().NoError(err3, "第三次执行 gate 放行后应完成")
-	wo := out3.(*workflow.WorkflowOutput)
-	s.Equal(workflow.WorkflowExecutionStateCompleted, wo.State)
+	wo := out3.(*workflowbase.WorkflowOutput)
+	s.Equal(workflowbase.WorkflowExecutionStateCompleted, wo.State)
 	s.Contains(fmt.Sprint(wo.Result), "10", "收割结果含 source(0)+10=10")
 }
 
