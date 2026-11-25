@@ -54,12 +54,12 @@ func TestAttachmentWindowOptions_按provider挂投影(t *testing.T) {
 			prompts.MetadataKeySessionID:         "s1",
 		})),
 	}
-	projected := ceiface.WindowMutatorsFromOption(opts...)[0](window)
+	projected := ceiface.WindowMutatorsFromOption(opts...)[0].MutateWindow(window)
 	require.IsType(t, &llmschema.SystemMessage{}, projected.ContextMessages[0], "dashscope 应换 System")
 
 	anthropic := &llm.Model{ClientConfig: &llmschema.ModelClientConfig{ClientProvider: "anthropic"}}
 	opts = attachmentWindowOptions(m, anthropic, "s1")
-	projected = ceiface.WindowMutatorsFromOption(opts...)[0](window)
+	projected = ceiface.WindowMutatorsFromOption(opts...)[0].MutateWindow(window)
 	require.IsType(t, &llmschema.UserMessage{}, projected.ContextMessages[0], "anthropic 保持 User")
 }
 

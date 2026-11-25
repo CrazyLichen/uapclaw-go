@@ -42,6 +42,16 @@ type roundOptions struct {
 	resumeContinuation bool
 	// inputParts 本轮原始输入批次（未 join），供 ON_USER_MESSAGE rails 看到接缝
 	inputParts []string
+	// extraMeta 附加任务元数据（随 event metadata 过队列，executor 侧读取）。
+	// 23.8：_multimodal_image_files 借此跨队列传递（ctx 不跨队列边界）。
+	extraMeta map[string]any
+}
+
+// WithRoundMetadata 附加任务元数据。
+// Python: submit_round 的 kwargs 由 task loop task 继承（contextvar 语义的
+// Go 等价——队列边界不透传 ctx，改以 metadata 载体）。
+func WithRoundMetadata(meta map[string]any) RoundOption {
+	return func(ro *roundOptions) { ro.extraMeta = meta }
 }
 
 // WithTurnNumber 设置本轮成员 turn 号。
@@ -147,6 +157,9 @@ func (tc *TaskLoopController) SubmitRound(
 	if len(ro.inputParts) > 1 {
 		// Python: 多条输入合成一个 InputEvent 的多个 TextDataFrame
 		meta["_input_parts"] = append([]string(nil), ro.inputParts...)
+	}
+	for k, v := range ro.extraMeta {
+		meta[k] = v
 	}
 	event.SetMetadata(meta)
 

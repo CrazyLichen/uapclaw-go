@@ -9,6 +9,7 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 )
 
@@ -51,33 +52,38 @@ func TestMultimodalImageRail_显式开关覆盖(t *testing.T) {
 // ──────────────────────────── BeforeModelCall 双路径 ────────────────────────────
 
 // TestMultimodalImageRail_带图安装mutator 对齐 :40-52 installed 分支与替换式重建。
+// 安装目标是 context 持久投影链（user_prompt_builder.py:288-292），不再由 rail 自持。
 func TestMultimodalImageRail_带图安装mutator(t *testing.T) {
 	rail := NewMultimodalImageRail(ptr(true))
 	img := writeTempImage(t, "a.png")
-	ctx := prompt.WithMultimodalImageFiles(context.Background(), []prompt.MultimodalImageFile{img})
+	ctx := turnctx.WithTurnMultimodalImageFiles(context.Background(), []map[string]any{
+		{"type": "image", "path": img.Path, "filename": img.Filename, "mime_type": img.MimeType},
+	})
+	mc := newMutatorStubModelContext()
 
-	rail.BeforeModelCall(ctx, &agentinterfaces.AgentCallbackContext{})
-	first := rail.ImageMutator()
-	if first == nil {
-		t.Fatal("带图轮应安装 mutator")
+	rail.BeforeModelCall(ctx, newCBWithModelContext(t, mc))
+	if got := mc.WindowMutators(); len(got) != 1 {
+		t.Fatalf("带图轮应安装 1 个 mutator，got %d", len(got))
 	}
 
-	// 第二轮换图：闭包被替换（单槽覆盖 = Python 清旧再挂新）
+	// 第二轮换图：替换式重建（清旧标记项再挂新，Python ensure :288-292）
 	img2 := writeTempImage(t, "b.png")
-	ctx2 := prompt.WithMultimodalImageFiles(ctx, []prompt.MultimodalImageFile{img2})
-	rail.BeforeModelCall(ctx2, nil)
-	if rail.ImageMutator() == nil {
-		t.Fatal("第二轮应保持安装态")
+	ctx2 := turnctx.WithTurnMultimodalImageFiles(ctx, []map[string]any{
+		{"type": "image", "path": img2.Path, "filename": img2.Filename, "mime_type": img2.MimeType},
+	})
+	rail.BeforeModelCall(ctx2, newCBWithModelContext(t, mc))
+	if got := mc.WindowMutators(); len(got) != 1 {
+		t.Fatalf("第二轮应保持替换式单 mutator，got %d", len(got))
 	}
-	_ = first
 }
 
-// TestMultimodalImageRail_无图不安装 对齐 :44-47 installed=false 分支。
+// TestMultimodalImageRail_无图不安装 对齐 :44-47 installed=false 分支（清标记残留）。
 func TestMultimodalImageRail_无图不安装(t *testing.T) {
 	rail := NewMultimodalImageRail(ptr(true))
-	rail.BeforeModelCall(context.Background(), &agentinterfaces.AgentCallbackContext{})
-	if rail.ImageMutator() != nil {
-		t.Fatal("无图轮不应安装 mutator")
+	mc := newMutatorStubModelContext()
+	rail.BeforeModelCall(context.Background(), newCBWithModelContext(t, mc))
+	if got := mc.WindowMutators(); len(got) != 0 {
+		t.Fatalf("无图轮不应安装 mutator，got %d", len(got))
 	}
 }
 
@@ -95,14 +101,18 @@ func TestMultimodalImageRail_关闭路径剥离(t *testing.T) {
 
 // ──────────────────────────── Uninit ────────────────────────────
 
-// TestMultimodalImageRail_Uninit清mutator 验证反向清理。
-func TestMultimodalImageRail_Uninit清mutator(t *testing.T) {
+// TestMultimodalImageRail_Uninit 与载体解耦 安装目标在 context 投影链，
+// rail 反向清理只解绑 agent 引用，不触碰 context（Python 同构：mutators 属 context）。
+func TestMultimodalImageRail_Uninit与载体解耦(t *testing.T) {
 	rail := NewMultimodalImageRail(ptr(true))
 	img := writeTempImage(t, "c.png")
-	rail.BeforeModelCall(prompt.WithMultimodalImageFiles(context.Background(), []prompt.MultimodalImageFile{img}), &agentinterfaces.AgentCallbackContext{})
+	mc := newMutatorStubModelContext()
+	rail.BeforeModelCall(turnctx.WithTurnMultimodalImageFiles(context.Background(), []map[string]any{
+		{"type": "image", "path": img.Path, "filename": img.Filename, "mime_type": img.MimeType},
+	}), newCBWithModelContext(t, mc))
 	rail.Uninit(nil)
-	if rail.ImageMutator() != nil {
-		t.Fatal("Uninit 后 mutator 应清空")
+	if len(mc.WindowMutators()) == 0 {
+		t.Fatal("mutator 归 context 所有，Uninit 不应清除")
 	}
 }
 
@@ -131,6 +141,20 @@ func (m *imageStubModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMess
 
 func (m *imageStubModelContext) SetMessages(messages []llmschema.BaseMessage, _ bool) {
 	m.messages = messages
+}
+
+// mutatorStubModelContext 在消息 stub 之上实现持久投影链载体。
+type mutatorStubModelContext struct {
+	*imageStubModelContext
+	mutators []ceiface.WindowMutator
+}
+
+func (m *mutatorStubModelContext) WindowMutators() []ceiface.WindowMutator { return m.mutators }
+
+func (m *mutatorStubModelContext) SetWindowMutators(ms []ceiface.WindowMutator) { m.mutators = ms }
+
+func newMutatorStubModelContext() *mutatorStubModelContext {
+	return &mutatorStubModelContext{imageStubModelContext: newMemModelContextForImage()}
 }
 
 // newCBWithModelContext 构造携带 ModelContext 的回调上下文。

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -165,12 +164,6 @@ func (d *DeepAdapter) attachAndSendInputs(
 	// 普通中断轮先等前一个读者释放：ACK-only 注入到已排队 EOF 的租约上
 	// 会丢掉全部恢复输出。
 	// Python: :16027-16036 previous.wait()——上一轮读者的 finally close 置位 drained。
-	// TEMP-PROBE
-	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
-		fmt.Fprintf(f, "PROBE attach: beforeWaitCheck\n")
-		f.Close()
-	}
-
 	if prev := d.interactionOutputHandoff; prev != nil {
 		if d.isInterruptResumeDispatch(req.Params) && !d.goalRecordIsActive() {
 			if err := prev.Wait(ctx); err != nil {
@@ -183,12 +176,6 @@ func (d *DeepAdapter) attachAndSendInputs(
 	if err != nil {
 		return nil, nil, false, err
 	}
-	// TEMP-PROBE
-	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
-		fmt.Fprintf(f, "PROBE attach: afterWait beforeAttachOutput\n")
-		f.Close()
-	}
-
 	if stream == nil && !sendWithoutOutput {
 		return nil, nil, false, nil
 	}
@@ -204,12 +191,6 @@ func (d *DeepAdapter) attachAndSendInputs(
 		Mode:      resolveInputDispatchMode(req.Params),
 	}
 	if sendErr := d.instance.SendInput(ctx, sendReq); sendErr != nil {
-		// TEMP-PROBE
-		if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
-			fmt.Fprintf(f, "PROBE attach: beforeSendInput\n")
-			f.Close()
-		}
-
 		if stream != nil {
 			stream.Close(ctx, false)
 			if handoff != nil {
@@ -352,11 +333,6 @@ func (d *DeepAdapter) drainInteractionStream(
 		defer func() {
 			// 结束时释放租约；不连带取消在飞轮（abort=false）。
 			interactionStream.Close(context.Background(), false)
-			// TEMP-PROBE
-			if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
-				fmt.Fprintf(f, "PROBE drainExit markDrained\n")
-				f.Close()
-			}
 			if handoff != nil {
 				handoff.markDrained(nil)
 			}

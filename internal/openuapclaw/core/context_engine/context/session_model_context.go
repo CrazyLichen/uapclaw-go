@@ -74,6 +74,31 @@ type SessionModelContext struct {
 	kvCacheManager *KVCacheManager
 	// offloadMessageBuffer 卸载消息缓冲区
 	offloadMessageBuffer *OffloadMessageBuffer
+	// windowMutators 持久窗口投影链（跨轮存活，替换式安装）
+	// Python: context._window_mutators（context.py:82）
+	windowMutators []iface.WindowMutator
+	// windowMutatorsMu 保护 windowMutators 的并发读写
+	// （Python 依赖 asyncio 单线程安全，Go 需显式锁——asyncio→Go 惯例偏差）
+	windowMutatorsMu sync.Mutex
+}
+
+// WindowMutators 返回持久投影链快照。
+// Python: context._window_mutators 读取。
+func (mc *SessionModelContext) WindowMutators() []iface.WindowMutator {
+	mc.windowMutatorsMu.Lock()
+	defer mc.windowMutatorsMu.Unlock()
+	out := make([]iface.WindowMutator, len(mc.windowMutators))
+	copy(out, mc.windowMutators)
+	return out
+}
+
+// SetWindowMutators 整表替换持久投影链。
+// Python: context._window_mutators 赋值（ensure_multimodal_image_window_mutator
+// 的替换式安装直接写该列表，user_prompt_builder.py:288-292）。
+func (mc *SessionModelContext) SetWindowMutators(mutators []iface.WindowMutator) {
+	mc.windowMutatorsMu.Lock()
+	defer mc.windowMutatorsMu.Unlock()
+	mc.windowMutators = mutators
 }
 
 // reloaderToolInput 重载工具输入参数结构体。
@@ -599,11 +624,15 @@ func (mc *SessionModelContext) GetContextWindow(
 	}
 
 	// 7.5 应用窗口投影链（本次请求有效，不改历史）
-	for _, mutate := range iface.WindowMutatorsFromOption(opts...) {
+	// Python: window_mutators = [*self._window_mutators, *call_window_mutators]
+	// （context.py:737）——持久链在前、call 级在后。
+	windowMutators := mc.WindowMutators()
+	windowMutators = append(windowMutators, iface.WindowMutatorsFromOption(opts...)...)
+	for _, mutate := range windowMutators {
 		if mutate == nil {
 			continue
 		}
-		if projected := mutate(window); projected != nil {
+		if projected := mutate.MutateWindow(window); projected != nil {
 			window = projected
 		}
 	}

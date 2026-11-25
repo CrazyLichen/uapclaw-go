@@ -12,9 +12,9 @@ package rails
 
 import (
 	"context"
-	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	hsrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
@@ -41,11 +41,6 @@ type MultimodalImageRail struct {
 	// deepAgent init 时注入的 agent 引用。
 	// Python: self._deep_agent
 	deepAgent agentinterfaces.BaseAgent
-	// imageMutator 当前窗口变形器闭包（每轮 before_model_call 替换式重建）。
-	// Python: _window_mutators 的替换式安装；Go 侧由 rail 持有（D-23.8-3）。
-	// imageMu 保护其并发读写（BeforeModelCall 写、窗口组装点读）。
-	imageMutator prompt.MultimodalImageWindowMutator
-	imageMu      sync.RWMutex
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -66,23 +61,12 @@ func (r *MultimodalImageRail) Init(_ context.Context, agent agentinterfaces.Base
 // Uninit 反向清理。
 func (r *MultimodalImageRail) Uninit(_ agentinterfaces.BaseAgent) error {
 	r.deepAgent = nil
-	r.imageMu.Lock()
-	r.imageMutator = nil
-	r.imageMu.Unlock()
 	return nil
 }
 
 // Priority rail 优先级。
 // Python: priority = 75
 func (r *MultimodalImageRail) Priority() int { return MultimodalImageRailPriority }
-
-// ImageMutator 供上下文窗口组装点取用当前变形器（D-23.8-3 的消费入口）。
-// 未安装时返回 nil。
-func (r *MultimodalImageRail) ImageMutator() prompt.MultimodalImageWindowMutator {
-	r.imageMu.RLock()
-	defer r.imageMu.RUnlock()
-	return r.imageMutator
-}
 
 // GetCallbacks 覆写基类回调映射，注册 BeforeModelCall。
 // 注意：基类方法体内的钩子派发是静态绑定（Go 嵌入虚方法陷阱），
@@ -109,21 +93,29 @@ func (r *MultimodalImageRail) BeforeModelCall(ctx context.Context, cbc *agentint
 		// Python: image_files = current_multimodal_image_files()
 		// Go: 图片列表由 adapter 写入 request ctx（D-23.8-1）
 		imageFiles := prompt.MultimodalImageFilesFromContext(ctx)
-		mutator, installed := prompt.EnsureMultimodalImageWindowMutator(imageFiles)
+		// Python: ensure_multimodal_image_window_mutator(ctx.context, image_files)
+		// 替换式安装进 context 持久投影链（清旧标记项→按需挂新，user_prompt_builder.py:288-292）；
+		// 消费点为取窗口时的持久+call 级合并（context.py:737 对应实现）。
+		installed := prompt.EnsureMultimodalImageWindowMutator(cbc.ModelContext(), imageFiles)
 		if installed {
-			// Python 替换式安装：先清旧 mutator 再挂新（ensure_multimodal_image_window_mutator:289-292）；
-			// Go 侧闭包由 rail 单槽持有，直接覆盖即等价「清旧再挂新」。
-			r.imageMu.Lock()
-			r.imageMutator = mutator
-			r.imageMu.Unlock()
-			logger.Info(multimodalImageLogComponent).
+			logger.Warn(multimodalImageLogComponent).
 				Int("image_count", len(imageFiles)).
-				Msg("Installed multimodal image context-window adapter")
+				Msg("PROBE: Installed multimodal image context-window adapter")
 		} else {
-			// 无图轮：清掉上一轮残留（Python 每轮窗口全新，旧 mutator 不会带入本轮）
-			r.imageMu.Lock()
-			r.imageMutator = nil
-			r.imageMu.Unlock()
+			logger.Warn(multimodalImageLogComponent).Int("images", len(imageFiles)).
+				Msg("PROBE: not installed")
+			// 无图轮/载体不支持：清掉上一轮带标记残留（Python ensure 空图路径同款清理）
+			if mc := cbc.ModelContext(); mc != nil {
+				if registrar, ok := mc.(ceiface.WindowMutatorsRegistrar); ok {
+					kept := make([]ceiface.WindowMutator, 0, len(registrar.WindowMutators()))
+					for _, m := range registrar.WindowMutators() {
+						if !prompt.IsMultimodalImageMutator(m) {
+							kept = append(kept, m)
+						}
+					}
+					registrar.SetWindowMutators(kept)
+				}
+			}
 		}
 		return nil
 	}

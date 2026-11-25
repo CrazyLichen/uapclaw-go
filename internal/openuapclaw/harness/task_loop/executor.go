@@ -15,6 +15,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -262,6 +263,15 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			if b, isBool := v.(bool); isBool && b {
 				effective["_resume_continuation"] = true
 			}
+		}
+	}
+
+	// 23.8 步骤 2.5（消费侧终站）：本轮图片附件从任务元数据取出挂进轮次 ctx，
+	// before_model_call rail 经该 ctx 读取（对齐 Python task 级 contextvar，
+	// interface_deep.py:18412；Go 侧 ctx 不跨队列，metadata 为载体）。
+	if raw, hasImg := task.Metadata["_multimodal_image_files"]; hasImg && raw != nil {
+		if files := turnctx.PopTurnMultimodalImageFiles(map[string]any{"_multimodal_image_files": raw}); len(files) > 0 {
+			ctx = turnctx.WithTurnMultimodalImageFiles(ctx, files)
 		}
 	}
 
