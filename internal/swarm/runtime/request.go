@@ -647,3 +647,10 @@ func legacyPersistSession(raw any) *bool {
 	}
 	return nil
 }
+
+// ParseRequestParamsForInput 供 server 侧补充输入面复用的 params 解析。
+// [Go 扩展] Python 中 agent_adapter 直接 import runtime 函数；Go 的包边界
+// 要求导出。语义与 parseRequestParams 完全一致（nil/空/坏 JSON → 空表）。
+func ParseRequestParamsForInput(req *schema.AgentRequest) map[string]any {
+	return parseRequestParams(req)
+}

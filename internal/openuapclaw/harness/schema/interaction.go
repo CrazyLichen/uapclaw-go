@@ -608,3 +608,62 @@ func (m *OutputLeaseManager) logDropThrottled(token string) {
 		Int("queue_size", cap(m.queue)).
 		Msg("interaction output queue full, dropping new frame")
 }
+
+// QueuedSessionInput 已绑定活跃轮的补充输入队列条目。
+// Python: session_input.py QueuedSessionInput —— 本体是 ctx.inputs.parts 的
+// 一员（SDK controller.enqueue_steer 直接消费），BoundaryGuard 按 isinstance
+// 过滤；steering 通道只收 display_content 字符串（偏差 D-25.6-s3，spec 登记）。
+type QueuedSessionInput struct {
+	// Query 用户输入文本（sdk_request.inputs["query"]）
+	Query string
+	// RequestID 请求信封 id
+	RequestID string
+	// DisplayContent 前端展示文本（图片-only 补充时取 content/query，绝不
+	// 把内部工具提示词当用户原话发布——Python :150 注释对齐）
+	DisplayContent string
+	// MediaItems steer 图片引用列表（经准入校验的引用条目）
+	MediaItems []map[string]any
+	// CrossSession 跨会话投递键内容（nil=本会话投递）
+	CrossSession map[string]any
+	// MessageRoute 跨会话路由五键（session_id/request_id/user_id/
+	// chain_id/parent_message_id/hop_count）
+	MessageRoute map[string]any
+	// BoundaryReady 边界结果信号（入队收尾关闭；BoundaryGuard 消费）
+	BoundaryReady chan struct{}
+	// BoundaryError 入队/边界失败原因（nil=成功）
+	BoundaryError error
+
+	// boundaryClosed 边界信号是否已关闭（幂等标记，非导出）
+	boundaryClosed bool
+}
+
+// NewQueuedSessionInput 构造边界信号就绪的条目。
+// Python: QueuedSessionInput(query, request_id)
+func NewQueuedSessionInput(query, requestID string) *QueuedSessionInput {
+	return &QueuedSessionInput{
+		Query:         query,
+		RequestID:     requestID,
+		BoundaryReady: make(chan struct{}),
+	}
+}
+
+// CompleteBoundary 关闭边界信号（成功路径，BoundaryError 保持 nil）。
+// Python: entry.boundary_ready.set()
+func (e *QueuedSessionInput) CompleteBoundary() {
+	if e.BoundaryReady != nil && !e.boundaryClosed {
+		e.boundaryClosed = true
+		close(e.BoundaryReady)
+	}
+}
+
+// FailBoundary 记录边界失败并关闭信号（幂等：重复调用只保留首个错误）。
+// Python: entry.boundary_error = err; entry.boundary_ready.set()
+func (e *QueuedSessionInput) FailBoundary(err error) {
+	if e.BoundaryError == nil {
+		e.BoundaryError = err
+	}
+	if e.BoundaryReady != nil && !e.boundaryClosed {
+		e.boundaryClosed = true
+		close(e.BoundaryReady)
+	}
+}
