@@ -603,8 +603,9 @@ func (s *EvolutionStore) GetPendingRecords(ctx context.Context, name string, tar
 }
 
 // RenderEvolutionMarkdown 渲染演进 Markdown。
-func (s *EvolutionStore) RenderEvolutionMarkdown(ctx context.Context, name string) error {
-	return s.projection.RenderEvolutionMarkdown(ctx, name)
+// Python: render_evolution_markdown(name, subject_kind=None)（store_projection.py）。
+func (s *EvolutionStore) RenderEvolutionMarkdown(ctx context.Context, name string, opts ...RecordsOption) error {
+	return s.projection.RenderEvolutionMarkdown(ctx, name, opts...)
 }
 
 // FormatDescExperienceText 格式化描述层经验文本。
@@ -653,52 +654,25 @@ func (s *EvolutionStore) LoadRecordsByIds(ctx context.Context, name string, reco
 }
 
 // DeleteRecords 删除记录（RMW 操作，加写锁）。
-func (s *EvolutionStore) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
+// Python: delete_records(name, record_ids, *, subject_kind=None)（evolution_store.py:526-533）。
+func (s *EvolutionStore) DeleteRecords(ctx context.Context, name string, recordIDs []string, opts ...RecordsOption) (int, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.DeleteRecords(ctx, name, recordIDs)
+	return s.records.DeleteRecords(ctx, name, recordIDs, opts...)
 }
 
 // MarkRecordsApplied 标记记录已应用（RMW 操作，加写锁）。
-func (s *EvolutionStore) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string) (int, error) {
+// Python: mark_records_applied(name, record_ids, *, subject_kind=None)（evolution_store.py:535-542）。
+func (s *EvolutionStore) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string, opts ...RecordsOption) (int, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.MarkRecordsApplied(ctx, name, recordIDs)
+	return s.records.MarkRecordsApplied(ctx, name, recordIDs, opts...)
 }
 
-// DeleteRecordsForKind 按 subject_kind 过滤删除记录（RMW 操作，加写锁）。
-// Python: EvolutionStore.delete_records(name, record_ids, subject_kind=...)（evolution_store.py:526-533）。
-func (s *EvolutionStore) DeleteRecordsForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) (int, error) {
-	lock := s.getSkillLock(name)
-	lock.Lock()
-	defer lock.Unlock()
-	return s.records.DeleteRecordsForKind(ctx, name, recordIDs, subjectKind)
-}
 
-// MarkRecordsAppliedForKind 按 subject_kind 过滤标记记录已应用（RMW 操作，加写锁）。
-// Python: EvolutionStore.mark_records_applied(name, record_ids, subject_kind=...)（evolution_store.py:535-542）。
-func (s *EvolutionStore) MarkRecordsAppliedForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) (int, error) {
-	lock := s.getSkillLock(name)
-	lock.Lock()
-	defer lock.Unlock()
-	return s.records.MarkRecordsAppliedForKind(ctx, name, recordIDs, subjectKind)
-}
 
-// RenderEvolutionMarkdownForKind 按 subject_kind 渲染演进 Markdown。
-// Python: render_evolution_markdown(name, subject_kind=...)（store_projection.py）。
-func (s *EvolutionStore) RenderEvolutionMarkdownForKind(ctx context.Context, name string, subjectKind string) error {
-	skillDir := s.ResolveSkillDirForKind(ctx, name, false, subjectKind)
-	if skillDir == "" {
-		return nil
-	}
-	evoLog, err := s.records.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
-	if err != nil {
-		return err
-	}
-	return s.projection.RenderEvolutionMarkdownWithLog(ctx, name, skillDir, evoLog)
-}
 
 // MergeRecords 合并记录（RMW 操作，加写锁）。
 func (s *EvolutionStore) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {

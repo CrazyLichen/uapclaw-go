@@ -28,24 +28,22 @@ type StoreProjectionHelper struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RenderEvolutionMarkdown 渲染演进 Markdown。
-// Python: StoreProjectionHelper.render_evolution_markdown(name)
-func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, name string) error {
-	skillDir := h.store.ResolveSkillDir(ctx, name)
+// Python: StoreProjectionHelper.render_evolution_markdown(name, subject_kind=None)
+// ——skill_dir 经 resolve_skill_dir(name, subject_kind=...) 解析、日志经
+// load_full_evolution_log(name, subject_kind=...) 过滤。
+func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, name string, opts ...RecordsOption) error {
+	kind := recordsSubjectKindOf(opts)
+	skillDir := h.store.ResolveSkillDirForKind(ctx, name, false, kind)
 	if skillDir == "" {
 		return nil
 	}
 
-	evoLog, err := h.store.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.store.records.LoadFullEvolutionLogForKind(ctx, name, kind)
 	if err != nil {
 		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[StoreProjection] failed to load evolution log")
 		return err
 	}
-	return h.RenderEvolutionMarkdownWithLog(ctx, name, skillDir, evoLog)
-}
 
-// RenderEvolutionMarkdownWithLog 以给定目录与日志渲染（ForKind 变体共享体；
-// Python: render_evolution_markdown(name, subject_kind=...) 的参数化承载）。
-func (h *StoreProjectionHelper) RenderEvolutionMarkdownWithLog(ctx context.Context, name, skillDir string, evoLog *EvolutionLog) error {
 	// Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
 	activeEntries := make([]EvolutionRecord, 0)
 	for _, r := range evoLog.Entries {

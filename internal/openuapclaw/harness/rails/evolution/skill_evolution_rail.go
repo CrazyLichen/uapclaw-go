@@ -30,8 +30,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	toolpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
@@ -2736,6 +2738,50 @@ func (r *SkillEvolutionRail) unregisterEvolutionReviewAgent(agent agentinterface
 		specs = append(specs, cfg)
 	}
 	deepConfig.Subagents = specs
+}
+
+// BeforeModelCall 注入稳定的 Skill 演进协议段（每次模型调用前幂等 add_section）。
+// Python: SkillEvolutionRail.before_model_call（skill_evolution_rail.py:733-740）：
+// builder 取 inputs.system_prompt_builder 回落 agent.system_prompt_builder；
+// language 取 builder.language 回落 self._language。
+func (r *SkillEvolutionRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	_ = ctx
+	builder := r.builderFromContext(cbc)
+	if builder == nil {
+		return nil
+	}
+	language := builder.Language()
+	if language == "" {
+		language = r.language
+	}
+	builder.AddSection(sections.BuildEvolutionProtocolSection(language))
+	return nil
+}
+
+// GetCallbacks 覆写基座回调表，追加 before_model_call 注入。
+// Python: SkillEvolutionRail 的 before_model_call 经 rail 回调注册链挂接。
+func (r *SkillEvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.EvolutionRail.GetCallbacks()
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	return callbacks
+}
+
+// builderFromContext 按脚本顺序取提示词构建器：inputs → agent（均缺则 nil）。
+// Python: getattr(getattr(ctx, "inputs", None), "system_prompt_builder", None)
+// 回落 getattr(getattr(ctx, "agent", None), "system_prompt_builder", None)。
+// 偏差（语言层）：Go EventInputs 无 system_prompt_builder 属性，恒走 agent 分支。
+func (r *SkillEvolutionRail) builderFromContext(cbc *agentinterfaces.AgentCallbackContext) saprompt.SystemPromptBuilderInterface {
+	if cbc == nil {
+		return nil
+	}
+	if cbc.Agent() != nil {
+		if builder := cbc.Agent().SystemPromptBuilder(); builder != nil {
+			return builder
+		}
+	}
+	return r.systemPromptBuilder
 }
 
 // PrepareEvolutionReviewScope 以当前干净轨迹窗口创建审查 scope。
