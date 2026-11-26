@@ -278,6 +278,9 @@ type DeepAdapter struct {
 	// skillEvolutionRail 技能演进护栏
 	// ✅ 已回填：SkillEvolutionRail（对齐 Python: _skill_evolution_rail: SkillEvolutionRail | None）
 	skillEvolutionRail *evolution.SkillEvolutionRail
+	// evolutionInterruptRail 演进审批中断护栏
+	// 对齐 Python: _evolution_interrupt_rail（_refresh_active_evolution_rail_refs 缓存）
+	evolutionInterruptRail *evolution.EvolutionInterruptRail
 	// skillCreateRail 技能创建护栏（单 Agent 版）
 	// 对齐 Python: _skill_create_rail: SkillCreateRail | None
 	skillCreateRail *skills.SkillCreateRail
@@ -1235,6 +1238,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		logger.Warn(logComponent).Err(syncErr).Msg("MCP service hot-sync failed, continuing")
 	}
 
+	// Python: self._sync_active_evolution_review_agent_after_reload()（:13721，configure 后恢复审查子 agent）
+	d.syncActiveEvolutionReviewAgentAfterReload(ctx)
 	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig config hot-reloaded")
 	return nil
 }
@@ -2173,7 +2178,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		//   task = asyncio.create_task(self._watch_evolution_and_push(rid, cid, session_id))
 		//   task.add_done_callback(self._on_evolution_watcher_done)
 		//   self._evolution_watcher_tasks.add(task)
-		if d.skillEvolutionRail != nil {
+		// Python: if self._skill_evolution_rail is not None 		//   and self._skill_evolution_rail.signal_trigger 		//   and not self._skill_evolution_rail.auto_save:   (interface_deep.py:20525-20528)
+		// 个人 rail 新版恒 signal_trigger=False → 门恒 False（形态位，偏差 D-15.24d-3）。
+		if d.skillEvolutionRail != nil &&
+			d.skillEvolutionRail.SignalTrigger() && !d.skillEvolutionRail.AutoSave() {
 			go func() {
 				_ = d.watchEvolutionAndPush(ctx, sessionID, req.ChannelID, req.RequestID)
 				d.onEvolutionWatcherDone(sessionID)
@@ -3887,7 +3895,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 //     全量重建会清空 StreamEventRail 的 abortRequested 与 TaskPlanningRail 的 usageRecords。
 func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
 	// 1. 就地更新演进 rail（不重建、不重新注册），对齐 Python :2314-2328
-	d.updateSkillEvolutionRail(config)
+	d.updateSkillEvolutionRail(config, configBase)
 
 	// 2. 唯一新建项：skillRail（include_tools 取决于 profile，靠重建切换）
 	d.skillRail = d.buildSkillRailWithIncludeTools(d.skillIncludeToolsForProfile(d.instanceOverrides))

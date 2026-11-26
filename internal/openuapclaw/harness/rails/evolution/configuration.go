@@ -86,6 +86,7 @@ func ConfigureSkillEvolution(
 	language string,
 	signalTrigger bool,
 	reviewTrigger bool,
+	disabledSkills []string,
 ) error {
 	existingRegular := findExistingSkillEvolutionRail(agent)
 	existingTeam := findExistingTeamSkillEvolutionRail(agent)
@@ -145,7 +146,8 @@ func ConfigureSkillEvolution(
 			WithEvolutionTrajectorySpanProcessor(trajectorySpanProcessor),
 			WithAutoSave(autoSave),
 			WithSignalTrigger(signalTrigger),
-			WithReviewTrigger(reviewTrigger))
+			WithReviewTrigger(reviewTrigger),
+			WithDisabledSkillsSet(disabledSkills))
 		// rail_kwargs 其余成员（two_stage/subject_kind/review_interval/
 		// review_agent_max_iterations）：无生产调用方传参（Python 全仓仅
 		// examples 传 signal/review_trigger）；two_stage 依赖 optimizer 双段
@@ -185,11 +187,12 @@ func ConfigureSkillEvolutionRuntime(
 	language string,
 	signalTrigger bool,
 	reviewTrigger bool,
+	disabledSkills []string,
 ) error {
 	// Python: before_pending = _pending_rail_identities(agent)
 	beforePending := pendingRailIdentities(agent)
 	if err := ConfigureSkillEvolution(agent, skillsDir, llmModel, model,
-		trajectorySpanProcessor, team, reviewRuntime, autoSave, language, signalTrigger, reviewTrigger); err != nil {
+		trajectorySpanProcessor, team, reviewRuntime, autoSave, language, signalTrigger, reviewTrigger, disabledSkills); err != nil {
 		return err
 	}
 

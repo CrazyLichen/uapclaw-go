@@ -2658,6 +2658,13 @@ func (r *SkillEvolutionRail) unregisterRuntimeTools(agent agentinterfaces.BaseAg
 	}
 }
 
+// EnsureEvolutionReviewAgent 导出包装：热重载后恢复审查子 agent 配置。
+// Python 侧 host adapter 直接调 rail._register_evolution_review_agent(instance)
+// （interface_deep.py:10688-10694）；Go 跨包调用需导出（可见性规则，归属不变）。
+func (r *SkillEvolutionRail) EnsureEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {
+	r.registerEvolutionReviewAgent(agent)
+}
+
 // registerEvolutionReviewAgent 在 agent.deep_config 上确保稳定审查子 agent 配置。
 // Python: _register_evolution_review_agent（skill_evolution_rail.py:417-434）。
 func (r *SkillEvolutionRail) registerEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {

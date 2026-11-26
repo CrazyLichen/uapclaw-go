@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	evolutionreview "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	memrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/memory"
 	secrail "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
@@ -406,43 +407,37 @@ func (d *DeepAdapter) resolveSkillMode() string {
 	return skillrails.SkillModeAll
 }
 
-// evolutionAutoScan 计算 auto_scan：环境变量优先，其次 config，缺省关闭。
-// 对齐 Python: interface_deep.py:1951-1955 与 2317-2328
-// （注意 rail 构造默认值为 true，必须显式传入，不能省略）
-func evolutionAutoScan(config map[string]any) bool {
-	if env := os.Getenv("EVOLUTION_AUTO_SCAN"); env != "" {
-		switch strings.ToLower(strings.TrimSpace(env)) {
-		case "true", "1", "yes":
-			return true
-		default:
-			return false
-		}
-	}
-	evolutionConfig, _ := config["evolution"].(map[string]any)
-	as, _ := evolutionConfig["auto_scan"].(bool)
-	return as
-}
-
-// updateSkillEvolutionRail 热重载时就地更新演进 rail 的 LLM 与 auto_scan。
-// Python: _get_current_agent_rails 顶部（interface_deep.py:2314-2328）——
-// 该 rail 不重建、不重新注册，只换 LLM 与开关。
-func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any) {
+// updateSkillEvolutionRail 热重载时就地更新演进 rail 的 LLM 与 auto_save。
+// Python: _get_current_agent_rails 顶部（interface_deep.py:12328-12333）——
+// 该 rail 不重建、不重新注册，只换 LLM 与 auto_save（跟随 config evolution_auto_save）；
+// signal_trigger 不在此更新（Python 新版个人 rail 构造恒 False，无热更新点）。
+func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any, configBase map[string]any) {
 	if d.skillEvolutionRail == nil {
 		return
 	}
 	d.skillEvolutionRail.UpdateLLM(d.modelSnapshot(), d.defaultModelName)
-	d.skillEvolutionRail.SetSignalTrigger(evolutionAutoScan(config))
+	d.skillEvolutionRail.SetAutoSave(evolutionAutoSaveFrom(configBase, config))
 	logger.Info(logComponent).
 		Str("model", d.defaultModelName).
-		Bool("auto_scan", d.skillEvolutionRail.SignalTrigger()).
+		Bool("auto_save", d.skillEvolutionRail.AutoSave()).
 		Msg("SkillEvolutionRail hot-updated in place")
 }
 
-// buildSkillEvolutionRail 构建技能演进护栏。
-// 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:1948-1968)
+
+// buildSkillEvolutionRail 构建技能演进护栏（code 模式动态 rails 配置点路径）。
+// 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:10236-10259)；
+// 调用方 = code 模式 rails 配置点（interface_code.py:2448-2450
+// _build_skill_evolution_rail_via_config → self._build_skill_evolution_rail(...)）。
+// agent 模式生产路径是 ensureActiveEvolutionRailsRegistered（:10595 →
+// configure_skill_evolution_runtime），不走本函数。
 //
-// 与 Python 一致：本函数不判 evolution.enabled（门控在调用方），
-// 不接 sharing 配置，auto_save 恒 false（需审批），auto_scan 缺省关闭。
+// 构造参数（Python :10246-10257 逐项）：
+//   - review_runtime=EvolutionReviewRuntime() 必传（:10249）
+//   - signal_trigger=False 恒（:10250；信号触发收编团队语义）
+//   - auto_save=config evolution_auto_save（:10253）
+//   - review_trigger=True 恒（:10251；审查自检 follow-up）
+//   - trajectory_span_processor 注入（:10256）
+//   - 不接 sharing 配置
 func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 	model := d.modelSnapshot()
 	if model == nil {
@@ -450,30 +445,30 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		return nil
 	}
 
-	cache := d.configCacheSnapshot()
+	cfgBase := evolutionSectionFrom(d.configBaseSnapshot(), d.configCacheSnapshot())
 
-	// 禁用技能列表
+	// Python :10255 disabled_skills = skill_manager.list_execution_disabled_skills()
 	var disabledSkills []string
 	if d.skillManager != nil {
 		disabledSkills = d.skillManager.ListExecutionDisabledSkills()
 	}
 
-	// skills 目录
+	// skills 目录（Python :10248 self._skill_scan_dirs()）
 	skillsDir := workspace.AgentSkillsDir()
 	if skillsDir == "" {
 		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: skills dir is empty, skipping")
 		return nil
 	}
 
-	// model_name 兜底链：默认模型 → config.model_name → 模板默认值
+	// model_name 兜底链：默认模型 → config.model_name → "gpt-4"（Python :10252）
 	modelName := d.defaultModelName
 	if modelName == "" {
-		if v, ok := cache["model_name"].(string); ok && v != "" {
+		if v, ok := d.configCacheSnapshot()["model_name"].(string); ok && v != "" {
 			modelName = v
 		}
 	}
 	if modelName == "" {
-		modelName = "qwen-max"
+		modelName = "gpt-4"
 	}
 
 	rail := evolution.NewSkillEvolutionRail(
@@ -481,16 +476,17 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		model,
 		modelName,
 		d.resolveRuntimeLanguage(),
-		evolution.WithSignalTrigger(evolutionAutoScan(cache)),
-		// auto_save 恒 false：rail 构造默认 true（skill_evolution_rail.go:192），
-		// 省略该选项等于放开审批，必须显式传 false。
-		evolution.WithAutoSave(false),
+		evolution.WithEvolutionReviewRuntime(evolutionreview.NewEvolutionReviewRuntime(60.0)),
+		evolution.WithSignalTrigger(false),
+		evolution.WithAutoSave(cfgBase["auto_save"] == true),
+		evolution.WithReviewTrigger(true),
+		evolution.WithEvolutionTrajectorySpanProcessor(demandSpanProcessorOf()),
 		evolution.WithDisabledSkillsSet(disabledSkills),
 	)
 
 	logger.Info(logComponent).
 		Str("model", modelName).
-		Bool("auto_scan", rail.SignalTrigger()).
+		Bool("auto_save", rail.AutoSave()).
 		Msg("SkillEvolutionRail created")
 	return rail
 }
@@ -1204,37 +1200,23 @@ func (d *DeepAdapter) ensureContextProcessorRail(ctx context.Context) {
 	logger.Info(logComponent).Msg("ContextProcessorRail unregistered (context_engine disabled)")
 }
 
-// ensureSkillEvolutionRail 按 evolution.enabled 注册/注销 SkillEvolutionRail。
+// ensureSkillEvolutionRail 按 evolution.enabled 配置/注销演进 rail 栈。
+// Python: _update_agent_rails 内演进分支（interface_deep.py:14030-14045）：
+//
+//	if evolution_enabled:
+//	    await self._ensure_active_evolution_rails_registered()
+//	else:
+//	    await self._unconfigure_active_evolution_rails()
+//	    取消并清空 _evolution_watcher_tasks（Go：watcher 为 per-request goroutine
+//	    随 ctx 生命周期，无集合可取消——偏差 D-15.24d-1）
+//	    log "evolution stack unregistered (skill_evolution=false)"
 func (d *DeepAdapter) ensureSkillEvolutionRail(ctx context.Context) {
-	cache := d.configCacheSnapshot()
-	evolutionConfig, _ := cache["evolution"].(map[string]any)
-	evolutionEnabled, _ := evolutionConfig["enabled"].(bool)
-	if evolutionEnabled {
-		if d.skillEvolutionRail != nil {
-			return
-		}
-		rail := d.buildSkillEvolutionRail()
-		if rail == nil || d.instance == nil {
-			return
-		}
-		if err := d.instance.RegisterRail(ctx, rail); err != nil {
-			logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail")
-			return
-		}
-		d.skillEvolutionRail = rail
-		logger.Info(logComponent).Msg("SkillEvolutionRail registered")
+	if skillEvolutionEnabledFrom(d.configBaseSnapshot(), d.configCacheSnapshot()) {
+		d.ensureActiveEvolutionRailsRegistered(ctx)
 		return
 	}
-	if d.skillEvolutionRail == nil {
-		return
-	}
-	if d.instance != nil {
-		if err := d.instance.UnregisterRail(ctx, d.skillEvolutionRail); err != nil {
-			logger.Error(logComponent).Err(err).Msg("Failed to unregister SkillEvolutionRail")
-		}
-	}
-	d.skillEvolutionRail = nil
-	logger.Info(logComponent).Msg("SkillEvolutionRail unregistered (evolution.enabled=false)")
+	d.unconfigureActiveEvolutionRails(ctx)
+	logger.Info(logComponent).Msg("evolution stack unregistered (skill_evolution=false)")
 }
 
 // ensureSkillCreateRail 按 skill_create 开关注册/注销 SkillCreateRail。

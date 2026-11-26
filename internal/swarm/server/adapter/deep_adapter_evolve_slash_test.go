@@ -26,6 +26,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	coreevolutionreview "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -128,9 +129,16 @@ func newEvolveTestAdapter(t *testing.T, skillsDir string, stub *stubEvolveLLMCli
 			t.Fatalf("构造 Model 失败: %v", err)
 		}
 	}
+	// 构造参数与生产 ensureActiveEvolutionRailsRegistered 一致
+	//（Python :10246-10257：review_trigger=True/review_runtime 必传/processor 注入），
+	// 否则 configure 幂等校验报 config mismatch。
 	rail := coreevolution.NewSkillEvolutionRail(
 		[]string{skillsDir}, model, "test-model", "cn",
 		coreevolution.WithSignalTrigger(false), coreevolution.WithAutoSave(false),
+		coreevolution.WithReviewTrigger(true),
+		coreevolution.WithEvolutionReviewRuntime(
+			coreevolutionreview.NewEvolutionReviewRuntime(60.0)),
+		coreevolution.WithEvolutionTrajectorySpanProcessor(demandSpanProcessorOf()),
 	)
 	d := NewDeepAdapter()
 	d.skillEvolutionRail = rail
@@ -885,13 +893,18 @@ func TestProcessMessageStreamImpl_非流式审批块透传(t *testing.T) {
 	d := newEvolveTestAdapter(t, skillsDir, stub)
 	card := newEvolveTestAgentCard("nonstream-agent")
 	d.instance = harness.NewDeepAgent(card)
+	// ensure/configure 幂等复用按「已挂 instance 的 rail」判别（Python
+	// _find_existing_evolution_rail），替身 rail 须入队才能被复用。
+	if d.skillEvolutionRail != nil {
+		d.instance.AddRail(d.skillEvolutionRail)
+	}
 
 	params, _ := json.Marshal(map[string]any{"query": "/evolve ns-skill 记录经验", "mode": "agent.work.plan"})
 	req := sschema.NewAgentRequest("req-ns-1", "ch-ns-1", sschema.ReqMethod("chat.send"), params,
 		sschema.WithAgentSessionID("web_sess-ns-1"))
 
 	// 非流式 agent.plan 模式：ensureEvolutionRailForSlash 需要 evolution.enabled
-	d.configCache = map[string]any{"evolution": map[string]any{"enabled": true}}
+	d.configCache = map[string]any{"evolution": map[string]any{"skill_evolution": true}}
 
 	resp, err := d.ProcessMessageImpl(t.Context(), req, map[string]any{})
 	if err != nil {

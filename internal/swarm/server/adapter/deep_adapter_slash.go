@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+		"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -70,35 +70,41 @@ func (d *DeepAdapter) handleSlashCommand(
 	}
 }
 
-// ensureEvolutionRailForSlash 检查演进功能可用性，必要时懒加载并注册 SkillEvolutionRail。
-// Python: _ensure_evolution_rail_for_slash() (interface_deep.py:4286-4303)
+// ensureEvolutionRailForSlash 检查演进功能可用性，必要时配置并注册演进 rail 栈。
+// Python: _ensure_evolution_rail_for_slash() (interface_deep.py:17474-17498)
 //
-// 与 Python 的偏差（有意）：Python 只构建不注册，导致会话首条消息为 /evolve* 时
-// 该实例永不注册、被动演进全灭。这里在构建后立即注册，维持
-// 「字段非 nil ⇒ 已注册」的不变量。
+// 步骤：
+//
+//	Python: 1. mode 白名单 {agent, agent.plan, agent.work.normal, agent.work.plan}
+//	   （旧集合不含 team；code 系 / team.work.* 均不放行）
+//	Python: 2. if not get_skill_evolution_enabled(config_base or config_cache): "演进功能未启用。"
+//	Python: 3. await self._ensure_active_evolution_rails_registered()
+//	Python: 4. if self._skill_evolution_rail is None: "演进功能初始化失败。"
+//	Python: 5. skill_create rail 缺失则懒构建（:17494-17497）
 func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode string) string {
-	if mode != "agent.work.plan" {
-		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
+	// Python: 1. 白名单
+	switch mode {
+	case "agent", "agent.plan", "agent.work.normal", "agent.work.plan":
+	default:
+		displayMode := mode
+		if displayMode == "" {
+			displayMode = "当前"
+		}
+		return displayMode + " 模式下演进功能不可用。"
 	}
-	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
-	enabled, _ := evolutionConfig["enabled"].(bool)
-	if !enabled {
+	// Python: 2. enabled 门
+	if !skillEvolutionEnabledFrom(d.configBaseSnapshot(), d.configCacheSnapshot()) {
 		return "演进功能未启用。"
 	}
-	if d.skillEvolutionRail == nil {
-		rail := d.buildSkillEvolutionRail()
-		if rail != nil {
-			if d.instance != nil {
-				if err := d.instance.RegisterRail(ctx, rail); err != nil {
-					logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail (slash)")
-					return "演进功能初始化失败。"
-				}
-			}
-			d.skillEvolutionRail = rail
-		}
-	}
+	// Python: 3. 配置并注册演进 rail 栈（含审查子 agent 重挂与引用刷新）
+	d.ensureActiveEvolutionRailsRegistered(ctx)
+	// Python: 4.
 	if d.skillEvolutionRail == nil {
 		return "演进功能初始化失败。"
+	}
+	// Python: 5. skill_create rail 懒构建
+	if d.skillCreateRail == nil {
+		d.ensureSkillCreateRail(ctx)
 	}
 	return ""
 }
