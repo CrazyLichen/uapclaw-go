@@ -171,6 +171,9 @@ type CompressionExecutor struct {
 	lastResponse *llm_schema.AssistantMessage
 }
 
+// Model 返回底层模型实例（诊断/执行体消费）。
+func (e *CompressionExecutor) Model() *llm.Model { return e.model }
+
 // NewCompressionExecutor 构造压缩执行器
 // Python: compression_executor.py:118 (__init__)
 func NewCompressionExecutor(model *llm.Model) *CompressionExecutor {

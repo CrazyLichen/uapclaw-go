@@ -2,6 +2,7 @@ package context_engineer
 
 import (
 	"context"
+	"os"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
@@ -18,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	compressionrecall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/compression_recall"
+	filesystemtools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -120,6 +122,9 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	if r.sessionMemoryConfig != nil && r.sessionMemoryMgr != nil {
 		r.sessionMemoryConfig.SetModelDefaults(modelConfig, modelClientConfig)
 		r.sessionMemoryMgr.BindModelDefaults(modelConfig, modelClientConfig)
+		// agent_edit 模式：注入 SessionMemoryAgent 执行体 + 笔记读状态预填充
+		// （挂账①⑤销账；Python: SessionMemoryManager 构造期闭包装配）
+		r.wireSessionMemoryAgent(agent, modelConfig, modelClientConfig)
 	}
 
 	var baseProcessors []ceiface.ProcessorSpec
@@ -382,6 +387,46 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	}
 	section := sections.BuildReloadSection(lang)
 	r.systemPromptBuilder.AddSection(section)
+}
+
+// wireSessionMemoryAgent agent_edit 模式装配：SessionMemoryAgent 执行体注入
+// SetAgentEditAgent + SetPrimeNotesFn（文件读状态预填充，filesystem.SetFileReadState）。
+// 挂账①⑤销账；Python: SessionMemoryUpdateAgent（session_memory_manager.py L214-466）
+// 的构建半区 + _prime_notes_file_as_read（:430-447）。
+func (r *ContextProcessorRail) wireSessionMemoryAgent(
+	agent sainterfaces.BaseAgent,
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
+) {
+	if r.sessionMemoryMgr == nil {
+		return
+	}
+	_ = agent
+	updater, ok := r.sessionMemoryMgr.AgentUpdater()
+	if !ok {
+		return // direct_replace 模式无需执行体
+	}
+	workspaceRoot := ""
+	if ws := r.Workspace(); ws != nil {
+		workspaceRoot = ws.RootPath
+	}
+	sma := forkedcompressor.NewSessionMemoryAgent(
+		nil, modelConfig, modelClientConfig, nil,
+		forkedcompressor.NewSessionMemoryAgentConfig(),
+		workspaceRoot,
+	)
+	r.sessionMemoryMgr.SetAgentEditAgent(sma)
+	// 预填充：把笔记当前内容登记为已读（对齐 Python _prime_notes_file_as_read）
+	updater.SetPrimeNotesFn(func(notesPath string, currentNotes string) {
+		if stat, err := os.Stat(notesPath); err == nil {
+			filesystemtools.SetFileReadState(notesPath, &filesystemtools.FileReadState{
+				MtimeNS:   stat.ModTime().UnixNano(),
+				SizeBytes: stat.Size(),
+				IsPartial: false,
+				Content:   currentNotes,
+			})
+		}
+	})
 }
 
 // wireCompressionRecall 压缩召回生效判定 + 工具注册 + offloader 保护名单。
