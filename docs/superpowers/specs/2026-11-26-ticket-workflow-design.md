@@ -6,6 +6,11 @@
 
 ## 1. 需求与边界
 
+### 1.0 双触发模式
+
+- **模式一（本 spec 范围）**：外部工单系统 HTTP 触发（建会话→send→断开→轮询 metadata）；
+- **模式二（第二阶段，契约预留）**：聊天问答式——workflow 挂到聊天 agent 中，对话触发工单、流式输出进度、结果卡片在会话中展示、对话控制确认/补充（见 §3.0a 事件协议与双模式适配）。
+
 ### 1.1 需求
 
 1. 用户提出产品问题（描述 + 可能的图片/日志附件），三级处理：
@@ -65,6 +70,34 @@ agentserver 入口（session metadata mode 分流）
 ```
 
 Workflow 注册表（`mode → workflow builder`）是通用机制：后续新增"聊天问答式"workflow 只需注册新类型 + 定义自己的 metadata 扩展键约定，接口与生命周期协议全部复用。
+
+### 3.0 E2A 转发支持
+
+外部工单的 send 走既有 gateway HTTP → transport `SendRequest/SendRequestNoWait`（E2A 请求）→ agentserver 链路，协议零改动：
+
+- E2A send 为异步无等待语义（send 即返回，结果走事件/metadata），与"送完断开轮询"同构；
+- ticket 模式 workflow 执行不产流式帧，E2A 响应事件通道不被占用，普通流式会话不受影响；
+- 分流点在 agentserver 收到 E2A 请求之后（按 session metadata mode 分发），gateway 只透传。
+
+### 3.0a 事件协议与双模式适配（为聊天问答式预留）
+
+workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 sink 实现：
+
+**输出：标准事件协议**。节点产出统一事件：`Progress`（检索/分析进度）、`Guidance`（引导选项）、`Confirm`（待确认）、`Solution`（方案+kb_source+ticket 关联）、`Closed`。
+
+| Sink | 事件去向 | 适用 |
+|---|---|---|
+| Sink A（HTTP 模式，本 spec 范围） | 事件写 store metadata（§2 协议键） | 外部工单系统轮询 |
+| Sink B（聊天模式，第二阶段） | 事件写 store + 会话流式帧 + 交互卡片 | 用户在会话内看进度流式输出、方案结果卡片、引导选项按钮 |
+
+**输入：双解释器**。标准输入事件 = `补充特征 / confirm_solved / not_solved / close / abandon`：
+
+| 模式 | 解释方式 |
+|---|---|
+| HTTP 模式 | `biz_event` 协议（§2） |
+| 聊天模式（第二阶段） | 给聊天 DeepAgent 装诊断工具（如 `start_diagnosis`），同会话内启动 workflow；卡片按钮回调直接映射标准输入事件；用户打字由 agent 判断后转换（聊天场景猜错代价仅多一轮澄清，允许 LLM 判断） |
+
+聊天模式下 workflow 跑在会话上下文内：Progress 与 AgentNode 的 DeepAgent chunk 直接走既有流式通道；状态依旧持久化，会话中断可续。
 
 ### 3.1 节点与状态
 
