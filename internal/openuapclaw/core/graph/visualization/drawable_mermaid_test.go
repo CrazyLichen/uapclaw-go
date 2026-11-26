@@ -122,14 +122,13 @@ func TestToMermaid_int零值(t *testing.T) {
 	assert.NotContains(t, s, "subgraph ")
 }
 
-// TestToMermaid_参数校验 非法 expand/animation（drawable.py:239-244，112043）
+// TestToMermaid_参数校验 非法 expand（drawable.py:239-241，112043；
+// enable_animation 校验分支随 bool 收窄不可达不落，D-13-3 修订）
 func TestToMermaid_参数校验(t *testing.T) {
 	d := NewDrawable()
 	_, err := d.ToMermaid("", 1.5, false) // expand 非 bool/int
 	assert.Error(t, err)
 	_, err = d.ToMermaid("", -1, false)
-	assert.Error(t, err)
-	_, err = d.ToMermaid("", true, "yes") // animation 非 bool
 	assert.Error(t, err)
 	_, err = d.ToMermaid("", true, false) // 合法
 	assert.NoError(t, err)

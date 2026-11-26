@@ -1,6 +1,7 @@
 package visualization
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,4 +162,35 @@ func TestGetTargets_不可达形态(t *testing.T) {
 func TestGetGraph(t *testing.T) {
 	d := NewDrawable()
 	assert.Same(t, d.graph, d.GetGraph())
+}
+
+// TestDrawableAddNode_重复compID R-2 回归：dict 覆盖语义（Python comp_configs/
+// add_node dict 覆盖，重复注册不重复输出、保持原插入序）
+func TestDrawableAddNode_重复compID(t *testing.T) {
+	d := NewDrawable()
+	d.addNode("n1", &fakeBranchSource{})
+	d.addNode("n2", &fakeBranchSource{})
+	d.addNode("n1", &fakeBranchSource{}) // 重复注册
+	require.Len(t, d.nodeOrder, 2)
+	require.Len(t, d.graph.SubNodeOrder, 2)
+	assert.Equal(t, []string{"n1", "n2"}, d.nodeOrder)
+	s, err := d.ToMermaid("", false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(s, "node_1[")) // 输出仅一次
+}
+
+// TestDrawableAddNode_循环子图end顺序 R-1 回归：end 自动发现按插入序
+// （Python out_degrees dict 按 subgraph.nodes 插入序迭代）
+func TestDrawableAddNode_循环子图end顺序(t *testing.T) {
+	sub := &DrawableGraph{
+		Nodes:        map[string]NodeLike{"z": &DrawableNode{ID: "z"}, "a": &DrawableNode{ID: "a"}, "m": &DrawableNode{ID: "m"}},
+		SubNodeOrder: []string{"z", "a", "m"}, // 注册序（map 序不可依赖）
+		Edges:        []*DrawableEdge{{Source: "z", Target: "m"}},
+	}
+	d := NewDrawable()
+	d.addNode("loop1", &fakeLoopSource{sub: sub})
+	// 出度=0：a、m（z 有出边 z→m）；按插入序 a 在 m 前
+	require.Len(t, sub.EndNodes, 2)
+	assert.Equal(t, "a", sub.EndNodes[0].NodeID())
+	assert.Equal(t, "m", sub.EndNodes[1].NodeID())
 }

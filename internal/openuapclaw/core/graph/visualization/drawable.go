@@ -125,12 +125,19 @@ func (d *Drawable) GetGraph() *DrawableGraph { return d.graph }
 // addNode 组件登记内实现（Python drawable.py:51-81 add_node 步骤一比一；
 // D-13-5：isinstance 链 → 能力接口断言，断言序=Python isinstance 分支序）
 func (d *Drawable) addNode(nodeID string, component any) {
-	d.nodeOrder = append(d.nodeOrder, nodeID)
-	d.graph.SubNodeOrder = append(d.graph.SubNodeOrder, nodeID)
+	// Python dict 覆盖语义：重复 compID 时覆盖节点且保持原插入序（_workflow.py
+	// 无重复检查，comp_configs/add_node 均为 dict 覆盖；R-2 修正：不重复 append 序）
+	_, exists := d.graph.Nodes[nodeID]
+	if !exists {
+		d.nodeOrder = append(d.nodeOrder, nodeID)
+		d.graph.SubNodeOrder = append(d.graph.SubNodeOrder, nodeID)
+	}
 	// drawable.py:58-73：LoopComponent/AdvancedLoopComponent 分支
 	if src, ok := component.(LoopSubgraphSource); ok {
 		subgraph := src.LoopDrawableSubgraph()
 		// drawable.py:62-70：end 未设时遍历子图发现出度=0 的 end 节点
+		// （R-1 修正：Python out_degrees dict 按 subgraph.nodes 插入序迭代 →
+		// EndNodes append 序确定；Go 按 SubNodeOrder 序迭代对齐）
 		if len(subgraph.EndNodes) == 0 {
 			outDegrees := map[string]int{}
 			for id := range subgraph.Nodes {
@@ -142,8 +149,8 @@ func (d *Drawable) addNode(nodeID string, component any) {
 				}
 				outDegrees[edge.Source]++
 			}
-			for id, deg := range outDegrees {
-				if deg == 0 {
+			for _, id := range d.subNodeOrder(subgraph) {
+				if outDegrees[id] == 0 {
 					subgraph.EndNodes = append(subgraph.EndNodes, subgraph.Nodes[id])
 				}
 			}
@@ -367,19 +374,17 @@ func nodeMermaidShape(list []NodeLike, n NodeLike) bool {
 }
 
 // ToMermaid 转 Mermaid 文本（Python drawable.py:234-263 to_mermaid 一比一；
-// expandSubgraph any 承载 bool|int（D-13-3）；enableAnimation any 承载 bool——
+// expandSubgraph any 承载 bool|int（D-13-3）；enableAnimation bool 收窄——
+// Python isinstance(enable_animation, bool) 校验分支在 Go 静态类型下不可达不落
+// （D-13-3 修订：全仓消费方恒传 bool，回收条件=出现非 bool 消费方）
 // Python isinstance(title, str) 分支在 Go 串型形参下不可达不落）
-func (d *Drawable) ToMermaid(title string, expandSubgraph, enableAnimation any) (string, error) {
-	// drawable.py:239-244：expand/animation 校验（112043）
+func (d *Drawable) ToMermaid(title string, expandSubgraph any, enableAnimation bool) (string, error) {
+	// drawable.py:239-241：expand 校验（112043）
 	if _, ok := expandSubgraph.(bool); !ok {
 		if n, isInt := expandSubgraph.(int); !isInt || n < 0 {
 			return "", exception.BuildError(exception.StatusDrawableGraphToMermaidInvalid,
 				exception.WithParam("reason", "'expand_subgraph' type is not bool"))
 		}
-	}
-	if _, ok := enableAnimation.(bool); !ok {
-		return "", exception.BuildError(exception.StatusDrawableGraphToMermaidInvalid,
-			exception.WithParam("reason", "'enable_animation' type is not bool"))
 	}
 
 	nodeIDs := &idGenerator{prefix: "node"}
@@ -420,7 +425,7 @@ func (d *Drawable) ToMermaid(title string, expandSubgraph, enableAnimation any) 
 }
 
 // genMermaidNode 子图递归展开（Python drawable.py:276-315 _gen_mermaid_node 一比一）
-func (d *Drawable) genMermaidNode(expandSubgraph any, node *DrawableSubgraphNode, enableAnimation any,
+func (d *Drawable) genMermaidNode(expandSubgraph any, node *DrawableSubgraphNode, enableAnimation bool,
 	nodeIDs, linkIDs *idGenerator) *subgraphMermaidNode {
 	mermaidNodes := map[string]*mermaidNode{}
 	subMermaidNodes := map[string]*subgraphMermaidNode{}
@@ -482,7 +487,7 @@ func (d *Drawable) genMermaidNode(expandSubgraph any, node *DrawableSubgraphNode
 // genMermaidLinks 顶层连线（Python drawable.py:317-356 _gen_mermaid_links 一比一 +
 // drawable.py:354-355 子图 links 追加）
 func (d *Drawable) genMermaidLinks(mermaidNodes map[string]*mermaidNode,
-	subMermaidNodes map[string]*subgraphMermaidNode, enableAnimation any, linkIDs *idGenerator) []*mermaidLink {
+	subMermaidNodes map[string]*subgraphMermaidNode, enableAnimation bool, linkIDs *idGenerator) []*mermaidLink {
 	links := d.genSubgraphLinks(d.graph, mermaidNodes, subMermaidNodes, enableAnimation, linkIDs)
 	for _, id := range d.nodeOrder {
 		if sn, ok := subMermaidNodes[id]; ok {
@@ -495,7 +500,7 @@ func (d *Drawable) genMermaidLinks(mermaidNodes map[string]*mermaidNode,
 // genSubgraphLinks 连线四象限展开（Python drawable.py:321-352 一比一；
 // graph 入参区分顶层/子图递归复用，start/end/break 取自该层 graph）
 func (d *Drawable) genSubgraphLinks(graph *DrawableGraph, mermaidNodes map[string]*mermaidNode,
-	subMermaidNodes map[string]*subgraphMermaidNode, enableAnimation any, linkIDs *idGenerator) []*mermaidLink {
+	subMermaidNodes map[string]*subgraphMermaidNode, enableAnimation bool, linkIDs *idGenerator) []*mermaidLink {
 	links := []*mermaidLink{}
 	for _, edge := range graph.Edges {
 		// drawable.py:322-331：形状选择
@@ -508,7 +513,7 @@ func (d *Drawable) genSubgraphLinks(graph *DrawableGraph, mermaidNodes map[strin
 		}
 		linkExtendID := ""
 		linkExtendProps := []string(nil)
-		if edge.Streaming && enableAnimation.(bool) {
+		if edge.Streaming && enableAnimation {
 			linkExtendID = linkIDs.next()
 			linkExtendProps = []string{"animate: true"}
 		}
