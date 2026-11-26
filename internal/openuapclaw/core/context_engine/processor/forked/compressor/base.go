@@ -148,9 +148,10 @@ type PrefixCompactProcessor struct {
 	buildSpanHook func(messages []llm_schema.BaseMessage) PrefixCompactSpan
 }
 
-// NewPrefixCompactProcessor 创建基座处理器。
+// NewPrefixCompactProcessor 创建基座处理器（config 可为基座配置或子类配置，
+// 原样存储以保留子类形态——Python __init__ 直接存 config 实例）。
 // Python: base.py:154 (PrefixCompactProcessor.__init__)
-func NewPrefixCompactProcessor(config *PrefixCompactProcessorConfig) *PrefixCompactProcessor {
+func NewPrefixCompactProcessor(config any) *PrefixCompactProcessor {
 	p := &PrefixCompactProcessor{
 		ContextProcessor:          forked.NewContextProcessor(config),
 		MemoryBlockOpen:           "<memory_block>",
@@ -160,10 +161,10 @@ func NewPrefixCompactProcessor(config *PrefixCompactProcessorConfig) *PrefixComp
 		MemoryBlockMeaning:        "This is compressed context from earlier messages. It is not a new user request.",
 		MemoryBlockConflictPolicy: "Newer raw messages and the latest explicit user intent override this compressed context.",
 	}
-	if config.ModelClient != nil && config.Model != nil {
+	if cfg := unwrapBaseConfig(config); cfg != nil && cfg.ModelClient != nil && cfg.Model != nil {
 		// Python: self._model = Model(model_client, model)
-		if m, err := llm.NewModel(config.ModelClient, config.Model); err == nil {
-			p.ContextProcessor.RebindModelReference(m, config.Model, config.ModelClient)
+		if m, err := llm.NewModel(cfg.ModelClient, cfg.Model); err == nil {
+			p.ContextProcessor.RebindModelReference(m, cfg.Model, cfg.ModelClient)
 			// Python: self._compression_executor = CompressionExecutor(self._model)
 			p.compressionExecutor = cesupport.NewCompressionExecutor(m)
 		}
@@ -938,12 +939,22 @@ func (p *PrefixCompactProcessor) CountMessagesTokensForDump(mc cesupport.DumpCon
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// config 取强类型配置。
+// config 取强类型配置（子类配置经 GetBase 解包到基座配置）。
 func (p *PrefixCompactProcessor) config() *PrefixCompactProcessorConfig {
-	if c, ok := p.ContextProcessor.Config().(*PrefixCompactProcessorConfig); ok {
+	return unwrapBaseConfig(p.ContextProcessor.Config())
+}
+
+// unwrapBaseConfig 从基座/子类配置中解包基座配置。
+func unwrapBaseConfig(config any) *PrefixCompactProcessorConfig {
+	switch c := config.(type) {
+	case *PrefixCompactProcessorConfig:
 		return c
+	case interface {
+		GetBase() *PrefixCompactProcessorConfig
+	}:
+		return c.GetBase()
 	}
-	return &PrefixCompactProcessorConfig{}
+	return nil
 }
 
 // minTargetContextRatio 读取最小目标比例（缺省 0.1）。
