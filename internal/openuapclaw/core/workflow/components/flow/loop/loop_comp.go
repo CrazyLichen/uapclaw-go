@@ -14,6 +14,7 @@ import (
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/visualization"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessionconstants "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/constants"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -707,8 +708,13 @@ func (g *LoopGroup) AddWorkflowComp(
 	if bc, ok := workflowComp.(*LoopBreakComponent); ok {
 		g.breakComponents = append(g.breakComponents, bc)
 	}
-	// Python 83-84: if self._drawable and isinstance(...): set_break_node —— D-20-2
-	// drawable 缝 ⤴️8.13 回填（与 BranchRouter drawable 分支一并）
+	// Python loop_comp.py:83-84：drawable 非空且组件为 LoopBreakComponent 时登记中断节点
+	if g.Drawable() != nil {
+		if bc, ok := workflowComp.(*LoopBreakComponent); ok {
+			_ = g.Drawable().SetBreakNode(compID)
+			_ = bc
+		}
+	}
 	// Python: self._node_ids.append(comp_id)
 	g.nodeIDs = append(g.nodeIDs, compID)
 	return nil
@@ -1015,3 +1021,27 @@ func actorSessionOf(sess session.BaseSession) stream_actor.ActorSession {
 	}
 	return nil
 }
+
+// ──────────────────────────── 8.13 D-13-5 接口实现 ────────────────────────────
+
+// LoopDrawableSubgraph 返回循环体子图（Python drawable.py:59-60
+// `component.loop_group.drawable.get_graph()`；8.13 D-13-5 接口实现，
+// LoopSubgraphSource 编译期断言见下）
+func (c *LoopComponent) LoopDrawableSubgraph() *visualization.DrawableGraph {
+	return c.loopGroup.Drawable().GetGraph()
+}
+
+// LoopDrawableSubgraph AdvancedLoop 取循环体子图（Python drawable.py:59-60
+// `component.body.drawable.get_graph()`；body 非 LoopGroup 时 nil）
+func (a *AdvancedLoopComponent) LoopDrawableSubgraph() *visualization.DrawableGraph {
+	if lg, ok := a.body.(*LoopGroup); ok {
+		return lg.Drawable().GetGraph()
+	}
+	return nil
+}
+
+// 编译期断言：实现 visualization 循环子图源接口
+var (
+	_ visualization.LoopSubgraphSource = (*LoopComponent)(nil)
+	_ visualization.LoopSubgraphSource = (*AdvancedLoopComponent)(nil)
+)

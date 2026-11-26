@@ -91,3 +91,9 @@ func errBranchParam(reason string) error {
 	return exception.BuildError(exception.StatusComponentBranchParamInvalid,
 		exception.WithParam("reason", reason))
 }
+
+// ──────────────────────────── 8.13 D-13-5 接口实现 ────────────────────────────
+
+// DrawableRouter 返回分支路由器（Python drawable.py:79 `component.router()`；
+// 8.13 D-13-5 接口实现，visualization.BranchRouterSource 消费）
+func (c *BranchComponent) DrawableRouter() any { return c.router }
