@@ -204,3 +204,34 @@ func TestSubmitAndWait_放弃等待不吞排队项(t *testing.T) {
 	}
 	_ = cancel
 }
+
+// TestSessionWaitingControl 有等待交互 → true；无 → false。
+func TestSessionWaitingControl(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	if c.SessionWaitingControl("s1") {
+		t.Fatal("无活跃执行应 false")
+	}
+	parent := c.newExecutionForTest("s1", "req-1", SessionWorkKindChatStream)
+	c.registry.MarkRunning(parent)
+	if c.SessionWaitingControl("s1") {
+		t.Fatal("RUNNING 无等待标识应 false")
+	}
+	c.registry.MarkAwaitingControl(parent, map[string]struct{}{"ctl-1": {}})
+	if !c.SessionWaitingControl("s1") {
+		t.Fatal("登记等待交互后应 true")
+	}
+}
+
+// TestLookupExecution 按标识查句柄。
+func TestLookupExecution(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	h := c.newExecutionForTest("s1", "req-1", SessionWorkKindChatStream)
+	if got := c.LookupExecution(h.ExecutionID); got != h {
+		t.Fatalf("应命中，实际 %+v", got)
+	}
+	if got := c.LookupExecution("exec-none"); got != nil {
+		t.Errorf("查无应 nil，实际 %+v", got)
+	}
+}

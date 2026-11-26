@@ -250,6 +250,13 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 // （WaitingControlIDs），由门面装配时注入探测闭包（Task 6 接线）。
 type InteractionSuspensionProbe func() bool
 
+// SetInteractionSuspensionProbe 装配挂起探测（门面接线点；nil=不挂起）。
+// Python: _stream_completion_state 读 loop_session INTERRUPTION_KEY；
+// Go 事实源在协调器账本，由 runViaSessionInputCoordinator 注入。
+func (d *DeepAdapter) SetInteractionSuspensionProbe(probe InteractionSuspensionProbe) {
+	d.interactionSuspensionProbe = probe
+}
+
 // streamCompletionState 区分中断挂起与无文本完成轮。
 // Python: interface_deep.py _stream_completion_state（:20751）——
 // probe 未装配/返回 false → completed；probe 命中 → suspended。
