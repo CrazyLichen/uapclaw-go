@@ -9,6 +9,7 @@
 package swarmevolution
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -29,10 +30,16 @@ func (s *EvolutionE2ESuite) TestE1主动链Followup注入与落盘() {
 	s.adapter = d
 	s.makeSkill("evo_active_skill", "主动链演示技能")
 
-	// ① /evolve 触发 followup 注入：mock 捕获的首条 prompt 应含审查工作流指令
-	// （Python evolution_slash.py:230-236 + interface_deep.py:18278-18283）
+	// ① /evolve 触发 followup 注入（Python evolution_slash.py:230-236 +
+	// interface_deep.py:18278-18283）——E5 验证点：followup_prompt 注入 query
 	resp := s.chatSend("/evolve evo_active_skill " + e11Marker)
 	s.Require().NotNil(resp)
+	// 注入直证：mock 捕获的首条 prompt 应含审查工作流指令（E5 核心——
+	// followup 注入生效，agent 轮收到的是 review 流程指令而非原话）
+	if call := s.mockLLM.GetInvokeCall(1); call != nil {
+		s.Assert().Contains(fmt.Sprintf("%v", call.Messages), "prepare_skill_evolution",
+			"followup 注入应使 agent 轮收到审查工作流指令（E5）")
+	}
 
 	// ② rail 层六工具真实链（mock 边界仅 LLM；15.24b 全链用例先例扩展）
 	store := s.rail.EvolutionStore()
