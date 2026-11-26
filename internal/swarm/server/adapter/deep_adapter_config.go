@@ -713,6 +713,8 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result syso
 	}()
 
 	mode := sysop_builder.ResolveOperationMode(configBase)
+	// [25.6 遗留回填] steer 图片能力探测的 read_file 本地模式判定源
+	d.sysopOperationMode = mode
 
 	var card *sysop.SysOperationCard
 	switch mode {

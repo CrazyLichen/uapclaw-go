@@ -91,7 +91,7 @@ func TestAgentDeliveryReference(t *testing.T) {
 // TestSessionInputGuard_准入窗口 初始关、before_model_call 开、无工具调用收尾关。
 func TestSessionInputGuard_准入窗口(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	if guard.Accepting() {
 		t.Fatal("初始应 accepting=false（对齐 Python __init__）")
 	}
@@ -113,7 +113,7 @@ func TestSessionInputGuard_准入窗口(t *testing.T) {
 // TestSessionInputGuard_工具窗口 工具期间保持开窗，最后一个收尾关。
 func TestSessionInputGuard_工具窗口(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	cbc := guardModelCallCBC(agent, 1)
 	_ = guard.beforeModelCall(context.Background(), cbc)
 	_ = guard.beforeToolCall()
@@ -134,7 +134,7 @@ func TestSessionInputGuard_工具窗口(t *testing.T) {
 // TestSessionInputGuard_异常与收尾 异常关窗；after_invoke 清交付状态。
 func TestSessionInputGuard_异常与收尾(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	cbc := guardModelCallCBC(agent, 1)
 	_ = guard.beforeModelCall(context.Background(), cbc)
 	_ = guard.onException()
@@ -158,7 +158,7 @@ func TestSessionInputGuard_异常与收尾(t *testing.T) {
 // TestSessionInputGuard_PublishInputReceived_无会话流 无 sessionRef 时边界失败 + DeliveryUnknown。
 func TestSessionInputGuard_PublishInputReceived_无会话流(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	entry := hschema.NewQueuedSessionInput("q", "req-1")
 	err := guard.PublishInputReceived(context.Background(), entry)
 	var unknown *SessionInputDeliveryUnknown
@@ -178,7 +178,7 @@ func TestSessionInputGuard_PublishInputReceived_无会话流(t *testing.T) {
 // TestSessionInputGuard_代次边界 before_steering_drain 置位、consume 一次性。
 func TestSessionInputGuard_代次边界(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	if guard.ConsumeGenerationBoundary() {
 		t.Error("初始应无边界")
 	}
@@ -199,7 +199,7 @@ func TestSessionInputGuard_代次边界(t *testing.T) {
 // TestGetCallbacks_守卫声明全钩子 防 GetCallbacks 名字错位回归。
 func TestGetCallbacks_守卫声明全钩子(t *testing.T) {
 	agent := newGuardTestAgent()
-	guard := NewSessionInputGuard(agent)
+	guard := NewSessionInputGuard(agent, nil)
 	cbs := guard.GetCallbacks()
 	for _, ev := range []agentinterfaces.AgentCallbackEvent{
 		agentinterfaces.CallbackOnUserMessage, agentinterfaces.CallbackBeforeInvoke,

@@ -23,8 +23,12 @@ import (
 	sessioniface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	sysop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/manifest"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	prompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -32,6 +36,11 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// steerVisionToolName 视觉问答工具名（Python: "visual_question_answering"）
+	steerVisionToolName = "visual_question_answering"
+	// steerImageFilesKey prepared inputs 中的图片文件键（Python:
+	// _multimodal_image_files）
+	steerImageFilesKey = "_multimodal_image_files"
 	// inputBoundaryTimeoutSeconds 输入边界发布的有界回压时长。
 	// Python: _INPUT_BOUNDARY_TIMEOUT_SECONDS = 5.0
 	inputBoundaryTimeoutSeconds = 5 * time.Second
@@ -56,6 +65,24 @@ const (
 type SessionInputDeliveryUnknown struct{ Message string }
 
 func (e *SessionInputDeliveryUnknown) Error() string { return e.Message }
+
+// SessionInputImageUnavailableError 活跃宿主没有可通过工具读图的能力。
+// Python: session_input.py SessionInputImageUnavailableError（:73-76），
+// code = SESSION_INPUT_IMAGE_UNAVAILABLE（REJECTED 子类）。
+type SessionInputImageUnavailableError struct{ Message string }
+
+func (e *SessionInputImageUnavailableError) Error() string { return e.Message }
+
+// SteerImageResolver steer 图片上传引用的离循环解析闭包（门面装配注入）。
+// Python: attachments/steer_images.py resolve_steer_image_references；
+// [Go 层级映射] 解析本体在 server/runtime/attachments（adapter 不能
+// import runtime→环），经闭包注入——与 BuildInputs 同批层级映射偏差。
+type SteerImageResolver func(params map[string]any, sessionID string) ([]map[string]any, error)
+
+// SetSteerImageResolver 装配图片解析闭包（runViaSessionInputCoordinator 接线）。
+func (d *DeepAdapter) SetSteerImageResolver(resolver SteerImageResolver) {
+	d.steerImageResolver = resolver
+}
 
 // SessionInputLedger 在途补充输入条目账本（display 文本 → 条目）。
 // [Go 承载] Python 的 QueuedSessionInput 是 str 子类（对象即 part），
@@ -98,6 +125,9 @@ type SessionInputGuard struct {
 	agentinterfaces.BaseRail
 	// owner 持有的 DeepAgent 实例（Python self.owner 鸭子引用）
 	owner *harness.DeepAgent
+	// adapterRef 回指宿主适配器（能力探测取 sysop 模式/vision 配置/
+	// overrides/图片解析闭包——Python 鸭子 self._instance.* 的等价物）
+	adapterRef *DeepAdapter
 	// accepting 准入窗口（Python: self.accepting = False 起始）
 	accepting bool
 	// modelAllowsSteer 模型层允许 steer（未配置 max_iterations 恒开）
@@ -125,12 +155,46 @@ type SessionInputGuard struct {
 
 // NewSessionInputGuard 创建守卫（accepting 初始 false，对齐 Python __init__）。
 // Python: SessionInputGuard.__init__
-func NewSessionInputGuard(owner *harness.DeepAgent) *SessionInputGuard {
+func NewSessionInputGuard(owner *harness.DeepAgent, adapter *DeepAdapter) *SessionInputGuard {
 	return &SessionInputGuard{
-		BaseRail:  *agentinterfaces.NewBaseRail(),
-		owner:     owner,
-		accepting: false,
+		BaseRail:   *agentinterfaces.NewBaseRail(),
+		owner:      owner,
+		adapterRef: adapter,
+		accepting:  false,
 	}
+}
+
+// ownerOperationMode 系统操作模式（read_file 本地模式判定）。
+func (g *SessionInputGuard) ownerOperationMode() sysop.OperationMode {
+	if g.adapterRef != nil {
+		return g.adapterRef.sysopOperationMode
+	}
+	return sysop.OperationModeLocal
+}
+
+// ownerVisionModelConfig 视觉模型配置（VQA 完整性判定）。
+func (g *SessionInputGuard) ownerVisionModelConfig() *hschema.VisionModelConfig {
+	if g.adapterRef != nil {
+		return g.adapterRef.visionModelConfig
+	}
+	return nil
+}
+
+// ownerOverrides 实例覆盖（enable_read_image_multimodal 开关源）。
+func (g *SessionInputGuard) ownerOverrides() (any, bool) {
+	if g.adapterRef != nil {
+		v, ok := g.adapterRef.instanceOverrides["enable_read_image_multimodal"]
+		return v, ok
+	}
+	return nil, false
+}
+
+// ownerSteerImageResolver 图片解析闭包（nil=未装配降级）。
+func (g *SessionInputGuard) ownerSteerImageResolver() SteerImageResolver {
+	if g.adapterRef != nil {
+		return g.adapterRef.steerImageResolver
+	}
+	return nil
 }
 
 // Accepting 报告准入窗口状态（deliver 链 require_open_input 消费）。
@@ -704,6 +768,83 @@ func (g *SessionInputGuard) failBoundary(entry *hschema.QueuedSessionInput, err 
 	entry.UndeliveredResponseFullText = ""
 	entry.UndeliveredResponseTruncated = false
 	entry.FailBoundary(err)
+}
+
+// ──────────────────────────── steer 图片能力（25.6 遗留回填） ────────────────────────────
+
+// selectSteerImageTool 用活跃宿主已注册工具与原生图片策略选读图工具。
+// Python: interface_deep.py _select_steer_image_tool（:18691-18723）一比一：
+// ① read_file：本地模式 + 原生图片输入开启 + 工具图片多模态开启
+// ② visual_question_answering：vision_model_config 配置完整
+// 都没有 → SessionInputImageUnavailableError（原文文案）。
+// [Go 承载] guard 持 owner（DeepAgent）引用，能力探测在此层与 Python
+// adapter 层位置一致（deliver_active_session_input 内调用）。
+func (g *SessionInputGuard) selectSteerImageTool() (string, error) {
+	mgr := g.owner.AbilityManager()
+	// ① read_file 分支（Python: local_operation && should_enable... &&
+	//    tool.enable_image_multimodal；Go 工具闭包默认开、原生策略经
+	//    ShouldEnableReadImageMultimodal、本地模式经装配时落账）
+	if mgr.Get(ToolNameReadFile) != nil &&
+		g.ownerOperationMode() == sysop.OperationModeLocal &&
+		harnessrails.ShouldEnableReadImageMultimodal(g.owner, nil) &&
+		g.imageMultimodalEnabled() {
+		return ToolNameReadFile, nil
+	}
+	// ② visual_question_answering 分支（Python: is_vision_model_config_complete）
+	if mgr.Get(steerVisionToolName) != nil &&
+		manifest.IsVisionModelConfigComplete(g.ownerVisionModelConfig()) {
+		return steerVisionToolName, nil
+	}
+	return "", &SessionInputImageUnavailableError{
+		Message: "the active agent has no image-reading capability; enable native image input " +
+			"with read_file or configure a visual_question_answering tool before retrying",
+	}
+}
+
+// imageMultimodalEnabled 读工具图片多模态开关（overrides 优先）。
+// Python: getattr(tool, "enable_image_multimodal", False)——Go 开关经
+// deep_config/overrides 解析（deep_adapter_rails.go:348 同源）。
+func (g *SessionInputGuard) imageMultimodalEnabled() bool {
+	if v, ok := g.ownerOverrides(); ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return true
+}
+
+// prepareSteerImageInputs 离循环解析上传，只把文本引用送进 Core。
+// Python: interface_deep.py _prepare_steer_image_inputs（:18726-18741）一比一：
+// resolve_steer_image_references → _select_steer_image_tool →
+// prepare_image_tool_inputs（enable_read_image_multimodal=False、
+// vision_tool_available 按所选工具）。
+func (g *SessionInputGuard) prepareSteerImageInputs(
+	request *schema.AgentRequest, inputs map[string]any,
+) (map[string]any, []map[string]any, error) {
+	// ① 解析上传（注入闭包；nil → 退回 params 已校验引用，降级登记）
+	params := requestParamsOf(request)
+	mediaItems := steerMediaItemsOf(params)
+	if g.ownerSteerImageResolver() != nil {
+		resolved, err := g.ownerSteerImageResolver()(params, sessionIDOf(request))
+		if err != nil {
+			return nil, nil, &sessionpkg.SessionInputRejectedError{Message: err.Error()}
+		}
+		mediaItems = resolved
+	}
+	// ② 能力探测（无能力 → REJECTED，原文文案）
+	toolName, err := g.selectSteerImageTool()
+	if err != nil {
+		return nil, nil, err
+	}
+	// ③ 图片工具提示词序列化（共享 user prompt builder）
+	prepared := make(map[string]any, len(inputs)+1)
+	for k, v := range inputs {
+		prepared[k] = v
+	}
+	prepared[steerImageFilesKey] = mediaItems
+	prepared = prompt.PrepareImageToolInputs(params, prepared,
+		false, toolName == steerVisionToolName, "unknown", toolName)
+	return prepared, mediaItems, nil
 }
 
 // ──────────────────────────── 独立助手 ────────────────────────────

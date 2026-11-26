@@ -192,6 +192,9 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 	// require_open_input：guard 归属与准入窗口（Python SessionInputGuard.accepting）
 	// Python: if guard is None or guard.owner is not instance: accepting=False;
 	//         if not accepting: raise REJECTED "session is finishing or changing execution state..."
+	if d.sessionInputGuard == nil {
+		d.sessionInputGuard = NewSessionInputGuard(d.instance, d)
+	}
 	guard := d.sessionInputGuard
 	accepting := false
 	if guard != nil && guard.OwnedBy(d.instance) {
@@ -202,6 +205,24 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 			Message: "session is finishing or changing execution state; " +
 				"supplemental input was not sent, retry after it settles",
 		}
+	}
+	// 图片 steer：离循环解析上传 + 能力探测 + 提示词序列化（Python
+	// :18771 require_open_input() 之后的 media_items = [] / prepare 分支；
+	// 无能力 → REJECTED SESSION_INPUT_IMAGE_UNAVAILABLE）
+	var preparedMediaItems []map[string]any
+	if imageSteer {
+		if guard == nil {
+			return false, &SessionInputImageUnavailableError{
+				Message: "the active agent has no image-reading capability; enable native image input " +
+					"with read_file or configure a visual_question_answering tool before retrying",
+			}
+		}
+		prepared, mediaItems, err := guard.prepareSteerImageInputs(request, inputs)
+		if err != nil {
+			return false, err
+		}
+		inputs = prepared
+		preparedMediaItems = mediaItems
 	}
 	// 捕获绑定轮（入队复核的锚）
 	// Python: bound_round = instance.active_round
@@ -227,7 +248,7 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 			BoundRound:      boundRound,
 			Request:         request,
 			Query:           displayContentOf(params, inputs),
-			MediaItems:      steerMediaItemsOf(params),
+			MediaItems:      preparedMediaItems,
 			ExecutionLookup: executionLookupOf(request),
 		})
 		entry = q

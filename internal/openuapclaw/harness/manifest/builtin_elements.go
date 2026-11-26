@@ -206,7 +206,7 @@ func registerCoreToolProviders() {
 	// （不完整 → 空表）→ create_vision_tools(language, config, agent_id)
 	hschema.RegisterToolProvider("core.vision", func(params map[string]any, ctx hschema.BuildContextInterface) ([]any, error) {
 		cfg := visionModelConfigFromParams(params)
-		if cfg == nil || !isVisionModelConfigComplete(cfg) {
+		if cfg == nil || !IsVisionModelConfigComplete(cfg) {
 			return nil, nil
 		}
 		return toolsToAny(multimodal.CreateVisionTools(cfg, webLanguage(ctx), webAgentID(ctx))), nil
@@ -286,10 +286,11 @@ func webAgentID(ctx hschema.BuildContextInterface) string {
 	return ""
 }
 
-// isVisionModelConfigComplete 视觉模型配置完整性门控。
+// IsVisionModelConfigComplete 视觉模型配置完整性门控（导出：adapter 侧
+// steer 图片能力探测复用，25.6 遗留回填批）。
 // Python: is_vision_model_config_complete (schema/config.py:97-108)：
 // api_key/base_url/model 三者非空。
-func isVisionModelConfigComplete(cfg *hschema.VisionModelConfig) bool {
+func IsVisionModelConfigComplete(cfg *hschema.VisionModelConfig) bool {
 	return cfg != nil &&
 		strings.TrimSpace(cfg.APIKey) != "" &&
 		strings.TrimSpace(cfg.BaseURL) != "" &&

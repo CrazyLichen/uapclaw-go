@@ -21,6 +21,7 @@ import (
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	swruntimeattachments "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/attachments"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -1805,6 +1806,8 @@ func (uc *UapClawSwarm) runViaSessionInputCoordinator(ctx context.Context,
 			// loop session 中断态（_stream_completion_state 对齐），无需探针
 			coord := runtime.Coordinator()
 			adapter.SetSessionInputExecutionLookup(coord.LookupExecution)
+			// steer 图片解析闭包（25.6 遗留回填；attachments 属 runtime 层）
+			deep.SetSteerImageResolver(swruntimeattachments.ResolveSteerImageReferences)
 			// inputs 由门面构建（Python 在 adapter 内 _build_inputs；层级映射差异，
 			// 见 adapter/deep_adapter_session_input.go 头注）
 			inputs, _, _ := uc.BuildInputs(request)

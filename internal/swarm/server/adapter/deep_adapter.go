@@ -110,6 +110,11 @@ type DeepAdapter struct {
 	// streamContentRunKind 上一个可见内容块的归属（判断 user→goal 切换点）。
 	// Python: interface_deep.py _stream_content_run_kind
 	streamContentRunKind string
+	// steerImageResolver steer 图片解析闭包（门面装配注入，25.6 遗留回填）
+	steerImageResolver SteerImageResolver
+	// sysopOperationMode 系统操作模式（createSysOperation 时落账；
+	// steer 图片能力探测的 read_file 本地模式判定用）
+	sysopOperationMode sysop.OperationMode
 	// sessionInputGuard 补充输入守卫（SessionInputGuard 全状态机；惰性创建，
 	// owner=本适配器 instance——deliver 链 require_open_input 消费）。
 	sessionInputGuard *SessionInputGuard
