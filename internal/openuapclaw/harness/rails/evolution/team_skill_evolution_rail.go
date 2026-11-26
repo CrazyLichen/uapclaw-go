@@ -117,11 +117,14 @@ type TeamSkillEvolutionRail struct {
 	reviewInterval int
 	// reviewAgentMaxIterations 审查子 agent 最大迭代数
 	reviewAgentMaxIterations int
-	// reviewFeedbackSkillCreateRail 绑定的创建 rail（审查反馈重复模式复用）。
-	// 窄接口承载（2026-11-26 审查轮 A 收窄：原 any 字段 + 使用点断言）；
-	// 不可用具体 *skills.TeamSkillCreateRail——skills→evolution 已成环。
-	// Python: self._review_feedback_skill_create_rail
-	reviewFeedbackSkillCreateRail ExternalProposalOwner
+	// ownsExternalProposal / resolveExternalProposal 绑定的创建 rail 认卡/取件
+	// 方法值（2026-11-26 三轮审查：Python 鸭子调用的 Go 忠实等价——
+	// Python: self._review_feedback_skill_create_rail 存对象、:870-871 鸭子调
+	// owns_external_proposal/resolve_external_proposal；Go 无鸭子，bind 期经
+	// 方法值提前绑定具体类型，使用点调用形态与 Python 逐字对应。
+	// 不用具体类型字段：skills→evolution 已成环（TeamSkillCreateRail 继承基座）。
+	ownsExternalProposal        func(requestID string) bool
+	resolveExternalProposalFunc func(requestID string, accepted bool) string
 	// reviewFeedbackApprovalContinuations 审批后续动作（request_id → continuation）
 	// Python: self._review_feedback_approval_continuations（team_skill_evolution_rail.py:878-885）
 	reviewFeedbackApprovalContinuations map[string]string
@@ -850,8 +853,8 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 func (r *TeamSkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string) error {
 	// 外部提案分支（Python :866-886）：creation rail 持有该 request_id 时转发 resolve，
 	// 并把续执行提示词存入 _review_feedback_approval_continuations。
-	if r.reviewFeedbackSkillCreateRail != nil && r.reviewFeedbackSkillCreateRail.OwnsExternalProposal(requestID) {
-		continuation := r.reviewFeedbackSkillCreateRail.ResolveExternalProposal(requestID, true)
+	if r.ownsExternalProposal != nil && r.ownsExternalProposal(requestID) {
+		continuation := r.resolveExternalProposalFunc(requestID, true)
 		delete(r.pendingApprovalSnapshots, requestID)
 		if continuation != "" {
 			if r.reviewFeedbackApprovalContinuations == nil {
@@ -883,8 +886,8 @@ func (r *TeamSkillEvolutionRail) ApproveRecord(ctx context.Context, requestID st
 // Python: TeamSkillEvolutionRail.reject_record(request_id)
 func (r *TeamSkillEvolutionRail) RejectRecord(ctx context.Context, requestID string) error {
 	// 外部提案分支（Python :906-913）：creation rail 持有该 request_id 时转发 resolve(accepted=false)。
-	if r.reviewFeedbackSkillCreateRail != nil && r.reviewFeedbackSkillCreateRail.OwnsExternalProposal(requestID) {
-		r.reviewFeedbackSkillCreateRail.ResolveExternalProposal(requestID, false)
+	if r.ownsExternalProposal != nil && r.ownsExternalProposal(requestID) {
+		r.resolveExternalProposalFunc(requestID, false)
 		delete(r.pendingApprovalSnapshots, requestID)
 		return nil
 	}
@@ -1834,10 +1837,13 @@ func (r *TeamSkillEvolutionRail) SetReviewFeedbackCoordinator(coordinator Review
 	r.reviewFeedbackCoordinator = coordinator
 }
 
-// BindReviewFeedbackSkillCreateRail 绑定已挂载、用于重复模式的新建 Skill rail。
-// Python: bind_review_feedback_skill_create_rail (team_skill_evolution_rail.py L277-280)。
-func (r *TeamSkillEvolutionRail) BindReviewFeedbackSkillCreateRail(rail ExternalProposalOwner) {
-	r.reviewFeedbackSkillCreateRail = rail
+// BindReviewFeedbackSkillCreateRail 绑定已挂载、用于重复模式的新建 Skill rail 的
+// 认卡/取件方法值。
+// Python: bind_review_feedback_skill_create_rail (team_skill_evolution_rail.py L277-280)
+// ——bind 对象、调用点鸭子取方法；Go 以方法值承载同一绑定语义。
+func (r *TeamSkillEvolutionRail) BindReviewFeedbackSkillCreateRail(ownsExternalProposal func(requestID string) bool, resolveExternalProposal func(requestID string, accepted bool) string) {
+	r.ownsExternalProposal = ownsExternalProposal
+	r.resolveExternalProposalFunc = resolveExternalProposal
 }
 
 // HandleReviewFeedback 把一条结算失败的评审经 Core 协调器路由。

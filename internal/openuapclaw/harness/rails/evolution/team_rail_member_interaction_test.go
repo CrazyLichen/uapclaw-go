@@ -259,9 +259,9 @@ func TestReviewFeedback五方法_集成(t *testing.T) {
 	if rail.RailDrainApprovalEvents() == nil {
 		t.Fatal("drain must return a slice")
 	}
-	// bind 覆写。
+	// bind 覆写（方法值注入；本用例的 fake 方法恒空转）。
 	other := &fakeFeedbackCoordinator{}
-	rail.BindReviewFeedbackSkillCreateRail(other)
+	rail.BindReviewFeedbackSkillCreateRail(other.OwnsExternalProposal, other.ResolveExternalProposal)
 	if !strings.Contains("x", "x") {
 		t.Fatal("placeholder")
 	}
