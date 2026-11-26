@@ -1408,9 +1408,17 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 				content = fmt.Sprintf("%v", slashResult)
 			}
 			resultType, _ := slashResult["result_type"].(string)
+			// Python: payload = {content, source, slash_command, display_level}
+			// （interface_deep.py:18288-18294——前端注记随 payload 透传）
+			payload := map[string]any{"content": content}
+			for _, key := range []string{"source", "slash_command", "display_level"} {
+				if v, ok := slashResult[key]; ok && v != nil {
+					payload[key] = v
+				}
+			}
 			return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 				schema.WithResponseOK(resultType != "error"),
-				schema.WithPayload(map[string]any{"content": content}),
+				schema.WithPayload(payload),
 			), nil
 		}
 	}
@@ -2630,6 +2638,31 @@ func (d *DeepAdapter) SetInstanceForTest(agent *harness.DeepAgent) {
 		return
 	}
 	d.instance = agent
+}
+
+// SetSkillEvolutionRailForTest 注入演进 rail 实例（仅测试用）。
+// 与 SetInstanceForTest 同类：生产路径经 ensureActiveEvolutionRailsRegistered 装配；
+// 集成测试需要预置 MockLLM rail 时使用。
+func (d *DeepAdapter) SetSkillEvolutionRailForTest(rail *evolution.SkillEvolutionRail) {
+	d.skillEvolutionRail = rail
+}
+
+// SetModelForTest 注入测试用模型与模型缓存（仅测试用）。
+// 集成测试预置 MockLLM 时使用；生产路径经模型解析链装配。
+// SetConfigSnapshotsForTest 注入配置快照（仅测试用）。
+// 集成测试预置 react.evolution 开关时使用；生产路径经配置装载链发布。
+func (d *DeepAdapter) SetConfigSnapshotsForTest(configCache, configBase map[string]any) {
+	d.setConfigSnapshots(configCache, configBase)
+}
+
+func (d *DeepAdapter) SetModelForTest(model *llm.Model, modelName string) {
+	d.stateMu.Lock()
+	d.model = model
+	d.modelClientConfig = model.ClientConfig
+	d.modelRequestConfig = model.ModelConfig
+	d.defaultModelName = modelName
+	d.modelCache = map[string]*llm.Model{modelName: model}
+	d.stateMu.Unlock()
 }
 
 // IsSessionScoped 是否为会话级子适配器。
