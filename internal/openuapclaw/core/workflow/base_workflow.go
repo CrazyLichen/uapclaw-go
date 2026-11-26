@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/stream_actor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/visualization"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/constants"
@@ -59,8 +60,9 @@ type BaseWorkflow struct {
 	workflowSpec   *WorkflowSpec
 	streamActor    *stream_actor.StreamGraph
 	session        *session.ProxySession
-	// drawable 可视化件（偏差 D-d：8.13 压后，env 读取骨架、恒 nil）
-	drawable any
+	// drawable 可视化件（Python _workflow.py:157-160；8.13 D-d 已回填具体类型，
+	// env WORKFLOW_DRAWABLE=true 时构造期创建）
+	drawable *visualization.Drawable
 }
 
 // EdgeTopology 边拓扑上下文（Python _workflow.py:38-53 EdgeTopology dataclass 一比一）。
@@ -87,17 +89,24 @@ func NewBaseWorkflow(cfg *WorkflowConfig, g *graph.PregelGraph) *BaseWorkflow {
 		card := NewWorkflowCard()
 		cfg, _ = NewWorkflowConfig(card)
 	}
-	// D-d：_drawable 恒 nil，env 读取骨架留档（Python _workflow.py:157-160）
-	drawableEnabled := strings.EqualFold(os.Getenv("WORKFLOW_DRAWABLE"), "true")
-	_ = drawableEnabled
+	// Python _workflow.py:157-160：WORKFLOW_DRAWABLE=true 时创建 Drawable
+	var drawable *visualization.Drawable
+	if strings.EqualFold(os.Getenv("WORKFLOW_DRAWABLE"), "true") {
+		drawable = visualization.NewDrawable()
+	}
 	return &BaseWorkflow{
 		graph:          g,
 		workflowConfig: cfg,
 		workflowSpec:   cfg.Spec,
 		streamActor:    stream_actor.NewStreamGraph(),
 		session:        session.NewProxySession(),
+		drawable:       drawable,
 	}
 }
+
+// Drawable 返回可视化件（Python `_drawable` property 访问，_workflow.py:326-327；
+// 8.13 D-d 回填件，LoopGroup/SubWorkflow 子图取图消费）
+func (w *BaseWorkflow) Drawable() *visualization.Drawable { return w.drawable }
 
 // Config 返回工作流配置（Python config()）。
 func (w *BaseWorkflow) Config() *WorkflowConfig {
@@ -178,7 +187,10 @@ func (w *BaseWorkflow) AddWorkflowComp(
 	if err := workflowComp.AddComponent(w.graph, compID, *waitForAll); err != nil {
 		return err
 	}
-	// Python _workflow.py:200-202 drawable 钩子（D-d：恒 nil，空）
+	// Python _workflow.py:200-202：drawable.add_node(comp_id, workflow_comp)
+	if w.drawable != nil {
+		w.drawable.AddNode(compID, workflowComp)
+	}
 	return nil
 }
 
@@ -188,6 +200,13 @@ func (w *BaseWorkflow) StartComp(startCompID string) error {
 		return err
 	}
 	w.graph.StartNode(startCompID)
+	// Python _workflow.py:209-210：drawable.set_start_node
+	if w.drawable != nil {
+		// 112020 错误即 Python build_error 上抛
+		if err := w.drawable.SetStartNode(startCompID); err != nil {
+			return err
+		}
+	}
 	w.workflowSpec.StartNodes = append(w.workflowSpec.StartNodes, startCompID)
 	return nil
 }
@@ -198,6 +217,12 @@ func (w *BaseWorkflow) EndComp(endCompID string) error {
 		return err
 	}
 	w.graph.EndNode(endCompID)
+	// Python _workflow.py:220-221：drawable.set_end_node
+	if w.drawable != nil {
+		if err := w.drawable.SetEndNode(endCompID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -211,6 +236,10 @@ func (w *BaseWorkflow) AddConnection(srcCompIDs []string, targetCompID string) e
 	w.graph.AddEdge(srcCompIDs, targetCompID)
 	for _, src := range srcCompIDs {
 		w.appendEdge(src, targetCompID)
+		// Python _workflow.py:235-236（list 分支）/242（单源分支）：drawable.add_edge
+		if w.drawable != nil {
+			w.drawable.AddEdge(src, targetCompID, false, false, nil)
+		}
 	}
 	return nil
 }
@@ -226,6 +255,10 @@ func (w *BaseWorkflow) AddStreamConnection(srcCompID string, targetCompID string
 		w.streamActor.AddStreamConsumer(tgt, targetCompID)
 	}
 	w.appendStreamEdge(srcCompID, targetCompID)
+	// Python _workflow.py:255-256：drawable.add_edge(src, dst, False, True) 流式边
+	if w.drawable != nil {
+		w.drawable.AddEdge(srcCompID, targetCompID, false, true, nil)
+	}
 	return nil
 }
 
@@ -277,6 +310,10 @@ func (w *BaseWorkflow) AddConditionalConnection(srcCompID any, router any) error
 			exception.WithParam("src_comp_id", src),
 			exception.WithParam("reason", fmt.Sprintf("router must be a callable function, got %T", router)),
 			exception.WithParam("workflow", toStr))
+	}
+	// Python _workflow.py:293-294：drawable.add_edge(source=..., conditional=True, data=router)
+	if w.drawable != nil {
+		w.drawable.AddEdge(src, "", true, false, router)
 	}
 	return nil
 }

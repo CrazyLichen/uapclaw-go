@@ -238,22 +238,33 @@ func (w *Workflow) Stream(ctx context.Context, inputs any, sess sessioninterface
 	return out, nil
 }
 
-// Draw mermaid 生成（workflow.py:471-499；偏差 D-d：_drawable 恒 nil，
-// 复刻 Python `_drawable is None` 分支返回空串/空字节；8.13 实施时回收）。
-// 偏差 D-14-7：expand_subgraph: int|bool（False/True 或展开层级）→ Go 收窄 bool
-// （层级语义当前零消费方，8.13 落地若需层级改 int）。
-func (w *Workflow) Draw(title, outputFormat string, expandSubgraph bool, enableAnimation bool) any {
-	_ = title
-	_ = expandSubgraph
+// Draw mermaid 生成（workflow.py:471-499 draw 一比一：png/svg/默认三分支；
+// Python 异常上抛 → Go (any, error)；D-d/D-14-7 已回收：expandSubgraph any 承载
+// bool|int，层级语义兑现）。
+// None 语义承载：_workflow.py:321-334 to_mermaid* 的 `if self._drawable` 空分支
+// （env 未开启时可达，保留）。
+func (w *Workflow) Draw(title, outputFormat string, expandSubgraph any, enableAnimation bool) (any, error) {
+	if w.internal.Drawable() == nil {
+		switch outputFormat {
+		case "png", "svg":
+			return []byte(nil), nil // ≙ Python return b""
+		default:
+			return "", nil // ≙ Python return ""
+		}
+	}
 	switch outputFormat {
 	case "png":
-		return []byte(nil) // ≙ Python return b""
+		return w.internal.Drawable().ToMermaidPNG(title, expandSubgraph)
 	case "svg":
-		return []byte(nil)
+		return w.internal.Drawable().ToMermaidSVG(title, expandSubgraph)
 	default:
-		return "" // ≙ Python return ""
+		return w.internal.Drawable().ToMermaid(title, expandSubgraph, enableAnimation)
 	}
 }
+
+// Internal 返回内部基座（Python `_internal` 属性访问；SubWorkflowComponent
+// drawable 取子图消费，8.13 回填件）
+func (w *Workflow) Internal() *BaseWorkflow { return w.internal }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

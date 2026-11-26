@@ -2,12 +2,18 @@ package flow
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/visualization"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/condition"
 )
+
+// WORKFLOW_DRAWABLE 工作流可绘制开关 env 键（Python branch_router.py:16 同名常量）
+const WORKFLOW_DRAWABLE = "WORKFLOW_DRAWABLE"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -57,23 +63,31 @@ func (b *Branch) TraceInfo(sess session.BaseSession) any {
 // BranchRouter 分支路由器（Python branch_router.py:41-112）。
 // 实现 pregel.Router：dispatch 阶段同步评估（spec §1 链路②）；
 // session 走实例字段捕获（8.5 D2 惯例：Dispatch 的 state 形参恒 nil 不读）。
-// 偏差 D-19-1：drawable 三处（env 读取 / DrawableBranchRouter / add_branch 填充）
-// 整段跳过，回收条件挂 8.13。
 type BranchRouter struct {
 	branches    []*Branch
 	session     session.BaseSession
 	reportTrace bool
+	// drawableBranchRouter drawable 投影（Python branch_router.py:47-49
+	// _drawable_branch_router；D-19-1 已回填：env 开启时构造期创建）
+	drawableBranchRouter *visualization.DrawableBranchRouter
 }
 
-// NewBranchRouter 构造路由器（Python __init__(report_trace=False)）。
+// 编译期断言：实现 visualization 分支目标投影接口（drawable.py:115-118 消费面）
+var _ visualization.DrawableBranchTargetsSource = (*BranchRouter)(nil)
+
+// NewBranchRouter 构造路由器（Python __init__(report_trace=False)；
+// branch_router.py:48-49：env 开启时创建 DrawableBranchRouter(targets=[], datas=[])）
 func NewBranchRouter(reportTrace bool) *BranchRouter {
-	return &BranchRouter{reportTrace: reportTrace}
+	r := &BranchRouter{reportTrace: reportTrace}
+	if strings.ToLower(os.Getenv(WORKFLOW_DRAWABLE)) == "true" {
+		r.drawableBranchRouter = &visualization.DrawableBranchRouter{Targets: []string{}, Datas: []string{}}
+	}
+	return r
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// AddBranch 登记分支（Python add_branch：nil 校验 → 构造 Branch；
-// branch_router.py:58-64 drawable 填充段按 D-19-1 跳过）。
+// AddBranch 登记分支（Python add_branch：nil 校验 → drawable 填充 → 构造 Branch）。
 // 偏差 D-19-4：target 收窄为 []string（Python Union[str, list[str]] 的 str 归一
 // `[target] if isinstance(target, str)` 上移到调用方——用户拍板调用层自己转，
 // 边界 any 只保留 cond 的三态归一）。
@@ -86,12 +100,37 @@ func (r *BranchRouter) AddBranch(cond any, target []string, branchID string) err
 		return exception.BuildError(exception.StatusComponentBranchParamInvalid,
 			exception.WithParam("reason", "target is None or empty"))
 	}
+	// Python branch_router.py:58-64：drawable 填充段（Branch 构造前）
+	if r.drawableBranchRouter != nil {
+		branchData := branchID
+		if branchID == "" {
+			branchData = "" // Python `branch_id if branch_id else ""`
+		}
+		if condStr, ok := cond.(string); ok {
+			branchData = condStr
+		}
+		for _, tgt := range target {
+			r.drawableBranchRouter.Targets = append(r.drawableBranchRouter.Targets, tgt)
+			r.drawableBranchRouter.Datas = append(r.drawableBranchRouter.Datas, branchData)
+		}
+	}
 	b, err := NewBranch(cond, target, branchID)
 	if err != nil {
 		return err
 	}
 	r.branches = append(r.branches, b)
 	return nil
+}
+
+// GetDrawableBranchTargets 返回分支目标投影（Python branch_router.py:71-72
+// get_drawable_branch_router；drawable.py:115-118 消费面接口化，D-13-5：
+// visualization 侧以 DrawableBranchTargetsSource 断言本方法；
+// drawable 未开启时 Python 返回 None → Go (nil, nil)）
+func (r *BranchRouter) GetDrawableBranchTargets() (targets []string, datas []string) {
+	if r.drawableBranchRouter == nil {
+		return nil, nil
+	}
+	return r.drawableBranchRouter.Targets, r.drawableBranchRouter.Datas
 }
 
 // AllTargets 目标全集（Python all_targets property：set 去重）。
