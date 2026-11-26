@@ -656,3 +656,30 @@ func TestSkillEvolutionRail_ExtractToolContent_data中间层(t *testing.T) {
 	inputs7 := &agentinterfaces.ToolCallInputs{}
 	assert.Equal(t, "", r.extractToolContent(inputs7))
 }
+
+// TestPendingChangeRecordIDs 快照 payload 内 record_id 提取（含全空→nil 语义）。
+// Python: record_ids_from_pending_approval()（evolution_helpers.py:454-475）。
+func TestPendingChangeRecordIDs(t *testing.T) {
+	rail := newConstructedRail(t)
+	requestID := "req-partial-1"
+	rail.pendingApprovalSnapshots[requestID] = &experience.PendingChange{
+		Payload: []checkpointing.EvolutionRecord{
+			{ID: "r1"},
+			{ID: ""},
+			{ID: "r3"},
+		},
+	}
+	got := rail.PendingChangeRecordIDs(requestID)
+	if len(got) != 3 || got[0] != "r1" || got[2] != "r3" {
+		t.Fatalf("应按索引返回 id 列表，实际 %v", got)
+	}
+	rail.pendingApprovalSnapshots["req-empty"] = &experience.PendingChange{
+		Payload: []checkpointing.EvolutionRecord{{ID: ""}},
+	}
+	if got := rail.PendingChangeRecordIDs("req-empty"); got != nil {
+		t.Fatalf("全空 id 应返回 nil，实际 %v", got)
+	}
+	if rail.PendingChangeRecordIDs("missing") != nil {
+		t.Fatal("无快照应返回 nil")
+	}
+}

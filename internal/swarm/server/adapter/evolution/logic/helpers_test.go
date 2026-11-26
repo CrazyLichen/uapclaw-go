@@ -777,3 +777,47 @@ func TestEvolutionSlashResult(t *testing.T) {
 		t.Fatalf("缺省 display_level 应按短语判定，实际 %v", result2["display_level"])
 	}
 }
+
+// TestApprovedRecordIDsFromAnswers 索引→record_id 映射。
+// Python: approved_record_ids_from_answers()（evolution_helpers.py:419-451）。
+func TestApprovedRecordIDsFromAnswers(t *testing.T) {
+	ids := []string{"r1", "r2", "r3"}
+	labels := EvolutionAcceptLabels
+
+	// 全选接受 → 全部 record_id
+	accepted, got, hasMapping := ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}, {"accept"}, {"接受"}}, labels, ids)
+	if !accepted || !hasMapping || len(got) != 3 {
+		t.Fatalf("全选接受应映射全部，实际 accepted=%v ids=%v", accepted, got)
+	}
+
+	// 部分接受（第 2 条拒绝）→ 仅 r1/r3
+	accepted, got, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}, {"拒绝"}, {"本次允许"}}, labels, ids)
+	if !accepted || len(got) != 2 || got[0] != "r1" || got[1] != "r3" {
+		t.Fatalf("部分批准应得 [r1 r3]，实际 %v", got)
+	}
+
+	// 全拒绝 → accepted=false
+	accepted, _, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"拒绝"}, {"拒绝"}}, labels, ids)
+	if accepted {
+		t.Fatal("全拒绝应 accepted=false")
+	}
+
+	// 无映射（recordIDsByIndex=nil）→ hasMapping=false，保持 all-or-nothing
+	var got2 []string
+	accepted, got2, hasMapping = ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}}, labels, nil)
+	got = got2
+	if !accepted || hasMapping || got != nil && len(got) != 0 {
+		t.Fatalf("无映射应 hasMapping=false，实际 %v/%v", got, hasMapping)
+	}
+
+	// 空白与大小写归一
+	accepted, _, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"  Accept  "}}, labels, ids)
+	if !accepted {
+		t.Fatal("标签归一后应命中接受")
+	}
+}

@@ -573,7 +573,24 @@ func (d *DeepAdapter) handleEvolutionApproval(ctx context.Context, requestID str
 	approved := parseApprovalAnswers(answers)
 
 	if approved {
-		err := d.skillEvolutionRail.ApproveRecord(ctx, requestID)
+		// Python: record_ids = record_ids_from_pending_approval(rail, request_id) +
+		//   approved_record_ids_from_answers(answers, EVOLUTION_ACCEPT_LABELS, record_ids)
+		// （evolution_helpers.py:419-499；approve_evolution_records 调用段）
+		// 前端不感知 record_id：host 按索引映射回 record_id 后逐条回传；
+		// 无映射时保持 all-or-nothing（ApproveRecord variadic 空参 = None 语义）。
+		var approvedRecordIDs []string
+		recordIDs := d.skillEvolutionRail.PendingChangeRecordIDs(requestID)
+		if recordIDs != nil {
+			selected := make([][]string, len(answers))
+			for i, ans := range answers {
+				selected[i] = ans.SelectedOptions
+			}
+			accepted, ids, hasMapping := evolutionlogic.ApprovedRecordIDsFromAnswers(selected, evolutionlogic.EvolutionAcceptLabels, recordIDs)
+			if accepted && hasMapping {
+				approvedRecordIDs = ids
+			}
+		}
+		err := d.skillEvolutionRail.ApproveRecord(ctx, requestID, approvedRecordIDs...)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleEvolutionApproval: ApproveRecord failed")
 			return false

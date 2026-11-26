@@ -1108,7 +1108,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 
 // ApproveRecord 批准暂存的演进记录。
 // 对齐 Python: SkillEvolutionRail.approve_record(request_id)
-func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string) error {
+func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string, approvedRecordIDs ...string) error {
 	// Python: snapshot_pending = self._pending_approval_snapshots.get(request_id)
 	snapshotPending := r.pendingApprovalSnapshots[requestID]
 	var approvedRecords []checkpointing.EvolutionRecord
@@ -1119,6 +1119,23 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 		approvedRecords = snapshotPending.Payload
 		approvalMessages = snapshotPending.Messages
 		isShared = snapshotPending.IsSharedRecords
+	}
+
+	// Python: if approved_record_ids is not None and approved_records:
+	//   approved_records = [r for r in approved_records if r.id in approved_id_set]
+	// （skill_evolution_rail.py:1458-1460 部分批准过滤；variadic 空参 = None 语义）
+	if len(approvedRecordIDs) > 0 && len(approvedRecords) > 0 {
+		approvedIDSet := make(map[string]bool, len(approvedRecordIDs))
+		for _, id := range approvedRecordIDs {
+			approvedIDSet[id] = true
+		}
+		filtered := approvedRecords[:0]
+		for _, record := range approvedRecords {
+			if approvedIDSet[record.ID] {
+				filtered = append(filtered, record)
+			}
+		}
+		approvedRecords = filtered
 	}
 
 	// Python: pending, result = await self.approval_runtime.approve_pending_request(request_id, ...)
@@ -1154,6 +1171,30 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 	}
 
 	return nil
+}
+
+// PendingChangeRecordIDs 返回待审批快照 payload 内的 record_id 列表；
+// 全空（无任何非空 id）返回 nil——对齐 Python record_ids_from_pending_approval
+// （evolution_helpers.py:454-475）「has_record_id 否则 None」语义。
+// 前端对 record_id 无感知，host 层按索引映射回 record_id 后逐条回传。
+func (r *SkillEvolutionRail) PendingChangeRecordIDs(requestID string) []string {
+	pending := r.pendingApprovalSnapshots[requestID]
+	if pending == nil {
+		return nil
+	}
+	recordIDs := make([]string, 0, len(pending.Payload))
+	hasRecordID := false
+	for _, record := range pending.Payload {
+		id := record.ID
+		recordIDs = append(recordIDs, id)
+		if id != "" {
+			hasRecordID = true
+		}
+	}
+	if !hasRecordID {
+		return nil
+	}
+	return recordIDs
 }
 
 // RejectRecord 拒绝暂存的演进记录。

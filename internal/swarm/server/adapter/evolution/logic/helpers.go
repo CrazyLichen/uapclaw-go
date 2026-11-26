@@ -792,3 +792,71 @@ func EvolutionSlashResult(command string, result map[string]any, warningPhrases 
 	}
 	return annotated
 }
+
+// ──────────────────────────── 15.24d Task4：审批索引→record_id 映射 ────────────────────────────
+
+// EvolutionAcceptLabels 审批“接受”选项标签集（前端标签与内部 option 归一小写比对）。
+// Python: EVOLUTION_ACCEPT_LABELS（evolution_helpers.py:115-123）。
+var EvolutionAcceptLabels = []string{
+	"accept",
+	"接收",
+	"接受",
+	"allow_once",
+	"allow_always",
+	"本次允许",
+	"总是允许",
+}
+
+// EvolutionExecuteLabels 执行类标签集。
+// Python: EVOLUTION_EXECUTE_LABELS（evolution_helpers.py:124）。
+var EvolutionExecuteLabels = []string{"execute", "执行"}
+
+// AnswerSelectsOption 判定单条应答是否选中任一标签（大小写/空白归一）。
+// Python: answer_selects_option()（evolution_helpers.py:402-412）。
+func AnswerSelectsOption(selectedOptions []string, labels []string) bool {
+	normalized := make(map[string]bool, len(labels))
+	for _, label := range labels {
+		normalized[strings.ToLower(strings.TrimSpace(label))] = true
+	}
+	for _, option := range selectedOptions {
+		if normalized[strings.ToLower(strings.TrimSpace(option))] {
+			return true
+		}
+	}
+	return false
+}
+
+// ApprovedRecordIDsFromAnswers 将按索引的应答映射回 SDK record_id。
+// Python: approved_record_ids_from_answers()（evolution_helpers.py:419-451）。
+//
+// 前端对 evolution record_id 无感知；host 层持有 record_ids_by_index 时把
+// “选中接受”的索引映射回 record_id。返回值：
+//   - accepted：是否任一应答选中了接受标签
+//   - approvedIDs：映射出的 record_id（去重保序）
+//   - hasMapping：recordIDsByIndex 是否可用（nil 时调用方保持 all-or-nothing 审批）
+func ApprovedRecordIDsFromAnswers(selectedOptions [][]string, labels []string, recordIDsByIndex []string) (accepted bool, approvedIDs []string, hasMapping bool) {
+	accepted = false
+	approvedIDs = []string{}
+	seen := map[string]bool{}
+
+	for index, options := range selectedOptions {
+		if !AnswerSelectsOption(options, labels) {
+			continue
+		}
+		accepted = true
+		recordID := ""
+		if recordIDsByIndex != nil && index < len(recordIDsByIndex) {
+			recordID = strings.TrimSpace(recordIDsByIndex[index])
+		}
+		if recordID == "" || seen[recordID] {
+			continue
+		}
+		seen[recordID] = true
+		approvedIDs = append(approvedIDs, recordID)
+	}
+
+	if !accepted {
+		return false, []string{}, recordIDsByIndex != nil
+	}
+	return accepted, approvedIDs, recordIDsByIndex != nil
+}
