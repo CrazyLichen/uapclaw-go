@@ -121,8 +121,13 @@ func TestFactoryTemplatePresetMerge_NoPanicDefaultActiveSet(t *testing.T) {
 		}
 	}
 
-	// 出厂模板含陈旧键（FullCompact/ToolResultBudget dict 覆盖）→ 合并报错但降级继续
-	merged, mergeErr := MergeProcessors(base, rail.userProcessors, nil, nil)
+	// 注入陈旧键（FullCompact/ToolResultBudget dict 覆盖——出厂模板已收敛不再承载，
+	// 旧配置残留场景）→ 合并报错但降级继续
+	staleRail := NewContextProcessorRail(WithUserProcessors([]ceiface.ProcessorSpec{
+		{Type: "FullCompactProcessor", ConfigOverrides: map[string]any{"trigger_total_tokens": 180000}},
+		{Type: "ToolResultBudgetProcessor", ConfigOverrides: map[string]any{"tokens_threshold": 50000}},
+	}))
+	merged, mergeErr := MergeProcessors(base, staleRail.userProcessors, nil, nil)
 	if mergeErr == nil {
 		t.Fatal("陈旧 dict 覆盖应触发合并错误（对齐 PY ValueError）")
 	}
@@ -210,8 +215,12 @@ func TestActivate_SwitchesFactoriesTo(t *testing.T) {
 // preset，MergeProcessors 对齐 Python _merge_processors（context_processor_rail.py:176-180）
 // 抛错（Go 收集为聚合错误），rail init 侧降级为 warn + 跳过违规处理器。
 func TestFactoryTemplatePresetMerge_StaleKeysDegrade(t *testing.T) {
-	ctxCfg := loadFactoryContextEngineConfig(t)
-	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
+	// 出厂模板已收敛（无 FullCompact/ToolResultBudget 预设段），陈旧键场景改为
+	// 显式注入旧配置残留的 dict 覆盖来构造。
+	rail := NewContextProcessorRail(WithUserProcessors([]ceiface.ProcessorSpec{
+		{Type: "FullCompactProcessor", ConfigOverrides: map[string]any{"trigger_total_tokens": 180000}},
+		{Type: "ToolResultBudgetProcessor", ConfigOverrides: map[string]any{"tokens_threshold": 50000}},
+	}))
 
 	base := rail.buildPresetProcessors(nil, nil)
 	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
