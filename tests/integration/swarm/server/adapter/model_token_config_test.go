@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor"
+	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -132,10 +132,10 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 	reactCfg, ok := reactAgent.Config().(*saconfig.ReActAgentConfig)
 	s.Require().True(ok, "应为 *ReActAgentConfig，实际 %T", reactAgent.Config())
 
-	trigger, target := compressionThresholds(reactCfg.ContextProcessors, 32000)
+	trigger := compressionThresholds(reactCfg.ContextProcessors, 32000)
 	// 32K × 0.8 = 25600：比例化后生效阈值由"窗口 × TriggerContextRatio"在运行时算出
+	// （forked 版无 TargetTotalTokens 配置字段——总量预算门为基座 PY 常量）
 	s.Equal(25600, trigger, "RoundLevel 触发阈值应按窗口收口")
-	s.Equal(160000, target, "RoundLevel 目标预算为固定值")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -195,11 +195,12 @@ react:
 //
 // 137c7d4f 起触发阈值比例化：配置只留 TriggerContextRatio，
 // 生效阈值 = 窗口 × 比例；目标仍是固定预算 TargetTotalTokens。
-func compressionThresholds(specs []ceiface.ProcessorSpec, window int) (int, int) {
+// 24.15 单 forked 链：preset 的 RoundLevel 携带 forked 配置类型（旧类型断言随链切换失效）
+func compressionThresholds(specs []ceiface.ProcessorSpec, window int) int {
 	for _, spec := range specs {
-		if cfg, ok := spec.Config.(*compressor.RoundLevelCompressorConfig); ok {
-			return int(float64(window) * cfg.TriggerContextRatio), cfg.TargetTotalTokens
+		if cfg, ok := spec.Config.(*forkedcompressor.RoundLevelCompressorConfig); ok {
+			return int(float64(window) * cfg.TriggerContextRatio)
 		}
 	}
-	return 0, 0
+	return 0
 }
