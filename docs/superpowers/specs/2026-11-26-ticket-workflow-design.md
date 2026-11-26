@@ -79,29 +79,28 @@ Workflow 注册表（`mode → workflow builder`）是通用机制：后续新�
 - ticket 模式 workflow 执行不产流式帧，E2A 响应事件通道不被占用，普通流式会话不受影响；
 - 分流点在 agentserver 收到 E2A 请求之后（按 session metadata mode 分发），gateway 只透传。
 
-### 3.0a 事件协议与双模式适配（为聊天问答式预留）
+### 3.0a 双模式统一适配（workflow 适配现有机制，零改动既有链路）
 
-workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 runner 实现。**store 是状态层（状态机事实），卡片/轮询是表达层**：两模式共享节点实现 + store + 状态转移表，差异仅在"遇到等待状态怎么办"。
+**统一原则：不改现有会话/交互机制，workflow 作为适配者**。执行模型唯一——workflow 每次调用都是短执行（读 store → 跑节点 → 写 store → 返回），没有进程内挂起、没有断点 resume；"继续"的语义就是再调一次，RouterNode 按 store 状态重进。两模式共享节点实现 + store + 状态转移表，差异仅在"谁调用它、等待如何呈现"。
 
-**同一状态机 + 两个 runner**：
+**workflow 适配面（三个入口，工具形状）**：
 
-| | HTTP runner（本 spec 范围） | 聊天 runner（第二阶段） |
+| 入口 | 入参 | 行为 |
 |---|---|---|
-| 执行模型 | 每次 send 起短执行，等待状态落 store 后 END，下次 send 重进 | 会话进程内长执行，等待状态走 ask_user 中断挂起，回调后从断点 resume 继续执行（不 END） |
-| 等待表达 | 落 store + 外部轮询 metadata | interaction 中断卡片（前端已有渲染，零前端改动） |
+| `start` | TicketInput（§3.0b） | 从 init 跑到首个等待状态，返回结构化"待用户输入"载荷 |
+| `continue` | 标准输入事件（补充特征/confirm_solved/not_solved/close/abandon） | RouterNode 按 store 重进，继续执行 |
+| 等待载荷 | Guidance/Confirm/Solution 事件 | 返回给调用方，由调用方决定呈现方式 |
 
-HTTP 模式不发任何中断（无人处理）——其等待状态行为就是写 store 后 END。
+**聊天模式（第二阶段）**：聊天 DeepAgent 装诊断工具（`start_diagnosis`/`continue_diagnosis`/`close_diagnosis`），同会话内调用：
 
-**输出：标准事件协议**。节点产出统一事件：`Progress`（检索/分析进度）、`Guidance`（引导选项）、`Confirm`（待确认）、`Solution`（方案+kb_source+ticket 关联）、`Closed`。
+- workflow 跑到等待状态返回载荷 → Agent 走**现有 interrupt 机制**发 ask_user 卡片（前端已有渲染，零前端改动）；
+- 用户点选卡片 → 结构化 answers（不经 LLM 猜测）→ 中断恢复 → Agent 把答案映射为标准输入事件 → 再调 `continue_diagnosis`（RouterNode 重进）；
+- 只有开放补充（用户打字）经 Agent 归入 intent_features，且只影响检索质量、不影响状态转移；
+- AgentNode 的结论作为会话产出（chunk → final，final 即天然收尾）。
 
-**帧纪律（防覆盖）**：只有 `Progress` 允许以文本流式帧出现；聊天模式的 `Solution` 直接走会话正常 chunk → final 消息（final 即天然收尾，无额外帧，不用 send_push 类通道）；`Guidance`/`Confirm` 聊天模式下走 ask_user 中断（独立 pending 交互类型，前端已有处理）；HTTP 模式所有事件只写 store metadata，不产任何帧、不发中断。
+**HTTP 模式（本 spec 范围）**：gateway/agentserver 按 mode 直调 runner；等待状态只写 store metadata（§2 协议键），轮询可查；不产任何帧、不发中断（无人处理）。`biz_event` 协议即标准输入事件的直读形态。
 
-**输入：双解释器**。标准输入事件 = `补充特征 / confirm_solved / not_solved / close / abandon`：
-
-| 模式 | 解释方式 |
-|---|---|
-| HTTP 模式 | `biz_event` 协议（§2） |
-| 聊天模式（第二阶段） | 聊天 DeepAgent 装诊断工具（`start_diagnosis`）同会话内启动 workflow；卡片按钮回调直接映射标准输入事件；用户打字由 agent 判断后转换（猜错代价仅多一轮澄清，允许 LLM 判断） |
+**帧纪律（防覆盖）**：只有 `Progress` 允许以文本流式帧出现；`Guidance`/`Confirm` 仅聊天模式经 ask_user 中断呈现（独立 pending 交互类型，前端已有处理）；HTTP 模式所有事件只写 store metadata。
 
 ### 3.0b 统一入参 schema（工具与 HTTP 同构）
 
