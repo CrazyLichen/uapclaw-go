@@ -13,4 +13,7 @@ type DrawableGraph struct {
 	EndNodes []NodeLike
 	// BreakNodes 中断节点（Python break_nodes，Optional → nil）
 	BreakNodes []NodeLike
+	// SubNodeOrder 节点插入序（Python dict 插入序承载；由 Drawable.addNode 填充，
+	// 手工构造的图回退 ID 排序——Mermaid 输出序消费）
+	SubNodeOrder []string
 }
