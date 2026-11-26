@@ -634,3 +634,86 @@ func cloneMap(m map[string]any) map[string]any {
 	}
 	return result
 }
+
+// ──────────────────────────── 15.24d Task2：SDK 状态映射 ────────────────────────────
+
+// userFacingGenerationText 内部工具链错误链归一后的用户面文案。
+// Python: _user_facing_generation_error()（evolution_helpers.py:323）。
+const userFacingGenerationText = "LLM 服务调用失败，请检查模型配置或稍后重试"
+
+// internalGenerationErrorMarkers 归一判定的内部错误链标记。
+// Python: internal_markers（evolution_helpers.py:315-322）。
+var internalGenerationErrorMarkers = []string{
+	"toolchain",
+	"tool_call",
+	"invoke_failed",
+	"execution error",
+	"optimizer",
+}
+
+// UserFacingGenerationError 隐藏底层工具链错误链，归一为用户面文案。
+// Python: _user_facing_generation_error()（evolution_helpers.py:312-324）。
+func UserFacingGenerationError(message string) string {
+	lowered := strings.ToLower(message)
+	for _, marker := range internalGenerationErrorMarkers {
+		if strings.Contains(lowered, marker) {
+			return userFacingGenerationText
+		}
+	}
+	return message
+}
+
+// EvolutionStatusResponse 将 SDK EvolutionRequestResult.status 映射为用户面响应。
+// Python: evolution_status_response()（evolution_helpers.py:274-309）。
+//
+// 步骤：
+//
+//	Python: 1. status = str(evolve_result.status).strip()；空 → None
+//	Python: 2. message = str(evolve_result.message).strip()
+//	Python: 3. generation_failed → 归一文案 or generation_failed_output（error）
+//	Python: 4. skipped_skill_definition_not_found → 固定文案 + message 追加（error）
+//	Python: 5. persistence_failed → "演进经验保存失败：{message}"（error）
+//	Python: 6. no_evolution_no_records → no_records_output + message 追加（answer）
+//	Python: 7. 其余 → None
+// 返回 {"output","result_type"} 或 nil（evolveResult 形状：{"status","message"}）。
+func EvolutionStatusResponse(evolveResult map[string]any, generationFailedOutput, noRecordsOutput string) map[string]string {
+	if evolveResult == nil {
+		return nil
+	}
+	status := StrFromAny(evolveResult["status"])
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return nil
+	}
+	message := strings.TrimSpace(StrFromAny(evolveResult["message"]))
+
+	switch status {
+	case "generation_failed":
+		// Python :288：_user_facing_generation_error(message) or generation_failed_output
+		output := UserFacingGenerationError(message)
+		if output == "" {
+			output = generationFailedOutput
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "skipped_skill_definition_not_found":
+		output := "Skill 缺少 SKILL.md，无法执行演进生成。"
+		if message != "" {
+			output = output + "\n" + message
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "persistence_failed":
+		output := "演进经验保存失败"
+		if message != "" {
+			output = output + "：" + message
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "no_evolution_no_records":
+		output := noRecordsOutput
+		if message != "" {
+			output = output + "\n" + message
+		}
+		return map[string]string{"output": output, "result_type": "answer"}
+	}
+	return nil
+}
+

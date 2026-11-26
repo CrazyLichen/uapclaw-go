@@ -672,3 +672,63 @@ func TestNoopStageFromMessage_none(t *testing.T) {
 		t.Errorf("noopStageFromMessage(none) = %v, 期望 nil", result)
 	}
 }
+
+// ──────────────────────────── 15.24d Task2：状态映射 ────────────────────────────
+
+// TestEvolutionStatusResponse 四状态映射与透传。
+// Python: evolution_status_response()（evolution_helpers.py:274-309）。
+func TestEvolutionStatusResponse(t *testing.T) {
+	t.Run("空status返回nil", func(t *testing.T) {
+		if got := EvolutionStatusResponse(map[string]any{"status": ""}, "gen-fail", "no-records"); got != nil {
+			t.Fatalf("空 status 应返回 nil，实际 %v", got)
+		}
+	})
+	t.Run("generation_failed_内部错误归一", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "generation_failed", "message": "toolchain boom"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "LLM 服务调用失败，请检查模型配置或稍后重试" {
+			t.Fatalf("内部错误链应归一文案，实际 %v", got)
+		}
+	})
+	t.Run("generation_failed_普通错误透传", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "generation_failed", "message": "model down"}, "gen-fail", "no-records")
+		if got == nil || got["output"] != "model down" || got["result_type"] != "error" {
+			t.Fatalf("普通 message 应透传，实际 %v", got)
+		}
+	})
+	t.Run("skipped_skill_definition_not_found", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "skipped_skill_definition_not_found", "message": "extra"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "Skill 缺少 SKILL.md，无法执行演进生成。\nextra" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("persistence_failed", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "persistence_failed", "message": "disk full"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "演进经验保存失败：disk full" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("no_evolution_no_records", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "no_evolution_no_records", "message": "empty"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "answer" || got["output"] != "no-records\nempty" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("未知status返回nil", func(t *testing.T) {
+		if got := EvolutionStatusResponse(map[string]any{"status": "completed"}, "gen-fail", "no-records"); got != nil {
+			t.Fatalf("未知 status 应返回 nil，实际 %v", got)
+		}
+	})
+}
+
+// TestUserFacingGenerationError 内部工具链错误链归一。
+// Python: _user_facing_generation_error()（evolution_helpers.py:312-324）。
+func TestUserFacingGenerationError(t *testing.T) {
+	for _, marker := range []string{"toolchain", "tool_call", "invoke_failed", "execution error", "optimizer"} {
+		if got := UserFacingGenerationError("failed: " + marker + " x"); got != "LLM 服务调用失败，请检查模型配置或稍后重试" {
+			t.Fatalf("marker %q 应归一，实际 %q", marker, got)
+		}
+	}
+	if got := UserFacingGenerationError("model quota exceeded"); got != "model quota exceeded" {
+		t.Fatalf("普通错误应透传，实际 %q", got)
+	}
+}
