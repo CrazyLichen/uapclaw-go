@@ -16,14 +16,17 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	skillopt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/skill_call"
+	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater/single_dim"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
+	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 )
@@ -1779,6 +1782,46 @@ func (r *TeamSkillEvolutionRail) SetupReviewFeedbackEvolution(sessionID, teamID 
 // Python: review_feedback_evolution_enabled (team_skill_evolution_rail.py L274-276)。
 func (r *TeamSkillEvolutionRail) ReviewFeedbackEvolutionEnabled() bool {
 	return r.reviewFeedbackCoordinator != nil
+}
+
+// BeforeModelCall 仅注入 Team/Swarm Skill 演进协议段。
+// Python: TeamSkillEvolutionRail.before_model_call（team_skill_evolution_rail.py:381-388）：
+// 只注入 team 专属段（常规段由单 Agent rail 负责）。
+func (r *TeamSkillEvolutionRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	_ = ctx
+	builder := r.builderFromContext(cbc)
+	if builder == nil {
+		return nil
+	}
+	language := builder.Language()
+	if language == "" {
+		language = r.language
+	}
+	builder.AddSection(sections.BuildTeamEvolutionProtocolSection(language))
+	return nil
+}
+
+// GetCallbacks 覆写基座回调表，追加 before_model_call 注入。
+func (r *TeamSkillEvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.EvolutionRail.GetCallbacks()
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	return callbacks
+}
+
+// builderFromContext 按脚本顺序取提示词构建器（偏差同 skill rail：Go EventInputs
+// 无 system_prompt_builder 属性，恒走 agent 分支）。
+func (r *TeamSkillEvolutionRail) builderFromContext(cbc *agentinterfaces.AgentCallbackContext) saprompts.SystemPromptBuilderInterface {
+	if cbc == nil {
+		return nil
+	}
+	if cbc.Agent() != nil {
+		if builder := cbc.Agent().SystemPromptBuilder(); builder != nil {
+			return builder
+		}
+	}
+	return nil
 }
 
 // SetReviewFeedbackCoordinator 注入评审反馈协调器（configure_review_feedback_evolution

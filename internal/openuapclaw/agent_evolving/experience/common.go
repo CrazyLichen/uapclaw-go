@@ -124,7 +124,8 @@ func ExecuteSimplifyActions(
 		switch actionType {
 		// 删除：删掉这一条记录，删成功才算一次删除，其余情况记为出错。
 		case "DELETE":
-			deleted, err := store.DeleteRecordsForKind(ctx, skillName, []string{recordID}, subjectKind)
+			// Python: store.delete_records(skill_name, [record_id], subject_kind=subject_kind)
+			deleted, err := store.DeleteRecords(ctx, skillName, []string{recordID}, checkpointing.WithRecordsSubjectKind(subjectKind))
 			if err != nil {
 				logger.Error(logComponent).
 					Str("action", "DELETE").
