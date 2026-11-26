@@ -98,3 +98,13 @@ func (c *DialogueCompressor) Config() *DialogueCompressorConfig {
 	}
 	return NewDialogueCompressorConfig()
 }
+
+// SetModelDefaultsiface.ProcessorConfig 实现：Model/ModelClient 为 nil 时回填。
+func (c *DialogueCompressorConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil {
+		c.ModelClient = modelClient
+	}
+}

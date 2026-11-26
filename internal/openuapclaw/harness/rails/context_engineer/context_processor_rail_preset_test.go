@@ -3,10 +3,12 @@ package context_engineer
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	context_engine "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
@@ -85,129 +87,130 @@ func TestMergeConfigWithOverrides_NilValueSkipped(t *testing.T) {
 }
 
 // TestFactoryTemplatePresetMerge_NoPanicDefaultActiveSet 用出厂模板驱动预设合并：
-// 必须不 panic，默认路径只激活 4 个处理器（FullCompact 被过滤）。
+// 必须不 panic；24.15 单 forked preset 链（5 处理器，无两分支互斥）。
 func TestFactoryTemplatePresetMerge_NoPanicDefaultActiveSet(t *testing.T) {
 	ctxCfg := loadFactoryContextEngineConfig(t)
 	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
 
 	base := rail.buildPresetProcessors(nil, nil)
-	// 24.2：session_memory preset 追加 SessionMemoryCompressor（共 8 个）
-	if len(base) != 8 {
-		t.Fatalf("base 应包含全部 8 个已知处理器（默认 4 + session_memory 4 含 SessionMemoryCompressor），实际 %d", len(base))
+	// 24.15：单 forked 链 Offloader + SessionMemoryCompressor + Dialogue + CurrentRound + RoundLevel
+	if len(base) != 5 {
+		t.Fatalf("base 应为单 forked 链 5 个处理器，实际 %d", len(base))
 	}
-
-	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
-	if err != nil {
-		t.Fatalf("出厂模板合并不应报错: %v", err)
-	}
-	active := rail.filterActiveProcessors(merged)
-
-	got := make(map[string]bool, len(active))
-	for _, spec := range active {
-		got[spec.Type] = true
-	}
-	want := []string{
-		"MessageSummaryOffloader",
-		"DialogueCompressor",
-		"CurrentRoundCompressor",
-		"RoundLevelCompressor",
-	}
-	if len(active) != len(want) {
-		t.Fatalf("默认路径激活处理器数 = %d, want %d（%v）", len(active), len(want), got)
-	}
-	for _, name := range want {
-		if !got[name] {
-			t.Errorf("默认路径缺少处理器 %s", name)
+	// SessionMemoryCompressor 默认 disabled（Python: enabled=False，用户覆盖启用）
+	for _, spec := range base {
+		if spec.Type == "SessionMemoryCompressor" {
+			if cfg, ok := spec.Config.(*forkedcompressor.SessionMemoryCompressorConfig); !ok || cfg.Enabled {
+				t.Errorf("SessionMemoryCompressor preset 应为 forked 配置且 enabled=false, got %T", spec.Config)
+			}
 		}
 	}
-	if got["FullCompactProcessor"] {
-		t.Error("session_memory 未启用时不应激活 FullCompactProcessor")
+	// 三压缩器配置类型应为 forked 版
+	wantForked := map[string]bool{
+		"DialogueCompressor": true, "CurrentRoundCompressor": true, "RoundLevelCompressor": true,
 	}
-}
-
-// TestSessionMemoryPreset_ActiveSetIsThree 开启 session memory 后只激活三件套。
-func TestSessionMemoryPreset_ActiveSetIsThree(t *testing.T) {
-	ctxCfg := loadFactoryContextEngineConfig(t)
-	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
-	rail.sessionMemoryEnabled = true // 同包测试，直接置位以隔离 adapter 解析逻辑
-
-	base := rail.buildPresetProcessors(nil, nil)
-	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
-	if err != nil {
-		t.Fatalf("合并不应报错: %v", err)
-	}
-	active := rail.filterActiveProcessors(merged)
-
-	got := make(map[string]bool, len(active))
-	for _, spec := range active {
-		got[spec.Type] = true
-	}
-	want := []string{"ToolResultBudgetProcessor", "MicroCompactProcessor", "FullCompactProcessor"}
-	if len(active) != len(want) {
-		t.Fatalf("session_memory 路径激活处理器数 = %d, want %d（%v）", len(active), len(want), got)
-	}
-	for _, name := range want {
-		if !got[name] {
-			t.Errorf("session_memory 路径缺少处理器 %s", name)
+	for _, spec := range base {
+		if wantForked[spec.Type] {
+			switch spec.Config.(type) {
+			case *forkedcompressor.DialogueCompressorConfig,
+				*forkedcompressor.CurrentRoundCompressorConfig,
+				*forkedcompressor.RoundLevelCompressorConfig:
+			default:
+				t.Errorf("%s 配置应为 forked 版, got %T", spec.Type, spec.Config)
+			}
 		}
 	}
-	if got["RoundLevelCompressor"] {
-		t.Error("session_memory 路径不应激活默认 preset 的 RoundLevelCompressor")
+
+	// 出厂模板含陈旧键（FullCompact/ToolResultBudget dict 覆盖）→ 合并报错但降级继续
+	merged, mergeErr := MergeProcessors(base, rail.userProcessors, nil, nil)
+	if mergeErr == nil {
+		t.Fatal("陈旧 dict 覆盖应触发合并错误（对齐 PY ValueError）")
 	}
-}
-
-// TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate 锁定模板接线：
-// session_memory 路径下 ToolResultBudgetProcessor 的阈值应来自出厂模板，而不是零值/默认兜底。
-func TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate(t *testing.T) {
-	ctxCfg := loadFactoryContextEngineConfig(t)
-	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
-
-	base := rail.buildPresetProcessors(nil, nil)
-	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
-	if err != nil {
-		t.Fatalf("出厂模板合并不应报错: %v", err)
-	}
-
-	var cfg *offloader.ToolResultBudgetProcessorConfig
+	_ = mergeErr
+	got := make(map[string]bool, len(merged))
 	for _, spec := range merged {
-		if spec.Type != "ToolResultBudgetProcessor" {
-			continue
+		got[spec.Type] = true
+	}
+	for _, name := range []string{"MessageSummaryOffloader", "SessionMemoryCompressor", "DialogueCompressor", "CurrentRoundCompressor", "RoundLevelCompressor"} {
+		if !got[name] {
+			t.Errorf("单链缺少处理器 %s（合并结果 %v）", name, got)
 		}
-		typed, ok := spec.Config.(*offloader.ToolResultBudgetProcessorConfig)
-		if !ok {
-			t.Fatalf("配置类型 = %T, want *ToolResultBudgetProcessorConfig", spec.Config)
-		}
-		cfg = typed
 	}
-	if cfg == nil {
-		t.Fatal("合并结果缺少 ToolResultBudgetProcessor")
-	}
-	if cfg.TokensThreshold != 50000 {
-		t.Errorf("TokensThreshold = %d, want 50000（模板值未生效）", cfg.TokensThreshold)
-	}
-	if cfg.LargeMessageThreshold != 10000 {
-		t.Errorf("LargeMessageThreshold = %d, want 10000（模板值未生效）", cfg.LargeMessageThreshold)
-	}
-	if cfg.TrimSize != 3000 {
-		t.Errorf("TrimSize = %d, want 3000（模板值未生效）", cfg.TrimSize)
-	}
-	if cfg.OffloadFilePrefix != "ToolResultBudgetProcessor" {
-		t.Errorf("OffloadFilePrefix = %q, want ToolResultBudgetProcessor", cfg.OffloadFilePrefix)
+	if got["FullCompactProcessor"] && !userOverridePresent(rail, "FullCompactProcessor") {
+		t.Error("FullCompactProcessor 只能来自用户覆盖，不应在 preset 中")
 	}
 }
 
-// TestFilterActiveProcessors_CustomTypeKept 自定义处理器类型不受激活集过滤。
-func TestFilterActiveProcessors_CustomTypeKept(t *testing.T) {
-	rail := NewContextProcessorRail(WithUserProcessors([]ceiface.ProcessorSpec{
-		{Type: "MyCustomProcessor", Config: &offloader.MessageSummaryOffloaderConfig{}},
-	}))
-	specs := []ceiface.ProcessorSpec{
-		{Type: "RoundLevelCompressor", Config: &offloader.MessageSummaryOffloaderConfig{}},
-		{Type: "MyCustomProcessor", Config: &offloader.MessageSummaryOffloaderConfig{}},
+// userOverridePresent 用户覆盖集中是否含指定类型
+func userOverridePresent(rail *ContextProcessorRail, typeName string) bool {
+	for _, spec := range rail.userProcessors {
+		if spec.Type == typeName {
+			return true
+		}
 	}
-	active := rail.filterActiveProcessors(specs)
-	if len(active) != 2 {
-		t.Fatalf("激活数 = %d, want 2（自定义类型必须保留）", len(active))
+	return false
+}
+
+// TestPresetChain_IndependentOfSessionMemoryToggle 单 forked 链与 session_memory 开关无关
+// （取代旧两分支互斥断言）。
+func TestPresetChain_IndependentOfSessionMemoryToggle(t *testing.T) {
+	rail := NewContextProcessorRail()
+	off := rail.buildPresetProcessors(nil, nil)
+	rail.sessionMemoryEnabled = true
+	on := rail.buildPresetProcessors(nil, nil)
+	if len(off) != len(on) {
+		t.Errorf("开关不应改变 preset 链长度: %d vs %d", len(off), len(on))
+	}
+	for i := range off {
+		if off[i].Type != on[i].Type {
+			t.Errorf("链顺序不应随开关变化: %s vs %s", off[i].Type, on[i].Type)
+		}
+	}
+}
+
+// TestActivate_SwitchesFactoriesTo forked Activate 后工厂应解析为 forked 配置类型
+// （Python: forked.activate() 切换 _PROCESSOR_MAP）。
+func TestActivate_SwitchesFactoriesTo(t *testing.T) {
+	forkedcompressor.Activate()
+	for _, typeName := range []string{"SessionMemoryCompressor", "DialogueCompressor", "CurrentRoundCompressor", "RoundLevelCompressor"} {
+		factory, ok := context_engine.GetProcessorFactory(typeName)
+		if !ok {
+			t.Fatalf("%s 工厂未注册", typeName)
+		}
+		cfgFactory, err := factory(nil)
+		if err == nil {
+			t.Errorf("%s 空配置应被拒绝（forked 工厂类型断言）", typeName)
+			_ = cfgFactory
+		}
+	}
+}
+
+// TestFactoryTemplatePresetMerge_StaleKeysDegrade 锁定陈旧键降级语义：
+// 出厂模板中的 FullCompact/ToolResultBudget dict 覆盖在单 forked 链下不再存在于
+// preset，MergeProcessors 对齐 Python _merge_processors（context_processor_rail.py:176-180）
+// 抛错（Go 收集为聚合错误），rail init 侧降级为 warn + 跳过违规处理器。
+func TestFactoryTemplatePresetMerge_StaleKeysDegrade(t *testing.T) {
+	ctxCfg := loadFactoryContextEngineConfig(t)
+	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
+
+	base := rail.buildPresetProcessors(nil, nil)
+	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
+	if err == nil {
+		t.Fatal("陈旧 dict 覆盖应触发合并错误（对齐 PY ValueError）")
+	}
+	errText := err.Error()
+	if !strings.Contains(errText, "FullCompactProcessor") || !strings.Contains(errText, "ToolResultBudgetProcessor") {
+		t.Errorf("错误应点名陈旧类型, got: %v", errText)
+	}
+	// 降级：单链 5 处理器仍在合并结果中
+	got := make(map[string]bool, len(merged))
+	for _, spec := range merged {
+		got[spec.Type] = true
+	}
+	for _, name := range []string{"MessageSummaryOffloader", "SessionMemoryCompressor", "DialogueCompressor", "CurrentRoundCompressor", "RoundLevelCompressor"} {
+		if !got[name] {
+			t.Errorf("降级后单链不应丢失 %s（结果 %v）", name, got)
+		}
 	}
 }
 

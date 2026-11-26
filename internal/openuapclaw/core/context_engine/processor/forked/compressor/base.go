@@ -914,6 +914,22 @@ func (p *PrefixCompactProcessor) ResolveContextMax(mc iface.ModelContext, modelN
 	return cesupport.ResolveContextMax(mc, modelName)
 }
 
+// OnAddMessages 收到消息时的变换（基座缺省直通）。
+// Python: forked/base.py:71 (on_add_messages, 默认 no-op)
+func (p *PrefixCompactProcessor) OnAddMessages(
+	_ context.Context, _ iface.ModelContext, messages []llm_schema.BaseMessage, _ ...iface.Option,
+) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
+	return nil, messages, nil
+}
+
+// TriggerAddMessages 消息添加介入判定（基座缺省 false）。
+// Python: forked/base.py:108 (trigger_add_messages, 默认 False)
+func (p *PrefixCompactProcessor) TriggerAddMessages(
+	_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ ...iface.Option,
+) (bool, error) {
+	return false, nil
+}
+
 // LoadState 恢复状态（基座无状态）。
 // Python: base.py:883 (load_state)
 func (p *PrefixCompactProcessor) LoadState(map[string]any) {}

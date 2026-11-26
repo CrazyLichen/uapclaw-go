@@ -102,3 +102,13 @@ func (c *RoundLevelCompressor) Config() *RoundLevelCompressorConfig {
 	}
 	return NewRoundLevelCompressorConfig()
 }
+
+// SetModelDefaults iface.ProcessorConfig 实现：Model/ModelClient 为 nil 时回填。
+func (c *RoundLevelCompressorConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil {
+		c.ModelClient = modelClient
+	}
+}
