@@ -139,14 +139,12 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	s.Greater(len(first[0].GetContent().Text()), 1000, "system prompt 不应被压缩/清空")
 }
 
-// TestAddMessages路径_Dialogue与当轮压缩触发 验证 add_messages 判据下两个压缩器都会触发。
-func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩触发() {
-	// 窗口 10 → 比例收口后 Dialogue/CurrentRound 阈值只有几 token，助手消息回填即触发
-	s.writeConfig(10, `    dialogue_compressor_config:
-      messages_to_keep: 1
-    current_round_compressor_config:
-      messages_to_keep: 1
-`)
+// TestGetContextWindow路径_forked链触发 24.15 单 forked 链后，三个压缩器都在
+// get_context_window 判据触发（PY forked 版语义：无 add_messages 压缩路径）。
+// 对应 Python：forked dialogue/current_round/round_level 的 trigger_get_context_window。
+func (s *CompressionTriggerSuite) TestGetContextWindow路径_forked链触发() {
+	// 窗口 10 → 比例阈值几个 token，小上下文必然越过
+	s.writeConfig(10, "")
 	s.setScript(scriptStep{text: "用户在打招呼"})
 
 	d := adapter.NewDeepAdapter()
@@ -155,8 +153,35 @@ func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩�
 
 	states := s.runTurn(d, "sess_compress_add", "req-c-2", "你好")
 	processors := collectProcessors(states)
-	s.Contains(processors, "DialogueCompressor", "add_messages 路径应触发 DialogueCompressor")
-	s.Contains(processors, "CurrentRoundCompressor", "add_messages 路径应触发 CurrentRoundCompressor")
+	s.Contains(processors, "DialogueCompressor", "forked 链应触发 DialogueCompressor")
+	s.Contains(processors, "CurrentRoundCompressor", "forked 链应触发 CurrentRoundCompressor")
+	s.Contains(processors, "RoundLevelCompressor", "forked 链应触发 RoundLevelCompressor")
+}
+
+// TestToolResultBudget陈旧键降级 24.15 单 forked 链后 ToolResultBudget 已退出
+// preset；yaml 里的陈旧 dict 覆盖按 PY _merge_processors ValueError 语义降级
+// （合并报错被 rail 吞为 warn），链路不崩、其余处理器照常生效。
+func (s *CompressionTriggerSuite) TestToolResultBudget陈旧键降级() {
+	s.writeConfig(262, `    session_memory: true
+    tool_result_budget_processor_config:
+      tokens_threshold: 1
+      large_message_threshold: 1
+`)
+	s.setScript(
+		scriptStep{toolName: "todo_list", toolArgs: "{}"},
+		scriptStep{text: "已查看任务列表"},
+	)
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	states := s.runTurn(d, "sess_compress_trb", "req-c-3", "看看任务列表")
+	processors := collectProcessors(states)
+	s.NotContains(processors, "ToolResultBudgetProcessor",
+		"陈旧键降级后不应再激活 ToolResultBudgetProcessor")
+	s.Contains(processors, "RoundLevelCompressor",
+		"降级不应影响 forked 链其余处理器")
 }
 
 // TestToolResultBudget触发 session_memory 预设下轮内工具结果超预算应触发卸载。
