@@ -680,7 +680,7 @@ func NewLoopGroup() *LoopGroup {
 
 // AddWorkflowComp 添加循环体组件（loop_comp.py:57-85 一比一）：
 // 禁嵌套 LoopComponent（101030）→ super 转发 → LoopBreakComponent 收集 →
-// drawable.set_break_node 属 D-20-2 跳过（⤴️8.13）→ node_ids 记录。
+// drawable.set_break_node（:83-84，8.13 已回填）→ node_ids 记录。
 func (g *LoopGroup) AddWorkflowComp(
 	compID string,
 	workflowComp components.ComponentComposable,
