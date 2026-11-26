@@ -94,38 +94,14 @@ func (s *CrossUserSuite) TestE9跨用户共享下载() {
 	s.Require().NotNil(stagedA)
 	if sh := railA.ExperienceSharer(); sh == nil {
 		s.T().Logf("[DIAG] sharerA nil")
-	} else {
-		s.T().Logf("[DIAG] sharerA HasPending pre=%v", sh.HasPending("shared_skill"))
 	}
 	err = railA.ApproveRecord(s.ctx, stagedA.RequestID)
 	s.Require().NoError(err)
-	if sh := railA.ExperienceSharer(); sh != nil {
-		s.T().Logf("[DIAG] sharerA HasPending post=%v", sh.HasPending("shared_skill"))
-	}
-	_ = filepath.WalkDir(hubDir, func(path string, dd os.DirEntry, err error) error {
-		if err == nil && !dd.IsDir() {
-			s.T().Logf("[DIAG] hub file %s", path)
-		}
-		return nil
-	})
 
 	// hub 侧断言：A 的上传产物已写盘
 	hubEntries, _ := os.ReadDir(hubDir)
 	s.Require().NotEmpty(hubEntries, "A 上传后 hub 目录应有 bundle")
 
-	// [DIAG-E9] hub bundle keywords 实况
-	filepath.WalkDir(hubDir, func(path string, dd os.DirEntry, err error) error {
-		if err == nil && !dd.IsDir() {
-			if data, rerr := os.ReadFile(path); rerr == nil && len(data) > 0 {
-				head := string(data)
-				if len(head) > 200 {
-					head = head[:200]
-				}
-				s.T().Logf("[DIAG-E9] %s head=%q", path, head)
-			}
-		}
-		return nil
-	})
 	// 用户 B：检索 + 下载（真实 backend.DownloadBundles → mirror 缓存）
 	// 用户 B 侧也创建同名 skill（跨用户场景：B 已安装同名技能，
 	// 经 hub 拉取 A 的经验；local_file 后端 ResolveSkillID 依赖本地 skill 记录）
