@@ -5,16 +5,23 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
-	gatewaypush "github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// EvolutionPushTransport 推送传输最小接口（本地定义，勿 import gateway_push：
+// gateway_push→server→adapter→evolution 会成环——15.24d Task5 裁决，
+// Transport 由调用方适配实现，如 adapter 包 sendPushFuncTransport）。
+type EvolutionPushTransport interface {
+	// SendPush 发送一条 server_push 语义消息（msg 形状同 BuildServerPushMessage 产物）
+	SendPush(ctx context.Context, msg map[string]any) error
+}
 
 // EvolutionPushContext evolution 推送上下文。
 // Python: EvolutionPushContext
 type EvolutionPushContext struct {
 	// Transport 推送传输
-	Transport gatewaypush.GatewayPushTransport
+	Transport EvolutionPushTransport
 	// ChannelID 通道标识（可能为空）
 	ChannelID string
 	// SessionID 会话标识
@@ -31,8 +38,8 @@ type BuildPushMessageFunc func(sessionID, requestID string, payload map[string]a
 type ParseStreamChunkFunc func(evt map[string]any) map[string]any
 
 // BroadcastEventFunc 广播事件的函数类型。
-// Python: broadcast_event 回调参数
-type BroadcastEventFunc func(channelID *string, sessionID string, parsed map[string]any)
+// Python: broadcast_event 回调参数（channel_id 可空）
+type BroadcastEventFunc func(channelID string, sessionID string, parsed map[string]any)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -99,7 +106,7 @@ func PushEvolutionEvent(
 // Python: broadcast_evolution_progress()
 func BroadcastEvolutionProgress(
 	ctx context.Context,
-	channelID *string,
+	channelID string,
 	sessionID string,
 	events []map[string]any,
 	parseChunk ParseStreamChunkFunc,

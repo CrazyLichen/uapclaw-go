@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	evolutionhelpers "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -889,6 +890,23 @@ loop:
 	}
 }
 
+// sendPushFuncTransport 将实例级 sendPushFunc 适配为 GatewayPushTransport。
+// Task5：独立包 evolution.PushEvolutionStatus/Event 需要 Transport 抽象，
+// 而循环依赖禁止 evolution 包回调 adapter——经本适配器（持有 *DeepAdapter）
+// 在调用时动态解析 getSendPushFunc（实例级优先，回退 defaultSendPushFunc）。
+type sendPushFuncTransport struct {
+	d *DeepAdapter
+}
+
+func (t sendPushFuncTransport) SendPush(ctx context.Context, msg map[string]any) error {
+	sendPush := t.d.getSendPushFunc()
+	if sendPush == nil {
+		logger.Warn(logComponent).Msg("sendPushFuncTransport: sendPushFunc not injected")
+		return fmt.Errorf("sendPushFunc not injected")
+	}
+	return sendPush(ctx, msg)
+}
+
 // watchTeamEvolutionAndPushTeam 后台监控 TeamSkillEvolutionRail 并推送状态。
 // 对齐 Python: _watch_team_evolution_and_push(channel_id, session_id, rail) (line 1101-1393)
 //
@@ -916,25 +934,19 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		_ = rail.CleanupBackgroundTasks()
 	}
 
-	// 内部推送 evolution status 函数（内联对齐 Python: push_evolution_status）
-	// Python 团队路径 include_payload_request_id=True（默认），payload 含 request_id
+	// 推送上下文：Transport 适配实例级 sendPushFunc（原「内联对齐」偏差已收敛，
+	// Task5 规则 8——统一调 adapter/evolution 独立包四助手）
+	pushContext := &evolutionhelpers.EvolutionPushContext{
+		Transport: sendPushFuncTransport{d: d},
+		ChannelID: channelID,
+		SessionID: sessionID,
+	}
+
+	// 内部推送 evolution status 函数（收敛为调独立包 PushEvolutionStatus）
+	// Python: push_evolution_status —— 团队路径 include_payload_request_id=True（默认）
 	pushEvolutionStatus := func(requestID, status, stage string, message string) {
-		sendPush := d.getSendPushFunc()
-		if sendPush == nil {
-			logger.Warn(logComponent).Str("session_id", sessionID).
-				Msg("watchTeamEvolutionAndPushTeam: sendPushFunc not injected")
-			return
-		}
 		update := evolutionlogic.BuildEvolutionStatusUpdate(requestID, status, stage, message)
-		payload := map[string]any{
-			"event_type": "chat.evolution_status",
-			"status":     update.Status,
-			"stage":      update.Stage,
-			"message":    update.Message,
-			"request_id": update.RequestID,
-		}
-		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
-		if err := sendPush(ctx, msg); err != nil {
+		if err := evolutionhelpers.PushEvolutionStatus(ctx, pushContext, update, sessionmd.BuildServerPushMessage); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
 				Str("request_id", requestID).
 				Str("status", status).Str("stage", stage).
@@ -958,32 +970,9 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		return true
 	}
 
-	// 内部推送 evolution event 函数（内联对齐 Python: push_evolution_event）
+	// 内部推送 evolution event 函数（收敛为调独立包 PushEvolutionEvent）
 	pushEvolutionEvent := func(requestID string, evt map[string]any) error {
-		sendPush := d.getSendPushFunc()
-		if sendPush == nil {
-			logger.Warn(logComponent).Str("session_id", sessionID).
-				Msg("watchTeamEvolutionAndPushTeam: sendPushFunc not injected")
-			return fmt.Errorf("sendPushFunc not injected")
-		}
-		payload := evolutionlogic.EventPayloadDict(evt)
-		evtType := evolutionlogic.EventType(evt)
-		if evtType != "" {
-			if _, ok := payload["event_type"]; !ok {
-				payload["event_type"] = evtType
-			}
-		}
-		if _, ok := payload["request_id"]; !ok {
-			payload["request_id"] = requestID
-		}
-		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
-		if err := sendPush(ctx, msg); err != nil {
-			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
-				Str("request_id", requestID).Str("event_type", evtType).
-				Msg("watchTeamEvolutionAndPushTeam: failed to push evolution event")
-			return err
-		}
-		return nil
+		return evolutionhelpers.PushEvolutionEvent(ctx, pushContext, requestID, evt, sessionmd.BuildServerPushMessage)
 	}
 
 	lastEventAt := time.Now()
@@ -1051,16 +1040,8 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		lastEventAt = time.Now()
 
 		// Python: await broadcast_evolution_progress(channel_id, session_id, events, ...)
-		// Go 差异：因循环依赖无法导入 adapter/evolution 包，内联 broadcast_evolution_progress 逻辑
-		for _, evt := range eventsMap {
-			if evolutionlogic.IsEvolutionApprovalEvent(evt) || evolutionlogic.IsEvolutionOutcomeEvent(evt) || evolutionlogic.TeamEvolutionTerminalProgress(evt) != nil {
-				continue
-			}
-			parsed := utilsParseStreamChunk(evt)
-			if parsed != nil {
-				broadcastParsedEvent(channelID, sessionID, parsed)
-			}
-		}
+		_ = evolutionhelpers.BroadcastEvolutionProgress(ctx, channelID, sessionID, eventsMap,
+			utilsParseStreamChunk, broadcastParsedEvent)
 
 		// Python: grouped_approvals, _ = _group_team_evolution_approvals(session_id, events)
 		groupedApprovals, _ := groupTeamEvolutionApprovals(sessionID, eventsMap)

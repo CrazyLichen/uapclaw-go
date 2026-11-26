@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
-	gatewaypush "github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -198,7 +197,7 @@ func TestPushEvolutionProgress_nilChunk(t *testing.T) {
 
 // ──────────────────────────── 接口合规测试 ────────────────────────────
 
-// TestGatewayPushTransport接口合规 测试 mockPushTransport 实现 GatewayPushTransport。
+// TestGatewayPushTransport接口合规 测试 mockPushTransport 实现 EvolutionPushTransport。
 func TestGatewayPushTransport接口合规(t *testing.T) {
-	var _ gatewaypush.GatewayPushTransport = (*mockPushTransport)(nil)
+	var _ EvolutionPushTransport = (*mockPushTransport)(nil)
 }
