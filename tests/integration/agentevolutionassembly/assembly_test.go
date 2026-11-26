@@ -110,10 +110,10 @@ func (s *EvolutionAssemblySuite) TestMemberCopyOnWriteChain() {
 func (s *EvolutionAssemblySuite) TestStoreForKindChain() {
 	_, err := s.store.CreateSkill(s.ctx, "kind_skill", "演示", "正文", "")
 	s.Require().NoError(err)
-	deleted, err := s.store.DeleteRecordsForKind(s.ctx, "kind_skill", []string{"missing"}, "skill")
+	deleted, err := s.store.DeleteRecords(s.ctx, "kind_skill", []string{"missing"}, checkpointing.WithRecordsSubjectKind("skill"))
 	s.Assert().NoError(err)
 	s.Assert().Equal(0, deleted)
-	marked, err := s.store.MarkRecordsAppliedForKind(s.ctx, "kind_skill", []string{"missing"}, "skill")
+	marked, err := s.store.MarkRecordsApplied(s.ctx, "kind_skill", []string{"missing"}, checkpointing.WithRecordsSubjectKind("skill"))
 	s.Assert().NoError(err)
 	s.Assert().Equal(0, marked)
 }
