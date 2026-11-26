@@ -17,6 +17,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	compressionrecall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/compression_recall"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -44,6 +45,9 @@ type ContextProcessorRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// allProcessors 合并后的完整处理器列表
 	allProcessors []ceiface.ProcessorSpec
+	// recallEnabled 压缩召回生效开关（recall 配置开启 + 存在受支持的 forked 压缩器）
+	// Python: self._recall_enabled
+	recallEnabled bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -145,6 +149,9 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	// 命中池子时忽略 processors，老会话不会跟随（见 Go 侧增强说明）。
 	pushRuntimeConfig(agent, config.ContextEngineConfig, allProcessors)
 
+	// 压缩召回生效判定与接线（Python: init 尾部 _recall_enabled 分支）
+	r.wireCompressionRecall(agent, config.ContextEngineConfig, allProcessors)
+
 	// 获取 systemPromptBuilder 引用
 	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
@@ -173,6 +180,7 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection("offload")
+		r.systemPromptBuilder.RemoveSection("compression_recall")
 	}
 	r.allProcessors = nil
 
@@ -195,6 +203,8 @@ func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfac
 func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	r.maybeInjectOffloadSection()
+	// Python: self._maybe_inject_compression_recall_section()
+	r.maybeInjectCompressionRecallSection()
 	return nil
 }
 
@@ -372,6 +382,108 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	}
 	section := sections.BuildReloadSection(lang)
 	r.systemPromptBuilder.AddSection(section)
+}
+
+// wireCompressionRecall 压缩召回生效判定 + 工具注册 + offloader 保护名单。
+// Python: init 尾部 recall_requested/_recall_enabled 分支 + _protect_compression_recall_tool_results
+// + _register_compression_recall_tool（context_processor_rail.py:378-392）。
+func (r *ContextProcessorRail) wireCompressionRecall(
+	agent sainterfaces.BaseAgent,
+	engineConfig ceschema.ContextEngineConfig,
+	allProcessors []ceiface.ProcessorSpec,
+) {
+	recallConfig := engineConfig.CompressionRecall
+	recallRequested := recallConfig != nil && recallConfig.Enabled
+	supportedCompressorPresent := false
+	supported := map[string]bool{
+		"DialogueCompressor": true, "CurrentRoundCompressor": true,
+		"RoundLevelCompressor": true, "SessionMemoryCompressor": true,
+	}
+	for _, spec := range allProcessors {
+		if supported[spec.Type] {
+			supportedCompressorPresent = true
+			break
+		}
+	}
+	r.recallEnabled = recallRequested && supportedCompressorPresent
+	if recallConfig != nil {
+		logger.Info(logComponent).
+			Bool("enabled", recallConfig.Enabled).
+			Msg("compression recall effective config")
+	}
+	if recallRequested && !supportedCompressorPresent {
+		logger.Warn(logComponent).Msg("compression recall is enabled but no supported forked compressor is configured")
+	}
+	if !r.recallEnabled {
+		return
+	}
+	// Python: _protect_compression_recall_tool_results——recall 工具结果免于规则压缩
+	r.protectCompressionRecallToolResults(allProcessors)
+	// Python: _register_compression_recall_tool
+	r.registerCompressionRecallTool(agent)
+}
+
+// protectCompressionRecallToolResults 向 forked offloader 配置追加 recall 工具保护名单。
+// Python: context_processor_rail.py:694 (_protect_compression_recall_tool_results)
+func (r *ContextProcessorRail) protectCompressionRecallToolResults(processors []ceiface.ProcessorSpec) {
+	for i := range processors {
+		if processors[i].Type != "MessageSummaryOffloader" {
+			continue
+		}
+		if cfg, ok := processors[i].Config.(*forkedoffloader.MessageSummaryOffloaderConfig); ok {
+			already := false
+			for _, name := range cfg.ProtectedToolNames {
+				if name == "recall_compressed_context" {
+					already = true
+					break
+				}
+			}
+			if !already {
+				cfg.ProtectedToolNames = append(cfg.ProtectedToolNames, "recall_compressed_context")
+			}
+		}
+	}
+}
+
+// registerCompressionRecallTool 注册 recall 工具到 agent 能力管理器。
+// Python: context_processor_rail.py:656 (_register_compression_recall_tool)
+func (r *ContextProcessorRail) registerCompressionRecallTool(agent sainterfaces.BaseAgent) {
+	abilityManager := agent.AbilityManager()
+	if abilityManager == nil {
+		return
+	}
+	workspaceDir := ""
+	if ws := r.Workspace(); ws != nil {
+		workspaceDir = ws.RootPath
+	}
+	agentID := "default"
+	language := "cn"
+	if r.systemPromptBuilder != nil && r.systemPromptBuilder.Language() != "" {
+		language = r.systemPromptBuilder.Language()
+	}
+	recallTool, card, err := compressionrecall.NewCompressionRecallTool(workspaceDir, language, agentID)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("register compression recall tool failed")
+		return
+	}
+	abilityManager.AddAbility(card, recallTool)
+}
+
+// maybeInjectCompressionRecallSection 按召回开关注入/移除 compression_recall 节。
+// Python: context_processor_rail.py:686 (_maybe_inject_compression_recall_section)
+func (r *ContextProcessorRail) maybeInjectCompressionRecallSection() {
+	if r.systemPromptBuilder == nil {
+		return
+	}
+	if !r.recallEnabled {
+		r.systemPromptBuilder.RemoveSection("compression_recall")
+		return
+	}
+	lang := "cn"
+	if r.systemPromptBuilder.Language() != "" {
+		lang = r.systemPromptBuilder.Language()
+	}
+	r.systemPromptBuilder.AddSection(sections.BuildCompressionRecallSection(lang))
 }
 
 // maybeScheduleSessionMemoryUpdate 调度会话记忆更新。

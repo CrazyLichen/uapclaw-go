@@ -628,3 +628,7 @@ func writeJSONLines(path string, values []map[string]any) error {
 }
 
 // utf8CharBytes 已由 runeLen 取代（splitText 改按 rune 索引）
+
+// ExtractQueryText 结构化 user content 的 query 文本抽取（B-15 诊断/扩展点）。
+// Python: archive.py content_to_query_text（内容判型：纯文本直取，多模态 parts 拼接）。
+func ExtractQueryText(content any) string { return contentToQueryText(content) }
