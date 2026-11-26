@@ -15,12 +15,17 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"fmt"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
+
+	recall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor/recall"
 	forkedoffloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	compressionrecall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/compression_recall"
 	mockllm "github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 
@@ -267,4 +272,85 @@ func (s *ForkedCompressionChainSuite) TestE_OffloaderAddOffload() {
 		return nil
 	}))
 	s.Require().True(found, "offload 原文应落盘")
+}
+
+// TestF_TTL通道真实时序 真 SessionModelContext + 注入时钟：首次访问登记 →
+// 间隔超 TTL 且占用超阈 → 触发 TTL 卸载（记忆块替换窗口）。
+// 跨子系统：forked offloader + SessionModelContext 访问时间（D-24.15-a6）+ MockLLM。
+func (s *ForkedCompressionChainSuite) TestF_TTL通道真实时序() {
+	cfg := forkedoffloader.NewMessageSummaryOffloaderConfig()
+	previous := forkedoffloader.NowFunc
+	forkedoffloader.SetNowFunc(func() float64 { return 1000 })
+	defer forkedoffloader.SetNowFunc(previous)
+	// 构造必须在 SetNowFunc 之后：pipeline 构造期捕获时间源
+	offloader := forkedoffloader.NewMessageSummaryOffloader(cfg)
+
+	engineCfg := ceschema.NewContextEngineConfig()
+	engineCfg.ContextWindowTokens = 100
+	mc := cecontext.NewSessionModelContext("ctx-ttl", "sess-ttl", engineCfg, nil, nil, nil, nil, nil, nil)
+	// 占用超阈：一条大工具结果（~1000 token > 0.5×100）
+	mc.SetMessages([]llmschema.BaseMessage{
+		llmschema.NewToolMessage("c-ttl", strings.Repeat("ttl-", 1000)),
+	}, true)
+
+	// ① 首次访问：登记时间戳，不触发
+	triggered, err := offloader.TriggerGetContextWindow(context.Background(), mc, iface.ContextWindow{})
+	s.Require().NoError(err)
+	s.Require().False(triggered, "首次访问不触发")
+
+	// ② 间隔 400s（> TTL 300）且占用超阈 → 触发
+	forkedoffloader.SetNowFunc(func() float64 { return 1400 })
+	triggered, err = offloader.TriggerGetContextWindow(context.Background(), mc, iface.ContextWindow{})
+	s.Require().NoError(err)
+	s.Require().True(triggered, "TTL 空闲超时 + 占用超阈应触发")
+
+	// ③ TTL 处理：记忆块替换窗口
+	event, _, err := offloader.OnGetContextWindow(context.Background(), mc, iface.ContextWindow{})
+	s.Require().NoError(err)
+	s.Require().NotNil(event, "TTL 处理应产出事件")
+	s.Equal("MessageSummaryOffloader", event.EventType)
+	msgs, _ := mc.GetMessages(0, true)
+	text := ""
+	for _, msg := range msgs {
+		text += msg.GetContent().Text() + "\n"
+	}
+	s.Require().Contains(text, "[[OFFLOAD: handle=", "TTL 卸载应落 OFFLOAD 占位标记")
+}
+
+// TestG_recall压缩召回闭环 压缩归档落盘 → recall_compressed_context 工具检索 →
+// 渲染内容含原文片段——压缩后找回的完整闭环。
+// 跨子系统：forked compressor/archive + recall retriever + harness recall 工具。
+func (s *ForkedCompressionChainSuite) TestG_recall压缩召回闭环() {
+	ws := s.fcWorkspace()
+	recallCfg := &ceschema.CompressionRecallConfig{Enabled: true}
+	mc := &fcModelContext{smcModelContext: &smcModelContext{workspaceDir: ws, sessionID: "sess-recall", recallCfg: recallCfg}}
+	assistant := llmschema.NewAssistantMessage("I will inspect the LoginHandler handler now.")
+	assistant.ToolCalls = []*llmschema.ToolCall{llmschema.NewToolCall("c-r1", "read_file", `{"file_path":"/a/login_handler.py"}`)}
+	toolMsg := llmschema.NewToolMessage("c-r1", strings.Repeat("LoginHandler nil pointer at line 42. ", 30))
+	mc.messages = []llmschema.BaseMessage{
+		llmschema.NewUserMessage("fix the LoginHandler bug"),
+		assistant,
+		toolMsg,
+	}
+
+	archive, err := recall.ArchiveCompressionMessages(mc, "DialogueCompressor",
+		[]llmBaseMessage{mc.messages[0]},
+		[]llmBaseMessage{mc.messages[1], mc.messages[2]},
+		nil, 500, 50)
+	s.Require().NoError(err, "归档应成功")
+	s.Require().NotNil(archive)
+	s.Require().NotEmpty(archive.MemoryID, "归档应有 memory_id")
+
+	// 精确召回（PY 工具主线：memory_id 来自 COMPRESSION_RECALL 标记）
+	recalled, recallErr := recall.RecallCompressedContext(ws, "sess-recall", archive.MemoryID, "LoginHandler nil pointer")
+	s.Require().NoError(recallErr, "精确召回应成功")
+	chunksJSON := fmt.Sprint(recalled["chunks"])
+	s.Require().Contains(chunksJSON, "LoginHandler", "召回 chunk 应含原文片段")
+
+	tool, _, err := compressionrecall.NewCompressionRecallTool(ws, "cn", "agent-1")
+	s.Require().NoError(err)
+	out := tool.Recall(map[string]any{"query": "LoginHandler nil pointer", "memory_id": archive.MemoryID}, "sess-recall")
+	s.Require().True(out.Success, "召回应成功: %v", out.Error)
+	content, _ := out.Data["content"].(string)
+	s.Require().Contains(content, "LoginHandler", "渲染内容应含原文片段")
 }

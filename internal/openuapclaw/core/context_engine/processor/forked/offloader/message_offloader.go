@@ -74,6 +74,12 @@ var offloadStrategy OffloadStrategy = OffloadStrategyRuleThenTruncate
 // nowFunc 时间源（测试可覆盖）。
 var nowFunc = func() float64 { return float64(time.Now().UnixNano()) / 1e9 }
 
+// SetNowFunc 覆盖时间源（测试注入 TTL 时序）。
+func SetNowFunc(fn func() float64) { nowFunc = fn }
+
+// NowFunc 当前时间源。
+func NowFunc() float64 { return nowFunc() }
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageSummaryOffloaderConfig 上下文相对工具结果卸载的最小配置。
@@ -232,7 +238,7 @@ func (mo *MessageSummaryOffloader) OnAddMessages(
 func (mo *MessageSummaryOffloader) TriggerGetContextWindow(
 	_ context.Context, mc iface.ModelContext, _ iface.ContextWindow, _ ...iface.Option,
 ) (bool, error) {
-	now := mo.rulePipeline.CurrentTime()
+	now := NowFunc()
 	var previousAccess float64
 	var hasPrevious bool
 	if accessor, ok := mc.(WindowAccessAtProvider); ok {
