@@ -20,7 +20,6 @@ import (
 	cesupport "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor/support"
 	forkedsupport "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/support"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -687,7 +686,6 @@ func (p *PrefixCompactProcessor) dumpCompressionArtifact(
 		return
 	}
 	cesupport.DumpCompressionArtifact(&cesupport.CompressionDumpInput{
-		Processor:        p,
 		Context:          mc,
 		Config:           cfg,
 		ProcessorType:    p.ProcessorType(),
@@ -937,21 +935,6 @@ func (p *PrefixCompactProcessor) LoadState(map[string]any) {}
 // SaveState 保存状态（基座无状态）。
 // Python: base.py:886 (save_state)
 func (p *PrefixCompactProcessor) SaveState() map[string]any { return map[string]any{} }
-
-// ResolveContextMaxForDump dump 窄接口：等价 processor.resolve_context_max(context, {})。
-// Python: compression_dump.py 经 processor.resolve_context_max 访问（D-24.15-b1 窄接口缝）。
-func (p *PrefixCompactProcessor) ResolveContextMaxForDump(mc cesupport.DumpContextIdentifiers, modelName string) int {
-	return cesupport.ResolveContextMax(mc, modelName)
-}
-
-// CountMessagesTokensForDump dump 窄接口：等价 processor.count_messages_tokens(messages, context)。
-func (p *PrefixCompactProcessor) CountMessagesTokensForDump(mc cesupport.DumpContextIdentifiers, messages []llm_schema.BaseMessage) int {
-	var counter token.TokenCounter
-	if tc, ok := mc.(interface{ TokenCounter() token.TokenCounter }); ok {
-		counter = tc.TokenCounter()
-	}
-	return cesupport.CountMessagesTokens(messages, counter, "", p.ProcessorType(), false)
-}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

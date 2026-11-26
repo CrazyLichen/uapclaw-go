@@ -277,6 +277,9 @@ type DeepAdapter struct {
 	// skillEvolutionRail 技能演进护栏
 	// ✅ 已回填：SkillEvolutionRail（对齐 Python: _skill_evolution_rail: SkillEvolutionRail | None）
 	skillEvolutionRail *evolution.SkillEvolutionRail
+	// evolutionInterruptRail 演进审批中断护栏
+	// 对齐 Python: _evolution_interrupt_rail（_refresh_active_evolution_rail_refs 缓存）
+	evolutionInterruptRail *evolution.EvolutionInterruptRail
 	// skillCreateRail 技能创建护栏（单 Agent 版）
 	// 对齐 Python: _skill_create_rail: SkillCreateRail | None
 	skillCreateRail *skills.SkillCreateRail
@@ -1234,6 +1237,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		logger.Warn(logComponent).Err(syncErr).Msg("MCP service hot-sync failed, continuing")
 	}
 
+	// Python: self._sync_active_evolution_review_agent_after_reload()（:13721，configure 后恢复审查子 agent）
+	d.syncActiveEvolutionReviewAgentAfterReload(ctx)
 	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig config hot-reloaded")
 	return nil
 }
@@ -1402,9 +1407,17 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 				content = fmt.Sprintf("%v", slashResult)
 			}
 			resultType, _ := slashResult["result_type"].(string)
+			// Python: payload = {content, source, slash_command, display_level}
+			// （interface_deep.py:18288-18294——前端注记随 payload 透传）
+			payload := map[string]any{"content": content}
+			for _, key := range []string{"source", "slash_command", "display_level"} {
+				if v, ok := slashResult[key]; ok && v != nil {
+					payload[key] = v
+				}
+			}
 			return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 				schema.WithResponseOK(resultType != "error"),
-				schema.WithPayload(map[string]any{"content": content}),
+				schema.WithPayload(payload),
 			), nil
 		}
 	}
@@ -2172,7 +2185,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		//   task = asyncio.create_task(self._watch_evolution_and_push(rid, cid, session_id))
 		//   task.add_done_callback(self._on_evolution_watcher_done)
 		//   self._evolution_watcher_tasks.add(task)
-		if d.skillEvolutionRail != nil {
+		// Python: if self._skill_evolution_rail is not None 		//   and self._skill_evolution_rail.signal_trigger 		//   and not self._skill_evolution_rail.auto_save:   (interface_deep.py:20525-20528)
+		// 个人 rail 新版恒 signal_trigger=False → 门恒 False（形态位，偏差 D-15.24d-3）。
+		if d.skillEvolutionRail != nil &&
+			d.skillEvolutionRail.SignalTrigger() && !d.skillEvolutionRail.AutoSave() {
 			go func() {
 				_ = d.watchEvolutionAndPush(ctx, sessionID, req.ChannelID, req.RequestID)
 				d.onEvolutionWatcherDone(sessionID)
@@ -2621,6 +2637,38 @@ func (d *DeepAdapter) SetInstanceForTest(agent *harness.DeepAgent) {
 		return
 	}
 	d.instance = agent
+}
+
+// SetSkillEvolutionRailForTest 注入演进 rail 实例（仅测试用）。
+// 与 SetInstanceForTest 同类：生产路径经 ensureActiveEvolutionRailsRegistered 装配；
+// 集成测试需要预置 MockLLM rail 时使用。
+func (d *DeepAdapter) SetSkillEvolutionRailForTest(rail *evolution.SkillEvolutionRail) {
+	d.skillEvolutionRail = rail
+}
+
+// SetModelForTest 注入测试用模型与模型缓存（仅测试用）。
+// 集成测试预置 MockLLM 时使用；生产路径经模型解析链装配。
+// SetConfigSnapshotsForTest 注入配置快照（仅测试用）。
+// 集成测试预置 react.evolution 开关时使用；生产路径经配置装载链发布。
+func (d *DeepAdapter) SetConfigSnapshotsForTest(configCache, configBase map[string]any) {
+	d.setConfigSnapshots(configCache, configBase)
+}
+
+// StartTeamEvolutionWatcherForTest 启动团队演进 watcher（仅测试用）。
+// 集成测试注入已装配的 TeamSkillEvolutionRail 后启动，观察推送帧；
+// 生产路径经 team slash / ensure 链启动。
+func (d *DeepAdapter) StartTeamEvolutionWatcherForTest(ctx context.Context, channelID, sessionID string, rail *evolution.TeamSkillEvolutionRail) {
+	go d.watchTeamEvolutionAndPushTeam(ctx, channelID, sessionID, rail)
+}
+
+func (d *DeepAdapter) SetModelForTest(model *llm.Model, modelName string) {
+	d.stateMu.Lock()
+	d.model = model
+	d.modelClientConfig = model.ClientConfig
+	d.modelRequestConfig = model.ModelConfig
+	d.defaultModelName = modelName
+	d.modelCache = map[string]*llm.Model{modelName: model}
+	d.stateMu.Unlock()
 }
 
 // IsSessionScoped 是否为会话级子适配器。

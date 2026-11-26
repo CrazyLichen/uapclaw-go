@@ -44,13 +44,14 @@ func (r *EvolutionApprovalRuntime) LookupPendingApprovalSnapshot(requestID, rail
 func (r *EvolutionApprovalRuntime) ApprovePendingRequest(
 	ctx context.Context,
 	requestID, railName, actionName string,
+	approvedRecordIDs ...string,
 ) (*experience.PendingChange, *experience.ExperienceApplyResult, error) {
 	pending := r.LookupPendingApprovalSnapshot(requestID, railName, actionName)
 	if pending == nil {
 		return nil, nil, nil
 	}
 
-	result, err := r.manager.ApproveRequest(ctx, requestID)
+	result, err := r.manager.ApproveRequest(ctx, requestID, approvedRecordIDs...)
 	if err != nil {
 		return pending, nil, err
 	}

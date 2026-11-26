@@ -672,3 +672,152 @@ func TestNoopStageFromMessage_none(t *testing.T) {
 		t.Errorf("noopStageFromMessage(none) = %v, 期望 nil", result)
 	}
 }
+
+// ──────────────────────────── 15.24d Task2：状态映射 ────────────────────────────
+
+// TestEvolutionStatusResponse 四状态映射与透传。
+// Python: evolution_status_response()（evolution_helpers.py:274-309）。
+func TestEvolutionStatusResponse(t *testing.T) {
+	t.Run("空status返回nil", func(t *testing.T) {
+		if got := EvolutionStatusResponse(map[string]any{"status": ""}, "gen-fail", "no-records"); got != nil {
+			t.Fatalf("空 status 应返回 nil，实际 %v", got)
+		}
+	})
+	t.Run("generation_failed_内部错误归一", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "generation_failed", "message": "toolchain boom"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "LLM 服务调用失败，请检查模型配置或稍后重试" {
+			t.Fatalf("内部错误链应归一文案，实际 %v", got)
+		}
+	})
+	t.Run("generation_failed_普通错误透传", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "generation_failed", "message": "model down"}, "gen-fail", "no-records")
+		if got == nil || got["output"] != "model down" || got["result_type"] != "error" {
+			t.Fatalf("普通 message 应透传，实际 %v", got)
+		}
+	})
+	t.Run("skipped_skill_definition_not_found", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "skipped_skill_definition_not_found", "message": "extra"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "Skill 缺少 SKILL.md，无法执行演进生成。\nextra" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("persistence_failed", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "persistence_failed", "message": "disk full"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "error" || got["output"] != "演进经验保存失败：disk full" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("no_evolution_no_records", func(t *testing.T) {
+		got := EvolutionStatusResponse(map[string]any{"status": "no_evolution_no_records", "message": "empty"}, "gen-fail", "no-records")
+		if got == nil || got["result_type"] != "answer" || got["output"] != "no-records\nempty" {
+			t.Fatalf("实际 %v", got)
+		}
+	})
+	t.Run("未知status返回nil", func(t *testing.T) {
+		if got := EvolutionStatusResponse(map[string]any{"status": "completed"}, "gen-fail", "no-records"); got != nil {
+			t.Fatalf("未知 status 应返回 nil，实际 %v", got)
+		}
+	})
+}
+
+// TestUserFacingGenerationError 内部工具链错误链归一。
+// Python: _user_facing_generation_error()（evolution_helpers.py:312-324）。
+func TestUserFacingGenerationError(t *testing.T) {
+	for _, marker := range []string{"toolchain", "tool_call", "invoke_failed", "execution error", "optimizer"} {
+		if got := UserFacingGenerationError("failed: " + marker + " x"); got != "LLM 服务调用失败，请检查模型配置或稍后重试" {
+			t.Fatalf("marker %q 应归一，实际 %q", marker, got)
+		}
+	}
+	if got := UserFacingGenerationError("model quota exceeded"); got != "model quota exceeded" {
+		t.Fatalf("普通错误应透传，实际 %q", got)
+	}
+}
+
+// ──────────────────────────── 15.24d Task3：slash 结果前端注记 ────────────────────────────
+
+// TestEvolutionSlashDisplayLevel 显示级别判定。
+// Python: evolution_slash_display_level()（evolution_helpers.py:327-338）。
+func TestEvolutionSlashDisplayLevel(t *testing.T) {
+	if got := EvolutionSlashDisplayLevel("error", "x", RegularEvolutionSlashWarningPhrases); got != "error" {
+		t.Fatalf("error → error，实际 %q", got)
+	}
+	if got := EvolutionSlashDisplayLevel("answer", "本次未生成可保存经验", RegularEvolutionSlashWarningPhrases); got != "warning" {
+		t.Fatalf("warning 短语 → warning，实际 %q", got)
+	}
+	if got := EvolutionSlashDisplayLevel("answer", "已完成", RegularEvolutionSlashWarningPhrases); got != "info" {
+		t.Fatalf("普通 → info，实际 %q", got)
+	}
+}
+
+// TestEvolutionSlashCommandName 命令名提取。
+// Python: evolution_slash_command_name()（evolution_helpers.py:341-347）。
+func TestEvolutionSlashCommandName(t *testing.T) {
+	for q, want := range map[string]string{
+		"/evolve_list x":  "evolve_list",
+		"/evolve_simplify": "evolve_simplify",
+		"/evolve skill":   "evolve",
+		"/evolve":         "evolve",
+		"/other":          "evolve",
+	} {
+		if got := EvolutionSlashCommandName(q); got != want {
+			t.Fatalf("%q → %q, want %q", q, got, want)
+		}
+	}
+}
+
+// TestEvolutionSlashResult 注记不覆盖已有键。
+// Python: evolution_slash_result()（evolution_helpers.py:350-368）。
+func TestEvolutionSlashResult(t *testing.T) {
+	result := EvolutionSlashResult("evolve", map[string]any{"output": "ok", "result_type": "answer", "display_level": "custom"}, nil)
+	if result["source"] != "slash_command" || result["slash_command"] != "evolve" || result["display_level"] != "custom" {
+		t.Fatalf("setdefault 不得覆盖已有 display_level，实际 %v", result)
+	}
+	result2 := EvolutionSlashResult("evolve_list", map[string]any{"output": "未生成可保存经验", "result_type": "answer"}, nil)
+	if result2["display_level"] != "warning" {
+		t.Fatalf("缺省 display_level 应按短语判定，实际 %v", result2["display_level"])
+	}
+}
+
+// TestApprovedRecordIDsFromAnswers 索引→record_id 映射。
+// Python: approved_record_ids_from_answers()（evolution_helpers.py:419-451）。
+func TestApprovedRecordIDsFromAnswers(t *testing.T) {
+	ids := []string{"r1", "r2", "r3"}
+	labels := EvolutionAcceptLabels
+
+	// 全选接受 → 全部 record_id
+	accepted, got, hasMapping := ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}, {"accept"}, {"接受"}}, labels, ids)
+	if !accepted || !hasMapping || len(got) != 3 {
+		t.Fatalf("全选接受应映射全部，实际 accepted=%v ids=%v", accepted, got)
+	}
+
+	// 部分接受（第 2 条拒绝）→ 仅 r1/r3
+	accepted, got, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}, {"拒绝"}, {"本次允许"}}, labels, ids)
+	if !accepted || len(got) != 2 || got[0] != "r1" || got[1] != "r3" {
+		t.Fatalf("部分批准应得 [r1 r3]，实际 %v", got)
+	}
+
+	// 全拒绝 → accepted=false
+	accepted, _, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"拒绝"}, {"拒绝"}}, labels, ids)
+	if accepted {
+		t.Fatal("全拒绝应 accepted=false")
+	}
+
+	// 无映射（recordIDsByIndex=nil）→ hasMapping=false，保持 all-or-nothing
+	var got2 []string
+	accepted, got2, hasMapping = ApprovedRecordIDsFromAnswers(
+		[][]string{{"接受"}}, labels, nil)
+	got = got2
+	if !accepted || hasMapping || got != nil && len(got) != 0 {
+		t.Fatalf("无映射应 hasMapping=false，实际 %v/%v", got, hasMapping)
+	}
+
+	// 空白与大小写归一
+	accepted, _, _ = ApprovedRecordIDsFromAnswers(
+		[][]string{{"  Accept  "}}, labels, ids)
+	if !accepted {
+		t.Fatal("标签归一后应命中接受")
+	}
+}

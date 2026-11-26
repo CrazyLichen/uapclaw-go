@@ -1334,28 +1334,14 @@ func TestDeepAdapter_Team占位函数(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_Slash占位函数 测试 slash 占位函数不 panic。
+// TestDeepAdapter_Slash占位函数 新版语义改写（2026-12-26）：旧占位五命令已随
+// 上游重写删除（规则 8）；无 rail/无 instance 时新版处理器走 store 直建分支，
+// 无 skills 目录 → panic 兜底 → 初始化失败 error。
 func TestDeepAdapter_Slash占位函数(t *testing.T) {
 	d := NewDeepAdapter()
-	ctx := t.Context()
-
-	if result, err := d.handleEvolveCommand(ctx, "/evolve", "s1"); result != nil || err != nil {
-		t.Errorf("handleEvolveCommand 占位应返回 nil, nil")
-	}
-	if result, err := d.handleEvolveListCommand(ctx, "/evolve_list", "s1"); result != nil || err != nil {
-		t.Errorf("handleEvolveListCommand 占位应返回 nil, nil")
-	}
-	if result, err := d.handleEvolveSimplifyCommand(ctx, "/evolve_simplify", "s1"); result != nil || err != nil {
-		t.Errorf("handleEvolveSimplifyCommand 占位应返回 nil, nil")
-	}
-	if result, err := d.handleEvolveRebuildCommand(ctx, "/evolve_rebuild", "s1"); result != nil || err != nil {
-		t.Errorf("handleEvolveRebuildCommand 占位应返回 nil, nil")
-	}
-	if result, err := d.handleEvolveRollbackCommand(ctx, "/evolve_rollback", "s1"); result != nil || err != nil {
-		t.Errorf("handleEvolveRollbackCommand 占位应返回 nil, nil")
-	}
-	if d.handleGovernanceApproval(context.Background(), "req1", nil, "simplify") != false {
-		t.Error("handleGovernanceApproval 占位应返回 false")
+	result := runEvolveSlashForTest(d, "/evolve")
+	if result == nil || result["result_type"] != "error" {
+		t.Fatalf("无 rail/无 skills 目录应返回初始化失败 error，实际 %v", result)
 	}
 }
 

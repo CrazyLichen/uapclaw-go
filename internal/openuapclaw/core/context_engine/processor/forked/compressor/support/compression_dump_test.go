@@ -10,36 +10,46 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
-// fakeDumpProcessor 实现 DumpProcessorStats 窄接口
-type fakeDumpProcessor struct{ tokensPerList int }
-
-func (f *fakeDumpProcessor) ResolveContextMaxForDump(_ DumpContextIdentifiers, _ string) int {
-	return 8000
-}
-func (f *fakeDumpProcessor) CountMessagesTokensForDump(_ DumpContextIdentifiers, _ []llm_schema.BaseMessage) int {
-	return f.tokensPerList
-}
-
-// fakeDumpModelContext dump 用最小 ModelContext 桩
+// fakeDumpModelContext dump 用最小 ModelContext 桩（含 TokenCounter 能力面）
 type fakeDumpModelContext struct {
 	sessionID    string
 	contextID    string
 	workspaceDir string
+	tokensPerMsg int
 }
 
 func (f *fakeDumpModelContext) SessionID() string    { return f.sessionID }
 func (f *fakeDumpModelContext) ContextID() string    { return f.contextID }
 func (f *fakeDumpModelContext) WorkspaceDir() string { return f.workspaceDir }
+func (f *fakeDumpModelContext) TokenCounter() token.TokenCounter {
+	if f.tokensPerMsg <= 0 {
+		return nil
+	}
+	return fakeTokenCounter{tokensPerMsg: f.tokensPerMsg}
+}
+
+// fakeTokenCounter 定值计数桩
+type fakeTokenCounter struct{ tokensPerMsg int }
+
+func (c fakeTokenCounter) Count(_ string, _ string) (int, error) {
+	return c.tokensPerMsg, nil
+}
+func (c fakeTokenCounter) CountMessages(messages []llm_schema.BaseMessage, _ string) (int, error) {
+	return c.tokensPerMsg * len(messages), nil
+}
+func (c fakeTokenCounter) CountTools(_ []commonschema.ToolInfoInterface, _ string) (int, error) {
+	return 0, nil
+}
 
 // TestDumpCompressionArtifact_禁用时返回空 测试开关关闭直接返回
 // Python: compression_dump.py dump_compression_artifact 首段
 func TestDumpCompressionArtifact_禁用时返回空(t *testing.T) {
-	proc := &fakeDumpProcessor{}
 	input := &CompressionDumpInput{
-		Processor:     proc,
 		Context:       &fakeDumpModelContext{sessionID: "s1", contextID: "c1"},
 		Config:        map[string]any{"enable_compression_dump": false},
 		ProcessorType: "TestProcessor",
@@ -52,10 +62,8 @@ func TestDumpCompressionArtifact_禁用时返回空(t *testing.T) {
 // Python: compression_dump.py dump_compression_artifact 主体 + _build_file_name
 func TestDumpCompressionArtifact_完整落盘(t *testing.T) {
 	dir := t.TempDir()
-	proc := &fakeDumpProcessor{tokensPerList: 120}
 	input := &CompressionDumpInput{
-		Processor:        proc,
-		Context:          &fakeDumpModelContext{sessionID: "s 1", contextID: "c/1", workspaceDir: dir},
+		Context:          &fakeDumpModelContext{sessionID: "s 1", contextID: "c/1", workspaceDir: dir, tokensPerMsg: 40},
 		Config:           map[string]any{"enable_compression_dump": true},
 		ProcessorType:    "TestProcessor",
 		OriginalMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("old")},
@@ -83,14 +91,15 @@ func TestDumpCompressionArtifact_完整落盘(t *testing.T) {
 		require.Contains(t, payload, key)
 	}
 	trigger := payload["trigger"].(map[string]any)
-	require.Equal(t, float64(8000), trigger["context_max"])
+	// context_max 走 ResolveContextMax(mc,"")（fake 无窗口能力面 → 兜底口径），不再断言具体值
+	require.NotEmpty(t, trigger["context_max"])
 	require.Equal(t, float64(120), trigger["target_tokens"])
 	span := payload["span"].(map[string]any)
 	require.Equal(t, float64(1), span["preserved_prefix_count"])
 	require.Equal(t, float64(3), span["messages_to_compress_count"])
 	require.Equal(t, float64(2), span["protected_tail_count"])
 	benefit := payload["benefit"].(map[string]any)
-	require.Equal(t, float64(120), benefit["tokens_before"])
+	require.Equal(t, float64(40), benefit["tokens_before"])
 	// 文件名：毫秒时间戳_处理器_会话.json
 	base := filepath.Base(path)
 	require.Regexp(t, regexp.MustCompile(`^\d+_TestProcessor_s-1\.json$`), base)

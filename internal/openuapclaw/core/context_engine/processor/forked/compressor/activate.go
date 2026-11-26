@@ -16,6 +16,19 @@ import (
 // rail 侧调用语义不变。
 // Offloader 位（MessageSummaryOffloader）forked 工厂已随 T11 回填（D-24.15-a1 销账）。
 func Activate() {
+	if originalFactories == nil {
+		originalFactories = map[string]iface.ProcessorFactory{}
+	}
+	for _, typeName := range []string{
+		"SessionMemoryCompressor", "DialogueCompressor",
+		"CurrentRoundCompressor", "RoundLevelCompressor",
+	} {
+		if _, ok := originalFactories[typeName]; !ok {
+			if factory, found := context_engine.GetProcessorFactory(typeName); found {
+				originalFactories[typeName] = factory
+			}
+		}
+	}
 	context_engine.RegisterProcessorFactory("SessionMemoryCompressor", func(config iface.ProcessorConfig) (iface.ContextProcessor, error) {
 		cfg, ok := config.(*SessionMemoryCompressorConfig)
 		if !ok {
@@ -62,4 +75,21 @@ func init() {
 		}
 		return offloader.NewMessageSummaryOffloader(cfg), nil
 	})
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// originalFactories Activate 前的工厂快照（Deactivate 还原用）。
+// Python: forked/__init__.py:33 (_ORIGINAL_PROCESSORS)
+var originalFactories map[string]iface.ProcessorFactory
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Deactivate 还原 Activate 前的工厂注册（未 Activate 过为 no-op）。
+// Python: forked/__init__.py:56 (deactivate)
+func Deactivate() {
+	for typeName, factory := range originalFactories {
+		context_engine.RegisterProcessorFactory(typeName, factory)
+	}
+	originalFactories = nil
 }

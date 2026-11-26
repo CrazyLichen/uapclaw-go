@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
@@ -20,7 +21,6 @@ const CompressionDumpDirEnv = "OPENUAPCLAW_COMPRESSION_DUMP_DIR"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// DumpProcessorStats dump 对压缩处理器的窄能力面。
 // Python: compression_dump.py 直接引用 PrefixCompactProcessor 类型
 // （processor.resolve_context_max / processor.count_messages_tokens）；
 // Go 侧 compressor → support 单向导入，dump 反向引用会成环（Python 靠
@@ -37,13 +37,16 @@ type DumpContextIdentifiers interface {
 	ContextID() string
 	// WorkspaceDir 工作目录
 	WorkspaceDir() string
+	// TokenCounter token 计数器（iface.ModelContext 已有，dump 直接消费）
+	TokenCounter() token.TokenCounter
 }
 
-type DumpProcessorStats interface {
-	// ResolveContextMaxForDump 等价 processor.resolve_context_max(context, {})
-	ResolveContextMaxForDump(mc DumpContextIdentifiers, modelName string) int
-	// CountMessagesTokensForDump 等价 processor.count_messages_tokens(messages, context)
-	CountMessagesTokensForDump(mc DumpContextIdentifiers, messages []llm_schema.BaseMessage) int
+// dumpProcessorTokenUsage dump 视角的 token 计数（等价 processor.count_messages_tokens
+// (messages, context)。原 DumpProcessorStats/DumpContextIdentifiers 双接口已按用户裁决
+// 合并为单 DumpContextIdentifiers（+TokenCounter 能力），dump 与 util 同包直接消费，
+// 处理器转发层无信息增量已删除。）
+func dumpProcessorTokenUsage(mc DumpContextIdentifiers, messages []llm_schema.BaseMessage) int {
+	return CountMessagesTokens(messages, mc.TokenCounter(), "", "", false)
 }
 
 // CompressionSpanShape dump 视角的 span 只读形状（计数用）。
@@ -61,8 +64,6 @@ type CompressionSpanShape struct {
 // CompressionDumpInput 单次压缩调用的落盘输入
 // Python: compression_dump.py:26 (CompressionDumpInput)
 type CompressionDumpInput struct {
-	// Processor 压缩处理器（窄接口，见 DumpProcessorStats）
-	Processor DumpProcessorStats
 	// Context 模型上下文（标识窄面，见 DumpContextIdentifiers）
 	Context DumpContextIdentifiers
 	// Config 处理器配置（读 enable_compression_dump / compression_dump_dir）
@@ -114,10 +115,10 @@ func DumpCompressionArtifact(compression *CompressionDumpInput) string {
 		return ""
 	}
 
-	contextMax := compression.Processor.ResolveContextMaxForDump(compression.Context, "")
-	tokensBefore := compression.Processor.CountMessagesTokensForDump(compression.Context, compression.OriginalMessages)
-	tokensAfter := compression.Processor.CountMessagesTokensForDump(compression.Context, compression.NewMessages)
-	targetTokens := compression.Processor.CountMessagesTokensForDump(compression.Context, compression.Span.MessagesToCompress)
+	contextMax := ResolveContextMax(compression.Context, "")
+	tokensBefore := dumpProcessorTokenUsage(compression.Context, compression.OriginalMessages)
+	tokensAfter := dumpProcessorTokenUsage(compression.Context, compression.NewMessages)
+	targetTokens := dumpProcessorTokenUsage(compression.Context, compression.Span.MessagesToCompress)
 	messagesSentToModel := BuildMessages(compression.Request)
 
 	payload := map[string]any{

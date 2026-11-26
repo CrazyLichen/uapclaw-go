@@ -732,6 +732,19 @@ func (s *EvolutionStore) ClearEvolutions(ctx context.Context, name string) error
 	return s.archive.ClearEvolutions(ctx, name)
 }
 
+// ClearEvolutionsForKind 按 subject_kind 清空演进数据。
+// Python: clear_evolutions(name, subject_kind=...)（evolution_store.py:687-691）。
+func (s *EvolutionStore) ClearEvolutionsForKind(ctx context.Context, name, subjectKind string) error {
+	return s.archive.ClearEvolutionsForKind(ctx, name, subjectKind)
+}
+
+// SaveEvolutionLogForKind 按 subject_kind 写演进日志（skillDir 经 kind 解析）。
+// Python: save_evolution_log(name, log, subject_kind=...)（store_archive 侧）。
+func (s *EvolutionStore) SaveEvolutionLogForKind(ctx context.Context, name string, evoLog *EvolutionLog, subjectKind string) error {
+	skillDir := s.ResolveSkillDirForKind(ctx, name, true, subjectKind)
+	return s.records.SaveEvolutionLog(ctx, name, evoLog, skillDir)
+}
+
 // ListArchives 列出归档文件。
 func (s *EvolutionStore) ListArchives(ctx context.Context, name string) []string {
 	return s.archive.ListArchives(ctx, name)

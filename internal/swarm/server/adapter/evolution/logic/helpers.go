@@ -634,3 +634,229 @@ func cloneMap(m map[string]any) map[string]any {
 	}
 	return result
 }
+
+// ──────────────────────────── 15.24d Task2：SDK 状态映射 ────────────────────────────
+
+// userFacingGenerationText 内部工具链错误链归一后的用户面文案。
+// Python: _user_facing_generation_error()（evolution_helpers.py:323）。
+const userFacingGenerationText = "LLM 服务调用失败，请检查模型配置或稍后重试"
+
+// internalGenerationErrorMarkers 归一判定的内部错误链标记。
+// Python: internal_markers（evolution_helpers.py:315-322）。
+var internalGenerationErrorMarkers = []string{
+	"toolchain",
+	"tool_call",
+	"invoke_failed",
+	"execution error",
+	"optimizer",
+}
+
+// UserFacingGenerationError 隐藏底层工具链错误链，归一为用户面文案。
+// Python: _user_facing_generation_error()（evolution_helpers.py:312-324）。
+func UserFacingGenerationError(message string) string {
+	lowered := strings.ToLower(message)
+	for _, marker := range internalGenerationErrorMarkers {
+		if strings.Contains(lowered, marker) {
+			return userFacingGenerationText
+		}
+	}
+	return message
+}
+
+// EvolutionStatusResponse 将 SDK EvolutionRequestResult.status 映射为用户面响应。
+// Python: evolution_status_response()（evolution_helpers.py:274-309）。
+//
+// 步骤：
+//
+//	Python: 1. status = str(evolve_result.status).strip()；空 → None
+//	Python: 2. message = str(evolve_result.message).strip()
+//	Python: 3. generation_failed → 归一文案 or generation_failed_output（error）
+//	Python: 4. skipped_skill_definition_not_found → 固定文案 + message 追加（error）
+//	Python: 5. persistence_failed → "演进经验保存失败：{message}"（error）
+//	Python: 6. no_evolution_no_records → no_records_output + message 追加（answer）
+//	Python: 7. 其余 → None
+// 返回 {"output","result_type"} 或 nil（evolveResult 形状：{"status","message"}）。
+func EvolutionStatusResponse(evolveResult map[string]any, generationFailedOutput, noRecordsOutput string) map[string]string {
+	if evolveResult == nil {
+		return nil
+	}
+	status := StrFromAny(evolveResult["status"])
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return nil
+	}
+	message := strings.TrimSpace(StrFromAny(evolveResult["message"]))
+
+	switch status {
+	case "generation_failed":
+		// Python :288：_user_facing_generation_error(message) or generation_failed_output
+		output := UserFacingGenerationError(message)
+		if output == "" {
+			output = generationFailedOutput
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "skipped_skill_definition_not_found":
+		output := "Skill 缺少 SKILL.md，无法执行演进生成。"
+		if message != "" {
+			output = output + "\n" + message
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "persistence_failed":
+		output := "演进经验保存失败"
+		if message != "" {
+			output = output + "：" + message
+		}
+		return map[string]string{"output": output, "result_type": "error"}
+	case "no_evolution_no_records":
+		output := noRecordsOutput
+		if message != "" {
+			output = output + "\n" + message
+		}
+		return map[string]string{"output": output, "result_type": "answer"}
+	}
+	return nil
+}
+
+
+// ──────────────────────────── 15.24d Task3：slash 结果前端注记 ────────────────────────────
+
+// RegularEvolutionSlashWarningPhrases 个人版 slash 结果 warning 短语集。
+// Python: REGULAR_EVOLUTION_SLASH_WARNING_PHRASES（evolution_helpers.py:125-128）。
+var RegularEvolutionSlashWarningPhrases = []string{
+	"未生成可保存经验",
+	"未发现明确的演进信号",
+}
+
+// TeamEvolutionSlashWarningPhrases 团队版 slash 结果 warning 短语集。
+// Python: TEAM_EVOLUTION_SLASH_WARNING_PHRASES（evolution_helpers.py:129-132）。
+var TeamEvolutionSlashWarningPhrases = []string{
+	"未生成可保存经验",
+	"未生成新的团队技能演进经验",
+}
+
+// evolutionSlashCommands slash 命令名表（去斜杠）。
+// Python: _EVOLUTION_SLASH_COMMANDS（evolution_helpers.py:133-138）。
+var evolutionSlashCommands = []string{
+	"evolve_simplify",
+	"evolve_rebuild",
+	"evolve_rollback",
+	"evolve_list",
+}
+
+// EvolutionSlashDisplayLevel 返回演进 slash 结果的前端显示级别。
+// Python: evolution_slash_display_level()（evolution_helpers.py:327-338）。
+func EvolutionSlashDisplayLevel(resultType, content string, warningPhrases []string) string {
+	if warningPhrases == nil {
+		warningPhrases = RegularEvolutionSlashWarningPhrases // Python 缺省参数（:331）
+	}
+	if resultType == "error" {
+		return "error"
+	}
+	for _, phrase := range warningPhrases {
+		if strings.Contains(content, phrase) {
+			return "warning"
+		}
+	}
+	return "info"
+}
+
+// EvolutionSlashCommandName 返回不带斜杠的演进 slash 命令名。
+// Python: evolution_slash_command_name()（evolution_helpers.py:341-347）。
+func EvolutionSlashCommandName(query string) string {
+	stripped := strings.TrimSpace(query)
+	for _, command := range evolutionSlashCommands {
+		if strings.HasPrefix(stripped, "/"+command) {
+			return command
+		}
+	}
+	return "evolve"
+}
+
+// EvolutionSlashResult 为前端渲染注记 slash 结果（setdefault 语义：不覆盖已有键）。
+// Python: evolution_slash_result()（evolution_helpers.py:350-368）。
+func EvolutionSlashResult(command string, result map[string]any, warningPhrases []string) map[string]any {
+	annotated := cloneMap(result)
+	if _, ok := annotated["source"]; !ok {
+		annotated["source"] = "slash_command"
+	}
+	if _, ok := annotated["slash_command"]; !ok {
+		annotated["slash_command"] = command
+	}
+	if _, ok := annotated["display_level"]; !ok {
+		resultType := "answer"
+		if rt, ok := annotated["result_type"].(string); ok && rt != "" {
+			resultType = strings.ToLower(strings.TrimSpace(rt))
+		}
+		output := StrFromAny(annotated["output"])
+		annotated["display_level"] = EvolutionSlashDisplayLevel(resultType, output, warningPhrases)
+	}
+	return annotated
+}
+
+// ──────────────────────────── 15.24d Task4：审批索引→record_id 映射 ────────────────────────────
+
+// EvolutionAcceptLabels 审批“接受”选项标签集（前端标签与内部 option 归一小写比对）。
+// Python: EVOLUTION_ACCEPT_LABELS（evolution_helpers.py:115-123）。
+var EvolutionAcceptLabels = []string{
+	"accept",
+	"接收",
+	"接受",
+	"allow_once",
+	"allow_always",
+	"本次允许",
+	"总是允许",
+}
+
+// EvolutionExecuteLabels 执行类标签集。
+// Python: EVOLUTION_EXECUTE_LABELS（evolution_helpers.py:124）。
+var EvolutionExecuteLabels = []string{"execute", "执行"}
+
+// AnswerSelectsOption 判定单条应答是否选中任一标签（大小写/空白归一）。
+// Python: answer_selects_option()（evolution_helpers.py:402-412）。
+func AnswerSelectsOption(selectedOptions []string, labels []string) bool {
+	normalized := make(map[string]bool, len(labels))
+	for _, label := range labels {
+		normalized[strings.ToLower(strings.TrimSpace(label))] = true
+	}
+	for _, option := range selectedOptions {
+		if normalized[strings.ToLower(strings.TrimSpace(option))] {
+			return true
+		}
+	}
+	return false
+}
+
+// ApprovedRecordIDsFromAnswers 将按索引的应答映射回 SDK record_id。
+// Python: approved_record_ids_from_answers()（evolution_helpers.py:419-451）。
+//
+// 前端对 evolution record_id 无感知；host 层持有 record_ids_by_index 时把
+// “选中接受”的索引映射回 record_id。返回值：
+//   - accepted：是否任一应答选中了接受标签
+//   - approvedIDs：映射出的 record_id（去重保序）
+//   - hasMapping：recordIDsByIndex 是否可用（nil 时调用方保持 all-or-nothing 审批）
+func ApprovedRecordIDsFromAnswers(selectedOptions [][]string, labels []string, recordIDsByIndex []string) (accepted bool, approvedIDs []string, hasMapping bool) {
+	accepted = false
+	approvedIDs = []string{}
+	seen := map[string]bool{}
+
+	for index, options := range selectedOptions {
+		if !AnswerSelectsOption(options, labels) {
+			continue
+		}
+		accepted = true
+		recordID := ""
+		if recordIDsByIndex != nil && index < len(recordIDsByIndex) {
+			recordID = strings.TrimSpace(recordIDsByIndex[index])
+		}
+		if recordID == "" || seen[recordID] {
+			continue
+		}
+		seen[recordID] = true
+		approvedIDs = append(approvedIDs, recordID)
+	}
+
+	if !accepted {
+		return false, []string{}, recordIDsByIndex != nil
+	}
+	return accepted, approvedIDs, recordIDsByIndex != nil
+}

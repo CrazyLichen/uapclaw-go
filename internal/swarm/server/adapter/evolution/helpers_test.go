@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
-	gatewaypush "github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -121,7 +120,7 @@ func TestPushEvolutionEvent(t *testing.T) {
 // TestBroadcastEvolutionProgress 测试广播进度。
 func TestBroadcastEvolutionProgress(t *testing.T) {
 	var broadcasted []map[string]any
-	broadcastFn := func(channelID *string, sessionID string, parsed map[string]any) {
+	broadcastFn := func(channelID string, sessionID string, parsed map[string]any) {
 		broadcasted = append(broadcasted, parsed)
 	}
 	parseFn := func(evt map[string]any) map[string]any {
@@ -134,7 +133,7 @@ func TestBroadcastEvolutionProgress(t *testing.T) {
 		{"data": "stream2"},
 	}
 	chID := "ch-1"
-	err := BroadcastEvolutionProgress(t.Context(), &chID, "sess-1", events, parseFn, broadcastFn)
+	err := BroadcastEvolutionProgress(t.Context(), chID, "sess-1", events, parseFn, broadcastFn)
 	if err != nil {
 		t.Errorf("BroadcastEvolutionProgress() 返回错误: %v", err)
 	}
@@ -198,7 +197,7 @@ func TestPushEvolutionProgress_nilChunk(t *testing.T) {
 
 // ──────────────────────────── 接口合规测试 ────────────────────────────
 
-// TestGatewayPushTransport接口合规 测试 mockPushTransport 实现 GatewayPushTransport。
+// TestGatewayPushTransport接口合规 测试 mockPushTransport 实现 EvolutionPushTransport。
 func TestGatewayPushTransport接口合规(t *testing.T) {
-	var _ gatewaypush.GatewayPushTransport = (*mockPushTransport)(nil)
+	var _ EvolutionPushTransport = (*mockPushTransport)(nil)
 }

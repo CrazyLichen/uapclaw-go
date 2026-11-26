@@ -888,9 +888,35 @@ func (r *SkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 
 // ─── Slash 命令 API 方法 ───
 
-// RequestUserEvolution 用户主动触发的演进入口。
-// 对齐 Python: SkillEvolutionRail.request_user_evolution(skill_name, user_intent, *, auto_approve=False)
+// RequestUserEvolution 用户主动触发的演进入口（兼容壳）。
+// Python: request_user_evolution（skill_evolution_rail.py:1082-1100）——
+// 新版主动请求 = agent_prompt 模式：只产出审查工作流 followup prompt，
+// 由 host 注入 query 后在 agent 轮内走 prepare→review→submit→evolve 六工具链；
+// auto_approve 等旧旗标保留调用兼容但有意忽略（del auto_approve）。
 func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName string, userIntent string, autoApprove bool) (*EvolutionRequestResult, error) {
+	_ = autoApprove // Python: del auto_approve（兼容旧调用点旗标）
+	subject := r.activeReviewSubject(ctx, skillName)
+	if subject == nil {
+		return &EvolutionRequestResult{SkillName: skillName}, nil
+	}
+	return buildActiveEvolutionFollowup(skillName, subject, &userIntent)
+}
+
+// activeReviewSubject 解析主动审查 subject（store 支持时用 store payload，
+// 否则回退 skill 形态）。
+// Python: _active_review_subject（skill_evolution_rail.py:1151-1156）。
+func (r *SkillEvolutionRail) activeReviewSubject(ctx context.Context, skillName string) map[string]string {
+	if payload := r.evolutionStore.ResolveSubjectPayload(ctx, skillName); payload != nil {
+		return payload
+	}
+	return map[string]string{"kind": "skill", "name": skillName}
+}
+
+// StageEvolutionFromSignalsForTest 信号驱动的 staging 半区（仅测试用）。
+// 与旧版 RequestUserEvolution 的生成编排同构（traj→detect→user_intent signal→
+// handleEvolutionFromSignals，requires_approval=true、emit_host_events=false）；
+// 上游删除该编排壳后，被动链由 signal 回调驱动，测试经本钩子直达真实 staging。
+func (r *SkillEvolutionRail) StageEvolutionFromSignalsForTest(ctx context.Context, skillName, userIntent string, autoApprove bool) (*experience.ExperienceApprovalRequest, *stream.OutputSchema, error) {
 	traj := r.buildTrajectory()
 	var messages []map[string]any
 	var signals []*signal.EvolutionSignal
@@ -900,9 +926,6 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 		detected := r.detectActiveRequestSignals(ctx, skillName, traj, messages)
 		signals = append(signals, detected...)
 	}
-
-	// 追加 USER_INTENT_SIGNAL
-	// Python: if user_intent: self._append_unique_signal(signals, make_evolution_signal(USER_INTENT_SIGNAL, ...))
 	if userIntent != "" {
 		sig := signal.MakeEvolutionSignal(
 			schema.UserIntentSignal,
@@ -913,38 +936,20 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 		)
 		signals = appendUniqueSignal(signals, sig)
 	}
-
-	if len(signals) == 0 {
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
 	if len(messages) == 0 && userIntent != "" {
 		messages = []map[string]any{{"role": "user", "content": userIntent}}
 	}
-
-	requiresApproval := !autoApprove
-	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, requiresApproval, false)
-	if err != nil {
-		return nil, err
+	// autoApprove=false → auto-approve 落盘 + sharingAfterAutoApproved；
+	// true → staged pending + 审批事件（buildGeneratedRecordsEvent）
+	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, !autoApprove, false)
+	if err != nil || request == nil {
+		return request, nil, err
 	}
-
-	if request == nil {
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
-	records := request.Proposal.Records
-	var approvalEvent *stream.OutputSchema
+	var event *stream.OutputSchema
 	if !autoApprove {
-		approvalEvent = r.buildGeneratedRecordsEvent(skillName, request)
+		event = r.buildGeneratedRecordsEvent(skillName, request)
 	}
-
-	return &EvolutionRequestResult{
-		SkillName:     skillName,
-		RequestID:     &request.RequestID,
-		ApprovalEvent: approvalEvent,
-		Records:       records,
-		AutoApproved:  autoApprove,
-	}, nil
+	return request, event, nil
 }
 
 // RequestSimplify 请求精简技能经验。
@@ -1108,7 +1113,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 
 // ApproveRecord 批准暂存的演进记录。
 // 对齐 Python: SkillEvolutionRail.approve_record(request_id)
-func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string) error {
+func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string, approvedRecordIDs ...string) error {
 	// Python: snapshot_pending = self._pending_approval_snapshots.get(request_id)
 	snapshotPending := r.pendingApprovalSnapshots[requestID]
 	var approvedRecords []checkpointing.EvolutionRecord
@@ -1121,8 +1126,27 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 		isShared = snapshotPending.IsSharedRecords
 	}
 
+	// Python: if approved_record_ids is not None and approved_records:
+	//   approved_records = [r for r in approved_records if r.id in approved_id_set]
+	// （skill_evolution_rail.py:1458-1460 部分批准过滤；variadic 空参 = None 语义）
+	if len(approvedRecordIDs) > 0 && len(approvedRecords) > 0 {
+		approvedIDSet := make(map[string]bool, len(approvedRecordIDs))
+		for _, id := range approvedRecordIDs {
+			approvedIDSet[id] = true
+		}
+		filtered := approvedRecords[:0]
+		for _, record := range approvedRecords {
+			if approvedIDSet[record.ID] {
+				filtered = append(filtered, record)
+			}
+		}
+		approvedRecords = filtered
+	}
+
 	// Python: pending, result = await self.approval_runtime.approve_pending_request(request_id, ...)
-	pending, result, err := r.approvalRuntime.ApprovePendingRequest(ctx, requestID, "SkillEvolutionRail", "approve_record")
+	// Python: approve_kwargs["approved_record_ids"]（approval_runtime.py:19-21 转发）——
+	// variadic 空参 = None（all-or-nothing）；非空时逐层转发至 commit 过滤段。
+	pending, result, err := r.approvalRuntime.ApprovePendingRequest(ctx, requestID, "SkillEvolutionRail", "approve_record", approvedRecordIDs...)
 	if err != nil {
 		return err
 	}
@@ -1154,6 +1178,30 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 	}
 
 	return nil
+}
+
+// PendingChangeRecordIDs 返回待审批快照 payload 内的 record_id 列表；
+// 全空（无任何非空 id）返回 nil——对齐 Python record_ids_from_pending_approval
+// （evolution_helpers.py:454-475）「has_record_id 否则 None」语义。
+// 前端对 record_id 无感知，host 层按索引映射回 record_id 后逐条回传。
+func (r *SkillEvolutionRail) PendingChangeRecordIDs(requestID string) []string {
+	pending := r.pendingApprovalSnapshots[requestID]
+	if pending == nil {
+		return nil
+	}
+	recordIDs := make([]string, 0, len(pending.Payload))
+	hasRecordID := false
+	for _, record := range pending.Payload {
+		id := record.ID
+		recordIDs = append(recordIDs, id)
+		if id != "" {
+			hasRecordID = true
+		}
+	}
+	if !hasRecordID {
+		return nil
+	}
+	return recordIDs
 }
 
 // RejectRecord 拒绝暂存的演进记录。
@@ -2656,6 +2704,13 @@ func (r *SkillEvolutionRail) unregisterRuntimeTools(agent agentinterfaces.BaseAg
 			}
 		}
 	}
+}
+
+// EnsureEvolutionReviewAgent 导出包装：热重载后恢复审查子 agent 配置。
+// Python 侧 host adapter 直接调 rail._register_evolution_review_agent(instance)
+// （interface_deep.py:10688-10694）；Go 跨包调用需导出（可见性规则，归属不变）。
+func (r *SkillEvolutionRail) EnsureEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {
+	r.registerEvolutionReviewAgent(agent)
 }
 
 // registerEvolutionReviewAgent 在 agent.deep_config 上确保稳定审查子 agent 配置。

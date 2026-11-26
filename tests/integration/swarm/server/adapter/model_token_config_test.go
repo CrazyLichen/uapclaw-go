@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor"
+	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -43,41 +43,9 @@ func (s *ModelTokenConfigSuite) SetupTest() {
 	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_token_cfg")
 }
 
-// TestWriteModelTokens_RoundTrip 用例 1：models.replace_all → config.yaml → models.list
-func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
-	s.writeEnvConfig(0, 0, true)
-
-	_, err := testhelpers.CallWebRPC(s.T(), nil, "models.replace_all", map[string]any{
-		"models": []any{map[string]any{
-			"model_name":     "mock-model",
-			"api_base":       "http://127.0.0.1:1",
-			"api_key":        "mock-api-key",
-			"model_provider": "OpenAI", // models.replace_all 只接受 availableModelProviders
-			"context_window": 32000,
-			"max_tokens":     8192,
-			"origin_index":   0,
-		}},
-	})
-	s.Require().NoError(err)
-
-	// 落盘校验
-	raw, readErr := os.ReadFile(filepath.Join(s.env.DataDir, "config", "config.yaml"))
-	s.Require().NoError(readErr)
-	text := string(raw)
-	s.Require().Contains(text, "context_window: 32000", "config.yaml 应写入上下文窗口")
-	s.Require().Contains(text, "max_tokens: 8192", "config.yaml 应写入输出上限（model_config_obj.max_tokens）")
-
-	// 回填校验（帧经真实 WS 走 JSON，列表解出来是 []any / 数值是 float64）
-	resp, listErr := testhelpers.CallWebRPC(s.T(), nil, "models.list", nil)
-	s.Require().NoError(listErr)
-	models, ok := resp["models"].([]any)
-	s.Require().True(ok && len(models) == 1, "models.list 应返回 1 条，实际 %+v", resp["models"])
-	entry, isMap := models[0].(map[string]any)
-	s.Require().True(isMap, "模型条目应为对象")
-	// 137c7d4f 后 models.list 回填的是扁平化后的 context_window / max_tokens
-	s.Equal(float64(32000), entry["context_window"])
-	s.Equal(float64(8192), entry["max_tokens"])
-}
+// （TestWriteModelTokens_RoundTrip 已删：27.4 起 models.* RPC 真相源与
+// 契约覆盖在 AgentServer 侧，由 tests/integration/swarm/web/ModelsRPCSuite
+// 承接；本套件只保留“窗口/上限 → adapter 装配 → 阈值收口”链路。）
 
 // TestContextWindow_FromModelEntry 用例 2：adapter 装配后窗口值进入 ContextEngineConfig，
 // 并被 ContextUtils.resolve_context_max 命中（不再回落 200000）
@@ -132,10 +100,10 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 	reactCfg, ok := reactAgent.Config().(*saconfig.ReActAgentConfig)
 	s.Require().True(ok, "应为 *ReActAgentConfig，实际 %T", reactAgent.Config())
 
-	trigger, target := compressionThresholds(reactCfg.ContextProcessors, 32000)
+	trigger := compressionThresholds(reactCfg.ContextProcessors, 32000)
 	// 32K × 0.8 = 25600：比例化后生效阈值由"窗口 × TriggerContextRatio"在运行时算出
+	// （forked 版无 TargetTotalTokens 配置字段——总量预算门为基座 PY 常量）
 	s.Equal(25600, trigger, "RoundLevel 触发阈值应按窗口收口")
-	s.Equal(160000, target, "RoundLevel 目标预算为固定值")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -195,11 +163,12 @@ react:
 //
 // 137c7d4f 起触发阈值比例化：配置只留 TriggerContextRatio，
 // 生效阈值 = 窗口 × 比例；目标仍是固定预算 TargetTotalTokens。
-func compressionThresholds(specs []ceiface.ProcessorSpec, window int) (int, int) {
+// 24.15 单 forked 链：preset 的 RoundLevel 携带 forked 配置类型（旧类型断言随链切换失效）
+func compressionThresholds(specs []ceiface.ProcessorSpec, window int) int {
 	for _, spec := range specs {
-		if cfg, ok := spec.Config.(*compressor.RoundLevelCompressorConfig); ok {
-			return int(float64(window) * cfg.TriggerContextRatio), cfg.TargetTotalTokens
+		if cfg, ok := spec.Config.(*forkedcompressor.RoundLevelCompressorConfig); ok {
+			return int(float64(window) * cfg.TriggerContextRatio)
 		}
 	}
-	return 0, 0
+	return 0
 }

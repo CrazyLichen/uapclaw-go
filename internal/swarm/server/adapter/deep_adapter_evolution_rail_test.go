@@ -7,6 +7,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	coreevolutionreview "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
@@ -18,7 +19,7 @@ func TestBuildAgentRails_不构建演进与创建rail(t *testing.T) {
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
 	d.setConfigSnapshots(map[string]any{
-		"evolution": map[string]any{"enabled": true, "skill_create": true, "auto_scan": true},
+		"evolution": map[string]any{"skill_evolution": true, "skill_create": true, "auto_scan": true},
 	}, map[string]any{})
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
@@ -49,11 +50,16 @@ func newTestEvolutionRail(t *testing.T, modelName string) *coreevolution.SkillEv
 		"cn",
 		coreevolution.WithSignalTrigger(false),
 		coreevolution.WithAutoSave(false),
+		coreevolution.WithReviewTrigger(true),
+		coreevolution.WithEvolutionReviewRuntime(
+			coreevolutionreview.NewEvolutionReviewRuntime(60.0)),
+		coreevolution.WithEvolutionTrajectorySpanProcessor(demandSpanProcessorOf()),
 	)
 }
 
-// TestUpdateSkillEvolutionRail_就地更新 热重载必须就地换 LLM 与 auto_save，实例不变；
-// signal_trigger 恒为 False（Python interface_deep.py:12328-12332 只更新 auto_save）。
+// TestUpdateSkillEvolutionRail_就地更新 热重载只换 LLM 与 auto_save，实例不变；
+// signal_trigger 不随热更新（Python 新版个人 rail 构造恒 False，无热更新点）。
+// Python: _get_current_agent_rails 顶部（interface_deep.py:12328-12333）。
 func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 	d := NewDeepAdapter()
 	rail := newTestEvolutionRail(t, "old-model")
@@ -61,6 +67,7 @@ func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 	d.model = usableTestModel()
 	d.defaultModelName = "new-model"
 
+	// 单参签名（24.15 收敛）：auto_save 读 configBase 的 react.evolution.auto_save
 	d.updateSkillEvolutionRail(map[string]any{
 		"react": map[string]any{"evolution": map[string]any{"auto_save": true}},
 	})
@@ -72,83 +79,76 @@ func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 		t.Fatalf("ModelName = %q, want new-model", got)
 	}
 	if !rail.AutoSave() {
-		t.Fatal("auto_save 应跟随 react.evolution.auto_save 更新为 true")
+		t.Fatal("auto_save 应跟随配置更新为 true（Python :12330-12333）")
 	}
 	if rail.SignalTrigger() {
-		t.Fatal("signal_trigger 恒为 False，不从配置读取（上游已无 auto_scan 键）")
+		t.Fatal("signal_trigger 不得随热更新翻转（Python 新版恒 False）")
 	}
 }
 
 // newRailBuildAdapter 构造只用于 rail 构建的 adapter。
-func newRailBuildAdapter(t *testing.T, cache map[string]any) *DeepAdapter {
+func newRailBuildAdapter(t *testing.T, base map[string]any) *DeepAdapter {
 	t.Helper()
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(cache, map[string]any{})
+	d.setConfigSnapshots(map[string]any{}, base)
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
 	return d
 }
 
-// TestBuildSkillEvolutionRail_参数矩阵 构造参数必须与 Python 对齐
-// （interface_deep.py:10234-10260）：signal_trigger 恒 False、review_trigger 恒 True、
-// auto_save 读 react.evolution.auto_save、sharing 不接、model_name 兜底。
+// TestBuildSkillEvolutionRail_参数矩阵 构造参数必须与 Python 新版对齐
+// （interface_deep.py:10236-10259）：signal_trigger 恒 False、auto_save 跟随
+// config evolution_auto_save、review_trigger 恒 True、review_runtime 必传、
+// processor 注入、sharing 不接、model_name 兜底 gpt-4。
 func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 
-	baseWith := func(evolution map[string]any) (map[string]any, map[string]any) {
-		return map[string]any{"evolution": evolution},
-			map[string]any{"react": map[string]any{"evolution": evolution}}
-	}
-
-	t.Run("signal_trigger恒为false", func(t *testing.T) {
-		cache, base := baseWith(map[string]any{"skill_evolution": true})
-		d := newRailBuildAdapter(t, cache)
-		d.setConfigSnapshots(cache, base)
+	t.Run("signal_trigger恒False", func(t *testing.T) {
+		t.Setenv("EVOLUTION_AUTO_SCAN", "1") // 环境变量不再影响个人 rail（Python :10250 恒 False）
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		rail := d.buildSkillEvolutionRail()
-		if rail == nil {
-			t.Fatal("rail 不应为 nil")
-		}
-		if rail.SignalTrigger() {
-			t.Fatal("signal_trigger 恒为 False（Python :10250 硬编码，上游已无 auto_scan 键）")
-		}
-	})
-
-	t.Run("auto_save缺省关闭", func(t *testing.T) {
-		cache, base := baseWith(map[string]any{"skill_evolution": true})
-		d := newRailBuildAdapter(t, cache)
-		d.setConfigSnapshots(cache, base)
-		if rail := d.buildSkillEvolutionRail(); rail == nil || rail.AutoSave() {
-			t.Fatal("auto_save 缺省必须为 false（Python get_evolution_auto_save_enabled 默认 false）")
+		if rail == nil || rail.SignalTrigger() {
+			t.Fatal("signal_trigger 必须恒为 false（Python :10250）")
 		}
 	})
 
 	t.Run("auto_save跟随配置", func(t *testing.T) {
-		cache, base := baseWith(map[string]any{"skill_evolution": true, "auto_save": true})
-		d := newRailBuildAdapter(t, cache)
-		d.setConfigSnapshots(cache, base)
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true, "auto_save": true}}})
 		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.AutoSave() {
-			t.Fatal("auto_save=true 应透传（Python :10251 evolution_auto_save）")
+			t.Fatal("auto_save 应跟随 config（Python :10253）")
+		}
+		d2 := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
+		if rail := d2.buildSkillEvolutionRail(); rail == nil || rail.AutoSave() {
+			t.Fatal("auto_save 缺省为 false（Python :10253）")
+		}
+	})
+
+	t.Run("review_trigger恒True且runtime必传", func(t *testing.T) {
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
+		rail := d.buildSkillEvolutionRail()
+		if rail == nil || !rail.ReviewTrigger() {
+			t.Fatal("review_trigger 必须恒为 true（Python :10251）")
+		}
+		if rail.ReviewRuntime() == nil {
+			t.Fatal("review_runtime 必传（Python :10249）")
 		}
 	})
 
 	t.Run("sharing被忽略", func(t *testing.T) {
-		cache, base := baseWith(map[string]any{"skill_evolution": true, "sharing": map[string]any{"enabled": true}})
-		d := newRailBuildAdapter(t, cache)
-		d.setConfigSnapshots(cache, base)
+		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{
+			"skill_evolution": true, "sharing": map[string]any{"enabled": true},
+		}})
 		if rail := d.buildSkillEvolutionRail(); rail == nil || rail.IsSharingEnabled() {
 			t.Fatal("adapter 路径不应接 sharing（Python builder 不传 sharing_config）")
 		}
 	})
 
-	t.Run("model_name兜底配置", func(t *testing.T) {
-		cache, base := baseWith(map[string]any{"skill_evolution": true})
-		cache["model_name"] = "cfg-model"
-		d := newRailBuildAdapter(t, cache)
-		d.setConfigSnapshots(cache, base)
+	t.Run("model_name兜底gpt4", func(t *testing.T) {
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		d.defaultModelName = ""
-		if rail := d.buildSkillEvolutionRail(); rail == nil || rail.ModelName() != "cfg-model" {
-			t.Fatalf("model_name 应回落到 config.model_name")
+		if rail := d.buildSkillEvolutionRail(); rail == nil || rail.ModelName() != "gpt-4" {
+			t.Fatalf("model_name 应回落 gpt-4（Python :10252 兜底）")
 		}
 	})
 }
@@ -158,9 +158,7 @@ func TestBuildSkillCreateRail_未启用(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(map[string]any{}, map[string]any{
-		"react": map[string]any{"evolution": map[string]any{"skill_evolution": false}},
-	})
+	d.setConfigSnapshots(map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true, "skill_create": false}}}, map[string]any{})
 
 	if rail := d.buildSkillCreateRail(); rail != nil {
 		t.Fatalf("skill_create=false 应返回 nil，实际 %T", rail)
@@ -196,9 +194,7 @@ func TestBuildDynamicRail_写字段(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(map[string]any{}, map[string]any{
-		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
-	})
+	d.setConfigSnapshots(map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}}, map[string]any{})
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
 
@@ -221,7 +217,7 @@ func TestGetCurrentAgentRails_仅skill重建其余复用(t *testing.T) {
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
 	d.setConfigSnapshots(map[string]any{
-		"evolution": map[string]any{"enabled": true, "auto_scan": false},
+		"evolution": map[string]any{"skill_evolution": true, "auto_scan": false},
 	}, map[string]any{})
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
