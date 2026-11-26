@@ -206,6 +206,12 @@ type fakeFeedbackCoordinator struct {
 	finalize int
 }
 
+// OwnsExternalProposal 空桩（Bind 面改窄接口后占位，本用例不消费）。
+func (f *fakeFeedbackCoordinator) OwnsExternalProposal(string) bool { return false }
+
+// ResolveExternalProposal 空桩（同上）。
+func (f *fakeFeedbackCoordinator) ResolveExternalProposal(string, bool) string { return "" }
+
 func (f *fakeFeedbackCoordinator) HandleReviewFeedback(_ context.Context, _ map[string]any) error {
 	f.handled++
 	return nil

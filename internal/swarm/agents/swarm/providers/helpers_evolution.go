@@ -1,7 +1,6 @@
 package providers
 
 import (
-	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -66,37 +65,3 @@ func mapStrField(m map[string]any, key string) string {
 
 // logComponent 日志组件（swarm provider 系）。
 const logComponent = logger.ComponentAgentServer
-
-// evolutionSwarmContextFace SwarmBuildContext 的演进注册消费面适配
-// （team.EvolutionSwarmContextFace 结构化满足；team↔buildctx 成环，
-// providers 以方法集包装承载）。
-type evolutionSwarmContextFace struct {
-	view *buildctx.SwarmBuildContext
-}
-
-// EvolutionSessionID 会话 id。
-func (f evolutionSwarmContextFace) EvolutionSessionID() string { return f.view.SessionID }
-
-// EvolutionChannel 渠道键。
-func (f evolutionSwarmContextFace) EvolutionChannel() string { return f.view.Channel }
-
-// EvolutionTeamID 团队名。
-func (f evolutionSwarmContextFace) EvolutionTeamID() string { return f.view.TeamID }
-
-// EvolutionRole 团队角色。
-func (f evolutionSwarmContextFace) EvolutionRole() string { return f.view.Role }
-
-// EvolutionConfig 已解析配置。
-func (f evolutionSwarmContextFace) EvolutionConfig() map[string]any { return f.view.Config }
-
-// EvolutionLanguage 语言码。
-func (f evolutionSwarmContextFace) EvolutionLanguage() string { return f.view.Language }
-
-// EvolutionTeamWsRoot 团队共享工作区根。
-func (f evolutionSwarmContextFace) EvolutionTeamWsRoot() string { return f.view.TeamWsRoot }
-
-// EvolutionMemberName 成员名。
-func (f evolutionSwarmContextFace) EvolutionMemberName() string { return f.view.MemberName }
-
-// EvolutionProjectDir 项目目录。
-func (f evolutionSwarmContextFace) EvolutionProjectDir() string { return f.view.ProjectDir }

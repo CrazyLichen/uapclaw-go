@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/skills"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/swarmsnapshot"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -42,27 +43,27 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// EvolutionWorkspaceSnapshot 构建期捕获的工作区句柄（swarm 注册缝载荷）。
-// Go 偏差 D-15.24c-3：providers↔team 成环，TeamManager 注册经父包注入的
-// registrar 回调承载；本结构为跨缝载荷（team 类型不可进 providers 包）。
-type EvolutionWorkspaceSnapshot struct {
-	// RootDir 团队共享工作区根
-	RootDir string
-	// SkillsDir 唯一 Skill 库
-	SkillsDir string
-	// TeamID 团队名
-	TeamID string
-	// Config 已解析 config.yaml
-	Config map[string]any
-	// Language 语言
-	Language string
-}
-
 // EvolutionRailRegistrar swarm 父包注入的 TeamManager 注册回调。
 // kind ∈ {"team_evolution","team_create","member_evolution"}。
-type EvolutionRailRegistrar func(kind, channel, sessionID string, agent harnessinterfaces.DeepAgentInterface, rail agentinterfaces.AgentRail, ws *EvolutionWorkspaceSnapshot)
+// EvolutionRailKind 注册缝 rail 类别（枚举承载，防字符串拼写漂移）。
+type EvolutionRailKind string
 
-// evolutionRailRegistrar 注册回调（RegisterSwarmProviders 注入；nil 时跳过注册）。
+const (
+	// EvolutionRailKindTeamEvolution leader 团队技能演进 rail
+	EvolutionRailKindTeamEvolution EvolutionRailKind = "team_evolution"
+	// EvolutionRailKindTeamCreate leader 团队技能创建 rail
+	EvolutionRailKindTeamCreate EvolutionRailKind = "team_create"
+	// EvolutionRailKindMemberEvolution teammate 成员技能演进 rail
+	EvolutionRailKindMemberEvolution EvolutionRailKind = "member_evolution"
+)
+
+// EvolutionRailRegistrar team 包注入的 TeamManager 注册回调。
+// 偏差 D-15.24c-3：providers↔team 成环（team_manager_spec.go→swarm→providers），
+// providers 只持有回调本体；载荷用 swarmsnapshot.Snapshot 具体类型
+// （2026-11-26 审查轮 B：提取叶包消 any）。
+type EvolutionRailRegistrar func(kind EvolutionRailKind, snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail agentinterfaces.AgentRail)
+
+// evolutionRailRegistrar 注册回调（team 包 init 注入；nil 时跳过注册）。
 var evolutionRailRegistrar EvolutionRailRegistrar
 
 // SetEvolutionRailRegistrar 注入 TeamManager 注册回调（父包无环注入缝）。
@@ -74,20 +75,14 @@ func SetEvolutionRailRegistrar(fn EvolutionRailRegistrar) {
 // Python: SwarmTeamSkillEvolutionRail（evolution_rails.py:206-287）。
 type SwarmTeamSkillEvolutionRail struct {
 	*evolution.TeamSkillEvolutionRail
-	// swarmChannel 已解析 channel 键（bind_swarm_context 捕获）
-	swarmChannel string
-	// swarmSessionID 持有 rail 的活跃会话 id
-	swarmSessionID string
-	// swarmWorkspace 构建期捕获的工作区句柄
-	swarmWorkspace *EvolutionWorkspaceSnapshot
+	// swarmSnapshot 构建期捕获的上下文快照（bind_swarm_context 捕获）
+	swarmSnapshot *swarmsnapshot.Snapshot
 }
 
 // BindSwarmContext 捕获 TeamManager 注册所需构建期句柄。
 // Python: bind_swarm_context（evolution_rails.py:214-244）。
-func (r *SwarmTeamSkillEvolutionRail) BindSwarmContext(channel, sessionID string, ws *EvolutionWorkspaceSnapshot) {
-	r.swarmChannel = channel
-	r.swarmSessionID = sessionID
-	r.swarmWorkspace = ws
+func (r *SwarmTeamSkillEvolutionRail) BindSwarmContext(ws *swarmsnapshot.Snapshot) {
+	r.swarmSnapshot = ws
 }
 
 // Init 挂载 agent 并经父包 registrar 向 per-channel TeamManager 注册。
@@ -97,7 +92,7 @@ func (r *SwarmTeamSkillEvolutionRail) Init(ctx context.Context, agent agentinter
 		return err
 	}
 	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar("team_evolution", r.swarmChannel, r.swarmSessionID, deepOf(agent), r, r.swarmWorkspace)
+		evolutionRailRegistrar(EvolutionRailKindTeamEvolution, r.swarmSnapshot, agent, r)
 	}
 	return nil
 }
@@ -111,17 +106,13 @@ func (r *SwarmTeamSkillEvolutionRail) Uninit(agent agentinterfaces.BaseAgent) er
 // Python: SwarmTeamSkillCreateRail（evolution_rails.py:290-358）。
 type SwarmTeamSkillCreateRail struct {
 	*skillrails.TeamSkillCreateRail
-	swarmChannel   string
-	swarmSessionID string
-	swarmWorkspace *EvolutionWorkspaceSnapshot
+	swarmSnapshot *swarmsnapshot.Snapshot
 }
 
 // BindSwarmContext 捕获构建期句柄。
 // Python: bind_swarm_context（evolution_rails.py:293-323）。
-func (r *SwarmTeamSkillCreateRail) BindSwarmContext(channel, sessionID string, ws *EvolutionWorkspaceSnapshot) {
-	r.swarmChannel = channel
-	r.swarmSessionID = sessionID
-	r.swarmWorkspace = ws
+func (r *SwarmTeamSkillCreateRail) BindSwarmContext(ws *swarmsnapshot.Snapshot) {
+	r.swarmSnapshot = ws
 }
 
 // Init 挂载 agent 并经父包 registrar 注册。
@@ -131,7 +122,7 @@ func (r *SwarmTeamSkillCreateRail) Init(ctx context.Context, agent agentinterfac
 		return err
 	}
 	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar("team_create", r.swarmChannel, r.swarmSessionID, deepOf(agent), r, r.swarmWorkspace)
+		evolutionRailRegistrar(EvolutionRailKindTeamCreate, r.swarmSnapshot, agent, r)
 	}
 	return nil
 }
@@ -145,18 +136,13 @@ func (r *SwarmTeamSkillCreateRail) Uninit(agent agentinterfaces.BaseAgent) error
 // Python: SwarmMemberSkillEvolutionRail（evolution_rails.py:361-455）。
 type SwarmMemberSkillEvolutionRail struct {
 	*evolution.MemberSkillEvolutionRail
-	swarmChannel   string
-	swarmSessionID string
-	swarmWorkspace *EvolutionWorkspaceSnapshot
-	swarmLanguage  string
+	swarmSnapshot *swarmsnapshot.Snapshot
 }
 
 // BindSwarmContext 捕获构建期句柄。
 // Python: bind_swarm_context（evolution_rails.py:369-402）。
-func (r *SwarmMemberSkillEvolutionRail) BindSwarmContext(channel, sessionID string, ws *EvolutionWorkspaceSnapshot) {
-	r.swarmChannel = channel
-	r.swarmSessionID = sessionID
-	r.swarmWorkspace = ws
+func (r *SwarmMemberSkillEvolutionRail) BindSwarmContext(ws *swarmsnapshot.Snapshot) {
+	r.swarmSnapshot = ws
 }
 
 // Init 挂载 agent 并经父包 registrar 注册。
@@ -166,7 +152,7 @@ func (r *SwarmMemberSkillEvolutionRail) Init(ctx context.Context, agent agentint
 		return err
 	}
 	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar("member_evolution", r.swarmChannel, r.swarmSessionID, deepOf(agent), r, r.swarmWorkspace)
+		evolutionRailRegistrar(EvolutionRailKindMemberEvolution, r.swarmSnapshot, agent, r)
 	}
 	return nil
 }
@@ -287,7 +273,7 @@ func buildTeamSkillEvolutionRail(params map[string]any, view *buildctx.SwarmBuil
 		logger.Warn(logComponent).
 			Msg("[swarm.team_skill_evolution] review-feedback integration skipped: global_skills_dir is unavailable")
 	}
-	rail.BindSwarmContext(view.Channel, view.SessionID, workspaceSnapshotOf(view, skillsDir))
+	rail.BindSwarmContext(workspaceSnapshotOf(view, skillsDir))
 	logger.Info(logComponent).
 		Str("skills_dir", skillsDir).
 		Str("model", actualModelName).
@@ -310,7 +296,7 @@ func buildTeamSkillCreateRail(params map[string]any, view *buildctx.SwarmBuildCo
 		skillrails.WithTeamSkillCreateAutoTrigger(true),
 		skillrails.WithTeamSkillCreateLanguage(stringFieldOrEmpty(view.Language, "cn")),
 	)}
-	rail.BindSwarmContext(view.Channel, view.SessionID, workspaceSnapshotOf(view, skillsDir))
+	rail.BindSwarmContext(workspaceSnapshotOf(view, skillsDir))
 	logger.Info(logComponent).
 		Str("skills_dir", skillsDir).
 		Str("team_visibility", view.TeamSkillVisibilityPath).
@@ -348,7 +334,7 @@ func buildMemberSkillEvolutionRail(params map[string]any, view *buildctx.SwarmBu
 		evolution.WithReviewTrigger(false),
 		evolution.WithDisabledSkillsSet(skillruntime.LoadExecutionDisabledSkills()),
 	)}
-	rail.BindSwarmContext(view.Channel, view.SessionID, workspaceSnapshotOf(view, skillsDir))
+	rail.BindSwarmContext(workspaceSnapshotOf(view, skillsDir))
 	logger.Info(logComponent).
 		Str("model", actualModelName).
 		Msg("[swarm.member_skill_evolution] built")
@@ -380,13 +366,19 @@ func buildEvolutionInterruptProvider(params map[string]any, view *buildctx.Swarm
 // workspaceSnapshotOf 捕获构建期工作区句柄。
 // Python: _build_team_workspace_info（evolution_rails.py:116-156）——全字段
 // 填充 TeamWorkspaceInfo；Go 侧 snapshot 由父包 registrar 换算 team 类型。
-func workspaceSnapshotOf(view *buildctx.SwarmBuildContext, skillsDir string) *EvolutionWorkspaceSnapshot {
-	return &EvolutionWorkspaceSnapshot{
-		RootDir:   view.TeamWsRoot,
-		SkillsDir: skillsDir,
-		TeamID:    view.TeamID,
-		Config:    view.Config,
-		Language:  stringFieldOrEmpty(view.Language, "cn"),
+func workspaceSnapshotOf(view *buildctx.SwarmBuildContext, skillsDir string) *swarmsnapshot.Snapshot {
+	channel := stringFieldOrEmpty(view.Channel, "default")
+	return &swarmsnapshot.Snapshot{
+		SessionID:  view.SessionID,
+		Channel:    channel,
+		TeamID:     view.TeamID,
+		Role:       view.Role,
+		Language:   stringFieldOrEmpty(view.Language, "cn"),
+		MemberName: view.MemberName,
+		ProjectDir: view.ProjectDir,
+		TeamWsRoot: view.TeamWsRoot,
+		SkillsDir:  skillsDir,
+		Config:     view.Config,
 	}
 }
 
