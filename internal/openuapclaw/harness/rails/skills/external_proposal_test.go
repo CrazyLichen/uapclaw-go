@@ -84,8 +84,6 @@ func TestTeamSkillCreateRail_外部审批卡载荷(t *testing.T) {
 	metaStr := payload["_evolution_meta"].(map[string]string)
 	assert.Equal(t, "create", metaStr["approval_kind"])
 	assert.Equal(t, "scheduler_review_feedback", metaStr["source"])
-	assert.Equal(t, "create", meta["approval_kind"])
-	assert.Equal(t, "scheduler_review_feedback", meta["source"])
 	questions := payload["questions"].([]map[string]any)
 	require.Len(t, questions, 1)
 	assert.Equal(t, "新建 Skill 审批", questions[0]["header"])
