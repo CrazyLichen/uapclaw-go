@@ -101,3 +101,11 @@ func (m *MockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试/集成替身）。
 func (m *MockSessionFacade) GetParentSessionID() string { return "" }
+
+// GetAgentID 返回会话绑定的 agent 标识（mock 固定值；接口扩面回填）。
+func (m *MockSessionFacade) GetAgentID() string {
+	return "mock-agent"
+}
+
+// GetTeamID 返回会话属主团队标识（mock 固定空串；接口扩面回填）。
+func (m *MockSessionFacade) GetTeamID() string { return "" }
