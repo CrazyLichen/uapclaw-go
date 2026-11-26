@@ -247,3 +247,36 @@ func guardInvokeCBC() *agentinterfaces.AgentCallbackContext {
 func guardTestCard() *agentschema.AgentCard {
 	return agentschema.NewAgentCard()
 }
+
+// TestStreamCompletionState 中断态判定（_stream_completion_state 对齐）。
+func TestStreamCompletionState(t *testing.T) {
+	agent := newGuardTestAgent()
+	d := NewDeepAdapter()
+	d.instance = agent
+	// loop session 缺席 → had_interaction 分支（Python 一比一）
+	if got := d.streamCompletionState(true); got != "suspended" {
+		t.Errorf("缺席+had_interaction 应 suspended，实际 %s", got)
+	}
+	if got := d.streamCompletionState(false); got != "completed" {
+		t.Errorf("缺席无交互应 completed，实际 %s", got)
+	}
+	// 有中断态（ask_user 挂起）→ suspended
+	loopSess := agent.LoopSession()
+	if loopSess == nil {
+		t.Skip("测试 agent 无 loop session，跳过状态分支")
+	}
+	loopSess.UpdateState(map[string]any{agentschema.InterruptionKey: &agentschema.ToolInterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{Iteration: 1},
+		InterruptedTools: map[string]*agentschema.ToolInterruptEntry{
+			"call-1": {ToolCall: &schema.ToolCall{ID: "call-1", Name: "ask_user"}},
+		},
+	}})
+	if got := d.streamCompletionState(false); got != "suspended" {
+		t.Errorf("interrupted_tools 非空应 suspended，实际 %s", got)
+	}
+	// 清态后 → completed
+	loopSess.UpdateState(map[string]any{agentschema.InterruptionKey: nil})
+	if got := d.streamCompletionState(false); got != "completed" {
+		t.Errorf("清态后应 completed，实际 %s", got)
+	}
+}

@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sessstate "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
+	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -244,30 +246,37 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 	return true, nil
 }
 
-// InteractionSuspensionProbe 交互挂起探测（nil=不挂起）。
-// [Go 归属] Python _stream_completion_state 读 loop_session 的
-// INTERRUPTION_KEY.interrupted_tools；Go 的挂起事实源在协调器账本
-// （WaitingControlIDs），由门面装配时注入探测闭包（Task 6 接线）。
-type InteractionSuspensionProbe func() bool
-
-// SetInteractionSuspensionProbe 装配挂起探测（门面接线点；nil=不挂起）。
-// Python: _stream_completion_state 读 loop_session INTERRUPTION_KEY；
-// Go 事实源在协调器账本，由 runViaSessionInputCoordinator 注入。
-func (d *DeepAdapter) SetInteractionSuspensionProbe(probe InteractionSuspensionProbe) {
-	d.interactionSuspensionProbe = probe
-}
-
 // streamCompletionState 区分中断挂起与无文本完成轮。
-// Python: interface_deep.py _stream_completion_state（:20751）——
-// probe 未装配/返回 false → completed；probe 命中 → suspended。
-// hadInteraction 分支保留 Python 语义：loop_session 缺席时以
-// had_interaction 决定（Go 侧 probe==nil 等价）。
+// Python: interface_deep.py _stream_completion_state（:20751-20758）一比一：
+// loop_session 缺席 → had_interaction 分支；否则读 INTERRUPTION_KEY，
+// interrupted_tools 非空 → suspended，否则 completed。
+// [25.6 收尾批] 对齐修正：事实源从协调器探针改回 loop session 中断态
+// （Go 中断基础设施完整存在：ToolInterruptionState.InterruptedTools），
+// probe 注入按规则 8 删除。
 func (d *DeepAdapter) streamCompletionState(hadInteraction bool) string {
-	if d.interactionSuspensionProbe != nil && d.interactionSuspensionProbe() {
-		return "suspended"
+	loopSession := d.instance.LoopSession()
+	if loopSession == nil {
+		if hadInteraction {
+			return "suspended"
+		}
+		return "completed"
 	}
-	if hadInteraction {
-		return "suspended"
+	val, err := loopSession.GetState(sessstate.StringKey(saschema.InterruptionKey))
+	if err != nil || val == nil {
+		// Python: get_state 异常/缺席 → completed（getattr(state,"interrupted_tools",None) 空）
+		return "completed"
+	}
+	switch st := val.(type) {
+	case *saschema.ToolInterruptionState:
+		if len(st.InterruptedTools) > 0 {
+			return "suspended"
+		}
+	case *saschema.InterruptionState:
+		// Go 工作流中断态与 Python interrupted_tools 同键承载；
+		// 待处理工作流/组件同样意味着轮次挂起
+		if st.PendingWorkflowID != "" || len(st.InterruptedWorkflows) > 0 {
+			return "suspended"
+		}
 	}
 	return "completed"
 }

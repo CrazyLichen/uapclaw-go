@@ -910,29 +910,6 @@ func (c *RuntimeSessionCoordinator) LookupExecution(executionID string) *Session
 	return c.registry.Get(executionID)
 }
 
-// SessionWaitingControl 会话当前代次的活跃执行是否有等待中的交互。
-// [25.6 收尾批] A4 装配：DeepAdapter.interactionSuspensionProbe 的探针源——
-// Python _stream_completion_state 读 loop_session INTERRUPTION_KEY.interrupted_tools；
-// Go 的挂起事实源在执行账本 WaitingControlIDs。
-func (c *RuntimeSessionCoordinator) SessionWaitingControl(sessionID string) bool {
-	c.mu.Lock()
-	record, ok := c.sessions[sessionID]
-	if !ok || record.state == RuntimeSessionStateClosed {
-		c.mu.Unlock()
-		return false
-	}
-	gen := record.generation
-	c.mu.Unlock()
-	for _, h := range c.registry.Select(SelectOptions{
-		SessionID: sessionID, Generation: &gen, ActiveOnly: true,
-	}) {
-		if len(c.registry.WaitingControlIDsOf(h.ExecutionID)) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // MarkAwaitingControlForTest 登记等待交互标识（跨包集成测试专用）。
 func (c *RuntimeSessionCoordinator) MarkAwaitingControlForTest(executionID string, ids map[string]struct{}) {
 	if h := c.registry.Get(executionID); h != nil {

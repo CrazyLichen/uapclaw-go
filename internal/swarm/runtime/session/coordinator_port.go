@@ -38,8 +38,6 @@ type CoordinatorPort interface {
 		operation func(context.Context, TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error), options StreamOptions, emit func(*schema.AgentResponseChunk) bool) error
 	// LookupExecution 按 execution_id 查执行句柄（补充输入锚定复核）。
 	LookupExecution(executionID string) *SessionExecutionHandle
-	// SessionWaitingControl 会话当前代次是否有等待中的交互（suspended 探针源）。
-	SessionWaitingControl(sessionID string) bool
 	// StreamSessionInput 补充输入分流（三守卫+parent 绑定+idle 分流）。
 	// Python: _session_coordinator.stream_session_input（coordinator.py:576-628）。
 	StreamSessionInput(ctx context.Context,
