@@ -531,6 +531,63 @@ func (m *Model) BuildKVCacheInvokeKwargs(session SessionLike, enableKVCacheRelea
 	return extra
 }
 
+// EvictKvc 逐出 KV cache（best-effort，底层不支持或失败均静默返回 false）。
+// Python: Model.evict_kvc()（model.py:416）经 _run_kv_cache_action 鸭子式委托底层客户端。
+func (m *Model) EvictKvc(ctx context.Context, params *model_clients.KVCacheActionParams) bool {
+	return m.runKVCacheAction(ctx, "evict", params)
+}
+
+// OffloadKvc 移出 KV cache（best-effort）。
+// Python: Model.offload_kvc()（model.py:464）。
+func (m *Model) OffloadKvc(ctx context.Context, params *model_clients.KVCacheActionParams) bool {
+	return m.runKVCacheAction(ctx, "offload", params)
+}
+
+// PrefetchKvc 预取 KV cache（best-effort）。
+// Python: Model.prefetch_kvc()（openai_model_client.py:855 同族）。
+func (m *Model) PrefetchKvc(ctx context.Context, params *model_clients.KVCacheActionParams) bool {
+	return m.runKVCacheAction(ctx, "prefetch", params)
+}
+
+// runKVCacheAction 鸭子式执行可选 KVC 动作，不向业务代码暴露失败。
+// 底层客户端未实现 model_clients.KVCActionClient 时返回 false；
+// 动作报错记录警告日志后返回 false。
+// Python: Model._run_kv_cache_action()（model.py:400-415）。
+func (m *Model) runKVCacheAction(ctx context.Context, action string, params *model_clients.KVCacheActionParams) bool {
+	actionClient, ok := m.client.(model_clients.KVCActionClient)
+	if !ok {
+		return false
+	}
+	// Python target 默认 "session"（model.py:421 target: str = "session"）
+	if params == nil {
+		params = &model_clients.KVCacheActionParams{}
+	}
+	if params.Target == "" {
+		params.Target = "session"
+	}
+	var actionFn func(context.Context, *model_clients.KVCacheActionParams) (bool, error)
+	switch action {
+	case "evict":
+		actionFn = actionClient.EvictKvc
+	case "offload":
+		actionFn = actionClient.OffloadKvc
+	case "prefetch":
+		actionFn = actionClient.PrefetchKvc
+	default:
+		return false
+	}
+	got, err := actionFn(ctx, params)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "KV_CACHE_ACTION_FAILED").
+			Str("action", action).
+			Err(err).
+			Msgf("KVC %s failed; continue normal flow", action)
+		return false
+	}
+	return got
+}
+
 // GenerateImage 生成图片。
 // Python: Model.generate_image()
 func (m *Model) GenerateImage(

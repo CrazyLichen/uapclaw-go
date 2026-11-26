@@ -18,8 +18,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
-	sessioniface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
+	sessioniface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
 	review "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	reviewsubagent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/reviewsubagent"

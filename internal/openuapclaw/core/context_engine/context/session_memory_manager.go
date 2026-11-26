@@ -1387,3 +1387,10 @@ func generateShortID() string {
 	_, _ = crypto_rand.Read(b)
 	return fmt.Sprintf("%x", b)
 }
+
+// AgentUpdater 返回 agent_edit 模式更新器（非 agent_edit 返回 false）。
+// 装配缝：外部经 SetAgentEditAgent 注入执行体（15b）。
+func (m *SessionMemoryManager) AgentUpdater() (*SessionMemoryAgentUpdater, bool) {
+	u, ok := m.updater.(*SessionMemoryAgentUpdater)
+	return u, ok
+}

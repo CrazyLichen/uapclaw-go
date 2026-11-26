@@ -2,13 +2,13 @@ package context_engineer
 
 import (
 	"context"
+	"os"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/compressor"
 	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/offloader"
+	forkedoffloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
@@ -18,6 +18,8 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	compressionrecall "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/compression_recall"
+	filesystemtools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/tools/filesystem"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -45,6 +47,9 @@ type ContextProcessorRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// allProcessors 合并后的完整处理器列表
 	allProcessors []ceiface.ProcessorSpec
+	// recallEnabled 压缩召回生效开关（recall 配置开启 + 存在受支持的 forked 压缩器）
+	// Python: self._recall_enabled
+	recallEnabled bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -61,20 +66,17 @@ const (
 
 	// 默认 preset 的处理器类型
 	// Python: ContextProcessorRail._build_preset_processors (session_memory=False)
-	defaultProcessorOffloader    = "MessageSummaryOffloader"
-	defaultProcessorDialogue     = "DialogueCompressor"
-	defaultProcessorCurrentRound = "CurrentRoundCompressor"
-	defaultProcessorRoundLevel   = "RoundLevelCompressor"
+	presetProcessorOffloader    = "MessageSummaryOffloader"
+	presetProcessorDialogue     = "DialogueCompressor"
+	presetProcessorCurrentRound = "CurrentRoundCompressor"
+	presetProcessorRoundLevel   = "RoundLevelCompressor"
 
 	// session_memory preset 的处理器类型
 	// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
-	sessionMemoryProcessorToolResultBudget = "ToolResultBudgetProcessor"
-	sessionMemoryProcessorMicroCompact     = "MicroCompactProcessor"
-	sessionMemoryProcessorFullCompact      = "FullCompactProcessor"
 
 	// forked 链的会话记忆物化压缩器（24.2；Python: _SESSION_MEMORY_PROCESSOR_KEY，
 	// _build_preset_processors 中 SessionMemoryCompressorConfig(enabled=False)）
-	sessionMemoryProcessorSessionMemory = "SessionMemoryCompressor"
+	presetProcessorSessionMemory = "SessionMemoryCompressor"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -83,14 +85,11 @@ const (
 // 用于区分"preset 内建类型"与"用户自定义处理器"：前者受 mode 激活集过滤，
 // 后者始终保留。
 var allPresetProcessorTypes = map[string]struct{}{
-	defaultProcessorOffloader:              {},
-	defaultProcessorDialogue:               {},
-	defaultProcessorCurrentRound:           {},
-	defaultProcessorRoundLevel:             {},
-	sessionMemoryProcessorToolResultBudget: {},
-	sessionMemoryProcessorMicroCompact:     {},
-	sessionMemoryProcessorFullCompact:      {},
-	sessionMemoryProcessorSessionMemory:    {},
+	presetProcessorOffloader:     {},
+	presetProcessorDialogue:      {},
+	presetProcessorCurrentRound:  {},
+	presetProcessorRoundLevel:    {},
+	presetProcessorSessionMemory: {},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -123,6 +122,9 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	if r.sessionMemoryConfig != nil && r.sessionMemoryMgr != nil {
 		r.sessionMemoryConfig.SetModelDefaults(modelConfig, modelClientConfig)
 		r.sessionMemoryMgr.BindModelDefaults(modelConfig, modelClientConfig)
+		// agent_edit 模式：注入 SessionMemoryAgent 执行体 + 笔记读状态预填充
+		// （挂账①⑤销账；Python: SessionMemoryManager 构造期闭包装配）
+		r.wireSessionMemoryAgent(agent, modelConfig, modelClientConfig)
 	}
 
 	var baseProcessors []ceiface.ProcessorSpec
@@ -144,12 +146,6 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 			Msg("context processor merge partially failed, offending processors skipped")
 	}
 
-	// 激活集过滤：base 同时包含默认与 session_memory 两条分支的默认配置
-	// （只为让 yaml 覆盖能命中类型），真正生效的集合由 session_memory 开关决定。
-	if r.preset {
-		allProcessors = r.filterActiveProcessors(allProcessors)
-	}
-
 	config.ContextProcessors = allProcessors
 	r.allProcessors = allProcessors
 
@@ -157,6 +153,9 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	// （用户轮次入口）应用到池内的老上下文。Python 无此行为——其 create_context
 	// 命中池子时忽略 processors，老会话不会跟随（见 Go 侧增强说明）。
 	pushRuntimeConfig(agent, config.ContextEngineConfig, allProcessors)
+
+	// 压缩召回生效判定与接线（Python: init 尾部 _recall_enabled 分支）
+	r.wireCompressionRecall(agent, config.ContextEngineConfig, allProcessors)
 
 	// 获取 systemPromptBuilder 引用
 	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
@@ -186,6 +185,7 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection("offload")
+		r.systemPromptBuilder.RemoveSection("compression_recall")
 	}
 	r.allProcessors = nil
 
@@ -208,6 +208,8 @@ func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfac
 func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	r.maybeInjectOffloadSection()
+	// Python: self._maybe_inject_compression_recall_section()
+	r.maybeInjectCompressionRecallSection()
 	return nil
 }
 
@@ -301,175 +303,68 @@ func WithSessionMemoryConfig(cfg *cecontext.SessionMemoryConfig) ContextProcesso
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildPresetProcessors 构建"全量已知处理器的默认配置"（两条 preset 分支的并集）。
-// Python: ContextProcessorRail._build_preset_processors(model_config, model_client_config)
-// 根据 session_memory 是否启用选择不同的预设路径。Go 把两条分支都构造成 base，
-// 目的是让 yaml 里任何已知 processor 段都能在 MergeProcessors 中命中类型并做字段覆盖；
-// 合并后再由 filterActiveProcessors 按 session_memory 开关筛出真正生效的集合。
+// buildPresetProcessors 构建单 forked preset 链（对齐当前 Python 单链，无两分支互斥）。
+// Python: ContextProcessorRail._build_preset_processors (context_processor_rail.py:204-272)：
+// forked.activate() 后注册 5 处理器——MessageSummaryOffloader（forked 版，15b 回填
+// 前暂用旧配置形态，D-24.15-a1）+ SessionMemoryCompressor（默认 disabled，用户以
+// enabled=True 覆盖即启用并伴随 SessionMemoryManager 启动）+ Dialogue/CurrentRound/
+// RoundLevel 三压缩器（model/model_client 透传）。context_debug 传播随 15b 补齐
+// （Go 侧 enable_context_debug 字段在 15b offloader/dump 半区接入）。
 func (r *ContextProcessorRail) buildPresetProcessors(
 	modelConfig *llmschema.ModelRequestConfig,
 	modelClientConfig *llmschema.ModelClientConfig,
 ) []ceiface.ProcessorSpec {
-	specs := make([]ceiface.ProcessorSpec, 0, 7)
-	specs = append(specs, defaultPresetProcessors(modelConfig, modelClientConfig)...)
-	specs = append(specs, sessionMemoryPresetProcessors(r, modelConfig, modelClientConfig)...)
+	// Python: forked.activate()——工厂注册表 last-write-wins，forked 实现覆盖旧工厂
+	forkedcompressor.Activate()
+	specs := make([]ceiface.ProcessorSpec, 0, 5)
+	specs = append(specs, ceiface.ProcessorSpec{
+		Type: presetProcessorOffloader,
+		// Python: ForkedMessageSummaryOffloaderConfig（enable_debug_dump 半区随 context_debug 半区接入）
+		Config: func() *forkedoffloader.MessageSummaryOffloaderConfig {
+			cfg := forkedoffloader.NewMessageSummaryOffloaderConfig()
+			cfg.ProtectedToolNames = []string{"read_file:*SKILL.md", "reload_original_context_messages"}
+			return cfg
+		}(),
+	})
+	specs = append(specs, ceiface.ProcessorSpec{
+		Type: presetProcessorSessionMemory,
+		// Python: SessionMemoryCompressorConfig(enabled=False, memory=...)
+		Config: func() *forkedcompressor.SessionMemoryCompressorConfig {
+			cfg := forkedcompressor.NewSessionMemoryCompressorConfig()
+			if r.sessionMemoryConfig != nil {
+				cfg.Memory = r.sessionMemoryConfig
+			}
+			return cfg
+		}(),
+	})
+	specs = append(specs, ceiface.ProcessorSpec{
+		Type: presetProcessorDialogue,
+		Config: func() *forkedcompressor.DialogueCompressorConfig {
+			cfg := forkedcompressor.NewDialogueCompressorConfig()
+			cfg.Model = modelConfig
+			cfg.ModelClient = modelClientConfig
+			return cfg
+		}(),
+	})
+	specs = append(specs, ceiface.ProcessorSpec{
+		Type: presetProcessorCurrentRound,
+		Config: func() *forkedcompressor.CurrentRoundCompressorConfig {
+			cfg := forkedcompressor.NewCurrentRoundCompressorConfig()
+			cfg.Model = modelConfig
+			cfg.ModelClient = modelClientConfig
+			return cfg
+		}(),
+	})
+	specs = append(specs, ceiface.ProcessorSpec{
+		Type: presetProcessorRoundLevel,
+		Config: func() *forkedcompressor.RoundLevelCompressorConfig {
+			cfg := forkedcompressor.NewRoundLevelCompressorConfig()
+			cfg.Model = modelConfig
+			cfg.ModelClient = modelClientConfig
+			return cfg
+		}(),
+	})
 	return specs
-}
-
-// filterActiveProcessors 按 session_memory 开关过滤激活集。
-// 规则（对齐 Python 两条 preset 分支互斥）：
-//   - session_memory 关闭 → 只保留默认 4 个处理器；
-//   - session_memory 开启 → 只保留 ToolResultBudget/MicroCompact/FullCompact；
-//   - 未知类型（用户自定义处理器）始终保留；
-//   - 用户的 yaml 覆盖落在被过滤掉的 preset 上时打 Warn，避免"配置静默失效"。
-func (r *ContextProcessorRail) filterActiveProcessors(specs []ceiface.ProcessorSpec) []ceiface.ProcessorSpec {
-	active := map[string]struct{}{}
-	if r.sessionMemoryEnabled {
-		active[sessionMemoryProcessorToolResultBudget] = struct{}{}
-		active[sessionMemoryProcessorMicroCompact] = struct{}{}
-		active[sessionMemoryProcessorFullCompact] = struct{}{}
-	} else {
-		active[defaultProcessorOffloader] = struct{}{}
-		active[defaultProcessorDialogue] = struct{}{}
-		active[defaultProcessorCurrentRound] = struct{}{}
-		active[defaultProcessorRoundLevel] = struct{}{}
-	}
-
-	userTypes := make(map[string]struct{}, len(r.userProcessors))
-	for _, spec := range r.userProcessors {
-		userTypes[spec.Type] = struct{}{}
-	}
-
-	out := make([]ceiface.ProcessorSpec, 0, len(specs))
-	for _, spec := range specs {
-		if _, isPreset := allPresetProcessorTypes[spec.Type]; !isPreset {
-			// 非 preset 类型（用户自定义处理器）原样保留
-			out = append(out, spec)
-			continue
-		}
-		if _, ok := active[spec.Type]; ok {
-			out = append(out, spec)
-			continue
-		}
-		if _, overridden := userTypes[spec.Type]; overridden {
-			logger.Warn(logComponent).
-				Str("processor", spec.Type).
-				Bool("session_memory_enabled", r.sessionMemoryEnabled).
-				Msg("processor config ignored: not in active preset for current mode")
-		}
-	}
-	return out
-}
-
-// defaultPresetProcessors 构造默认（非 session_memory）preset。
-// 显式覆盖值严格对齐 Python _build_preset_processors 中的参数。
-func defaultPresetProcessors(
-	modelConfig *llmschema.ModelRequestConfig,
-	modelClientConfig *llmschema.ModelClientConfig,
-) []ceiface.ProcessorSpec {
-	return []ceiface.ProcessorSpec{
-		{
-			Type: defaultProcessorOffloader,
-			Config: &offloader.MessageSummaryOffloaderConfig{
-				LargeMessageThreshold: 10000, // Python: large_message_threshold=10000 (覆盖默认1000)
-				OffloadMessageTypes:   []string{"tool"},
-				ProtectedToolNames:    []string{"read_file:*SKILL.md", "reload_original_context_messages"},
-				Model:                 modelConfig,
-				ModelClient:           modelClientConfig,
-			},
-		},
-		{
-			Type: defaultProcessorDialogue,
-			Config: &compressor.DialogueCompressorConfig{
-				TriggerContextRatio:     compressor.DefaultTriggerContextRatio,
-				MinTargetContextRatio:   compressor.DefaultMinTargetContextRatio,
-				MessagesToKeep:          10,    // Python: messages_to_keep=10
-				KeepLastRound:           false, // Python: keep_last_round=False
-				CompressionTargetTokens: 1800,
-				Model:                   modelConfig,
-				ModelClient:             modelClientConfig,
-			},
-		},
-		{
-			Type: defaultProcessorCurrentRound,
-			// 用 NewCurrentRoundCompressorConfig 构造以携带默认值
-			// （对齐 Python pydantic Field(default=...) 自动填默认——
-			// 结构体字面量会漏 MinSelectedTokensForCompression 等字段导致
-			// Validate 失败），再按 preset 覆盖指定字段
-			Config: func() *compressor.CurrentRoundCompressorConfig {
-				cfg := compressor.NewCurrentRoundCompressorConfig()
-				cfg.MessagesToKeep = 3
-				cfg.Model = modelConfig
-				cfg.ModelClient = modelClientConfig
-				return cfg
-			}(),
-		},
-		{
-			Type: defaultProcessorRoundLevel,
-			// 用 NewRoundLevelCompressorConfig 构造以携带默认值（对齐
-			// Python pydantic 自动填默认，防止 CompressionCallMaxTokens 等
-			// 字段漏设导致 Validate 失败），再按 preset 覆盖指定字段
-			Config: func() *compressor.RoundLevelCompressorConfig {
-				cfg := compressor.NewRoundLevelCompressorConfig()
-				cfg.TriggerContextRatio = compressor.DefaultTriggerContextRatio
-				cfg.TargetTotalTokens = 160000
-				cfg.KeepRecentMessages = 6 // Python: keep_recent_messages=6 (覆盖默认0)
-				cfg.Model = modelConfig
-				cfg.ModelClient = modelClientConfig
-				return cfg
-			}(),
-		},
-	}
-}
-
-// sessionMemoryPresetProcessors 构造 session_memory 启用时的 preset。
-// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
-// 三个处理器均无参构造（Python L157-172），pydantic 自动填默认值。
-// Go 端等价性说明：
-//   - ToolResultBudgetProcessorConfig：Validate 先调 applyDefaults()
-//     自愈填默认（TokensThreshold=50000 等），裸字面量安全；
-//   - MicroCompact/FullCompact：Validate 无自愈，裸字面量会漏
-//     TriggerThreshold/TriggerTotalTokens 等必填字段导致初始化失败
-//     （"初始化处理器类型失败"错误），必须用 New*Config 构造器
-func sessionMemoryPresetProcessors(
-	r *ContextProcessorRail,
-	modelConfig *llmschema.ModelRequestConfig,
-	modelClientConfig *llmschema.ModelClientConfig,
-) []ceiface.ProcessorSpec {
-	return []ceiface.ProcessorSpec{
-		{
-			Type:   sessionMemoryProcessorToolResultBudget,
-			Config: &offloader.ToolResultBudgetProcessorConfig{},
-		},
-		{
-			Type:   sessionMemoryProcessorMicroCompact,
-			Config: compressor.NewMicroCompactProcessorConfig(),
-		},
-		{
-			Type: sessionMemoryProcessorFullCompact,
-			// NewFullCompactProcessorConfig 携带全部默认值，再按 preset
-			// 覆盖模型配置字段（Python: FullCompactProcessorConfig(model=...,
-			// model_client=...) 其余字段走 pydantic 默认）
-			Config: func() *compressor.FullCompactProcessorConfig {
-				cfg := compressor.NewFullCompactProcessorConfig()
-				cfg.Model = modelConfig
-				cfg.ModelClient = modelClientConfig
-				return cfg
-			}(),
-		},
-		{
-			Type: sessionMemoryProcessorSessionMemory,
-			// Python: SessionMemoryCompressorConfig(enabled=False, memory=SessionMemoryConfig(...))，
-			// rail 已解析的 session_memory_config 透传给内嵌 memory 子配置
-			Config: func() *forkedcompressor.SessionMemoryCompressorConfig {
-				cfg := forkedcompressor.NewSessionMemoryCompressorConfig()
-				if r.sessionMemoryConfig != nil {
-					cfg.Memory = r.sessionMemoryConfig
-				}
-				return cfg
-			}(),
-		},
-	}
 }
 
 // maybeInjectOffloadSection 如果配置了处理器，注入 offload 提示节。
@@ -492,6 +387,148 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	}
 	section := sections.BuildReloadSection(lang)
 	r.systemPromptBuilder.AddSection(section)
+}
+
+// wireSessionMemoryAgent agent_edit 模式装配：SessionMemoryAgent 执行体注入
+// SetAgentEditAgent + SetPrimeNotesFn（文件读状态预填充，filesystem.SetFileReadState）。
+// 挂账①⑤销账；Python: SessionMemoryUpdateAgent（session_memory_manager.py L214-466）
+// 的构建半区 + _prime_notes_file_as_read（:430-447）。
+func (r *ContextProcessorRail) wireSessionMemoryAgent(
+	agent sainterfaces.BaseAgent,
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
+) {
+	if r.sessionMemoryMgr == nil {
+		return
+	}
+	_ = agent
+	updater, ok := r.sessionMemoryMgr.AgentUpdater()
+	if !ok {
+		return // direct_replace 模式无需执行体
+	}
+	workspaceRoot := ""
+	if ws := r.Workspace(); ws != nil {
+		workspaceRoot = ws.RootPath
+	}
+	sma := forkedcompressor.NewSessionMemoryAgent(
+		nil, modelConfig, modelClientConfig, nil,
+		forkedcompressor.NewSessionMemoryAgentConfig(),
+		workspaceRoot,
+	)
+	r.sessionMemoryMgr.SetAgentEditAgent(sma)
+	// 预填充：把笔记当前内容登记为已读（对齐 Python _prime_notes_file_as_read）
+	updater.SetPrimeNotesFn(func(notesPath string, currentNotes string) {
+		if stat, err := os.Stat(notesPath); err == nil {
+			filesystemtools.SetFileReadState(notesPath, &filesystemtools.FileReadState{
+				MtimeNS:   stat.ModTime().UnixNano(),
+				SizeBytes: stat.Size(),
+				IsPartial: false,
+				Content:   currentNotes,
+			})
+		}
+	})
+}
+
+// wireCompressionRecall 压缩召回生效判定 + 工具注册 + offloader 保护名单。
+// Python: init 尾部 recall_requested/_recall_enabled 分支 + _protect_compression_recall_tool_results
+// + _register_compression_recall_tool（context_processor_rail.py:378-392）。
+func (r *ContextProcessorRail) wireCompressionRecall(
+	agent sainterfaces.BaseAgent,
+	engineConfig ceschema.ContextEngineConfig,
+	allProcessors []ceiface.ProcessorSpec,
+) {
+	recallConfig := engineConfig.CompressionRecall
+	recallRequested := recallConfig != nil && recallConfig.Enabled
+	supportedCompressorPresent := false
+	supported := map[string]bool{
+		"DialogueCompressor": true, "CurrentRoundCompressor": true,
+		"RoundLevelCompressor": true, "SessionMemoryCompressor": true,
+	}
+	for _, spec := range allProcessors {
+		if supported[spec.Type] {
+			supportedCompressorPresent = true
+			break
+		}
+	}
+	r.recallEnabled = recallRequested && supportedCompressorPresent
+	if recallConfig != nil {
+		logger.Info(logComponent).
+			Bool("enabled", recallConfig.Enabled).
+			Msg("compression recall effective config")
+	}
+	if recallRequested && !supportedCompressorPresent {
+		logger.Warn(logComponent).Msg("compression recall is enabled but no supported forked compressor is configured")
+	}
+	if !r.recallEnabled {
+		return
+	}
+	// Python: _protect_compression_recall_tool_results——recall 工具结果免于规则压缩
+	r.protectCompressionRecallToolResults(allProcessors)
+	// Python: _register_compression_recall_tool
+	r.registerCompressionRecallTool(agent)
+}
+
+// protectCompressionRecallToolResults 向 forked offloader 配置追加 recall 工具保护名单。
+// Python: context_processor_rail.py:694 (_protect_compression_recall_tool_results)
+func (r *ContextProcessorRail) protectCompressionRecallToolResults(processors []ceiface.ProcessorSpec) {
+	for i := range processors {
+		if processors[i].Type != "MessageSummaryOffloader" {
+			continue
+		}
+		if cfg, ok := processors[i].Config.(*forkedoffloader.MessageSummaryOffloaderConfig); ok {
+			already := false
+			for _, name := range cfg.ProtectedToolNames {
+				if name == "recall_compressed_context" {
+					already = true
+					break
+				}
+			}
+			if !already {
+				cfg.ProtectedToolNames = append(cfg.ProtectedToolNames, "recall_compressed_context")
+			}
+		}
+	}
+}
+
+// registerCompressionRecallTool 注册 recall 工具到 agent 能力管理器。
+// Python: context_processor_rail.py:656 (_register_compression_recall_tool)
+func (r *ContextProcessorRail) registerCompressionRecallTool(agent sainterfaces.BaseAgent) {
+	abilityManager := agent.AbilityManager()
+	if abilityManager == nil {
+		return
+	}
+	workspaceDir := ""
+	if ws := r.Workspace(); ws != nil {
+		workspaceDir = ws.RootPath
+	}
+	agentID := "default"
+	language := "cn"
+	if r.systemPromptBuilder != nil && r.systemPromptBuilder.Language() != "" {
+		language = r.systemPromptBuilder.Language()
+	}
+	recallTool, card, err := compressionrecall.NewCompressionRecallTool(workspaceDir, language, agentID)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("register compression recall tool failed")
+		return
+	}
+	abilityManager.AddAbility(card, recallTool)
+}
+
+// maybeInjectCompressionRecallSection 按召回开关注入/移除 compression_recall 节。
+// Python: context_processor_rail.py:686 (_maybe_inject_compression_recall_section)
+func (r *ContextProcessorRail) maybeInjectCompressionRecallSection() {
+	if r.systemPromptBuilder == nil {
+		return
+	}
+	if !r.recallEnabled {
+		r.systemPromptBuilder.RemoveSection("compression_recall")
+		return
+	}
+	lang := "cn"
+	if r.systemPromptBuilder.Language() != "" {
+		lang = r.systemPromptBuilder.Language()
+	}
+	r.systemPromptBuilder.AddSection(sections.BuildCompressionRecallSection(lang))
 }
 
 // maybeScheduleSessionMemoryUpdate 调度会话记忆更新。
