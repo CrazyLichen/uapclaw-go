@@ -8,10 +8,12 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
-	ceprocessor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	ceprocessor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor/reinjection"
 	cesupport "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -406,7 +408,12 @@ func MessageToText(message llm_schema.BaseMessage) string {
 	if message == nil {
 		return ""
 	}
-	return cesupport.SanitizeContentForText(message.GetContent())
+	content := message.GetContent()
+	if content.IsText() {
+		// PY：str content 原样返回；Go MessageContent 包装形态需先取 Text
+		return cesupport.SanitizeContentForText(content.Text())
+	}
+	return cesupport.SanitizeContentForText(content)
 }
 
 // IsSummaryMessage 判断消息是否为携带指定标记的压缩记忆块
@@ -486,4 +493,124 @@ func IterSummaryMergeRanges(messages []llm_schema.BaseMessage, summaryMarker str
 	}
 
 	return ranges
+}
+
+// ───────── 24.15 Task 6：util.py 回注装配符号（附录 A.2 reinjection 半区） ─────────
+
+// ReinjectedStateBuilderSpec 具名回注构建器描述（support 侧载体）
+// Python: util.py:66 (ReinjectedStateBuilderSpec)
+type ReinjectedStateBuilderSpec struct {
+	// Name 构建器名
+	Name string
+	// Label 展示标签
+	Label string
+	// Builder 构建函数
+	Builder reinjection.ReinjectBuilderFunc
+}
+
+// BuildCompressorReinjectedStateMessage 为压缩器装配单条回注状态消息
+// Python: util.py:346 (build_compressor_reinjected_state_message)
+func BuildCompressorReinjectedStateMessage(
+	sourceMessages []llm_schema.BaseMessage,
+	messagesToKeep []llm_schema.BaseMessage,
+	context any,
+	config any,
+	builderNames []string,
+	sessionState map[string]any,
+) *llm_schema.UserMessage {
+	if sessionState == nil {
+		sessionState = GetSessionStateForReinjection(context)
+	}
+	maxChars := 12000
+	if m, ok := config.(map[string]any); ok {
+		if v, ok := m["reinject_max_chars_per_section"].(int); ok && v > 0 {
+			maxChars = v
+		}
+	}
+	ctx := &reinjection.ReinjectContext{
+		SessionState:   sessionState,
+		SourceMessages: sourceMessages,
+		MessagesToKeep: messagesToKeep,
+		WorkspaceRoot:  GetWorkspaceRootForReinjection(context),
+		Config:         config,
+		StateMarker:    StateReinjectionMarker,
+		Truncate: func(text string) string {
+			return TruncateStateText(text, maxChars)
+		},
+		Context: context,
+	}
+	return reinjection.BuildSingleReinjectedStateMessage(ctx, builderSpecsToReinject(builderNames), nil)
+}
+
+// builderSpecsToReinject 把具名描述转为回注器 spec 列表
+// Python: util.py:369 build_single_reinjected_state_message(ctx, builder_names=...)
+// （Python 侧由调用方传入注册表 specs；Go 侧经 StateReinjector 注册表解析，
+//
+//	24.15-a2 偏差：specs 来源从显式入参改为包级注册表，见 base.go 装配段）
+func builderSpecsToReinject(builderNames []string) []reinjection.ReinjectBuilderSpec {
+	reinjector := reinjection.DefaultStateReinjector()
+	specs := reinjector.IterBuilders()
+	if builderNames == nil {
+		return specs
+	}
+	active := map[string]bool{}
+	for _, name := range builderNames {
+		active[name] = true
+	}
+	out := make([]reinjection.ReinjectBuilderSpec, 0, len(specs))
+	for _, spec := range specs {
+		if active[spec.Name] {
+			out = append(out, spec)
+		}
+	}
+	return out
+}
+
+// GetSessionStateForReinjection best-effort 读取会话状态字典
+// Python: util.py:372 (get_session_state_for_reinjection)
+func GetSessionStateForReinjection(context any) map[string]any {
+	type sessionProvider interface {
+		GetSessionRef() sessioninterfaces.SessionFacade
+	}
+	provider, ok := context.(sessionProvider)
+	if !ok {
+		return map[string]any{}
+	}
+	session := provider.GetSessionRef()
+	if session == nil {
+		return map[string]any{}
+	}
+	state := session.DumpState()
+	if state == nil {
+		return map[string]any{}
+	}
+	return state
+}
+
+// GetWorkspaceRootForReinjection best-effort 解析回注工作区根
+// Python: util.py:389 (get_workspace_root_for_reinjection)
+func GetWorkspaceRootForReinjection(context any) string {
+	provider, ok := context.(interface{ WorkspaceDir() string })
+	if !ok {
+		return ""
+	}
+	return provider.WorkspaceDir()
+}
+
+// TruncateStateText 头尾截断长状态文本并带截断标记
+// Python: util.py:400 (truncate_state_text)
+func TruncateStateText(text string, maxChars int) string {
+	textLen := len([]rune(text))
+	if maxChars <= 0 || textLen <= maxChars {
+		return text
+	}
+	runes := []rune(text)
+	headLen := maxChars / 2
+	head := string(runes[:headLen])
+	tailStart := textLen - (maxChars - headLen)
+	if tailStart < 0 {
+		tailStart = 0
+	}
+	tail := string(runes[tailStart:])
+	return head + "\n...[STATE_REINJECTION_TRUNCATED]...\n" + tail
 }

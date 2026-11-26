@@ -3,9 +3,9 @@ package support
 import (
 	"testing"
 
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	ceprocessor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor"
 	"github.com/stretchr/testify/assert"
+	ceprocessor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // TestInternalUserPrefixes 测试内部前缀表完整性（Python 七项一比一）

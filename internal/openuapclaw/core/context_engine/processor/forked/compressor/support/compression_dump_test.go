@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/stretchr/testify/require"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 )
 
 // fakeDumpProcessor 实现 DumpProcessorStats 窄接口
@@ -60,9 +60,9 @@ func TestDumpCompressionArtifact_完整落盘(t *testing.T) {
 		ProcessorType:    "TestProcessor",
 		OriginalMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("old")},
 		Span: CompressionSpanShape{
-			PreservedPrefix:       []llm_schema.BaseMessage{llm_schema.NewUserMessage("keep")},
-			MessagesToCompress:    []llm_schema.BaseMessage{llm_schema.NewUserMessage("a"), llm_schema.NewUserMessage("b"), llm_schema.NewUserMessage("c")},
-			ProtectedTail:         []llm_schema.BaseMessage{llm_schema.NewUserMessage("t1"), llm_schema.NewUserMessage("t2")},
+			PreservedPrefix:    []llm_schema.BaseMessage{llm_schema.NewUserMessage("keep")},
+			MessagesToCompress: []llm_schema.BaseMessage{llm_schema.NewUserMessage("a"), llm_schema.NewUserMessage("b"), llm_schema.NewUserMessage("c")},
+			ProtectedTail:      []llm_schema.BaseMessage{llm_schema.NewUserMessage("t1"), llm_schema.NewUserMessage("t2")},
 		},
 		Prompt:          "summarize",
 		Request:         &CompressionRequest{Prompt: "summarize", ExcludeRecentMessages: 2},

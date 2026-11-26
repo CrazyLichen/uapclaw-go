@@ -130,9 +130,9 @@ func DumpCompressionArtifact(compression *CompressionDumpInput) string {
 			"target_tokens":       targetTokens,
 		},
 		"span": map[string]any{
-			"preserved_prefix_count":       len(compression.Span.PreservedPrefix),
-			"messages_to_compress_count":   len(compression.Span.MessagesToCompress),
-			"protected_tail_count":         len(compression.Span.ProtectedTail),
+			"preserved_prefix_count":     len(compression.Span.PreservedPrefix),
+			"messages_to_compress_count": len(compression.Span.MessagesToCompress),
+			"protected_tail_count":       len(compression.Span.ProtectedTail),
 		},
 		"compression_request": map[string]any{
 			"prompt":                  compression.Prompt,
