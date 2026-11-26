@@ -762,6 +762,23 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch(t *testing.T) {
 	assert.Equal(t, "team_skill_user_patch", record.Source)
 }
 
+// TestTeamSkillExperienceOptimizer_GenerateUserPatch_Keywords透传 响应 keywords
+// 必须写入 patch.Keywords（D-15.24d-4 修复：缺失时 bundle keywords 恒空 →
+// hub 检索 jaccard 恒 0 → user_patch 记录经 hub 不可检索）。
+func TestTeamSkillExperienceOptimizer_GenerateUserPatch_Keywords透传(t *testing.T) {
+	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Troubleshooting", "content": "部署排障记录", "summary": "部署排障", "keywords": ["deploy", "port-check", "端口占用"]}`), nil
+	})
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
+
+	traj := trajectory.NewTestTrajectoryWithID("exec-1")
+
+	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "部署排障经验")
+	assert.NoError(t, err)
+	assert.NotNil(t, record)
+	assert.NotEmpty(t, record.Change.Keywords, "patch.Keywords 不应为空（D-15.24d-4）")
+}
+
 // TestTeamSkillExperienceOptimizer_GenerateUserPatch_不需要 无需 patch 时返回 nil
 func TestTeamSkillExperienceOptimizer_GenerateUserPatch_不需要(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
