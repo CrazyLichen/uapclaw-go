@@ -98,6 +98,12 @@ func CountMessagesTokens(
 	return total
 }
 
+// CountUsageTokensWithTail 导出包装：usage 优先的累计 token 计数（base 基座消费）。
+// Python: util.py count_usage_tokens_with_tail。
+func CountUsageTokensWithTail(messages []llm_schema.BaseMessage) (int, bool) {
+	return countUsageTokensWithTail(messages)
+}
+
 // ResolveContextMax 解析上下文处理器比例阈值使用的 token 容量。
 // Python: util.py:332 (resolve_context_max) → ContextUtils.resolve_context_max
 func ResolveContextMax(ctx any, modelName string) int {
