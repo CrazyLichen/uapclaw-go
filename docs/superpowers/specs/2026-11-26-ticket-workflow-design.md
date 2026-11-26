@@ -1,8 +1,8 @@
 # 工单问题诊断闭环（TicketWorkflow）设计文档
 
-- 日期：2026-11-26（实例隔离修订版）
+- 日期：2026-11-26（图内中断统一修订版）
 - 状态：待评审
-- 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 本轮（双实例隔离讨论拍板）
+- 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 407cc1868（双实例隔离）→ 本轮（统一图内中断，废弃 END+store 与 instance_id 条款）
 
 ---
 
@@ -29,9 +29,9 @@
 | 实现位置 | 本仓（uapclaw-gateway）内，复用既有 KB/agent/skill/HITL 设施 |
 | 多租户 | 不做，单用户 |
 | 工单实体 | 外部工单系统持有，仅 HTTP 调用触发；两侧靠 `ticket_id` 关联 |
-| 编排形态 | workflow（PregelGraph）；等待外部输入 = END + 持久化状态 + 重进路由，不用图内 interrupt |
-| 执行模型 | **永 END 铁律**：workflow 图内无挂起、无图内 interrupt，每次执行遇等待态必 END；恢复 = 重新 invoke，非断点续跑 |
-| 实例模型 | **双实例共享内核**（本轮拍板）：HTTP / 聊天 = 两个独立 workflow 实例，共享节点库 + 状态转移表 + TicketInput schema；唯一共享数据面 = GraphKB；隔离条款见 §2.3 |
+| 编排形态 | workflow（PregelGraph）；**统一图内中断模型**（本轮拍板）：等待外部输入 = 图内抛交互挂起（checkpointer 持久化）+ INPUT_REQUIRED；恢复 = 带 `*interaction.InteractiveInput` 重新 Invoke，引擎按 checkpoint 重放续跑 |
+| 执行模型 | **图内中断统一**：两模式共用同一恢复协议；聊天恢复执行者 = ReAct 中断桥（现成），HTTP 恢复执行者 = envelope 层 runner 直调 `Workflow.Invoke(InteractiveInput)`（引擎恢复不依赖 ReAct，workflow.go Invoke 入参闭集已含 InteractiveInput） |
+| 实例模型 | **双实例共享内核**：HTTP / 聊天 = 两个独立 workflow 执行实例；隔离由 checkpointer 天然承载（挂起态按执行绑定，无需 store 键空间设计）；保留答案归属判定与单活跃实例两条语义规则（§2.3） |
 | 分流键 | mode 进 canonical 三段式体系：`agent.workflow.ticket`（本轮拍板，方案乙） |
 | 分流层 | agentserver envelope 层（handle_message），mode 命中 `agent.workflow.*` 直接交 runner，不进门面（本轮拍板） |
 | HTTP 结果通道 | **追加会话历史**（本轮拍板）：复用 AppendHistoryRecord，外部轮询既有历史接口取增量；metadata 只留会话属性，不写 workflow 结果 |
@@ -53,21 +53,23 @@
   ▼
 agentserver envelope 层（handle_message 分流）
   ├── chat.send 且会话 metadata mode 命中 agent.workflow.* ──▶ TicketWorkflow runner
-  │     （读 store → 短执行 → 写 store → 追加历史记录 → 返回）
+  │     start：Invoke(TicketInput) → 图执行 → 等待节点抛交互挂起 → INPUT_REQUIRED
+  │     resume：Invoke(*interaction.InteractiveInput) → 引擎按 checkpoint 重放续跑
+  │     每次状态变更 → 追加历史记录 → 返回
   ├── 其余 chat.* ──▶ 既有门面链路（ExecuteMessageStream / ProcessMessage，零改动）
-  ──▶ 既有 KB / DeepAgent / SkillEvolutionRail / interrupt 组件（零改动）
+  ──▶ 既有 KB / DeepAgent / SkillEvolutionRail / GraphInterrupt(8.7) / checkpointer(8.9b) 组件（零改动）
 ```
 
 ### 2.2 双实例共享内核
 
-**两模式是两个独立 workflow 实例，不是"一套机制对外呈现两种样子"。** 每次诊断 = 一个实例 = 一个会话 + 一份实例私有 store；HTTP 实例由工单系统建会话触发，聊天实例由 DeepAgent 工具调起，互不感知。
+**两模式是两个独立 workflow 执行实例，不是"一套机制对外呈现两种样子"。** 每次诊断 = 一次图执行实例（挂起态由 checkpointer 按执行绑定，天然隔离）；HTTP 实例由工单系统建会话触发，聊天实例由 DeepAgent 工具调起，互不感知。
 
 **同源内核（共享资产）：**
 
 | 共享面 | 内容 |
 |---|---|
-| 节点库函数 | §3 六节点实现（Router/Intent/Guidance/KBSearch/Agent/Settle） |
-| 状态转移表定义 | §3.3 状态路由与转移规则 |
+| 图定义与节点库函数 | §3 六节点实现（Router/Intent/Guidance/KBSearch/Agent/Settle）+ 状态转移表（§3.3） |
+| 执行与恢复协议 | 统一图内中断：Invoke(TicketInput) 启动 / Invoke(InteractiveInput) 恢复，checkpointer（8.9b 持久 KV）承载挂起态 |
 | TicketInput schema | §4.3 同构入参 + 校验规则（"description 非空"） |
 | GraphKB | 历史库 + 业务库 + SettleNode 落库函数——唯一共享数据面，跨实例知识流动只经此 |
 
@@ -76,44 +78,45 @@ agentserver envelope 层（handle_message 分流）
 | | HTTP 实例（本 spec 范围） | 聊天实例（第二阶段） |
 |---|---|---|
 | 入口 | envelope 层分流直调 runner | DeepAgent 调 `start_diagnosis`/`continue_diagnosis` 工具 |
-| 等待呈现 | 追加历史记录（事件流），外部轮询历史接口 | 经 ReAct 中断信封发 ask_user 卡片（见 §2.4） |
+| 恢复执行者 | runner 直调 `Workflow.Invoke(InteractiveInput)`（biz_event/answers 映射为恢复输入） | ReAct 中断桥重放 tool call（现成，见 §2.4） |
+| 等待呈现 | 追加历史记录（事件流），外部轮询历史接口可见 pending 交互 | 经 ReAct 中断信封发 ask_user 卡片（见 §2.4） |
 | 输入解释 | send 中 `biz_event` 协议直读（结构化，无歧义） | 卡片结构化 answers 直读（不经 LLM 猜测） |
 | 输出表达 | 追加历史记录（结构化事件载荷） | AgentNode 结论走会话 chunk → final |
 
-### 2.3 实例隔离条款（铁律）
+### 2.3 语义规则（图内中断模型下的剩余约束）
 
-1. **键空间隔离**：每个诊断实例生成 `instance_id`（uuid，`start_diagnosis` 时生成；HTTP 实例 = 会话维度一实例），实例 store 全部键带前缀 `ticket:{instance_id}:*`；两实例物理上无法互写。
-2. **禁止桥接**：不为"跨模式同步状态"建立任何机制（共享 store 前缀、实例间事件总线、跨会话引用）；跨实例知识流动**只经 GraphKB**（聊天实例沉淀的结论，HTTP 实例下次检索可召回）。
-3. **中断呈现私有**：聊天实例的 ask_user 中断是聊天呈现层的私事；HTTP 实例与工单系统不感知、不消费。
-4. **恢复归属**：ReAct 恢复输入（`WorkflowResumeInputsKey` 旁路）按 tool call 绑定的 instance_id 分发，答案只进绑定的那个实例。
-5. **答案归属判定**：pending 交互挂起期间到达的自由文本输入，先经归属判定（复用 interrupt 包 answer_attribution 机制）：是当前交互的应答 → 并入特征；明显是新话题 → 不消费，作为普通用户消息走 ReAct 新一轮（由 DeepAgent 决定开新诊断或提醒先回应挂起卡片）。
-6. **单活跃实例**（第一版收紧）：同一会话同时只允许一个活跃诊断实例；已有挂起实例时再调 `start_diagnosis` 直接返回"已有进行中的诊断"提示。多实例并行留给后续需求放开（隔离已铺路，放开只是去掉本条检查）。
-7. **永 END 铁律**：workflow 图内无挂起无图内 interrupt；每次执行遇 `guiding`/`wait_confirm` 必然 END（写完 store 再退），恢复 = 全新 invoke 从 RouterNode 按 store 重进。与 ReAct 恢复链的"重放 tool call"模型天然吻合。
+执行态隔离由 checkpointer 天然承载（挂起态按执行实例绑定，随 tool_call/执行生命周期走），原 END+store 模型下的 instance_id 键空间条款**作废**。剩余两条与执行模型无关的语义规则：
 
-### 2.4 聊天实例：中断信封与恢复接缝（第二阶段，契约预留）
+1. **答案归属判定**：挂起期间到达的自由文本输入，先经归属判定（复用 interrupt 包 answer_attribution 机制）：是当前 pending 交互的应答 → 作为 InteractiveInput 恢复执行；明显是新话题 → 不消费，作为普通用户消息走 ReAct 新一轮（由 DeepAgent 决定开新诊断或提醒先回应挂起卡片）。HTTP 侧同理：不带 biz_event 且与 pending 选项无关的 send 视为补充特征并入恢复输入。
+2. **单活跃实例**（图内中断天然保证）：会话挂起在 pending 交互上时，聊天侧会话本身挂起、不可能再调 `start_diagnosis`；HTTP 侧 runner 收到 start 类输入且存在活跃 checkpoint 时直接返回"已有进行中的诊断"提示。同一会话多诊断并行在图内中断模型下无发生面。
 
-等待载荷**禁止以普通 tool result 返回**（LLM 会拿到继续推理）。必须经仓内现成的 workflow-as-tool 中断桥（`react_workflow_interrupt.go`，8.26 已落地）：
+### 2.4 统一中断信封与恢复协议
+
+等待载荷**禁止以普通 tool result 返回**（LLM 会拿到继续推理）。两模式共用引擎的图内中断，差异仅在恢复执行者：
 
 ```
-DeepAgent 调 start_diagnosis/continue_diagnosis（workflow-as-tool）
-  → workflow 短执行 → 遇 guiding/wait_confirm
-  → tool 包装层返回【WorkflowOutput{State: INPUT_REQUIRED, result: [__interaction__ 等待载荷]}】
-  → ReAct 中断桥 isInterrupted 命中 → 会话挂起，不回喂 LLM
-  → pending 交互（Guidance/Confirm 卡片）发前端（渲染已有，零改动）
-  → 用户点选/补充 → 中断恢复链
-  → handleResumeWorkflow：回写 ai_message → 恢复输入经 WorkflowResumeInputsKey
-    旁路注入 → executeToolCalls 重放 tool call（全新 invoke）
-  → tool 包装层先查旁路恢复输入 → 映射为标准输入事件 → RouterNode 按 store 重进
-  → 再遇 INPUT_REQUIRED → 再 commit 中断（多轮等待天然支持）
+启动（两模式同构）：
+  Invoke(TicketInput) → 图执行 → 等待节点（Guidance/Confirm）抛 GraphInterrupt（8.7）
+  → 引擎挂起，执行态写 checkpointer（8.9b 持久 KV，跨时间 gap 可恢复）
+  → WorkflowOutput{State: INPUT_REQUIRED, result: [__interaction__ 等待载荷]}
+  → 等待载荷追加进历史记录（外部轮询可见）
+
+聊天恢复（第二阶段，现成机制 react_workflow_interrupt.go）：
+  用户点选/补充 → handleResumeWorkflow：回写 ai_message → 恢复输入经
+  WorkflowResumeInputsKey 旁路注入 → executeToolCalls 重放 tool call
+  → Workflow.Invoke(*interaction.InteractiveInput) → 引擎 checkpoint 重放续跑
+  → 结果不含普通 tool result 回喂 LLM；再遇等待 → 再中断（多轮天然支持）
   → 全完成 → ResumeStartIterationKey 续跑 ReAct 循环
+
+HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
+  工单 send（biz_event / 补充）→ envelope 分流 → runner 将其映射为
+  *interaction.InteractiveInput → Workflow.Invoke → 引擎 checkpoint 重放续跑
+  → 跑到下一等待（再追加历史）或终态（closed/abandoned）
 ```
 
-挂起语义分两层，各管各的：
+挂起态唯一承载 = checkpointer（按执行绑定）；聊天侧 ReAct 层的 InterruptionState 只额外保存"tool call + 答案收集器 + AIMessage"用于会话恢复，不承载诊断状态。
 
-| 层 | 挂起时保存 | 恢复时使用 |
-|---|---|---|
-| ReAct 层（InterruptionState） | tool call（含组件 id）+ 答案收集器 + AIMessage | 重放 tool call，答案经旁路作 invoke 输入 |
-| workflow 层（store） | guiding/wait_confirm 状态 + 全部进度 | RouterNode 读 store 重进，无需断点续跑 |
+**HTTP runner 职责清单**：持有 workflow 组件引用；从最近一次 INPUT_REQUIRED 输出/历史记录解析 pending component_id；把 send 输入映射为 InteractiveInput（component_id + answers）；调 Invoke 恢复；把每轮结果追加历史。
 
 ### 2.5 E2A 转发
 
@@ -134,7 +137,7 @@ DeepAgent 调 start_diagnosis/continue_diagnosis（workflow-as-tool）
 - **分流在 agentserver envelope 层（handle_message）**，不在门面、不在 coordinator：
   - chat.send 进入 envelope 分发时读 `GetSessionMetadata(sessionID)` 的 mode，命中 `agent.workflow.*` → 直接交 TicketWorkflow runner；
   - 不进门面：跳过普通对话路径的 `AppendHistoryRecord`、`BuildInputs`、云端记忆钩子、adapter 构造——workflow 不是对话链路（其事件经 runner 主动追加历史，见 §2.6）；
-  - coordinator 层（`runViaExecutionCoordinator`）只做执行登记，不懂业务 mode——workflow runner 不经 coordinator 账本（短执行无长任务登记需求；实施时按 writing-plans 细化）。
+  - coordinator 层（`runViaExecutionCoordinator`）只做执行登记，不懂业务 mode——workflow 图执行不经 coordinator 账本（实施时按 writing-plans 细化）。
 - **mode 键设计**：`agent.workflow.ticket` 进 canonical 三段式体系——schema 加常量 + `modeClassifier.IsWorkflowMode`（判前缀 `agent.workflow.`，新增 workflow 类型免改分类器）；mode 显式覆盖式写入复用 `SyncSessionRequestMetadata` 既有语义（建会话时锁定，会话生命周期内不可变）。
 - **为什么不消息级路由**：会话级固定 mode 保证"一个实例一套状态"的边界；消息级混跑与实例隔离冲突，不在本 spec 范围。
 
@@ -152,18 +155,18 @@ DeepAgent 调 start_diagnosis/continue_diagnosis（workflow-as-tool）
 
 ### 3.1 节点与状态
 
-节点（图节点，6 个）与状态（store 持久化阶段标记）是两个层面：
+节点（图节点，6 个）与阶段标记（图状态字段）是两个层面：
 
-| 节点 | 职责 | 产出的状态 |
+| 节点 | 职责 | 产出的阶段 |
 |---|---|---|
-| RouterNode | 每次执行入口，读 store 状态路由；处理 biz_event | `searching` 等 |
+| RouterNode | 图执行启动入口，Intent 前置分流（§3.3） | `searching` 等 |
 | IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取 | — |
-| GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项 | `guiding` |
-| KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定 | `wait_confirm` |
+| GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（抛交互挂起） | `guiding` |
+| KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定（抛交互挂起待确认） | `wait_confirm` |
 | AgentNode | 诊断 DeepAgent（skill + 附件日志分析） | `wait_confirm` |
 | SettleNode | 关闭后归档：写历史库 / 命中计数 / 演进信号 | `closed` / `abandoned` |
 
-每次执行遇 `guiding` / `wait_confirm` 必然 END（写完 store 再退）；执行体永远短促无挂起（§2.3 铁律 7）。
+每次执行遇 `guiding` / `wait_confirm` 在图内抛交互挂起（checkpointer 承载），执行体不驻留进程内等待。
 
 ### 3.2 全局流程图
 
@@ -171,37 +174,37 @@ DeepAgent 调 start_diagnosis/continue_diagnosis（workflow-as-tool）
 flowchart TD
     EXT[外部工单系统] -->|POST 建会话 mode=agent.workflow.ticket| SES[(会话)]
     EXT -->|POST send 问题+附件+ticket_id 可选biz_event| AS[agentserver envelope 层分流]
-    AS --> WF[TicketWorkflow runner: 读store→短执行→写store→追加历史]
+    AS --> WF[TicketWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
-        R[RouterNode 状态路由] --> I[IntentNode 附件预处理+特征抽取]
-        I -->|表象/组件全模糊| G1[GuidanceNode 开放式澄清]
+        R[RouterNode Intent前置分流] --> I[IntentNode 附件预处理+特征抽取]
+        I -->|表象/组件全模糊| G1[GuidanceNode 开放式澄清·抛交互挂起]
         I -->|特征就绪| K[KBSearchNode scope=history]
-        G1 --> W1[(store: guiding + 历史事件)]
-        W1 -.用户补充后重进.-> R
-        K -->|高置信单向| WC1[(store: wait_confirm 历史方案+ticket关联)]
-        K -->|多向且未超轮数| G2[GuidanceNode 判别式引导]
-        G2 --> W2[(store: guiding + 历史事件)]
-        W2 -.补充后重进.-> R
+        G1 -.挂起待补充.-> G1R[恢复后并入特征]
+        G1R --> K
+        K -->|高置信单向| WC1[等待确认·抛交互挂起 历史方案+ticket关联]
+        K -->|多向且未超轮数| G2[GuidanceNode 判别式引导·抛交互挂起]
+        G2 -.补充后恢复.-> G2R[恢复后重新检索]
+        G2R --> K
         K -->|无命中| K2[KBSearchNode scope=business]
         K -.scope升级.-> K2
-        K2 -->|命中| WC2[(store: wait_confirm 业务库方案)]
+        K2 -->|命中| WC2[等待确认·抛交互挂起 业务库方案]
         K2 -->|无果/超限| A[AgentNode 诊断DeepAgent+skill]
-        A --> WC3[(store: wait_confirm 诊断结论)]
+        A --> WC3[等待确认·抛交互挂起 诊断结论]
         WC1 & WC2 & WC3 -.轮询历史可查.-> EXT
     end
 
-    EXT -->|biz_event=confirm_solved| PEND[等待 close]
+    EXT -->|biz_event=confirm_solved| PEND[挂起等待 close]
     EXT -->|biz_event=not_solved/评论| UP[scope升级重查]
     EXT -->|biz_event=close| S[SettleNode 写历史库/计数/演进信号]
-    S --> CL[(store: closed + 历史事件)]
+    S --> CL[closed + 历史事件]
 ```
 
 ### 3.3 RouterNode
 
-- 每次执行的唯一入口；读 store 状态与消息 `biz_event`；
-- 状态路由：`pending_intent`→主流程；`guiding`→并入补充特征再查；`wait_confirm`→处理 confirm/not_solved；`biz_event=close`→SettleNode；
-- scope 升级在此发生（history→business→agent 只进不退）。
+- 图执行的启动入口；读 TicketInput 做 Intent 分流前置路由（§3.4 分支 3）；
+- 恢复路径不经 RouterNode——引擎按 checkpoint 重放直续挂起节点；
+- scope 升级（history→business→agent 只进不退）由 KBSearchNode/AgentNode 协作承担。
 
 状态转移表：
 
@@ -273,9 +276,9 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 轻判重：表象向量与历史库比对，超阈值且根因同向 → 并入既有案例 +1；否则 `AddDocuments`（含三元组抽取 + 长尾合并规则 §2.8）。两条路径均写 `metadata.ticket_id`；agent 路径额外注入演进信号。abandon 不沉淀不演进。
 
-### 3.9 跨轮上下文（store 持久化，复用 Persistence KV GraphStore 8.9b）
+### 3.9 跨轮上下文（图状态 + checkpointer 承载）
 
-实例 store 全部键带 `ticket:{instance_id}:` 前缀（§2.3 铁律 1）：
+图内中断模型下，跨轮上下文（intent_features / guidance_rounds / scope / hit_doc_ids / trail）作为**图状态**由执行实例携带，挂起时随执行态写入 checkpointer（8.9b 持久 KV）——恢复时重放即可见，无需任何外部 store 键设计：
 
 - `intent_features`：累积结构化特征（键值），每轮合并；
 - `guidance_rounds`：已引导次数（上限可配）；
@@ -401,7 +404,7 @@ TicketInput {
 
 ### 5.5 会话状态存储
 
-TicketWorkflow 实例 store 复用既有 Persistence KV GraphStore（8.9b），键空间 `ticket:{instance_id}:*`（§2.3 铁律 1），键：`state` / `intent_features` / `guidance_rounds` / `scope` / `hit_doc_ids` / `ticket_id`。面向外部的事件载荷不经 store 暴露——走历史记录（§4.2③）。
+诊断进度（图状态）由 checkpointer（8.9b Persistence KV）按执行实例承载，挂起/恢复/跨时间 gap 均经 checkpoint 重放——**无独立 workflow store、无键空间设计**。面向外部的事件载荷走历史记录（§4.2③）。
 
 ---
 
@@ -410,10 +413,10 @@ TicketWorkflow 实例 store 复用既有 Persistence KV GraphStore（8.9b），�
 ### 6.1 测试策略
 
 1. **单测**：真实 KB 会话管线验证（真实链纪律——禁窄接口/替身承载能力面；函数参数收具体类型）；GraphRetriever/判重规则/长尾合并/状态转移表逐一覆盖，目标 ≥85%；
-2. **集成测试**：覆盖"建会话→引导→确认→关闭落库→演进信号"全链，真实跨 KB/agent/store ≥3 子系统（满足集成审计两层门禁）；`biz_event` 三态与轮数超限分支必测；实例隔离必测（两实例 store 互不可见、恢复输入只进绑定实例）；
+2. **集成测试**：覆盖"建会话→引导→确认→关闭落库→演进信号"全链，真实跨 KB/agent/checkpointer ≥3 子系统（满足集成审计两层门禁）；`biz_event` 三态与轮数超限分支必测；挂起/恢复必测（跨 Invoke 恢复后图状态续跑正确、恢复输入只进绑定执行）；
 3. **mock 只在边界**：HTTP 端点、LLM 端点；不得 mock 被测子系统本身。
 
 ### 6.2 已知偏差与遗留
 
 - 无对齐上游场景（平台自有业务编排流），不存在 Python 对照问题；
-- 遗留：业务库导入面板第二阶段；trail 字段第一版可缓（YAGNI）；定期类别合并任务不做（沉淀时规则已覆盖）；聊天模式接入第二阶段（§2.4 中断信封 + 恢复接缝契约已预留）；多实例并行放开（§2.3 铁律 6 去除即可）；历史接口 `since` 增量参数若既有接口不具备则在本 spec 实施时定义参数级扩展。
+- 遗留：业务库导入面板第二阶段；trail 字段第一版可缓（YAGNI）；定期类别合并任务不做（沉淀时规则已覆盖）；聊天模式接入第二阶段（§2.4 统一中断协议契约已预留）；历史接口 `since` 增量参数若既有接口不具备则在本 spec 实施时定义参数级扩展。
