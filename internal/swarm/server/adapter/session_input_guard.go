@@ -26,6 +26,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -141,8 +142,8 @@ func (g *SessionInputGuard) Accepting() bool {
 
 // OwnedBy 报告 guard 是否仍归属给定实例。
 // Python: guard.owner is instance
-func (g *SessionInputGuard) OwnedBy(instance any) bool {
-	return g.owner != nil && any(g.owner) == instance
+func (g *SessionInputGuard) OwnedBy(instance *harness.DeepAgent) bool {
+	return g.owner == instance
 }
 
 // PublishInputReceived 把用户边界写入与模型输出同一队列。
@@ -271,7 +272,7 @@ func (g *SessionInputGuard) onUserMessage(cbc *agentinterfaces.AgentCallbackCont
 	// run_context 来自 extra（Python: ctx.extra.get("run_context")）
 	var crossSession map[string]any
 	if rc, ok := cbc.Extra()["run_context"].(*agentinterfaces.RunContext); ok && rc.Extra != nil {
-		crossSession, _ = rc.Extra[sessionMessageKey].(map[string]any)
+		crossSession, _ = rc.Extra[schema.CrossSessionInternalKey].(map[string]any)
 	}
 	if inputs.Source == "query" {
 		text := strings.Join(inputs.Parts, "\n")

@@ -226,14 +226,7 @@ func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) schema.Resol
 
 // parseRequestParams 解析 request.Params 为可写 map（nil/非法时返回空 map）。
 func parseRequestParams(req *schema.AgentRequest) map[string]any {
-	if req == nil || len(req.Params) == 0 {
-		return map[string]any{}
-	}
-	params := map[string]any{}
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return map[string]any{}
-	}
-	return params
+	return schema.ParseRequestParams(req)
 }
 
 // writeRequestParams 把 params 序列化回 request.Params。

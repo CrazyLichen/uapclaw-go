@@ -103,6 +103,9 @@ type DeepAgent struct {
 
 	// deepConfig Harness 编排配置
 	deepConfig *hschema.DeepAgentConfig
+	// steeringQueueOverride 测试注入的 steering 通道（跨包测试专用；
+	// 生产恒 nil，EnqueueSteerEntry/SteeringQueueChan 优先走活跃 controller）。
+	steeringQueueOverride chan string
 	// innerReactMaxIterations 内层 ReAct 迭代上限（0=不限）。
 	// [25.6 steer 批] SessionInputGuard 准入窗口消费（Python _bind_inner_react_max_iterations
 	// 挂在实例上的等价物）。
@@ -1830,6 +1833,39 @@ func (d *DeepAgent) EventManager() *task_loop.EventManager {
 	return d.interactionEvents
 }
 
+// SetActiveRoundForTest 设置/清除活跃轮（跨包测试专用；生产由交互监督器迁移）。
+// [25.6 收尾批] adapter 侧 EnqueueBoundSessionInput 单测的轮次锚定脚手架。
+func (d *DeepAgent) SetActiveRoundForTest(work *hschema.RoundWorkItem) {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if work == nil {
+		d.activeInteractionRound = nil
+		return
+	}
+	d.activeInteractionRound = &hschema.ActiveInteractionRound{Work: work}
+}
+
+// SetSteeringQueueForTest 注入 steering 通道（跨包测试专用；无 loop controller
+// 场景下 EnqueueSteerEntry/SteeringQueueChan 的回退载体）。
+func (d *DeepAgent) SetSteeringQueueForTest(q chan string) {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	d.steeringQueueOverride = q
+}
+
+// SetOutputStreamForTest 设置/清除输出租约（跨包测试专用；生产经 AttachOutput）。
+func (d *DeepAgent) SetOutputStreamForTest(active bool) {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if !active {
+		d.interactionOutput = hschema.NewOutputLeaseManager()
+		return
+	}
+	lease := d.interactionOutput.Attach()
+	_ = lease
+}
+
 // MaxIterations 返回内层 ReAct 迭代上限（0=不限；SessionInputGuard 准入窗口用）。
 // Python: agent.max_iterations 经 _bind_inner_react_max_iterations 绑定。
 func (d *DeepAgent) MaxIterations() int { return d.innerReactMaxIterations }
@@ -1839,7 +1875,7 @@ func (d *DeepAgent) MaxIterations() int { return d.innerReactMaxIterations }
 func (d *DeepAgent) SteeringQueueChan() chan string {
 	ctrl := d.currentLoopController()
 	if ctrl == nil {
-		return nil
+		return d.steeringQueueOverride
 	}
 	q := ctrl.Queues()
 	if q == nil {
@@ -4466,6 +4502,15 @@ func (d *DeepAgent) WithInteractionLock(fn func() error) error {
 func (d *DeepAgent) EnqueueSteerEntry(display string) error {
 	ctrl := d.currentLoopController()
 	if ctrl == nil {
+		// 测试注入通道回退（生产恒 nil → 报无队列）
+		if d.steeringQueueOverride != nil {
+			select {
+			case d.steeringQueueOverride <- display:
+				return nil
+			default:
+				return fmt.Errorf("steering queue is full; supplemental input was not sent")
+			}
+		}
 		return fmt.Errorf("active execution has no steering queue; supplemental input was not sent")
 	}
 	queues := ctrl.Queues()

@@ -20,7 +20,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
-	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	hist "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -218,22 +217,24 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 	}
 
 	// ③ 同步入队：校验与入队同一临界区（无 await）
-	// Python: enqueue_bound_session_input(instance, bound_round, request, sdk_request, media_items=...)
-	display := displayContentOf(params, inputs)
-	entry := hschema.NewQueuedSessionInput(display, request.RequestID)
-	entry.DisplayContent = display
-	if imageSteer {
-		entry.MediaItems = steerMediaItemsOf(params)
-	}
+	// Python: entry = enqueue_bound_session_input(instance, bound_round, request, sdk_request, media_items=...)
+	var entry *QueuedSessionInput
 	enqueueErr := withInstanceLocked(d.instance, func() error {
-		return enqueueBoundLocked(instanceEnqueuer(d.instance), boundRound, request, entry,
-			executionLookupOf(request))
+		q, err := EnqueueBoundSessionInput(EnqueueBoundOptions{
+			Instance:        d.instance,
+			BoundRound:      boundRound,
+			Request:         request,
+			Query:           displayContentOf(params, inputs),
+			MediaItems:      steerMediaItemsOf(params),
+			ExecutionLookup: executionLookupOf(request),
+		})
+		entry = q
+		return err
 	})
 	if enqueueErr != nil {
 		entry.FailBoundary(enqueueErr)
 		return false, enqueueErr
 	}
-	sessionInputLedger.Register(entry)
 	// ④ 发布输入边界（与模型输出同队列；失败→DeliveryUnknown，输入被丢弃
 	// 而不拖垮原任务）
 	// Python: await self._session_input_guard.publish_input_received(entry)
@@ -359,61 +360,6 @@ func withInstanceLocked(instance *harness.DeepAgent, fn func() error) error {
 	return instance.WithInteractionLock(func() error { return fn() })
 }
 
-// instanceEnqueuer 把 DeepAgent 包装为 SteerTarget（display 文本进 steering 通道）。
-func instanceEnqueuer(instance *harness.DeepAgent) SteerTarget {
-	return &deepAgentSteerTarget{agent: instance}
-}
-
-// deepAgentSteerTarget SteerTarget 的 DeepAgent 适配。
-type deepAgentSteerTarget struct{ agent *harness.DeepAgent }
-
-func (t *deepAgentSteerTarget) ActiveRoundIs(bound any) bool {
-	round := t.agent.ActiveRound()
-	if round == nil {
-		return false
-	}
-	b, ok := bound.(*hschema.ActiveInteractionRound)
-	return ok && round == b
-}
-
-func (t *deepAgentSteerTarget) HasOutputStream() bool { return t.agent.HasOutputStream() }
-
-func (t *deepAgentSteerTarget) EnqueueSteerEntry(display string) error {
-	return t.agent.EnqueueSteerEntry(display)
-}
-
-// enqueueBoundLocked 同步校验并入队（与 enqueue_bound_session_input 一比一的
-// 临界区体；opts.Instance 校验与 EnqueueSteerEntry 均在此函数内同步完成）。
-// Python: session_input.py enqueue_bound_session_input（:102-160）
-func enqueueBoundLocked(target SteerTarget, boundRound any, request *schema.AgentRequest,
-	entry *QueuedSessionInput, lookup func(string) *session.SessionExecutionHandle) error {
-	params := requestParamsOf(request)
-	// ① execution 复核
-	expectedID, _ := params["expected_execution_id"].(string)
-	if lookup != nil && expectedID != "" {
-		execution := lookup(expectedID)
-		if execution == nil ||
-			execution.SessionID != sessionIDOf(request) ||
-			execution.State != session.SessionExecutionStateRunning ||
-			execution.CancellationRequested {
-			return &session.SessionInputTargetError{
-				Message: "the targeted execution has ended or changed; supplemental input was not sent",
-			}
-		}
-	}
-	// ② bound_round 复核
-	if boundRound == nil || !target.ActiveRoundIs(boundRound) || !target.HasOutputStream() {
-		return &session.SessionInputTargetError{
-			Message: "the targeted execution has ended or changed; supplemental input was not sent",
-		}
-	}
-	// ③ 入队（display 文本进 steering 通道；结构化条目由账本承载）
-	if err := target.EnqueueSteerEntry(entry.DisplayContent); err != nil {
-		return err
-	}
-	return nil
-}
-
 // sessionInputExecutionLookup execution 账本查询闭包（门面装配注入；
 // nil → 跳过 expected_execution_id 复核，与 Python runtime 缺席一致）。
 var sessionInputExecutionLookup atomic.Pointer[func(string) *session.SessionExecutionHandle]
@@ -441,7 +387,7 @@ func classifyNotAccepted(params map[string]any, hasOutputStream bool) error {
 	// 跨会话键请求：让持久信箱重新取任务准入，不得在父执行启动/释放期间
 	// 无锚定地开新轮
 	// Python: if isinstance(request.params.get(SESSION_MESSAGE_INTERNAL_KEY), dict)
-	if _, isCross := params[sessionMessageKey].(map[string]any); isCross {
+	if _, isCross := params[schema.CrossSessionInternalKey].(map[string]any); isCross {
 		return &session.SessionInputRejectedError{
 			Message: "target execution changed before submission; queue the message",
 		}

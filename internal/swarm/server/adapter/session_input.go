@@ -4,13 +4,13 @@
 package adapter
 
 import (
-	"encoding/json"
 	"strings"
 
 	"context"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -28,43 +28,33 @@ func NewQueuedSessionInput(query, requestID string) *QueuedSessionInput {
 	return hschema.NewQueuedSessionInput(query, requestID)
 }
 
-// SteerTarget 补充输入投递目标实例的最小能力面。
-// Python 为鸭子类型直取 instance.active_round / has_output_stream /
-// loop_controller.enqueue_steer；Go 依赖倒置用窄接口承载（规则 10.2：
-// 本接口是"DeepAgent 用别人"方向的反例——它是宿主调 agent 的能力，
-// 但 EnqueueBoundSessionInput 属宿主侧函数，注入窄接口避免 runtime 包
-// 反向依赖 harness）。
-type SteerTarget interface {
-	// ActiveRoundIs 报告实例当前活跃轮是否仍为 bound（同一轮记账对象）
-	ActiveRoundIs(bound any) bool
-	// HasOutputStream 报告输出租约是否有消费者
-	HasOutputStream() bool
-	// EnqueueSteerEntry 同步入队 steering 显示文本（与校验同临界区调用）
-	EnqueueSteerEntry(display string) error
-}
-
 // EnqueueBoundOptions EnqueueBoundSessionInput 的调用参数。
+// Python: enqueue_bound_session_input(instance, target_round, request, sdk_request, *, media_items)
 type EnqueueBoundOptions struct {
-	// Instance 投递目标实例
-	Instance SteerTarget
+	// Instance 投递目标实例（Python 鸭子取 active_round/has_output_stream/
+	// loop_controller.enqueue_steer；Go 具体类型——adapter 已依赖 harness 无环）
+	Instance *harness.DeepAgent
 	// BoundRound 准入时捕获的活跃轮（不得为 nil）
-	BoundRound any
+	BoundRound *hschema.ActiveInteractionRound
 	// Request 原始请求（params 取 expected_execution_id/content/query/跨会话键）
 	Request *schema.AgentRequest
 	// Query 已解析的 sdk_request.inputs["query"] 文本
 	Query string
 	// MediaItems steer 图片引用列表（nil=纯文本）
 	MediaItems []map[string]any
-	// ExecutionLookup 按 execution_id 查账本（nil 时跳过执行复核）
+	// ExecutionLookup 按 execution_id 查账本（nil 时跳过执行复核；生产由
+	// 门面装配注入——SetSessionInputExecutionLookup）
 	ExecutionLookup func(executionID string) *sessionpkg.SessionExecutionHandle
 }
 
 // EnqueueBoundSessionInput 同步校验并入队活跃轮的 steering queue。
-// Python: session_input.py enqueue_bound_session_input（:102-160）
+// Python: session_input.py enqueue_bound_session_input（:102-160）——
+// 上游唯一实现；deliver_active_session_input（interface_deep.py:18811）
+// 在校验-入队同一临界区内直接调用它。Go 对齐：deliver 链持
+// DeepAgent.WithInteractionLock 调用本函数。
 //
-// 铁律：目标校验与入队之间不得插入任何可让渡点（含锁获取），否则目标轮
-// 可能在间隙结束并错开新轮——调用方保证 Instance 三个方法在同一临界区
-// 完成（DeepAgent 的 interactionControlMu 语义）。
+// 铁律：目标校验与入队之间不得插入任何可让渡点——调用方保证在实例
+// 交互锁内完成（Go 同步闭包无让渡点，天然满足）。
 // 拒收即错误上抛：入队尚未发生，前端拿到的失败就是"什么都没发"。
 func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, error) {
 	params := requestParamsOf(opts.Request)
@@ -75,12 +65,8 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 	expectedID, _ := params["expected_execution_id"].(string)
 	if opts.ExecutionLookup != nil && expectedID != "" {
 		execution := opts.ExecutionLookup(expectedID)
-		if execution == nil {
-			return nil, &sessionpkg.SessionInputTargetError{
-				Message: "the targeted execution has ended or changed; supplemental input was not sent",
-			}
-		}
-		if execution.SessionID != sessionIDOf(opts.Request) ||
+		if execution == nil ||
+			execution.SessionID != sessionIDOf(opts.Request) ||
 			execution.State != sessionpkg.SessionExecutionStateRunning ||
 			execution.CancellationRequested {
 			return nil, &sessionpkg.SessionInputTargetError{
@@ -92,7 +78,7 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 	// ② bound_round 复核：目标轮必须仍是准入时捕获的那一轮
 	// Python: instance.active_round is not target_round or target_round is None
 	//         or not instance.has_output_stream()
-	if opts.BoundRound == nil || !opts.Instance.ActiveRoundIs(opts.BoundRound) ||
+	if opts.BoundRound == nil || opts.Instance.ActiveRound() != opts.BoundRound ||
 		!opts.Instance.HasOutputStream() {
 		return nil, &sessionpkg.SessionInputTargetError{
 			Message: "the targeted execution has ended or changed; supplemental input was not sent",
@@ -116,7 +102,7 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 
 	// ④ 跨会话键：entry.cross_session + message_route 五键
 	// Python: cross_session = request.params.get(SESSION_MESSAGE_INTERNAL_KEY)
-	if cross, ok := params[sessionMessageKey].(map[string]any); ok {
+	if cross, ok := params[schema.CrossSessionInternalKey].(map[string]any); ok {
 		entry.CrossSession = make(map[string]any, len(cross)+1)
 		for k, v := range cross {
 			entry.CrossSession[k] = v
@@ -142,8 +128,7 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 		entry.MessageRoute = route
 	}
 
-	// ⑤ 同步入队 steering（display_content 字符串；结构化条目由调用方
-	// 挂进 inputs.parts 供 BoundaryGuard 过滤——Python duck-typing 等价）
+	// ⑤ 同步入队 steering（display_content 字符串；结构化条目由账本承载）
 	// Python: controller.enqueue_steer(entry)
 	if err := opts.Instance.EnqueueSteerEntry(entry.DisplayContent); err != nil {
 		return nil, err
@@ -151,39 +136,14 @@ func EnqueueBoundSessionInput(opts EnqueueBoundOptions) (*QueuedSessionInput, er
 	return entry, nil
 }
 
-// ──────────────────────────── 以下为 agent_adapter/session_input.py 的两守卫 rail 与账本 ────────────────────────────
-
-// SessionInputBoundaryGuard 在记忆等输入观察者之前剔除失败的发布。
-// Python: session_input.py SessionInputBoundaryGuard（priority=1000）
-//
-// Go 偏差 D-25.6-s3：steering 队列元素是 string（Python 是对象 part），
-// 失败条目在入队前已被 fail-fast 拦截（永不入队），本 rail 作为防线
-// 依 Ledger 逐条核验 display 文本对应的条目状态：失败的 part 被剔除，
-// 其余按原顺序放行。
-type SessionInputBoundaryGuard struct {
-	agentinterfaces.BaseRail
-	// ledger 在途条目账本（deliver 链入队时登记，边界收尾后清理）
-	ledger *SessionInputLedger
-}
-
-// sessionMessageKey 跨会话消息内部参数键（runtime 侧常量的 adapter 侧别名；
 // adapter 不能 import swarm/runtime，常量值逐字对齐 _jiuwenswarm_cross_session）。
-const sessionMessageKey = "_jiuwenswarm_cross_session"
-
 // requestParamsOf 取请求 params（nil 安全；Params 是延迟解析的 RawMessage）。
 // Python: request.params 直接字典访问。
 // [Go 扩展] swarm/runtime 已有 parseRequestParams，但 server/adapter 直接
 // import swarm/runtime 会成环（runtime→server/runtime→adapter），此处内联
 // 同语义实现（nil/空/坏 JSON → 空表）。
 func requestParamsOf(req *schema.AgentRequest) map[string]any {
-	if req == nil || len(req.Params) == 0 {
-		return map[string]any{}
-	}
-	params := map[string]any{}
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return map[string]any{}
-	}
-	return params
+	return schema.ParseRequestParams(req)
 }
 
 // requestIDOf 取请求信封 id（nil 安全）。
@@ -200,6 +160,19 @@ func sessionIDOf(req *schema.AgentRequest) string {
 		return ""
 	}
 	return strings.TrimSpace(*req.SessionID)
+}
+
+// SessionInputBoundaryGuard 在记忆等输入观察者之前剔除失败的发布。
+// Python: session_input.py SessionInputBoundaryGuard（priority=1000）
+//
+// Go 偏差 D-25.6-s3：steering 队列元素是 string（Python 是对象 part），
+// 失败条目在入队前已被 fail-fast 拦截（永不入队），本 rail 作为防线
+// 依 Ledger 逐条核验 display 文本对应的条目状态：失败的 part 被剔除，
+// 其余按原顺序放行。
+type SessionInputBoundaryGuard struct {
+	agentinterfaces.BaseRail
+	// ledger 在途条目账本（deliver 链入队时登记，边界收尾后清理）
+	ledger *SessionInputLedger
 }
 
 // NewSessionInputBoundaryGuard 创建边界守卫（默认优先级 1000）。
