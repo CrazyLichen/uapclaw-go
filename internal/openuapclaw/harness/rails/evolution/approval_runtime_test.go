@@ -19,7 +19,7 @@ type fakeApprovalManager struct {
 	rejectCalled  bool
 }
 
-func (f *fakeApprovalManager) ApproveRequest(_ context.Context, _ string) (experience.ExperienceApplyResult, error) {
+func (f *fakeApprovalManager) ApproveRequest(_ context.Context, _ string, _ ...string) (experience.ExperienceApplyResult, error) {
 	f.approveCalled = true
 	return f.approveResult, f.approveErr
 }

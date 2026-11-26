@@ -27,8 +27,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	integrationmockllm "github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 
@@ -47,6 +48,8 @@ type EvolutionE2ESuite struct {
 	adapter *adapter.DeepAdapter
 	// rail 当前用例的演进 rail（MockLLM 驱动）
 	rail *coreevolution.SkillEvolutionRail
+	// mockLLM rail 侧 Mock 客户端引用（台本注入）
+	mockLLM *integrationmockllm.MockModelClient
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -84,7 +87,8 @@ func (s *EvolutionE2ESuite) TearDownTest() {
 func (s *EvolutionE2ESuite) newMockModel() *llm.Model {
 	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
 	s.Require().NoError(err)
-	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(integrationmockllm.NewMockModelClient()))
+	s.mockLLM = integrationmockllm.NewMockModelClient()
+	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(s.mockLLM))
 	s.Require().NoError(err)
 	return model
 }
@@ -252,4 +256,15 @@ func (s *EvolutionE2ESuite) TestE6SlashFiveCommands() {
 	// ⑧ display_level 注记（Task3 三件套）
 	s.Assert().Equal("slash_command", resp5.Payload["source"])
 	s.Assert().Equal("evolve_rollback", resp5.Payload["slash_command"])
+}
+
+// mockScript 预设 rail 侧 MockLLM 的响应队列（GenerateRecords 台本）。
+func (s *EvolutionE2ESuite) mockScript(text string) {
+	s.Require().NotNil(s.mockLLM, "newAdapter 后才可写台本")
+	s.mockLLM.SetResponses(integrationmockllm.MockResponse{Text: text})
+}
+
+// approvedIDsForTest host 侧索引映射（Task4：ApprovedRecordIDsFromAnswers 集成入口）。
+func approvedIDsForTest(selected [][]string, recordIDs []string) (bool, []string, bool) {
+	return evolutionlogic.ApprovedRecordIDsFromAnswers(selected, evolutionlogic.EvolutionAcceptLabels, recordIDs)
 }

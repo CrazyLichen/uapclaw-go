@@ -307,8 +307,8 @@ func (m *ExperienceManager) StageApplyResults(
 
 // ApproveRequest 应用暂存审批批次到持久化存储。
 // Python: ExperienceManager.approve_request()
-func (m *ExperienceManager) ApproveRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) {
-	return m.applyRequest(ctx, requestID, schema.ApproveAction)
+func (m *ExperienceManager) ApproveRequest(ctx context.Context, requestID string, approvedRecordIDs ...string) (ExperienceApplyResult, error) {
+	return m.applyRequest(ctx, requestID, schema.ApproveAction, approvedRecordIDs...)
 }
 
 // RejectRequest 拒绝并丢弃暂存审批批次。
@@ -671,6 +671,7 @@ func (m *ExperienceManager) applyRequest(
 	ctx context.Context,
 	requestID string,
 	action string,
+	approvedRecordIDs ...string,
 ) (ExperienceApplyResult, error) {
 	pending := m.pendingApprovalSnapshots[requestID]
 	if pending == nil {
@@ -695,7 +696,7 @@ func (m *ExperienceManager) applyRequest(
 		return RejectPendingChange(rejected), nil
 	}
 
-	commitResult, err := m.commitPendingChange(ctx, requestID)
+	commitResult, err := m.commitPendingChange(ctx, requestID, approvedRecordIDs...)
 	if err != nil {
 		return ExperienceApplyResult{}, err
 	}
@@ -806,8 +807,9 @@ func (m *ExperienceManager) rejectPendingChange(changeID string) (*PendingChange
 func (m *ExperienceManager) commitPendingChange(
 	ctx context.Context,
 	changeID string,
+	approvedRecordIDs ...string,
 ) (PendingCommitResult, error) {
-	return CommitPendingChange(ctx, m.pendingApprovalSnapshots, changeID, m.store)
+	return CommitPendingChange(ctx, m.pendingApprovalSnapshots, changeID, m.store, approvedRecordIDs...)
 }
 
 // getRebuildTemplate 获取重建提示词模板。

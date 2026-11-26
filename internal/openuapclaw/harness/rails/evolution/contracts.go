@@ -15,7 +15,9 @@ import (
 //   - RejectRequest(ctx, requestID) → (ExperienceApplyResult, error) ✅
 type ApprovalManager interface {
 	// ApproveRequest 持久化或应用一个暂存的审批请求。
-	ApproveRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
+	// approvedRecordIDs：部分批准集（variadic 空参 = Python None 语义，
+	// all-or-nothing；15.24d 对齐 Python approve_record 的 approved_record_ids 转发）。
+	ApproveRequest(ctx context.Context, requestID string, approvedRecordIDs ...string) (experience.ExperienceApplyResult, error)
 	// RejectRequest 拒绝一个暂存的审批请求。
 	RejectRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
 }

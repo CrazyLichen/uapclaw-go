@@ -1139,7 +1139,9 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 	}
 
 	// Python: pending, result = await self.approval_runtime.approve_pending_request(request_id, ...)
-	pending, result, err := r.approvalRuntime.ApprovePendingRequest(ctx, requestID, "SkillEvolutionRail", "approve_record")
+	// Python: approve_kwargs["approved_record_ids"]（approval_runtime.py:19-21 转发）——
+	// variadic 空参 = None（all-or-nothing）；非空时逐层转发至 commit 过滤段。
+	pending, result, err := r.approvalRuntime.ApprovePendingRequest(ctx, requestID, "SkillEvolutionRail", "approve_record", approvedRecordIDs...)
 	if err != nil {
 		return err
 	}

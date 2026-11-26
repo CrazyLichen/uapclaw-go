@@ -52,6 +52,7 @@ func CommitPendingChange(
 	pendingByID map[string]*PendingChange,
 	changeID string,
 	store *checkpointing.EvolutionStore,
+	approvedRecordIDs ...string,
 ) (PendingCommitResult, error) {
 	pending, ok := pendingByID[changeID]
 	if !ok {
@@ -62,13 +63,32 @@ func CommitPendingChange(
 		return PendingCommitResult{}, fmt.Errorf("change_type %s 不匹配", pending.ChangeType)
 	}
 
-	appliedCount := 0
-	remainingRecords := pending.Payload
+	// Python: approved_record_ids 过滤段（common.py:70-79）——None 语义 =
+	// all-or-nothing（variadic 空参）；非空时仅写批准集，未批准记录剔除。
+	records := pending.Payload
+	rejectedCount := 0
+	if len(approvedRecordIDs) > 0 {
+		approvedSet := make(map[string]bool, len(approvedRecordIDs))
+		for _, id := range approvedRecordIDs {
+			approvedSet[id] = true
+		}
+		records = make([]checkpointing.EvolutionRecord, 0, len(pending.Payload))
+		for _, record := range pending.Payload {
+			if approvedSet[record.ID] {
+				records = append(records, record)
+			} else {
+				rejectedCount++
+			}
+		}
+	}
 
-	for i, record := range pending.Payload {
+	appliedCount := 0
+	remainingRecords := records
+
+	for i, record := range records {
 		if err := store.AppendRecord(ctx, pending.SkillName, record); err != nil {
 			// Python: 任何一条失败时保留剩余记录
-			remainingRecords = pending.Payload[i:]
+			remainingRecords = records[i:]
 			logger.Error(logComponent).
 				Str("skill", pending.SkillName).
 				Str("record_id", record.ID).
@@ -78,11 +98,11 @@ func CommitPendingChange(
 		}
 		appliedCount++
 		// 成功时逐渐缩减 remainingRecords
-		remainingRecords = pending.Payload[i+1:]
+		remainingRecords = records[i+1:]
 	}
 
 	// Python: 全部成功时 remainingRecords 为空
-	if appliedCount == len(pending.Payload) {
+	if appliedCount == len(records) {
 		remainingRecords = nil
 	}
 
