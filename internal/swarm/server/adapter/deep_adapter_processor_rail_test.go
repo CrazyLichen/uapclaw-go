@@ -67,13 +67,13 @@ func TestBuildContextProcessorRail_出厂模板段全部接线(t *testing.T) {
 
 	names := ceRail.UserProcessorTypes()
 	sort.Strings(names)
+	// 上游模板已收敛为默认 4 处理器；FullCompactProcessor / ToolResultBudgetProcessor
+	// 仅在 session_memory_config 启用时挂载（Go 侧预设，出厂模板不再承载）。
 	want := []string{
 		"CurrentRoundCompressor",
 		"DialogueCompressor",
-		"FullCompactProcessor",
 		"MessageSummaryOffloader",
 		"RoundLevelCompressor",
-		"ToolResultBudgetProcessor",
 	}
 	if len(names) != len(want) {
 		t.Fatalf("模板段映射 = %v, want %v", names, want)
