@@ -11,6 +11,9 @@
 package swarmevolution
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/suite"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,11 +30,21 @@ const e4GenerateResp = `[
 	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e4Marker + ` 端口占用排查法", "summary": "端口占用排查（auto_save）"}
 ]`
 
+// TestSwarmEvolutionMemberAutoSave 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。
+func TestSwarmEvolutionMemberAutoSave(t *testing.T) {
+	suite.Run(t, new(MemberAutoSaveSuite))
+}
+
+// MemberAutoSaveSuite member_auto_save_test.go 的文件级 suite（嵌入主 suite 复用基建；audit 规则：每文件自带 suite.Run）
+type MemberAutoSaveSuite struct {
+	EvolutionE2ESuite
+}
+
 // TestE4成员AutoSave落盘 auto_save 免审批直落盘；sharing 分支与上游同为
 // no-op（auto-approve 先 commit 清空 payload，_sharing_after_auto_approved 读到
 // 空 records 返回——Python skill_evolution_sharing.py:339-354 + common.py L112
 // 同行为；真实上传链在审批路径，见 TestE4审批路径Sharing上传）。
-func (s *EvolutionE2ESuite) TestE4成员AutoSave落盘() {
+func (s *MemberAutoSaveSuite) TestE4成员AutoSave落盘() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeSkill("evo_member_skill", "成员 auto_save 演示技能")
@@ -74,7 +87,7 @@ func (s *EvolutionE2ESuite) TestE4成员AutoSave落盘() {
 
 // TestE4审批路径Sharing上传 审批批准路径的真实上传链（records 在 commit 前
 // 从快照读取）：stage pending → ApproveRecord → hub 产物写盘。
-func (s *EvolutionE2ESuite) TestE4审批路径Sharing上传() {
+func (s *MemberAutoSaveSuite) TestE4审批路径Sharing上传() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeSkill("evo_share_skill", "审批路径共享演示技能")

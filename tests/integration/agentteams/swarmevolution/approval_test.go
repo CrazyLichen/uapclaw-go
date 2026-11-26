@@ -10,6 +10,9 @@
 package swarmevolution
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/suite"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 )
 
@@ -39,9 +42,36 @@ func (s *EvolutionE2ESuite) stagePendingForApproval(skillName string) (requestID
 	return request.RequestID, eventMap
 }
 
+// TestSwarmEvolutionApproval 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。
+func TestSwarmEvolutionApproval(t *testing.T) {
+	suite.Run(t, new(ApprovalSuite))
+}
+
+// ApprovalSuite approval_test.go 的文件级 suite（嵌入主 suite 复用基建；audit 规则：每文件自带 suite.Run）
+type ApprovalSuite struct {
+	EvolutionE2ESuite
+}
+
+// TestE7审批拒绝不落盘 reject_record 链：拒绝 → 不落盘 + 无残留。
+func (s *ApprovalSuite) TestE7审批拒绝不落盘() {
+	d := s.newAdapter()
+	s.adapter = d
+	s.makeSkill("evo_reject_skill", "拒绝链演示技能")
+
+	requestID, approvalEvent := s.stagePendingForApproval("evo_reject_skill")
+	s.Require().Equal("chat.ask_user_question", evolutionlogic.EventType(approvalEvent))
+
+	err := s.rail.RejectRecord(s.ctx, requestID)
+	s.Require().NoError(err)
+
+	evoLog, err := s.rail.EvolutionStore().LoadFullEvolutionLog(s.ctx, "evo_reject_skill")
+	s.Require().NoError(err)
+	s.Assert().Empty(evoLog.Entries, "拒绝后不得落盘")
+}
+
 // TestE10审批部分批准回传Rail 配置组装 + 审批回传 rail 同链：host 索引映射 →
 // approve_record(request_id, approved_record_ids) 部分批准（3 批 2）→ 同 rail 落盘。
-func (s *EvolutionE2ESuite) TestE10审批部分批准回传Rail() {
+func (s *ApprovalSuite) TestE10审批部分批准回传Rail() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeSkill("evo_approve_skill", "审批回传演示技能")
@@ -92,22 +122,3 @@ func (s *EvolutionE2ESuite) TestE10审批部分批准回传Rail() {
 		s.Assert().Contains(entry.Change.Content, "E2E-MARK-RECORD")
 	}
 }
-
-// TestE7审批拒绝不落盘 reject_record 链：拒绝 → 不落盘 + 无残留。
-func (s *EvolutionE2ESuite) TestE7审批拒绝不落盘() {
-	d := s.newAdapter()
-	s.adapter = d
-	s.makeSkill("evo_reject_skill", "拒绝链演示技能")
-
-	requestID, approvalEvent := s.stagePendingForApproval("evo_reject_skill")
-	s.Require().Equal("chat.ask_user_question", evolutionlogic.EventType(approvalEvent))
-
-	err := s.rail.RejectRecord(s.ctx, requestID)
-	s.Require().NoError(err)
-
-	evoLog, err := s.rail.EvolutionStore().LoadFullEvolutionLog(s.ctx, "evo_reject_skill")
-	s.Require().NoError(err)
-	s.Assert().Empty(evoLog.Entries, "拒绝后不得落盘")
-}
-
-

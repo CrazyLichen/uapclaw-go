@@ -10,6 +10,9 @@
 package swarmevolution
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/suite"
 	"os"
 	"path/filepath"
 
@@ -48,8 +51,18 @@ func (s *EvolutionE2ESuite) makeSkillIn(baseDir, name string) string {
 	return skillDir
 }
 
+// TestSwarmEvolutionCrossUser 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。
+func TestSwarmEvolutionCrossUser(t *testing.T) {
+	suite.Run(t, new(CrossUserSuite))
+}
+
+// CrossUserSuite cross_user_test.go 的文件级 suite（嵌入主 suite 复用基建；audit 规则：每文件自带 suite.Run）
+type CrossUserSuite struct {
+	EvolutionE2ESuite
+}
+
 // TestE9跨用户共享下载 A 上传 → hub → B 检索下载 → mirror 落缓存。
-func (s *EvolutionE2ESuite) TestE9跨用户共享下载() {
+func (s *CrossUserSuite) TestE9跨用户共享下载() {
 	d := s.newAdapter()
 	s.adapter = d
 	hubDir := filepath.Join(s.T().TempDir(), "hub")

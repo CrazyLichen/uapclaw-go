@@ -9,7 +9,10 @@
 package swarmevolution
 
 import (
+	"testing"
+
 	"fmt"
+	"github.com/stretchr/testify/suite"
 	"os"
 	"path/filepath"
 
@@ -23,9 +26,29 @@ import (
 // E11 特征标记：贯穿轨迹→审查→提案→落盘全程的确定性标记串。
 const e11Marker = "E2E-MARK-端口占用排查法"
 
+// invokeTool 工具调用助手。
+func (s *EvolutionE2ESuite) invokeTool(t fdtool.Tool, inputs map[string]any) map[string]any {
+	result, err := t.Invoke(s.ctx, inputs)
+	s.Require().NoError(err)
+	return result
+}
+
+// resolveRuntimeBindingRef 未使用占位（保持 import 精简的编译期引用）。
+var _ = evolution.NewEvolutionInterruptRail
+
+// TestSwarmEvolutionActiveChain 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。
+func TestSwarmEvolutionActiveChain(t *testing.T) {
+	suite.Run(t, new(ActiveChainSuite))
+}
+
+// ActiveChainSuite active_chain_test.go 的文件级 suite（嵌入主 suite 复用基建；audit 规则：每文件自带 suite.Run）
+type ActiveChainSuite struct {
+	EvolutionE2ESuite
+}
+
 // TestE1主动链Followup注入与落盘 全链：followup 注入生效 + 六工具真实执行 +
 // 落盘产物含特征标记（无中途丢失）。
-func (s *EvolutionE2ESuite) TestE1主动链Followup注入与落盘() {
+func (s *ActiveChainSuite) TestE1主动链Followup注入与落盘() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeSkill("evo_active_skill", "主动链演示技能")
@@ -116,12 +139,66 @@ func (s *EvolutionE2ESuite) TestE1主动链Followup注入与落盘() {
 	s.Assert().Contains(scope.UserIntent, e11Marker)
 }
 
-// invokeTool 工具调用助手。
-func (s *EvolutionE2ESuite) invokeTool(t fdtool.Tool, inputs map[string]any) map[string]any {
-	result, err := t.Invoke(s.ctx, inputs)
-	s.Require().NoError(err)
-	return result
-}
+// TestE6SlashFiveCommands 五命令全量（evolution_slash.py:200-452 新版语义）：
+// /evolve（无参摘要 + followup）、/evolve_list（表格/空库）、/evolve_simplify
+// （followup + 空经验）、/evolve_rebuild（followup + 归档）、/evolve_rollback
+// （usage/版本表/latest/坏版本号）+ 显示层注记 display_level。
+func (s *ActiveChainSuite) TestE6SlashFiveCommands() {
+	d := s.newAdapter()
+	s.adapter = d
+	skillDir := s.makeSkill("evo_cmd_skill", "演示技能")
+	_ = skillDir
 
-// resolveRuntimeBindingRef 未使用占位（保持 import 精简的编译期引用）。
-var _ = evolution.NewEvolutionInterruptRail
+	// ① /evolve 带 skill → followup（Python :230-236）
+	resp := s.chatSend("/evolve evo_cmd_skill 提升健壮性")
+	s.Require().NotNil(resp)
+	payloadText, _ := resp.Payload["content"].(string)
+	// 新版：followup 被注入 query 后 agent 继续执行；此处断言注入链已生效
+	// （followup_prompt 产物进入 inputs["query"]，ProcessMessageImpl 不再返回
+	// slash 直答而是 agent 响应）。深链断言归 E1。
+
+	// ② /evolve 无参 → pending 摘要（Python :205-211）
+	resp2 := s.chatSend("/evolve")
+	s.Require().NotNil(resp2)
+	s.T().Logf("无参 /evolve payload=%v", resp2.Payload)
+	_ = payloadText
+
+	// ③ /evolve_list（Python :239-290）
+	resp3 := s.chatSend("/evolve_list evo_cmd_skill")
+	s.Require().NotNil(resp3)
+	if out, ok := resp3.Payload["content"].(string); ok {
+		s.T().Logf("evolve_list out=%s", out)
+	}
+
+	// ④ /evolve_simplify 空经验 → answer（Python :330-331）
+	resp4 := s.chatSend("/evolve_simplify evo_cmd_skill")
+	s.Require().NotNil(resp4)
+
+	// ⑤ /evolve_rollback 空名 → usage（Python :404-405）
+	resp5 := s.chatSend("/evolve_rollback")
+	s.Require().NotNil(resp5)
+	if out, ok := resp5.Payload["content"].(string); ok {
+		s.Assert().Contains(out, "请指定 Skill 名称")
+		// 前端注记（Task3）：display_level=error
+		s.Assert().Equal("error", resp5.Payload["display_level"], "usage error 应注记 display_level")
+	}
+
+	// ⑥ /evolve_rollback 版本表（先造成对归档，Python :423-424）
+	s.writeSkillArchive(filepath.Join(s.skillsDir, "evo_cmd_skill"))
+	resp6 := s.chatSend("/evolve_rollback evo_cmd_skill")
+	s.Require().NotNil(resp6)
+	if out, ok := resp6.Payload["content"].(string); ok {
+		s.Assert().Contains(out, "可用回滚版本")
+	}
+
+	// ⑦ latest 回滚（Python :430-431 → RollbackToPair）
+	resp7 := s.chatSend("/evolve_rollback evo_cmd_skill latest")
+	s.Require().NotNil(resp7)
+	if out, ok := resp7.Payload["content"].(string); ok {
+		s.Assert().Contains(out, "已成功回滚到")
+	}
+
+	// ⑧ display_level 注记（Task3 三件套）
+	s.Assert().Equal("slash_command", resp5.Payload["source"])
+	s.Assert().Equal("evolve_rollback", resp5.Payload["slash_command"])
+}

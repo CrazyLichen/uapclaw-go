@@ -11,6 +11,9 @@
 package swarmevolution
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/suite"
 	"path/filepath"
 	"strings"
 	"time"
@@ -52,12 +55,55 @@ func (s *EvolutionE2ESuite) makeTeamSkill(name string) string {
 	return skillDir
 }
 
+func keysOf(m map[string]any) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func mapOrEmpty(m map[string]any) any { return "" }
+
+// ──────────────────────────── E8：watcher 超时 hidden end + 重入 ────────────────────────────
+
+// TestE8Watcher超时HiddenEnd与重入 超时 → hidden end 推送 → rail cleanup →
+// 再次 staging 成功（Python resolve_evolution_event_timeout_sec + watcher
+// timeout 分支：pushEvolutionStatus(end, hidden) + cleanupEvolutionRail）。
+func diagKeysE8(m map[string]any) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// ──────────────────────────── E12：团队轨迹聚合路径完整性 ────────────────────────────
+
+// e12Marker 团队轨迹完整性特征标记（成员发言 → 轨迹摘要 → 生成输入 → 提案 → 落盘）。
+const e12Marker = "E2E-MARK-TRAJECTORY-SAVEGUARD"
+
+// e12GenerateResp 聚合路径台本（records 数组，内容回显标记）。
+const e12GenerateResp = `[
+	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e12Marker + ` 部署失败聚合排查", "summary": "聚合路径排障经验"}
+]`
+
+// TestSwarmEvolutionTeamChain 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。
+func TestSwarmEvolutionTeamChain(t *testing.T) {
+	suite.Run(t, new(TeamChainSuite))
+}
+
+// TeamChainSuite team_chain_test.go 的文件级 suite（嵌入主 suite 复用基建；audit 规则：每文件自带 suite.Run）
+type TeamChainSuite struct {
+	EvolutionE2ESuite
+}
+
 // TestE2TeamLeader被动链 真实链：signal staging（emitRecordApprovalEvent 进
 // pending 缓冲）→ 团队 watcher drain（1s 轮询）→ 推送审批卡 + approval_required
 // end → host 从审批帧取 request_id → rail.ApproveRecord → 落盘。
 // （新版 request_user_evolution 为 followup 壳——见 skill_evolution_rail.py:1066-1100
 // ——生成+审批事件由 staging 半区承接，RequestUserEvolution 旧式生成路径已删。）
-func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
+func (s *TeamChainSuite) TestE2TeamLeader被动链() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeTeamSkill("evo_team_skill")
@@ -143,36 +189,13 @@ func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
 	s.Assert().True(fileExists(filepath.Join(s.skillsDir, "evo_team_skill", "evolutions.json")))
 }
 
-func keysOf(m map[string]any) []string {
-	out := []string{}
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
-func mapOrEmpty(m map[string]any) any { return "" }
-
-// ──────────────────────────── E8：watcher 超时 hidden end + 重入 ────────────────────────────
-
-// TestE8Watcher超时HiddenEnd与重入 超时 → hidden end 推送 → rail cleanup →
-// 再次 staging 成功（Python resolve_evolution_event_timeout_sec + watcher
-// timeout 分支：pushEvolutionStatus(end, hidden) + cleanupEvolutionRail）。
-func diagKeysE8(m map[string]any) []string {
-	out := []string{}
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
 // TestE8Watcher超时HiddenEnd与重入 仅 progress 事件后静默 → idle 超时 →
 // hidden end 推送 → 重启 watcher 重入成功。
 // ⤴️ 语义澄清（2026-12-26 会话7，Python team_helpers.py:6355-6363 对照）：
 // 审批推送后 activeCycleRequestID 即清空（Go :1190 与 Python :6363 一致），
 // 审批挂起"不超时"是上游设计——hidden timeout 只对"有活跃 progress cycle
 // 但事件静默"生效。本用例以 EmitHostEvent 直发 progress 事件构造该场景。
-func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
+func (s *TeamChainSuite) TestE8Watcher超时HiddenEnd与重入() {
 	// 根因已定位并修复（2026-12-26 会话7）：①用例前提错误——审批推送后
 	// activeCycleRequestID 即清空（Go :1190 与 Python team_helpers.py:6363 一致），
 	// 审批挂起"不超时"是上游设计语义；②原断言 stage/status 字段搞反
@@ -263,21 +286,11 @@ func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
 	s.Assert().True(sawReentry, "cleanup 后 watcher 重入应处理新事件")
 }
 
-// ──────────────────────────── E12：团队轨迹聚合路径完整性 ────────────────────────────
-
-// e12Marker 团队轨迹完整性特征标记（成员发言 → 轨迹摘要 → 生成输入 → 提案 → 落盘）。
-const e12Marker = "E2E-MARK-TRAJECTORY-SAVEGUARD"
-
-// e12GenerateResp 聚合路径台本（records 数组，内容回显标记）。
-const e12GenerateResp = `[
-	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e12Marker + ` 部署失败聚合排查", "summary": "聚合路径排障经验"}
-]`
-
 // TestE12团队轨迹完整性标记回读 六环节标记回读：成员发言（含标记）→ 轨迹 span →
 // 轨迹摘要进入生成输入（mock 捕获的 prompt 含标记）→ 提案（records 含标记）→
 // 审批 → 团队库落盘（含标记）。
 // Python 锚点：TeamSkillEvolutionRail 聚合路径（span 模型）+ BuildTeamTrajectorySummary。
-func (s *EvolutionE2ESuite) TestE12团队轨迹完整性标记回读() {
+func (s *TeamChainSuite) TestE12团队轨迹完整性标记回读() {
 	// ⤴️ 断点登记（2026-12-26）：独跑 PASS（轨迹标记经聚合路径六环节全程回读），
 	// 套件序必红（聚合生成 0 次 LLM 调用）——与 E8 同源的全局污染待专项定位。
 	// 根因已定位并修复（2026-12-26 会话6）：非全局污染——①GetInvokeCall 为
