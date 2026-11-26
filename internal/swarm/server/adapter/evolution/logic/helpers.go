@@ -717,3 +717,78 @@ func EvolutionStatusResponse(evolveResult map[string]any, generationFailedOutput
 	return nil
 }
 
+
+// ──────────────────────────── 15.24d Task3：slash 结果前端注记 ────────────────────────────
+
+// RegularEvolutionSlashWarningPhrases 个人版 slash 结果 warning 短语集。
+// Python: REGULAR_EVOLUTION_SLASH_WARNING_PHRASES（evolution_helpers.py:125-128）。
+var RegularEvolutionSlashWarningPhrases = []string{
+	"未生成可保存经验",
+	"未发现明确的演进信号",
+}
+
+// TeamEvolutionSlashWarningPhrases 团队版 slash 结果 warning 短语集。
+// Python: TEAM_EVOLUTION_SLASH_WARNING_PHRASES（evolution_helpers.py:129-132）。
+var TeamEvolutionSlashWarningPhrases = []string{
+	"未生成可保存经验",
+	"未生成新的团队技能演进经验",
+}
+
+// evolutionSlashCommands slash 命令名表（去斜杠）。
+// Python: _EVOLUTION_SLASH_COMMANDS（evolution_helpers.py:133-138）。
+var evolutionSlashCommands = []string{
+	"evolve_simplify",
+	"evolve_rebuild",
+	"evolve_rollback",
+	"evolve_list",
+}
+
+// EvolutionSlashDisplayLevel 返回演进 slash 结果的前端显示级别。
+// Python: evolution_slash_display_level()（evolution_helpers.py:327-338）。
+func EvolutionSlashDisplayLevel(resultType, content string, warningPhrases []string) string {
+	if warningPhrases == nil {
+		warningPhrases = RegularEvolutionSlashWarningPhrases // Python 缺省参数（:331）
+	}
+	if resultType == "error" {
+		return "error"
+	}
+	for _, phrase := range warningPhrases {
+		if strings.Contains(content, phrase) {
+			return "warning"
+		}
+	}
+	return "info"
+}
+
+// EvolutionSlashCommandName 返回不带斜杠的演进 slash 命令名。
+// Python: evolution_slash_command_name()（evolution_helpers.py:341-347）。
+func EvolutionSlashCommandName(query string) string {
+	stripped := strings.TrimSpace(query)
+	for _, command := range evolutionSlashCommands {
+		if strings.HasPrefix(stripped, "/"+command) {
+			return command
+		}
+	}
+	return "evolve"
+}
+
+// EvolutionSlashResult 为前端渲染注记 slash 结果（setdefault 语义：不覆盖已有键）。
+// Python: evolution_slash_result()（evolution_helpers.py:350-368）。
+func EvolutionSlashResult(command string, result map[string]any, warningPhrases []string) map[string]any {
+	annotated := cloneMap(result)
+	if _, ok := annotated["source"]; !ok {
+		annotated["source"] = "slash_command"
+	}
+	if _, ok := annotated["slash_command"]; !ok {
+		annotated["slash_command"] = command
+	}
+	if _, ok := annotated["display_level"]; !ok {
+		resultType := "answer"
+		if rt, ok := annotated["result_type"].(string); ok && rt != "" {
+			resultType = strings.ToLower(strings.TrimSpace(rt))
+		}
+		output := StrFromAny(annotated["output"])
+		annotated["display_level"] = EvolutionSlashDisplayLevel(resultType, output, warningPhrases)
+	}
+	return annotated
+}

@@ -732,3 +732,48 @@ func TestUserFacingGenerationError(t *testing.T) {
 		t.Fatalf("普通错误应透传，实际 %q", got)
 	}
 }
+
+// ──────────────────────────── 15.24d Task3：slash 结果前端注记 ────────────────────────────
+
+// TestEvolutionSlashDisplayLevel 显示级别判定。
+// Python: evolution_slash_display_level()（evolution_helpers.py:327-338）。
+func TestEvolutionSlashDisplayLevel(t *testing.T) {
+	if got := EvolutionSlashDisplayLevel("error", "x", RegularEvolutionSlashWarningPhrases); got != "error" {
+		t.Fatalf("error → error，实际 %q", got)
+	}
+	if got := EvolutionSlashDisplayLevel("answer", "本次未生成可保存经验", RegularEvolutionSlashWarningPhrases); got != "warning" {
+		t.Fatalf("warning 短语 → warning，实际 %q", got)
+	}
+	if got := EvolutionSlashDisplayLevel("answer", "已完成", RegularEvolutionSlashWarningPhrases); got != "info" {
+		t.Fatalf("普通 → info，实际 %q", got)
+	}
+}
+
+// TestEvolutionSlashCommandName 命令名提取。
+// Python: evolution_slash_command_name()（evolution_helpers.py:341-347）。
+func TestEvolutionSlashCommandName(t *testing.T) {
+	for q, want := range map[string]string{
+		"/evolve_list x":  "evolve_list",
+		"/evolve_simplify": "evolve_simplify",
+		"/evolve skill":   "evolve",
+		"/evolve":         "evolve",
+		"/other":          "evolve",
+	} {
+		if got := EvolutionSlashCommandName(q); got != want {
+			t.Fatalf("%q → %q, want %q", q, got, want)
+		}
+	}
+}
+
+// TestEvolutionSlashResult 注记不覆盖已有键。
+// Python: evolution_slash_result()（evolution_helpers.py:350-368）。
+func TestEvolutionSlashResult(t *testing.T) {
+	result := EvolutionSlashResult("evolve", map[string]any{"output": "ok", "result_type": "answer", "display_level": "custom"}, nil)
+	if result["source"] != "slash_command" || result["slash_command"] != "evolve" || result["display_level"] != "custom" {
+		t.Fatalf("setdefault 不得覆盖已有 display_level，实际 %v", result)
+	}
+	result2 := EvolutionSlashResult("evolve_list", map[string]any{"output": "未生成可保存经验", "result_type": "answer"}, nil)
+	if result2["display_level"] != "warning" {
+		t.Fatalf("缺省 display_level 应按短语判定，实际 %v", result2["display_level"])
+	}
+}

@@ -10,6 +10,7 @@ import (
 		"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -44,30 +45,45 @@ func (d *DeepAdapter) handleSlashCommand(
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveSimplifyCommand(ctx, stripped, sessionID)
+		res, err := d.handleEvolveSimplifyCommand(ctx, stripped, sessionID)
+		return annotateEvolveSlashResult(stripped, res), err
 	case strings.HasPrefix(stripped, "/evolve_rebuild"):
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveRebuildCommand(ctx, stripped, sessionID)
+		res, err := d.handleEvolveRebuildCommand(ctx, stripped, sessionID)
+		return annotateEvolveSlashResult(stripped, res), err
 	case strings.HasPrefix(stripped, "/evolve_rollback"):
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveRollbackCommand(ctx, stripped, sessionID)
+		res, err := d.handleEvolveRollbackCommand(ctx, stripped, sessionID)
+		return annotateEvolveSlashResult(stripped, res), err
 	case strings.HasPrefix(stripped, "/evolve_list"):
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveListCommand(ctx, stripped, sessionID)
+		res, err := d.handleEvolveListCommand(ctx, stripped, sessionID)
+		return annotateEvolveSlashResult(stripped, res), err
 	case stripped == "/evolve" || strings.HasPrefix(stripped, "/evolve "):
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveCommand(ctx, stripped, sessionID)
+		res, err := d.handleEvolveCommand(ctx, stripped, sessionID)
+		return annotateEvolveSlashResult(stripped, res), err
 	default:
 		return nil, nil
 	}
+}
+
+// annotateEvolveSlashResult 出口注记（Python evolution_slash_result，:350-368）：
+// 命令名/来源/显示级别 setdefault；nil 结果透传。
+func annotateEvolveSlashResult(query string, result map[string]any) map[string]any {
+	if result == nil {
+		return nil
+	}
+	return evolutionlogic.EvolutionSlashResult(
+		evolutionlogic.EvolutionSlashCommandName(query), result, nil)
 }
 
 // ensureEvolutionRailForSlash 检查演进功能可用性，必要时配置并注册演进 rail 栈。
