@@ -267,7 +267,7 @@ func TestChatMethods_Ack响应(t *testing.T) {
 }
 
 func TestConfigEnvMap_条目数(t *testing.T) {
-	assert.Len(t, configEnvMap, 48, "configEnvMap 应有 48 个条目（含 evolution_auto_scan 和 skill_create 环境变量映射）")
+	assert.Len(t, configEnvMap, 46, "configEnvMap 应有 46 个条目（evolution_auto_scan / skill_create 环境变量映射已随上游收敛删除）")
 }
 
 func TestHandleChannelGet_有ChannelManager(t *testing.T) {

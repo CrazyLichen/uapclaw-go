@@ -145,27 +145,6 @@ var toolWhitelist = swarmSchema.ToolWhitelist
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GetEvolutionAutoScanEnabled 从 config 读取 auto_scan 开关。
-// 对齐 Python: get_evolution_auto_scan_enabled (L381-385)
-//
-// env EVOLUTION_AUTO_SCAN 优先（true/1/yes 不区分大小写），
-// 回退 react.evolution.auto_scan → evolution.auto_scan，默认 false。
-func GetEvolutionAutoScanEnabled(config map[string]any) bool {
-	if envVal, ok := getBoolEnv("EVOLUTION_AUTO_SCAN"); ok {
-		return envVal
-	}
-	return getEvolutionConfigField(config, "auto_scan")
-}
-
-// GetSkillCreateEnabled 从 config 读取 skill_create 开关。
-// 对齐 Python: get_skill_create_enabled (L388-392)
-func GetSkillCreateEnabled(config map[string]any) bool {
-	if envVal, ok := getBoolEnv("SKILL_CREATE"); ok {
-		return envVal
-	}
-	return getEvolutionConfigField(config, "skill_create")
-}
-
 // GetDefaultModelName 从配置获取默认 model_name。
 // 对齐 Python: get_default_model_name (team_runtime_inheritance.py L335-360)
 //
@@ -388,7 +367,8 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any) *evolution
 	if llmModel == nil {
 		return nil
 	}
-	evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
+
+	// Python: L548-551 signal_trigger=True、auto_save=True（成员自演化跳过审批）
 
 	// Python 未显式传 language，使用默认 "cn"
 	rail := evolution.NewSkillEvolutionRail(
@@ -396,14 +376,14 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any) *evolution
 		llmModel,
 		modelName,
 		"cn",
-		evolution.WithSignalTrigger(evolutionAutoScan),
+		evolution.WithSignalTrigger(true),
 		evolution.WithAutoSave(true),
 		evolution.WithDisabledSkillsSet(skillruntime.LoadExecutionDisabledSkills()),
 	)
 
 	logger.Info(logComponent).
 		Str("model", modelName).
-		Bool("auto_scan", evolutionAutoScan).
+		Bool("auto_save", true).
 		Msg("[TeamRuntime] SkillEvolutionRail created")
 	return rail
 }
@@ -526,7 +506,8 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	}
 
 	// 11. Leader-only: TeamSkillEvolutionRail（团队技能演进）
-	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" {
+	// Python: L275 if role == "leader" and skill_evolution_enabled
+	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && configutil.SkillEvolutionEnabled(config) {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
 			if err := os.MkdirAll(teamWsSkillsDir, 0o755); err != nil {
 				return nil, fmt.Errorf("mkdir skills_dir: %w", err)
@@ -535,7 +516,9 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 			if llmModel == nil {
 				return nil, fmt.Errorf("evolution LLM 构建失败（config 无有效模型）")
 			}
-			evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
+			// Python: L288-291 signal_trigger=False、review_trigger=True、
+			// auto_save=get_evolution_auto_save_enabled(config)
+			evolutionAutoSave := configutil.EvolutionAutoSaveEnabled(config)
 			// 【12-04】registry 绑定段删除（死字段，规则 8）；跨成员可见性由
 			// 订阅窗口承载。
 			var opts []evolution.TeamSkillEvolutionRailOption
@@ -545,8 +528,9 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 				)
 			}
 			opts = append(opts,
-				evolution.WithTeamSkillSignalTrigger(evolutionAutoScan),
-				evolution.WithTeamSkillAutoSave(false),
+				evolution.WithTeamSkillSignalTrigger(false),
+				evolution.WithTeamSkillReviewTrigger(true),
+				evolution.WithTeamSkillAutoSave(evolutionAutoSave),
 				evolution.WithTeamSkillDisabledSkills(skillruntime.LoadExecutionDisabledSkills()),
 			)
 			rail := evolution.NewTeamSkillEvolutionRail(
@@ -555,15 +539,16 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 			logger.Info(logComponent).
 				Str("skills_dir", teamWsSkillsDir).
 				Str("model", actualModelName).
-				Bool("auto_scan", evolutionAutoScan).
+				Bool("auto_save", evolutionAutoSave).
 				Bool("team_trajectory_registry", false).
 				Msg("[TeamRuntime] TeamSkillEvolutionRail created")
 			return rail, nil
 		}, "TeamSkillEvolutionRail")
 	}
 
-	// 12. Leader-only: TeamSkillCreateRail（需 skill_create 配置启用；env SKILL_CREATE 优先）
-	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && GetSkillCreateEnabled(config) {
+	// 12. Leader-only: TeamSkillCreateRail（与演进共用 react.evolution.skill_evolution 开关）
+	// Python: L318 if role == "leader" and skill_evolution_enabled
+	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && configutil.SkillEvolutionEnabled(config) {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
 			rail := skills.NewTeamSkillCreateRail(
 				teamWsSkillsDir,
@@ -577,7 +562,8 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 	}
 
 	// 13. Non-leader: SkillEvolutionRail（成员技能自演化）
-	if roleStr(memberInfo.Role) != "leader" && teamWsSkillsDir != "" {
+	// Python: L336 if role != "leader" and skill_evolution_enabled
+	if roleStr(memberInfo.Role) != "leader" && teamWsSkillsDir != "" && configutil.SkillEvolutionEnabled(config) {
 		// Python 直接调 build_skill_evolution_rail（内部自带 try/except 返回 None）
 		if rail := BuildSkillEvolutionRail(teamWsSkillsDir, config); rail != nil {
 			railsList = append(railsList, rail)
@@ -598,37 +584,6 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getEvolutionConfigField 从嵌套路径读取 evolution 配置字段（bool）。
-// 对齐 Python _get_evolution_config (L369-378)：
-// 优先 config["react"]["evolution"]，回退 config["evolution"]，均无则空 → 默认 false
-func getEvolutionConfigField(config map[string]any, field string) bool {
-	evolutionConfig := getEvolutionConfig(config)
-	if b, ok := evolutionConfig[field].(bool); ok {
-		return b
-	}
-	return false
-}
-
-// getEvolutionConfig 解析嵌套的 evolution 配置段。
-// 对齐 Python _get_evolution_config (L369-378)
-func getEvolutionConfig(config map[string]any) map[string]any {
-	if config == nil {
-		return nil
-	}
-	if reactConfig, ok := config["react"].(map[string]any); ok {
-		if evolutionConfig, ok := reactConfig["evolution"].(map[string]any); ok {
-			return evolutionConfig
-		}
-	}
-	if evolutionConfig, ok := config["evolution"].(map[string]any); ok {
-		return evolutionConfig
-	}
-	return nil
-}
-
-// getBoolEnv 读取布尔环境变量。
-// 对齐 Python _get_bool_env (L363-366)：
-// 值为 true/1/yes（不区分大小写）→ true；设置但非真值 → false；未设置 → (false, false)
 func getBoolEnv(key string) (value bool, ok bool) {
 	raw, exists := os.LookupEnv(key)
 	if !exists {

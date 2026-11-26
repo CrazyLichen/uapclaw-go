@@ -37,7 +37,7 @@ type ContextEngineConfig struct {
 	OpenRouterRequestTimeout float64 `json:"openrouter_request_timeout"`
 	// CompressionRecall 压缩归档与召回的全局配置（Python: schema/config.py:11）
 	// nil 时按"未配置"处理，消费方回退默认值
-	CompressionRecall *CompressionRecallConfig `json:"compression_recall"`
+	CompressionRecall *CompressionRecallConfig `json:"compression_recall_config"`
 }
 
 // CompressionRecallConfig 压缩归档与召回的全局配置，控制被压缩消息的
@@ -108,7 +108,7 @@ func (c ContextEngineConfig) Validate() error {
 	}
 	if c.CompressionRecall != nil {
 		if err := c.CompressionRecall.Validate(); err != nil {
-			return fmt.Errorf("compression_recall: %w", err)
+			return fmt.Errorf("compression_recall_config: %w", err)
 		}
 	}
 	for model, tokens := range c.ModelContextWindowTokens {

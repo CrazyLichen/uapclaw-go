@@ -9,6 +9,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/visualization"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
@@ -276,3 +277,18 @@ func toFloat64(v any) (float64, bool) {
 		return 0, false
 	}
 }
+
+// ──────────────────────────── 8.13 D-13-5 接口实现 ────────────────────────────
+
+// SubWorkflowDrawableSubgraph 返回子工作流子图（Python drawable.py:76
+// `component.sub_workflow._internal.drawable.get_graph()`；8.13 D-13-5 接口实现）
+func (c *SubWorkflowComponent) SubWorkflowDrawableSubgraph() *visualization.DrawableGraph {
+	// env 为进程级开关：外层 drawable 开启则内层同开启，此守卫仅测试注入 nil 场景可达
+	if c.subWorkflow == nil || c.subWorkflow.Internal().Drawable() == nil {
+		return nil
+	}
+	return c.subWorkflow.Internal().Drawable().GetGraph()
+}
+
+// 编译期断言：实现 visualization 子图源接口
+var _ visualization.SubgraphSource = (*SubWorkflowComponent)(nil)

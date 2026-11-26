@@ -47,7 +47,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	buildctx "github.com/uapclaw/uapclaw-go/internal/swarm/agents/swarm/buildctx"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -2938,9 +2937,9 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 		}
 	}
 
-	// 压缩召回全局配置（Python: cec.compression_recall 由 pydantic 解析；
-	// Go 侧在此手工解析三字段，缺省键保留 NewCompressionRecallConfig 默认值）
-	if raw, ok := cecMap["compression_recall"]; ok {
+	// 压缩召回全局配置（Python: interface_deep.py:1433 cec.compression_recall_config）；
+	// Go 侧在此手工解析三字段，缺省键保留 NewCompressionRecallConfig 默认值
+	if raw, ok := cecMap["compression_recall_config"]; ok {
 		if m, ok := raw.(map[string]any); ok {
 			recallCfg := ceschema.NewCompressionRecallConfig()
 			if v, ok := m["enabled"].(bool); ok {
@@ -3771,22 +3770,22 @@ func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
 }
 
 // resolveEnableTaskLoop 解析是否启用任务循环。
-// Python: _resolve_enable_task_loop(config, config_base)
+// Python: _resolve_enable_task_loop(config, config_base) (interface_deep.py:11687-11713)
 //
-// skill_create=True 时强制启用：SkillCreateRail 依赖 AFTER_TASK_ITERATION 事件与
-// enqueue_follow_up()，单轮模式下无法工作（Python interface_deep.py:2215-2248）。
-func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase map[string]any) bool {
+// skill_evolution=True 时强制启用：演进 follow-up 依赖 AFTER_TASK_ITERATION 事件与
+// enqueue_follow_up()，单轮模式下无法工作。
+func (d *DeepAdapter) resolveEnableTaskLoop(reactCfg map[string]any, configBase map[string]any) bool {
 	configured := true
-	if v, ok := config["enable_task_loop"]; ok {
+	if v, ok := reactCfg["enable_task_loop"]; ok {
 		if b, ok := v.(bool); ok {
 			configured = b
 		}
 	}
-	if team.GetSkillCreateEnabled(configBase) {
+	if config.SkillEvolutionEnabled(configBase) {
 		if !configured {
 			logger.Warn(logComponent).
 				Bool("configured_value", configured).
-				Msg("skill_create requires enable_task_loop, overriding user config")
+				Msg("skill_evolution=True requires enable_task_loop=True; overriding user config")
 		}
 		return true
 	}
@@ -3887,7 +3886,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 //     全量重建会清空 StreamEventRail 的 abortRequested 与 TaskPlanningRail 的 usageRecords。
 func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
 	// 1. 就地更新演进 rail（不重建、不重新注册），对齐 Python :2314-2328
-	d.updateSkillEvolutionRail(config)
+	d.updateSkillEvolutionRail(configBase)
 
 	// 2. 唯一新建项：skillRail（include_tools 取决于 profile，靠重建切换）
 	d.skillRail = d.buildSkillRailWithIncludeTools(d.skillIncludeToolsForProfile(d.instanceOverrides))

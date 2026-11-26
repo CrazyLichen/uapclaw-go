@@ -109,7 +109,7 @@ Python 逻辑：callable/class → `get_type_hints(func)["return"]` 为 `Literal
 |---|---|---|---|---|
 | D-13-1 | `_get_targets` 靠 `get_type_hints`+`Literal` 反射 callable 返回类型（drawable.py:29-43） | 保留函数壳 `getTargets(data any) []string`，无可达调用形态（两条 Router() 恒 `*BranchRouter`） | 语言层缺类型注解反射 + Go 具体类型化使分支不可达 | 上游若把 router 泛化为任意 callable 且出现非 BranchRouter 形态时重新评估 |
 | D-13-2 | `DrawableEdge.data: Optional[Stringifiable]`（Protocol，duck-typed） | `Data string` | Go 无 Protocol；调用方实传均为字符串标签（BranchRouter datas 即 []string） | 出现非字符串 data 消费方时改 `any` |
-| D-13-3 | `expand_subgraph: int \| bool`（Python union 动态分派） | 形参 `expandSubgraph any`，运行时 bool/int 分派复刻 | 保持签名一比一（规则 12） | 无 |
+| D-13-3 | `expand_subgraph: int \| bool`（Python union 动态分派） | 形参 `expandSubgraph any`，运行时 bool/int 分派复刻；**修订（审查拍板 2026-11-26）：`enableAnimation` 维持 `bool` 收窄不收 any**——Python `isinstance(enable_animation, bool)` 校验分支在 Go 静态类型下不可达（全仓消费方 `Draw()` 恒传 bool），校验不落，回收条件=出现非 bool 消费方 | 保持签名一比一（规则 12） | enableAnimation：出现非 bool 消费方时改 any 并补校验 |
 | D-13-4 | mermaid-py 依赖（soft-import，缺包抛 ImportError，drawable.py:11-18/143-160） | 文本拼接自实现 + png/svg 直连 HTTP；无"缺包"形态（Go 静态编译） | 依赖差异；soft-import 分支不复刻 | 无 |
 | D-13-5 | `Drawable.add_node` 内函数级延迟导入组件类型做 isinstance 分派（drawable.py:53-57），借此破 workflow↔visualization 环 | 能力接口断言分派（§4.2 四接口，断言序=Python isinstance 序；实现方 flow/loop/llm 反向 import visualization，依赖全单向零环） | Go 无函数内延迟导入，语言层缺能力唯一出口（规则 12.3，2026-11-25 用户批准） | Go 若引入延迟加载/插件化机制则回收为 type switch |
 
