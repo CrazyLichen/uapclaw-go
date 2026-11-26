@@ -120,10 +120,8 @@ func (e *ServerEnv) AwaitUnary(requestID string) *schema.AgentResponse {
 				break
 			}
 		}
-		if idx < 0 && len(e.responses) > 0 {
-			// 适配器未回填 request_id 时按到达顺序兜底
-			idx = 0
-		}
+		// 严格按 request_id 匹配：兜底按到达顺序取响应会在多请求/ack 帧场景
+		// 吃到无关帧（Python 端 response 与 request_id 严格关联）。
 		if idx >= 0 {
 			resp := e.responses[idx]
 			e.responses = append(e.responses[:idx], e.responses[idx+1:]...)
