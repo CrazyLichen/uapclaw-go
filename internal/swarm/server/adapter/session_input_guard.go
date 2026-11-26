@@ -155,6 +155,9 @@ type SessionInputGuard struct {
 	// lastDeliverySection 最近一次构建的交付节内容（""=节不在场；
 	// ForTest 断言读取——builder 接口无节枚举）
 	lastDeliverySection string
+	// deliverySectionSeenText 本执行周期内出现过的交付节内容（只增不减；
+	// after_model_call 清节后仍可断言"节曾进系统提示词"）
+	deliverySectionSeenText string
 
 	// mu 串行化状态机（Python asyncio 单线程语义的 Go 承载）
 	mu sync.Mutex
@@ -193,7 +196,11 @@ func (g *SessionInputGuard) BindOwner(owner *harness.DeepAgent, adapter *DeepAda
 func (g *SessionInputGuard) DeliverySectionTextForTest() string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.lastDeliverySection
+	// 节可能已被 after_model_call 清除——返回本周期出现过的最近内容
+	if g.lastDeliverySection != "" {
+		return g.lastDeliverySection
+	}
+	return g.deliverySectionSeenText
 }
 
 // ownerOperationMode 系统操作模式（read_file 本地模式判定）。
@@ -666,6 +673,7 @@ func (g *SessionInputGuard) refreshDeliverySectionLocked() {
 		"复用已经完成的工具结果，不要仅为重述结果而重复工具调用或副作用。" +
 		"引用标记截断时，可回看上下文中的原始消息。"
 	g.lastDeliverySection = chinese + dataBlock
+	g.deliverySectionSeenText = g.lastDeliverySection
 	builder.AddSection(prompts.NewPromptSection(
 		deliverySectionName,
 		map[string]string{"cn": chinese + dataBlock, "en": english + dataBlock},
