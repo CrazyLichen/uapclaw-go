@@ -17,6 +17,7 @@ import (
 
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
+	forkedoffloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llm "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
@@ -46,6 +47,9 @@ func (s *ForkedCompressionChainSuite) SetupTest() {
 // ──────────────────────────── 非导出函数（测试助手） ────────────────────────────
 
 // fcModelContext smcModelContext 包装：补 SetMessages 落盘（基接口为 nil 不可用）
+// llmBaseMessage 别名
+type llmBaseMessage = llmschema.BaseMessage
+
 type fcModelContext struct {
 	*smcModelContext
 	messages []llmschema.BaseMessage
@@ -54,6 +58,14 @@ type fcModelContext struct {
 func (m *fcModelContext) SetMessages(messages []llmschema.BaseMessage, _ bool) {
 	m.messages = messages
 }
+
+// GetMessages 覆盖（嵌入基接口为 nil 不可用）
+func (m *fcModelContext) GetMessages(int, bool) ([]llmschema.BaseMessage, error) {
+	return m.messages, nil
+}
+
+// Len 覆盖
+func (m *fcModelContext) Len() int { return len(m.messages) }
 
 // fcWorkspace 建临时工作区
 func (s *ForkedCompressionChainSuite) fcWorkspace() string {
@@ -225,4 +237,34 @@ func (s *ForkedCompressionChainSuite) TestD_共链回归_24_2() {
 		_, err := c.TriggerGetContextWindow(s.ctx, mc, cw)
 		s.Require().NoError(err, "%s 触发判定不应报错", name)
 	}
+}
+
+// TestE_OffloaderAddOffload forked offloader：超大工具结果走 OnAddMessages 卸载
+// （head/tail 预览 + 占位描述 + workspace offload 落盘）。
+// 跨子系统：forked offloader + BaseProcessor offload + filesystem。
+func (s *ForkedCompressionChainSuite) TestE_OffloaderAddOffload() {
+	ws := s.fcWorkspace()
+	mo := forkedoffloader.NewMessageSummaryOffloader(forkedoffloader.NewMessageSummaryOffloaderConfig())
+	assistant := llmschema.NewAssistantMessage("")
+	assistant.ToolCalls = []*llmschema.ToolCall{llmschema.NewToolCall("call-e1", "bash", "{}")}
+	tool := llmschema.NewToolMessage("call-e1", strings.Repeat("payload-", 2000))
+	mc := &fcModelContext{smcModelContext: &smcModelContext{workspaceDir: ws, sessionID: "fc-sess-e1"}}
+	mc.messages = []llmschema.BaseMessage{assistant}
+
+	event, processed, err := mo.OnAddMessages(context.Background(), mc, []llmBaseMessage{tool})
+	s.Require().NoError(err)
+	s.Require().NotNil(event, "超阈应产出事件")
+	s.Equal("MessageSummaryOffloader", event.EventType)
+	text := processed[0].GetContent().Text()
+	s.Require().Contains(text, "Content truncated and offloaded")
+	s.Require().True(len(text) < len("payload-")*2000, "内容应裁剪为预览")
+	// 原文落盘（workspace offload 目录）
+	found := false
+	s.Require().NoError(filepath.WalkDir(filepath.Join(ws, "context"), func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, ".json") {
+			found = true
+		}
+		return nil
+	}))
+	s.Require().True(found, "offload 原文应落盘")
 }
