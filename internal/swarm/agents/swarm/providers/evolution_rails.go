@@ -43,32 +43,33 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// EvolutionRailRegistrar swarm 父包注入的 TeamManager 注册回调。
-// kind ∈ {"team_evolution","team_create","member_evolution"}。
-// EvolutionRailKind 注册缝 rail 类别（枚举承载，防字符串拼写漂移）。
-type EvolutionRailKind string
-
-const (
-	// EvolutionRailKindTeamEvolution leader 团队技能演进 rail
-	EvolutionRailKindTeamEvolution EvolutionRailKind = "team_evolution"
-	// EvolutionRailKindTeamCreate leader 团队技能创建 rail
-	EvolutionRailKindTeamCreate EvolutionRailKind = "team_create"
-	// EvolutionRailKindMemberEvolution teammate 成员技能演进 rail
-	EvolutionRailKindMemberEvolution EvolutionRailKind = "member_evolution"
+// 三条独立注册回调（team 包 init 注入；nil 时跳过注册）。
+// 偏差 D-15.24c-3：providers↔team 成环（team_manager_spec.go→swarm→providers），
+// providers 只持有回调本体；载荷用 swarmsnapshot.Snapshot 具体类型 +
+// 各 rail 具体类型参数（2026-11-26 四轮审查：消 kind 分派与 any rail 参数，
+// 每条注册链一条强类型回调）。
+var (
+	// teamEvolutionRailRegistrar leader 团队技能演进 rail 的注册回调
+	teamEvolutionRailRegistrar func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmTeamSkillEvolutionRail)
+	// teamCreateRailRegistrar leader 团队技能创建 rail 的注册回调
+	teamCreateRailRegistrar func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmTeamSkillCreateRail)
+	// memberEvolutionRailRegistrar teammate 成员技能演进 rail 的注册回调
+	memberEvolutionRailRegistrar func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmMemberSkillEvolutionRail)
 )
 
-// EvolutionRailRegistrar team 包注入的 TeamManager 注册回调。
-// 偏差 D-15.24c-3：providers↔team 成环（team_manager_spec.go→swarm→providers），
-// providers 只持有回调本体；载荷用 swarmsnapshot.Snapshot 具体类型
-// （2026-11-26 审查轮 B：提取叶包消 any）。
-type EvolutionRailRegistrar func(kind EvolutionRailKind, snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail agentinterfaces.AgentRail)
+// SetTeamEvolutionRailRegistrar 注入演进 rail 注册回调。
+func SetTeamEvolutionRailRegistrar(fn func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmTeamSkillEvolutionRail)) {
+	teamEvolutionRailRegistrar = fn
+}
 
-// evolutionRailRegistrar 注册回调（team 包 init 注入；nil 时跳过注册）。
-var evolutionRailRegistrar EvolutionRailRegistrar
+// SetTeamCreateRailRegistrar 注入创建 rail 注册回调。
+func SetTeamCreateRailRegistrar(fn func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmTeamSkillCreateRail)) {
+	teamCreateRailRegistrar = fn
+}
 
-// SetEvolutionRailRegistrar 注入 TeamManager 注册回调（父包无环注入缝）。
-func SetEvolutionRailRegistrar(fn EvolutionRailRegistrar) {
-	evolutionRailRegistrar = fn
+// SetMemberEvolutionRailRegistrar 注入成员演进 rail 注册回调。
+func SetMemberEvolutionRailRegistrar(fn func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail *SwarmMemberSkillEvolutionRail)) {
+	memberEvolutionRailRegistrar = fn
 }
 
 // SwarmTeamSkillEvolutionRail 自注册 TeamManager 的 TeamSkillEvolutionRail。
@@ -91,8 +92,8 @@ func (r *SwarmTeamSkillEvolutionRail) Init(ctx context.Context, agent agentinter
 	if err := r.TeamSkillEvolutionRail.Init(ctx, agent); err != nil {
 		return err
 	}
-	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar(EvolutionRailKindTeamEvolution, r.swarmSnapshot, agent, r)
+	if teamEvolutionRailRegistrar != nil {
+		teamEvolutionRailRegistrar(r.swarmSnapshot, agent, r)
 	}
 	return nil
 }
@@ -121,8 +122,8 @@ func (r *SwarmTeamSkillCreateRail) Init(ctx context.Context, agent agentinterfac
 	if err := r.TeamSkillCreateRail.Init(ctx, agent); err != nil {
 		return err
 	}
-	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar(EvolutionRailKindTeamCreate, r.swarmSnapshot, agent, r)
+	if teamCreateRailRegistrar != nil {
+		teamCreateRailRegistrar(r.swarmSnapshot, agent, r)
 	}
 	return nil
 }
@@ -151,8 +152,8 @@ func (r *SwarmMemberSkillEvolutionRail) Init(ctx context.Context, agent agentint
 	if err := r.MemberSkillEvolutionRail.Init(ctx, agent); err != nil {
 		return err
 	}
-	if evolutionRailRegistrar != nil {
-		evolutionRailRegistrar(EvolutionRailKindMemberEvolution, r.swarmSnapshot, agent, r)
+	if memberEvolutionRailRegistrar != nil {
+		memberEvolutionRailRegistrar(r.swarmSnapshot, agent, r)
 	}
 	return nil
 }

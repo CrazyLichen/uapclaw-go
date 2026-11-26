@@ -28,37 +28,24 @@ var evolutionRegistrarOnce sync.Once
 // EnsureEvolutionRailRegistrarWired 幂等注入注册回调（包 init 调用；
 // team → providers 无环，providers 侧持有回调本体）。
 func EnsureEvolutionRailRegistrarWired() {
-	evolutionRegistrarOnce.Do(func() { wireEvolutionRailRegistrar() })
-}
-
-// wireEvolutionRailRegistrar 注入 evolution rail 的 TeamManager 注册回调
-// Python: 各 Swarm 子类 init 的注册段。kind 分派：
-//   - team_evolution → RegisterTeamLiveRail + RegisterTeamSkillRail +
-//     bind_review_feedback_skill_create_rail + consume_watcher + RegisterTeamRailContext
-//   - team_create → RegisterTeamLiveRail + RegisterTeamSkillCreateRail +
-//     反向 bind + RegisterTeamRailContext
-//   - member_evolution → RegisterTeamLiveRail + RegisterTeamMemberSkillEvolutionRail +
-//     RegisterTeamMemberRailContext
-func wireEvolutionRailRegistrar() {
-	providers.SetEvolutionRailRegistrar(func(kind providers.EvolutionRailKind, snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, rail agentinterfaces.AgentRail) {
-		teamManager := GetTeamManager(snapshot.Channel)
-		if teamManager == nil || snapshot == nil {
-			return
-		}
-		deepAgent := deepOfAgent(agent)
-		workspace := NewTeamWorkspaceInfo(snapshot.TeamWsRoot, snapshot.SkillsDir, snapshot.TeamID, snapshot.Config, snapshot.Language)
-		workspace.MountContext = NewTeamRailMountContext(deepAgent, snapshot.Role, snapshot.Channel, snapshot.Language, workspace)
-		switch kind {
-		case providers.EvolutionRailKindTeamEvolution:
-			swarmRail, ok := rail.(*providers.SwarmTeamSkillEvolutionRail)
-			if !ok {
+	evolutionRegistrarOnce.Do(func() {
+		// leader 团队技能演进 rail：登记 live/skill rail + 反向 bind 创建 rail
+		// 的认卡/取件方法值 + consume watcher 标记 + 挂载上下文。
+		// Python: SwarmTeamSkillEvolutionRail.init（evolution_rails.py:246-287）。
+		providers.SetTeamEvolutionRailRegistrar(func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, swarmRail *providers.SwarmTeamSkillEvolutionRail) {
+			teamManager := GetTeamManager(snapshot.Channel)
+			if teamManager == nil {
 				return
 			}
+			deepAgent := deepOfAgent(agent)
+			workspace := NewTeamWorkspaceInfo(snapshot.TeamWsRoot, snapshot.SkillsDir, snapshot.TeamID, snapshot.Config, snapshot.Language)
+			workspace.MountContext = NewTeamRailMountContext(deepAgent, snapshot.Role, snapshot.Channel, snapshot.Language, workspace)
 			teamManager.RegisterTeamLiveRail(snapshot.SessionID, deepAgent, swarmRail)
 			teamManager.RegisterTeamSkillRail(snapshot.SessionID, swarmRail.TeamSkillEvolutionRail)
 			// Python: bind_review_feedback_skill_create_rail(get_team_skill_create_rail)（:259-261）
 			if createRail := teamManager.GetTeamSkillCreateRail(snapshot.SessionID); createRail != nil {
-				swarmRail.TeamSkillEvolutionRail.BindReviewFeedbackSkillCreateRail(createRail)
+				swarmRail.TeamSkillEvolutionRail.BindReviewFeedbackSkillCreateRail(
+					createRail.OwnsExternalProposal, createRail.ResolveExternalProposal)
 			}
 			// Python: consume_team_evolution_watcher_deferred（:262-271）
 			//（G2 裁决：consume 面随本批补；watcher 本体挂 15.24d，true 时空转日志）
@@ -72,26 +59,40 @@ func wireEvolutionRailRegistrar() {
 				Str("session_id", snapshot.SessionID).
 				Str("skills_dir", snapshot.SkillsDir).
 				Msg("[swarm.team_skill_evolution] registered live rail")
-		case providers.EvolutionRailKindTeamCreate:
-			swarmRail, ok := rail.(*providers.SwarmTeamSkillCreateRail)
-			if !ok {
+		})
+		// leader 团队技能创建 rail：登记 live/create rail + 反向 bind 自身 +
+		// 挂载上下文。Python: SwarmTeamSkillCreateRail.init（:324-358）。
+		providers.SetTeamCreateRailRegistrar(func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, swarmRail *providers.SwarmTeamSkillCreateRail) {
+			teamManager := GetTeamManager(snapshot.Channel)
+			if teamManager == nil {
 				return
 			}
+			deepAgent := deepOfAgent(agent)
+			workspace := NewTeamWorkspaceInfo(snapshot.TeamWsRoot, snapshot.SkillsDir, snapshot.TeamID, snapshot.Config, snapshot.Language)
+			workspace.MountContext = NewTeamRailMountContext(deepAgent, snapshot.Role, snapshot.Channel, snapshot.Language, workspace)
 			teamManager.RegisterTeamLiveRail(snapshot.SessionID, deepAgent, swarmRail)
 			teamManager.RegisterTeamSkillCreateRail(snapshot.SessionID, swarmRail.TeamSkillCreateRail)
 			// Python: team_rail.bind_review_feedback_skill_create_rail(self)（:337-344）
 			if teamRail := teamManager.GetTeamSkillRail(snapshot.SessionID); teamRail != nil {
-				teamRail.BindReviewFeedbackSkillCreateRail(swarmRail.TeamSkillCreateRail)
+				teamRail.BindReviewFeedbackSkillCreateRail(
+					swarmRail.TeamSkillCreateRail.OwnsExternalProposal,
+					swarmRail.TeamSkillCreateRail.ResolveExternalProposal)
 			}
 			teamManager.RegisterTeamRailContext(snapshot.SessionID, workspace.MountContext)
 			logger.Info(evolutionWiringLogComponent).
 				Str("session_id", snapshot.SessionID).
 				Msg("[swarm.team_skill_create] registered live rail")
-		case providers.EvolutionRailKindMemberEvolution:
-			swarmRail, ok := rail.(*providers.SwarmMemberSkillEvolutionRail)
-			if !ok {
+		})
+		// teammate 成员技能演进 rail：登记 live/member rail + member 挂载上下文。
+		// Python: SwarmMemberSkillEvolutionRail.init（:404-455）。
+		providers.SetMemberEvolutionRailRegistrar(func(snapshot *swarmsnapshot.Snapshot, agent agentinterfaces.BaseAgent, swarmRail *providers.SwarmMemberSkillEvolutionRail) {
+			teamManager := GetTeamManager(snapshot.Channel)
+			if teamManager == nil {
 				return
 			}
+			deepAgent := deepOfAgent(agent)
+			workspace := NewTeamWorkspaceInfo(snapshot.TeamWsRoot, snapshot.SkillsDir, snapshot.TeamID, snapshot.Config, snapshot.Language)
+			workspace.MountContext = NewTeamRailMountContext(deepAgent, snapshot.Role, snapshot.Channel, snapshot.Language, workspace)
 			teamManager.RegisterTeamLiveRail(snapshot.SessionID, deepAgent, swarmRail)
 			teamManager.RegisterTeamMemberSkillEvolutionRail(snapshot.SessionID, swarmRail.SkillEvolutionRail)
 			// Python: register_team_member_rail_context（:420-445）
@@ -99,11 +100,19 @@ func wireEvolutionRailRegistrar() {
 			logger.Info(evolutionWiringLogComponent).
 				Str("session_id", snapshot.SessionID).
 				Msg("[swarm.member_skill_evolution] registered member evolution rail")
-		default:
-			logger.Warn(evolutionWiringLogComponent).Str("kind", string(kind)).Msg("unknown evolution rail kind, skipping")
-		}
+		})
 	})
 }
+
+// 编译期验证：Go 侧各 Swarm rail 满足 AgentRail（Init/Uninit 覆写经嵌入分发）。
+var (
+	_ agentinterfaces.AgentRail = (*providers.SwarmTeamSkillEvolutionRail)(nil)
+	_ agentinterfaces.AgentRail = (*providers.SwarmTeamSkillCreateRail)(nil)
+	_ agentinterfaces.AgentRail = (*providers.SwarmMemberSkillEvolutionRail)(nil)
+)
+
+// init 包加载时注入 evolution rail 注册回调（D-15.24c-3）。
+func init() { EnsureEvolutionRailRegistrarWired() }
 
 // 编译期验证：Go 侧各 Swarm rail 满足 AgentRail（Init/Uninit 覆写经嵌入分发）。
 var (
