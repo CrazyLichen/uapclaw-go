@@ -2655,6 +2655,13 @@ func (d *DeepAdapter) SetConfigSnapshotsForTest(configCache, configBase map[stri
 	d.setConfigSnapshots(configCache, configBase)
 }
 
+// StartTeamEvolutionWatcherForTest 启动团队演进 watcher（仅测试用）。
+// 集成测试注入已装配的 TeamSkillEvolutionRail 后启动，观察推送帧；
+// 生产路径经 team slash / ensure 链启动。
+func (d *DeepAdapter) StartTeamEvolutionWatcherForTest(ctx context.Context, channelID, sessionID string, rail *evolution.TeamSkillEvolutionRail) {
+	go d.watchTeamEvolutionAndPushTeam(ctx, channelID, sessionID, rail)
+}
+
 func (d *DeepAdapter) SetModelForTest(model *llm.Model, modelName string) {
 	d.stateMu.Lock()
 	d.model = model

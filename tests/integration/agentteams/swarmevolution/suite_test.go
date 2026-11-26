@@ -268,3 +268,22 @@ func (s *EvolutionE2ESuite) mockScript(text string) {
 func approvedIDsForTest(selected [][]string, recordIDs []string) (bool, []string, bool) {
 	return evolutionlogic.ApprovedRecordIDsFromAnswers(selected, evolutionlogic.EvolutionAcceptLabels, recordIDs)
 }
+
+// railStore 当前 rail 的 store（E1 前未建 rail 时回退直建）。
+func (s *EvolutionE2ESuite) railStore() *checkpointing.EvolutionStore {
+	if s.rail != nil && s.rail.EvolutionStore() != nil {
+		return s.rail.EvolutionStore()
+	}
+	return checkpointing.NewEvolutionStore([]string{s.skillsDir})
+}
+
+// contextWithCancel 派生可取消 ctx。
+func contextWithCancel(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithCancel(parent)
+}
+
+// fileExistsPath 文件存在判定。
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
