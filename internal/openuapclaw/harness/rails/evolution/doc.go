@@ -30,7 +30,11 @@
 //	├── skill_evolution_rail.go         # SkillEvolutionRail 单 Agent 技能演进护栏（Priority=80）+ Sharing 集成
 //	├── team_skill_evolution_rail.go    # TeamSkillEvolutionRail 团队技能演进护栏（Priority=80）+ Slash 命令集成
 //	├── evolution_interrupt_rail.go  # EvolutionInterruptRail 演进工具审批中断（priority 89，evolve/simplify 映射）
-//	├── review/                      # 审查子包：runtime（scope 生命周期）+ result_schema（审查结果归一化）；subagent.go ⤴️15.24
+//	├── external_evolution.go         # 外部生产者驱动演进入口（F_62 评审半区）+ ExternalProposalOwner 外部提案归属面
+//	├── member_skill_workspace.go      # 成员 Skill copy-on-write 助手（member_skill_workspace.py 1:1）
+//	├── member_skill_evolution_rail.go  # MemberSkillEvolutionRail 成员域演进 rail（member_skill_evolution_rail.py 1:1，组合转发偏差 D-15.24c-2）
+//	├── review/                      # 审查子包：runtime（scope 生命周期）+ result_schema + subagent_prompt（审查子 agent 常量段）
+//	├── reviewsubagent/              # 审查子 agent 装配半区（subagent.py 1:1；D-15.24c-1 下沉叶包消环）
 //	└── helpers.go                      # 辅助函数：splitResponseTokenFields / normalizeSkillNames / normalizeMemberRole 等
 //
 // 对应 Python 代码：openjiuwen/harness/rails/evolution/
