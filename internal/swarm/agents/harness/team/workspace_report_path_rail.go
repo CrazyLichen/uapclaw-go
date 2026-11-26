@@ -10,6 +10,7 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/swarmsnapshot"
 )
 
 // TeamWorkspaceReportPathRail 注入项目产物与团队共享输出的文件系统归属策略。
@@ -33,8 +34,9 @@ type TeamWorkspaceReportPathRail struct {
 	teamID string
 	// language 语言标识
 	language string
-	// swarmContext swarm 装配上下文（技能演进热重载注册用）
-	swarmContext any
+	// swarmContext swarm 装配上下文快照（技能演进热重载注册用）。
+	// 2026-11-26 审查轮 B：具体类型承载（叶包 swarmsnapshot），消 any 字段。
+	swarmContext *swarmsnapshot.Snapshot
 	// sendFileEnabledFn 渠道 send_file 开关探测缝（工厂注入；nil=不提示投递）
 	sendFileEnabledFn func() bool
 }
@@ -67,7 +69,7 @@ func NewTeamWorkspaceReportPathRail(rootDir, projectDir, outputsDir, teamID, lan
 // 本 rail 自身不添加任何演进能力或提示词内容。
 //
 // Python: bind_swarm_context (team_workspace_report_path_rail.py:48-52)
-func (r *TeamWorkspaceReportPathRail) BindSwarmContext(ctx any) {
+func (r *TeamWorkspaceReportPathRail) BindSwarmContext(ctx *swarmsnapshot.Snapshot) {
 	r.swarmContext = ctx
 }
 
@@ -192,29 +194,22 @@ func (r *TeamWorkspaceReportPathRail) registerTeamMountContext(agent agentinterf
 	}
 	// Python: session_id/channel/team_id/role 提取 + _make_team_rail_mount_context
 	// 构造 + leader/member 双路注册（team_workspace_report_path_rail.py:96-148）。
-	// 15.20 ⑦ 回收：swarm 装配上下文经 EvolutionSwarmContextFace 结构化消费。
-	ctx, ok := r.swarmContext.(EvolutionSwarmContextFace)
-	if !ok {
-		logger.Debug(workspaceReportLogComponent).
-			Msg("[TeamWorkspaceReportPathRail] swarm context lacks evolution face, skipping")
-		return
-	}
-	sessionID := ctx.EvolutionSessionID()
-	channel := ctx.EvolutionChannel()
+	sessionID := r.swarmContext.SessionID
+	channel := r.swarmContext.Channel
 	if channel == "" {
 		channel = "default"
 	}
-	teamID := ctx.EvolutionTeamID()
-	role := ctx.EvolutionRole()
+	teamID := r.swarmContext.TeamID
+	role := r.swarmContext.Role
 	if sessionID == "" || teamID == "" || (role != "leader" && role != "teammate") {
 		return
 	}
-	rootDir := ctx.EvolutionTeamWsRoot()
+	rootDir := r.swarmContext.TeamWsRoot
 	if rootDir == "" {
 		rootDir = r.rootDir
 	}
-	workspace := NewTeamWorkspaceInfo(rootDir, "", teamID, ctx.EvolutionConfig(), ctx.EvolutionLanguage())
-	mountContext := NewTeamRailMountContext(deepOfAgent(agent), role, channel, ctx.EvolutionLanguage(), workspace)
+	workspace := NewTeamWorkspaceInfo(rootDir, "", teamID, r.swarmContext.Config, r.swarmContext.Language)
+	mountContext := NewTeamRailMountContext(deepOfAgent(agent), role, channel, r.swarmContext.Language, workspace)
 	teamManager := GetTeamManager(channel)
 	if teamManager == nil {
 		return

@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/swarmsnapshot"
 	"strings"
 	"testing"
 
@@ -233,7 +234,7 @@ func TestTeamWorkspaceReportPathRail_BindSwarmContext(t *testing.T) {
 	if rail.swarmContext != nil {
 		t.Fatalf("初始 swarmContext 应为 nil")
 	}
-	rail.BindSwarmContext(map[string]any{"role": "leader"})
+	rail.BindSwarmContext(&swarmsnapshot.Snapshot{Role: "leader"})
 	if rail.swarmContext == nil {
 		t.Fatalf("BindSwarmContext 后应捕获上下文")
 	}

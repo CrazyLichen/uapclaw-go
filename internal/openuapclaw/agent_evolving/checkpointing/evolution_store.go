@@ -671,9 +671,6 @@ func (s *EvolutionStore) MarkRecordsApplied(ctx context.Context, name string, re
 	return s.records.MarkRecordsApplied(ctx, name, recordIDs, opts...)
 }
 
-
-
-
 // MergeRecords 合并记录（RMW 操作，加写锁）。
 func (s *EvolutionStore) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {
 	lock := s.getSkillLock(name)
