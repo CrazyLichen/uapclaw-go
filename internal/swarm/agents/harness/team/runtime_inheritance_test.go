@@ -3,10 +3,10 @@ package team
 import (
 	"context"
 	runtimeinheritance "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team/runtimeinheritance"
-	"os"
 	"reflect"
 	"testing"
 
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/controller"
@@ -70,49 +70,23 @@ func TestRailWhitelist_13项(t *testing.T) {
 	}
 }
 
-// TestGetEvolutionAutoScanEnabled_env优先。
-func TestGetEvolutionAutoScanEnabled_env优先(t *testing.T) {
-	t.Setenv("EVOLUTION_AUTO_SCAN", "true")
-	if !GetEvolutionAutoScanEnabled(nil) {
-		t.Fatalf("env true should win")
+// TestSkillEvolutionEnabled_单一开关 react.evolution.skill_evolution
+// （common/config.py:335-337，strictly True 才启用）。
+func TestSkillEvolutionEnabled_单一开关(t *testing.T) {
+	if configutil.SkillEvolutionEnabled(nil) {
+		t.Fatalf("nil config default false")
 	}
-	t.Setenv("EVOLUTION_AUTO_SCAN", "false")
-	cfg := map[string]any{"react": map[string]any{"evolution": map[string]any{"auto_scan": true}}}
-	if GetEvolutionAutoScanEnabled(cfg) {
-		t.Fatalf("env false should override config true")
+	if configutil.SkillEvolutionEnabled(map[string]any{}) {
+		t.Fatalf("empty config default false")
 	}
-}
-
-// TestGetEvolutionAutoScanEnabled_配置回退。
-func TestGetEvolutionAutoScanEnabled_配置回退(t *testing.T) {
-	os.Unsetenv("EVOLUTION_AUTO_SCAN") //nolint:errcheck // 测试环境清理
-	cfg := map[string]any{"react": map[string]any{"evolution": map[string]any{"auto_scan": true}}}
-	if !GetEvolutionAutoScanEnabled(cfg) {
-		t.Fatalf("react.evolution.auto_scan=true should enable")
+	cfg := map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}}
+	if !configutil.SkillEvolutionEnabled(cfg) {
+		t.Fatalf("react.evolution.skill_evolution=true should enable")
 	}
-	if GetEvolutionAutoScanEnabled(map[string]any{"evolution": map[string]any{"auto_scan": true}}) {
-		t.Logf("top-level evolution fallback works")
-	} else {
-		t.Logf("top-level evolution fallback returns false (config has no react key)")
-	}
-	if GetEvolutionAutoScanEnabled(nil) {
-		t.Fatalf("default should be false")
-	}
-}
-
-// TestGetSkillCreateEnabled 同构 auto_scan。
-func TestGetSkillCreateEnabled(t *testing.T) {
-	t.Setenv("SKILL_CREATE", "1")
-	if !GetSkillCreateEnabled(nil) {
-		t.Fatalf("env 1 should enable")
-	}
-	os.Unsetenv("SKILL_CREATE") //nolint:errcheck // 测试环境清理
-	cfg := map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_create": true}}}
-	if GetSkillCreateEnabled(cfg) {
-		t.Logf("react.evolution.skill_create works")
-	}
-	if GetSkillCreateEnabled(nil) {
-		t.Fatalf("default false")
+	if configutil.SkillEvolutionEnabled(map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": "true"}},
+	}) {
+		t.Fatalf("string true should not enable (Python is True)")
 	}
 }
 
@@ -463,14 +437,17 @@ func TestBuildSkillEvolutionRail_失败返回nil(t *testing.T) {
 
 // TestBuildSkillEvolutionRail_合法配置 不绑 sink（teamID 空）。
 func TestBuildSkillEvolutionRail_合法配置(t *testing.T) {
-	cfg := map[string]any{"models": map[string]any{
-		"default": map[string]any{
-			"model_client_config": map[string]any{
-				"model_name": "m", "api_key": "k", "api_base": "https://x",
-				"client_provider": "OpenAI", "verify_ssl": false,
+	cfg := map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
+		"models": map[string]any{
+			"default": map[string]any{
+				"model_client_config": map[string]any{
+					"model_name": "m", "api_key": "k", "api_base": "https://x",
+					"client_provider": "OpenAI", "verify_ssl": false,
+				},
 			},
 		},
-	}}
+	}
 	rail := BuildSkillEvolutionRail("/tmp/skills", cfg)
 	if rail == nil {
 		t.Fatalf("valid config should build rail")
@@ -543,14 +520,17 @@ func TestBuildMemberRails_非leader挂SkillEvolution(t *testing.T) {
 
 // TestBuildMemberRails_合法LLM时leader挂TeamSkillEvolution。
 func TestBuildMemberRails_合法LLM时leader挂TeamSkillEvolution(t *testing.T) {
-	cfg := map[string]any{"models": map[string]any{
-		"default": map[string]any{
-			"model_client_config": map[string]any{
-				"model_name": "m", "api_key": "k", "api_base": "https://x",
-				"client_provider": "OpenAI", "verify_ssl": false,
+	cfg := map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
+		"models": map[string]any{
+			"default": map[string]any{
+				"model_client_config": map[string]any{
+					"model_name": "m", "api_key": "k", "api_base": "https://x",
+					"client_provider": "OpenAI", "verify_ssl": false,
+				},
 			},
 		},
-	}}
+	}
 	root := t.TempDir()
 	skills := root + "/skills"
 	teamID := "t1"

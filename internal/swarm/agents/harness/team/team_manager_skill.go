@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_teams"
@@ -234,65 +236,141 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 }
 
 // UpdateEvolutionConfig 热更新 team evolution rails。
-// 对齐 Python: TeamManager.update_evolution_config(config)
-//
-// Python 步骤：
-//
-//	Python: 1. auto_scan_enabled = get_evolution_auto_scan_enabled(config)
-//	Python: 2. skill_create_enabled = get_skill_create_enabled(config)
-//	Python: 3. for rails in self._team_member_skill_evolution_rails.values():
-//	   for rail in rails: rail.auto_scan = auto_scan_enabled
-//	Python: 4. for rail in self._team_skill_rails.values():
-//	   rail.auto_scan = auto_scan_enabled
-//	Python: 5. if not skill_create_enabled:
-//	   for session_id, rail in self._team_skill_create_rails.items():
-//	   await self._unregister_live_rail(session_id, rail)
-//	   self._team_skill_create_rails.pop(session_id, None)
-//	   return
-//	Python: 6. for session_id, context in self._team_rail_contexts.items():
-//	   if session_id in self._team_skill_create_rails: continue
-//	   self._build_and_mount_member_rails_for_context(session_id, context,
-//	   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
-//	   mount_skill_evolution_rail=False)
+// 对齐 Python: TeamManager.update_evolution_config (team_manager.py L2846-2935)
 func (m *TeamManager) UpdateEvolutionConfig(ctx context.Context, config map[string]any) {
-	autoScanEnabled := GetEvolutionAutoScanEnabled(config)
-	skillCreateEnabled := GetSkillCreateEnabled(config)
+	enabled := configutil.SkillEvolutionEnabled(config)
+	autoSave := configutil.EvolutionAutoSaveEnabled(config)
 
-	// 步骤 3: 更新所有成员 SkillEvolutionRail 的 autoScan
-	for _, rails := range m.teamMemberSkillEvoRails {
-		for _, rail := range rails {
-			rail.SetSignalTrigger(autoScanEnabled)
-		}
+	// 步骤 1: 汇总 known sessions 并逐 session 写入 _team_evolution_enabled
+	knownSessions := m.knownEvolutionSessions()
+	for sessionID := range knownSessions {
+		m.mu.Lock()
+		m.teamEvolutionEnabled[sessionID] = enabled
+		m.mu.Unlock()
 	}
 
-	// 步骤 4: 更新所有 TeamSkillEvolutionRail 的 autoScan（team rail 保持
-	// auto_scan 语义，Task 11 对照回收时按 Python 新版裁决）
-	for _, rail := range m.teamSkillRails {
-		rail.SetSignalTrigger(autoScanEnabled)
-	}
-
-	// 步骤 5: 若 skill_create 未启用，反注册所有 skill create rails
-	if !skillCreateEnabled {
-		for sessionID, rail := range m.teamSkillCreateRails {
-			m.unregisterLiveRail(ctx, sessionID, rail)
-			delete(m.teamSkillCreateRails, sessionID)
+	// 步骤 2: 未启用 = 全量能力拆除。先取消 watcher（保证开关落盘后不再
+	// 发出 pending approval），再反注册完整 live rail 快照（审批中断随父 rail
+	// 一并移除），最后遗忘已挂载 rail、保留重建 context。
+	if !enabled {
+		for sessionID := range knownSessions {
+			m.cancelTeamEvolutionWatcher(sessionID)
+			m.unregisterLiveRails(ctx, sessionID)
+			m.clearTeamEvolutionRails(sessionID)
 		}
 		return
 	}
 
-	// 步骤 6: 若 skill_create 启用，为缺少 skill create rail 的 session 挂载
+	// 步骤 3: 既有 rail 套用固定角色触发策略与规范 auto_save（均不可配置）。
+	// Python: rail.signal_trigger=False / review_trigger=True / auto_save=auto_save
+	for _, rail := range m.teamSkillRails {
+		rail.SetSignalTrigger(false)
+		rail.SetReviewTrigger(true)
+		rail.SetAutoSave(autoSave)
+	}
+	// Python: rail.signal_trigger=True / review_trigger=False / auto_save=True
+	for _, rails := range m.teamMemberSkillEvoRails {
+		for _, rail := range rails {
+			rail.SetSignalTrigger(true)
+			rail.SetReviewTrigger(false)
+			rail.SetAutoSave(true)
+		}
+	}
+
+	// 步骤 4: 从保留的 context 重建缺失的角色 rail。
+	// Python: 团队 context 缺 team rail 或 create rail 时重建（mount 开关取反）。
 	for sessionID, context := range m.teamRailContexts {
-		if _, ok := m.teamSkillCreateRails[sessionID]; ok {
+		_, hasTeamRail := m.teamSkillRails[sessionID]
+		_, hasCreateRail := m.teamSkillCreateRails[sessionID]
+		if hasTeamRail && hasCreateRail {
 			continue
 		}
 		m.buildAndMountMemberRailsForContext(ctx, sessionID, context,
-			false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
+			!hasTeamRail /* mountTeamSkillRail */, !hasCreateRail /* mountTeamSkillCreateRail */, true /* mountSkillEvolutionRail */)
+	}
+	// Python: 成员 context 尚无 SkillEvolutionRail 时重建（mount_skill_evolution_rail=True）。
+	for sessionID, context := range m.memberRailContexts {
+		if m.hasLiveRail(sessionID, context.Agent, &evolution.SkillEvolutionRail{}) {
+			continue
+		}
+		m.buildAndMountMemberRailsForContext(ctx, sessionID, context,
+			false /* mountTeamSkillRail */, false /* mountTeamSkillCreateRail */, true /* mountSkillEvolutionRail */)
 	}
 
 	logger.Info(logComponent).
-		Bool("auto_scan_enabled", autoScanEnabled).
-		Bool("skill_create_enabled", skillCreateEnabled).
+		Bool("skill_evolution_enabled", enabled).
+		Bool("auto_save", autoSave).
 		Msg("evolution config update completed")
+}
+
+// knownEvolutionSessions 汇总演进相关的全部 session（快照拷贝，供遍历）。
+// 对齐 Python: update_evolution_config 顶部的 known_sessions 集合构造。
+func (m *TeamManager) knownEvolutionSessions() map[string]struct{} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	known := make(map[string]struct{})
+	for sessionID := range m.teamRailContexts {
+		known[sessionID] = struct{}{}
+	}
+	for sessionID := range m.memberRailContexts {
+		known[sessionID] = struct{}{}
+	}
+	for sessionID := range m.teamSkillRails {
+		known[sessionID] = struct{}{}
+	}
+	for sessionID := range m.teamSkillCreateRails {
+		known[sessionID] = struct{}{}
+	}
+	for sessionID := range m.teamMemberSkillEvoRails {
+		known[sessionID] = struct{}{}
+	}
+	return known
+}
+
+// cancelTeamEvolutionWatcher 取消指定 session 的演进监控 watcher。
+// 对齐 Python: TeamManager._cancel_team_evolution_watcher (team_manager.py L2744-2757)：
+// pop 后未终止则取消；Python await 回收，Go cancel 即通知退出。
+func (m *TeamManager) cancelTeamEvolutionWatcher(sessionID string) {
+	if cancel := m.PopTeamEvolutionWatcher(sessionID); cancel != nil {
+		cancel()
+	}
+}
+
+// unregisterLiveRails 按注册顺序反注册 session 的全部 evolution live rails。
+// 对齐 Python: TeamManager._unregister_live_rails (team_manager.py L2784-2787)：
+// 遍历快照逐个调 _unregister_live_rail，保留顺序。
+func (m *TeamManager) unregisterLiveRails(ctx context.Context, sessionID string) {
+	m.mu.Lock()
+	entries := make([]LiveRailEntry, len(m.teamLiveRails[sessionID]))
+	copy(entries, m.teamLiveRails[sessionID])
+	m.mu.Unlock()
+	for _, entry := range entries {
+		m.unregisterLiveRail(ctx, sessionID, entry.Rail)
+	}
+}
+
+// clearTeamEvolutionRails 遗忘已挂载的演进 rail，保留重建 context。
+// 对齐 Python: TeamManager._clear_team_evolution_rails (team_manager.py L2789-2793)。
+func (m *TeamManager) clearTeamEvolutionRails(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.teamSkillRails, sessionID)
+	delete(m.teamSkillCreateRails, sessionID)
+	delete(m.teamMemberSkillEvoRails, sessionID)
+}
+
+// hasLiveRail 判断 agent 是否已持有指定类型的 live rail。
+// 对齐 Python: TeamManager._has_live_rail (team_manager.py L2795-2800)：
+// owner 相同且 rail 类型匹配。
+func (m *TeamManager) hasLiveRail(sessionID string, agent interfaces.DeepAgentInterface, target agentinterfaces.AgentRail) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, entry := range m.teamLiveRails[sessionID] {
+		if entry.Agent == agent && reflect.TypeOf(entry.Rail) == reflect.TypeOf(target) {
+			return true
+		}
+	}
+	return false
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -356,6 +434,10 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 			teamSkillRail = tsr
 		} else if ser, ok := rail.(*evolution.SkillEvolutionRail); ok && mountSkillEvolutionRail {
 			mountCtx.Agent.AddRail(ser)
+			// Python: register_team_live_rail + register_team_member_skill_evolution_rail
+			// （team_manager.py L2837-2840）——live rails 必须登记，否则关闭演进时
+			// 成员 rail 拆不掉。
+			m.RegisterTeamLiveRail(sessionID, mountCtx.Agent, ser)
 			m.RegisterTeamMemberSkillEvolutionRail(sessionID, ser)
 		} else if scr, ok := rail.(*skills.TeamSkillCreateRail); ok && mountTeamSkillCreateRail {
 			mountCtx.Agent.AddRail(scr)
