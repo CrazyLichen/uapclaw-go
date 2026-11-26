@@ -237,3 +237,28 @@ func mustJSON(v any) string {
 	}
 	return string(b)
 }
+
+// buildActiveEvolutionFollowup 构造主动演进的 followup 结果（agent_prompt 模式）。
+// Python 归属：skill_evolution_rail._build_user_evolution_request（:1066-1080）；
+// team rail 经 super() 继承同壳（team_skill_evolution_rail.py:528），Go 组合继承
+// 以包级助手承载（两 rail 共用，规则 9 归属注记）。
+func buildActiveEvolutionFollowup(skillName string, subject map[string]string, userIntent *string) (*EvolutionRequestResult, error) {
+	prompt, err := BuildEvolveReviewCommandPrompt(subjectStringMap(subject), userIntent)
+	if err != nil {
+		return nil, err
+	}
+	return &EvolutionRequestResult{
+		SkillName:     skillName,
+		Mode:          "agent_prompt",
+		FollowupPrompt: &prompt,
+	}, nil
+}
+
+// subjectStringMap map[string]string → map[string]any（evoschema 入参形状）。
+func subjectStringMap(subject map[string]string) map[string]any {
+	out := make(map[string]any, len(subject))
+	for k, v := range subject {
+		out[k] = v
+	}
+	return out
+}

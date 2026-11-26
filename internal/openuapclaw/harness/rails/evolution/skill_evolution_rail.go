@@ -888,9 +888,35 @@ func (r *SkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 
 // ─── Slash 命令 API 方法 ───
 
-// RequestUserEvolution 用户主动触发的演进入口。
-// 对齐 Python: SkillEvolutionRail.request_user_evolution(skill_name, user_intent, *, auto_approve=False)
+// RequestUserEvolution 用户主动触发的演进入口（兼容壳）。
+// Python: request_user_evolution（skill_evolution_rail.py:1082-1100）——
+// 新版主动请求 = agent_prompt 模式：只产出审查工作流 followup prompt，
+// 由 host 注入 query 后在 agent 轮内走 prepare→review→submit→evolve 六工具链；
+// auto_approve 等旧旗标保留调用兼容但有意忽略（del auto_approve）。
 func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName string, userIntent string, autoApprove bool) (*EvolutionRequestResult, error) {
+	_ = autoApprove // Python: del auto_approve（兼容旧调用点旗标）
+	subject := r.activeReviewSubject(ctx, skillName)
+	if subject == nil {
+		return &EvolutionRequestResult{SkillName: skillName}, nil
+	}
+	return buildActiveEvolutionFollowup(skillName, subject, &userIntent)
+}
+
+// activeReviewSubject 解析主动审查 subject（store 支持时用 store payload，
+// 否则回退 skill 形态）。
+// Python: _active_review_subject（skill_evolution_rail.py:1151-1156）。
+func (r *SkillEvolutionRail) activeReviewSubject(ctx context.Context, skillName string) map[string]string {
+	if payload := r.evolutionStore.ResolveSubjectPayload(ctx, skillName); payload != nil {
+		return payload
+	}
+	return map[string]string{"kind": "skill", "name": skillName}
+}
+
+// StageEvolutionFromSignalsForTest 信号驱动的 staging 半区（仅测试用）。
+// 与旧版 RequestUserEvolution 的生成编排同构（traj→detect→user_intent signal→
+// handleEvolutionFromSignals，requires_approval=true、emit_host_events=false）；
+// 上游删除该编排壳后，被动链由 signal 回调驱动，测试经本钩子直达真实 staging。
+func (r *SkillEvolutionRail) StageEvolutionFromSignalsForTest(ctx context.Context, skillName, userIntent string) (*experience.ExperienceApprovalRequest, *stream.OutputSchema, error) {
 	traj := r.buildTrajectory()
 	var messages []map[string]any
 	var signals []*signal.EvolutionSignal
@@ -900,9 +926,6 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 		detected := r.detectActiveRequestSignals(ctx, skillName, traj, messages)
 		signals = append(signals, detected...)
 	}
-
-	// 追加 USER_INTENT_SIGNAL
-	// Python: if user_intent: self._append_unique_signal(signals, make_evolution_signal(USER_INTENT_SIGNAL, ...))
 	if userIntent != "" {
 		sig := signal.MakeEvolutionSignal(
 			schema.UserIntentSignal,
@@ -913,38 +936,14 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 		)
 		signals = appendUniqueSignal(signals, sig)
 	}
-
-	if len(signals) == 0 {
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
 	if len(messages) == 0 && userIntent != "" {
 		messages = []map[string]any{{"role": "user", "content": userIntent}}
 	}
-
-	requiresApproval := !autoApprove
-	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, requiresApproval, false)
-	if err != nil {
-		return nil, err
+	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, true, false)
+	if err != nil || request == nil {
+		return request, nil, err
 	}
-
-	if request == nil {
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
-	records := request.Proposal.Records
-	var approvalEvent *stream.OutputSchema
-	if !autoApprove {
-		approvalEvent = r.buildGeneratedRecordsEvent(skillName, request)
-	}
-
-	return &EvolutionRequestResult{
-		SkillName:     skillName,
-		RequestID:     &request.RequestID,
-		ApprovalEvent: approvalEvent,
-		Records:       records,
-		AutoApproved:  autoApprove,
-	}, nil
+	return request, r.buildGeneratedRecordsEvent(skillName, request), nil
 }
 
 // RequestSimplify 请求精简技能经验。

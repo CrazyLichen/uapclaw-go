@@ -260,8 +260,17 @@ func (s *EvolutionE2ESuite) TestE6SlashFiveCommands() {
 
 // mockScript 预设 rail 侧 MockLLM 的响应队列（GenerateRecords 台本）。
 func (s *EvolutionE2ESuite) mockScript(text string) {
-	s.Require().NotNil(s.mockLLM, "newAdapter 后才可写台本")
-	s.mockLLM.SetResponses(integrationmockllm.MockResponse{Text: text})
+	s.mockScriptN(text, 1)
+}
+
+// mockScriptN 同 mockScript，重复 N 份（多次 LLM 调用的生成链用）。
+func (s *EvolutionE2ESuite) mockScriptN(text string, n int) {
+	s.Require().NotNil(s.mockLLM, "newMockModel 后才可写台本")
+	resps := make([]integrationmockllm.MockResponse, 0, n)
+	for i := 0; i < n; i++ {
+		resps = append(resps, integrationmockllm.MockResponse{Text: text})
+	}
+	s.mockLLM.SetResponses(resps...)
 }
 
 // approvedIDsForTest host 侧索引映射（Task4：ApprovedRecordIDsFromAnswers 集成入口）。

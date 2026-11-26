@@ -29,14 +29,14 @@ const e10GenerateResp = `[
 // 真实链：rail generate stage → manager stagePendingChange → pendingApprovalSnapshots。
 func (s *EvolutionE2ESuite) stagePendingForApproval(skillName string) (requestID string, approvalEvent map[string]any) {
 	s.mockScript(e10GenerateResp)
-	result, err := s.rail.RequestUserEvolution(s.ctx, skillName, "部署排障经验（"+e10Marker1+"）", false)
+	// 真实 staging 半区：signal 编排（Python _stage_evolution_from_signals 形态）
+	request, event, err := s.rail.StageEvolutionFromSignalsForTest(s.ctx, skillName, "部署排障经验（"+e10Marker1+"）")
 	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().NotNil(result.RequestID)
-	s.Require().NotNil(result.ApprovalEvent)
+	s.Require().NotNil(request)
+	s.Require().NotNil(event)
 	// typed → map（evolutionlogic.EventPayloadDict 兼容 typed/dict 双形状）
-	eventMap := evolutionlogic.EventPayloadDict(result.ApprovalEvent.ToMap())
-	return *result.RequestID, eventMap
+	eventMap := evolutionlogic.EventPayloadDict(event.ToMap())
+	return request.RequestID, eventMap
 }
 
 // TestE10审批部分批准回传Rail 配置组装 + 审批回传 rail 同链：host 索引映射 →

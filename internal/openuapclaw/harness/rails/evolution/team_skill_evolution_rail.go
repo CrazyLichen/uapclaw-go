@@ -751,101 +751,21 @@ func (r *TeamSkillEvolutionRail) NotifyTeamCompleted(_ context.Context) (bool, e
 	return true, nil
 }
 
-// RequestUserEvolution 用户主动触发演化入口。
-// 对齐 Python: TeamSkillEvolutionRail.request_user_evolution(skill_name, user_intent, *, auto_approve=False)
-//
-//	允许用户显式提供团队技能改进建议，是唯一的用户驱动团队技能演化路径
-func (r *TeamSkillEvolutionRail) RequestUserEvolution(
-	ctx context.Context,
-	skillName string,
-	userIntent string,
-	autoApprove bool,
-) (*EvolutionRequestResult, error) {
-	// Python: if not self._is_active_request_subject(skill_name): return ...
+// RequestUserEvolution 用户主动触发的团队演进入口（兼容壳）。
+// Python: request_user_evolution（team_skill_evolution_rail.py:515-528）——
+// subject 门（skill 存在 + team kind）→ super() 壳（agent_prompt followup 模式）；
+// auto_approve/max_index_records 旧旗标有意忽略。生成与审批由六工具链承接，
+// 审批事件经 emitRecordApprovalEvent 进 pending 缓冲（watcher drain 推送）。
+func (r *TeamSkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName string, userIntent string, autoApprove bool) (*EvolutionRequestResult, error) {
+	_ = autoApprove
 	if !r.isActiveRequestSubject(ctx, skillName) {
 		return &EvolutionRequestResult{SkillName: skillName}, nil
 	}
-
-	// Python: trajectory = self._build_trajectory()
-	traj := r.buildTrajectory()
-	if traj == nil {
-		// 12-04：空轨迹兜底改经离线组装器（span 模型，Python 无对应字面量）。
-		empty, buildErr := emptySpanTrajectoryForRails("user_triggered", "user_triggered")
-		if buildErr != nil {
-			return nil, buildErr
-		}
-		traj = empty
+	subject := map[string]string{"kind": "team-skill", "name": skillName}
+	if payload := r.evolutionStore.ResolveSubjectPayload(ctx, skillName); payload != nil && payload["kind"] != "" {
+		subject = payload
 	}
-
-	// Python: trajectory = self._aggregate_team_trajectory(trajectory)
-	traj = r.aggregateTeamTrajectory(traj)
-
-	// Python: messages = self._collect_messages_from_trajectory(trajectory) if trajectory.steps else []
-	// span 模型：以工作 span 存在性等价「steps 非空」判定。
-	messages := []map[string]any{}
-	if len(trajectory.IterSpans(traj)) > 0 {
-		messages = trajectoryToMessages(traj)
-	}
-
-	// Python: signals = await self._detect_active_request_signals(...) if trajectory.steps else []
-	signals := []*signal.EvolutionSignal{}
-	if len(trajectory.IterSpans(traj)) > 0 {
-		detected, err := r.detectActiveRequestSignals(ctx, skillName, traj)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request signal detection failed")
-		} else {
-			signals = detected
-		}
-	}
-
-	// Python: if user_intent: self._append_unique_signal(signals, make_team_user_intent_signal(...))
-	if userIntent != "" {
-		r.teamAppendUniqueSignal(&signals, signal.MakeTeamUserIntentSignal(skillName, userIntent))
-	}
-
-	if len(signals) == 0 {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: no evidence or user intent")
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
-	if len(messages) == 0 && userIntent != "" {
-		messages = []map[string]any{{"role": "user", "content": userIntent}}
-	}
-
-	// Python: request = await self._handle_evolution_from_signals(..., emit_host_events=False)
-	request, err := r.handleEvolutionFromSignals(
-		ctx, skillName, traj, signals,
-		autoApprove, userIntent, messages, false,
-	)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution evolution handling failed")
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
-	if request == nil {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: no record generated")
-		return &EvolutionRequestResult{SkillName: skillName}, nil
-	}
-
-	// 构建返回结果
-	records := []checkpointing.EvolutionRecord{}
-	if request.PendingChange != nil {
-		records = request.PendingChange.Payload
-	}
-
-	var approvalEvent *stream.OutputSchema
-	if !autoApprove && request.PendingChange != nil {
-		approvalEvent = r.buildRecordApprovalEvent(skillName, request)
-	}
-
-	requestID := request.RequestID
-	return &EvolutionRequestResult{
-		SkillName:     skillName,
-		RequestID:     &requestID,
-		ApprovalEvent: approvalEvent,
-		Records:       records,
-		AutoApproved:  autoApprove,
-	}, nil
+	return buildActiveEvolutionFollowup(skillName, subject, &userIntent)
 }
 
 // ApproveRecord 处理暂存演进记录的审批通过。

@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
@@ -22,12 +24,9 @@ import (
 // e2Marker 团队链落盘特征标记。
 const e2Marker = "E2E-MARK-TEAM-端口排查"
 
-// e2GenerateResp 团队提案生成台本。
-const e2GenerateResp = `[
-	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e2Marker + ` 团队部署排障"},
-	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "团队防火墙检查"},
-	{"action": "append", "section": "Examples", "target": "body", "content": "团队部署脚本示例"}
-]`
+// e2GenerateResp 团队提案生成台本（user_intent 信号 → GenerateUserPatch 契约：
+// {"need_patch":true,"action":...,"section":...,"content":...}，非 records 数组）。
+const e2GenerateResp = `{"need_patch": true, "action": "append", "section": "Troubleshooting", "content": "` + e2Marker + ` 团队部署排障", "summary": "团队部署排障经验"}`
 
 // newTeamRail 构造 leader 团队 rail（构造参数对齐 providers 装配：
 // signal_trigger=true + auto_save=config + review_trigger=true + review_runtime）。
@@ -49,17 +48,12 @@ func (s *EvolutionE2ESuite) makeTeamSkill(name string) string {
 	return skillDir
 }
 
-// TestE2TeamLeader被动链 审批缓冲 → watcher 推送 → leader 批准 → 落盘。
+// TestE2TeamLeader被动链 真实链：signal staging（emitRecordApprovalEvent 进
+// pending 缓冲）→ 团队 watcher drain（1s 轮询）→ 推送审批卡 + approval_required
+// end → host 从审批帧取 request_id → rail.ApproveRecord → 落盘。
+// （新版 request_user_evolution 为 followup 壳——见 skill_evolution_rail.py:1066-1100
+// ——生成+审批事件由 staging 半区承接，RequestUserEvolution 旧式生成路径已删。）
 func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
-	// ⤴️ 断点登记（2026-12-26）：实施中发现上游新版 request_user_evolution 已改
-	// followup 模式（skill_evolution_rail.py:1066-1082 _build_user_evolution_request
-	// —— 主动请求不再直生成+审批；团队审批事件由六工具链 evolve 提交 stage 进
-	// pending 缓冲，watcher drain 推送）。Go team rail 的 RequestUserEvolution
-	// 仍为旧式直生成路径（requiresApproval 时 FinalizeStagedEvolutionRequest
-	// 恒返回 nil → RequestID 恒空）。E2 需先按新版重构该链（对齐
-	// evolution_slash 六工具 + emitRecordApprovalEvent staging），与本批
-	// Task 1 已确立的"followup 注入→六工具→审批"同构。本用例随重构落地。
-	s.T().Skip("E2 待团队 rail RequestUserEvolution 新版语义重构后落地（见 plan 接力清单）")
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeTeamSkill("evo_team_skill")
@@ -67,25 +61,38 @@ func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
 	// 团队 rail 复用独立 MockLLM（生成台本注入其队列）
 	teamModel := s.newMockModel()
 	teamRail := s.newTeamRail(teamModel)
-	s.mockScript(e2GenerateResp)
+	s.mockScriptN(e2GenerateResp, 4) // 团队生成可能多次调用 LLM，队列给足
 
-	// ① rail 生成提案（被动信号载体：评审反馈注入的观察→演化；mock 边界仅 LLM）
-	result, err := teamRail.RequestUserEvolution(s.ctx, "evo_team_skill", "部署排障经验（"+e2Marker+"）", false)
+	// ① staging：signal 编排（user_intent 信号）→ emitRecordApprovalEvent 进缓冲
+	// Python: _handle_evolution_from_signals（requires_approval=true，emit_host_events=true）
+	intentSignal := signal.MakeEvolutionSignal(
+		schema.UserIntentSignal, "Instructions",
+		"部署排障经验（"+e2Marker+"）",
+		signal.WithSkillName("evo_team_skill"),
+		signal.WithSource("explicit_request"),
+	)
+	staged, err := teamRail.HandleEvolutionFromSignalsWithResult(
+		s.ctx, "evo_team_skill", nil, []*signal.EvolutionSignal{intentSignal},
+		false, "部署排障经验（"+e2Marker+"）",
+		[]map[string]any{{"role": "user", "content": "部署排障经验"}}, true)
 	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	if result.RequestID == nil {
-		s.T().Logf("RequestID nil: Status=%v Message=%q Records=%d AutoApproved=%v Mode=%q", result.Status, result.Message, len(result.Records), result.AutoApproved, result.Mode)
+	if staged != nil {
+		s.T().Logf("staged request_id=%s payload=%d", staged.RequestID, len(staged.PendingChange.Payload))
+	} else {
+		s.T().Logf("staged=nil（requiresApproval 时 Finalize 恒 nil，事件应在缓冲）")
 	}
-	s.Require().NotNil(result.RequestID, "审批请求应入 pending 缓冲")
+	// 注意：DrainPendingApprovalEvents 是破坏性的（drain 后清缓冲），
+	// 不得在此探针——事件必须留给 watcher drain
 
-	// ② 启动团队 watcher（1s 轮询 drain）
+	// ② 启动团队 watcher（1s 轮询 drain）	// ② 启动团队 watcher（1s 轮询 drain）
 	watcherCtx, cancel := contextWithCancel(s.ctx)
 	defer cancel()
 	d.StartTeamEvolutionWatcherForTest(watcherCtx, "ch-e2e", "web_sess-e2e", teamRail)
 
-	// ③ 轮询推送帧：审批卡 + approval_required end（E3 cycle 状态机帧序）
-	deadline := time.Now().Add(10 * time.Second)
+	// ③ 轮询推送帧：审批卡（含 request_id）+ approval_required end（E3 cycle 帧）
+	deadline := time.Now().Add(15 * time.Second)
 	var sawApproval, sawEnd bool
+	approvalRequestID := ""
 	for time.Now().Before(deadline) {
 		for _, payload := range s.pushPayloads("chat.evolution_status") {
 			if stage, _ := payload["stage"].(string); stage == "approval_required" {
@@ -93,22 +100,31 @@ func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
 			}
 		}
 		for _, frame := range s.pushFrames {
-			if payload, ok := frame["payload"].(map[string]any); ok {
-				if t, _ := payload["type"].(string); t == "chat.ask_user_question" {
-					sawApproval = true
+			payload, ok := frame["payload"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if t, _ := payload["type"].(string); t != "chat.ask_user_question" {
+				continue
+			}
+			sawApproval = true
+			if approvalRequestID == "" {
+				if rid, _ := payload["request_id"].(string); rid != "" {
+					approvalRequestID = rid
 				}
 			}
 		}
-		if sawApproval && sawEnd {
+		if sawApproval && sawEnd && approvalRequestID != "" {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	s.Assert().True(sawApproval, "watcher 应推送审批卡，帧数=%d", len(s.pushFrames))
 	s.Assert().True(sawEnd, "watcher 应推送 approval_required end")
+	s.Require().NotEmpty(approvalRequestID, "审批卡应带 request_id")
 
-	// ④ leader 批准 → 落盘（补答链的 rail 半区）
-	err = teamRail.ApproveRecord(s.ctx, *result.RequestID)
+	// ④ leader 批准（补答链的 rail 半区：approve_record）
+	err = teamRail.ApproveRecord(s.ctx, approvalRequestID)
 	s.Require().NoError(err)
 
 	// ⑤ 落盘标记回读（E12 团队版核心：内容无中途丢失）
@@ -122,3 +138,13 @@ func (s *EvolutionE2ESuite) TestE2TeamLeader被动链() {
 	s.Assert().Contains(contents, e2Marker)
 	s.Assert().True(fileExists(filepath.Join(s.skillsDir, "evo_team_skill", "evolutions.json")))
 }
+
+func keysOf(m map[string]any) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func mapOrEmpty(m map[string]any) any { return "" }
