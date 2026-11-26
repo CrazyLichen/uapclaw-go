@@ -10,3 +10,13 @@ type DrawableNode struct {
 	// Metadata 元数据（Python metadata，Optional → nil）
 	Metadata map[string]any
 }
+
+// NodeLike 节点同质容器接口（Python nodes dict 可同时持有 DrawableNode 与其子类
+// DrawableSubgraphNode；Go 以接口承载同质表，数据契约型，零破环）
+type NodeLike interface {
+	// NodeID 返回节点标识（Python id 字段访问）
+	NodeID() string
+}
+
+// NodeID 返回节点标识（DrawableSubgraphNode 经嵌入提升同款）
+func (n *DrawableNode) NodeID() string { return n.ID }

@@ -25,7 +25,7 @@ func TestDrawableBranchRouter(t *testing.T) {
 
 // TestDrawableGraph构造 对齐 drawable_graph.py dataclass
 func TestDrawableGraph构造(t *testing.T) {
-	g := &DrawableGraph{Nodes: map[string]*DrawableNode{}, Edges: []*DrawableEdge{}}
+	g := &DrawableGraph{Nodes: map[string]NodeLike{}, Edges: []*DrawableEdge{}}
 	assert.Empty(t, g.Nodes)
 	assert.Empty(t, g.Edges)
 	assert.Nil(t, g.BreakNodes) // Python Optional → Go nil
