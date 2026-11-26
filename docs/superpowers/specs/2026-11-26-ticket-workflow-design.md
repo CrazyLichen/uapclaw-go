@@ -81,21 +81,38 @@ Workflow 注册表（`mode → workflow builder`）是通用机制：后续新�
 
 ### 3.0a 事件协议与双模式适配（为聊天问答式预留）
 
-workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 sink 实现：
+workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 sink 实现。**store 是状态层（状态机事实），卡片/轮询是表达层**：聊天模式状态依旧写 store（续跑/恢复靠它），仅表达与交互方式不同。
 
 **输出：标准事件协议**。节点产出统一事件：`Progress`（检索/分析进度）、`Guidance`（引导选项）、`Confirm`（待确认）、`Solution`（方案+kb_source+ticket 关联）、`Closed`。
 
-| Sink | 事件去向 | 适用 |
+| Sink | 事件去向 | 表达方式 |
 |---|---|---|
 | Sink A（HTTP 模式，本 spec 范围） | 事件写 store metadata（§2 协议键） | 外部工单系统轮询 |
-| Sink B（聊天模式，第二阶段） | 事件写 store + 会话流式帧 + 交互卡片 | 用户在会话内看进度流式输出、方案结果卡片、引导选项按钮 |
+| Sink B（聊天模式，第二阶段） | 事件写 store + 结构化推送 | ask_user 中断卡片（前端已有渲染，零前端改动）；Guidance/Confirm 以卡片呈现，回调即标准输入事件 |
+
+**帧纪律（防覆盖）**：只有 `Progress` 允许以文本流式帧出现；`Guidance`/`Confirm`/`Solution` 一律结构化帧——Solution 走 `BuildServerPushWire`（send_push，`E2A_WIRE_SERVER_PUSH_KEY` 标记）结构化推送，不走正文流式文本；ask_user 中断帧为独立 pending 交互类型，前端已有处理，不会覆盖正文。
 
 **输入：双解释器**。标准输入事件 = `补充特征 / confirm_solved / not_solved / close / abandon`：
 
 | 模式 | 解释方式 |
 |---|---|
 | HTTP 模式 | `biz_event` 协议（§2） |
-| 聊天模式（第二阶段） | 给聊天 DeepAgent 装诊断工具（如 `start_diagnosis`），同会话内启动 workflow；卡片按钮回调直接映射标准输入事件；用户打字由 agent 判断后转换（聊天场景猜错代价仅多一轮澄清，允许 LLM 判断） |
+| 聊天模式（第二阶段） | 聊天 DeepAgent 装诊断工具（`start_diagnosis`）同会话内启动 workflow；卡片按钮回调直接映射标准输入事件；用户打字由 agent 判断后转换（猜错代价仅多一轮澄清，允许 LLM 判断） |
+
+### 3.0b 统一入参 schema（工具与 HTTP 同构）
+
+```
+TicketInput {
+  description     string  必填（问题描述）
+  reproduce_steps string  可选（复现步骤）
+  attachments     list    可选（图片/日志）
+  ticket_id       string  HTTP 侧可选（工单回关联）；聊天侧不传，沉淀 metadata 为空
+}
+```
+
+- `start_diagnosis` 工具参数即此 schema：LLM 从对话中填 description（必填），其余从上下文/附件提取，缺省为空；校验规则 = "description 非空"，与 HTTP 侧同一套；
+- HTTP send payload 同步为同一 schema（description 必填，其余可选）；
+- 多轮补充：两侧统一并入 `intent_features`（§3.2）——工具侧来自对话消息，HTTP 侧来自不带 biz_event 的普通 send，进入状态机后完全同构。
 
 聊天模式下 workflow 跑在会话上下文内：Progress 与 AgentNode 的 DeepAgent chunk 直接走既有流式通道；状态依旧持久化，会话中断可续。
 
