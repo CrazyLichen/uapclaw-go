@@ -73,7 +73,7 @@ func (s *ExperienceSubmissionService) ApplySimplifyActions(
 	if err != nil {
 		return nil, err
 	}
-	counts := ExecuteSimplifyActions(ctx, s.store, normalizedSubject.Name, draft.Actions)
+	counts := ExecuteSimplifyActions(ctx, s.store, normalizedSubject.Name, draft.Actions, normalizedSubject.Kind)
 	appliedCount := counts["deleted"] + counts["merged"] + counts["refined"]
 	status := "applied"
 	if counts["errors"] != 0 {

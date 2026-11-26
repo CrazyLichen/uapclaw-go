@@ -17,8 +17,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // WorkflowRunSuite 8.14 Workflow 全链集成。

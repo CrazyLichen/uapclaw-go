@@ -23,9 +23,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/tracer"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

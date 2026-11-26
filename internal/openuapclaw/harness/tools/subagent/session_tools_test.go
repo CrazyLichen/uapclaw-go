@@ -825,6 +825,13 @@ func (f *fakeController) Config() *config.ControllerConfig { return nil }
 func (f *fakeController) EventHandler() modules.EventHandler { return nil }
 
 // GetSessionID 实现 SessionFacade 接口
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeHandlerSess) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeHandlerSess) GetTeamID() string { return "" }
+
 func (f *fakeHandlerSess) GetSessionID() string {
 	return f.sessionID
 }

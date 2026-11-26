@@ -121,6 +121,13 @@ func (e *cancelAwareContextEngine) UpdateModelContext(modelName string, tokens i
 }
 
 // GetSessionID 获取会话标识。
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *abortTestSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *abortTestSession) GetTeamID() string { return "" }
+
 func (s *abortTestSession) GetSessionID() string { return s.sessionID }
 
 // UpdateState 记录写入的状态数据。

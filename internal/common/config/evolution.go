@@ -29,6 +29,37 @@ func SkillEvolutionEnabled(cfg map[string]any) bool {
 	return EvolutionConfig(cfg)["skill_evolution"] == true
 }
 
+// EvolutionReviewFeedbackMinConfidence 返回审查器驱动演进的最低置信度。
+// Python: get_evolution_review_feedback_min_confidence (config.py:514-521)：
+// 缺省 0.7，钳制 [0,1]，非法值回落 0.7。
+func EvolutionReviewFeedbackMinConfidence(cfg map[string]any) float64 {
+	raw, ok := EvolutionConfig(cfg)["review_feedback_min_confidence"]
+	if !ok {
+		return 0.7
+	}
+	switch v := raw.(type) {
+	case float64:
+		if v < 0.0 {
+			return 0.0
+		}
+		if v > 1.0 {
+			return 1.0
+		}
+		return v
+	case int:
+		f := float64(v)
+		if f < 0.0 {
+			return 0.0
+		}
+		if f > 1.0 {
+			return 1.0
+		}
+		return f
+	default:
+		return 0.7
+	}
+}
+
 // EvolutionAutoSaveEnabled 返回规范化的 react.evolution.auto_save 开关
 // （纯配置读取，不落盘不读 env）。
 // Python: get_evolution_auto_save_enabled (config.py:524-526)

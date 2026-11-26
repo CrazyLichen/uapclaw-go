@@ -1345,6 +1345,12 @@ func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.C
 
 // fakeSessionFacade 方法实现
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeSessionFacade) GetTeamID() string { return "" }
+
 func (f *fakeSessionFacade) GetSessionID() string            { return f.sessionID }
 func (f *fakeSessionFacade) UpdateState(data map[string]any) { f.stateData = data }
 func (f *fakeSessionFacade) DumpState() map[string]any       { return f.stateData }

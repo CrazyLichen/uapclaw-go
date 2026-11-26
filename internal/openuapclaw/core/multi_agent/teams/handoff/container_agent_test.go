@@ -94,6 +94,12 @@ func newMockContainerSessionFacade(id string) *mockContainerSessionFacade {
 	}
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *mockContainerSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *mockContainerSessionFacade) GetTeamID() string { return "" }
+
 func (m *mockContainerSessionFacade) GetSessionID() string            { return m.sessionID }
 func (m *mockContainerSessionFacade) UpdateState(data map[string]any) { m.state["global"] = data }
 func (m *mockContainerSessionFacade) GetState(key state.StateKey) (any, error) {

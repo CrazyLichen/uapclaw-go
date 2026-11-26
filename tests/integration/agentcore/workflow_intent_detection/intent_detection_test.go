@@ -12,9 +12,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 

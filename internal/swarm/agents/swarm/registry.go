@@ -51,6 +51,7 @@ func RegisterSwarmProviders() {
 	providers.RegisterBuiltinRailProviders()
 	providers.RegisterDesignProviders()
 	providers.RegisterSkillProviders()
+	providers.RegisterEvolutionRailProviders()
 	// 步骤 2：tool（tools → runtime_tools → designer）
 	providers.RegisterToolProviders()
 	providers.RegisterRuntimeToolProviders()
@@ -58,6 +59,7 @@ func RegisterSwarmProviders() {
 	providers.RegisterSubagentProviders()
 	// 步骤 3
 	atschema.RegisterBuildContextFactory(buildSwarmContextFromSeed)
+	// evolution rail 的 TeamManager 注册缝（D-15.24c-3 父包无环注入）
 	registered = true
 }
 

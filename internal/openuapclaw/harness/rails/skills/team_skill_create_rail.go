@@ -54,6 +54,12 @@ type TeamSkillCreateRail struct {
 	completedSessionID string
 	// proposedSpawnCounts 已提议的 spawn 计数（防重复）
 	proposedSpawnCounts map[string]int
+	// externalProposalKeys 已登记的外部提案键（去重）
+	// Python: self._external_proposal_keys（team_skill_create_rail.py:102）
+	externalProposalKeys map[string]struct{}
+	// pendingExternalProposals 待审批外部提案（request_id → proposal）
+	// Python: self._pending_external_proposals（:103）
+	pendingExternalProposals map[string]*PendingSkillCreationProposal
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -105,11 +111,13 @@ func NewTeamSkillCreateRail(
 	opts ...TeamSkillCreateRailOption,
 ) *TeamSkillCreateRail {
 	r := &TeamSkillCreateRail{
-		skillsDir:           skillsDir,
-		autoTrigger:         true,
-		minTeamMembers:      defaultMinTeamMembers,
-		language:            "cn",
-		proposedSpawnCounts: make(map[string]int),
+		skillsDir:                skillsDir,
+		autoTrigger:              true,
+		minTeamMembers:           defaultMinTeamMembers,
+		language:                 "cn",
+		proposedSpawnCounts:      make(map[string]int),
+		externalProposalKeys:     make(map[string]struct{}),
+		pendingExternalProposals: make(map[string]*PendingSkillCreationProposal),
 	}
 
 	// 创建 EvolutionRail 基类（evolution_trigger=NONE）

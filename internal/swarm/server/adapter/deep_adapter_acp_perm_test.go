@@ -20,6 +20,12 @@ import (
 // acpPermSession 固定会话 ID 的 SessionFacade。
 type acpPermSession struct{}
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *acpPermSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *acpPermSession) GetTeamID() string { return "" }
+
 func (m *acpPermSession) GetSessionID() string                       { return "sess-acp-perm" }
 func (m *acpPermSession) UpdateState(_ map[string]any)               {}
 func (m *acpPermSession) GetState(_ state.StateKey) (any, error)     { return nil, nil }

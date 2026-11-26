@@ -212,6 +212,12 @@ func newFakeSession(id string) *fakeSession {
 	return &fakeSession{sessionID: id}
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *fakeSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *fakeSession) GetTeamID() string { return "" }
+
 func (s *fakeSession) GetSessionID() string                             { return s.sessionID }
 func (s *fakeSession) UpdateState(_ map[string]any)                     {}
 func (s *fakeSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }

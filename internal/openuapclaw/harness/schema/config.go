@@ -131,6 +131,9 @@ type SubAgentConfig struct {
 	EnablePlanMode bool `json:"enable_plan_mode"`
 	// RestrictToWorkDir 是否限制在工作目录
 	RestrictToWorkDir bool `json:"restrict_to_work_dir"`
+	// EnableReadImageMultimodal 是否启用读图多模态
+	// Python: SubAgentConfig.enable_read_image_multimodal（15.24c 随 review subagent 补齐）
+	EnableReadImageMultimodal bool `json:"enable_read_image_multimodal"`
 }
 
 // SubagentCreateParams 子 Agent 创建参数。

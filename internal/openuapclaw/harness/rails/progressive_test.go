@@ -150,6 +150,13 @@ func newProgressiveFakeSession(id string) *progressiveFakeSession {
 }
 
 // GetSessionID 返回会话 id。
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *progressiveFakeSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *progressiveFakeSession) GetTeamID() string { return "" }
+
 func (f *progressiveFakeSession) GetSessionID() string { return f.id }
 
 // UpdateState 合并写入状态。

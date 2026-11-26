@@ -58,10 +58,43 @@ type TeamWorkspaceInfo struct {
 	TeamID *string
 	// Config 配置字典
 	Config map[string]any
+	// Language 语言标识（G2/15.24c：member rail 绑定透传）
+	Language string
+	// MountContext 挂载期构建的 rail-mount context（Go 侧承载：swarm provider
+	// 在 rail.Init 拿到 live agent 后填充，供热重载重建链消费；
+	// Python 侧为独立 _make_team_rail_mount_context 调用）。
+	MountContext *TeamRailMountContext
 	// 【12-04 迁移注记】TrajectoryRegistry 字段已删除：上游生产恒 None
 	//（TeamWorkspaceInfo.trajectory_registry 两处构造均未传），Go 侧注入逻辑
 	// 无生产调用方，规则 8 删除。跨成员轨迹可见性改由 TrajectorySpanProcessor
 	// 订阅窗口承载（25.2b，spec §5）。
+}
+
+// NewTeamWorkspaceInfo 构造 TeamWorkspaceInfo（全字段；Python: TeamWorkspaceInfo
+// dataclass 直构造，evolution_rails.py:116-156 消费）。
+func NewTeamWorkspaceInfo(rootDir, skillsDir, teamID string, config map[string]any, language string) *TeamWorkspaceInfo {
+	rootPtr := &rootDir
+	skillsPtr := &skillsDir
+	teamPtr := &teamID
+	return &TeamWorkspaceInfo{
+		RootDir:   rootPtr,
+		SkillsDir: skillsPtr,
+		TeamID:    teamPtr,
+		Config:    config,
+		Language:  language,
+	}
+}
+
+// NewTeamRailMountContext 构造挂载上下文（Python: _make_team_rail_mount_context；
+// swarm providers 经 evolution_rails_wiring 的 registrar 调用）。
+func NewTeamRailMountContext(agent interfaces.DeepAgentInterface, role, channel, language string, ws *TeamWorkspaceInfo) *TeamRailMountContext {
+	rolePtr := &role
+	return &TeamRailMountContext{
+		Agent:         agent,
+		MemberInfo:    &MemberInfo{ModelName: "gpt-4", Role: rolePtr},
+		Runtime:       &RuntimeInfo{Channel: channel, Language: language},
+		TeamWorkspace: ws,
+	}
 }
 
 // TeamRailMountContext 重建 team rails 所需的上下文。

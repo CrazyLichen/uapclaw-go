@@ -241,8 +241,10 @@ func (t *prepareSkillEvolutionReviewTool) Invoke(ctx context.Context, inputs map
 		return Failure(err).ToMap(), nil
 	}
 	sessionID := sessionIDFromOpts(args, opts)
-	// Python: **self._session_scope(kwargs)（member_id/team_id）；偏差 D-15.24b-1 恒空串。
-	launch, err := t.prepareScope("agent_detected_signal", subject, sessionID, "", "", stringArg(args, "user_intent"))
+	// Python: **self._session_scope(kwargs)（member_id/team_id）
+	//（D-15.24b-1 销账：SessionFacade GetAgentID/GetTeamID 已随 15.24c 补齐）
+	memberID, teamID := sessionScopeFromOpts(args, opts)
+	launch, err := t.prepareScope("agent_detected_signal", subject, sessionID, memberID, teamID, stringArg(args, "user_intent"))
 	if err != nil {
 		return Failure(err).ToMap(), nil
 	}
@@ -535,6 +537,26 @@ func sessionIDFromOpts(args map[string]any, opts []tool.ToolOption) string {
 		}
 	}
 	return ""
+}
+
+// sessionScopeFromOpts 提取可选 Agent/Team 定位符（runtime Session 暴露面）。
+// Python: _session_scope (skill.py:143-154)：get_agent_id/get_team_id callable
+// 且非空才入 scope；Go SessionFacade 恒有该方法（空串承载缺席语义）。
+func sessionScopeFromOpts(args map[string]any, opts []tool.ToolOption) (string, string) {
+	if len(opts) == 0 {
+		return "", ""
+	}
+	callOpts := tool.NewToolCallOptions(opts...)
+	sess := callOpts.Session
+	if sess == nil {
+		return "", ""
+	}
+	memberID := sess.GetAgentID()
+	teamID := sess.GetTeamID()
+	if memberID == "" {
+		return "", teamID
+	}
+	return memberID, teamID
 }
 
 // stringArg 取字符串参数（缺失返回空串）。

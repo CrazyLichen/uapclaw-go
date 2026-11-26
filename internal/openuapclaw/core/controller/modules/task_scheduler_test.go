@@ -60,6 +60,13 @@ type schedulerFakeEventHandler struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetSessionID 实现 SessionFacade 接口
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *schedulerFakeSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *schedulerFakeSessionFacade) GetTeamID() string { return "" }
+
 func (f *schedulerFakeSessionFacade) GetSessionID() string { return f.sessionID }
 
 // UpdateState 实现 SessionFacade 接口

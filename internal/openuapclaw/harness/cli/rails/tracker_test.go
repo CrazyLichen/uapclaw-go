@@ -23,6 +23,12 @@ type recordingSession struct {
 
 func newRecordingSession() *recordingSession { return &recordingSession{sessionID: "s-1"} }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *recordingSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *recordingSession) GetTeamID() string { return "" }
+
 func (s *recordingSession) GetSessionID() string                   { return s.sessionID }
 func (s *recordingSession) UpdateState(_ map[string]any)           {}
 func (s *recordingSession) GetState(_ state.StateKey) (any, error) { return nil, nil }

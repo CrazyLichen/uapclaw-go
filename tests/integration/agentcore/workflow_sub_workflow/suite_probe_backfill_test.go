@@ -13,14 +13,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	graphexe "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/graph/executable"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/ability"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // buildEchoChild 构造子工作流：start(a1=${input}) → echo → end(child:{{answer}})。

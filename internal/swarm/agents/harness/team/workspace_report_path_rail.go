@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails"
 )
 
@@ -185,16 +186,70 @@ func (r *TeamWorkspaceReportPathRail) BeforeModelCall(_ context.Context, _ *agen
 // RegisterTeamRailContext/RegisterTeamLiveRail 已在 team_manager_skill.go。
 // swarm 装配上下文字段经 BindSwarmContext 注入；字段缺失时按 Python
 // 语义直接返回（session/team/role 不齐）。
-func (r *TeamWorkspaceReportPathRail) registerTeamMountContext(_ agentinterfaces.BaseAgent) {
+func (r *TeamWorkspaceReportPathRail) registerTeamMountContext(agent agentinterfaces.BaseAgent) {
 	if r.swarmContext == nil {
 		return
 	}
 	// Python: session_id/channel/team_id/role 提取 + _make_team_rail_mount_context
-	// 构造 + leader/member 双路注册。完整注册段依赖 SwarmBuildContext 的
-	// channel/role/member_name/trajectory_span_processor 字段透传，
-	// 随 15.21 evolution_rails 的注册段同缝接线（15.21 行已登记）。
-	logger.Debug(workspaceReportLogComponent).
-		Msg("[TeamWorkspaceReportPathRail] team mount context registration pending 15.21 seam")
+	// 构造 + leader/member 双路注册（team_workspace_report_path_rail.py:96-148）。
+	// 15.20 ⑦ 回收：swarm 装配上下文经 EvolutionSwarmContextFace 结构化消费。
+	ctx, ok := r.swarmContext.(EvolutionSwarmContextFace)
+	if !ok {
+		logger.Debug(workspaceReportLogComponent).
+			Msg("[TeamWorkspaceReportPathRail] swarm context lacks evolution face, skipping")
+		return
+	}
+	sessionID := ctx.EvolutionSessionID()
+	channel := ctx.EvolutionChannel()
+	if channel == "" {
+		channel = "default"
+	}
+	teamID := ctx.EvolutionTeamID()
+	role := ctx.EvolutionRole()
+	if sessionID == "" || teamID == "" || (role != "leader" && role != "teammate") {
+		return
+	}
+	rootDir := ctx.EvolutionTeamWsRoot()
+	if rootDir == "" {
+		rootDir = r.rootDir
+	}
+	workspace := NewTeamWorkspaceInfo(rootDir, "", teamID, ctx.EvolutionConfig(), ctx.EvolutionLanguage())
+	mountContext := NewTeamRailMountContext(deepOfAgent(agent), role, channel, ctx.EvolutionLanguage(), workspace)
+	teamManager := GetTeamManager(channel)
+	if teamManager == nil {
+		return
+	}
+	if role == "leader" {
+		if teamManager.GetTeamRailContext(sessionID) == nil {
+			teamManager.RegisterTeamRailContext(sessionID, mountContext)
+		}
+		return
+	}
+	teamManager.RegisterTeamMemberRailContext(sessionID, mountContext)
+}
+
+// EvolutionSwarmContextFace swarm 装配上下文的演进注册消费面（结构化接口；
+// providers 侧以 wrapper 实现，规避 team↔buildctx 环）。
+// Python: getattr(context, "session_id"/"channel"/...) 鸭子读取
+// （team_workspace_report_path_rail.py:99-120）。
+type EvolutionSwarmContextFace interface {
+	EvolutionSessionID() string
+	EvolutionChannel() string
+	EvolutionTeamID() string
+	EvolutionRole() string
+	EvolutionConfig() map[string]any
+	EvolutionLanguage() string
+	EvolutionTeamWsRoot() string
+	EvolutionMemberName() string
+	EvolutionProjectDir() string
+}
+
+// deepOfAgent 断言 DeepAgent 能力面（mount context Agent 字段签名要求）。
+func deepOfAgent(agent agentinterfaces.BaseAgent) hinterfaces.DeepAgentInterface {
+	if deep, ok := agent.(hinterfaces.DeepAgentInterface); ok {
+		return deep
+	}
+	return nil
 }
 
 // filepathOrEmpty 清洗可选路径形参（Python: str(Path(x)) if x else None）。

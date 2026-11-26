@@ -96,6 +96,51 @@ func (m *TeamManager) GetTeamRailContext(sessionID string) *TeamRailMountContext
 	return m.teamRailContexts[sessionID]
 }
 
+// ConsumeTeamEvolutionWatcherDeferred 取走（一次性）指定 session 的延迟演进
+// watcher 补建标记；无标记返回 false。
+// Python: TeamManager.consume_team_evolution_watcher_deferred(session_id)
+// （team_manager.py；消费点 evolution_rails.py:262-271）。
+// 偏差 G2（2026-11-26 裁决）：ensure_team_evolution_watcher 本体挂 15.24d，
+// 本方法仅承载 consume 语义（true 时消费方在 15.24d 接 ensure 调用）。
+func (m *TeamManager) ConsumeTeamEvolutionWatcherDeferred(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := "evolution_watcher_deferred_" + sessionID
+	flag, ok := m.flags[key]
+	if !ok {
+		return false
+	}
+	delete(m.flags, key)
+	return flag
+}
+
+// MarkTeamEvolutionWatcherDeferred 设置延迟演进 watcher 补建标记。
+// Python: TeamManager.mark_team_evolution_watcher_deferred(session_id) 镜像。
+// 生产写入点在 15.24d host 层推送链（evolution_slash/interface_deep 对齐件）。
+func (m *TeamManager) MarkTeamEvolutionWatcherDeferred(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.flags == nil {
+		m.flags = map[string]bool{}
+	}
+	m.flags["evolution_watcher_deferred_"+sessionID] = true
+}
+
+// RegisterTeamMemberRailContext 注册 teammate 的 rail-mount context。
+// Python: TeamManager.register_team_member_rail_context(session_id, context)
+// （team_manager.py；消费点 evolution_rails.py:420-445）。
+func (m *TeamManager) RegisterTeamMemberRailContext(sessionID string, ctx *TeamRailMountContext) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.memberRailContexts[sessionID] = ctx
+}
+
+// GetTeamMemberRailContext 返回指定 session 的 teammate rail-mount context。
+// Python: TeamManager.get_team_member_rail_context(session_id) 镜像。
+func (m *TeamManager) GetTeamMemberRailContext(sessionID string) *TeamRailMountContext {
+	return m.memberRailContexts[sessionID]
+}
+
 // RegisterTeamLiveRail 注册活跃 Rail 及其所有者。
 // 对齐 Python: TeamManager.register_team_live_rail(session_id, agent, rail)
 //

@@ -26,6 +26,12 @@ func newProjectionSession() *projectionSession {
 	return &projectionSession{state: make(map[string]any)}
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *projectionSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *projectionSession) GetTeamID() string { return "" }
+
 func (s *projectionSession) GetSessionID() string { return "sess-1" }
 func (s *projectionSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 	return kv_cache.KVCacheIdentity{}

@@ -18,6 +18,14 @@ import (
 type SessionFacade interface {
 	// GetSessionID 获取会话唯一标识
 	GetSessionID() string
+	// GetAgentID 返回会话属主 agent 标识（无归属返回空串）。
+	// Python: AgentSession.get_agent_id (session/agent.py:107)；
+	// Team/Node/Workflow/Router 会话 Python 无该方法（duck-typing 缺席 → 空串承载）。
+	GetAgentID() string
+	// GetTeamID 返回团队标识（无归属返回空串）。
+	// Python: TeamSession.get_team_id (session/agent_team.py:58)；
+	// 其余会话 Python 无该方法 → 空串承载。
+	GetTeamID() string
 	// GetCacheIdentity 返回 provider 侧缓存身份。
 	// Python: agent.py:126 / agent_team.py:61 get_cache_identity() -> KVCacheIdentity
 	// （无 raise，故 Go 无 error；消费点的防御性兜底由调用方负责）。

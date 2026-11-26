@@ -15,6 +15,12 @@ type lineageStub struct {
 	hasGetEnv, hasParent                  bool
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *lineageStub) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *lineageStub) GetTeamID() string { return "" }
+
 func (s *lineageStub) GetSessionID() string { return s.id }
 func (s *lineageStub) GetCacheIdentity() KVCacheIdentity {
 	return KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCacheID}

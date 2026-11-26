@@ -42,6 +42,13 @@ func newMockSession() *mockSession {
 }
 
 // GetSessionID 返回固定会话 id。
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *mockSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *mockSession) GetTeamID() string { return "" }
+
 func (m *mockSession) GetSessionID() string { return "test-session" }
 
 // UpdateState 合并写入状态。

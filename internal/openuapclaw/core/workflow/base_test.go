@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────

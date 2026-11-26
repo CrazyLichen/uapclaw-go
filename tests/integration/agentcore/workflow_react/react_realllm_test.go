@@ -28,13 +28,13 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/config"
 	llmcomp "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/llm/react"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 )
 

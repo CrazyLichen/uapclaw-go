@@ -15,7 +15,7 @@
 //	└── orchestrator.go  # OnlineEvolutionOrchestrator Evolve 管线
 //
 // 2026-12-24 方案 B：draft_schema.go 下沉叶包 agent_evolving/evoschema
-//（消 review↔experience 循环依赖，偏差 D-15.24b-4 回收），本包经叶包引用。
+// （消 review↔experience 循环依赖，偏差 D-15.24b-4 回收），本包经叶包引用。
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/experience/
 package experience

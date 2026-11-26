@@ -27,6 +27,9 @@ type PendingGovernance struct {
 	// merge_remove_ids（仅 MERGE）、new_content（仅 MERGE/REFINE）。
 	// 因 LLM 输出非硬约束，保持 any 而非强类型结构体。
 	Actions []map[string]any
+	// SubjectKind 主体类型（Python: gov["subject_kind"]=self._subject_kind，
+	// request_simplify → execute_simplify_actions 透传；15.24c ⑪ 补齐）
+	SubjectKind string
 }
 
 // ExperienceManager 编排技能/团队技能的在线演进生命周期。
@@ -46,6 +49,11 @@ type ExperienceManager struct {
 	pendingApprovalSnapshots map[string]*PendingChange
 	// pendingGovernance 暂存治理操作映射
 	pendingGovernance map[string]*PendingGovernance
+	// queryService 只读查询服务（Python: _query_service，缺省 ExperienceQueryService(store)）
+	queryService *ExperienceQueryService
+	// submissionService 提交服务（Python: _submission_service，缺省
+	// ExperienceSubmissionService(store, pending_approval_snapshots)）
+	submissionService *ExperienceSubmissionService
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -174,7 +182,23 @@ func NewExperienceManager(
 	}
 
 	em.BindPendingApprovalSnapshots(pendingApprovalSnapshots)
+	// Python: _query_service = ExperienceQueryService(store=store)
+	em.queryService = NewExperienceQueryService(store)
+	// Python: _submission_service = ExperienceSubmissionService(
+	//     store=store, pending_approval_snapshots=self._pending_approval_snapshots)
+	em.submissionService = NewExperienceSubmissionService(store)
+	em.submissionService.BindPendingApprovalSnapshots(em.pendingApprovalSnapshots)
 	return em, nil
+}
+
+// QueryService 返回只读查询服务。
+// Python: ExperienceManager.experience_query_service property（skill_experience_manager.py:115-117）。
+func (m *ExperienceManager) QueryService() *ExperienceQueryService { return m.queryService }
+
+// SubmissionService 返回提交服务。
+// Python: ExperienceManager.experience_submission_service property（skill_experience_manager.py:119-121）。
+func (m *ExperienceManager) SubmissionService() *ExperienceSubmissionService {
+	return m.submissionService
 }
 
 // PendingApprovalSnapshots 返回暂存审批快照映射。
@@ -392,9 +416,10 @@ func (m *ExperienceManager) RequestSimplify(
 	// 有动作则登记为待审批，返回请求号给上层走审批。
 	requestID := fmt.Sprintf("evolve_simplify_%08x", time.Now().UTC().UnixNano()&0xFFFFFFFF)
 	m.pendingGovernance[requestID] = &PendingGovernance{
-		Kind:      "simplify",
-		SkillName: skillName,
-		Actions:   actions,
+		Kind:        "simplify",
+		SkillName:   skillName,
+		Actions:     actions,
+		SubjectKind: m.kind,
 	}
 
 	elapsed := time.Since(startedAt).Seconds()
@@ -418,7 +443,7 @@ func (m *ExperienceManager) ApproveSimplify(ctx context.Context, requestID strin
 	}
 	delete(m.pendingGovernance, requestID)
 
-	return ExecuteSimplifyActions(ctx, m.store, gov.SkillName, gov.Actions), nil
+	return ExecuteSimplifyActions(ctx, m.store, gov.SkillName, gov.Actions, gov.SubjectKind), nil
 }
 
 // RejectSimplify 丢弃暂存的整理治理操作。

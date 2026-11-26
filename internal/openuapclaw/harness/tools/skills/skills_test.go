@@ -567,6 +567,13 @@ type fakeSkillSession struct {
 }
 
 // GetSessionID 返回会话 id
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeSkillSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeSkillSession) GetTeamID() string { return "" }
+
 func (f *fakeSkillSession) GetSessionID() string { return f.id }
 
 // UpdateState 空实现

@@ -27,8 +27,8 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/turnctx"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	rails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -189,7 +189,7 @@ type imageItestStubModelContext struct {
 
 // WindowMutators/SetWindowMutators 实现 ceiface.WindowMutatorsRegistrar
 // （27.8 修订：mutator 装进 ModelContext 持久投影链，非 rail 自持）。
-func (m *imageItestStubModelContext) WindowMutators() []ceiface.WindowMutator { return m.mutators }
+func (m *imageItestStubModelContext) WindowMutators() []ceiface.WindowMutator      { return m.mutators }
 func (m *imageItestStubModelContext) SetWindowMutators(ms []ceiface.WindowMutator) { m.mutators = ms }
 
 func (m *imageItestStubModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {

@@ -37,6 +37,12 @@ type mockSession struct {
 	sessionID string
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *mockSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *mockSession) GetTeamID() string { return "" }
+
 func (m *mockSession) GetSessionID() string                             { return m.sessionID }
 func (m *mockSession) UpdateState(_ map[string]any)                     {}
 func (m *mockSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }

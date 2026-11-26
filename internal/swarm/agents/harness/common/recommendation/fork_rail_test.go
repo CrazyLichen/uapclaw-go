@@ -28,6 +28,12 @@ type lineageTestSession struct {
 	stateMap     map[string]any
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *lineageTestSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *lineageTestSession) GetTeamID() string { return "" }
+
 func (s *lineageTestSession) GetSessionID() string { return s.id }
 func (s *lineageTestSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 	return kv_cache.KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCache}

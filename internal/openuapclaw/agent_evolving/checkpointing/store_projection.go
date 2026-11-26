@@ -40,6 +40,12 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[StoreProjection] failed to load evolution log")
 		return err
 	}
+	return h.RenderEvolutionMarkdownWithLog(ctx, name, skillDir, evoLog)
+}
+
+// RenderEvolutionMarkdownWithLog 以给定目录与日志渲染（ForKind 变体共享体；
+// Python: render_evolution_markdown(name, subject_kind=...) 的参数化承载）。
+func (h *StoreProjectionHelper) RenderEvolutionMarkdownWithLog(ctx context.Context, name, skillDir string, evoLog *EvolutionLog) error {
 	// Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
 	activeEntries := make([]EvolutionRecord, 0)
 	for _, r := range evoLog.Entries {

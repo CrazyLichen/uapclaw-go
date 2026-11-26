@@ -105,6 +105,7 @@ func ExecuteSimplifyActions(
 	store *checkpointing.EvolutionStore,
 	skillName string,
 	actions []map[string]any,
+	subjectKind string,
 ) map[string]int {
 	// 结果计数器：按删除、合并、改写、保留、出错五类分别统计，最后一起返回。
 	counts := map[string]int{
@@ -123,7 +124,7 @@ func ExecuteSimplifyActions(
 		switch actionType {
 		// 删除：删掉这一条记录，删成功才算一次删除，其余情况记为出错。
 		case "DELETE":
-			deleted, err := store.DeleteRecords(ctx, skillName, []string{recordID})
+			deleted, err := store.DeleteRecordsForKind(ctx, skillName, []string{recordID}, subjectKind)
 			if err != nil {
 				logger.Error(logComponent).
 					Str("action", "DELETE").

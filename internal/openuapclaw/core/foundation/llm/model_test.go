@@ -113,6 +113,12 @@ type mockSession struct {
 	id string
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *mockSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *mockSession) GetTeamID() string { return "" }
+
 func (s *mockSession) GetSessionID() string           { return s.id }
 func (s *mockSession) ClearSession(_ context.Context) {}
 

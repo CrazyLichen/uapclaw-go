@@ -45,6 +45,13 @@ type fakeRailSession struct {
 }
 
 // GetSessionID 返回会话标识
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeRailSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeRailSession) GetTeamID() string { return "" }
+
 func (f *fakeRailSession) GetSessionID() string { return f.sessionID }
 
 // fakeModelContext 仅实现 GetMessages/SetMessages 的 ModelContext。

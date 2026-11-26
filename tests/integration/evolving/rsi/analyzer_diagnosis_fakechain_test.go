@@ -38,6 +38,12 @@ type diagnosisMockSession struct {
 	state map[string]any
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *diagnosisMockSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *diagnosisMockSession) GetTeamID() string { return "" }
+
 func (m *diagnosisMockSession) GetSessionID() string { return "test-session" }
 func (m *diagnosisMockSession) UpdateState(data map[string]any) {
 	for key, value := range data {
