@@ -120,7 +120,7 @@ func TestPushEvolutionEvent(t *testing.T) {
 // TestBroadcastEvolutionProgress 测试广播进度。
 func TestBroadcastEvolutionProgress(t *testing.T) {
 	var broadcasted []map[string]any
-	broadcastFn := func(channelID *string, sessionID string, parsed map[string]any) {
+	broadcastFn := func(channelID string, sessionID string, parsed map[string]any) {
 		broadcasted = append(broadcasted, parsed)
 	}
 	parseFn := func(evt map[string]any) map[string]any {
