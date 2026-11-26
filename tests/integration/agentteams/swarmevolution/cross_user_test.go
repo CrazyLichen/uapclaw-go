@@ -93,7 +93,7 @@ func (s *CrossUserSuite) TestE9跨用户共享下载() {
 	s.Require().NoError(serr)
 	s.Require().NotNil(stagedA)
 	if sh := railA.ExperienceSharer(); sh == nil {
-		s.T().Logf("[DIAG] sharerA nil")
+		s.T().Logf("[sharerA nil]")
 	}
 	err = railA.ApproveRecord(s.ctx, stagedA.RequestID)
 	s.Require().NoError(err)
