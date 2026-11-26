@@ -145,6 +145,23 @@ func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string)
 	return filepath.Base(dest), nil
 }
 
+// ClearEvolutionsForKind 按 subject_kind 清空演进数据。
+// Python: StoreArchiveHelper.clear_evolutions(name, subject_kind=...)
+// （store_archive.py:122-128）：空日志覆写 + markdown 重渲染，均带 kind。
+func (h *StoreArchiveHelper) ClearEvolutionsForKind(ctx context.Context, name, subjectKind string) error {
+	emptyLog := EmptyEvolutionLog(name)
+	if err := h.store.SaveEvolutionLogForKind(ctx, name, emptyLog, subjectKind); err != nil {
+		return err
+	}
+	if err := h.store.RenderEvolutionMarkdown(ctx, name, WithRecordsSubjectKind(subjectKind)); err != nil {
+		return err
+	}
+	logger.Info(logComponent).
+		Str("skill", name).
+		Msg("[EvolutionStore] clearing evolution data")
+	return nil
+}
+
 // ClearEvolutions 清空演进数据。
 // Python: StoreArchiveHelper.clear_evolutions(name)
 func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) error {

@@ -882,41 +882,42 @@ func TestStreamApprovalChunksEmission_双形状(t *testing.T) {
 	}
 }
 
-// TestProcessMessageStreamImpl_非流式审批块透传 测试非流式路径的
-// approval_chunks 透传（M-14：非流式直接透传 JSON 数组，天然兼容）。
+// TestProcessMessageStreamImpl_非流式审批块透传 新版契约改写（2026-12-26）：
+// 上游已删旧「/evolve 直出审批块」链（旧 handler 对照 L4159-4242 已被
+// evolution_slash.py 重写替代）。新版 /evolve 语义 = followup query 替换
+// （evolution_slash.py:200-236 + interface_deep.py:18278-18283），审批闭环由
+// agent 轮内六工具 + EvolutionInterruptRail 完成（e2e swarmevolution E1 覆盖）。
+// 本用例改为直断言新版 followup 契约（action/followup_prompt/skill_name/result_type）。
 func TestProcessMessageStreamImpl_非流式审批块透传(t *testing.T) {
 	skillsDir := t.TempDir()
 	makeEvolveSkillDir(t, skillsDir, "ns-skill")
-	stub := &stubEvolveLLMClient{
-		generateResp: `[{"action": "append", "section": "Troubleshooting", "target": "body", "content": "非流式经验"}]`,
-	}
-	d := newEvolveTestAdapter(t, skillsDir, stub)
+	d := newEvolveTestAdapter(t, skillsDir, nil)
 	card := newEvolveTestAgentCard("nonstream-agent")
 	d.instance = harness.NewDeepAgent(card)
-	// ensure/configure 幂等复用按「已挂 instance 的 rail」判别（Python
-	// _find_existing_evolution_rail），替身 rail 须入队才能被复用。
 	if d.skillEvolutionRail != nil {
 		d.instance.AddRail(d.skillEvolutionRail)
 	}
 
-	params, _ := json.Marshal(map[string]any{"query": "/evolve ns-skill 记录经验", "mode": "agent.work.plan"})
-	req := sschema.NewAgentRequest("req-ns-1", "ch-ns-1", sschema.ReqMethod("chat.send"), params,
-		sschema.WithAgentSessionID("web_sess-ns-1"))
-
-	// 非流式 agent.plan 模式：ensureEvolutionRailForSlash 需要 evolution.enabled
-	d.configCache = map[string]any{"evolution": map[string]any{"skill_evolution": true}}
-
-	resp, err := d.ProcessMessageImpl(t.Context(), req, map[string]any{})
-	if err != nil {
-		t.Fatalf("ProcessMessageImpl error: %v", err)
+	result := HandleEvolutionSlashCommand(t.Context(), "/evolve ns-skill 记录经验", EvolutionSlashContext{
+		Mode:             "agent.work.plan",
+		SessionID:        "web_sess-ns-1",
+		SkillsDir:        skillsDir,
+		EvolutionEnabled: true,
+		Language:         "cn",
+		ReviewAgentName:  defaultReviewAgentName,
+	})
+	if result == nil {
+		t.Fatal("应返回 slash 结果")
 	}
-	if resp == nil {
-		t.Fatal("应返回响应")
+	if result["result_type"] != "followup" {
+		t.Fatalf("result_type 应为 followup（Python :236），实际 %v", result["result_type"])
 	}
-	// 审批块透传：payload 含 approval_chunks
-	if _, ok := resp.Payload["approval_chunks"]; !ok {
-		// 无审批块时输出 content——检查是否走了 error 分支
-		t.Fatalf("应含 approval_chunks payload，实际 payload=%v", resp.Payload)
+	if result["action"] != "run_evolve_followup" || result["skill_name"] != "ns-skill" {
+		t.Fatalf("followup 契约不符，实际 %v", result)
+	}
+	if prompt, _ := result["followup_prompt"].(string); prompt == "" ||
+		!strings.Contains(prompt, "prepare_skill_evolution") {
+		t.Fatalf("followup_prompt 应为 build_evolve_review_command_prompt 产物，实际 %q", prompt)
 	}
 }
 

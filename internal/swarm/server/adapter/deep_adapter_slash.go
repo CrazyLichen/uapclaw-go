@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-		"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
-	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -38,52 +38,32 @@ func (d *DeepAdapter) handleSlashCommand(
 		}
 	}
 
-	// Python: 按 stripped 前缀分发（L4319-4348）。
-	// /evolve 精确匹配（== "/evolve" 或前缀 "/evolve "），防止 /evolveXXX 误命中
-	switch {
-	case strings.HasPrefix(stripped, "/evolve_simplify"):
+	// Python: :17485-17491 slash 门（ensure 演进 rail 栈 + skill_create 懒建）
+	// → :17530 handle_evolution_slash_command(stripped, EvolutionSlashContext)
+	if strings.HasPrefix(stripped, "/evolve") {
 		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		res, err := d.handleEvolveSimplifyCommand(ctx, stripped, sessionID)
-		return annotateEvolveSlashResult(stripped, res), err
-	case strings.HasPrefix(stripped, "/evolve_rebuild"):
-		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
-			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		// Python: handle_evolution_slash_command（rail-independent 新版，evolution_slash.py:51-102）
+		// Python: skills_dir=str(get_agent_skills_dir())（:17530）。Go 取值面等价：
+		// 生产 rail 的 store 根目录即 AgentSkillsDir（ensure/build 同源），
+		// 已挂 rail 时直接复用其根目录（测试替身注入自定义根目录也因此生效）。
+		skillsDir := workspace.AgentSkillsDir()
+		if d.skillEvolutionRail != nil && d.skillEvolutionRail.EvolutionStore() != nil &&
+			len(d.skillEvolutionRail.EvolutionStore().BaseDirs()) > 0 {
+			skillsDir = d.skillEvolutionRail.EvolutionStore().BaseDirs()[0]
 		}
-		res, err := d.handleEvolveRebuildCommand(ctx, stripped, sessionID)
-		return annotateEvolveSlashResult(stripped, res), err
-	case strings.HasPrefix(stripped, "/evolve_rollback"):
-		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
-			return map[string]any{"output": errMsg, "result_type": "error"}, nil
-		}
-		res, err := d.handleEvolveRollbackCommand(ctx, stripped, sessionID)
-		return annotateEvolveSlashResult(stripped, res), err
-	case strings.HasPrefix(stripped, "/evolve_list"):
-		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
-			return map[string]any{"output": errMsg, "result_type": "error"}, nil
-		}
-		res, err := d.handleEvolveListCommand(ctx, stripped, sessionID)
-		return annotateEvolveSlashResult(stripped, res), err
-	case stripped == "/evolve" || strings.HasPrefix(stripped, "/evolve "):
-		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
-			return map[string]any{"output": errMsg, "result_type": "error"}, nil
-		}
-		res, err := d.handleEvolveCommand(ctx, stripped, sessionID)
-		return annotateEvolveSlashResult(stripped, res), err
-	default:
-		return nil, nil
+		result := HandleEvolutionSlashCommand(ctx, stripped, EvolutionSlashContext{
+			Mode:             mode,
+			SessionID:        sessionID,
+			SkillsDir:        skillsDir,
+			EvolutionEnabled: skillEvolutionEnabledFrom(d.configBaseSnapshot(), d.configCacheSnapshot()),
+			Language:         d.resolveRuntimeLanguage(),
+			ReviewAgentName:  defaultReviewAgentName,
+		})
+		return annotateEvolveSlashResult(stripped, result), nil
 	}
-}
-
-// annotateEvolveSlashResult 出口注记（Python evolution_slash_result，:350-368）：
-// 命令名/来源/显示级别 setdefault；nil 结果透传。
-func annotateEvolveSlashResult(query string, result map[string]any) map[string]any {
-	if result == nil {
-		return nil
-	}
-	return evolutionlogic.EvolutionSlashResult(
-		evolutionlogic.EvolutionSlashCommandName(query), result, nil)
+	return nil, nil
 }
 
 // ensureEvolutionRailForSlash 检查演进功能可用性，必要时配置并注册演进 rail 栈。
