@@ -40,6 +40,18 @@ func (f *fakeCoordinator) SnapshotSession(string) *sessionpkg.RuntimeSessionSnap
 	return f.snapshot
 }
 
+// LookupExecution 满足 CoordinatorPort（fake 默认查无）。
+func (f *fakeCoordinator) LookupExecution(string) *sessionpkg.SessionExecutionHandle {
+	return nil
+}
+
+// DeliverControlStream 满足 CoordinatorPort（fake 默认拒绝）。
+func (f *fakeCoordinator) DeliverControlStream(_ context.Context, _ string, _ []string,
+	_ func(context.Context) (<-chan *swarmschema.AgentResponseChunk, error),
+	_ sessionpkg.ControlDeliveryOptions, _ func(*swarmschema.AgentResponseChunk) bool) error {
+	return errors.New("fake: control stream not wired")
+}
+
 // CloseSession 记录并返回预设结果。
 func (f *fakeCoordinator) CloseSession(
 	sessionID string, _ *int, _ *time.Duration,

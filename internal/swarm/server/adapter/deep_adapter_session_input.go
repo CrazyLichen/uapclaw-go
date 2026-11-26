@@ -258,6 +258,9 @@ func (d *DeepAdapter) deliverActiveSessionInput(
 		entry.FailBoundary(enqueueErr)
 		return false, enqueueErr
 	}
+	// ③.5 账本登记（BoundaryGuard/交付节按 display 查条目；
+	// Python 的 QueuedSessionInput 对象即 part，Go 经账本承载）
+	sessionInputLedger.Register(entry)
 	// ④ 发布输入边界（与模型输出同队列；失败→DeliveryUnknown，输入被丢弃
 	// 而不拖垮原任务）
 	// Python: await self._session_input_guard.publish_input_received(entry)

@@ -162,8 +162,11 @@ type DeepAgent struct {
 	interactionPhase hschema.InteractionPhase
 	// interactionStarted 是否已 Start
 	interactionStarted bool
-	// activeInteractionRound 当前执行中的轮次
-	activeInteractionRound *hschema.ActiveInteractionRound
+	// activeInteractionRound 当前执行中的轮次。
+	// [25.6 收尾批] 改原子指针：EnqueueBoundSessionInput 在
+	// WithInteractionLock 锁内读该字段——sync.Mutex 非重入，若经
+	// ActiveRound()（加同一把锁）读取必然自死锁；写点仍持锁保证顺序。
+	activeInteractionRound atomic.Pointer[hschema.ActiveInteractionRound]
 	// interactionEvents user/goal 双队列调度器（无内部锁，调用方持 controlMu）
 	interactionEvents *task_loop.EventManager
 	// goalCoordinator Goal 能力面（9.89 由 Start 注入 *goal.GoalManager）
@@ -1821,9 +1824,9 @@ func (d *DeepAgent) InteractionStarted() bool {
 // Python: DeepAgent.active_round (L3901)
 func (d *DeepAgent) ActiveRound() *hschema.ActiveInteractionRound {
 	d.ensureInteractionState()
-	d.interactionControlMu.Lock()
-	defer d.interactionControlMu.Unlock()
-	return d.activeInteractionRound
+	// 原子读（不加 interactionControlMu）：EnqueueBoundSessionInput 在
+	// WithInteractionLock 锁内调用本方法——sync.Mutex 非重入，加锁即自死锁。
+	return d.activeInteractionRound.Load()
 }
 
 // EventManager 返回交互调度器。
@@ -1839,10 +1842,10 @@ func (d *DeepAgent) SetActiveRoundForTest(work *hschema.RoundWorkItem) {
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
 	if work == nil {
-		d.activeInteractionRound = nil
+		d.activeInteractionRound.Store(nil)
 		return
 	}
-	d.activeInteractionRound = &hschema.ActiveInteractionRound{Work: work}
+	d.activeInteractionRound.Store(&hschema.ActiveInteractionRound{Work: work})
 }
 
 // SetSteeringQueueForTest 注入 steering 通道（跨包测试专用；无 loop controller
@@ -1864,6 +1867,16 @@ func (d *DeepAgent) SetOutputStreamForTest(active bool) {
 	}
 	lease := d.interactionOutput.Attach()
 	_ = lease
+}
+
+// normalizeUnboundedIterations MaxInt 归一为 0（不限）。
+// ResolveInnerReactMaxIterations 把"未配置"解析成 math.MaxInt；守卫窗口
+// 判定以 0=不限为约定，这里归一。
+func normalizeUnboundedIterations(v int) int {
+	if v == math.MaxInt {
+		return 0
+	}
+	return v
 }
 
 // MaxIterations 返回内层 ReAct 迭代上限（0=不限；SessionInputGuard 准入窗口用）。
@@ -2503,7 +2516,7 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	newReactConfig.MaxIterations = config.ResolveInnerReactMaxIterations()
-	d.innerReactMaxIterations = newReactConfig.MaxIterations
+	d.innerReactMaxIterations = normalizeUnboundedIterations(newReactConfig.MaxIterations)
 	logInnerReactMaxIterations(config.MaxIterations, newReactConfig.MaxIterations)
 
 	if config.ContextEngineConfig != nil {
@@ -2704,7 +2717,7 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	reactConfig.MaxIterations = cfg.ResolveInnerReactMaxIterations()
-	d.innerReactMaxIterations = reactConfig.MaxIterations
+	d.innerReactMaxIterations = normalizeUnboundedIterations(reactConfig.MaxIterations)
 	logInnerReactMaxIterations(cfg.MaxIterations, reactConfig.MaxIterations)
 
 	if cfg.ContextEngineConfig != nil {
@@ -4575,7 +4588,7 @@ func (d *DeepAgent) waitInteractionEmits(timeout time.Duration) {
 // 等待会自锁）③ scheduler.CancelTask 有界等待 1.5s。
 // Python: _cancel_active_round (L4287)
 func (d *DeepAgent) cancelActiveRoundLocked(ctx context.Context, reason string, expected *RoundExpectation) {
-	active := d.activeInteractionRound
+	active := d.activeInteractionRound.Load()
 	if active == nil {
 		return
 	}
@@ -4807,7 +4820,7 @@ func (d *DeepAgent) stopInteractionLocked(ctx context.Context) error {
 	d.tryTransitionInteractionPhase(hschema.InteractionPhaseTerminated)
 
 	d.interactionControlMu.Lock()
-	d.activeInteractionRound = nil
+	d.activeInteractionRound.Store(nil)
 	d.interactionRoundCancel = nil
 	d.interactionRoundDone = nil
 	d.interactionRoundForwarded = nil
@@ -5045,7 +5058,7 @@ func (d *DeepAgent) closeIdleOutputIfFinished(_ context.Context) bool {
 // 让下一次尝试在宿主观察到空闲完成之前就排好队。
 // Python: _should_keep_interaction_open_locked (L4442)
 func (d *DeepAgent) shouldKeepInteractionOpenLocked() (bool, error) {
-	if d.interactionEvents.HasPendingWork() || d.activeInteractionRound != nil {
+	if d.interactionEvents.HasPendingWork() || d.activeInteractionRound.Load() != nil {
 		return true, nil
 	}
 	if d.goalCoordinator != nil && d.goalCoordinator.HasActiveRecord() {
@@ -5097,7 +5110,7 @@ func (d *DeepAgent) sendUser(_ context.Context, req hschema.SendInputRequest) er
 	if mode != hschema.InputDispatchModeFollowUp && mode != hschema.InputDispatchModeSteer {
 		return fmt.Errorf("unsupported input dispatch mode: %s", req.Mode)
 	}
-	if mode == hschema.InputDispatchModeSteer && d.activeInteractionRound != nil {
+	if mode == hschema.InputDispatchModeSteer && d.activeInteractionRound.Load() != nil {
 		ctrl := d.currentLoopController()
 		if ctrl == nil {
 			return fmt.Errorf("active interaction round cannot accept steer without loop controller")
@@ -5235,14 +5248,14 @@ func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkIte
 	taskID := strings.ReplaceAll(uuid.NewString(), "-", "")
 
 	d.interactionControlMu.Lock()
-	d.activeInteractionRound = &hschema.ActiveInteractionRound{Work: work, TaskID: taskID}
+	d.activeInteractionRound.Store(&hschema.ActiveInteractionRound{Work: work, TaskID: taskID})
 	d.interactionEvents.MarkStarted(work)
 	d.interactionControlMu.Unlock()
 
 	defer func() {
 		d.interactionControlMu.Lock()
 		d.interactionEvents.MarkFinished(work)
-		d.activeInteractionRound = nil
+		d.activeInteractionRound.Store(nil)
 		forwarded := d.interactionRoundForwarded
 		d.interactionControlMu.Unlock()
 
