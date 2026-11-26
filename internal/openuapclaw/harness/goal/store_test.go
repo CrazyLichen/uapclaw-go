@@ -30,6 +30,13 @@ func newFakeGoalSession(sessionID string) *fakeGoalSession {
 }
 
 // GetSessionID 返回会话标识
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *fakeGoalSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *fakeGoalSession) GetTeamID() string { return "" }
+
 func (s *fakeGoalSession) GetSessionID() string { return s.sessionID }
 
 // GetState 读取状态

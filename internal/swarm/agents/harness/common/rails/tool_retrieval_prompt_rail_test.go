@@ -249,6 +249,12 @@ func (s *railStateSession) GetState(key sessionstate.StateKey) (any, error) {
 	return s.state[key.String()], nil
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *railStateSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *railStateSession) GetTeamID() string { return "" }
+
 func (s *railStateSession) GetSessionID() string {
 	if s.id != "" {
 		return s.id

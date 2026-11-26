@@ -479,6 +479,12 @@ func TestFindHandoffFromSession_JSON解析失败(t *testing.T) {
 
 // mockSessionFacade 实现 SessionFacade 接口的方法
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (m *mockSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (m *mockSessionFacade) GetTeamID() string { return "" }
+
 func (m *mockSessionFacade) GetSessionID() string            { return "mock-session" }
 func (m *mockSessionFacade) UpdateState(data map[string]any) {}
 func (m *mockSessionFacade) GetState(key state.StateKey) (any, error) {

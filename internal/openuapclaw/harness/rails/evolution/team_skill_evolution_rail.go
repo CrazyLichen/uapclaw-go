@@ -1781,6 +1781,14 @@ func (r *TeamSkillEvolutionRail) ReviewFeedbackEvolutionEnabled() bool {
 	return r.reviewFeedbackCoordinator != nil
 }
 
+// SetReviewFeedbackCoordinator 注入评审反馈协调器（configure_review_feedback_evolution
+// 的 Go 落点）。Python: configure_review_feedback_evolution（team_skill_evolution_rail.py:246-271）
+// 以 lazy import 直构造协调器；Go 经 scheduling 包构造 + 本 setter 注入
+// （偏差：rail→scheduling 反向 import 成环，经 swarm providers 组装）。
+func (r *TeamSkillEvolutionRail) SetReviewFeedbackCoordinator(coordinator ReviewFeedbackCoordinator) {
+	r.reviewFeedbackCoordinator = coordinator
+}
+
 // BindReviewFeedbackSkillCreateRail 绑定已挂载、用于重复模式的新建 Skill rail。
 // Python: bind_review_feedback_skill_create_rail (team_skill_evolution_rail.py L277-280)。
 func (r *TeamSkillEvolutionRail) BindReviewFeedbackSkillCreateRail(rail ReviewFeedbackCoordinator) {

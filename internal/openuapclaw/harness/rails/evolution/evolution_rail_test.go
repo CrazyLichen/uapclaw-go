@@ -472,6 +472,12 @@ type fakeSessionFacade struct {
 	stateMu  sync.Mutex
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeSessionFacade) GetTeamID() string { return "" }
+
 func (f *fakeSessionFacade) GetSessionID() string { return f.sessionID }
 
 func (f *fakeSessionFacade) UpdateState(data map[string]any) {

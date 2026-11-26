@@ -161,6 +161,13 @@ type testSessionFacade struct {
 }
 
 // GetSessionID 返回会话 id
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *testSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *testSessionFacade) GetTeamID() string { return "" }
+
 func (f *testSessionFacade) GetSessionID() string { return f.id }
 
 // UpdateState 空实现

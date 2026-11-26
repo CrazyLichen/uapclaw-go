@@ -272,6 +272,10 @@ func (s *Session) BindParentSessionID(parentSessionID string) error {
 // SetTeamCacheScope 绑定成员会话推导缓存身份所需的团队作用域。
 // 两个参数缺一即忽略（对齐 Python 的空值守卫）。
 // Python: Session.set_team_cache_scope (core/session/agent.py L120-124)
+// GetTeamID 返回团队标识（单 agent 会话恒空串）。
+// Python: AgentSession 无 get_team_id（duck-typing 缺席语义 → 空串承载）。
+func (s *Session) GetTeamID() string { return "" }
+
 func (s *Session) SetTeamCacheScope(teamID, agentID string) {
 	if teamID == "" || agentID == "" {
 		return

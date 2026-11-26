@@ -1129,6 +1129,13 @@ func TestTaskLoopEventHandler_HandleTaskFailed_SessionSpawn_更新Toolkit(t *tes
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // GetSessionID 实现 SessionFacade 接口
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeHandlerSess) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeHandlerSess) GetTeamID() string { return "" }
+
 func (f *fakeHandlerSess) GetSessionID() string {
 	return f.sessionID
 }

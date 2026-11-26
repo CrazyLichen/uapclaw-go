@@ -47,6 +47,12 @@ type lineageAndTurnStub struct {
 	env                                   map[string]any
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *lineageAndTurnStub) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *lineageAndTurnStub) GetTeamID() string { return "" }
+
 func (s *lineageAndTurnStub) GetSessionID() string { return s.id }
 func (s *lineageAndTurnStub) GetCacheIdentity() KVCacheIdentity {
 	return KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCacheID}

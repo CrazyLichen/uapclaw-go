@@ -27,6 +27,12 @@ type captureSession struct {
 	frames []any
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *captureSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *captureSession) GetTeamID() string { return "" }
+
 func (s *captureSession) GetSessionID() string                   { return "test-session" }
 func (s *captureSession) UpdateState(_ map[string]any)           {}
 func (s *captureSession) GetState(_ state.StateKey) (any, error) { return nil, nil }

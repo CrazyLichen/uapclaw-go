@@ -27,6 +27,12 @@ func newStatefulSession() *statefulSession {
 	return &statefulSession{state: make(map[string]any)}
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *statefulSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *statefulSession) GetTeamID() string { return "" }
+
 func (s *statefulSession) GetSessionID() string { return "test-session" }
 
 func (s *statefulSession) GetCacheIdentity() kv_cache.KVCacheIdentity {

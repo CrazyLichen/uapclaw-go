@@ -163,6 +163,9 @@ func (s *AgentTeamSession) GetTeamID() string {
 	return s.teamID
 }
 
+// GetAgentID 返回成员 agent 标识（Team 会话 Python 无 get_agent_id → 空串承载）。
+func (s *AgentTeamSession) GetAgentID() string { return "" }
+
 // GetCacheIdentity 返回团队会话共享的根缓存身份。
 // Python: AgentTeamSession.get_cache_identity -> KVCacheIdentity（无 raise）
 // (core/session/agent_team.py L61-66)

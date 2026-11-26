@@ -111,6 +111,12 @@ func WithWorkflowSessionInner(inner *internal.WorkflowSession) WorkflowSessionOp
 }
 
 // GetSessionID 返回会话唯一标识
+// GetAgentID 返回会话属主 agent 标识（Workflow 会话 Python 无该方法 → 空串承载）。
+func (ws *WorkflowSession) GetAgentID() string { return "" }
+
+// GetTeamID 返回团队标识（Workflow 会话 Python 无该方法 → 空串承载）。
+func (ws *WorkflowSession) GetTeamID() string { return "" }
+
 func (ws *WorkflowSession) GetSessionID() string {
 	if ws.inner == nil {
 		return ""

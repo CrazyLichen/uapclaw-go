@@ -102,6 +102,12 @@ func (f *NodeSessionFacade) GetExecutableID() string {
 
 // GetSessionID 返回会话唯一标识
 // Python: Session.get_session_id()
+// GetAgentID 返回会话属主 agent 标识（Node 会话 Python 无该方法 → 空串承载）。
+func (f *NodeSessionFacade) GetAgentID() string { return "" }
+
+// GetTeamID 返回团队标识（Node 会话 Python 无该方法 → 空串承载）。
+func (f *NodeSessionFacade) GetTeamID() string { return "" }
+
 func (f *NodeSessionFacade) GetSessionID() string {
 	return f.inner.SessionID()
 }

@@ -634,6 +634,13 @@ type fakeSession struct {
 }
 
 // GetSessionID 实现 SessionFacade
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeSession) GetTeamID() string { return "" }
+
 func (f *fakeSession) GetSessionID() string { return f.sessionID }
 
 // UpdateState 实现 SessionFacade（本批未使用）

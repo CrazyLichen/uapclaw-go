@@ -236,6 +236,13 @@ type fakeAttachmentSession struct {
 }
 
 // GetSessionID 返回会话标识
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *fakeAttachmentSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *fakeAttachmentSession) GetTeamID() string { return "" }
+
 func (f *fakeAttachmentSession) GetSessionID() string { return f.sessionID }
 
 // fakeAttachmentAgent 仅实现 PromptAttachments 的 BaseAgent 桩。

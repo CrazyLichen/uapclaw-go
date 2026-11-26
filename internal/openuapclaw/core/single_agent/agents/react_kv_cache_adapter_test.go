@@ -24,6 +24,12 @@ type kvCacheTestSession struct {
 	state        map[string]any
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *kvCacheTestSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *kvCacheTestSession) GetTeamID() string { return "" }
+
 func (s *kvCacheTestSession) GetSessionID() string { return s.id }
 func (s *kvCacheTestSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 	return kv_cache.KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCache}

@@ -12,7 +12,7 @@ import (
 func acquireFileLockDefault(lockPath string) (func(), error) {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		if err := os.Mkdir(lockPath + ".lockdir", 0o755); err == nil {
+		if err := os.Mkdir(lockPath+".lockdir", 0o755); err == nil {
 			return func() { _ = os.RemoveAll(lockPath + ".lockdir") }, nil
 		}
 		if time.Now().After(deadline) {

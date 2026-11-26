@@ -38,6 +38,13 @@ func newSkillFakeSession(id string) *skillFakeSession {
 }
 
 // GetSessionID 返回会话 id
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (f *skillFakeSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (f *skillFakeSession) GetTeamID() string { return "" }
+
 func (f *skillFakeSession) GetSessionID() string { return f.id }
 
 // UpdateState 合并写入状态

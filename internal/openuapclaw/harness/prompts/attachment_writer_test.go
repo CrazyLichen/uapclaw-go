@@ -142,6 +142,13 @@ type stubSession struct{ id string }
 func newStubSession(id string) *stubSession { return &stubSession{id: id} }
 
 // GetSessionID 返回会话标识。
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *stubSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *stubSession) GetTeamID() string { return "" }
+
 func (s *stubSession) GetSessionID() string { return s.id }
 
 // UpdateState 空实现。

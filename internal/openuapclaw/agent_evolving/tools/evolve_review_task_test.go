@@ -215,7 +215,13 @@ type fakeSessionFacadeForEvolve struct {
 	sessionID string
 }
 
-func (f *fakeSessionFacadeForEvolve) GetSessionID() string                         { return f.sessionID }
+func (f *fakeSessionFacadeForEvolve) GetSessionID() string { return f.sessionID }
+
+// GetAgentID 空桩（facade 15.24c 扩面）。
+func (f *fakeSessionFacadeForEvolve) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（facade 15.24c 扩面）。
+func (f *fakeSessionFacadeForEvolve) GetTeamID() string                            { return "" }
 func (f *fakeSessionFacadeForEvolve) UpdateState(map[string]any)                   {}
 func (f *fakeSessionFacadeForEvolve) GetState(state.StateKey) (any, error)         { return nil, nil }
 func (f *fakeSessionFacadeForEvolve) DumpState() map[string]any                    { return nil }

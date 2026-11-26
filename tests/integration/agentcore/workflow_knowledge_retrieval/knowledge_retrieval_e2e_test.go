@@ -38,9 +38,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/resource"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/configpanel"
 )
 

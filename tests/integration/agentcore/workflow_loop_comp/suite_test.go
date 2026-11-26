@@ -16,14 +16,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow"
-	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components"
 	flow "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow"
 	loop "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/components/flow/loop"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // LoopCompSuite 8.20 LoopComp 端到端集成。

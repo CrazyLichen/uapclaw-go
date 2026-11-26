@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/workflow/workflowbase"
 )
 
 // interactionPayloadID/ComponentID 双形态辅助：值/指针/map 三形态 + 未知类型
@@ -142,7 +142,7 @@ func TestDeepCloneHelpers_nil(t *testing.T) {
 // result 非 list 守卫
 func TestPendingInteractionValue_指针帧(t *testing.T) {
 	out := &workflowbase.WorkflowOutput{Result: []stream.Schema{&stream.OutputSchema{
-		Type: interaction.InteractionType,
+		Type:    interaction.InteractionType,
 		Payload: &interaction.InteractionOutput{ID: "react", Value: "指针值"}}}}
 	v, ok := pendingInteractionValue(map[string]any{
 		"workflow_execution_state": out, "component_ids": []string{"react"}})

@@ -58,6 +58,12 @@ func (r *RouterSessionFacade) GetExecutableID() string {
 }
 
 // GetSessionID 返回会话唯一标识（只读，允许）
+// GetAgentID 委托内层会话（Router 会话 Python 无该方法 → 空串承载）。
+func (r *RouterSessionFacade) GetAgentID() string { return r.inner.GetAgentID() }
+
+// GetTeamID 委托内层会话（Router 会话 Python 无该方法 → 空串承载）。
+func (r *RouterSessionFacade) GetTeamID() string { return r.inner.GetTeamID() }
+
 func (r *RouterSessionFacade) GetSessionID() string {
 	return r.inner.GetSessionID()
 }

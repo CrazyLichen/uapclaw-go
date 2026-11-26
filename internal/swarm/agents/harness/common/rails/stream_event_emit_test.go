@@ -23,6 +23,12 @@ type fakeSession struct {
 	err     error
 }
 
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (s *fakeSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (s *fakeSession) GetTeamID() string { return "" }
+
 func (s *fakeSession) GetSessionID() string       { return "test-session" }
 func (s *fakeSession) UpdateState(map[string]any) {}
 func (s *fakeSession) WriteStream(_ context.Context, data any) error {

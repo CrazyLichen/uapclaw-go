@@ -277,6 +277,75 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 	return deletedCount, nil
 }
 
+// DeleteRecordsForKind 按 subject_kind 过滤删除记录。
+// Python: StoreRecordsHelper.delete_records(name, record_ids, subject_kind=...)（:326-352）。
+func (h *StoreRecordsHelper) DeleteRecordsForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) (int, error) {
+	if len(recordIDs) == 0 {
+		return 0, nil
+	}
+	evoLog, err := h.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
+	if err != nil {
+		return 0, fmt.Errorf("load evolution log for delete_records: %w", err)
+	}
+	idsSet := make(map[string]bool, len(recordIDs))
+	for _, id := range recordIDs {
+		idsSet[id] = true
+	}
+	originalCount := len(evoLog.Entries)
+	filtered := make([]EvolutionRecord, 0)
+	for _, r := range evoLog.Entries {
+		if !idsSet[r.ID] {
+			filtered = append(filtered, r)
+		}
+	}
+	evoLog.Entries = filtered
+	deletedCount := originalCount - len(evoLog.Entries)
+	if deletedCount > 0 {
+		evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		skillDir := h.store.ResolveSkillDirForKind(ctx, name, true, subjectKind)
+		if err := h.SaveEvolutionLog(ctx, name, evoLog, skillDir); err != nil {
+			return deletedCount, err
+		}
+		_ = h.store.RenderEvolutionMarkdownForKind(ctx, name, subjectKind)
+		logger.Info(logComponent).
+			Int("deleted_count", deletedCount).
+			Str("skill", name).
+			Msg("[EvolutionStore] deleting record")
+	}
+	return deletedCount, nil
+}
+
+// MarkRecordsAppliedForKind 按 subject_kind 过滤标记记录已应用。
+// Python: StoreRecordsHelper.mark_records_applied(name, record_ids, subject_kind=...)（:354+）。
+func (h *StoreRecordsHelper) MarkRecordsAppliedForKind(ctx context.Context, name string, recordIDs []string, subjectKind string) (int, error) {
+	if len(recordIDs) == 0 {
+		return 0, nil
+	}
+	evoLog, err := h.LoadFullEvolutionLogForKind(ctx, name, subjectKind)
+	if err != nil {
+		return 0, fmt.Errorf("load evolution log for mark_records_applied: %w", err)
+	}
+	idsSet := make(map[string]bool, len(recordIDs))
+	for _, id := range recordIDs {
+		idsSet[id] = true
+	}
+	updatedCount := 0
+	for i := range evoLog.Entries {
+		if idsSet[evoLog.Entries[i].ID] && !evoLog.Entries[i].Applied {
+			evoLog.Entries[i].Applied = true
+			updatedCount++
+		}
+	}
+	if updatedCount > 0 {
+		evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		skillDir := h.store.ResolveSkillDirForKind(ctx, name, true, subjectKind)
+		if err := h.SaveEvolutionLog(ctx, name, evoLog, skillDir); err != nil {
+			return updatedCount, err
+		}
+	}
+	return updatedCount, nil
+}
+
 // MarkRecordsApplied 标记记录已应用。
 // Python: StoreRecordsHelper.mark_records_applied(name, record_ids)
 func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string) (int, error) {

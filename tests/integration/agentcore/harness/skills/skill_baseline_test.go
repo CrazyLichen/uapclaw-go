@@ -87,6 +87,13 @@ func (a *itAgent) Card() *agentschema.AgentCard {
 func (a *itAgent) PromptAttachments() *prompts.Manager { return a.attachMgr }
 
 // GetSessionID 返回会话 id
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (sess *itSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (sess *itSession) GetTeamID() string { return "" }
+
 func (sess *itSession) GetSessionID() string { return sess.id }
 
 // UpdateState 合并写入状态

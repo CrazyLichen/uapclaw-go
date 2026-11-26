@@ -94,8 +94,13 @@ type TeamManager struct {
 	teamMemberSkillEvoRails map[string][]*evolution.SkillEvolutionRail   // sessionID → []SkillEvolutionRail
 	teamSkillCreateRails    map[string]*skills.TeamSkillCreateRail       // sessionID → TeamSkillCreateRail
 	teamRailContexts        map[string]*TeamRailMountContext             // sessionID → TeamRailMountContext
-	teamLiveRails           map[string][]LiveRailEntry                   // sessionID → []LiveRailEntry
-	teamSkillSyncTargets    map[string]SkillSyncTarget                   // sessionID → SkillSyncTarget
+	// memberRailContexts teammate rail-mount context（Python: team_member_rail_contexts；
+	// G2 随 15.24c 补）
+	memberRailContexts map[string]*TeamRailMountContext
+	// flags 一次性标记面（evolution watcher deferred 等；G2 随 15.24c 补）
+	flags                map[string]bool
+	teamLiveRails        map[string][]LiveRailEntry // sessionID → []LiveRailEntry
+	teamSkillSyncTargets map[string]SkillSyncTarget // sessionID → SkillSyncTarget
 
 	// 演进监控
 	// 对齐 Python: _team_evolution_watchers
@@ -184,6 +189,8 @@ func NewTeamManager() *TeamManager {
 		teamMemberSkillEvoRails: make(map[string][]*evolution.SkillEvolutionRail),
 		teamSkillCreateRails:    make(map[string]*skills.TeamSkillCreateRail),
 		teamRailContexts:        make(map[string]*TeamRailMountContext),
+		memberRailContexts:      make(map[string]*TeamRailMountContext),
+		flags:                   make(map[string]bool),
 		teamLiveRails:           make(map[string][]LiveRailEntry),
 		teamSkillSyncTargets:    make(map[string]SkillSyncTarget),
 		teamEvolutionWatchers:   make(map[string]context.CancelFunc),

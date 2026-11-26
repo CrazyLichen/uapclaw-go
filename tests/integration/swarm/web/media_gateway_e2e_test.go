@@ -378,7 +378,6 @@ func (s *MediaGatewayE2ESuite) TestU5_ChatSend_图片全链() {
 	s.True(foundImage, "user 消息应含 data URI image_url part（图片字节内联进模型输入）")
 }
 
-
 // ──────────────────────────── 下行 ────────────────────────────
 
 // TestD1_DownloadVerifiedChunk_分块下载 sealed-asset 令牌 → server 侧

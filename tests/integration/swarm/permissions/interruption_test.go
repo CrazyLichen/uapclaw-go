@@ -362,6 +362,13 @@ func newRecordingSession() *recordingSession {
 }
 
 // GetSessionID 实现 SessionFacade
+
+// GetAgentID 空桩（SessionFacade 15.24c 扩面：GetAgentID/GetTeamID）。
+func (r *recordingSession) GetAgentID() string { return "" }
+
+// GetTeamID 空桩（SessionFacade 15.24c 扩面）。
+func (r *recordingSession) GetTeamID() string { return "" }
+
 func (r *recordingSession) GetSessionID() string { return "recording-session" }
 
 // GetCacheIdentity 实现 SessionFacade
