@@ -133,7 +133,7 @@ func TestBroadcastEvolutionProgress(t *testing.T) {
 		{"data": "stream2"},
 	}
 	chID := "ch-1"
-	err := BroadcastEvolutionProgress(t.Context(), &chID, "sess-1", events, parseFn, broadcastFn)
+	err := BroadcastEvolutionProgress(t.Context(), chID, "sess-1", events, parseFn, broadcastFn)
 	if err != nil {
 		t.Errorf("BroadcastEvolutionProgress() 返回错误: %v", err)
 	}
