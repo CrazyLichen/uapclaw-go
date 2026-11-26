@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	lifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1550,7 +1550,7 @@ func (c *RuntimeSessionCoordinator) DeliverControlStream(
 		return opErr
 	}
 	for chunk := range opCh {
-		if emitErr := c.emitChunkStreamTerminal(handle, parent, parentWasWaiting, chunk, opts, emit); emitErr != nil {
+		if emitErr := c.emitChunkStreamTerminal(handle, chunk, opts); emitErr != nil {
 			return emitErr
 		}
 		if emit != nil && !emit(chunk) {
@@ -1576,26 +1576,21 @@ func (c *RuntimeSessionCoordinator) DeliverControlStream(
 				sessionID, requestID),
 		}
 	}
-	var controlIDs map[string]struct{}
-	if opts.InteractionIDs != nil {
-		controlIDs = opts.InteractionIDs(&schema.AgentResponseChunk{})
-	}
-	// 流式版：交互标识在转发期已即时标记（此处收尾只做 answered/终态）
+	// 收尾（Python: else 分支——交互标识在转发期已即时标记，此处只做
+	// answered/终态；交互挂起看 handle.waiting_control_ids 累积）
 	c.answered(parent, claimed, parentWasWaiting)
 	if len(handle.WaitingControlIDs) > 0 {
 		c.registry.MarkWaiting(handle)
 	} else {
 		c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
 	}
-	_ = controlIDs
 	return nil
 }
 
 // emitChunkStreamTerminal 单 chunk 的即时挂起标记（流式转发循环内联辅助）。
 func (c *RuntimeSessionCoordinator) emitChunkStreamTerminal(
-	handle *SessionExecutionHandle, parent *SessionExecutionHandle,
-	parentWasWaiting bool, chunk *schema.AgentResponseChunk,
-	opts ControlDeliveryOptions, emit func(*schema.AgentResponseChunk) bool,
+	handle *SessionExecutionHandle, chunk *schema.AgentResponseChunk,
+	opts ControlDeliveryOptions,
 ) error {
 	var controlIDs map[string]struct{}
 	if opts.InteractionIDs != nil {

@@ -328,3 +328,27 @@ func (c *AgentResponseChunk) IsTerminal() bool {
 	}
 	return false
 }
+
+// ──────────────────────────── 常量（会话补充输入面共享） ────────────────────────────
+
+const (
+	// CrossSessionInternalKey 跨会话消息内部参数键。
+	// [25.6 收尾批] 原在 runtime/request.go（SessionMessageInternalKey）——
+	// adapter 投递链需直接消费而 runtime→server/runtime 成环，故下沉本包
+	// （双方共同依赖的 leaf）；runtime 侧保留别名转发。
+	CrossSessionInternalKey = "_jiuwenswarm_cross_session"
+)
+
+// ParseRequestParams 解析请求 params（nil/空/坏 JSON → 空表）。
+// [25.6 收尾批] 与 runtime/request.go parseRequestParams 同语义；下沉本包
+// 消除 adapter 侧的内联重复（B3）。
+func ParseRequestParams(req *AgentRequest) map[string]any {
+	if req == nil || len(req.Params) == 0 {
+		return map[string]any{}
+	}
+	params := map[string]any{}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return map[string]any{}
+	}
+	return params
+}

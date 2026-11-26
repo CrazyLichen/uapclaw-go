@@ -154,8 +154,11 @@ type AgentRuntime struct {
 	// GetTeamManager(channelID) 渠道粒度既定差异改为渠道维度缓存，spec 附录 A）
 	sessionRuntimeLifecycleMu sync.Mutex
 	sessionRuntimeLifecycle   map[string]SessionRuntimeLifecyclePort
-	// interactionPendingClearer 交互 pending 清理缝（可选；nil=缺席，spec 附录 A）
-	interactionPendingClearer any
+	// pendingInteractions 挂起交互账本（session_id → 交互标识集合）。
+	// Python: AdmissionController.state.pending_interrupt_ids（25.6 收尾批落账，
+	// 原 interactionPendingClearer 注入缝删除——缝无装配方，规则 8）
+	pendingInteractions   map[string]map[string]struct{}
+	pendingInteractionsMu sync.Mutex
 	// provisioner 会话开通器（创建/切换/分叉/删除的唯一出口）
 	// Python: service.py:403-409 self._session_provisioner = RuntimeSessionProvisioner(...)
 	//
@@ -396,7 +399,11 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest, opt
 	if execErr != nil {
 		return nil, execErr
 	}
-	return []*RuntimeEvent{FromAgentResponse(resp)}, nil
+	// Python :1885 await self._mark_pending_interaction(event)——事件集合命中
+	// 即登记挂起（automated turns 让路的账本源）
+	event := FromAgentResponse(resp)
+	r.markPendingInteractionIfInteractionEvent(event)
+	return []*RuntimeEvent{event}, nil
 }
 
 // Stream 执行流式 chat turn；onEvent 返回 false 时停止消费。
@@ -457,7 +464,10 @@ func (r *AgentRuntime) Stream(
 		return streamErr
 	}
 	for chunk := range ch {
-		if onEvent != nil && !onEvent(FromAgentResponseChunk(chunk)) {
+		event := FromAgentResponseChunk(chunk)
+		// Python :2531 async def mark_interaction —— 事件集合命中即登记挂起
+		r.markPendingInteractionIfInteractionEvent(event)
+		if onEvent != nil && !onEvent(event) {
 			break
 		}
 	}
@@ -1931,19 +1941,96 @@ func sessionIDOr(req *schema.AgentRequest, fallback string) string {
 	return strings.TrimSpace(*req.SessionID)
 }
 
-// interactionPendingClearer 交互 pending 清理窄缝（可选注入）。
+// interactionPendingClearer 交互 pending 清理窄缝（已废弃，占位注释见 clearPendingInteraction）。
 // Python: admission_controller.clear_interaction_pending（:573-578 duck-typing
 // 调用，可缺席）；Go 无该域，字段 nil 时跳过（缺口登记 spec 附录 A）。
 type interactionPendingClearer interface {
 	ClearInteractionPending(sessionID string, requestID *string) error
 }
 
-// clearPendingInteraction 清理挂起交互（可选注入缝，nil 时跳过）。
-// Python: service.py:570-579 _clear_pending_interaction
+// clearPendingInteraction 清理挂起交互（requestID=nil 清全会话）。
+// Python: service.py:570-579 _clear_pending_interaction → admission.clear_interaction_pending
 func (r *AgentRuntime) clearPendingInteraction(sessionID string, requestID *string) {
-	if clearer, ok := any(r.interactionPendingClearer).(interactionPendingClearer); ok && clearer != nil {
-		_ = clearer.ClearInteractionPending(sessionID, requestID)
+	r.pendingInteractionsMu.Lock()
+	defer r.pendingInteractionsMu.Unlock()
+	if requestID == nil {
+		delete(r.pendingInteractions, sessionID)
+		return
 	}
+	if ids := r.pendingInteractions[sessionID]; ids != nil {
+		delete(ids, *requestID)
+		if len(ids) == 0 {
+			delete(r.pendingInteractions, sessionID)
+		}
+	}
+}
+
+// markPendingInteraction 登记挂起交互（USER_INTERACTION_EVENTS 命中时调用）。
+// Python: service.py:551-565 _mark_pending_interaction → admission.mark_interaction_pending
+// —— "Keep automated turns out while a tool interrupt awaits its answer"：
+// 心跳/跨会话邮箱自动轮在会话有未答交互时让路。
+func (r *AgentRuntime) markPendingInteraction(sessionID, requestID string) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return
+	}
+	if r.pendingInteractions == nil {
+		r.pendingInteractions = make(map[string]map[string]struct{})
+	}
+	r.pendingInteractionsMu.Lock()
+	defer r.pendingInteractionsMu.Unlock()
+	if r.pendingInteractions[sessionID] == nil {
+		r.pendingInteractions[sessionID] = make(map[string]struct{})
+	}
+	r.pendingInteractions[sessionID][requestID] = struct{}{}
+}
+
+// pendingInteractionIDs 会话当前挂起的全部交互标识（只读副本）。
+// Python: service.py:581-584 _pending_interaction_ids
+func (r *AgentRuntime) pendingInteractionIDs(sessionID string) map[string]struct{} {
+	r.pendingInteractionsMu.Lock()
+	defer r.pendingInteractionsMu.Unlock()
+	out := make(map[string]struct{}, len(r.pendingInteractions[sessionID]))
+	for id := range r.pendingInteractions[sessionID] {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+// HasPendingInteraction 会话是否有未答交互（admission blocked 探针的并集项）。
+// Python: execution.py:134-136 has_pending_interaction
+func (r *AgentRuntime) HasPendingInteraction(sessionID string) bool {
+	r.pendingInteractionsMu.Lock()
+	defer r.pendingInteractionsMu.Unlock()
+	return len(r.pendingInteractions[sessionID]) > 0
+}
+
+// markPendingInteractionIfInteractionEvent USER_INTERACTION_EVENTS 命中时
+// 登记挂起（Python _mark_pending_interaction 的事件过滤一比一：
+// chat.ask_user_question / chat.client_tool_request）。
+func (r *AgentRuntime) markPendingInteractionIfInteractionEvent(event *RuntimeEvent) {
+	if event == nil {
+		return
+	}
+	eventType, _ := event.Payload["event_type"].(string)
+	if eventType != "chat.ask_user_question" && eventType != "chat.client_tool_request" {
+		return
+	}
+	requestID, _ := event.Payload["request_id"].(string)
+	r.markPendingInteraction(sessionIDOrSession(strings.TrimSpace(event.SessionID)), requestID)
+}
+
+// sessionIDOrSession 空会话回退 "default"（Python: event.session_id or "default"）。
+func sessionIDOrSession(sessionID string) string {
+	if strings.TrimSpace(sessionID) == "" {
+		return "default"
+	}
+	return sessionID
+}
+
+// MarkInteractionPendingPublic 供 admission 适配器转发（25.6 收尾批）。
+func (r *AgentRuntime) MarkInteractionPendingPublic(sessionID, requestID string) {
+	r.markPendingInteraction(sessionID, requestID)
 }
 
 // publishTeamPauseCompleted 业务流退出后发布暂停完成（保留观察者）。
