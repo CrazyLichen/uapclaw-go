@@ -5,6 +5,7 @@ package web_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -31,6 +32,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
+	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 
 // HTTPDispatchE2ESuite 27-A B2 /api/v1 HTTP 分发面 e2e（真实网关进程）。
@@ -190,6 +192,59 @@ func (s *HTTPDispatchE2ESuite) TestHTTP全链会话多轮() {
 	dStatus, dBody := s.requestJSON("DELETE", base+"/api/v1/sessions/"+sid, nil)
 	s.Require().Equal(404, dStatus)
 	s.Require().Equal("METHOD_NOT_FOUND", dBody["error"].(map[string]any)["code"])
+}
+
+// TestHTTP断开后台续跑_结果落历史 HTTP unary chat.send 发出后客户端立即断开：
+// server 侧执行不受影响（transport 常驻连接独立于 HTTP 请求生命周期），
+// 结果落 session history；重连后 history.get 可取回。
+// Python 对照：gateway↔agentserver 单 WS 承载全部请求（gateway_push/transport.py），
+// HTTP 客户端生命周期不传入 server 侧。
+func (s *HTTPDispatchE2ESuite) TestHTTP断开后台续跑_结果落历史() {
+	base := s.baseURL()
+
+	// ① 建会话
+	status, body := s.postJSON(base+"/api/v1/sessions", []byte("{}"))
+	s.Require().Equal(201, status)
+	sid, _ := body["data"].(map[string]any)["session_id"].(string)
+	s.Require().NotEmpty(sid)
+
+	// ② unary chat.send：发出请求后立即断开（不读响应体）
+	baseline := s.MockLLM.StreamCallCount()
+	s.MockLLM.SetResponses(
+		mockllm.CreateTextResponse("断线后台回复"),
+	)
+	requestCtx, cancelReq := context.WithCancel(s.Ctx)
+	req, reqErr := http.NewRequestWithContext(requestCtx, "POST",
+		base+"/api/v1/chat/send",
+		bytes.NewReader([]byte(fmt.Sprintf(`{"session_id":%q,"query":"断线测试","mode":"agent"}`, sid))))
+	s.Require().NoError(reqErr)
+	req.Header.Set("Content-Type", "application/json")
+	_, sendErr := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	// 客户端已断开：请求失败（ctx 取消/EOF）或瞬间返回均视为断开成立
+	cancelReq()
+	_ = sendErr
+
+	// ③ 后台应继续跑：MockLLM 被调用（未因断开被取消）
+	s.Require().Eventually(func() bool {
+		return s.MockLLM.StreamCallCount() >= baseline+1
+	}, 15*time.Second, 50*time.Millisecond, "断开后 server 应继续执行")
+
+	// ④ 重连查结果：history.get 出现最终文本
+	s.Require().Eventually(func() bool {
+		hStatus, hBody := s.getJSON(base + "/api/v1/sessions/" + sid + "/history?page_idx=1")
+		if hStatus != 200 {
+			return false
+		}
+		hData, _ := hBody["data"].(map[string]any)
+		raw, _ := json.Marshal(hData["messages"])
+		return strings.Contains(string(raw), "断线后台回复")
+	}, 15*time.Second, 100*time.Millisecond, "结果应落 history 可查回")
+
+	// ⑤ metadata 端点状态：session.get_metadata 为预定义未实现 RPC（27.6
+	// 下游缺口）→ 404 METHOD_NOT_FOUND（与本套件既有断言一致，登记现状）
+	gStatus, gBody := s.getJSON(base + "/api/v1/sessions/" + sid)
+	s.Require().Equal(404, gStatus)
+	s.Require().Equal("METHOD_NOT_FOUND", gBody["error"].(map[string]any)["code"])
 }
 
 // ──────────────────────────── 附件 ────────────────────────────
