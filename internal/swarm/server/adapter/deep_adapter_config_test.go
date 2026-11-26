@@ -1061,8 +1061,8 @@ func TestUpdateToolsForMode_正常注册(t *testing.T) {
 	}
 }
 
-// TestResolveEnableTaskLoop_SkillCreate覆盖 验证 skill_create=true 时强制启用 task loop
-// 对齐 Python interface_deep.py:2215-2248
+// TestResolveEnableTaskLoop_SkillCreate覆盖 验证 skill_evolution=true 时强制启用 task loop
+// 对齐 Python interface_deep.py:11687-11713
 func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 	d := &DeepAdapter{}
 	cases := []struct {
@@ -1072,15 +1072,15 @@ func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 		want       bool
 	}{
 		{
-			name:       "skill_create=true且用户关闭则强制开启",
+			name:       "skill_evolution=true且用户关闭则强制开启",
 			config:     map[string]any{"enable_task_loop": false},
-			configBase: map[string]any{"evolution": map[string]any{"skill_create": true}},
+			configBase: map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}},
 			want:       true,
 		},
 		{
-			name:       "skill_create=true且缺键默认开启",
+			name:       "skill_evolution=true且缺键默认开启",
 			config:     map[string]any{},
-			configBase: map[string]any{"evolution": map[string]any{"skill_create": true}},
+			configBase: map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}},
 			want:       true,
 		},
 		{

@@ -84,7 +84,7 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode stri
 		}
 		return displayMode + " 模式下演进功能不可用。"
 	}
-	// Python: 2. enabled 门
+	// Python: 2. enabled 门（skillEvolutionEnabledFrom=15.24d 双读法对齐）
 	if !skillEvolutionEnabledFrom(d.configBaseSnapshot(), d.configCacheSnapshot()) {
 		return "演进功能未启用。"
 	}

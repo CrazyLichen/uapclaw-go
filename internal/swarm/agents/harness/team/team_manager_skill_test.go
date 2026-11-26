@@ -237,11 +237,11 @@ func TestUpdateEvolutionConfig_热更新开关(t *testing.T) {
 	mgr.RegisterTeamSkillCreateRail("sess-ue", createRail)
 	mgr.RegisterTeamLiveRail("sess-ue", agent, createRail)
 
-	// skill_create 关闭（默认 False 时 evolution skill_create_enabled 未开启）→ create rail 反注册
+	// skill_evolution 关闭（缺省 False）→ create rail 反注册
 	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{})
 
 	if _, ok := mgr.teamSkillCreateRails["sess-ue"]; ok {
-		t.Fatalf("create rail should be unregistered when skill_create disabled")
+		t.Fatalf("create rail should be unregistered when skill_evolution disabled")
 	}
 }
 
@@ -291,23 +291,31 @@ func TestRegisterTeamRailContext_非leader丢弃(t *testing.T) {
 //	按 mount 开关挂载三类 rail 并注册到 manager 各表。
 //
 // 注意：get_config() 总是覆盖 workspace.config（Python 语义），
-// 因此 skill_create 开关必须写在全局 config.yaml 中而非 workspace.Config。
+// 因此 skill_evolution 开关必须写在全局 config.yaml 中而非 workspace.Config。
 func TestBuildAndMountMemberRailsForContext_挂载TeamSkillCreateRail(t *testing.T) {
 	wsDir, _ := setupSkillTestEnv(t)
 	mgr := NewTeamManager()
 
-	// 全局 config.yaml 启用 skill_create
+	// 全局 config.yaml 启用 skill_evolution
 	configDir := filepath.Join(wsDir, "config")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 	writeFile(t, filepath.Join(configDir, "config.yaml"), `
+models:
+  default:
+    model_client_config:
+      model_name: test-model
+      client_provider: openai
+      api_base: http://localhost:1
+      api_key: test
+      verify_ssl: false
 react:
   evolution:
-    skill_create: true
+    skill_evolution: true
 `)
 
-	// leader + skills_dir + skill_create 启用 → BuildMemberRails step 11 产出 TeamSkillCreateRail
+	// leader + skills_dir + skill_evolution 启用 → BuildMemberRails step 11 产出 TeamSkillCreateRail
 	skillsDir := t.TempDir()
 	leaderRole := "leader"
 	agent := newCustomizerFakeAgent("agent")
@@ -364,7 +372,7 @@ models:
       verify_ssl: false
 react:
   evolution:
-    auto_scan: false
+    skill_evolution: true
 `)
 
 	skillsDir := t.TempDir()
@@ -401,13 +409,13 @@ react:
 
 // TestBuildAndMountMemberRailsForContext_最新config覆盖workspace
 // 对齐 Python latest_config = get_config(); context.team_workspace.config = latest_config：
-// workspace.Config 旧值（无 skill_create）被 get_config() 新值（含 skill_create）覆盖后，
+// workspace.Config 旧值被 get_config() 新值（含 skill_evolution）覆盖后，
 // BuildMemberRails step 11 才能产出 TeamSkillCreateRail。
 func TestBuildAndMountMemberRailsForContext_最新config覆盖workspace(t *testing.T) {
 	wsDir, _ := setupSkillTestEnv(t)
 	mgr := NewTeamManager()
 
-	// 在 workspace config 目录写入含 skill_create 的最新 config.yaml
+	// 在 workspace config 目录写入含 skill_evolution 的最新 config.yaml
 	// （UAPCLAW_DATA_DIR 控制 WorkspaceDir → ConfigDir → config.yaml）
 	configDir := filepath.Join(wsDir, "config")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
@@ -424,7 +432,7 @@ models:
       verify_ssl: false
 react:
   evolution:
-    skill_create: true
+    skill_evolution: true
 `)
 
 	skillsDir := t.TempDir()
@@ -436,7 +444,7 @@ react:
 		Runtime:    &RuntimeInfo{Channel: "default"},
 		TeamWorkspace: &TeamWorkspaceInfo{
 			SkillsDir: &skillsDir,
-			Config:    map[string]any{}, // 旧 config 无 skill_create
+			Config:    map[string]any{}, // 旧 config 无 skill_evolution
 		},
 	}
 	mgr.RegisterTeamRailContext("sess-cfg", ctx)
@@ -444,7 +452,7 @@ react:
 	mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-cfg", ctx,
 		false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 
-	// 最新 config 含 skill_create → TeamSkillCreateRail 成功挂载
+	// 最新 config 含 skill_evolution → TeamSkillCreateRail 成功挂载
 	if mgr.GetTeamSkillCreateRail("sess-cfg") == nil {
 		t.Fatalf("TeamSkillCreateRail should be mounted after config refresh")
 	}
@@ -476,7 +484,7 @@ models:
       verify_ssl: false
 react:
   evolution:
-    auto_scan: false
+    skill_evolution: true
 `)
 
 	// 非 leader 成员 + skills_dir → BuildMemberRails step 12 产出 SkillEvolutionRail
@@ -547,24 +555,32 @@ func TestBuildAndMountMemberRailsForContext_config加载失败返回nil(t *testi
 
 // TestUpdateEvolutionConfig_skillCreate启用触发挂载
 // 对齐 Python update_evolution_config 步骤 6（team_manager.py L1359-1368）：
-// skill_create 启用时，遍历 _team_rail_contexts 中无 create rail 的 session，
+// skill_evolution 启用时，遍历 _team_rail_contexts 中无 create rail 的 session，
 // 调 _build_and_mount_member_rails_for_context 挂载 TeamSkillCreateRail。
 func TestUpdateEvolutionConfig_skillCreate启用触发挂载(t *testing.T) {
 	wsDir, _ := setupSkillTestEnv(t)
 	mgr := NewTeamManager()
 
-	// 全局 config.yaml 启用 skill_create
+	// 全局 config.yaml 启用 skill_evolution
 	configDir := filepath.Join(wsDir, "config")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 	writeFile(t, filepath.Join(configDir, "config.yaml"), `
+models:
+  default:
+    model_client_config:
+      model_name: test-model
+      client_provider: openai
+      api_base: http://localhost:1
+      api_key: test
+      verify_ssl: false
 react:
   evolution:
-    skill_create: true
+    skill_evolution: true
 `)
 
-	// leader + skills_dir + skill_create 启用（走 config.yaml）→ BuildMemberRails step 11 产出 create rail
+	// leader + skills_dir + skill_evolution 启用（走 config.yaml）→ BuildMemberRails step 11 产出 create rail
 	skillsDir := t.TempDir()
 	leaderRole := "leader"
 	agent := newCustomizerFakeAgent("agent")
@@ -579,9 +595,9 @@ react:
 	}
 	mgr.RegisterTeamRailContext("sess-ue2", ctx)
 
-	// UpdateEvolutionConfig 传 skill_create=true → 步骤 6 触发挂载
+	// UpdateEvolutionConfig 传 skill_evolution=true → 步骤 6 触发挂载
 	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{
-		"react": map[string]any{"evolution": map[string]any{"skill_create": true}},
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
 	})
 
 	if mgr.GetTeamSkillCreateRail("sess-ue2") == nil {
@@ -589,9 +605,193 @@ react:
 	}
 	// 已挂载后再次调用：幂等跳过（sessionID 已在 teamSkillCreateRails 中）
 	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{
-		"react": map[string]any{"evolution": map[string]any{"skill_create": true}},
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
 	})
-	if len(agent.rails) != 1 {
-		t.Fatalf("second call should skip already-mounted session, rails=%d", len(agent.rails))
+	// 第二次调用幂等跳过：team rail 与 create rail 均已在册，不再重复挂载
+	// （上游重建条件 = 缺 team rail 或缺 create rail 才进 build，齐全则 continue）。
+	if len(agent.rails) != 2 {
+		t.Fatalf("second call should skip already-mounted session (team+create rails), rails=%d", len(agent.rails))
+	}
+}
+
+// TestUpdateEvolutionConfig_关闭全量拆除
+// 对齐 Python update_evolution_config 关闭分支（team_manager.py L2861-2872）：
+// 取消 watcher → 反注册完整 live rail 快照 → 遗忘已挂载 rail，保留重建 context。
+func TestUpdateEvolutionConfig_关闭全量拆除(t *testing.T) {
+	wsDir, _ := setupSkillTestEnv(t)
+	_ = wsDir
+	mgr := NewTeamManager()
+
+	configDir := filepath.Join(wsDir, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	writeFile(t, filepath.Join(configDir, "config.yaml"), `
+models:
+  default:
+    model_client_config:
+      model_name: test-model
+      client_provider: openai
+      api_base: http://localhost:1
+      api_key: test
+      verify_ssl: false
+react:
+  evolution:
+    skill_evolution: true
+`)
+	skillsDir := t.TempDir()
+	leaderRole := "leader"
+	agent := newCustomizerFakeAgent("agent")
+	ctx := &TeamRailMountContext{
+		Agent:      agent,
+		MemberInfo: &MemberInfo{Role: &leaderRole},
+		Runtime:    &RuntimeInfo{Channel: "default"},
+		TeamWorkspace: &TeamWorkspaceInfo{
+			SkillsDir: &skillsDir,
+			Config:    map[string]any{},
+		},
+	}
+	mgr.RegisterTeamRailContext("sess-teardown", ctx)
+
+	// 启用：先挂载 team rail + create rail
+	enabledCfg := map[string]any{
+		"react": map[string]any{"evolution": map[string]any{
+			"skill_evolution": true, "auto_save": true,
+		}},
+	}
+	mgr.UpdateEvolutionConfig(context.Background(), enabledCfg)
+	if mgr.GetTeamSkillRail("sess-teardown") == nil {
+		t.Fatal("启用后应挂载 TeamSkillEvolutionRail")
+	}
+	if mgr.GetTeamSkillCreateRail("sess-teardown") == nil {
+		t.Fatal("启用后应挂载 TeamSkillCreateRail")
+	}
+
+	// 注册 watcher，验证关闭分支取消并弹出
+	watcherCancelled := false
+	mgr.RegisterTeamEvolutionWatcher("sess-teardown", func() { watcherCancelled = true })
+
+	// 关闭：全量拆除
+	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{})
+
+	if !watcherCancelled {
+		t.Fatal("watcher cancel 应被调用（先于 rail 反注册）")
+	}
+	if mgr.GetTeamEvolutionWatcher("sess-teardown") != nil {
+		t.Fatal("watcher 应从登记表弹出")
+	}
+	if mgr.GetTeamSkillRail("sess-teardown") != nil {
+		t.Fatal("teamSkillRails 应清空")
+	}
+	if mgr.GetTeamSkillCreateRail("sess-teardown") != nil {
+		t.Fatal("teamSkillCreateRails 应清空")
+	}
+	if rails := mgr.teamMemberSkillEvoRails["sess-teardown"]; len(rails) != 0 {
+		t.Fatalf("teamMemberSkillEvoRails 应清空，实际 %d", len(rails))
+	}
+	if entries := mgr.teamLiveRails["sess-teardown"]; len(entries) != 0 {
+		t.Fatalf("teamLiveRails 应清空，实际 %d", len(entries))
+	}
+	if mgr.GetTeamRailContext("sess-teardown") == nil {
+		t.Fatal("重建 context 必须保留（供后续重新启用）")
+	}
+	if !mgr.teamEvolutionEnabled["sess-teardown"] {
+		// enabled 标志应已写 false
+		if mgr.teamEvolutionEnabled["sess-teardown"] != false {
+			t.Fatal("teamEvolutionEnabled 应更新为 false")
+		}
+	}
+}
+
+// TestUpdateEvolutionConfig_重新启用重建缺失角色rail
+// 对齐 Python update_evolution_config 启用分支重建循环（team_manager.py L2904-2921）：
+// 团队 context 缺 team rail 或 create rail 时按需重建；成员 context 缺
+// SkillEvolutionRail 时重建。
+func TestUpdateEvolutionConfig_重新启用重建缺失角色rail(t *testing.T) {
+	wsDir, _ := setupSkillTestEnv(t)
+	_ = wsDir
+	mgr := NewTeamManager()
+
+	configDir := filepath.Join(wsDir, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	writeFile(t, filepath.Join(configDir, "config.yaml"), `
+models:
+  default:
+    model_client_config:
+      model_name: test-model
+      client_provider: openai
+      api_base: http://localhost:1
+      api_key: test
+      verify_ssl: false
+react:
+  evolution:
+    skill_evolution: true
+`)
+	skillsDir := t.TempDir()
+	leaderRole := "leader"
+	teammateRole := "teammate"
+	leaderAgent := newCustomizerFakeAgent("leader")
+	teammateAgent := newCustomizerFakeAgent("teammate")
+	leaderCtx := &TeamRailMountContext{
+		Agent:      leaderAgent,
+		MemberInfo: &MemberInfo{Role: &leaderRole},
+		Runtime:    &RuntimeInfo{Channel: "default"},
+		TeamWorkspace: &TeamWorkspaceInfo{
+			SkillsDir: &skillsDir, Config: map[string]any{},
+		},
+	}
+	memberCtx := &TeamRailMountContext{
+		Agent:      teammateAgent,
+		MemberInfo: &MemberInfo{Role: &teammateRole},
+		Runtime:    &RuntimeInfo{Channel: "default"},
+		TeamWorkspace: &TeamWorkspaceInfo{
+			SkillsDir: &skillsDir, Config: map[string]any{},
+		},
+	}
+	mgr.RegisterTeamRailContext("sess-rebuild", leaderCtx)
+	mgr.RegisterTeamMemberRailContext("sess-rebuild", memberCtx)
+
+	enabledCfg := map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
+	}
+
+	// 关闭 → 启用：context 保留的 session 应重建出全部角色 rail
+	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{})
+	mgr.UpdateEvolutionConfig(context.Background(), enabledCfg)
+
+	if mgr.GetTeamSkillRail("sess-rebuild") == nil {
+		t.Fatal("重建后 leader 应有 TeamSkillEvolutionRail")
+	}
+	if mgr.GetTeamSkillCreateRail("sess-rebuild") == nil {
+		t.Fatal("重建后 leader 应有 TeamSkillCreateRail")
+	}
+	if rails := mgr.teamMemberSkillEvoRails["sess-rebuild"]; len(rails) == 0 {
+		t.Fatal("重建后 teammate 应有 SkillEvolutionRail")
+	}
+
+	// 团队 rail 固定策略：signal=false / review=true / auto_save 跟随配置（缺省 false）
+	teamRail := mgr.GetTeamSkillRail("sess-rebuild")
+	if teamRail.SignalTrigger() {
+		t.Fatal("团队 rail signal_trigger 应恒为 false")
+	}
+	if !teamRail.ReviewTrigger() {
+		t.Fatal("团队 rail review_trigger 应恒为 true")
+	}
+	if teamRail.AutoSave() {
+		t.Fatal("auto_save 缺省应为 false")
+	}
+
+	// 成员 rail 固定策略：signal=true / review=false / auto_save=true
+	memberRail := mgr.teamMemberSkillEvoRails["sess-rebuild"][0]
+	if !memberRail.SignalTrigger() {
+		t.Fatal("成员 rail signal_trigger 应恒为 true")
+	}
+	if memberRail.ReviewTrigger() {
+		t.Fatal("成员 rail review_trigger 应恒为 false")
+	}
+	if !memberRail.AutoSave() {
+		t.Fatal("成员 rail auto_save 应恒为 true")
 	}
 }

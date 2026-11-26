@@ -8,6 +8,7 @@ package sessioninput
 
 import (
 	"context"
+	"strings"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -114,13 +115,12 @@ func payloadText(item any) string {
 
 // ──────────────────────────── 用例 ────────────────────────────
 
-// TestSteer_全链_投递窗口 server 传入 steer（活跃轮+准入窗口开）→ adapter
-// 投递链四步全走通：①execution 复核 ②bound_round 复核 ③同步入队（真实
-// EnqueueSteerEntry）④边界发布（boundary_ready 关闭）+ guard 交付义务登记。
-// [挂账] loop-drain→MockLLM 段需 session-runtime 交互执行脚手架
-// （executeRound 设活跃轮；普通流不设——adapter ② 复核对普通流正确拒收），
-// 随 session runtime e2e 批回填。
-func (s *SteerFullChainSuite) TestSteer_全链_投递窗口() {
+// TestSteer_全链_插话进MockLLM轮次 真交互执行路径 e2e：
+// StartInteraction（监督器+executeRound 设活跃轮）→ SendInput → 模型调用1
+// （工具阻塞）→ server 传入 steer → adapter 四步（真实 bound_round 复核）
+// → ReAct drain 吸收 → before_model_call 消费交付义务 → MockLLM 第二次调用
+// → NextOutput 收最终文本。[此前挂账段随本用例闭合]
+func (s *SteerFullChainSuite) TestSteer_全链_插话进MockLLM轮次() {
 	ctx := s.Ctx
 	hold := make(chan struct{})
 	stub := &stubTool{
@@ -136,12 +136,16 @@ func (s *SteerFullChainSuite) TestSteer_全链_投递窗口() {
 	// bridge 事件会被 registerRailSelective 静默丢弃——必须走 Rails 参数）
 	s.guard = adapter.NewSessionInputGuard(nil, nil)
 	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
-		Card:          agentschema.NewAgentCard(),
-		ToolInstances: []tool.Tool{stub},
-		MaxIterations: 0, // 未配置=不限 → 准入窗口恒开（Python limit None 语义）
-		Rails:         []agentinterfaces.AgentRail{s.guard},
+		Card:           agentschema.NewAgentCard(),
+		ToolInstances:  []tool.Tool{stub},
+		MaxIterations:  0, // 未配置=不限 → 准入窗口恒开（Python limit None 语义）
+		EnableTaskLoop: true,
+		Rails:          []agentinterfaces.AgentRail{s.guard},
 	})
 	s.Require().NoError(err)
+
+	sess := s.NewTestSession("session-A")
+	s.Require().NoError(sess.PreRun(ctx, map[string]any{}))
 
 	s.deep = adapter.NewDeepAdapter()
 	s.deep.SetSessionScopedForTest("session-A")
@@ -149,57 +153,70 @@ func (s *SteerFullChainSuite) TestSteer_全链_投递窗口() {
 	s.deep.SetSessionInputGuard(s.guard)
 	s.guard.BindOwner(agent, s.deep)
 
-	work := hschema.NewUserWorkItem("req-anchor", map[string]any{"query": "查 Q3 预算"}, false, true)
-	agent.SetActiveRoundForTest(work)
-	agent.SetOutputStreamForTest(true)
-	agent.SetSteeringQueueForTest(make(chan string, 8))
-
 	// MockLLM：①工具调用（进入阻塞工具，窗口保持）②最终文本
+	// 计数用增量（套件内 MockLLM 计数器跨用例累计）
+	baseline := s.MockLLM.StreamCallCount()
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("wait_tool", `{}`),
 		mockllm.CreateTextResponse("已结合你的补充完成"),
 	)
 
-	// 后台跑流（真实 ReAct：模型调用1 → stubTool(阻塞)）
-	streamCh, streamErr := agent.Stream(ctx, map[string]any{"query": "查 Q3 预算"})
-	s.Require().NoError(streamErr)
-	consumed := make(chan []string, 1)
+	// 真交互执行：监督器启动 + 输出租约 + 用户输入（executeRound 设活跃轮）
+	s.Require().NoError(agent.Start(ctx, sess))
+	lease, attachErr := agent.AttachOutput(ctx)
+	s.Require().NoError(attachErr)
+	s.Require().NotNil(lease)
 	go func() {
-		var payloads []string
-		for item := range streamCh {
-			payloads = append(payloads, payloadText(item))
-		}
-		consumed <- payloads
+		_ = agent.SendInput(ctx, hschema.SendInputRequest{
+			RequestID: "req-anchor",
+			Inputs:    map[string]any{"query": "查 Q3 预算"},
+		})
 	}()
 
-	// 等准入窗口打开（before_model_call/before_tool_call rail 真实触发）
+	// 等准入窗口打开（真实 executeRound → before_model_call/before_tool_call）
 	s.Require().Eventually(func() bool {
 		return s.guard.Accepting()
-	}, 5*time.Second, 10*time.Millisecond, "准入窗口应打开")
+	}, 10*time.Second, 10*time.Millisecond, "准入窗口应打开")
 
-	// server 传入 steer：经 adapter 投递链全链（DeliverSessionInput）
+	// server 传入 steer：经 adapter 投递链全链（真实 bound_round 复核）
 	ch, derr := s.deep.DeliverSessionInput(ctx, fullchainSteerRequest("改用 V2 数据"),
 		map[string]any{"query": "改用 V2 数据"})
 	s.Require().NoError(derr)
 	s.Require().NotNil(ch, "活跃轮存在时 steer 应被接受")
+	close(hold) // 放行工具 → loop 继续 → drain 吸收 steer
 
-	// 断言 ①：真实入队（EnqueueSteerEntry → steering 队列持有 display）
-	queue := agent.SteeringQueueChan()
-	s.Require().Equal("改用 V2 数据", <-queue)
+	// 等第二次模型调用（drain 吸收 steer → before_model_call 消费交付义务）
+	s.Require().Eventually(func() bool {
+		return s.MockLLM.StreamCallCount() >= baseline+2
+	}, 10*time.Second, 10*time.Millisecond, "第二次模型调用应吸收 steer")
 
-	// 断言 ②：账本条目登记 + 边界发布关闭（④ publish_input_received 真实走通）
-	entry := adapter.SessionInputLedgerForTest().Lookup("改用 V2 数据")
-	s.Require().NotNil(entry, "账本应登记条目")
+	// 断言 ①：steering 队列已被 drain 吸收
 	select {
-	case <-entry.BoundaryReady:
+	case leftover := <-agent.SteeringQueueChan():
+		s.Failf("steering 队列应已消费，残留 %q", leftover)
 	default:
-		s.Fail("边界信号应已关闭")
 	}
 
-	// 放行工具让流自然收尾
-	close(hold)
-	texts := <-consumed
-	s.Require().NotEmpty(texts)
+	// 断言 ②：交付义务节进系统提示词（builder 接口无节枚举，取构建快照）
+	sectionText := s.guard.DeliverySectionTextForTest()
+	s.Require().NotEmpty(sectionText, "交付义务节应存在（session_input_delivery）")
+	s.Require().Contains(sectionText, "改用 V2 数据")
+	s.Require().Contains(sectionText, "quoted-delivery-data")
+
+	// 断言 ③：最终文本经输出租约推给消费者
+	deadline := time.Now().Add(10 * time.Second)
+	finalText := ""
+	for time.Now().Before(deadline) {
+		item, ok := agent.NextOutput(ctx, lease.Lease())
+		if !ok {
+			break
+		}
+		if text := payloadText(item); strings.Contains(text, "已结合你的补充完成") {
+			finalText = text
+			break
+		}
+	}
+	s.Require().NotEmpty(finalText, "最终文本应经租约推送")
 }
 
 // TestSteer_全链_idle分流MockLLM新轮 无活跃轮 → idle 兜底 → 新轮消费 MockLLM

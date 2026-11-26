@@ -5,6 +5,7 @@ package adapter_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -121,11 +122,17 @@ func (s *SessionForkSuite) TestAttachOnly_创建child但不登记在飞任务() 
 	}
 	chunkCh, streamErr := d.ProcessMessageStreamImpl(s.Ctx, req, map[string]any{"query": "订阅"})
 	s.Require().NoError(streamErr)
-	for range chunkCh {
-	}
+	// attach-only 是被动订阅语义（25.8）：无在飞任务、流不主动关闭，
+	// 不能 drain 到底（会卡死）——后台排空，等 child 创建即断言。
+	go func() {
+		for range chunkCh {
+		}
+	}()
 
 	// attach-only 仍创建 child（要接续既有会话），但不登记在飞任务
-	s.NotNil(d.GetLiveSessionInstance(sid), "attach-only 仍应创建 child")
+	s.Require().Eventually(func() bool {
+		return d.GetLiveSessionInstance(sid) != nil
+	}, 10*time.Second, 100*time.Millisecond, "attach-only 仍应创建 child")
 }
 
 // runOneTurn 跑一轮流式对话并消费到底。

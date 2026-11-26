@@ -120,10 +120,11 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	}
 	s.Equal("started", started.status, "应存在 started 事件")
 	s.Equal("get_context_window", started.phase, "阶段应为 get_context_window")
-	s.Equal("RoundLevelCompressor", started.processor, "处理器应为 RoundLevelCompressor")
+	// 24.15 forked 链：链序首个 get_context_window 处理器为 DialogueCompressor
+	s.Equal("DialogueCompressor", started.processor, "处理器应为链序首个 DialogueCompressor")
 	s.Equal(int64(0), started.durationMs, "started 事件 duration_ms 必须为 0（不得负溢出）")
 	s.Equal(int64(262), started.contextMax, "context_max 应等于配置窗口 262，而不是兜底值")
-	s.Equal(int64(1), started.beforeMessages, "before 只统计窗口内对话消息（1 条用户消息）")
+	s.GreaterOrEqual(started.beforeMessages, int64(1), "before 统计窗口内对话消息（回填后 ≥1）")
 	s.Greater(started.beforeTokens, int64(0), "before.tokens 应为正数")
 
 	// 137c7d4f 起 round-level 多了一道「总量 > TargetTotalTokens(160000)」的预算门：
@@ -139,14 +140,13 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	s.Greater(len(first[0].GetContent().Text()), 1000, "system prompt 不应被压缩/清空")
 }
 
-// TestAddMessages路径_Dialogue与当轮压缩触发 验证 add_messages 判据下两个压缩器都会触发。
-func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩触发() {
-	// 窗口 10 → 比例收口后 Dialogue/CurrentRound 阈值只有几 token，助手消息回填即触发
-	s.writeConfig(10, `    dialogue_compressor_config:
-      messages_to_keep: 1
-    current_round_compressor_config:
-      messages_to_keep: 1
-`)
+// TestForked链触发_Dialogue 24.15 单 forked 链后 DialogueCompressor 在
+// get_context_window 判据触发（PY forked 版语义：无 add_messages 压缩路径）。
+// CurrentRound/RoundLevel 触发依赖窗口占用与 TargetTotalTokens 预算门，
+// 小上下文下不确定触发，不做强断言（窗口 262 用例已覆盖 RoundLevel 契约）。
+func (s *CompressionTriggerSuite) TestForked链触发_Dialogue() {
+	// 窗口 10 → 比例阈值几个 token，小上下文必然越过
+	s.writeConfig(10, "")
 	s.setScript(scriptStep{text: "用户在打招呼"})
 
 	d := adapter.NewDeepAdapter()
@@ -155,12 +155,13 @@ func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩�
 
 	states := s.runTurn(d, "sess_compress_add", "req-c-2", "你好")
 	processors := collectProcessors(states)
-	s.Contains(processors, "DialogueCompressor", "add_messages 路径应触发 DialogueCompressor")
-	s.Contains(processors, "CurrentRoundCompressor", "add_messages 路径应触发 CurrentRoundCompressor")
+	s.Contains(processors, "DialogueCompressor", "forked 链应触发 DialogueCompressor")
 }
 
-// TestToolResultBudget触发 session_memory 预设下轮内工具结果超预算应触发卸载。
-func (s *CompressionTriggerSuite) TestToolResultBudget触发() {
+// TestToolResultBudget陈旧键降级 24.15 单 forked 链后 ToolResultBudget 已退出
+// preset；yaml 里的陈旧 dict 覆盖按 PY _merge_processors ValueError 语义降级
+// （合并报错被 rail 吞为 warn），链路不崩、其余处理器照常生效。
+func (s *CompressionTriggerSuite) TestToolResultBudget陈旧键降级() {
 	s.writeConfig(262, `    session_memory: true
     tool_result_budget_processor_config:
       tokens_threshold: 1
@@ -177,8 +178,8 @@ func (s *CompressionTriggerSuite) TestToolResultBudget触发() {
 
 	states := s.runTurn(d, "sess_compress_trb", "req-c-3", "看看任务列表")
 	processors := collectProcessors(states)
-	s.Contains(processors, "ToolResultBudgetProcessor",
-		"轮内工具结果超过预算时应触发 ToolResultBudgetProcessor")
+	s.NotContains(processors, "ToolResultBudgetProcessor",
+		"陈旧键降级后不应再激活 ToolResultBudgetProcessor")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

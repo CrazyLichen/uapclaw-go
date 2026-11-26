@@ -67,9 +67,10 @@ func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 	d.model = usableTestModel()
 	d.defaultModelName = "new-model"
 
+	// 单参签名（24.15 收敛）：auto_save 读 configBase 的 react.evolution.auto_save
 	d.updateSkillEvolutionRail(map[string]any{
-		"evolution": map[string]any{"auto_save": true},
-	}, nil)
+		"react": map[string]any{"evolution": map[string]any{"auto_save": true}},
+	})
 
 	if d.skillEvolutionRail != rail {
 		t.Fatal("就地更新不得替换 rail 实例")
@@ -86,11 +87,11 @@ func TestUpdateSkillEvolutionRail_就地更新(t *testing.T) {
 }
 
 // newRailBuildAdapter 构造只用于 rail 构建的 adapter。
-func newRailBuildAdapter(t *testing.T, cache map[string]any) *DeepAdapter {
+func newRailBuildAdapter(t *testing.T, base map[string]any) *DeepAdapter {
 	t.Helper()
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(cache, map[string]any{})
+	d.setConfigSnapshots(map[string]any{}, base)
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
 	return d
@@ -105,7 +106,7 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 
 	t.Run("signal_trigger恒False", func(t *testing.T) {
 		t.Setenv("EVOLUTION_AUTO_SCAN", "1") // 环境变量不再影响个人 rail（Python :10250 恒 False）
-		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"skill_evolution": true}})
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		rail := d.buildSkillEvolutionRail()
 		if rail == nil || rail.SignalTrigger() {
 			t.Fatal("signal_trigger 必须恒为 false（Python :10250）")
@@ -113,18 +114,18 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 	})
 
 	t.Run("auto_save跟随配置", func(t *testing.T) {
-		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"skill_evolution": true, "auto_save": true}})
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true, "auto_save": true}}})
 		if rail := d.buildSkillEvolutionRail(); rail == nil || !rail.AutoSave() {
 			t.Fatal("auto_save 应跟随 config（Python :10253）")
 		}
-		d2 := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"skill_evolution": true}})
+		d2 := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		if rail := d2.buildSkillEvolutionRail(); rail == nil || rail.AutoSave() {
 			t.Fatal("auto_save 缺省为 false（Python :10253）")
 		}
 	})
 
 	t.Run("review_trigger恒True且runtime必传", func(t *testing.T) {
-		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"skill_evolution": true}})
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		rail := d.buildSkillEvolutionRail()
 		if rail == nil || !rail.ReviewTrigger() {
 			t.Fatal("review_trigger 必须恒为 true（Python :10251）")
@@ -144,7 +145,7 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 	})
 
 	t.Run("model_name兜底gpt4", func(t *testing.T) {
-		d := newRailBuildAdapter(t, map[string]any{"evolution": map[string]any{"skill_evolution": true}})
+		d := newRailBuildAdapter(t, map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}})
 		d.defaultModelName = ""
 		if rail := d.buildSkillEvolutionRail(); rail == nil || rail.ModelName() != "gpt-4" {
 			t.Fatalf("model_name 应回落 gpt-4（Python :10252 兜底）")
@@ -157,7 +158,7 @@ func TestBuildSkillCreateRail_未启用(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(map[string]any{"evolution": map[string]any{"skill_create": false}}, map[string]any{})
+	d.setConfigSnapshots(map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true, "skill_create": false}}}, map[string]any{})
 
 	if rail := d.buildSkillCreateRail(); rail != nil {
 		t.Fatalf("skill_create=false 应返回 nil，实际 %T", rail)
@@ -172,10 +173,9 @@ func TestBuildSkillCreateRail_启用返回单Agent版(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(map[string]any{
-		"evolution": map[string]any{"skill_create": true},
-		"language":  "cn",
-	}, map[string]any{})
+	d.setConfigSnapshots(map[string]any{"language": "cn"}, map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
+	})
 
 	rail := d.buildSkillCreateRail()
 	if rail == nil {
@@ -194,7 +194,7 @@ func TestBuildDynamicRail_写字段(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	pathutil.ResetCache()
 	d := NewDeepAdapter()
-	d.setConfigSnapshots(map[string]any{"evolution": map[string]any{"skill_evolution": true}}, map[string]any{})
+	d.setConfigSnapshots(map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}}, map[string]any{})
 	d.model = usableTestModel()
 	d.defaultModelName = "test-model"
 

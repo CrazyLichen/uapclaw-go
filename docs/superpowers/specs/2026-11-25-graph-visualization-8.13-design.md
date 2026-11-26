@@ -19,6 +19,7 @@
 | ② | 渲染方案 ① | `to_mermaid_png/svg` 一比一复刻：net/http 调 mermaid.ink（env `MERMAID_INK_SERVER` 可配），单测用 httptest 起本地 mock 服务 |
 | ③ | `_get_targets` | 保留函数壳复刻（死代码复刻惯例，Python 侧该分支在 Go 侧无可达调用形态，见 D-13-1），**不删除** |
 | ④ | 设计整体 | 按 §3-§7 写 spec |
+| ⑤ | 环破除（D-13-5） | 写计划时依赖核验发现 workflow→visualization→flow/loop→workflow 成环（Python 靠 add_node 函数内延迟导入破环，Go 无此能力）。批准改为**能力接口断言分派**（见 §4.2/§5 D-13-5）：visualization 只依赖 common/exception；flow/loop/llm → visualization 实现接口；workflow → visualization 构造与 Draw。连带：`BaseWorkflow.drawable` 具体类型化 `*visualization.Drawable`；`Workflow.Draw` 签名 `expandSubgraph bool → any`（D-14-7 回收标注） |
 
 ## 3. 文件结构（六文件一比一映射）
 
@@ -42,18 +43,44 @@
 
 ### 4.2 Drawable.add_node 类型分派（drawable.py:51-81）
 
-Python isinstance 链 → Go type switch 具体指针类型（顺序保持 Python 分支序）：
+Python isinstance 链 → Go **能力接口断言**（偏差 D-13-5，Python 函数内延迟导入在 Go 不可用的唯一出口；断言顺序=Python isinstance 分支序）。visualization 包定义四个接口：
 
-1. `*loop.LoopComponent` → 取 `LoopGroup.Drawable.GetGraph()`；`*loop.AdvancedLoopComponent` → 取 `Body.Drawable.GetGraph()`；子图 `len(EndNodes)==0` 时**出度=0 自动发现 end_nodes**（drawable.py:62-70 逐行复刻）→ 包 `DrawableSubgraphNode` + 记入 loopNodes 集合 + `addEdge(nodeID, nodeID)` 自环边
-2. `*flow.SubWorkflowComponent` → 取 `SubWorkflow.Internal.Drawable.GetGraph()` → `DrawableSubgraphNode`
-3. `*flow.BranchComponent` / `*llm.IntentDetectionComponent` → `DrawableNode` + `addEdge(source=nodeID, conditional=true, data=component.Router())`
+```go
+// 循环体子图源（Python isinstance(LoopComponent/AdvancedLoopComponent) 分支）
+type LoopSubgraphSource interface {
+    LoopDrawableSubgraph() *DrawableGraph
+}
+// 子工作流子图源（Python isinstance(SubWorkflowComponent) 分支）
+type SubgraphSource interface {
+    SubWorkflowDrawableSubgraph() *DrawableGraph
+}
+// 分支路由源（Python isinstance(BranchComponent/IntentDetectionComponent) 分支；
+// 实现：BranchComponent.DrawableRouter() / IntentDetectionComponent.DrawableRouter()
+// 返回 component.Router() 供条件边展开）
+type BranchRouterSource interface {
+    DrawableRouter() any
+}
+```
+
+分派步骤一比一：
+
+1. `LoopSubgraphSource` → 取 `LoopDrawableSubgraph()`；子图 `len(EndNodes)==0` 时**出度=0 自动发现 end_nodes**（drawable.py:62-70 逐行复刻）→ 包 `DrawableSubgraphNode` + 记入 loopNodes 集合 + `addEdge(nodeID, nodeID)` 自环边
+2. `SubgraphSource` → 取 `SubWorkflowDrawableSubgraph()` → `DrawableSubgraphNode`
+3. `BranchRouterSource` → `DrawableNode` + `addEdge(source=nodeID, conditional=true, data=DrawableRouter())`
 4. 默认 → 普通 `DrawableNode`
+
+实现方（flow/loop/llm 包，import visualization 实现接口）：
+
+- `LoopComponent.LoopDrawableSubgraph()`：`g.loopGroup.Drawable().GetGraph()`（LoopGroup 嵌入 BaseWorkflow 继承 Drawable 访问器）
+- `AdvancedLoopComponent.LoopDrawableSubgraph()`：`a.body` 为 `*LoopGroup` 时同上断言取图（Python `component.body.drawable.get_graph()`）
+- `SubWorkflowComponent.SubWorkflowDrawableSubgraph()`：`c.subWorkflow.Internal.Drawable().GetGraph()`（Python `sub_workflow._internal.drawable.get_graph()`；需 Workflow 补 `Internal()` 访问器）
+- `BranchComponent.DrawableRouter()` / `IntentDetectionComponent.DrawableRouter()`：返回 `c.router`
 
 ### 4.3 add_edge 条件边展开（drawable.py:104-124）
 
 - source 在 loopNodes → 强制 conditional 边直接落（drawable.py:107-109）
 - 非 conditional → 直落
-- conditional：data 为 `*flow.BranchRouter` → `GetDrawableBranchRouter()` 取 targets+datas（D-19-1 回填件）；否则走 `_get_targets(data)`（见 D-13-1）；逐 target 展开 DrawableEdge，datas 缺省 None → Go 空串
+- conditional：data 实现 `DrawableBranchTargetsSource` 接口（`GetDrawableBranchTargets() (targets, datas []string)`，实现在 `*flow.BranchRouter`，即 D-19-1 回填件 `GetDrawableBranchRouter` 的接口化形态）→ 取 targets+datas；否则走 `_get_targets(data)`（见 D-13-1）；逐 target 展开 DrawableEdge，datas 缺省 None → Go 空串
 
 ### 4.4 `_get_targets`（drawable.py:29-43）
 
@@ -82,14 +109,15 @@ Python 逻辑：callable/class → `get_type_hints(func)["return"]` 为 `Literal
 |---|---|---|---|---|
 | D-13-1 | `_get_targets` 靠 `get_type_hints`+`Literal` 反射 callable 返回类型（drawable.py:29-43） | 保留函数壳 `getTargets(data any) []string`，无可达调用形态（两条 Router() 恒 `*BranchRouter`） | 语言层缺类型注解反射 + Go 具体类型化使分支不可达 | 上游若把 router 泛化为任意 callable 且出现非 BranchRouter 形态时重新评估 |
 | D-13-2 | `DrawableEdge.data: Optional[Stringifiable]`（Protocol，duck-typed） | `Data string` | Go 无 Protocol；调用方实传均为字符串标签（BranchRouter datas 即 []string） | 出现非字符串 data 消费方时改 `any` |
-| D-13-3 | `expand_subgraph: int \| bool`（Python union 动态分派） | 形参 `expandSubgraph any`，运行时 bool/int 分派复刻 | 保持签名一比一（规则 12） | 无 |
+| D-13-3 | `expand_subgraph: int \| bool`（Python union 动态分派） | 形参 `expandSubgraph any`，运行时 bool/int 分派复刻；**修订（审查拍板 2026-11-26）：`enableAnimation` 维持 `bool` 收窄不收 any**——Python `isinstance(enable_animation, bool)` 校验分支在 Go 静态类型下不可达（全仓消费方 `Draw()` 恒传 bool），校验不落，回收条件=出现非 bool 消费方 | 保持签名一比一（规则 12） | enableAnimation：出现非 bool 消费方时改 any 并补校验 |
 | D-13-4 | mermaid-py 依赖（soft-import，缺包抛 ImportError，drawable.py:11-18/143-160） | 文本拼接自实现 + png/svg 直连 HTTP；无"缺包"形态（Go 静态编译） | 依赖差异；soft-import 分支不复刻 | 无 |
+| D-13-5 | `Drawable.add_node` 内函数级延迟导入组件类型做 isinstance 分派（drawable.py:53-57），借此破 workflow↔visualization 环 | 能力接口断言分派（§4.2 四接口，断言序=Python isinstance 序；实现方 flow/loop/llm 反向 import visualization，依赖全单向零环） | Go 无函数内延迟导入，语言层缺能力唯一出口（规则 12.3，2026-11-25 用户批准） | Go 若引入延迟加载/插件化机制则回收为 type switch |
 
 ## 6. 回填清单（三处缝，同改动回收，规则 8）
 
 | 缝 | 位置 | 回收内容 |
 |---|---|---|
-| **D-d** | `internal/openuapclaw/core/workflow/base_workflow.go:62-92,181` | `drawable any` 恒 nil → 具体类型 `*visualization.Drawable`；env 读取骨架（`WORKFLOW_DRAWABLE`=="true"）真接线；_workflow.py:200-294 组图钩子全链填充（add_node/set_start_node/set_end_node/add_edge 静态边/流式边/条件边五段）；workflow.go:241 `Draw()`（workflow.py:471-499 output_format 三分支）回收为真实现，删 `_drawable is None` 空分支守卫（保留 None 分支仅当 Python 语义如此——核对了 Python：`if self._drawable is None` 分支在 env 未开启时可达，**保留**，Go 同语义保留） |
+| **D-d** | `internal/openuapclaw/core/workflow/base_workflow.go:62-92,181` | `drawable any` 恒 nil → 具体类型 `*visualization.Drawable`（workflow → visualization 单向，已核验无环）；env 读取骨架（`WORKFLOW_DRAWABLE`=="true"）真接线（构造期非空创建，Python _workflow.py:157-160）+ 补 `Drawable()` 访问器供 LoopGroup/SubWorkflow 分支取子图；_workflow.py:200-294 组图钩子全链填充（add_node/set_start_node/set_end_node/add_edge 静态边/流式边/条件边五段）；workflow.go:241 `Draw()`（workflow.py:471-499 output_format 三分支）回收为真实现：`expandSubgraph bool → any`（偏差 D-14-7 同改动回收标注，层级语义兑现）；`_drawable is None` 分支（env 未开启时可达）保留同语义 |
 | **D-19-1** | `internal/openuapclaw/core/workflow/components/flow/branch_router.go:60,76` | 三处：① 构造期 `WORKFLOW_DRAWABLE` env 判定 → drawable 字段 ② `GetDrawableBranchRouter()` 方法（branch_router.py:71，返回 DrawableBranchRouter）③ `AddBranch` 填充段（branch_router.py:58-64，drawable 非空时 append targets/datas） |
 | **D-20-2** | `internal/openuapclaw/core/workflow/components/flow/loop/loop_comp.go:682,710-711` | `set_break_node` 段（loop_comp.py:83-84）：drawable 非空且组件类型匹配时登记 break node |
 

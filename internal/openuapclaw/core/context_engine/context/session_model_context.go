@@ -43,6 +43,12 @@ type SessionModelContext struct {
 	enableReload bool
 	// contextWindowTokens 上下文窗口 token 数（由 global 与 override 推导，见 effectiveGlobalWindow）
 	contextWindowTokens int
+	// windowAccessAt 上次窗口访问时间戳（forked offloader TTL 判定，D-24.15-a6）
+	windowAccessAt float64
+	// windowAccessAtSet 是否已记录过访问时间
+	windowAccessAtSet bool
+	// windowAccessMu 访问时间锁
+	windowAccessMu sync.Mutex
 	// globalContextWindowTokens 全局上下文窗口覆盖值（最高优先，0 表示未设置）
 	globalContextWindowTokens int
 	// modelWindowOverride 当前选中模型配置声明的窗口（低优先于 global）
@@ -81,7 +87,7 @@ type SessionModelContext struct {
 	// （Python 依赖 asyncio 单线程安全，Go 需显式锁——asyncio→Go 惯例偏差）
 	windowMutatorsMu sync.Mutex
 	// compressionRecall 压缩召回全局配置快照（热重载时整体替换）
-	// Python: SessionModelContext 读 config.compression_recall
+	// Python: SessionModelContext 读 config.compression_recall_config
 	compressionRecall *ceschema.CompressionRecallConfig
 }
 
@@ -1428,4 +1434,21 @@ func (r *ProcessorStateRecorder) recordFromEvent(event *iface.ContextEvent) {
 		Int("messages_to_modify_count", len(event.MessagesToModify)).
 		Str("compact_summary", event.CompactSummary).
 		Msg("processor event")
+}
+
+// LastWindowAccessAt 返回上次窗口访问时间戳与是否已记录。
+// Python: SessionModelContext.last_context_window_access_at()（forked offloader TTL 消费）
+func (c *SessionModelContext) LastWindowAccessAt() (float64, bool) {
+	c.windowAccessMu.Lock()
+	defer c.windowAccessMu.Unlock()
+	return c.windowAccessAt, c.windowAccessAtSet
+}
+
+// SetWindowAccessAt 写入本次窗口访问时间戳。
+// Python: SessionModelContext.set_last_context_window_access_at()
+func (c *SessionModelContext) SetWindowAccessAt(ts float64) {
+	c.windowAccessMu.Lock()
+	defer c.windowAccessMu.Unlock()
+	c.windowAccessAt = ts
+	c.windowAccessAtSet = true
 }

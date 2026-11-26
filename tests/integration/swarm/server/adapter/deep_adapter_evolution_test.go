@@ -50,8 +50,9 @@ func (s *DeepAdapterEvolutionSuite) TestEvolveSlash_审批后落盘() {
 	ctx := s.Ctx
 	d := s.newAdapterWithEvolution(true)
 
-	// 演化 rail 的 LLM 调用：返回一条经验记录
-	s.MockLLM.SetResponses(s.recordsResponse())
+	// 演化 rail 的 LLM 调用：/evolve 生成链多次调用 LLM（信号分析+记录生成），
+	// 每次返回同一条经验记录（mock 队列耗尽会静默返回空 → Records=0 假性无信号）
+	s.MockLLM.SetResponses(s.recordsResponse(), s.recordsResponse(), s.recordsResponse())
 
 	req := s.newChatRequest("/evolve " + s.skillName + " 把权限失败的教训记下来")
 	resp, err := d.ProcessMessageImpl(ctx, req, nil)

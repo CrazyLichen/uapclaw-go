@@ -3,10 +3,10 @@ package adapter
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -408,31 +408,30 @@ func (d *DeepAdapter) resolveSkillMode() string {
 }
 
 // updateSkillEvolutionRail 热重载时就地更新演进 rail 的 LLM 与 auto_save。
-// Python: _get_current_agent_rails 顶部（interface_deep.py:12328-12333）——
-// 该 rail 不重建、不重新注册，只换 LLM 与 auto_save（跟随 config evolution_auto_save）；
-// signal_trigger 不在此更新（Python 新版个人 rail 构造恒 False，无热更新点）。
-func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any, configBase map[string]any) {
+// Python: _get_current_agent_rails 顶部（interface_deep.py:2314-2328）与
+// 12331（auto_save 热更新，读 config_base）——该 rail 不重建、不重新注册，
+// 只换 LLM 与 auto_save（读 react.evolution.auto_save）；signal_trigger 恒为
+// False 不从配置读取（Python 新版个人 rail 构造恒 False，无热更新点）。
+func (d *DeepAdapter) updateSkillEvolutionRail(configBase map[string]any) {
 	if d.skillEvolutionRail == nil {
 		return
 	}
 	d.skillEvolutionRail.UpdateLLM(d.modelSnapshot(), d.defaultModelName)
-	d.skillEvolutionRail.SetAutoSave(evolutionAutoSaveFrom(configBase, config))
+	autoSave := config.EvolutionAutoSaveEnabled(configBase)
+	d.skillEvolutionRail.SetAutoSave(autoSave)
 	logger.Info(logComponent).
 		Str("model", d.defaultModelName).
-		Bool("auto_save", d.skillEvolutionRail.AutoSave()).
+		Bool("auto_save", autoSave).
 		Msg("SkillEvolutionRail hot-updated in place")
 }
 
-
 // buildSkillEvolutionRail 构建技能演进护栏（code 模式动态 rails 配置点路径）。
 // 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:10236-10259)；
-// 调用方 = code 模式 rails 配置点（interface_code.py:2448-2450
-// _build_skill_evolution_rail_via_config → self._build_skill_evolution_rail(...)）。
-// agent 模式生产路径是 ensureActiveEvolutionRailsRegistered（:10595 →
-// configure_skill_evolution_runtime），不走本函数。
+// 调用方 = code 模式 rails 配置点（interface_code.py:2448-2450）+ 演进栈装配
+// （agent 模式生产路径经 ensureSkillEvolutionRail → ensureActiveEvolutionRailsRegistered）。
 //
-// 构造参数（Python :10246-10257 逐项）：
-//   - review_runtime=EvolutionReviewRuntime() 必传（:10249）
+// 构造参数（Python :10246-10257 逐项，15.24d Task1 五项对齐）：
+//   - review_runtime=EvolutionReviewRuntime 必传（:10249）
 //   - signal_trigger=False 恒（:10250；信号触发收编团队语义）
 //   - auto_save=config evolution_auto_save（:10253）
 //   - review_trigger=True 恒（:10251；审查自检 follow-up）
@@ -444,8 +443,6 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model is nil, skipping")
 		return nil
 	}
-
-	cfgBase := evolutionSectionFrom(d.configBaseSnapshot(), d.configCacheSnapshot())
 
 	// Python :10255 disabled_skills = skill_manager.list_execution_disabled_skills()
 	var disabledSkills []string
@@ -471,6 +468,9 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		modelName = "gpt-4"
 	}
 
+	// signal_trigger 恒 False、review_trigger 恒 True、auto_save 读配置
+	// （Python: interface_deep.py:10250-10252；上游已无 auto_scan 键）。
+	// auto_save 显式传入：rail 构造默认 true（skill_evolution_rail.go:291）。
 	rail := evolution.NewSkillEvolutionRail(
 		[]string{skillsDir},
 		model,
@@ -478,7 +478,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		d.resolveRuntimeLanguage(),
 		evolution.WithEvolutionReviewRuntime(evolutionreview.NewEvolutionReviewRuntime(60.0)),
 		evolution.WithSignalTrigger(false),
-		evolution.WithAutoSave(cfgBase["auto_save"] == true),
+		evolution.WithAutoSave(config.EvolutionAutoSaveEnabled(d.configBaseSnapshot())),
 		evolution.WithReviewTrigger(true),
 		evolution.WithEvolutionTrajectorySpanProcessor(demandSpanProcessorOf()),
 		evolution.WithDisabledSkillsSet(disabledSkills),
@@ -496,7 +496,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 //
 // Python 语义：skill_create 未启用时返回 None 且不写字段；启用时 auto_trigger 恒 True。
 func (d *DeepAdapter) buildSkillCreateRail() *skillrails.SkillCreateRail {
-	if !d.getSkillCreateEnabled() {
+	if !d.getSkillEvolutionEnabled() {
 		logger.Debug(logComponent).Msg("skill_create disabled by config, skipping SkillCreateRail")
 		return nil
 	}
@@ -552,23 +552,13 @@ func (d *DeepAdapter) getLanguage() string {
 	return "cn"
 }
 
-// getSkillCreateEnabled 获取是否启用技能创建。
-// Python: _get_skill_create_enabled(config) (interface_deep.py:268-280)
-// 顺序：环境变量 SKILL_CREATE 优先 → react.evolution.skill_create → 默认 false。
-// 原实现读的是 skill_create_enabled 且默认 true，与 Python 不一致：
-// 模板里的 react.evolution.skill_create 因此完全不生效。
-func (d *DeepAdapter) getSkillCreateEnabled() bool {
-	if env := os.Getenv("SKILL_CREATE"); env != "" {
-		switch strings.ToLower(env) {
-		case "true", "1", "yes":
-			return true
-		default:
-			return false
-		}
-	}
-	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
-	enabled, _ := evolutionConfig["skill_create"].(bool)
-	return enabled
+// getSkillEvolutionEnabled 获取技能演进能力开关。
+// Python: get_skill_evolution_enabled (common/config.py:335-337)——
+// 上游已收敛为单一 react.evolution.skill_evolution 开关（同时门控
+// SkillEvolutionRail 与 SkillCreateRail），不再有独立 skill_create 键与
+// SKILL_CREATE 环境变量（interface_deep.py:14057 skill_create_enabled = evolution_enabled）。
+func (d *DeepAdapter) getSkillEvolutionEnabled() bool {
+	return config.SkillEvolutionEnabled(d.configBaseSnapshot())
 }
 
 // buildStreamEventRail 构建流事件护栏。
@@ -1221,7 +1211,7 @@ func (d *DeepAdapter) ensureSkillEvolutionRail(ctx context.Context) {
 
 // ensureSkillCreateRail 按 skill_create 开关注册/注销 SkillCreateRail。
 func (d *DeepAdapter) ensureSkillCreateRail(ctx context.Context) {
-	if d.getSkillCreateEnabled() {
+	if d.getSkillEvolutionEnabled() {
 		if d.skillCreateRail != nil {
 			return
 		}
@@ -1246,7 +1236,7 @@ func (d *DeepAdapter) ensureSkillCreateRail(ctx context.Context) {
 		}
 	}
 	d.skillCreateRail = nil
-	logger.Info(logComponent).Msg("SkillCreateRail unregistered (skill_create=false)")
+	logger.Info(logComponent).Msg("SkillCreateRail unregistered (skill_evolution=false)")
 }
 
 // updatePromptForMode 按模式更新系统提示词语言。

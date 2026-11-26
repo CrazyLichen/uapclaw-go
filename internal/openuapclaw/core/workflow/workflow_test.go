@@ -80,13 +80,22 @@ func TestValidateSession_空会话拒绝(t *testing.T) {
 	}
 }
 
-// TestDraw_未启用返回空 对齐 workflow.py:471-499（D-d 空分支复刻）。
+// TestDraw_未启用返回空 对齐 workflow.py:471-499（`_drawable is None` 空分支，
+// 8.13 回收后语义保留：env 未开启时空串/空字节，无 error）。
 func TestDraw_未启用返回空(t *testing.T) {
 	w := NewWorkflow(nil)
-	if got := w.Draw("", "mermaid", false, false); got != "" {
+	got, err := w.Draw("", "mermaid", false, false)
+	if err != nil {
+		t.Fatalf("不应有 error：%v", err)
+	}
+	if got != "" {
 		t.Fatalf("mermaid 应返回空串：%v", got)
 	}
-	if got, ok := w.Draw("", "png", false, false).([]byte); !ok || len(got) != 0 {
+	gotPng, err := w.Draw("", "png", false, false)
+	if err != nil {
+		t.Fatalf("不应有 error：%v", err)
+	}
+	if b, ok := gotPng.([]byte); !ok || len(b) != 0 {
 		t.Fatal("png 应返回空字节")
 	}
 }
