@@ -1150,3 +1150,9 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+// BuildSpan 分段（诊断/扩展点；实际派发经 buildSpanHook 子类覆盖）。
+// Python: _build_span 为受保护方法；Go 以导出等价物支持外部验证。
+func (p *PrefixCompactProcessor) BuildSpan(messages []llm_schema.BaseMessage) PrefixCompactSpan {
+	return p.buildSpanHook(messages)
+}
