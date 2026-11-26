@@ -81,12 +81,9 @@ func TestTeamSkillCreateRail_外部审批卡载荷(t *testing.T) {
 	assert.Equal(t, reqID, payload["request_id"])
 	assert.Equal(t, skillCreationApprovalSource, payload["source"])
 	assert.Equal(t, skillCreationApprovalSchema, payload["approval_schema"])
-	meta := payload["_evolution_meta"].(map[string]string)
-	metaAny := map[string]any{}
-	for k, v := range meta {
-		metaAny[k] = v
-	}
-	meta = metaAny
+	metaStr := payload["_evolution_meta"].(map[string]string)
+	assert.Equal(t, "create", metaStr["approval_kind"])
+	assert.Equal(t, "scheduler_review_feedback", metaStr["source"])
 	assert.Equal(t, "create", meta["approval_kind"])
 	assert.Equal(t, "scheduler_review_feedback", meta["source"])
 	questions := payload["questions"].([]map[string]any)
