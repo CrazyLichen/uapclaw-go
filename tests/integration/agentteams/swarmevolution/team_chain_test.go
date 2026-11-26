@@ -11,7 +11,6 @@
 package swarmevolution
 
 import (
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
