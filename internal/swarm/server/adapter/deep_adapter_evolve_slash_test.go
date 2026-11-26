@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
@@ -263,10 +262,7 @@ func TestHandleEvolveCommand_裸命令列表分支(t *testing.T) {
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
 	// 无 pending 记录 → ListPendingSummary 返回 "当前所有 Skill 暂无演进信息。"
-	result, err := d.handleEvolveCommand(t.Context(), "/evolve", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve")
 	if result == nil {
 		t.Fatal("裸 /evolve 应返回列表摘要，得到 nil")
 	}
@@ -284,10 +280,7 @@ func TestHandleEvolveCommand_裸命令列表分支(t *testing.T) {
 
 	// 追加 pending 记录后 → 摘要包含技能名与条目计数
 	appendEvolveRecord(t, d.skillEvolutionRail, "demo-skill", "ev_rec_1", "遇到 X 错误时应检查 Y", false)
-	result2, err := d.handleEvolveCommand(t.Context(), "/evolve", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand(有记录) error: %v", err)
-	}
+	result2 := runEvolveSlashForTest(d, "/evolve")
 	output2, _ := result2["output"].(string)
 	if !strings.Contains(output2, "demo-skill") {
 		t.Errorf("有 pending 记录时摘要应含技能名，输出:\n%s", output2)
@@ -296,14 +289,10 @@ func TestHandleEvolveCommand_裸命令列表分支(t *testing.T) {
 		t.Errorf("摘要应含 pending 计数，输出:\n%s", output2)
 	}
 
-	// "list" 显式参数走同一分支
-	result3, err := d.handleEvolveCommand(t.Context(), "/evolve list", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand(list) error: %v", err)
-	}
-	output3, _ := result3["output"].(string)
-	if !strings.Contains(output3, "**Skills 演进记录：**") {
-		t.Errorf("/evolve list 应与裸 /evolve 同分支，输出:\n%s", output3)
+	// 新版语义（Python :213-214）："list" 是 skill_name，不命中 skill → error
+	result3 := runEvolveSlashForTest(d, "/evolve list")
+	if result3["result_type"] != "error" {
+		t.Errorf("/evolve list 新版应按 skill_name 处理并报未找到，实际 %v", result3["result_type"])
 	}
 }
 
@@ -312,10 +301,7 @@ func TestHandleEvolveCommand_空技能目录(t *testing.T) {
 	skillsDir := t.TempDir()
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	result, err := d.handleEvolveCommand(t.Context(), "/evolve", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve")
 	output, _ := result["output"].(string)
 	if !strings.Contains(output, "未找到任何 Skill 目录") {
 		t.Errorf("空技能目录应返回未找到提示，输出:\n%s", output)
@@ -328,10 +314,7 @@ func TestHandleEvolveCommand_技能不存在(t *testing.T) {
 	makeEvolveSkillDir(t, skillsDir, "real-skill")
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	result, err := d.handleEvolveCommand(t.Context(), "/evolve no-such-skill 优化一下", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve no-such-skill 优化一下")
 	if result["result_type"] != "error" {
 		t.Errorf("result_type = %v, want error", result["result_type"])
 	}
@@ -344,174 +327,49 @@ func TestHandleEvolveCommand_技能不存在(t *testing.T) {
 	}
 }
 
-// TestHandleEvolveCommand_无信号无意图 测试无归属信号且无 user_query 时的提示。
+// TestHandleEvolveCommand_无信号无意图 新版语义改写（2026-12-26，Python 行号依据：
+// evolution_slash.py:230-236——/evolve 带 skill 无意图 → followup（默认空意图），
+// 旧版「无信号提前返回提示」链已随上游重写删除）。
 func TestHandleEvolveCommand_无信号无意图(t *testing.T) {
 	skillsDir := t.TempDir()
 	makeEvolveSkillDir(t, skillsDir, "demo-skill")
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	// instance 为 nil → collectMessagesForEvolve 返回 nil → 无检测信号；
-	// user_query 为空 → 提前返回 "未发现明确的演进信号"
-	result, err := d.handleEvolveCommand(t.Context(), "/evolve demo-skill", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand error: %v", err)
+	result := runEvolveSlashForTest(d, "/evolve demo-skill")
+	if result["result_type"] != "followup" {
+		t.Fatalf("result_type = %v, want followup（Python :236）", result["result_type"])
 	}
-	if result["result_type"] != "answer" {
-		t.Errorf("result_type = %v, want answer", result["result_type"])
-	}
-	output, _ := result["output"].(string)
-	if !strings.Contains(output, "未发现明确的演进信号") {
-		t.Errorf("无信号无意图应返回提示，输出:\n%s", output)
+	prompt, _ := result["followup_prompt"].(string)
+	if !strings.Contains(prompt, "prepare_skill_evolution") {
+		t.Fatalf("followup_prompt 应为审查工作流 prompt，实际 %q", prompt)
 	}
 }
 
-// TestHandleEvolveCommand_成功路径审批块形状 测试 M-14 修复的完整成功链。
-// skill 存在 + user_query 非空 → RequestUserEvolution（user_intent 信号）→
-// mock LLM 返回合法 JSON 草稿 → 生成 records + 审批事件 →
-// 返回 approval_chunks: []map[string]any（非 []any{result.ApprovalEvent} 原指针形状）。
+// TestHandleEvolveCommand_成功路径审批块形状 新版语义改写（2026-12-26，Python 行号依据：
+// evolution_slash.py:216-236——/evolve 带 skill+意图 → build_evolve_review_command_prompt
+// followup；旧版「直出 approval_chunks」链已随上游重写删除，完整审批闭环由
+// e2e swarmevolution E1 覆盖）。
 func TestHandleEvolveCommand_成功路径审批块形状(t *testing.T) {
 	skillsDir := t.TempDir()
 	makeEvolveSkillDir(t, skillsDir, "demo-skill")
-	stub := &stubEvolveLLMClient{
-		// GenerateRecords 提示词（cn 版以 "你是一个 Skill 优化专家" 开头）的 mock 响应：
-		// 一条 append 草稿
-		generateResp: `[{"action": "append", "section": "Troubleshooting", "target": "body", "content": "遇到超时错误时先检查网络代理配置"}]`,
-	}
-	d := newEvolveTestAdapter(t, skillsDir, stub)
+	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	result, err := d.handleEvolveCommand(t.Context(), "/evolve demo-skill 把超时问题记录下来", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve demo-skill 把超时问题记录下来")
 	if result == nil {
 		t.Fatal("成功路径应返回结果")
 	}
-	if result["result_type"] != "answer" {
-		t.Errorf("result_type = %v, want answer, output=%v", result["result_type"], result["output"])
+	if result["result_type"] != "followup" {
+		t.Fatalf("result_type = %v, want followup, output=%v", result["result_type"], result["output"])
 	}
-
-	// M-14 核心：approval_chunks 必须是 []map[string]any 展平形状
-	chunks, ok := result["approval_chunks"].([]map[string]any)
-	if !ok {
-		t.Fatalf("approval_chunks 应为 []map[string]any 展平形状（M-14），实际类型 %T", result["approval_chunks"])
+	if result["action"] != "run_evolve_followup" || result["skill_name"] != "demo-skill" {
+		t.Fatalf("followup 契约不符，实际 %v", result)
 	}
-	if len(chunks) != 1 {
-		t.Fatalf("approval_chunks 长度 = %d, want 1", len(chunks))
+	prompt, _ := result["followup_prompt"].(string)
+	if !strings.Contains(prompt, "把超时问题记录下来") {
+		t.Fatalf("user_intent 应注入 prompt（Python :114），实际 %q", prompt)
 	}
-	chunk := chunks[0]
-	if chunk["event_type"] != "chat.ask_user_question" {
-		t.Errorf("chunk event_type = %v, want chat.ask_user_question", chunk["event_type"])
-	}
-	requestID, _ := chunk["request_id"].(string)
-	if strings.TrimSpace(requestID) == "" {
-		t.Errorf("chunk 应含非空 request_id（approvalChunkFromEvent 校验），chunk=%v", chunk)
-	}
-	// questions 双形状（M-14 残留修复）：进程内原生构造产出 []map[string]any，
-	// 经 WS/JSON 序列化产出 []any；teamHelperQuestionsItems 统一识别
-	questions := teamHelperQuestionsItems(chunk["questions"])
-	if len(questions) != 1 {
-		t.Fatalf("questions 长度 = %d, want 1", len(questions))
-	}
-	qm, _ := questions[0].(map[string]any)
-	qText, _ := qm["question"].(string)
-	if !strings.Contains(qText, "demo-skill") {
-		t.Errorf("question 应含技能名，question=%q", qText)
-	}
-
-	// 输出摘要应含审批问题文本与条数
-	output, _ := result["output"].(string)
-	if !strings.Contains(output, "已为 Skill 'demo-skill' 生成 1 条演进经验") {
-		t.Errorf("输出应含成功摘要，输出:\n%s", output)
-	}
-	if !strings.Contains(output, "1. ") {
-		t.Errorf("输出应含问题编号列表，输出:\n%s", output)
-	}
-	// 顶层 request_id / skill_name 字段
-	if result["skill_name"] != "demo-skill" {
-		t.Errorf("skill_name = %v, want demo-skill", result["skill_name"])
-	}
-	if stub.generateCalls == 0 {
-		t.Error("mock LLM 的 GenerateRecords 提示词未被调用")
-	}
-}
-
-// TestHandleEvolveCommand_信号指纹去重 测试 S-11 决策点 A 的统一去重。
-// slash 处理过的信号写入 rail.ProcessedSignalKeys()——同一指纹
-// 第二次 slash 调用时被跳过。对话消息中 execution_failure 信号
-// 归属目标 skill；去重键在信号检测后立即回写。
-func TestHandleEvolveCommand_信号指纹去重(t *testing.T) {
-	skillsDir := t.TempDir()
-	makeEvolveSkillDir(t, skillsDir, "demo-skill")
-	stub := &stubEvolveLLMClient{
-		generateResp: `[{"action": "append", "section": "Troubleshooting", "target": "body", "content": "记录网络重试经验"}]`,
-	}
-	d := newEvolveTestAdapter(t, skillsDir, stub)
-
-	// 构造带 execution_failure 工具消息的会话上下文：
-	// DeepAgent + ReActAgent + ContextEngine + default_context 组件装配链
-	card := newEvolveTestAgentCard("evolve-dedup-agent")
-	instance := harness.NewDeepAgent(card)
-	reactAgent := newEvolveTestReActAgent(t, card)
-	instance.SetReactAgent(reactAgent, true)
-	d.instance = instance
-
-	ctx := t.Context()
-	sess := newEvolveTestSession(t, "evolve-dedup-session")
-	mc, err := reactAgent.ContextEngine().CreateContext(ctx, "default_context", sess)
-	if err != nil {
-		t.Fatalf("CreateContext 失败: %v", err)
-	}
-	// 消息链：assistant(skill_tool 读取 demo-skill) → tool(执行失败)
-	assistantMsg := llmschema.NewAssistantMessage("正在读取技能",
-		llmschema.WithToolCalls([]*llmschema.ToolCall{
-			llmschema.NewToolCall("call_1", "skill_tool",
-				`{"skill_name": "demo-skill", "relative_file_path": "SKILL.md"}`),
-		}))
-	toolMsg := llmschema.NewToolMessage("call_1", "执行失败: connection error timeout", llmschema.WithMessageName("skill_tool"))
-	if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{assistantMsg, toolMsg}); err != nil {
-		t.Fatalf("AddMessages 失败: %v", err)
-	}
-
-	// 第一次调用：信号被检测并写入 processedSignalKeys
-	result1, err := d.handleEvolveCommand(t.Context(), "/evolve demo-skill", "evolve-dedup-session")
-	if err != nil {
-		t.Fatalf("第一次 handleEvolveCommand error: %v", err)
-	}
-	if result1 == nil {
-		t.Fatal("第一次调用应返回结果")
-	}
-
-	keys := d.skillEvolutionRail.ProcessedSignalKeys()
-	if len(keys) == 0 {
-		t.Fatal("首次调用后 processedSignalKeys 应非空（S-11 决策点 A 统一指纹回写）")
-	}
-	// execution_failure 信号指纹应存在（skill_name=demo-skill）
-	found := false
-	for fp := range keys {
-		if fp[0] == "execution_failure" && fp[2] == "demo-skill" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("processedSignalKeys 应含 execution_failure/demo-skill 指纹，实际 keys=%v", keys)
-	}
-
-	// 第二次调用：同一信号被去重跳过（user_query 为空 + attributed 为空 → 未发现信号提示）
-	// （若去重失效，信号会再次进入演进链，mock LLM 的 generate 调用次数会增加）
-	genCallsBefore := stub.generateCalls
-	result2, err := d.handleEvolveCommand(t.Context(), "/evolve demo-skill", "evolve-dedup-session")
-	if err != nil {
-		t.Fatalf("第二次 handleEvolveCommand error: %v", err)
-	}
-	if result2 == nil {
-		t.Fatal("第二次调用应返回结果")
-	}
-	output2, _ := result2["output"].(string)
-	if !strings.Contains(output2, "未发现明确的演进信号") {
-		t.Errorf("去重后第二次调用应提示未发现信号，输出:\n%s", output2)
-	}
-	if stub.generateCalls != genCallsBefore {
-		t.Errorf("去重后不应再次调用 GenerateRecords（calls %d → %d）", genCallsBefore, stub.generateCalls)
+	if !strings.Contains(prompt, "evolve_review_task") {
+		t.Fatalf("prompt 应含审查流程指令（Python :119），实际 %q", prompt)
 	}
 }
 
@@ -533,10 +391,7 @@ func TestHandleEvolveListCommand_参数校验(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := d.handleEvolveListCommand(t.Context(), tt.query, "s1")
-			if err != nil {
-				t.Fatalf("handleEvolveListCommand error: %v", err)
-			}
+			result := runEvolveSlashForTest(d, tt.query)
 			if result["result_type"] != "error" {
 				t.Errorf("result_type = %v, want error", result["result_type"])
 			}
@@ -554,10 +409,7 @@ func TestHandleEvolveListCommand_技能不存在(t *testing.T) {
 	makeEvolveSkillDir(t, skillsDir, "real-skill")
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	result, err := d.handleEvolveListCommand(t.Context(), "/evolve_list ghost-skill", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveListCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve_list ghost-skill")
 	if result["result_type"] != "error" {
 		t.Errorf("result_type = %v, want error", result["result_type"])
 	}
@@ -576,10 +428,7 @@ func TestHandleEvolveListCommand_空记录(t *testing.T) {
 	makeEvolveSkillDir(t, skillsDir, "empty-skill")
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 
-	result, err := d.handleEvolveListCommand(t.Context(), "/evolve_list empty-skill", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveListCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve_list empty-skill")
 	if result["result_type"] != "answer" {
 		t.Errorf("result_type = %v, want answer", result["result_type"])
 	}
@@ -598,10 +447,7 @@ func TestHandleEvolveListCommand_表格输出(t *testing.T) {
 	d := newEvolveTestAdapter(t, skillsDir, nil)
 	appendEvolveRecord(t, d.skillEvolutionRail, "table-skill", "ev_t1", "第一条经验内容", false)
 
-	result, err := d.handleEvolveListCommand(t.Context(), "/evolve_list table-skill", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveListCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve_list table-skill")
 	if result["result_type"] != "answer" {
 		t.Errorf("result_type = %v, want answer", result["result_type"])
 	}
@@ -666,19 +512,13 @@ func TestHandleEvolveListCommand_禁用技能过滤(t *testing.T) {
 	}
 
 	// /evolve_list hidden-skill：技能存在（store 层 SkillExists 不过滤）仍可查询
-	result, err := d.handleEvolveListCommand(t.Context(), "/evolve_list hidden-skill", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveListCommand error: %v", err)
-	}
+	result := runEvolveSlashForTest(d, "/evolve_list hidden-skill")
 	if result["result_type"] != "answer" {
 		t.Errorf("result_type = %v, want answer（SkillExists 不过滤）", result["result_type"])
 	}
 
 	// 不存在技能的错误信息中可用列表应排除 hidden-skill
-	result2, err := d.handleEvolveListCommand(t.Context(), "/evolve_list ghost", "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveListCommand error: %v", err)
-	}
+	result2 := runEvolveSlashForTest(d, "/evolve_list ghost")
 	output2, _ := result2["output"].(string)
 	if strings.Contains(output2, "hidden-skill") {
 		t.Errorf("禁用技能不应出现在可用列表，输出:\n%s", output2)
@@ -1034,8 +874,17 @@ func TestProcessMessageStreamImpl_team分支6步(t *testing.T) {
 func archiveSkillTwice(t *testing.T, rail *coreevolution.SkillEvolutionRail, skillName string) {
 	t.Helper()
 	store := rail.EvolutionStore()
+	// 配对归档要求 evolutions.json 存在（新 ListPairs 语义：SKILL.v*.md +
+	// evolutions.v*.json 同存才算一对；缺源文件时 ArchiveEvolutions no-op）
+	skillDir0 := store.ResolveSkillDir(t.Context(), skillName)
+	if err := os.WriteFile(filepath.Join(skillDir0, "evolutions.json"), []byte("[]"), 0o644); err != nil {
+		t.Fatalf("初始化 evolutions.json 失败: %v", err)
+	}
 	if _, err := store.ArchiveSkillBody(t.Context(), skillName); err != nil {
 		t.Fatalf("第一次归档失败: %v", err)
+	}
+	if _, err := store.ArchiveEvolutions(t.Context(), skillName); err != nil {
+		t.Fatalf("第一次演进归档失败: %v", err)
 	}
 	// 稍作变更再归档一次，保证两个版本内容不同
 	skillDir := store.ResolveSkillDir(t.Context(), skillName)
@@ -1045,6 +894,9 @@ func archiveSkillTwice(t *testing.T, rail *coreevolution.SkillEvolutionRail, ski
 	}
 	if _, err := store.ArchiveSkillBody(t.Context(), skillName); err != nil {
 		t.Fatalf("第二次归档失败: %v", err)
+	}
+	if _, err := store.ArchiveEvolutions(t.Context(), skillName); err != nil {
+		t.Fatalf("第二次演进归档失败: %v", err)
 	}
 }
 
@@ -1063,15 +915,12 @@ func TestEvolveRollback_无版本只列清单不回滚(t *testing.T) {
 		t.Fatalf("读 SKILL.md 失败: %v", err)
 	}
 
-	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName, "s1")
-	if err != nil {
-		t.Fatalf("handleEvolveRollbackCommand 返回 error: %v", err)
-	}
+	resp := runEvolveSlashForTest(d, "/evolve_rollback "+skillName)
 	if got := resp["result_type"]; got != "answer" {
 		t.Fatalf("result_type = %v, 期望 answer（列清单）", got)
 	}
 	output, _ := resp["output"].(string)
-	if !strings.Contains(output, "可用归档版本") {
+	if !strings.Contains(output, "可用回滚版本") {
 		t.Errorf("输出应含版本清单，实际: %s", output)
 	}
 	if !strings.Contains(output, "← 最近") {
@@ -1101,14 +950,11 @@ func TestEvolveRollback_空名与不存在与无归档(t *testing.T) {
 	}{
 		{"空名", "/evolve_rollback", "请指定 Skill 名称"},
 		{"Skill 不存在", "/evolve_rollback ghost-skill", "未找到 Skill 'ghost-skill'"},
-		{"无归档版本", "/evolve_rollback " + skillName, "没有归档版本可回滚"},
+		{"无归档版本", "/evolve_rollback " + skillName, "没有成对归档版本可回滚"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			resp, err := d.handleEvolveRollbackCommand(t.Context(), c.query, "s1")
-			if err != nil {
-				t.Fatalf("返回 error: %v", err)
-			}
+			resp := runEvolveSlashForTest(d, c.query)
 			if got := resp["result_type"]; got != "error" {
 				t.Fatalf("result_type = %v, 期望 error", got)
 			}
@@ -1128,10 +974,7 @@ func TestEvolveRollback_版本非法与latest(t *testing.T) {
 	makeEvolveSkillDir(t, skillsDir, skillName)
 	archiveSkillTwice(t, d.skillEvolutionRail, skillName)
 
-	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName+" SKILL.v19990101_000000.md", "s1")
-	if err != nil {
-		t.Fatalf("返回 error: %v", err)
-	}
+	resp := runEvolveSlashForTest(d, "/evolve_rollback "+skillName+" SKILL.v19990101_000000.md")
 	if got := resp["result_type"]; got != "error" {
 		t.Fatalf("非法版本 result_type = %v, 期望 error", got)
 	}
@@ -1139,10 +982,7 @@ func TestEvolveRollback_版本非法与latest(t *testing.T) {
 		t.Errorf("非法版本应提示不存在，实际: %s", output)
 	}
 
-	resp, err = d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName+" latest", "s1")
-	if err != nil {
-		t.Fatalf("返回 error: %v", err)
-	}
+	resp = runEvolveSlashForTest(d, "/evolve_rollback "+skillName+" latest")
 	if got := resp["result_type"]; got != "answer" {
 		t.Fatalf("latest 回滚 result_type = %v, 期望 answer，输出: %v", got, resp["output"])
 	}
@@ -1158,21 +998,18 @@ func TestEvolveSimplify与Rebuild_空名与不存在(t *testing.T) {
 	skillName := "simplify-skill"
 	makeEvolveSkillDir(t, skillsDir, skillName)
 
-	type handler func(context.Context, string, string) (map[string]any, error)
+	// 新版处理器（Python evolution_slash.py:293-303/:343-353 空名/不存在分支）
 	cases := []struct {
-		name    string
-		handler handler
-		usage   string
+		name  string
+		query string
+		usage string
 	}{
-		{"simplify", d.handleEvolveSimplifyCommand, "/evolve_simplify"},
-		{"rebuild", d.handleEvolveRebuildCommand, "/evolve_rebuild"},
+		{"simplify", "/evolve_simplify", "/evolve_simplify"},
+		{"rebuild", "/evolve_rebuild", "/evolve_rebuild"},
 	}
 	for _, c := range cases {
 		t.Run(c.name+"_空名", func(t *testing.T) {
-			resp, err := c.handler(t.Context(), c.usage, "s1")
-			if err != nil {
-				t.Fatalf("返回 error: %v", err)
-			}
+			resp := runEvolveSlashForTest(d, c.usage)
 			if got := resp["result_type"]; got != "error" {
 				t.Fatalf("result_type = %v, 期望 error", got)
 			}
@@ -1181,10 +1018,7 @@ func TestEvolveSimplify与Rebuild_空名与不存在(t *testing.T) {
 			}
 		})
 		t.Run(c.name+"_不存在", func(t *testing.T) {
-			resp, err := c.handler(t.Context(), c.usage+" ghost-skill", "s1")
-			if err != nil {
-				t.Fatalf("返回 error: %v", err)
-			}
+			resp := runEvolveSlashForTest(d, c.usage+" ghost-skill")
 			if got := resp["result_type"]; got != "error" {
 				t.Fatalf("result_type = %v, 期望 error", got)
 			}
@@ -1195,70 +1029,10 @@ func TestEvolveSimplify与Rebuild_空名与不存在(t *testing.T) {
 	}
 }
 
-// TestApprovalSummaryOutput_计数口径与rune截断 回归（D1）：对齐 Python
-// _format_approval_summary —— 条数用 questions 总数、明细只列 dict 项、
-// 单条按 200 字符截断（不得按字节切断中文）。
-func TestApprovalSummaryOutput_计数口径与rune截断(t *testing.T) {
-	longText := strings.Repeat("中", 250)
-	questions := []any{
-		map[string]any{"question": "第一问"},
-		"非dict项", // 占位：计入总数但不产生明细行
-		map[string]any{"question": longText},
-	}
-
-	out := approvalSummaryOutput("demo", questions, "生成")
-
-	if !strings.HasPrefix(out, "已为 Skill 'demo' 生成 3 条待审批内容：\n") {
-		t.Fatalf("文案头不符（条数应为 questions 总数 3）: %q", out)
-	}
-	lines := strings.Split(out, "\n")
-	if len(lines) != 3 { // 首行 + 2 条明细
-		t.Fatalf("明细行数 = %d, 期望 2（非 dict 项不列）: %q", len(lines)-1, out)
-	}
-	if !strings.HasPrefix(lines[1], "  1. 第一问") {
-		t.Errorf("第 1 行不符: %q", lines[1])
-	}
-	// 非 dict 项占掉编号 2，故第 2 条明细编号为 3（对齐 enumerate 下标）
-	if !strings.HasPrefix(lines[2], "  3. ") {
-		t.Errorf("第 2 条明细编号应为 3: %q", lines[2])
-	}
-	if !strings.HasSuffix(lines[2], strings.Repeat("中", 200)) {
-		t.Error("长文本应按 200 字符截断")
-	}
-	if strings.Contains(out, strings.Repeat("中", 201)) {
-		t.Error("不得出现第 201 个字符（截断失效）")
-	}
-	if !utf8.ValidString(out) {
-		t.Error("截断产生非法 UTF-8")
-	}
-}
-
-// TestApprovalResultFromApprovalChunk_无questionCount 回归（D1）：deep 侧审批响应
-// 只有 output/result_type/approval_chunks（Python interface_deep 无 question_count）。
-func TestApprovalResultFromApprovalChunk_无questionCount(t *testing.T) {
-	chunk := map[string]any{
-		"event_type": "chat.ask_user_question",
-		"questions":  []any{map[string]any{"question": "要精简吗"}},
-	}
-	res := approvalResultFromApprovalChunk("demo", chunk, "生成")
-
-	if _, exists := res["question_count"]; exists {
-		t.Error("deep 侧审批响应不应带 question_count（那是 team 侧契约）")
-	}
-	if res["result_type"] != "answer" {
-		t.Errorf("result_type = %v, 期望 answer", res["result_type"])
-	}
-	chunks, ok := res["approval_chunks"].([]map[string]any)
-	if !ok || len(chunks) != 1 {
-		t.Fatalf("approval_chunks 形状不符: %#v", res["approval_chunks"])
-	}
-	if output, _ := res["output"].(string); !strings.Contains(output, "1 条待审批内容") {
-		t.Errorf("output 应含条数: %q", output)
-	}
-}
-
-// TestEvolveRollback_空名列入0版本 回归（D2）：Python 只判 archives 非空，
-// 「有归档但没有 SKILL.v*」的 skill 也要列出（显示 0 个版本）。
+// TestEvolveRollback_空名列入0版本 新版语义改写（2026-12-26，Python 行号依据：
+// evolution_slash.py:162-186 + archive.py:57-88——list_pairs 只认完整成对归档
+// （SKILL.v*.md + evolutions.v*.json 同存），「只有 evolutions 归档」不进清单，
+// 0 版本项在新版不可能出现；未成对 skill 不列出。
 func TestEvolveRollback_空名列入0版本(t *testing.T) {
 	skillsDir := t.TempDir()
 	d := newEvolveTestAdapter(t, skillsDir, nil)
@@ -1273,14 +1047,10 @@ func TestEvolveRollback_空名列入0版本(t *testing.T) {
 		t.Fatalf("ArchiveEvolutions 失败: %v", err)
 	}
 
-	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback", "s1")
-	if err != nil {
-		t.Fatalf("返回 error: %v", err)
-	}
+	resp := runEvolveSlashForTest(d, "/evolve_rollback")
 	output, _ := resp["output"].(string)
-	wantLine := "- **" + skillName + "**: 0 个版本"
-	if !strings.Contains(output, wantLine) {
-		t.Fatalf("空名清单应列出 0 版本项 %q，实际输出: %s", wantLine, output)
+	if strings.Contains(output, skillName) {
+		t.Fatalf("未成对 skill 不应出现在清单，实际输出: %s", output)
 	}
 	if got := resp["result_type"]; got != "error" {
 		t.Errorf("result_type = %v, 期望 error", got)

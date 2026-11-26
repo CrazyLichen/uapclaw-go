@@ -16,10 +16,10 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -615,4 +615,22 @@ func annotateEvolveSlashResult(query string, result map[string]any) map[string]a
 	}
 	return evolutionlogic.EvolutionSlashResult(
 		evolutionlogic.EvolutionSlashCommandName(query), result, nil)
+}
+
+// runEvolveSlashForTest 测试 shim：以替身 rail 的 skills 根目录直调新版处理器
+// （旧 rail-dependent handler 迁移用；生产路径见 handleSlashCommand）。
+func runEvolveSlashForTest(d *DeepAdapter, query string) map[string]any {
+	skillsDir := ""
+	if d.skillEvolutionRail != nil && d.skillEvolutionRail.EvolutionStore() != nil &&
+		len(d.skillEvolutionRail.EvolutionStore().BaseDirs()) > 0 {
+		skillsDir = d.skillEvolutionRail.EvolutionStore().BaseDirs()[0]
+	}
+	return HandleEvolutionSlashCommand(context.Background(), query, EvolutionSlashContext{
+		Mode:             "agent.work.plan",
+		SessionID:        "s1",
+		SkillsDir:        skillsDir,
+		EvolutionEnabled: true,
+		Language:         "cn",
+		ReviewAgentName:  defaultReviewAgentName,
+	})
 }

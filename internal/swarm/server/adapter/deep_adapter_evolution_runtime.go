@@ -13,8 +13,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/subagent"
@@ -113,8 +113,8 @@ func (d *DeepAdapter) ensureActiveEvolutionRailsRegistered(ctx context.Context) 
 		review.NewEvolutionReviewRuntime(60.0),
 		evolutionAutoSave,
 		resolvedLanguage,
-		false, // signal_trigger=False 恒（Python :10615；信号触发收编团队语义）
-		true,  // review_trigger=True 恒（Python :10616；审查自检 follow-up）
+		false,          // signal_trigger=False 恒（Python :10615；信号触发收编团队语义）
+		true,           // review_trigger=True 恒（Python :10616；审查自检 follow-up）
 		disabledSkills, // Python :10612-10614 disabled_skills 经 rail_kwargs 转发
 	)
 	if err != nil {
