@@ -354,14 +354,28 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		Msg("[TeamSkillOptimizer] user_patch")
 
 	summaryPtr := NormalizeSummary(parsed["summary"])
+
+	// D-15.24d-4 修复（2026-12-26）：keywords 从模型响应透传到 patch——
+	// 缺失时 bundle keywords 恒空 → hub 检索 jaccard 恒 0 → user_patch 记录
+	// 经 hub 不可检索（Python 上游同源缺陷，Python 侧对齐核归 9.80a 批）。
+	var keywords []string
+	if rawKeywords, ok := parsed["keywords"].([]any); ok {
+		for _, kw := range rawKeywords {
+			if str, ok := kw.(string); ok && strings.TrimSpace(str) != "" {
+				keywords = append(keywords, strings.TrimSpace(str))
+			}
+		}
+	}
+
 	return checkpointing.MakeEvolutionRecord(
 		"team_skill_user_patch",
 		fmt.Sprintf("User intent: %s", truncateString(userIntent, 200)),
 		checkpointing.EvolutionPatch{
-			Section: section,
-			Action:  "append",
-			Content: content,
-			Target:  signal.EvolutionTargetBody,
+			Section:  section,
+			Action:   "append",
+			Content:  content,
+			Target:   signal.EvolutionTargetBody,
+			Keywords: keywords,
 		},
 		0.6,
 		nil,

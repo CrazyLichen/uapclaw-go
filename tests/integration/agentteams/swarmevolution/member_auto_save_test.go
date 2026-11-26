@@ -27,7 +27,7 @@ const e4Marker = "E2E-MARK-MEMBER-AUTO-SAVE"
 
 // e4GenerateResp 成员生成台本（skill GenerateRecords 契约：records 数组）。
 const e4GenerateResp = `[
-	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e4Marker + ` 端口占用排查法", "summary": "端口占用排查（auto_save）"}
+	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e4Marker + ` 端口占用排查法", "summary": "端口占用排查（auto_save）", "keywords": ["deploy", "port-check", "端口占用"]}
 ]`
 
 // TestSwarmEvolutionMemberAutoSave 本文件审计入口（audit 规则：每个 _test.go 自带 suite.Run）。

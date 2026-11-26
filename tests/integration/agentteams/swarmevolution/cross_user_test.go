@@ -93,21 +93,10 @@ func (s *CrossUserSuite) TestE9跨用户共享下载() {
 	s.Require().NoError(serr)
 	s.Require().NotNil(stagedA)
 	if sh := railA.ExperienceSharer(); sh == nil {
-		s.T().Logf("[DIAG] sharerA nil")
-	} else {
-		s.T().Logf("[DIAG] sharerA HasPending pre=%v", sh.HasPending("shared_skill"))
+		s.T().Logf("[sharerA nil]")
 	}
 	err = railA.ApproveRecord(s.ctx, stagedA.RequestID)
 	s.Require().NoError(err)
-	if sh := railA.ExperienceSharer(); sh != nil {
-		s.T().Logf("[DIAG] sharerA HasPending post=%v", sh.HasPending("shared_skill"))
-	}
-	_ = filepath.WalkDir(hubDir, func(path string, dd os.DirEntry, err error) error {
-		if err == nil && !dd.IsDir() {
-			s.T().Logf("[DIAG] hub file %s", path)
-		}
-		return nil
-	})
 
 	// hub 侧断言：A 的上传产物已写盘
 	hubEntries, _ := os.ReadDir(hubDir)
@@ -123,26 +112,40 @@ func (s *CrossUserSuite) TestE9跨用户共享下载() {
 	sharerB := railB.ExperienceSharer()
 	s.Require().NotNil(sharerB)
 
-	skillID, err := sharerB.ResolveSkillID(s.ctx, "shared_skill")
-	s.Require().NoError(err)
-	s.Require().NotEmpty(skillID)
+	// ⤴️ 语义澄清（2026-12-26 会话8）：A、B 两侧同名 skill 的 skill_id 不同
+	//（ResolveSkillID 含内容哈希外的分量）——跨用户检索的真实入口是
+	// SearchSkills（全局索引 global.jsonl，按名称/描述匹配）而非本地
+	// ResolveSkillID；按 id 检索恒空（原负断言即此假象）。
+	searchResults := sharerB.SearchSkills(s.ctx, sharing.QueryKeywords{Keywords: []string{"shared_skill"}}, 5)
+	s.Require().NotEmpty(searchResults, "全局检索应命中 A 上传的 skill")
+	var skillID string
+	for _, res := range searchResults {
+		if res.SkillName == "shared_skill" {
+			skillID = res.SkillID
+		}
+	}
+	s.Require().NotEmpty(skillID, "SearchSkills 应返回 shared_skill 的 hub skill_id")
 
-	// ⤴️ 缺陷登记（15.24d 执行期发现，Python 同源）：GenerateUserPatch 产出的
-	// 记录不带 Keywords（team_optimizer.go:362-370 未设 patch.Keywords）→
-	// bundle keywords 恒空 → DownloadBundles jaccard 恒 0 → user_patch 记录
-	// 经 hub 不可检索（Python online 链同构）。修复属 sharing/optimizer 批
-	// （GenerateUserPatch 补 keywords + Python 对齐核），本批登记不修；
-	// 修复后此断言改为正断言（B 检索命中并回读标记）。
+	// D-15.24d-4 已修复（GenerateUserPatch keywords 透传 + prompt 要求）：
+	// bundle keywords 非空 → jaccard 命中 → B 检索到 A 的 bundle（跨用户标记回读）。
+	// 查询词与 A 侧台本 keywords（deploy/port-check/端口占用）取交集保证命中。
 	query := sharing.QueryKeywords{
-		Keywords: []string{"端口占用", "部署"},
+		Keywords: []string{"deploy", "port-check"},
 		Intent:   "部署排障",
 	}
 	bundles, err := sharerB.DownloadRelevant(s.ctx, skillID, query, 5, "shared_skill")
 	s.Require().NoError(err)
-	s.Assert().Empty(bundles, "user_patch 记录缺 keywords → 不可检索（上游同源缺陷）")
+	s.Require().NotEmpty(bundles, "B 应能从 hub 检索到 A 上传的 bundle（D-15.24d-4 修复后转正）")
+	contents := ""
+	for _, bundle := range bundles {
+		for _, exp := range bundle.Experiences {
+			contents += exp.Record.Change.Content
+		}
+	}
+	s.Assert().Contains(contents, e4Marker, "检索命中的 bundle 应含 A 侧标记（E9 复用 e4 台本，记录内容=e4Marker；跨用户内容无丢失）")
 
-	// hub 隔离断言：B 侧缓存独立（mirror 仅在检索命中时发生——当前检索空，
-	// B 缓存应为空，跨用户不串数据）
+	// mirror 断言：检索命中后 B 的本地缓存目录出现下载镜像（跨用户不串数据：
+	// 仅经 hub 传递，B 的 skills 目录独立）
 	cacheEntries, _ := os.ReadDir(cacheB)
-	s.Assert().Empty(cacheEntries, "检索未命中时 B 缓存不应有镜像")
+	s.Assert().NotEmpty(cacheEntries, "检索命中后 mirror 应写入 B 的 local_cache_dir")
 }
