@@ -118,7 +118,7 @@ type TeamSkillEvolutionRail struct {
 	// Python: self._review_feedback_skill_create_rail
 	reviewFeedbackSkillCreateRail any
 	// reviewFeedbackApprovalContinuations 审批后续动作（request_id → continuation）
-	// Python: self._review_feedback_approval_continuations
+	// Python: self._review_feedback_approval_continuations（team_skill_evolution_rail.py:878-885）
 	reviewFeedbackApprovalContinuations map[string]string
 	// hostCompletionPendingSessionID 外部通知的团队完成会话 ID
 	hostCompletionPendingSessionID *string
@@ -843,6 +843,19 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 // ApproveRecord 处理暂存演进记录的审批通过。
 // Python: TeamSkillEvolutionRail.approve_record(request_id)
 func (r *TeamSkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string) error {
+	// 外部提案分支（Python :866-886）：creation rail 持有该 request_id 时转发 resolve，
+	// 并把续执行提示词存入 _review_feedback_approval_continuations。
+	if creationRail := r.externalProposalOwner(); creationRail != nil && creationRail.OwnsExternalProposal(requestID) {
+		continuation := creationRail.ResolveExternalProposal(requestID, true)
+		delete(r.pendingApprovalSnapshots, requestID)
+		if continuation != "" {
+			if r.reviewFeedbackApprovalContinuations == nil {
+				r.reviewFeedbackApprovalContinuations = map[string]string{}
+			}
+			r.reviewFeedbackApprovalContinuations[requestID] = continuation
+		}
+		return nil
+	}
 	pending, result, err := r.approvalRuntime.ApprovePendingRequest(ctx, requestID, "TeamSkillEvolutionRail", "approve_record")
 	if err != nil {
 		return err
@@ -864,6 +877,12 @@ func (r *TeamSkillEvolutionRail) ApproveRecord(ctx context.Context, requestID st
 // RejectRecord 处理暂存演进记录的审批拒绝。
 // Python: TeamSkillEvolutionRail.reject_record(request_id)
 func (r *TeamSkillEvolutionRail) RejectRecord(ctx context.Context, requestID string) error {
+	// 外部提案分支（Python :906-913）：creation rail 持有该 request_id 时转发 resolve(accepted=false)。
+	if creationRail := r.externalProposalOwner(); creationRail != nil && creationRail.OwnsExternalProposal(requestID) {
+		creationRail.ResolveExternalProposal(requestID, false)
+		delete(r.pendingApprovalSnapshots, requestID)
+		return nil
+	}
 	pending, result, err := r.approvalRuntime.RejectPendingRequest(ctx, requestID, "TeamSkillEvolutionRail", "reject_record")
 	if err != nil {
 		return err
@@ -1767,6 +1786,15 @@ func (r *TeamSkillEvolutionRail) ReviewFeedbackEvolutionEnabled() bool {
 func (r *TeamSkillEvolutionRail) BindReviewFeedbackSkillCreateRail(rail ReviewFeedbackCoordinator) {
 	// Go 侧 creation rail 面与协调器同经接口注入（见 ReviewFeedbackCoordinator）。
 	r.reviewFeedbackCoordinator = rail
+}
+
+// externalProposalOwner 断言绑定的创建 rail 是否具备外部提案归属面。
+// Python: getattr(self, "_review_feedback_skill_create_rail", None) 鸭子式 owns/resolve。
+func (r *TeamSkillEvolutionRail) externalProposalOwner() ExternalProposalOwner {
+	if owner, ok := r.reviewFeedbackSkillCreateRail.(ExternalProposalOwner); ok {
+		return owner
+	}
+	return nil
 }
 
 // HandleReviewFeedback 把一条结算失败的评审经 Core 协调器路由。

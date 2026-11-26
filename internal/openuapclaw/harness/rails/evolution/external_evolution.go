@@ -27,6 +27,16 @@ type ReviewFeedbackCoordinator interface {
 	OnTeamCompleted(ctx context.Context, payload map[string]any) (bool, error)
 }
 
+// ExternalProposalOwner 外部提案归属面（team_skill_create_rail 的 owns/resolve 对）。
+// Python: creation_rail.owns_external_proposal / resolve_external_proposal
+// （team_skill_evolution_rail.py:870-871/910-911 消费）。
+type ExternalProposalOwner interface {
+	// OwnsExternalProposal 返回是否持有待审批创建卡。
+	OwnsExternalProposal(requestID string) bool
+	// ResolveExternalProposal 处理创建卡，批准时返回内部续执行提示词。
+	ResolveExternalProposal(requestID string, accepted bool) string
+}
+
 // ExternalEvolutionResult 外部信号演进结果（文字状态面，对齐上游返回 dict 的
 // status/message 形态）。
 type ExternalEvolutionResult struct {
