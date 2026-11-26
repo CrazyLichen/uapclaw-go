@@ -25,18 +25,23 @@ func loadResourcesConfig(t *testing.T) *Config {
 	return cfg
 }
 
-// requiredKeyPaths 出厂模板必须包含的键路径（Go 生产代码真实读取的键）
+// requiredKeyPaths 出厂模板必须包含的键路径（Go 生产代码真实读取的键）。
+// 模板已与上游 jiuwenswarm-develop/jiuwenswarm/resources/config.yaml 对齐：
+// Go 专属、模板未承载的键（logging.common/agent_core/permissions 等日志分档、
+// react.enable_task_planning / react.max_iterations、react.evolution.*、
+// session_memory 预设段、modes.team.memory）均有代码默认值，缺键即落默认。
 var requiredKeyPaths = []string{
 	"preferred_language",
 	"logging.level",
 	"logging.console_level",
-	"logging.common",
 	"logging.gateway",
 	"logging.channel",
 	"logging.agent_server",
-	"logging.permissions",
-	"logging.agent_core",
 	"logging.full",
+	"health_check.every",
+	"health_check.target",
+	"health_check.active_hours.start",
+	"health_check.active_hours.end",
 	"memory.mode",
 	"memory.engine",
 	"memory.external.provider",
@@ -49,17 +54,11 @@ var requiredKeyPaths = []string{
 	"embed.embed_base_url",
 	"embed.embed_model",
 	"react.agent_name",
-	"react.max_iterations",
 	"react.enable_task_loop",
-	"react.enable_task_planning",
 	"react.skill_mode",
 	"react.subagents.general_agent.enabled",
 	"react.subagents.code_agent.enabled",
 	"react.subagents.research_agent.enabled",
-	"react.evolution.enabled",
-	"react.evolution.auto_scan",
-	"react.evolution.skill_create",
-	"react.evolution.skill_base_dir",
 	"react.context_engine_config.enabled",
 	"react.context_engine_config.enable_reload",
 	"react.context_engine_config.round_level_compressor_config.trigger_context_ratio",
@@ -68,28 +67,13 @@ var requiredKeyPaths = []string{
 	"react.context_engine_config.dialogue_compressor_config",
 	"react.context_engine_config.current_round_compressor_config",
 	"react.context_engine_config.round_level_compressor_config",
-	"react.context_engine_config.full_compact_processor_config",
-	"react.context_engine_config.tool_result_budget_processor_config",
+	"react.context_engine_config.compression_recall_config",
 	"gateway.session_map_scope",
-	"heartbeat.every",
-	"heartbeat.target",
-	"heartbeat.active_hours.start",
-	"heartbeat.active_hours.end",
 	"channels.web.send_file_allowed",
 	"permissions.enabled",
 	"permissions.schema",
 	"permissions.permission_mode",
-	"team.team_name",
-	"team.lifecycle",
-	"team.teammate_mode",
-	"team.spawn_mode",
-	"team.transport.type",
-	"team.storage.type",
-	"modes.agent.fast.memory.enabled",
-	"modes.agent.fast.memory.is_proactive",
-	"modes.agent.plan.memory.enabled",
-	"modes.agent.plan.memory.is_proactive",
-	"modes.team.memory.enabled",
+	"modes.agent.memory.enabled",
 	"mcp.servers",
 	"hooks.disable_all_hooks",
 	"extensions.extension_dirs",
@@ -115,21 +99,12 @@ func TestResourcesConfigYAML_关键值(t *testing.T) {
 		key  string
 		want any
 	}{
-		{"heartbeat.every", 3600},
-		{"react.max_iterations", 100},
+		{"health_check.every", 3600},
 		{"react.enable_task_loop", true},
 		{"react.subagents.general_agent.enabled", true},
-		{"react.evolution.enabled", true},
-		{"react.evolution.auto_scan", false},
-		{"react.evolution.skill_create", false},
-		{"react.evolution.skill_base_dir", "agent/skills"},
-		{"modes.agent.fast.memory.enabled", true},
-		{"modes.agent.fast.memory.is_proactive", false},
-		{"modes.agent.plan.memory.enabled", true},
-		{"modes.agent.plan.memory.is_proactive", true},
-		{"modes.team.memory.enabled", false},
+		{"react.context_engine_config.enabled", true},
+		{"modes.agent.memory.enabled", true},
 		{"channels.web.send_file_allowed", true},
-		{"team.team_name", "uapclaw_team"},
 		{"memory.external.mem0.user_id", "uapclawswarm-user"},
 		{"memory.external.mem0.agent_id", "uapclawswarm"},
 		{"memory.mode", "local"},
@@ -146,7 +121,7 @@ func TestResourcesConfigYAML_关键值(t *testing.T) {
 // TestResourcesConfigYAML_不含死键 断言已删除的死段不会回流
 func TestResourcesConfigYAML_不含死键(t *testing.T) {
 	cfg := loadResourcesConfig(t)
-	for _, dead := range []string{"server", "workspace", "logging.format", "telemetry"} {
+	for _, dead := range []string{"server", "workspace", "logging.format"} {
 		if cfg.Get(dead) != nil {
 			t.Errorf("出厂模板不应包含死段/未实现段：%s", dead)
 		}

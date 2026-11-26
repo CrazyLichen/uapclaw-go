@@ -81,7 +81,7 @@ type SessionModelContext struct {
 	// （Python 依赖 asyncio 单线程安全，Go 需显式锁——asyncio→Go 惯例偏差）
 	windowMutatorsMu sync.Mutex
 	// compressionRecall 压缩召回全局配置快照（热重载时整体替换）
-	// Python: SessionModelContext 读 config.compression_recall
+	// Python: SessionModelContext 读 config.compression_recall_config
 	compressionRecall *ceschema.CompressionRecallConfig
 }
 

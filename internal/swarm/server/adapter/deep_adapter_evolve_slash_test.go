@@ -890,8 +890,8 @@ func TestProcessMessageStreamImpl_非流式审批块透传(t *testing.T) {
 	req := sschema.NewAgentRequest("req-ns-1", "ch-ns-1", sschema.ReqMethod("chat.send"), params,
 		sschema.WithAgentSessionID("web_sess-ns-1"))
 
-	// 非流式 agent.plan 模式：ensureEvolutionRailForSlash 需要 evolution.enabled
-	d.configCache = map[string]any{"evolution": map[string]any{"enabled": true}}
+	// 非流式 agent.plan 模式：ensureEvolutionRailForSlash 需要 skill_evolution
+	d.configBase = map[string]any{"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}}}
 
 	resp, err := d.ProcessMessageImpl(t.Context(), req, map[string]any{})
 	if err != nil {

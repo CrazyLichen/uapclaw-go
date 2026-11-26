@@ -147,28 +147,28 @@ func TestResolveSessionMemoryConfig_非法dict降级(t *testing.T) {
 	}
 }
 
-// TestGetSkillCreateEnabled_对齐Python 环境变量优先 → react.evolution.skill_create → 默认 false。
-func TestGetSkillCreateEnabled_对齐Python(t *testing.T) {
+// TestGetSkillEvolutionEnabled_对齐Python 单一开关 react.evolution.skill_evolution
+// （common/config.py:335-337）：strictly True 才启用，不再有独立 skill_create 键
+// 与 SKILL_CREATE 环境变量。
+func TestGetSkillEvolutionEnabled_对齐Python(t *testing.T) {
 	d := NewDeepAdapter()
 
-	t.Setenv("SKILL_CREATE", "")
-	if d.getSkillCreateEnabled() {
+	if d.getSkillEvolutionEnabled() {
 		t.Error("缺省应关闭（Python 默认 false）")
 	}
 
-	d.setConfigSnapshots(map[string]any{"evolution": map[string]any{"skill_create": true}}, nil)
-	if !d.getSkillCreateEnabled() {
-		t.Error("react.evolution.skill_create=true 应启用")
+	d.setConfigSnapshots(nil, map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": true}},
+	})
+	if !d.getSkillEvolutionEnabled() {
+		t.Error("react.evolution.skill_evolution=true 应启用")
 	}
 
-	t.Setenv("SKILL_CREATE", "false")
-	if d.getSkillCreateEnabled() {
-		t.Error("环境变量 SKILL_CREATE=false 应否决配置")
-	}
-
-	t.Setenv("SKILL_CREATE", "yes")
-	if !d.getSkillCreateEnabled() {
-		t.Error("环境变量 SKILL_CREATE=yes 应启用")
+	d.setConfigSnapshots(nil, map[string]any{
+		"react": map[string]any{"evolution": map[string]any{"skill_evolution": "true"}},
+	})
+	if d.getSkillEvolutionEnabled() {
+		t.Error("字符串 \"true\" 不应启用（Python 仅 is True）")
 	}
 }
 

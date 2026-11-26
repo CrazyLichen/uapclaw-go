@@ -201,8 +201,6 @@ var configEnvMap = map[string]string{
 	"serper_api_key":                    "SERPER_API_KEY",
 	"perplexity_api_key":                "PERPLEXITY_API_KEY",
 	"github_token":                      "GITHUB_TOKEN",
-	"evolution_auto_scan":               "EVOLUTION_AUTO_SCAN",
-	"skill_create":                      "SKILL_CREATE",
 	"teamskills_market_url":             "TEAM_SKILLS_HUB_BASE_URL",
 	"teamskills_user_token":             "TEAM_SKILLS_HUB_USER_TOKEN",
 	"teamskills_system_token":           "TEAM_SKILLS_HUB_SYSTEM_TOKEN",

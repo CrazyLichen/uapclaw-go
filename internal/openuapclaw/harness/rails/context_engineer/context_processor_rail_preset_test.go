@@ -157,42 +157,23 @@ func TestSessionMemoryPreset_ActiveSetIsThree(t *testing.T) {
 }
 
 // TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate 锁定模板接线：
-// session_memory 路径下 ToolResultBudgetProcessor 的阈值应来自出厂模板，而不是零值/默认兜底。
-func TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate(t *testing.T) {
+// TestFactoryTemplatePresetMerge_无SessionMemory预设 上游模板已收敛，出厂模板不再
+// 承载 FullCompactProcessor / ToolResultBudgetProcessor 预设段（仅在
+// session_memory_config 启用时挂载）；模板映射不产生这两个 user processors。
+func TestFactoryTemplatePresetMerge_无SessionMemory预设(t *testing.T) {
 	ctxCfg := loadFactoryContextEngineConfig(t)
-	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
-
-	base := rail.buildPresetProcessors(nil, nil)
-	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
-	if err != nil {
-		t.Fatalf("出厂模板合并不应报错: %v", err)
+	if _, ok := ctxCfg["full_compact_processor_config"]; ok {
+		t.Error("出厂模板不应包含 full_compact_processor_config")
 	}
-
-	var cfg *offloader.ToolResultBudgetProcessorConfig
-	for _, spec := range merged {
-		if spec.Type != "ToolResultBudgetProcessor" {
-			continue
+	if _, ok := ctxCfg["tool_result_budget_processor_config"]; ok {
+		t.Error("出厂模板不应包含 tool_result_budget_processor_config")
+	}
+	specs := buildFactoryUserProcessors(ctxCfg)
+	for _, spec := range specs {
+		switch spec.Type {
+		case "FullCompactProcessor", "ToolResultBudgetProcessor":
+			t.Errorf("出厂模板映射不应产生 %s", spec.Type)
 		}
-		typed, ok := spec.Config.(*offloader.ToolResultBudgetProcessorConfig)
-		if !ok {
-			t.Fatalf("配置类型 = %T, want *ToolResultBudgetProcessorConfig", spec.Config)
-		}
-		cfg = typed
-	}
-	if cfg == nil {
-		t.Fatal("合并结果缺少 ToolResultBudgetProcessor")
-	}
-	if cfg.TokensThreshold != 50000 {
-		t.Errorf("TokensThreshold = %d, want 50000（模板值未生效）", cfg.TokensThreshold)
-	}
-	if cfg.LargeMessageThreshold != 10000 {
-		t.Errorf("LargeMessageThreshold = %d, want 10000（模板值未生效）", cfg.LargeMessageThreshold)
-	}
-	if cfg.TrimSize != 3000 {
-		t.Errorf("TrimSize = %d, want 3000（模板值未生效）", cfg.TrimSize)
-	}
-	if cfg.OffloadFilePrefix != "ToolResultBudgetProcessor" {
-		t.Errorf("OffloadFilePrefix = %q, want ToolResultBudgetProcessor", cfg.OffloadFilePrefix)
 	}
 }
 

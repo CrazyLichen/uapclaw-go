@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
@@ -80,9 +81,8 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode stri
 	if mode != "agent.work.plan" {
 		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
 	}
-	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
-	enabled, _ := evolutionConfig["enabled"].(bool)
-	if !enabled {
+	evolutionEnabled := config.SkillEvolutionEnabled(d.configBaseSnapshot())
+	if !evolutionEnabled {
 		return "演进功能未启用。"
 	}
 	if d.skillEvolutionRail == nil {

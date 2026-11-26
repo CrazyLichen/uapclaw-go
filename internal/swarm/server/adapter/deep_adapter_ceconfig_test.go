@@ -175,7 +175,7 @@ func TestDeepAgentContextEngineConfig_CompressionRecall(t *testing.T) {
 	d := &DeepAdapter{}
 	reactCfg := map[string]any{
 		"context_engine_config": map[string]any{
-			"compression_recall": map[string]any{
+			"compression_recall_config": map[string]any{
 				"enabled":              true,
 				"chunk_size_tokens":    5000,
 				"chunk_overlap_tokens": 500,
