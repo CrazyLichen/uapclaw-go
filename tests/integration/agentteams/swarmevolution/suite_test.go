@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,8 +60,17 @@ func TestEvolutionE2ESuite(t *testing.T) {
 	suite.Run(t, new(EvolutionE2ESuite))
 }
 
+// setupLogsOnce 测试进程一次性启用文件日志（默认 Nop 会吞 watcher 的
+// warn/panic 日志——E8 专项诊断需要）。
+var setupLogsOnce sync.Once
+
 // SetupTest 每用例隔离 workspace + rail + adapter + 推送采集器。
 func (s *EvolutionE2ESuite) SetupTest() {
+	setupLogsOnce.Do(func() {
+		logDir := filepath.Join(os.TempDir(), "e2e-logs")
+		_ = os.MkdirAll(logDir, 0o755)
+		_ = logger.Setup(logger.WithLogLevel("debug"), logger.WithOutputDir(logDir))
+	})
 	s.ctx = context.Background()
 	s.pushFrames = nil
 

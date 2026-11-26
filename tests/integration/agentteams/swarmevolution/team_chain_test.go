@@ -11,18 +11,19 @@
 package swarmevolution
 
 import (
-	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
-	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 )
 
 // e2Marker 团队链落盘特征标记。
@@ -163,7 +164,13 @@ func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
 	// 帧=3 止于审批推送）——存在跨用例全局污染（嫌疑：E2 残留 watcher 协程/
 	// sharing 包全局态/路径缓存），需专项定位。用例本体已验证可行（独跑绿：
 	// 超时 2s+grace 5s → hidden end 推送 → 重入 staging 成功）。
-	s.T().Skip("E8 套件序全局污染待专项定位（独跑绿，见 plan 接力清单）")
+	// ⤴️ 断点登记（2026-12-26 会话6，专项诊断已做）：watcher 在处理完 staging
+	// 事件（collecting/approval_required 帧已推送）后静默退出——无 timeout 日志、
+	// 无 panic 日志（已启用文件日志 logger.Setup 确认）、buffer 空转不超时、
+	// 协程已消失。嫌疑收敛：activeCycleRequestID 赋值链（:1141 依赖 grouped
+	// approvals）或 pushCycleStart 内部 early-return 链。修复后此用例应全绿
+	// （断言本体已验证可跑通——重入段 staging 正常）。诊断脚手架保留。
+	s.T().Skip("E8 watcher 静默退出根因待定位（诊断结论见注记，plan 接力清单）")
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeTeamSkill("evo_timeout_skill")
@@ -210,6 +217,24 @@ func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+	for i, payload := range s.pushPayloads("chat.evolution_status") {
+		s.T().Logf("[DIAG-E8] frame%d stage=%v msg=%q req=%v", i, payload["stage"], payload["message"], payload["request_id"])
+	}
+	// [DIAG-E8] 断言点探针：dump watcher 协程栈（判断阻塞位置）
+	time.Sleep(2 * time.Second)
+	s.T().Logf("[DIAG-E8] 延时2s后 buffer 增量=%d", len(teamRail.DrainPendingApprovalEvents(false, nil)))
+	buf := make([]byte, 1<<16)
+	n := runtime.Stack(buf, false)
+	stack := string(buf[:n])
+	if idx := strings.Index(stack, "watchTeamEvolutionAndPushTeam"); idx >= 0 {
+		end := idx + 600
+		if end > n {
+			end = n
+		}
+		s.T().Logf("[DIAG-E8] watcher stack=%s", stack[idx:end])
+	} else {
+		s.T().Logf("[DIAG-E8] watcher 协程不存在（已退出）")
+	}
 	s.Assert().True(sawHiddenEnd, "watcher 超时应推送 hidden end 帧（含 timed out），帧数=%d", len(s.pushFrames))
 
 	// 重入：cleanup 后再次 staging 成功（rail 未被超时破坏）
@@ -243,7 +268,9 @@ const e12GenerateResp = `[
 func (s *EvolutionE2ESuite) TestE12团队轨迹完整性标记回读() {
 	// ⤴️ 断点登记（2026-12-26）：独跑 PASS（轨迹标记经聚合路径六环节全程回读），
 	// 套件序必红（聚合生成 0 次 LLM 调用）——与 E8 同源的全局污染待专项定位。
-	s.T().Skip("E12 套件序全局污染待专项定位（独跑绿，见 plan 接力清单）")
+	// 根因已定位并修复（2026-12-26 会话6）：非全局污染——①GetInvokeCall 为
+	// 0-indexed（原断言从 1 起漏首次调用）；②MessagesParam 私有字段需经
+	// Messages()+GetContent().Text() 提取（%v/json.Marshal 均不可见）。
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeTeamSkill("evo_traj_skill")
@@ -267,7 +294,8 @@ func (s *EvolutionE2ESuite) TestE12团队轨迹完整性标记回读() {
 	s.Require().NotEmpty(trajectory.IterSpans(traj), "轨迹应有工作 span")
 
 	s.mockScript(e12GenerateResp)
-	_, err := teamRail.HandleEvolutionFromSignalsWithResult(
+	// [DIAG-E12]
+	stagedE12, err := teamRail.HandleEvolutionFromSignalsWithResult(
 		s.ctx, "evo_traj_skill", traj,
 		[]*signal.EvolutionSignal{signal.MakeEvolutionSignal(
 			schema.UserIntentSignal, "Instructions", "部署排障（"+e12Marker+"）",
@@ -275,18 +303,33 @@ func (s *EvolutionE2ESuite) TestE12团队轨迹完整性标记回读() {
 		false, "部署排障",
 		[]map[string]any{{"role": "user", "content": "部署排障"}}, true)
 	s.Require().NoError(err)
+	if stagedE12 == nil {
+		s.T().Logf("[DIAG-E12] staged=nil; drain=%d", len(teamRail.DrainPendingApprovalEvents(false, nil)))
+	} else {
+		s.T().Logf("[DIAG-E12] staged req=%s payload=%d", stagedE12.RequestID, len(stagedE12.PendingChange.Payload))
+	}
 
 	// ① 轨迹 → 生成输入：mock 捕获的 prompt 应含标记（轨迹摘要未丢失）。
 	// 调用次数随路径浮动（生成+评分等），扫描 0..5 个调用取并集断言。
+	// 注意 GetInvokeCall 为 0-indexed（mock_client.go:385）。
 	promptAll := ""
 	sawAnyCall := false
-	for i := 1; i <= 5; i++ {
+	for i := 0; i <= 5; i++ {
 		if call := s.mockLLM.GetInvokeCall(i); call != nil {
 			sawAnyCall = true
-			promptAll += fmt.Sprintf("%v", call.Messages)
+			// MessagesParam 私有字段——经导出访问器提取消息文本
+			for _, bm := range call.Messages.Messages() {
+				promptAll += bm.GetContent().Text() + "\n"
+			}
 		}
 	}
 	s.Require().True(sawAnyCall, "聚合路径应发起 LLM 调用")
+	s.T().Logf("[DIAG-E12] prompt head=%q", func() string {
+		if len(promptAll) > 400 {
+			return promptAll[:400]
+		}
+		return promptAll
+	}())
 	s.Assert().Contains(promptAll, e12Marker, "生成输入应含轨迹标记（环节①②不丢失）")
 
 	// ② 提案 → 审批 → 落盘：drain 审批事件取 request_id → ApproveRecord → 落盘回读
