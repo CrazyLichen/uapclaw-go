@@ -7,7 +7,7 @@ import (
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/offloader"
+	forkedoffloader "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/offloader"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/runner/callback"
@@ -304,14 +304,12 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 	specs := make([]ceiface.ProcessorSpec, 0, 5)
 	specs = append(specs, ceiface.ProcessorSpec{
 		Type: presetProcessorOffloader,
-		// D-24.15-a1：forked MessageSummaryOffloader 随 15b 回填，此处暂沿用旧配置
-		Config: &offloader.MessageSummaryOffloaderConfig{
-			LargeMessageThreshold: 10000, // Python: large_message_threshold=10000
-			OffloadMessageTypes:   []string{"tool"},
-			ProtectedToolNames:    []string{"read_file:*SKILL.md", "reload_original_context_messages"},
-			Model:                 modelConfig,
-			ModelClient:           modelClientConfig,
-		},
+		// Python: ForkedMessageSummaryOffloaderConfig（enable_debug_dump 半区随 context_debug 半区接入）
+		Config: func() *forkedoffloader.MessageSummaryOffloaderConfig {
+			cfg := forkedoffloader.NewMessageSummaryOffloaderConfig()
+			cfg.ProtectedToolNames = []string{"read_file:*SKILL.md", "reload_original_context_messages"}
+			return cfg
+		}(),
 	})
 	specs = append(specs, ceiface.ProcessorSpec{
 		Type: presetProcessorSessionMemory,
