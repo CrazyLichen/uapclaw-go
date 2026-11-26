@@ -1,8 +1,8 @@
 package session
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 )

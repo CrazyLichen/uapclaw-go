@@ -1800,6 +1800,12 @@ func (uc *UapClawSwarm) runViaSessionInputCoordinator(ctx context.Context,
 					Message: "session has no active agent: " + sid,
 				}
 			}
+			// A4 装配（25.6 收尾批）：
+			// ① execution 账本查询 → EnqueueBoundSessionInput ①复核
+			coord := runtime.Coordinator()
+			adapter.SetSessionInputExecutionLookup(coord.LookupExecution)
+			// ② suspended 探针 → deliver 链 _stream_completion_state 判定
+			deep.SetInteractionSuspensionProbe(func() bool { return coord.SessionWaitingControl(sid) })
 			// inputs 由门面构建（Python 在 adapter 内 _build_inputs；层级映射差异，
 			// 见 adapter/deep_adapter_session_input.go 头注）
 			inputs, _, _ := uc.BuildInputs(request)
