@@ -1,9 +1,14 @@
 package support
 
 import (
+	"encoding/json"
+	"regexp"
+	"strings"
+
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
+	ceprocessor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor"
 	iface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	cesupport "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/token"
@@ -156,4 +161,329 @@ func lastUsageBase(messages []llm_schema.BaseMessage) (int, []llm_schema.BaseMes
 // Python: util.py _len3
 func len3(message llm_schema.BaseMessage) int {
 	return len([]rune(cesupport.SanitizeContentForText(message.GetContent().String()))) / 3
+}
+
+// appendUtilHelpers 以下为 24.15 Task 2 补齐的 util.py 缺失符号（附录 A.2 清单）。
+// Python: util.py:73-258 / :410-453
+
+// IsSkillFilePath 判断路径是否为 skill.md 文件
+// Python: util.py:73 (is_skill_file_path)
+func IsSkillFilePath(filePath string) bool {
+	if filePath == "" {
+		return false
+	}
+	normalized := strings.ReplaceAll(filePath, "\\", "/")
+	normalized = strings.ToLower(normalized)
+	return strings.HasSuffix(normalized, "/skill.md") || strings.HasSuffix(normalized, "skill.md")
+}
+
+// ExtractSkillNameFromPath 从 skill.md 路径抽取技能名
+// Python: util.py:80 (extract_skill_name_from_path)
+func ExtractSkillNameFromPath(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	normalized := strings.TrimSuffix(strings.ReplaceAll(filePath, "\\", "/"), "/")
+	parts := strings.Split(normalized, "/")
+	if len(parts) >= 2 && strings.ToLower(parts[len(parts)-1]) == "skill.md" {
+		return parts[len(parts)-2]
+	}
+	return ""
+}
+
+// RoundContainsSkillRead 判断消息列表中是否包含读取 skill.md 的 read_file 调用
+// Python: util.py:90 (round_contains_skill_read)
+func RoundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
+	for _, message := range messages {
+		assistant, ok := message.(*llm_schema.AssistantMessage)
+		if !ok {
+			continue
+		}
+		for _, toolCall := range assistant.ToolCalls {
+			if toolCall.Name != "read_file" {
+				continue
+			}
+			argumentsText := toolCall.Arguments
+			parsed := ParseToolArguments(argumentsText)
+			filePath := ExtractArgumentValue(parsed, argumentsText, []string{"file_path"})
+			if IsSkillFilePath(filePath) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GroupCompletedAPIRounds 按已完成 API 轮次分组消息
+// Python: util.py:106 (group_completed_api_rounds) → session_memory_manager 同名函数
+func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
+	ranges := ceprocessor.GroupCompletedAPIRounds(messages)
+	out := make([][]llm_schema.BaseMessage, 0, len(ranges))
+	for _, r := range ranges {
+		out = append(out, append([]llm_schema.BaseMessage(nil), messages[r[0]:r[1]]...))
+	}
+	return out
+}
+
+// MessageSignature 消息签名（role + 文本 + tool_call ids）
+// Python: util.py:110 (message_signature)
+func MessageSignature(message llm_schema.BaseMessage) string {
+	toolCallIDs := []string{}
+	if assistant, ok := message.(*llm_schema.AssistantMessage); ok {
+		for _, toolCall := range assistant.ToolCalls {
+			toolCallIDs = append(toolCallIDs, toolCall.ID)
+		}
+	}
+	raw := messageRole(message) + "|" + MessageToText(message) + "|" + strings.Join(toolCallIDs, "|")
+	return raw
+}
+
+// messageRole 取消息角色
+func messageRole(message llm_schema.BaseMessage) string {
+	switch message.(type) {
+	case *llm_schema.UserMessage:
+		return "user"
+	case *llm_schema.AssistantMessage:
+		return "assistant"
+	case *llm_schema.SystemMessage:
+		return "system"
+	case *llm_schema.ToolMessage:
+		return "tool"
+	default:
+		return ""
+	}
+}
+
+// ParseToolArguments 解析工具参数 JSON 文本；失败返回空表
+// Python: util.py:167 (parse_tool_arguments)
+func ParseToolArguments(argumentsText string) map[string]any {
+	if argumentsText == "" {
+		return map[string]any{}
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(argumentsText), &parsed); err != nil {
+		return map[string]any{}
+	}
+	return parsed
+}
+
+// ExtractArgumentValue 依次按候选键取字符串参数值；解析失败时正则兜底
+// Python: util.py:177 (extract_argument_value)
+func ExtractArgumentValue(parsedArguments map[string]any, argumentsText string, keys []string) string {
+	for _, key := range keys {
+		if value, ok := parsedArguments[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	for _, key := range keys {
+		re, err := regexp.Compile(`"` + regexp.QuoteMeta(key) + `"\s*:\s*"([^"]+)"`)
+		if err != nil {
+			continue
+		}
+		if m := re.FindStringSubmatch(argumentsText); len(m) > 1 {
+			return strings.TrimSpace(m[1])
+		}
+	}
+	return ""
+}
+
+// DescribeToolCall 生成工具调用的可读描述
+// Python: util.py:145 (describe_tool_call)
+func DescribeToolCall(toolName string, argumentsText string) string {
+	parsedArguments := ParseToolArguments(argumentsText)
+	switch toolName {
+	case "read_file", "write_file", "edit_file":
+		filePath := ExtractArgumentValue(parsedArguments, argumentsText, []string{"file_path"})
+		if filePath == "" {
+			filePath = "[unknown]"
+		}
+		return toolName + " path=" + filePath
+	case "glob":
+		pattern := ExtractArgumentValue(parsedArguments, argumentsText, []string{"pattern"})
+		path := ExtractArgumentValue(parsedArguments, argumentsText, []string{"path"})
+		if pattern == "" {
+			pattern = "[unknown]"
+		}
+		if path == "" {
+			path = "."
+		}
+		return "glob pattern=" + pattern + " path=" + path
+	case "grep":
+		pattern := ExtractArgumentValue(parsedArguments, argumentsText, []string{"pattern"})
+		path := ExtractArgumentValue(parsedArguments, argumentsText, []string{"path", "file_path"})
+		if pattern == "" {
+			pattern = "[unknown]"
+		}
+		if path == "" {
+			path = "[unknown]"
+		}
+		return "grep pattern=" + pattern + " path=" + path
+	default:
+		return toolName + " args=" + argumentsText
+	}
+}
+
+// FindToolResultText 按 tool_call_id 逆序查找工具结果文本
+// Python: util.py:193 (find_tool_result_text)
+func FindToolResultText(messages []llm_schema.BaseMessage, toolCallID string) string {
+	if toolCallID == "" {
+		return ""
+	}
+	for i := len(messages) - 1; i >= 0; i-- {
+		if toolMessage, ok := messages[i].(*llm_schema.ToolMessage); ok && toolMessage.ToolCallID == toolCallID {
+			return MessageToText(toolMessage)
+		}
+	}
+	return ""
+}
+
+// ExtractToolResultHint 按工具名抽取结果摘要提示（白名单内才处理）
+// Python: util.py:205 (extract_tool_result_hint)
+func ExtractToolResultHint(toolName string, resultText string, allowedToolNames []string) string {
+	if resultText == "" {
+		return ""
+	}
+	allowed := false
+	for _, name := range allowedToolNames {
+		if name == toolName {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return ""
+	}
+	switch toolName {
+	case "read_file":
+		var parts []string
+		if m := extractNumberedOrQuoted(resultText, "file_path", true); m != "" {
+			parts = append(parts, "result_path="+m)
+		}
+		if m := extractNumberedOrQuoted(resultText, "line_count", false); m != "" {
+			parts = append(parts, "lines="+m)
+		}
+		return strings.Join(parts, " ")
+	case "glob":
+		if m := extractNumberedOrQuoted(resultText, "count", false); m != "" {
+			return "matches=" + m
+		}
+	case "grep":
+		if m := extractNumberedOrQuoted(resultText, "count", false); m != "" {
+			return "hits=" + m
+		}
+	case "edit_file":
+		if m := extractNumberedOrQuoted(resultText, "replacements", false); m != "" {
+			return "replacements=" + m
+		}
+	case "write_file":
+		if m := extractNumberedOrQuoted(resultText, "bytes_written", false); m != "" {
+			return "bytes_written=" + m
+		}
+	}
+	return ""
+}
+
+// extractNumberedOrQuoted 在结果文本中抽取 `"key":"value"`（字符串值）或 `"key":123`（数值）。
+// Python: util.py:215-238 内联的正则查找
+func extractNumberedOrQuoted(resultText string, key string, quoted bool) string {
+	if quoted {
+		re := regexp.MustCompile(`"` + regexp.QuoteMeta(key) + `"\s*:\s*"([^"]+)"`)
+		if m := re.FindStringSubmatch(resultText); len(m) > 1 {
+			return m[1]
+		}
+		return ""
+	}
+	re := regexp.MustCompile(`"` + regexp.QuoteMeta(key) + `"\s*:\s*(\d+)`)
+	if m := re.FindStringSubmatch(resultText); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+// MessageToText 消息内容序列化为文本（清洗图片载荷）
+// Python: util.py:242 (message_to_text)
+func MessageToText(message llm_schema.BaseMessage) string {
+	if message == nil {
+		return ""
+	}
+	return cesupport.SanitizeContentForText(message.GetContent())
+}
+
+// IsSummaryMessage 判断消息是否为携带指定标记的压缩记忆块
+// Python: util.py:247 (is_summary_message)
+func IsSummaryMessage(message llm_schema.BaseMessage, summaryMarker string) bool {
+	userMessage, ok := message.(*llm_schema.UserMessage)
+	if !ok {
+		return false
+	}
+	content := userMessage.GetContent()
+	if !content.IsText() {
+		// PY 要求 content 为 str（纯文本）；Go 多模态分片形态不视为摘要
+		return false
+	}
+	return strings.HasPrefix(content.Text(), summaryMarker)
+}
+
+// CollectSummaryIndices 收集所有携带指定标记的摘要消息索引
+// Python: util.py:256 (collect_summary_indices)
+func CollectSummaryIndices(messages []llm_schema.BaseMessage, summaryMarker string) []int {
+	out := []int{}
+	for i, message := range messages {
+		if IsSummaryMessage(message, summaryMarker) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// FindLastCompletedAPIRoundEndIdx 返回选定范围内最后一个完整 API 轮次的绝对结束索引
+// Python: util.py:410 (find_last_completed_api_round_end_idx)
+func FindLastCompletedAPIRoundEndIdx(messages []llm_schema.BaseMessage, startIdx int, endIdx int) int {
+	if endIdx < startIdx {
+		return endIdx
+	}
+	end := endIdx + 1
+	if end > len(messages) {
+		end = len(messages)
+	}
+	candidateMessages := messages[startIdx:end]
+	completedRounds := ceprocessor.GroupCompletedAPIRounds(candidateMessages)
+	if len(completedRounds) == 0 {
+		return startIdx - 1
+	}
+	completedEnd := completedRounds[len(completedRounds)-1][1]
+	return startIdx + completedEnd - 1
+}
+
+// IterSummaryMergeRanges 返回可参与二段合并的连续摘要消息区间
+// Python: util.py:427 (iter_summary_merge_ranges)
+func IterSummaryMergeRanges(messages []llm_schema.BaseMessage, summaryMarker string, minBlocks int) [][2]int {
+	var ranges [][2]int
+	startIdx := -1
+	previousIdx := -1
+
+	for idx, message := range messages {
+		if IsSummaryMessage(message, summaryMarker) {
+			if startIdx == -1 {
+				startIdx = idx
+			}
+			previousIdx = idx
+			continue
+		}
+		if startIdx != -1 && previousIdx != -1 {
+			if previousIdx-startIdx+1 >= minBlocks {
+				ranges = append(ranges, [2]int{startIdx, previousIdx})
+			}
+			startIdx = -1
+			previousIdx = -1
+		}
+	}
+
+	if startIdx != -1 && previousIdx != -1 {
+		if previousIdx-startIdx+1 >= minBlocks {
+			ranges = append(ranges, [2]int{startIdx, previousIdx})
+		}
+	}
+
+	return ranges
 }
