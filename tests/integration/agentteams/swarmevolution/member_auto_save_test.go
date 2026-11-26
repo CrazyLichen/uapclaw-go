@@ -27,23 +27,67 @@ const e4GenerateResp = `[
 	{"action": "append", "section": "Troubleshooting", "target": "body", "content": "` + e4Marker + ` 端口占用排查法", "summary": "端口占用排查（auto_save）"}
 ]`
 
-// TestE4成员AutoSave与Sharing auto_save 免审批落盘 + sharing 上传到 hub 目录。
-func (s *EvolutionE2ESuite) TestE4成员AutoSave与Sharing() {
+// TestE4成员AutoSave落盘 auto_save 免审批直落盘；sharing 分支与上游同为
+// no-op（auto-approve 先 commit 清空 payload，_sharing_after_auto_approved 读到
+// 空 records 返回——Python skill_evolution_sharing.py:339-354 + common.py L112
+// 同行为；真实上传链在审批路径，见 TestE4审批路径Sharing上传）。
+func (s *EvolutionE2ESuite) TestE4成员AutoSave落盘() {
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeSkill("evo_member_skill", "成员 auto_save 演示技能")
 
-	// hub 与本地缓存目录（local_file 后端，文件系统即真实边界）
 	hubDir := filepath.Join(s.T().TempDir(), "hub")
-	cacheDir := filepath.Join(s.T().TempDir(), "cache")
 	s.Require().NoError(os.MkdirAll(hubDir, 0o755))
 
-	// 成员 rail：auto_save=true + sharing enabled（构造参数与生产成员装配一致）
+	// 成员 rail：auto_save=true + sharing enabled
 	memberModel := s.newMockModel()
 	memberRail := coreevolution.NewSkillEvolutionRail(
 		[]string{s.skillsDir}, memberModel, "test-model", "cn",
 		coreevolution.WithSignalTrigger(false),
 		coreevolution.WithAutoSave(true),
+		coreevolution.WithReviewTrigger(true),
+		coreevolution.WithEvolutionReviewRuntime(review.NewEvolutionReviewRuntime(60.0)),
+		coreevolution.WithSharingConfigMap(map[string]any{
+			"enabled":  true,
+			"backend":  "local_file",
+			"hub_path": hubDir,
+		}),
+	)
+	s.mockScript(e4GenerateResp)
+
+	request, _, err := memberRail.StageEvolutionFromSignalsForTest(
+		s.ctx, "evo_member_skill", "部署排障经验（"+e4Marker+"）", true)
+	s.Require().NoError(err)
+	s.Require().NotNil(request)
+
+	// 落盘断言：免审批直接写 evolutions.json，内容含标记
+	evoLog, err := memberRail.EvolutionStore().LoadFullEvolutionLog(s.ctx, "evo_member_skill")
+	s.Require().NoError(err)
+	s.Require().Len(evoLog.Entries, 1, "auto_save 应免审批直接落盘 1 条")
+	s.Assert().Contains(evoLog.Entries[0].Change.Content, e4Marker)
+
+	// sharing 边界断言（与上游一致）：auto-approve 路径 payload 已清空 →
+	// sharing no-op → hub 目录无产物
+	hubEntries, _ := os.ReadDir(hubDir)
+	s.Assert().Empty(hubEntries, "auto-approve 路径 sharing 应 no-op（Python 同行为）")
+}
+
+// TestE4审批路径Sharing上传 审批批准路径的真实上传链（records 在 commit 前
+// 从快照读取）：stage pending → ApproveRecord → hub 产物写盘。
+func (s *EvolutionE2ESuite) TestE4审批路径Sharing上传() {
+	d := s.newAdapter()
+	s.adapter = d
+	s.makeSkill("evo_share_skill", "审批路径共享演示技能")
+
+	hubDir := filepath.Join(s.T().TempDir(), "hub")
+	cacheDir := filepath.Join(s.T().TempDir(), "cache")
+	s.Require().NoError(os.MkdirAll(hubDir, 0o755))
+	s.Require().NoError(os.MkdirAll(cacheDir, 0o755))
+
+	rail := coreevolution.NewSkillEvolutionRail(
+		[]string{s.skillsDir}, s.newMockModel(), "test-model", "cn",
+		coreevolution.WithSignalTrigger(false),
+		coreevolution.WithAutoSave(false),
 		coreevolution.WithReviewTrigger(true),
 		coreevolution.WithEvolutionReviewRuntime(review.NewEvolutionReviewRuntime(60.0)),
 		coreevolution.WithSharingConfigMap(map[string]any{
@@ -53,33 +97,28 @@ func (s *EvolutionE2ESuite) TestE4成员AutoSave与Sharing() {
 			"local_cache_dir": cacheDir,
 		}),
 	)
-	s.mockScript(e4GenerateResp)
+	s.mockScriptN(e4GenerateResp, 6) // 生成 + keyword/dedup 等 LLM 调用都要台本
 
-	// ① staging（requiresApproval=false → auto-approve 直落盘）
-	request, event, err := memberRail.StageEvolutionFromSignalsForTest(
-		s.ctx, "evo_member_skill", "部署排障经验（"+e4Marker+"）", true)
+	request, _, err := rail.StageEvolutionFromSignalsForTest(
+		s.ctx, "evo_share_skill", "部署排障经验（"+e4Marker+"）", false)
 	s.Require().NoError(err)
-	_ = event
-	s.Require().NotNil(request, "auto-approve 仍返回 staged request（含 PendingChange）")
+	s.Require().NotNil(request)
 
-	// ② 落盘断言：免审批直接写 evolutions.json，内容含标记
-	evoLog, err := memberRail.EvolutionStore().LoadFullEvolutionLog(s.ctx, "evo_member_skill")
+	err = rail.ApproveRecord(s.ctx, request.RequestID)
 	s.Require().NoError(err)
-	s.Require().Len(evoLog.Entries, 1, "auto_save 应免审批直接落盘 1 条")
-	s.Assert().Contains(evoLog.Entries[0].Change.Content, e4Marker)
 
-	// ③ sharing 断言：hub 目录出现该技能的上传产物（local_file 后端真实写盘）
-	entries, _ := os.ReadDir(hubDir)
+	// hub 产物为目录结构（bundles/index/packages 子目录）——递归遍历找 bundle 文件
 	found := false
-	for _, entry := range entries {
-		data, rerr := os.ReadFile(filepath.Join(hubDir, entry.Name()))
-		if rerr == nil && len(data) > 0 {
-			// hub 产物为 JSON 批文件；关键字段命中即视为上传成功
-			raw := string(data)
-			if strings.Contains(raw, e4Marker) || strings.Contains(raw, "evo_member_skill") {
-				found = true
-			}
+	walkErr := filepath.WalkDir(hubDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
 		}
-	}
-	s.Assert().True(found, "sharing hub 目录应出现上传产物（entries=%d）", len(entries))
+		data, rerr := os.ReadFile(path)
+		if rerr == nil && (strings.Contains(string(data), e4Marker) || strings.Contains(string(data), "evo_share_skill")) {
+			found = true
+		}
+		return nil
+	})
+	s.Require().NoError(walkErr)
+	s.Assert().True(found, "hub bundle 文件应含标记或技能名")
 }
