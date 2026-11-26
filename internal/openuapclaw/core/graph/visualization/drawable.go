@@ -1,6 +1,11 @@
 package visualization
 
 import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -465,7 +470,7 @@ func (d *Drawable) genMermaidNode(expandSubgraph any, node *DrawableSubgraphNode
 	}
 	// drawable.py:309-310：子图头节点（direction=TOP_TO_BOTTOM → "TB"）
 	return &subgraphMermaidNode{
-		node:       &mermaidNode{id: snakeCase(nodeIDs.next()), content: node.ID,
+		node: &mermaidNode{id: snakeCase(nodeIDs.next()), content: node.ID,
 			subNodes: subNodes, isSub: true, direction: "TB"},
 		links:      links,
 		startNodes: subgraphStartNodes,
@@ -560,4 +565,73 @@ func (d *Drawable) subNodeOrder(graph *DrawableGraph) []string {
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// DefaultMermaidInkServer mermaid.ink 默认服务（mermaid-py __main__.py:194-196）
+const DefaultMermaidInkServer = "https://mermaid.ink"
+
+// MermaidInkServerEnv 服务地址 env 键（Python MERMAID_INK_SERVER 同名）
+const MermaidInkServerEnv = "MERMAID_INK_SERVER"
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ToMermaidPNG 转 Mermaid 并渲染为 png（Python drawable.py:130-132 to_mermaid_png；
+// expandSubgraph any 承载 bool|int，D-13-3）
+func (d *Drawable) ToMermaidPNG(title string, expandSubgraph any) ([]byte, error) {
+	script, err := d.ToMermaid(title, expandSubgraph, false)
+	if err != nil {
+		return nil, err
+	}
+	return mermaidRender(script, "img", "format=png")
+}
+
+// ToMermaidSVG 转 Mermaid 并渲染为 svg（Python drawable.py:134-136 to_mermaid_svg；
+// enable_animation 恒 True，drawable.py:274）
+func (d *Drawable) ToMermaidSVG(title string, expandSubgraph any) ([]byte, error) {
+	script, err := d.ToMermaid(title, expandSubgraph, true)
+	if err != nil {
+		return nil, err
+	}
+	return mermaidRender(script, "svg", "")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// mermaidRender mermaid.ink 渲染（mermaid-py __main__.py:165-225 一比一：
+// urlsafe base64 → GET {server}/{endpoint}/{b64}?{query}；svg query 为空仍带尾部 ?）
+func mermaidRender(script, endpoint, query string) ([]byte, error) {
+	server := os.Getenv(MermaidInkServerEnv)
+	if server == "" {
+		server = DefaultMermaidInkServer
+	}
+	b64 := base64.URLEncoding.EncodeToString([]byte(script))
+	url := server + "/" + endpoint + "/" + b64 + "?" + query
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDrawableGraphToMermaidInvalid,
+			exception.WithParam("reason", err.Error()))
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDrawableGraphToMermaidInvalid,
+			exception.WithParam("reason", err.Error()))
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, exception.BuildError(exception.StatusDrawableGraphToMermaidInvalid,
+			exception.WithParam("reason",
+				fmt.Sprintf("HTTP %d Error: %s", resp.StatusCode, truncateDetails(body))))
+	}
+	return body, nil
+}
+
+// truncateDetails MermaidError Details 段（前 200 字符，mermaid-py :119-123）
+func truncateDetails(body []byte) string {
+	s := string(body)
+	if len(s) > 200 {
+		return s[:200] + "..."
+	}
+	return s
 }
