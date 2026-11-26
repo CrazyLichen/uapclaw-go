@@ -81,16 +81,20 @@ Workflow 注册表（`mode → workflow builder`）是通用机制：后续新�
 
 ### 3.0a 事件协议与双模式适配（为聊天问答式预留）
 
-workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 sink 实现。**store 是状态层（状态机事实），卡片/轮询是表达层**：聊天模式状态依旧写 store（续跑/恢复靠它），仅表达与交互方式不同。
+workflow 的输入输出做成协议化（TypedEvent），不绑死轮询协议——HTTP 版只是第一个 runner 实现。**store 是状态层（状态机事实），卡片/轮询是表达层**：两模式共享节点实现 + store + 状态转移表，差异仅在"遇到等待状态怎么办"。
+
+**同一状态机 + 两个 runner**：
+
+| | HTTP runner（本 spec 范围） | 聊天 runner（第二阶段） |
+|---|---|---|
+| 执行模型 | 每次 send 起短执行，等待状态落 store 后 END，下次 send 重进 | 会话进程内长执行，等待状态走 ask_user 中断挂起，回调后从断点 resume 继续执行（不 END） |
+| 等待表达 | 落 store + 外部轮询 metadata | interaction 中断卡片（前端已有渲染，零前端改动） |
+
+HTTP 模式不发任何中断（无人处理）——其等待状态行为就是写 store 后 END。
 
 **输出：标准事件协议**。节点产出统一事件：`Progress`（检索/分析进度）、`Guidance`（引导选项）、`Confirm`（待确认）、`Solution`（方案+kb_source+ticket 关联）、`Closed`。
 
-| Sink | 事件去向 | 表达方式 |
-|---|---|---|
-| Sink A（HTTP 模式，本 spec 范围） | 事件写 store metadata（§2 协议键） | 外部工单系统轮询 |
-| Sink B（聊天模式，第二阶段） | 事件写 store + 结构化推送 | ask_user 中断卡片（前端已有渲染，零前端改动）；Guidance/Confirm 以卡片呈现，回调即标准输入事件 |
-
-**帧纪律（防覆盖）**：只有 `Progress` 允许以文本流式帧出现；`Guidance`/`Confirm`/`Solution` 一律结构化帧——Solution 走 `BuildServerPushWire`（send_push，`E2A_WIRE_SERVER_PUSH_KEY` 标记）结构化推送，不走正文流式文本；ask_user 中断帧为独立 pending 交互类型，前端已有处理，不会覆盖正文。
+**帧纪律（防覆盖）**：只有 `Progress` 允许以文本流式帧出现；聊天模式的 `Solution` 直接走会话正常 chunk → final 消息（final 即天然收尾，无额外帧，不用 send_push 类通道）；`Guidance`/`Confirm` 聊天模式下走 ask_user 中断（独立 pending 交互类型，前端已有处理）；HTTP 模式所有事件只写 store metadata，不产任何帧、不发中断。
 
 **输入：双解释器**。标准输入事件 = `补充特征 / confirm_solved / not_solved / close / abandon`：
 
