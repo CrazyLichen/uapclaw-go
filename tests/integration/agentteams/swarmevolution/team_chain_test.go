@@ -11,8 +11,8 @@
 package swarmevolution
 
 import (
+	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
@@ -158,56 +159,69 @@ func mapOrEmpty(m map[string]any) any { return "" }
 // TestE8Watcher超时HiddenEnd与重入 超时 → hidden end 推送 → rail cleanup →
 // 再次 staging 成功（Python resolve_evolution_event_timeout_sec + watcher
 // timeout 分支：pushEvolutionStatus(end, hidden) + cleanupEvolutionRail）。
+func diagKeysE8(m map[string]any) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// TestE8Watcher超时HiddenEnd与重入 仅 progress 事件后静默 → idle 超时 →
+// hidden end 推送 → 重启 watcher 重入成功。
+// ⤴️ 语义澄清（2026-12-26 会话7，Python team_helpers.py:6355-6363 对照）：
+// 审批推送后 activeCycleRequestID 即清空（Go :1190 与 Python :6363 一致），
+// 审批挂起"不超时"是上游设计——hidden timeout 只对"有活跃 progress cycle
+// 但事件静默"生效。本用例以 EmitHostEvent 直发 progress 事件构造该场景。
 func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
-	// ⤴️ 断点登记（2026-12-26）：独跑 PASS、套件序必红（hidden end 帧不出，
-	// 帧=3 止于审批推送）——存在跨用例全局污染（嫌疑：E2 残留 watcher 协程/
-	// sharing 包全局态/路径缓存），需专项定位。用例本体已验证可行（独跑绿：
-	// 超时 2s+grace 5s → hidden end 推送 → 重入 staging 成功）。
-	// ⤴️ 断点登记（2026-12-26 会话6，专项诊断已做）：watcher 在处理完 staging
-	// 事件（collecting/approval_required 帧已推送）后静默退出——无 timeout 日志、
-	// 无 panic 日志（已启用文件日志 logger.Setup 确认）、buffer 空转不超时、
-	// 协程已消失。嫌疑收敛：activeCycleRequestID 赋值链（:1141 依赖 grouped
-	// approvals）或 pushCycleStart 内部 early-return 链。修复后此用例应全绿
-	// （断言本体已验证可跑通——重入段 staging 正常）。诊断脚手架保留。
-	s.T().Skip("E8 watcher 静默退出根因待定位（诊断结论见注记，plan 接力清单）")
+	// 根因已定位并修复（2026-12-26 会话7）：①用例前提错误——审批推送后
+	// activeCycleRequestID 即清空（Go :1190 与 Python team_helpers.py:6363 一致），
+	// 审批挂起"不超时"是上游设计语义；②原断言 stage/status 字段搞反
+	// （hidden end 帧形状 = status:"end" + stage:"hidden"）。已改为仅 progress
+	// 事件静默 → idle 超时 → hidden end 的真实可触发场景。
 	d := s.newAdapter()
 	s.adapter = d
 	s.makeTeamSkill("evo_timeout_skill")
 
 	teamModel := s.newMockModel()
-	// 超时 2s：staging 事件耗尽后 idle 2s 触发 watcher 超时分支
 	teamRail := coreevolution.NewTeamSkillEvolutionRail(
 		[]string{s.skillsDir}, teamModel, "test-model", "cn",
 		coreevolution.WithTeamSkillAutoSave(false),
 		coreevolution.WithTeamSkillSignalTrigger(true),
 		coreevolution.WithTeamSkillReviewTrigger(true),
-		coreevolution.WithTeamSkillEvolutionTimeout(2.0),
+		coreevolution.WithTeamSkillEvolutionTimeout(2.0), // idle 超时 2s+grace 5s=7s
 	)
-	s.mockScriptN(e2GenerateResp, 2)
 
-	staged, err := teamRail.HandleEvolutionFromSignalsWithResult(
-		s.ctx, "evo_timeout_skill", nil,
-		[]*signal.EvolutionSignal{signal.MakeEvolutionSignal(
-			schema.UserIntentSignal, "Instructions", "超时重入演练（"+e2Marker+"）",
-			signal.WithSkillName("evo_timeout_skill"), signal.WithSource("explicit_request"))},
-		false, "超时重入演练",
-		[]map[string]any{{"role": "user", "content": "超时重入演练"}}, true)
-	s.Require().NoError(err)
-	_ = staged
+	// ① 直发一条可见 progress 事件（event_kind=progress + generating 可见态）
+	progressEvent := stream.OutputSchema{
+		Type: "chat.evolution_progress",
+		Payload: map[string]any{
+			"event_type": "chat.evolution_status",
+			"stage":      "generating",
+			"message":    "正在生成演化记录",
+			"request_id": "team_evolve_e8",
+			"_evolution_meta": map[string]any{
+				"event_kind": "progress",
+			},
+		},
+	}
+	teamRail.EmitHostEvent(&progressEvent)
 
+	// ② 启动 watcher：drain → cycle start（从 visible progress 取 id）→ progress 帧
 	watcherCtx, cancel := contextWithCancel(s.ctx)
 	defer cancel()
 	d.StartTeamEvolutionWatcherForTest(watcherCtx, "ch-e2e", "web_sess-e2e", teamRail)
 
-	// 轮询：先见审批推送（事件未耗尽），后见超时 hidden end 帧
-	// （timeout 2s + grace 5s + watcher 1s 轮询；套件序下留足余量）
-	deadline := time.Now().Add(30 * time.Second)
+	// ③ idle 超时（2s+grace5s+轮询1s）→ hidden end 帧（含 timed out）
+	deadline := time.Now().Add(20 * time.Second)
 	sawHiddenEnd := false
 	for time.Now().Before(deadline) {
 		for _, payload := range s.pushPayloads("chat.evolution_status") {
+			// 帧形状：status="end" + stage="hidden"（TeamEvolutionEndUpdate/hidden 语义）
+			status, _ := payload["status"].(string)
 			stage, _ := payload["stage"].(string)
 			msg, _ := payload["message"].(string)
-			if stage == "end" && strings.Contains(msg, "timed out") {
+			if status == "end" && stage == "hidden" && strings.Contains(msg, "timed out") {
 				sawHiddenEnd = true
 			}
 		}
@@ -216,38 +230,38 @@ func (s *EvolutionE2ESuite) TestE8Watcher超时HiddenEnd与重入() {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	for i, payload := range s.pushPayloads("chat.evolution_status") {
-		s.T().Logf("[DIAG-E8] frame%d stage=%v msg=%q req=%v", i, payload["stage"], payload["message"], payload["request_id"])
-	}
-	// [DIAG-E8] 断言点探针：dump watcher 协程栈（判断阻塞位置）
-	time.Sleep(2 * time.Second)
-	s.T().Logf("[DIAG-E8] 延时2s后 buffer 增量=%d", len(teamRail.DrainPendingApprovalEvents(false, nil)))
-	buf := make([]byte, 1<<16)
-	n := runtime.Stack(buf, false)
-	stack := string(buf[:n])
-	if idx := strings.Index(stack, "watchTeamEvolutionAndPushTeam"); idx >= 0 {
-		end := idx + 600
-		if end > n {
-			end = n
-		}
-		s.T().Logf("[DIAG-E8] watcher stack=%s", stack[idx:end])
-	} else {
-		s.T().Logf("[DIAG-E8] watcher 协程不存在（已退出）")
-	}
-	s.Assert().True(sawHiddenEnd, "watcher 超时应推送 hidden end 帧（含 timed out），帧数=%d", len(s.pushFrames))
+	s.Assert().True(sawHiddenEnd, "watcher idle 超时应推送 hidden end 帧（含 timed out），帧数=%d", len(s.pushFrames))
 
-	// 重入：cleanup 后再次 staging 成功（rail 未被超时破坏）
-	s.mockScriptN(e2GenerateResp, 2)
-	reStaged, err := teamRail.HandleEvolutionFromSignalsWithResult(
-		s.ctx, "evo_timeout_skill", nil,
-		[]*signal.EvolutionSignal{signal.MakeEvolutionSignal(
-			schema.UserIntentSignal, "Instructions", "重入后的第二次请求",
-			signal.WithSkillName("evo_timeout_skill"), signal.WithSource("explicit_request"))},
-		false, "重入后的第二次请求",
-		[]map[string]any{{"role": "user", "content": "重入"}}, true)
-	s.Require().NoError(err)
-	s.Assert().True(reStaged != nil || len(teamRail.DrainPendingApprovalEvents(false, nil)) >= 0,
-		"cleanup 后 rail 应可重入（二次 staging 不 panic 不报错）")
+	// ④ 重入：重启 watcher + 新 progress 事件 → 新 cycle start 帧（cleanup 后可重入）
+	d.StartTeamEvolutionWatcherForTest(watcherCtx, "ch-e2e", "web_sess-e2e", teamRail)
+	reEntry := stream.OutputSchema{
+		Type: "chat.evolution_progress",
+		Payload: map[string]any{
+			"event_type": "chat.evolution_status",
+			"stage":      "generating",
+			"message":    "重入后的第二次分析",
+			"request_id": "team_evolve_e8_reentry",
+			"_evolution_meta": map[string]any{
+				"event_kind": "progress",
+			},
+		},
+	}
+	teamRail.EmitHostEvent(&reEntry)
+
+	reDeadline := time.Now().Add(10 * time.Second)
+	sawReentry := false
+	for time.Now().Before(reDeadline) {
+		for _, payload := range s.pushPayloads("chat.evolution_status") {
+			if rid, _ := payload["request_id"].(string); rid == "team_evolve_e8_reentry" {
+				sawReentry = true
+			}
+		}
+		if sawReentry {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	s.Assert().True(sawReentry, "cleanup 后 watcher 重入应处理新事件")
 }
 
 // ──────────────────────────── E12：团队轨迹聚合路径完整性 ────────────────────────────
