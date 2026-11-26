@@ -1190,9 +1190,103 @@ func (r *AgentRuntime) StreamInteractionAnswer(
 	ctx context.Context, req *schema.AgentRequest,
 	onEvent func(*RuntimeEvent) bool,
 ) error {
+	params := parseRequestParams(req)
+	// Python :2055-2077：resume 答案 + CONTROL_INPUT → 控制车道
+	// deliver_control_stream（不占工作车道，不 submit）；其余走普通流。
+	if IsInterruptResumeRequest(params) {
+		if k := r.SessionWorkKindOf(req); k != nil && *k == sessionpkg.SessionWorkKindControlInput {
+			return r.streamControlInputAnswer(ctx, req, params, onEvent)
+		}
+	}
 	// Python:2083 _agent_execution=self._agent_execution_owner(request)
 	execution := r.agentExecutionOwner(req)
 	return r.streamWithExecution(ctx, req, execution, onEvent)
+}
+
+// streamControlInputAnswer 交互答案经控制车道投递（DeliverControlStream）。
+// Python: service.py:2064-2077 一比一：
+// deliver_control_stream(session, answered=_control_ids(request),
+//   operation=lambda: _stream_control_started(request),
+//   interaction_ids=interaction_ids, on_execution=remember_execution)。
+// emit=false（消费者关流）→ exec-2 CANCELLED + 父执行放回 waiting。
+func (r *AgentRuntime) streamControlInputAnswer(
+	ctx context.Context, req *schema.AgentRequest, params map[string]any,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	if r.coordinator == nil {
+		return ErrCoordinatorUnavailable
+	}
+	// Python remember_execution：后续事件 payload 带上 execution_id
+	executionID := ""
+	operation := func(opCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+		ch := make(chan *schema.AgentResponseChunk, 8)
+		go func() {
+			defer close(ch)
+			// Python _stream_control_started → agent.deliver_control_input：
+			// resume 送到活跃宿主（Go 经既有 execution 绑定流）
+			_ = r.streamWithExecution(opCtx, req, r.agentExecutionOwner(req),
+				func(event *RuntimeEvent) bool {
+					payload := event.Payload
+					if executionID != "" {
+						merged := make(map[string]any, len(payload)+1)
+						for k, v := range payload {
+							merged[k] = v
+						}
+						merged["execution_id"] = executionID
+						payload = merged
+					}
+					ch <- &schema.AgentResponseChunk{
+						RequestID: req.RequestID, ChannelID: req.ChannelID, Payload: payload,
+					}
+					return true
+				})
+		}()
+		return ch, nil
+	}
+	opts := sessionpkg.ControlDeliveryOptions{
+		InteractionIDs: func(item any) map[string]struct{} {
+			return r.InteractionIDsOfChunk(item)
+		},
+		OnExecution: func(snap sessionpkg.SessionExecutionSnapshot) {
+			executionID = snap.ExecutionID
+		},
+	}
+	emit := func(chunk *schema.AgentResponseChunk) bool {
+		return onEvent(FromAgentResponseChunk(chunk))
+	}
+	return r.coordinator.DeliverControlStream(ctx,
+		sessionIDOr(req, "default"), r.controlIDsOf(req, params),
+		operation, opts, emit)
+}
+
+// controlIDsOf 答案命中的交互标识集合。
+// Python: service.py:587-593 _control_ids 一比一：
+// client_tool_resume → answers[].request_id；否则 params.request_id 或信封 id。
+func (r *AgentRuntime) controlIDsOf(req *schema.AgentRequest, params map[string]any) []string {
+	if IsClientToolResume(params) {
+		ids := make([]string, 0, 4)
+		if answers, ok := params["answers"].([]any); ok {
+			for _, a := range answers {
+				if m, ok := a.(map[string]any); ok {
+					if rid, ok := m["request_id"].(string); ok && rid != "" {
+						ids = append(ids, rid)
+					}
+				}
+			}
+		}
+		return ids
+	}
+	id := ""
+	if v, ok := params["request_id"].(string); ok {
+		id = strings.TrimSpace(v)
+	}
+	if id == "" {
+		id = req.RequestID
+	}
+	if id == "" {
+		return nil
+	}
+	return []string{id}
 }
 
 // ──────────────────────────── 执行辅助 ────────────────────────────

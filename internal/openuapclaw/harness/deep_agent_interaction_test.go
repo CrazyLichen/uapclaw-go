@@ -68,10 +68,10 @@ func (d *DeepAgent) setActiveRoundForTest(work *hschema.RoundWorkItem) {
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
 	if work == nil {
-		d.activeInteractionRound = nil
+		d.activeInteractionRound.Store(nil)
 		return
 	}
-	d.activeInteractionRound = &hschema.ActiveInteractionRound{Work: work}
+	d.activeInteractionRound.Store(&hschema.ActiveInteractionRound{Work: work})
 }
 
 // setRoundOverrideForTest 设置轮执行覆写（持 controlMu 避免竞态）

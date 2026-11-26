@@ -217,3 +217,66 @@ func TestLookupExecution(t *testing.T) {
 		t.Errorf("查无应 nil，实际 %+v", got)
 	}
 }
+
+// TestDeliverControlStream_emit失败可恢复 消费者关流 → exec-2 CANCELLED、
+// exec-1 放回 waiting、再次答案可走通（验证讨论点"emit 失败取消 exec-2 但
+// exec-1 可恢复"）。
+func TestDeliverControlStream_emit失败可恢复(t *testing.T) {
+	c := NewRuntimeSessionCoordinator(DefaultCoordinatorOptions())
+	_, _ = c.RegisterSession("s1", "ch", SessionPersistencePolicyPersistent)
+	parent := c.newExecutionForTest("s1", "req-parent", SessionWorkKindChatStream)
+	c.registry.MarkRunning(parent)
+	c.registry.MarkAwaitingControl(parent, map[string]struct{}{"q-77": {}})
+	// 真实流程：exec-1 流收尾时 WaitingControlIDs>0 → MarkWaiting（状态置 WAITING）
+	c.registry.MarkWaiting(parent)
+
+	chunks := make(chan *schema.AgentResponseChunk, 2)
+	chunks <- schema.NewAgentResponseChunk("req-child", "ch", map[string]any{"event_type": "chat.delta", "content": "部分"})
+	chunks <- schema.NewAgentResponseChunk("req-child", "ch", map[string]any{"event_type": "chat.final", "content": "完整"})
+	close(chunks)
+	calls := 0
+	err := c.DeliverControlStream(context.Background(), "s1", []string{"q-77"},
+		func(context.Context) (<-chan *schema.AgentResponseChunk, error) { return chunks, nil },
+		ControlDeliveryOptions{},
+		func(*schema.AgentResponseChunk) bool {
+			calls++
+			return calls < 2 // 第二个 chunk 时消费者关流
+		})
+	if err != nil {
+		t.Fatalf("emit=false 按 GeneratorExit 收尾不应报错: %v", err)
+	}
+	// exec-2：CANCELLED
+		// exec-2 的 request_id = 命中的交互标识（claimControlParent 返回
+	// matchedRequestID）；Select 无 WorkKind 过滤，手工过滤
+	var childState SessionExecutionState
+	foundChild := false
+	for _, h := range c.registry.Select(SelectOptions{SessionID: "s1"}) {
+		if h.WorkKind == SessionWorkKindControlInput {
+			childState = h.State
+			foundChild = true
+		}
+	}
+	if !foundChild || childState != SessionExecutionStateCancelled {
+		t.Fatalf("exec-2 应存在且 CANCELLED，found=%v state=%v", foundChild, childState)
+	}
+	// exec-1：放回 waiting（可再次作答）
+	if got := c.registry.StateOf(parent.ExecutionID); got != SessionExecutionStateWaitingForControl {
+		t.Fatalf("exec-1 应回到 waiting，实际 %v", got)
+	}
+	// 再次作答（emit 全 true）→ 走通并 SUCCEEDED
+	chunks2 := make(chan *schema.AgentResponseChunk, 1)
+	chunks2 <- schema.NewAgentResponseChunk("req-child2", "ch", map[string]any{"event_type": "chat.final"})
+	close(chunks2)
+	err = c.DeliverControlStream(context.Background(), "s1", []string{"q-77"},
+		func(context.Context) (<-chan *schema.AgentResponseChunk, error) { return chunks2, nil },
+		ControlDeliveryOptions{}, func(*schema.AgentResponseChunk) bool { return true })
+	if err != nil {
+		t.Fatalf("第二次答案应走通: %v", err)
+	}
+	if got := c.registry.StateOf(parent.ExecutionID); got != SessionExecutionStateSucceeded {
+		t.Fatalf("exec-1 最终应 SUCCEEDED，实际 %v", got)
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
