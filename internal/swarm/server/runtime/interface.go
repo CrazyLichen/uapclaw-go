@@ -441,6 +441,9 @@ func (uc *UapClawSwarm) processMessageStreamInternal(
 	// /runMessageStreamDirect 整体成为 operation，内部分流逻辑不动。
 	if runtime := uc.currentAgentRuntime(); runtime != nil {
 		if kind := runtime.SessionWorkKindOf(request); kind != nil {
+			if *kind == swsession.SessionWorkKindSessionInput {
+				return uc.runViaSessionInputCoordinator(ctx, request, sessionID, runtime)
+			}
 			return uc.runViaExecutionCoordinator(ctx, request, sessionID, *kind, runtime)
 		}
 	}
@@ -1753,6 +1756,132 @@ func (uc *UapClawSwarm) SetHeartbeatService(service buildctx.HeartbeatJobService
 	}); ok {
 		setter.SetHeartbeatService(service)
 	}
+}
+
+// runViaSessionInputCoordinator 补充输入分流：三守卫+parent 绑定+idle 分流，
+// 不进每会话 FIFO 串行（Python service.py:2304-2359）。
+// operation 借宿主渠道直调 runMessageStreamDirect（Python
+// _stream_session_input_started 的 Go 对应物见 runViaExecutionCoordinator
+// 上层组合）；idle_operation 先发 runtime.accepted(input_delivery=chat) 再退
+// 普通新轮（Python idle_input 一比一，含 steer+图拒收）。
+func (uc *UapClawSwarm) runViaSessionInputCoordinator(ctx context.Context,
+	request *schema.AgentRequest, sessionID string, runtime agentRuntimeHandle,
+) (<-chan *schema.AgentResponseChunk, error) {
+	// 补充输入准入校验（service.go validateSessionInputRequest 已在入口链做过；
+	// 这里做会话登记幂等）
+	if _, err := runtime.Coordinator().RegisterSession(sessionID, request.ChannelID,
+		swsession.SessionPersistencePolicyPersistent); err != nil {
+		return nil, err
+	}
+	out := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(out)
+		operation := func(opCtx context.Context, channelID string) (<-chan *schema.AgentResponseChunk, error) {
+			// Python: _stream_session_input_started（service.py:2765-2790）：
+			// ① 借宿主查活跃 agent（nowait）→ 无则 REJECTED
+			// ② agent 无投递能力 → REJECTED
+			// ③ deliver(request) 逐 chunk 转 AgentResponseChunk
+			mode := uc.adapterModeForRequest(request)
+			a, err := uc.ensureAdapter(mode)
+			if err != nil {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "session has no active agent: " + sessionID,
+				}
+			}
+			deep, ok := a.(*adapter.DeepAdapter)
+			if !ok {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "active agent does not support supplemental input",
+				}
+			}
+			sid := session.NormalizeSessionID(uc.extractSessionID(request))
+			if deep.CachedSessionAdapter(sid) == nil {
+				return nil, &swsession.SessionInputRejectedError{
+					Message: "session has no active agent: " + sid,
+				}
+			}
+			// A4 装配（25.6 收尾批）：execution 账本查询 →
+			// EnqueueBoundSessionInput ①复核；suspended 判定已回归
+			// loop session 中断态（_stream_completion_state 对齐），无需探针
+			coord := runtime.Coordinator()
+			adapter.SetSessionInputExecutionLookup(coord.LookupExecution)
+			// inputs 由门面构建（Python 在 adapter 内 _build_inputs；层级映射差异，
+			// 见 adapter/deep_adapter_session_input.go 头注）
+			inputs, _, _ := uc.BuildInputs(request)
+			return deep.DeliverSessionInput(opCtx, request, inputs)
+		}
+		idleOperation := func(opCtx context.Context) (<-chan *schema.AgentResponseChunk, error) {
+			// Python idle_input 闭包（service.py:2309-2348）：
+			// ① steer+media_items → TARGET_CHANGED（图必须附着活跃轮）
+			params := requestParamsOfInterface(request)
+			if mode := swsession.ResolveSessionInputMode(params); mode != nil &&
+				*mode == swsession.SessionInputModeSteer {
+				if items, _ := params["media_items"].([]any); len(items) > 0 {
+					return nil, &swsession.SessionInputTargetError{
+						Message: "image supplemental input requires an active execution; supplemental input was not sent",
+					}
+				}
+			}
+			// ② 先发 accepted 帧（input_delivery=chat）再退普通新轮
+			ch := make(chan *schema.AgentResponseChunk, 8)
+			go func() {
+				defer close(ch)
+				ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, map[string]any{
+					"event_type":     "runtime.accepted",
+					"request_id":     request.RequestID,
+					"session_id":     sessionID,
+					"input_delivery": "chat",
+				}, schema.WithChunkIsComplete(false))
+				stream, err := uc.runMessageStreamDirect(opCtx, request)
+				if err != nil {
+					ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, map[string]any{
+						"event_type": "chat.error", "error": err.Error(),
+					}, schema.WithChunkIsComplete(true))
+					return
+				}
+				for chunk := range stream {
+					ch <- chunk
+				}
+			}()
+			return ch, nil
+		}
+		var expected *string
+		if params := requestParamsOfInterface(request); params != nil {
+			if eid, ok := params["expected_execution_id"].(string); ok && eid != "" {
+				expected = &eid
+			}
+		}
+		// interaction_ids 从 chunk 提取的桥接属交互挂起批（既有偏差登记不变，
+		// 本次保持 nil——StreamSessionInput 内 MarkAwaitingControl 收到 nil 跳过）
+		var interactionIDs func(*schema.AgentResponseChunk) map[string]struct{}
+		opts := swsession.StreamSessionInputOptions{
+			SessionID:           sessionID,
+			RequestID:           request.RequestID,
+			Operation:           operation,
+			IdleOperation:       idleOperation,
+			InteractionIDs:      interactionIDs,
+			ExpectedExecutionID: expected,
+		}
+		runErr := runtime.StreamSessionInput(ctx, opts, emitTo(out))
+		if runErr != nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Str("request_id", request.RequestID).Err(runErr).
+				Msg("runViaSessionInputCoordinator: coordinator run failed")
+		}
+	}()
+	return out, nil
+}
+
+// requestParamsOfInterface 门面侧 params 解析（nil 安全）。
+func requestParamsOfInterface(request *schema.AgentRequest) map[string]any {
+	if request == nil || len(request.Params) == 0 {
+		return nil
+	}
+	params := map[string]any{}
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil
+	}
+	return params
 }
 
 // runViaExecutionCoordinator 会话执行型流经 coordinator 注册 execution 后执行。

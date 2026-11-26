@@ -169,3 +169,39 @@ func TestToPositiveInt_各类型分支(t *testing.T) {
 		})
 	}
 }
+
+// TestDeepAgentContextEngineConfig_CompressionRecall 验证 compression_recall 三字段解析
+func TestDeepAgentContextEngineConfig_CompressionRecall(t *testing.T) {
+	d := &DeepAdapter{}
+	reactCfg := map[string]any{
+		"context_engine_config": map[string]any{
+			"compression_recall": map[string]any{
+				"enabled":              true,
+				"chunk_size_tokens":    5000,
+				"chunk_overlap_tokens": 500,
+			},
+		},
+	}
+	got := d.deepAgentContextEngineConfig(reactCfg, map[string]any{})
+	if got == nil || got.CompressionRecall == nil {
+		t.Fatal("compression_recall 段存在时应解析为非 nil")
+	}
+	if !got.CompressionRecall.Enabled {
+		t.Error("Enabled 应为 true")
+	}
+	if got.CompressionRecall.ChunkSizeTokens != 5000 || got.CompressionRecall.ChunkOverlapTokens != 500 {
+		t.Errorf("token 参数应透传，实际 size=%d overlap=%d",
+			got.CompressionRecall.ChunkSizeTokens, got.CompressionRecall.ChunkOverlapTokens)
+	}
+
+	// 缺省段：保持 NewContextEngineConfig 默认（非 nil、enabled=false）
+	got2 := d.deepAgentContextEngineConfig(map[string]any{
+		"context_engine_config": map[string]any{},
+	}, map[string]any{})
+	if got2 == nil || got2.CompressionRecall == nil {
+		t.Fatal("缺省 compression_recall 段应保持默认非 nil")
+	}
+	if got2.CompressionRecall.Enabled || got2.CompressionRecall.ChunkSizeTokens != 3000 {
+		t.Errorf("缺省应保留 Python 默认值，实际 %+v", got2.CompressionRecall)
+	}
+}

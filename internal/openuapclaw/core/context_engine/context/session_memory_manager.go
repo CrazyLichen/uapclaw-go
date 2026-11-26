@@ -893,6 +893,22 @@ func (m *SessionMemoryManager) Shutdown() {
 	}
 }
 
+// SetAgentEditAgent 注入 agent_edit 模式的 Agent 执行体（生产装配缝：15b 批
+// 落地真实 SessionMemoryAgent；Go 侧无 Python 的构造期闭包装配，经本方法注入）。
+func (m *SessionMemoryManager) SetAgentEditAgent(agent SessionMemoryAgent) {
+	if u, ok := m.updater.(*SessionMemoryAgentUpdater); ok {
+		u.SetAgent(agent)
+	}
+}
+
+// RunningTaskCount 返回登记中的后台任务数（观测缝：任务在 goroutine 退出时
+// 自行从 tasks 表注销；Python 侧无对应符号，Go 侧测试/诊断用）。
+func (m *SessionMemoryManager) RunningTaskCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.tasks)
+}
+
 // GetSessionMemoryRuntime 从 session state 获取 "__session_memory__" 键的值。
 // Python: get_session_memory_runtime()
 func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]any {

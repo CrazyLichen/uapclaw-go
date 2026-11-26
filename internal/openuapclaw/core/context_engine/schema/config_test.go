@@ -249,3 +249,58 @@ func TestContextEngineConfig_值类型字段(t *testing.T) {
 	// 注意：map 是引用类型，config2.ModelContextWindowTokens 与 config1 共享底层数据
 	// 这是 Go 的标准行为，与 Python 的 Pydantic model_copy(update) 语义不同
 }
+
+// TestCompressionRecallConfig_默认值与校验 测试压缩召回配置默认值与校验规则
+// Python: schema/config.py:11 (CompressionRecallConfig) + _validate_chunk_tokens
+func TestCompressionRecallConfig_默认值与校验(t *testing.T) {
+	cfg := NewCompressionRecallConfig()
+	// Python: enabled=False, chunk_size_tokens=3000, chunk_overlap_tokens=300
+	if cfg.Enabled {
+		t.Error("Enabled 默认应为 false")
+	}
+	if cfg.ChunkSizeTokens != 3000 {
+		t.Errorf("ChunkSizeTokens 默认应为 3000，实际 %d", cfg.ChunkSizeTokens)
+	}
+	if cfg.ChunkOverlapTokens != 300 {
+		t.Errorf("ChunkOverlapTokens 默认应为 300，实际 %d", cfg.ChunkOverlapTokens)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("默认配置应通过校验，实际错误: %v", err)
+	}
+
+	// Python: chunk_overlap_tokens >= chunk_size_tokens 时报错
+	bad := NewCompressionRecallConfig()
+	bad.ChunkSizeTokens = 300
+	bad.ChunkOverlapTokens = 300
+	if err := bad.Validate(); err == nil {
+		t.Error("overlap >= size 时应返回错误")
+	}
+
+	// 正向值通过校验
+	ok := NewCompressionRecallConfig()
+	ok.Enabled = true
+	ok.ChunkSizeTokens = 5000
+	ok.ChunkOverlapTokens = 500
+	if err := ok.Validate(); err != nil {
+		t.Errorf("合法配置应通过校验，实际错误: %v", err)
+	}
+}
+
+// TestContextEngineConfig_CompressionRecall_默认与透传 测试引擎配置内嵌召回配置
+func TestContextEngineConfig_CompressionRecall_默认与透传(t *testing.T) {
+	cfg := NewContextEngineConfig()
+	if cfg.CompressionRecall == nil {
+		t.Fatal("NewContextEngineConfig 应初始化 CompressionRecall 为非 nil")
+	}
+	if cfg.CompressionRecall.ChunkSizeTokens != 3000 {
+		t.Errorf("内嵌配置应为默认值，实际 %d", cfg.CompressionRecall.ChunkSizeTokens)
+	}
+	// JSON 往返后键名保持 snake_case
+	data, err := json.Marshal(cfg.CompressionRecall)
+	if err != nil {
+		t.Fatalf("marshal 失败: %v", err)
+	}
+	if string(data) != `{"enabled":false,"chunk_size_tokens":3000,"chunk_overlap_tokens":300}` {
+		t.Errorf("JSON 键名应对齐 Python snake_case，实际 %s", data)
+	}
+}

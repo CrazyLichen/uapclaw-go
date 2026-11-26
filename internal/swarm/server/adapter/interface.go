@@ -44,6 +44,11 @@ type AgentAdapter interface {
 	// inputs: 预构建的输入字典，含 conversation_id/query/channel 等。
 	ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error)
 
+	// DeliverSessionInput 补充输入投递链入口（校验+活跃轮投递+竞态分类）。
+	// Python: interface.py deliver_session_input。仅支持补充输入语义的适配器
+	// 实现；不支持的返回错误（deliverSessionInputImpl 的能力守卫兜底）。
+	DeliverSessionInput(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error)
+
 	// ProcessInterrupt 处理中断请求（pause/resume/cancel/supplement）。
 	ProcessInterrupt(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
 

@@ -36,6 +36,12 @@ type CoordinatorPort interface {
 	// Python: _session_coordinator.run_team_stream。
 	RunTeamStream(ctx context.Context, sessionID, requestID string, kind SessionWorkKind,
 		operation func(context.Context, TeamExecutionContext) (<-chan *schema.AgentResponseChunk, error), options StreamOptions, emit func(*schema.AgentResponseChunk) bool) error
+	// LookupExecution 按 execution_id 查执行句柄（补充输入锚定复核）。
+	LookupExecution(executionID string) *SessionExecutionHandle
+	// StreamSessionInput 补充输入分流（三守卫+parent 绑定+idle 分流）。
+	// Python: _session_coordinator.stream_session_input（coordinator.py:576-628）。
+	StreamSessionInput(ctx context.Context,
+		opts StreamSessionInputOptions, emit func(*schema.AgentResponseChunk) bool) error
 	// CancelExecution 取消某会话的执行
 	CancelExecution(sessionID string, options CancelExecutionOptions) (CancelExecutionResult, error)
 	// SnapshotSessions 取全部会话快照

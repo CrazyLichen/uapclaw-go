@@ -110,6 +110,9 @@ type DeepAdapter struct {
 	// streamContentRunKind 上一个可见内容块的归属（判断 user→goal 切换点）。
 	// Python: interface_deep.py _stream_content_run_kind
 	streamContentRunKind string
+	// sessionInputGuard 补充输入守卫（SessionInputGuard 全状态机；惰性创建，
+	// owner=本适配器 instance——deliver 链 require_open_input 消费）。
+	sessionInputGuard *SessionInputGuard
 	// interactionOutputHandoff 上一次输出的排空屏障（宿主自持，不碰 Core 私有字段）。
 	// Python: interface_deep.py:16029 _interaction_output_handoff
 	interactionOutputHandoff *outputHandoff
@@ -2927,6 +2930,24 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 	if v, ok := cecMap["enable_kv_cache_release"]; ok {
 		if b, ok := v.(bool); ok {
 			result.EnableKVCacheRelease = b
+		}
+	}
+
+	// 压缩召回全局配置（Python: cec.compression_recall 由 pydantic 解析；
+	// Go 侧在此手工解析三字段，缺省键保留 NewCompressionRecallConfig 默认值）
+	if raw, ok := cecMap["compression_recall"]; ok {
+		if m, ok := raw.(map[string]any); ok {
+			recallCfg := ceschema.NewCompressionRecallConfig()
+			if v, ok := m["enabled"].(bool); ok {
+				recallCfg.Enabled = v
+			}
+			if v, ok := m["chunk_size_tokens"].(int); ok && v > 0 {
+				recallCfg.ChunkSizeTokens = v
+			}
+			if v, ok := m["chunk_overlap_tokens"].(int); ok && v > 0 {
+				recallCfg.ChunkOverlapTokens = v
+			}
+			result.CompressionRecall = recallCfg
 		}
 	}
 

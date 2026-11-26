@@ -7,7 +7,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	cecontext "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
+	forkedcompressor "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/forked/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/processor/offloader"
 )
 
@@ -89,8 +91,9 @@ func TestFactoryTemplatePresetMerge_NoPanicDefaultActiveSet(t *testing.T) {
 	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
 
 	base := rail.buildPresetProcessors(nil, nil)
-	if len(base) != 7 {
-		t.Fatalf("base 应包含全部 7 个已知处理器（默认 4 + session_memory 3），实际 %d", len(base))
+	// 24.2：session_memory preset 追加 SessionMemoryCompressor（共 8 个）
+	if len(base) != 8 {
+		t.Fatalf("base 应包含全部 8 个已知处理器（默认 4 + session_memory 4 含 SessionMemoryCompressor），实际 %d", len(base))
 	}
 
 	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
@@ -205,5 +208,52 @@ func TestFilterActiveProcessors_CustomTypeKept(t *testing.T) {
 	active := rail.filterActiveProcessors(specs)
 	if len(active) != 2 {
 		t.Fatalf("激活数 = %d, want 2（自定义类型必须保留）", len(active))
+	}
+}
+
+// TestSessionMemoryCompressorPreset_YamlOverride 24.2：SessionMemoryCompressor 并入 preset
+// —— session_memory_config 传入时内嵌 Memory 透传 + enabled 开关同时驱动 manager 创建。
+func TestSessionMemoryCompressorPreset_YamlOverride(t *testing.T) {
+	// 传配置 → enabled + manager 创建
+	memCfg := cecontext.NewSessionMemoryConfig()
+	var memCfgPtr *cecontext.SessionMemoryConfig = &memCfg
+	rail := NewContextProcessorRail(WithSessionMemoryConfig(&memCfg))
+	if rail.sessionMemoryMgr == nil {
+		t.Fatal("传入 session_memory_config 应创建 SessionMemoryManager")
+	}
+	base := rail.buildPresetProcessors(nil, nil)
+	var smSpec *ceiface.ProcessorSpec
+	for i := range base {
+		if base[i].Type == "SessionMemoryCompressor" {
+			smSpec = &base[i]
+			break
+		}
+	}
+	if smSpec == nil {
+		t.Fatal("preset 应含 SessionMemoryCompressor spec")
+	}
+	cfg, ok := smSpec.Config.(*forkedcompressor.SessionMemoryCompressorConfig)
+	if !ok {
+		t.Fatalf("spec 配置类型不符，实际 %T", smSpec.Config)
+	}
+	if cfg.Memory != memCfgPtr {
+		t.Error("内嵌 Memory 应透传 rail 解析的 session_memory_config（同实例）")
+	}
+
+	// 不传配置 → spec 存在但默认 disabled
+	rail2 := NewContextProcessorRail()
+	base2 := rail2.buildPresetProcessors(nil, nil)
+	var smCfg2 *forkedcompressor.SessionMemoryCompressorConfig
+	for i := range base2 {
+		if base2[i].Type == "SessionMemoryCompressor" {
+			smCfg2 = base2[i].Config.(*forkedcompressor.SessionMemoryCompressorConfig)
+			break
+		}
+	}
+	if smCfg2 == nil {
+		t.Fatal("未传配置时 preset 也应含 SessionMemoryCompressor（yaml 可覆盖命中）")
+	}
+	if smCfg2.Enabled {
+		t.Error("默认应 disabled")
 	}
 }

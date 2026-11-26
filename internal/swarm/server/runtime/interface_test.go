@@ -78,6 +78,14 @@ func (f *fakeAdapter) TakeProcessCliRunOptions() *adapter.ProcessCliRunOptions {
 func (f *fakeAdapter) ProcessMessageImpl(_ context.Context, _ *schema.AgentRequest, _ map[string]any) (*schema.AgentResponse, error) {
 	return f.processResp, f.processErr
 }
+
+// DeliverSessionInput fake 兜底（接口扩面）。
+func (f *fakeAdapter) DeliverSessionInput(
+	_ context.Context, _ *schema.AgentRequest, _ map[string]any,
+) (<-chan *agentschema.AgentResponseChunk, error) {
+	return nil, fmt.Errorf("active agent does not support supplemental input")
+}
+
 func (f *fakeAdapter) ProcessMessageStreamImpl(_ context.Context, _ *schema.AgentRequest, _ map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
 	return f.streamCh, f.streamErr
 }
@@ -821,6 +829,11 @@ func (h *testRuntimeHandle) RunStream(context.Context, string, string, swsession
 
 func (h *testRuntimeHandle) RunTeamStream(context.Context, string, string, swsession.SessionWorkKind,
 	func(context.Context, swsession.TeamExecutionContext) (<-chan *agentschema.AgentResponseChunk, error), swsession.StreamOptions, func(*agentschema.AgentResponseChunk) bool) error {
+	return nil
+}
+
+func (h *testRuntimeHandle) StreamSessionInput(context.Context,
+	swsession.StreamSessionInputOptions, func(*agentschema.AgentResponseChunk) bool) error {
 	return nil
 }
 

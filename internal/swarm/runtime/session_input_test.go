@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// SessionInputTargetErrorPtr 供 errors.As 使用的目标错误二级指针。
+func SessionInputTargetErrorPtr() **SessionInputTargetError {
+	return new(*SessionInputTargetError)
+}
+
 // TestResolveSessionInputMode 主字段 / 遗留别名 / 冲突 / 未知值。
 func TestResolveSessionInputMode(t *testing.T) {
 	if got := ResolveSessionInputMode(map[string]any{"input_mode": "steer"}); got == nil || *got != SessionInputModeSteer {

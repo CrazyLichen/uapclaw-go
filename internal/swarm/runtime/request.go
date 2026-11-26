@@ -226,14 +226,7 @@ func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) schema.Resol
 
 // parseRequestParams 解析 request.Params 为可写 map（nil/非法时返回空 map）。
 func parseRequestParams(req *schema.AgentRequest) map[string]any {
-	if req == nil || len(req.Params) == 0 {
-		return map[string]any{}
-	}
-	params := map[string]any{}
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return map[string]any{}
-	}
-	return params
+	return schema.ParseRequestParams(req)
 }
 
 // writeRequestParams 把 params 序列化回 request.Params。
@@ -646,4 +639,11 @@ func legacyPersistSession(raw any) *bool {
 		}
 	}
 	return nil
+}
+
+// ParseRequestParamsForInput 供 server 侧补充输入面复用的 params 解析。
+// [Go 扩展] Python 中 agent_adapter 直接 import runtime 函数；Go 的包边界
+// 要求导出。语义与 parseRequestParams 完全一致（nil/空/坏 JSON → 空表）。
+func ParseRequestParamsForInput(req *schema.AgentRequest) map[string]any {
+	return parseRequestParams(req)
 }
