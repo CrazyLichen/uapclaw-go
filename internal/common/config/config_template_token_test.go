@@ -16,8 +16,6 @@ func TestResourcesConfigTemplate_Token与压缩段(t *testing.T) {
 	}
 	text := string(raw)
 	required := []string{
-		"context_window: 0",
-		"max_tokens: 0",
 		"trigger_context_ratio: 0.8",
 		"min_target_context_ratio: 0.1",
 		"enabled: true",
@@ -26,8 +24,7 @@ func TestResourcesConfigTemplate_Token与压缩段(t *testing.T) {
 		"dialogue_compressor_config",
 		"current_round_compressor_config",
 		"round_level_compressor_config",
-		"full_compact_processor_config",
-		"tool_result_budget_processor_config",
+		"compression_recall_config",
 	}
 	for _, key := range required {
 		if !strings.Contains(text, key) {
@@ -71,11 +68,8 @@ func TestResourcesConfigTemplate_可解析(t *testing.T) {
 	}
 	first, _ := defaults[0].(map[string]any)
 	mco, _ := first["model_config_obj"].(map[string]any)
-	if _, ok := mco["context_window"]; !ok {
-		t.Error("model_config_obj 缺少 context_window")
-	}
-	if _, ok := mco["max_tokens"]; !ok {
-		t.Error("model_config_obj 缺少 max_tokens")
+	if mco == nil {
+		t.Fatal("缺少 model_config_obj（对齐上游：出厂为空对象，context_window 走内置表兜底）")
 	}
 	mcc, _ := first["model_client_config"].(map[string]any)
 	if _, ok := mcc["max_input_tokens"]; ok {

@@ -204,3 +204,28 @@ func TestResolveLoggingLevels_独立级别覆盖基础(t *testing.T) {
 		t.Errorf("期望 Full = warn（跟随基础），实际 %s", levels.Full)
 	}
 }
+
+// TestResolveLoggingLevels_Permissions跟随AgentServer 对齐上游：permissions 无独立
+// 配置键（出厂模板不承载），未显式配置时跟随 agent_server（utils.py:3112 /
+// _FILE_HANDLER_LEVEL_MAP:3139）；显式配置仍优先生效。
+func TestResolveLoggingLevels_Permissions跟随AgentServer(t *testing.T) {
+	// 未配置 permissions → 跟随 agent_server（而非 base）
+	cfg := &config.LoggingConfig{
+		Level:       "info",
+		AgentServer: "debug",
+	}
+	levels := ResolveLoggingLevels(cfg, "", "")
+	if levels.Permissions != LogLevelDebug {
+		t.Errorf("未配置 permissions 时应跟随 agent_server=debug，实际 %s", levels.Permissions)
+	}
+	if levels.Common != LogLevelInfo {
+		t.Errorf("common 仍应跟随 base=info，实际 %s", levels.Common)
+	}
+
+	// 显式配置 permissions → 优先于 agent_server
+	cfg.Permissions = "error"
+	levels = ResolveLoggingLevels(cfg, "", "")
+	if levels.Permissions != LogLevelError {
+		t.Errorf("显式 permissions=error 应优先，实际 %s", levels.Permissions)
+	}
+}

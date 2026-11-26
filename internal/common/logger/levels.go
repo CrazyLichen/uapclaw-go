@@ -158,7 +158,14 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 		gateway = coerce(cfg.Gateway)
 		channel = coerce(cfg.Channel)
 		agentServer = coerce(cfg.AgentServer)
-		permissions = coerce(cfg.Permissions)
+		// permissions 无独立配置键（出厂模板不承载）：上游 permissions.log 级别
+		// 硬编码绑 agent_server（utils.py:3112 与 _FILE_HANDLER_LEVEL_MAP:3139），
+		// 未显式配置时跟随 agentServer 而非 base。
+		if cfg.Permissions != "" {
+			permissions = ParseLogLevel(cfg.Permissions, base)
+		} else {
+			permissions = agentServer
+		}
 		agentCore = coerce(cfg.AgentCore)
 		full = coerce(cfg.Full)
 	}
