@@ -19,19 +19,25 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/llm_resilience"
 	skillopt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/optimizer/skill_call"
+	sections "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/sharing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/sharing/backend"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/signal"
+	agenttools "github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/tools"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/trajectory"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/updater/single_dim"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	toolpkg "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/operator/skill_call"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/sys_operation"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/review"
+	reviewsubagent "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/evolution/reviewsubagent"
+	harnessschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -159,7 +165,7 @@ type SkillEvolutionRail struct {
 	subjectKindValue string
 	// evolutionTools rail 注册的演化工具（uninit 注销用；注册面 ⤴️15.24b）
 	// Python: self._evolution_tools
-	evolutionTools []any
+	evolutionTools []toolpkg.Tool
 	// agentRef 绑定的 agent（init 时设置）
 	// Python: self._agent
 	agentRef agentinterfaces.BaseAgent
@@ -2567,9 +2573,8 @@ func (r *SkillEvolutionRail) SetReviewTrigger(v bool) { r.reviewTrigger = v }
 
 // Init 绑定 agent 并注册 rail 持有的演化工具与稳定审查子 agent。
 // Python: init（:374-381）。
-// ⤴️ 15.24b：_register_evolution_tools / _register_evolution_review_agent
-// 依赖 create_main_evolution_tools 与 build_evolution_review_agent_config，
-// 随工具面批落地；本实现先完成 agent 绑定与提示词构建器抓取。
+// ⤴️ 15.24b/24c：_register_evolution_tools / _register_evolution_review_agent
+// 已随 15.24c 落地（CreateMainEvolutionTools + reviewsubagent 装配半区）。
 func (r *SkillEvolutionRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent) error {
 	r.agentRef = agent
 	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder")
@@ -2577,7 +2582,15 @@ func (r *SkillEvolutionRail) Init(ctx context.Context, agent agentinterfaces.Bas
 		r.systemPromptBuilder = agent.SystemPromptBuilder()
 	}
 	// Python: self._evolution_tools = self._register_evolution_tools(agent)
-	//        self._register_evolution_review_agent(agent)（⤴️ 15.24b/24c）
+	//        self._register_evolution_review_agent(agent)
+	if agent != nil {
+		if tools, err := r.registerEvolutionTools(agent); err == nil {
+			r.evolutionTools = tools
+		} else {
+			return err
+		}
+		r.registerEvolutionReviewAgent(agent)
+	}
 	return nil
 }
 
@@ -2585,11 +2598,117 @@ func (r *SkillEvolutionRail) Init(ctx context.Context, agent agentinterfaces.Bas
 // Python: uninit（:382-394）。
 func (r *SkillEvolutionRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// Python: self._unregister_runtime_tools(agent, self._evolution_tools)
-	//        （⤴️ 15.24b：工具注册面落地后补注销调用）
+	r.unregisterRuntimeTools(agent, r.evolutionTools)
 	r.evolutionTools = nil
 	r.unregisterEvolutionReviewAgent(agent)
+	if r.systemPromptBuilder != nil {
+		// Python: remove_section(EVOLUTION_PROTOCOL) + remove_section(EVOLUTION_TEAM_PROTOCOL)
+		r.systemPromptBuilder.RemoveSection(sections.SectionNameEvolutionProtocol)
+		r.systemPromptBuilder.RemoveSection(sections.SectionNameEvolutionTeamProtocol)
+	}
 	r.systemPromptBuilder = nil
 	r.agentRef = nil
+	return nil
+}
+
+// registerEvolutionTools 注册 rail 持有的活动审查工具到 agent 运行时。
+// Python: _register_evolution_tools（skill_evolution_rail.py:403-416）。
+func (r *SkillEvolutionRail) registerEvolutionTools(agent agentinterfaces.BaseAgent) ([]toolpkg.Tool, error) {
+	var agentID string
+	if card := agent.Card(); card != nil {
+		agentID = card.ID
+	}
+	evolutionTools, err := agenttools.CreateMainEvolutionTools(
+		r.manager.QueryService(),
+		r.manager.SubmissionService(),
+		r.PrepareEvolutionReviewScope,
+		r.reviewRuntime,
+		r.language,
+		agentID,
+		deepAgentOf(agent),
+	)
+	if err != nil {
+		return nil, err
+	}
+	// Python: self._register_runtime_tools(agent, evolution_tools)
+	// Go 落点 = ability_manager AddAbility（card+实例成对注册）。
+	am := agent.AbilityManager()
+	for _, t := range evolutionTools {
+		if card := t.Card(); card != nil {
+			am.AddAbility(card, t)
+		}
+	}
+	return evolutionTools, nil
+}
+
+// unregisterRuntimeTools 从 agent 运行时注销 rail 持有工具。
+// Python: _unregister_runtime_tools（按工具名移除）。
+func (r *SkillEvolutionRail) unregisterRuntimeTools(agent agentinterfaces.BaseAgent, tools []toolpkg.Tool) {
+	if agent == nil || len(tools) == 0 {
+		return
+	}
+	if am := agent.AbilityManager(); am != nil {
+		for _, t := range tools {
+			if card := t.Card(); card != nil {
+				am.Remove(card.Name)
+			}
+		}
+	}
+}
+
+// registerEvolutionReviewAgent 在 agent.deep_config 上确保稳定审查子 agent 配置。
+// Python: _register_evolution_review_agent（skill_evolution_rail.py:417-434）。
+func (r *SkillEvolutionRail) registerEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {
+	deep := deepAgentOf(agent)
+	if deep == nil {
+		return
+	}
+	deepConfig := deep.DeepConfig()
+	if deepConfig == nil {
+		return
+	}
+	var agentID string
+	if card := agent.Card(); card != nil {
+		agentID = card.ID
+	}
+	// Python: build_evolution_review_agent_config(runtime=..., query_service=...,
+	// store=..., model=None, language=..., max_iterations=..., agent_id=...)
+	config, err := reviewsubagent.BuildEvolutionReviewAgentConfig(
+		r.reviewRuntime,
+		nil,
+		r.manager.QueryService(),
+		r.evolutionStore,
+		r.language,
+		r.reviewAgentMaxIterations,
+		agentID,
+	)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("build evolution review agent config failed")
+		return
+	}
+	// Python: deep_config.subagents = ensure_evolution_review_agent_config(subagents, config)
+	existing := make([]*harnessschema.SubAgentConfig, 0, len(deepConfig.Subagents))
+	for _, spec := range deepConfig.Subagents {
+		if cfg, ok := spec.(*harnessschema.SubAgentConfig); ok {
+			existing = append(existing, cfg)
+		} else {
+			logger.Warn(logComponent).Msg("skip non SubAgentConfig spec in deep_config.subagents")
+		}
+	}
+	merged := reviewsubagent.EnsureEvolutionReviewAgentConfig(existing, config)
+	specs := make([]harnessschema.SubagentSpec, 0, len(merged))
+	for _, cfg := range merged {
+		specs = append(specs, cfg)
+	}
+	deepConfig.Subagents = specs
+}
+
+// deepAgentOf 断言 DeepAgent 能力面（审查子 agent 挂载需要 deep_config）。
+// Python: getattr(agent, "deep_config", None) 鸭子式判空。
+func deepAgentOf(agent agentinterfaces.BaseAgent) harnessinterfaces.DeepAgentInterface {
+	if deep, ok := agent.(harnessinterfaces.DeepAgentInterface); ok {
+		return deep
+	}
 	return nil
 }
 
@@ -2597,9 +2716,26 @@ func (r *SkillEvolutionRail) Uninit(agent agentinterfaces.BaseAgent) error {
 // Python: _unregister_evolution_review_agent（:395-401）。
 func (r *SkillEvolutionRail) unregisterEvolutionReviewAgent(agent agentinterfaces.BaseAgent) {
 	// Python: deep_config.subagents = remove_evolution_review_agent_config(subagents)
-	// 审查子 agent 配置面 ⤴️ 15.24c（build_evolution_review_agent_config 批），
-	// Go 侧暂无待摘除配置。
-	_ = agent
+	deep := deepAgentOf(agent)
+	if deep == nil {
+		return
+	}
+	deepConfig := deep.DeepConfig()
+	if deepConfig == nil {
+		return
+	}
+	existing := make([]*harnessschema.SubAgentConfig, 0, len(deepConfig.Subagents))
+	for _, spec := range deepConfig.Subagents {
+		if cfg, ok := spec.(*harnessschema.SubAgentConfig); ok {
+			existing = append(existing, cfg)
+		}
+	}
+	removed := reviewsubagent.RemoveEvolutionReviewAgentConfig(existing)
+	specs := make([]harnessschema.SubagentSpec, 0, len(removed))
+	for _, cfg := range removed {
+		specs = append(specs, cfg)
+	}
+	deepConfig.Subagents = specs
 }
 
 // PrepareEvolutionReviewScope 以当前干净轨迹窗口创建审查 scope。

@@ -46,6 +46,11 @@ type ExperienceManager struct {
 	pendingApprovalSnapshots map[string]*PendingChange
 	// pendingGovernance 暂存治理操作映射
 	pendingGovernance map[string]*PendingGovernance
+	// queryService 只读查询服务（Python: _query_service，缺省 ExperienceQueryService(store)）
+	queryService *ExperienceQueryService
+	// submissionService 提交服务（Python: _submission_service，缺省
+	// ExperienceSubmissionService(store, pending_approval_snapshots)）
+	submissionService *ExperienceSubmissionService
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -174,8 +179,22 @@ func NewExperienceManager(
 	}
 
 	em.BindPendingApprovalSnapshots(pendingApprovalSnapshots)
+	// Python: _query_service = ExperienceQueryService(store=store)
+	em.queryService = NewExperienceQueryService(store)
+	// Python: _submission_service = ExperienceSubmissionService(
+	//     store=store, pending_approval_snapshots=self._pending_approval_snapshots)
+	em.submissionService = NewExperienceSubmissionService(store)
+	em.submissionService.BindPendingApprovalSnapshots(em.pendingApprovalSnapshots)
 	return em, nil
 }
+
+// QueryService 返回只读查询服务。
+// Python: ExperienceManager.experience_query_service property（skill_experience_manager.py:115-117）。
+func (m *ExperienceManager) QueryService() *ExperienceQueryService { return m.queryService }
+
+// SubmissionService 返回提交服务。
+// Python: ExperienceManager.experience_submission_service property（skill_experience_manager.py:119-121）。
+func (m *ExperienceManager) SubmissionService() *ExperienceSubmissionService { return m.submissionService }
 
 // PendingApprovalSnapshots 返回暂存审批快照映射。
 // Python: ExperienceManager.pending_approval_snapshots (property)
