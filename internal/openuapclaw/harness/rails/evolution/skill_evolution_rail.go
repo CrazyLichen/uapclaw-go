@@ -916,7 +916,7 @@ func (r *SkillEvolutionRail) activeReviewSubject(ctx context.Context, skillName 
 // 与旧版 RequestUserEvolution 的生成编排同构（traj→detect→user_intent signal→
 // handleEvolutionFromSignals，requires_approval=true、emit_host_events=false）；
 // 上游删除该编排壳后，被动链由 signal 回调驱动，测试经本钩子直达真实 staging。
-func (r *SkillEvolutionRail) StageEvolutionFromSignalsForTest(ctx context.Context, skillName, userIntent string) (*experience.ExperienceApprovalRequest, *stream.OutputSchema, error) {
+func (r *SkillEvolutionRail) StageEvolutionFromSignalsForTest(ctx context.Context, skillName, userIntent string, autoApprove bool) (*experience.ExperienceApprovalRequest, *stream.OutputSchema, error) {
 	traj := r.buildTrajectory()
 	var messages []map[string]any
 	var signals []*signal.EvolutionSignal
@@ -939,11 +939,17 @@ func (r *SkillEvolutionRail) StageEvolutionFromSignalsForTest(ctx context.Contex
 	if len(messages) == 0 && userIntent != "" {
 		messages = []map[string]any{{"role": "user", "content": userIntent}}
 	}
-	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, true, false)
+	// autoApprove=false → auto-approve 落盘 + sharingAfterAutoApproved；
+	// true → staged pending + 审批事件（buildGeneratedRecordsEvent）
+	request, err := r.handleEvolutionFromSignals(ctx, skillName, signals, messages, nil, userIntent, !autoApprove, false)
 	if err != nil || request == nil {
 		return request, nil, err
 	}
-	return request, r.buildGeneratedRecordsEvent(skillName, request), nil
+	var event *stream.OutputSchema
+	if !autoApprove {
+		event = r.buildGeneratedRecordsEvent(skillName, request)
+	}
+	return request, event, nil
 }
 
 // RequestSimplify 请求精简技能经验。

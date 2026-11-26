@@ -30,7 +30,7 @@ const e10GenerateResp = `[
 func (s *EvolutionE2ESuite) stagePendingForApproval(skillName string) (requestID string, approvalEvent map[string]any) {
 	s.mockScript(e10GenerateResp)
 	// 真实 staging 半区：signal 编排（Python _stage_evolution_from_signals 形态）
-	request, event, err := s.rail.StageEvolutionFromSignalsForTest(s.ctx, skillName, "部署排障经验（"+e10Marker1+"）")
+	request, event, err := s.rail.StageEvolutionFromSignalsForTest(s.ctx, skillName, "部署排障经验（"+e10Marker1+"）", false)
 	s.Require().NoError(err)
 	s.Require().NotNil(request)
 	s.Require().NotNil(event)
