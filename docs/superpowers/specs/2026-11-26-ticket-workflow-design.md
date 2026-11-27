@@ -66,6 +66,7 @@
 | 18 | **最小前置信息集**：必需 = 表象 + 组件归属；增强 = 频率/时间模式、报错信息（口头）、复现步骤；组件选项来自配置的组件清单；必需字段齐 → 就绪 | §3.4 |
 | 19 | **HTTP 零新增字段**：ProblemInput 降级为 runner 内部归一化结构，由既有 chat.send params 拼装（description=query、附件对外用 media_items（图片）/documents（文档日志）走既有 normalize 管线、answers=answers（既有 buildInteractiveInputFromAnswers）、problem_id 新增可选 params 键，files 是内部归一化槽位不对外）；HTTP 纯文本下组件识别 = 组件清单关键字匹配，未命中并入表象下轮重问 | §4.3/§7 |
 | 20 | **工单走 WS 通道（勘误定案）**：与普通聊天同一 `/ws` 连接/帧协议/方法集，事件帧实时推送、history.get 断线兜底；废除「HTTP 端点 + SSE 断开」方案（unary 阻塞语义与超时不适配长诊断）；断开不触发取消（上游 Python/Go 行为一致，代码实证）；取消须显式 chat.cancel | §2.5/§7 |
+| 21 | **输入字段终版（4 个）**：①问题标题 title（必填）②问题描述 description（必填，params["query"]）③附件（可选，双轨上传）④问题单号 problem_id（外部工单必填 / wf 作为 tool 选填）；reproduce_steps 从 schema 删除；校验 = title+description 非空；label/value 为现网 ask_user 既有契约（value 缺省回传 label），复用不扩展 | §4.3/§7.3 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
@@ -256,7 +257,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 职责收窄（本轮拍板，决议 16/17/18）：**只做图片识别 + 查询文本合成 + 就绪判定，不碰日志原文**——日志分析归 AgentNode（挂诊断 skill + 附件读取工具）。
 
 1. **附件预处理**：仅处理图片附件 → 视觉模型（多模态 LLM）抽现象特征（错误码/界面异常/堆栈）；视觉模型走配置，无多模态时降级跳过并 Warn；**日志附件不解析**，仅取文件名/类型元信息拼入检索查询；
-2. **特征归集**：表象取 ProblemInput.description（零提取）；组件归属来自用户应答（卡片选项/纯文本清单匹配）；产出结构化特征 `{表象, 组件, 特征...}`（键值，非向量）；
+2. **特征归集**：表象取 ProblemInput.title + description（零提取）；组件归属来自用户应答（卡片选项/纯文本清单匹配）；产出结构化特征 `{表象, 组件, 特征...}`（键值，非向量）；
 3. **就绪判定（规则，零 LLM）**：必需字段 = 表象 + 组件归属，两者非空 → 就绪；缺 → 抛固定模板中断卡（只列缺的字段，组件项带配置清单选项），计入 `guidance_rounds`；**每轮恢复输入并入特征后回到本判定**，超限（2~3 轮，可配）带着已有特征进 KBSearchNode 兜底；
 4. 检索查询文本 = 表象描述 + 图片识别结果 + 附件元信息合成（图片先转文字再入查询）。
 
@@ -331,6 +332,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 
 ```json
 {
+  "title": "推送消息收不到",
   "query": "推送消息收不到，高峰期必现",
   "media_items": [{"type": "image", "filename": "screenshot.png", "path": "/uploads/.../screenshot.png"}],
   "documents": [{"type": "document", "filename": "app.log", "path": "/uploads/.../app.log"}],
@@ -383,16 +385,16 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 ProblemInput **不是 HTTP 请求体 schema**（HTTP 复用既有 chat.send params 零新增字段），而是 runner 从 params 拼装的内部归一化结构；聊天侧 `diagnose_problem` 单工具参数仍用它定义，两侧在 runner 内汇合同构：
 
 ```
-ProblemInput（runner 内部视角）{
-  description     string  必填（表象；来自 params["query"] / 工具参数 description）
-  reproduce_steps string  可选（工具参数；HTTP 侧并入 query 文本）
-  attachments     list    可选（HTTP 对外契约为两阶段：先经 POST /sessions/{id}/media、POST /sessions/{id}/documents 上传落盘（media.persist/document.persist），chat.send 引用落盘记录（media_items/documents 带 path + files 摘要），base64 不进 chat.send）
-  problem_id      string  可选（HTTP 侧 params["problem_id"]，工单回关联；聊天侧不传）
+ProblemInput（runner 内部视角，输入字段终版·决议 21）{
+  title           string  必填（问题标题；来自 params["title"]（新增可选键，自由 map 透传）/ 工具参数 title）
+  description     string  必填（问题描述；来自 params["query"] / 工具参数 description）
+  attachments     list    可选（图片/文档；media.persist / document.persist 上传落盘，chat.send 引用落盘记录，base64 不进 chat.send）
+  problem_id      string  问题单号（外部工单必填，params["problem_id"]，回关联；wf 作为 tool 选填）
 }
 ```
 
-- 校验规则 = "description 非空"，与工具/HTTP 同一套；
-- **必需前置信息集**（决议 18）：表象 + 组件归属；组件选项来自配置的组件清单，经固定模板中断卡收集；
+- 校验规则 = "title 非空 + description 非空"，与工具/HTTP 同一套；复现步骤不再作为独立输入字段（决议 21，并入 description 文本或经澄清卡收集）；
+- **必需前置信息集**（决议 18）：表象（title+description）+ 组件归属；组件选项来自配置的组件清单，经固定模板中断卡收集；
 - 挂起后恢复不经工具——应答经中断通道（ask_user 卡 / answers）回流，ReAct 重放同一 tool call；HTTP 侧经 `buildInteractiveInputFromAnswers`；
 - 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自 send 纯文本/answers，进入状态机后完全同构。
 
@@ -532,7 +534,7 @@ sequenceDiagram
 
     rect rgb(245,240,255)
     Note over T,W: 阶段二：首次提交问题 → 挂起
-    T->>G: req{method:chat.send,<br/>query:"推送收不到", media_items:[落盘记录],<br/>documents:[落盘记录], problem_id:"T-123"}
+    T->>G: req{method:chat.send,<br/>title:"推送收不到", query:"推送收不到高峰期必现",<br/>media_items:[落盘记录], documents:[落盘记录], problem_id:"T-123"}
     G->>S: E2A chat.send（透传）
     S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
     S->>S: runner 拼装 ProblemInput（attachments=落盘记录含 path）
