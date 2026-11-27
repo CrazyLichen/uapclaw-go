@@ -248,8 +248,8 @@ func buildActiveEvolutionFollowup(skillName string, subject map[string]string, u
 		return nil, err
 	}
 	return &EvolutionRequestResult{
-		SkillName:     skillName,
-		Mode:          "agent_prompt",
+		SkillName:      skillName,
+		Mode:           "agent_prompt",
 		FollowupPrompt: &prompt,
 	}, nil
 }
