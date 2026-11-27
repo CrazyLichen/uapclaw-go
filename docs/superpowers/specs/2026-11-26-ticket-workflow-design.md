@@ -54,7 +54,7 @@
   ▼
 agentserver envelope 层（handle_message 分流）
   ├── chat.send 且会话 metadata mode 命中 agent.workflow.* ──▶ ProblemDiagnosisWorkflow runner
-  │     start：Invoke(TicketInput) → 图执行 → 等待节点抛交互挂起 → INPUT_REQUIRED
+  │     start：Invoke(ProblemInput) → 图执行 → 等待节点抛交互挂起 → INPUT_REQUIRED
   │     resume：Invoke(*interaction.InteractiveInput) → 引擎按 checkpoint 重放续跑
   │     每次状态变更 → 追加历史记录 → 返回
   ├── 其余 chat.* ──▶ 既有门面链路（ExecuteMessageStream / ProcessMessage，零改动）
@@ -70,8 +70,8 @@ agentserver envelope 层（handle_message 分流）
 | 共享面 | 内容 |
 |---|---|
 | 图定义与节点库函数 | §3 六节点实现（Router/Intent/Guidance/KBSearch/Agent/Settle）+ 状态转移表（§3.3） |
-| 执行与恢复协议 | 统一图内中断：Invoke(TicketInput) 启动 / Invoke(InteractiveInput) 恢复，checkpointer（8.9b 持久 KV）承载挂起态 |
-| TicketInput schema | §4.3 同构入参 + 校验规则（"description 非空"） |
+| 执行与恢复协议 | 统一图内中断：Invoke(ProblemInput) 启动 / Invoke(InteractiveInput) 恢复，checkpointer（8.9b 持久 KV）承载挂起态 |
+| ProblemInput schema | §4.3 同构入参 + 校验规则（"description 非空"） |
 | GraphKB | 历史库 + 业务库 + SettleNode 落库函数——唯一共享数据面，跨实例知识流动只经此 |
 
 **各自适配面（互不相同，各自成立）：**
@@ -97,7 +97,7 @@ agentserver envelope 层（handle_message 分流）
 
 ```
 启动（两模式同构）：
-  Invoke(TicketInput) → 图执行 → 等待节点（Guidance/Confirm）抛 GraphInterrupt（8.7）
+  Invoke(ProblemInput) → 图执行 → 等待节点（Guidance/Confirm）抛 GraphInterrupt（8.7）
   → 引擎挂起，执行态写 checkpointer（8.9b 持久 KV，跨时间 gap 可恢复）
   → WorkflowOutput{State: INPUT_REQUIRED, result: [__interaction__ 等待载荷]}
   → 等待载荷追加进历史记录（外部轮询可见）
@@ -163,7 +163,8 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 | IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取；输出后接 Pregel 条件边分流（原 RouterNode 职能，§3.3） | `searching` 等 |
 | GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（多问卡 ≤4 问，一卡多问+多选+custom_input；抛交互挂起） | `guiding` |
 | KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定（抛交互挂起待确认） | `wait_confirm` |
-| AgentNode | 诊断 DeepAgent（skill + 附件日志分析） | `wait_confirm` |
+| AgentNode | 诊断 DeepAgent（skill + 附件日志分析）；**结论正常流式输出到界面**（会话 chunk，不走卡片），完成后输出提交进 checkpoint | `wait_confirm` |
+| ConfirmNode | 独立确认节点：轻卡挂起（"问题解决了吗？" + 确认解决/未解决选项）——与结论产出分离，重放只重做本节点不重播长文 | `wait_confirm` |
 | SettleNode | 关闭后归档：写历史库 / 命中计数 / 演进信号 | `closed` / `abandoned` |
 
 每次执行遇 `guiding` / `wait_confirm` 在图内抛交互挂起（checkpointer 承载），执行体不驻留进程内等待。
@@ -302,7 +303,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 **① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.diagnosis`（会话级固定，显式覆盖式写入即锁定）。
 
-**② send**（既有 POST）：请求体在 TicketInput（§4.3）基础上增加可选 `biz_event` 与可选 `answers`（HTTP 恢复三形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本）：
+**② send**（既有 POST）：请求体在 ProblemInput（§4.3）基础上增加可选 `biz_event` 与可选 `answers`（HTTP 恢复三形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本）：
 
 ```json
 {
@@ -355,7 +356,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 ### 4.3 同构入参 schema（工具与 HTTP 同构）
 
 ```
-TicketInput {
+ProblemInput {
   description     string  必填（问题描述）
   reproduce_steps string  可选（复现步骤）
   attachments     list    可选（图片/日志）
