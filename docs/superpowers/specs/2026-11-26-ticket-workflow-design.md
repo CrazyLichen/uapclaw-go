@@ -646,6 +646,8 @@ sequenceDiagram
 
 **④ 恢复应答（结构化 answers）**
 
+帧序说明（现网实证，前端 useWebSocket.ts:2844 + 上游 interface.py:500-534）：ask_user 应答上行 = `chat.send` 带 `answers`+`request_id`（`chat.user_answer` 是自进化确认等场景的另一个方法，ask_user 卡不走）；agentserver 经 `_is_ask_user_answer_resume` 识别后落 `chat.ask_user_answer` 历史记录，恢复的工具调用随后推下行 `chat.tool_result` 事件帧闭合前端工具卡片——联调时勿把下行展示帧误认作应答通道。
+
 ```
 → {"type":"req","id":"5","method":"chat.send",
    "params":{"session_id":"web_xxx",
