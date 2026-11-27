@@ -19,7 +19,10 @@ const (
 	// ClientToolInterruptSource 客户端工具中断来源
 	// Python: interrupt_resume.py CLIENT_TOOL_INTERRUPT_SOURCE
 	ClientToolInterruptSource = "client_tool_interrupt"
-	// LegacySkillEvolutionApprovalSource 旧版技能演进审批来源
+	// EvolutionInterruptSource 技能演化审批来源（新写法）
+	// Python: interrupt_helpers.py EVOLUTION_INTERRUPT_SOURCE
+	EvolutionInterruptSource = "evolution_interrupt"
+	// LegacySkillEvolutionApprovalSource 旧版技能演化审批来源
 	LegacySkillEvolutionApprovalSource = "skill_evolution_approval"
 	// disabledToolsPrompt 白名单为空时追加给模型的说明。
 	// Python: tool_allowlist.py:22-26

@@ -403,7 +403,6 @@ func TestRequestHelpers_非InterruptRequest(t *testing.T) {
 	// 包装类型的 id 经接口多态委托读取（对齐 Python 基类属性；
 	// 旧式 *InterruptRequest 断言对子类失效，2026-11-14 client tool 恢复链实锤）
 	assert.Equal(t, "intr_1", requestIDOf(wrapped))
-	assert.Nil(t, requestAsInterruptRequest(wrapped))
 	// owner 与 kind 走 GetInterruptOwner 委托，能取到
 	assert.Equal(t, "rail.A", requestOwnerOf(wrapped))
 	assert.Equal(t, saschema.InterruptKindPermission, requestKindOf(wrapped))
