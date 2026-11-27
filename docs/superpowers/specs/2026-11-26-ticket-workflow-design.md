@@ -1,8 +1,9 @@
-# 工单问题诊断闭环（TicketWorkflow）设计文档
+# 问题定位工作流（ProblemDiagnosisWorkflow）设计文档
 
 - 日期：2026-11-26（图内中断统一修订版）
 - 状态：待评审
-- 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 407cc1868（双实例隔离）→ 本轮（统一图内中断，废弃 END+store 与 instance_id 条款）
+- 命名：工作流本体为**问题定位工作流**（ProblemDiagnosisWorkflow）；"工单"只是 HTTP 模式的外部载体（工单系统持有工单实体，`ticket_id` 为外部回关联字段，与工作流解耦）
+- 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 407cc1868（双实例隔离）→ d23eb3f12（统一图内中断）→ e8ab25a55（零自定义事件）→ 本轮（更名 + 单工具收敛）
 
 ---
 
@@ -32,7 +33,7 @@
 | 编排形态 | workflow（PregelGraph）；**统一图内中断模型**（本轮拍板）：等待外部输入 = 图内抛交互挂起（checkpointer 持久化）+ INPUT_REQUIRED；恢复 = 带 `*interaction.InteractiveInput` 重新 Invoke，引擎按 checkpoint 重放续跑 |
 | 执行模型 | **图内中断统一**：两模式共用同一恢复协议；聊天恢复执行者 = ReAct 中断桥（现成），HTTP 恢复执行者 = envelope 层 runner 直调 `Workflow.Invoke(InteractiveInput)`（引擎恢复不依赖 ReAct，workflow.go Invoke 入参闭集已含 InteractiveInput） |
 | 实例模型 | **双实例共享内核**：HTTP / 聊天 = 两个独立 workflow 执行实例；隔离由 checkpointer 天然承载（挂起态按执行绑定，无需 store 键空间设计）；保留答案归属判定与单活跃实例两条语义规则（§2.3） |
-| 分流键 | mode 进 canonical 三段式体系：`agent.workflow.ticket`（本轮拍板，方案乙） |
+| 分流键 | mode 进 canonical 三段式体系：`agent.workflow.diagnosis`（本轮拍板，方案乙） |
 | 分流层 | agentserver envelope 层（handle_message），mode 命中 `agent.workflow.*` 直接交 runner，不进门面（本轮拍板） |
 | HTTP 结果通道 | **追加会话历史**（本轮拍板）：复用 AppendHistoryRecord，外部轮询既有历史接口取增量；metadata 只留会话属性，不写 workflow 结果 |
 | 知识库引擎 | 历史库与业务库均为 GraphKnowledgeBase（各自独立 collection）；分类树是三元组的查询侧视图，非独立存储 |
@@ -52,7 +53,7 @@
   │
   ▼
 agentserver envelope 层（handle_message 分流）
-  ├── chat.send 且会话 metadata mode 命中 agent.workflow.* ──▶ TicketWorkflow runner
+  ├── chat.send 且会话 metadata mode 命中 agent.workflow.* ──▶ ProblemDiagnosisWorkflow runner
   │     start：Invoke(TicketInput) → 图执行 → 等待节点抛交互挂起 → INPUT_REQUIRED
   │     resume：Invoke(*interaction.InteractiveInput) → 引擎按 checkpoint 重放续跑
   │     每次状态变更 → 追加历史记录 → 返回
@@ -77,7 +78,7 @@ agentserver envelope 层（handle_message 分流）
 
 | | HTTP 实例（本 spec 范围） | 聊天实例（第二阶段） |
 |---|---|---|
-| 入口 | envelope 层分流直调 runner | DeepAgent 调 `start_diagnosis`/`continue_diagnosis` 工具 |
+| 入口 | envelope 层分流直调 runner | DeepAgent 调 `diagnose_problem` 工具（**单工具**，本轮拍板：恢复走中断应答通道重放同一 tool call，无需 continue/close 工具） |
 | 恢复执行者 | runner 直调 `Workflow.Invoke(InteractiveInput)`（biz_event/answers 映射为恢复输入） | ReAct 中断桥重放 tool call（现成，见 §2.4） |
 | 等待呈现 | 追加历史记录（事件流），外部轮询历史接口可见 pending 交互 | 经 ReAct 中断信封发 ask_user 卡片（见 §2.4） |
 | 输入解释 | send 中 `biz_event` 协议直读（结构化，无歧义） | 卡片结构化 answers 直读（不经 LLM 猜测） |
@@ -88,7 +89,7 @@ agentserver envelope 层（handle_message 分流）
 执行态隔离由 checkpointer 天然承载（挂起态按执行实例绑定，随 tool_call/执行生命周期走），原 END+store 模型下的 instance_id 键空间条款**作废**。剩余两条与执行模型无关的语义规则：
 
 1. **答案归属判定**：挂起期间到达的自由文本输入，先经归属判定（复用 interrupt 包 answer_attribution 机制）：是当前 pending 交互的应答 → 作为 InteractiveInput 恢复执行；明显是新话题 → 不消费，作为普通用户消息走 ReAct 新一轮（由 DeepAgent 决定开新诊断或提醒先回应挂起卡片）。HTTP 侧同理：不带 biz_event 且与 pending 选项无关的 send 视为补充特征并入恢复输入。
-2. **单活跃实例**（图内中断天然保证）：会话挂起在 pending 交互上时，聊天侧会话本身挂起、不可能再调 `start_diagnosis`；HTTP 侧 runner 收到 start 类输入且存在活跃 checkpoint 时直接返回"已有进行中的诊断"提示。同一会话多诊断并行在图内中断模型下无发生面。
+2. **单活跃实例**（图内中断天然保证）：会话挂起在 pending 交互上时，聊天侧会话本身挂起、不可能再调 `diagnose_problem`；HTTP 侧 runner 收到 start 类输入且存在活跃 checkpoint 时直接返回"已有进行中的诊断"提示。同一会话多诊断并行在图内中断模型下无发生面。
 
 ### 2.4 统一中断信封与恢复协议
 
@@ -135,10 +136,10 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 ### 2.7 分流层定位（本轮拍板）
 
 - **分流在 agentserver envelope 层（handle_message）**，不在门面、不在 coordinator：
-  - chat.send 进入 envelope 分发时读 `GetSessionMetadata(sessionID)` 的 mode，命中 `agent.workflow.*` → 直接交 TicketWorkflow runner；
+  - chat.send 进入 envelope 分发时读 `GetSessionMetadata(sessionID)` 的 mode，命中 `agent.workflow.*` → 直接交 ProblemDiagnosisWorkflow runner；
   - 不进门面：跳过普通对话路径的 `AppendHistoryRecord`、`BuildInputs`、云端记忆钩子、adapter 构造——workflow 不是对话链路（其事件经 runner 主动追加历史，见 §2.6）；
   - coordinator 层（`runViaExecutionCoordinator`）只做执行登记，不懂业务 mode——workflow 图执行不经 coordinator 账本（实施时按 writing-plans 细化）。
-- **mode 键设计**：`agent.workflow.ticket` 进 canonical 三段式体系——schema 加常量 + `modeClassifier.IsWorkflowMode`（判前缀 `agent.workflow.`，新增 workflow 类型免改分类器）；mode 显式覆盖式写入复用 `SyncSessionRequestMetadata` 既有语义（建会话时锁定，会话生命周期内不可变）。
+- **mode 键设计**：`agent.workflow.diagnosis` 进 canonical 三段式体系——schema 加常量 + `modeClassifier.IsWorkflowMode`（判前缀 `agent.workflow.`，新增 workflow 类型免改分类器）；mode 显式覆盖式写入复用 `SyncSessionRequestMetadata` 既有语义（建会话时锁定，会话生命周期内不可变）。
 - **为什么不消息级路由**：会话级固定 mode 保证"一个实例一套状态"的边界；消息级混跑与实例隔离冲突，不在本 spec 范围。
 
 ### 2.8 渐进式自迭代机制（核心）
@@ -171,9 +172,9 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 ```mermaid
 flowchart TD
-    EXT[外部工单系统] -->|POST 建会话 mode=agent.workflow.ticket| SES[(会话)]
+    EXT[外部工单系统] -->|POST 建会话 mode=agent.workflow.diagnosis| SES[(会话)]
     EXT -->|POST send 问题+附件+ticket_id 可选biz_event| AS[agentserver envelope 层分流]
-    AS --> WF[TicketWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
+    AS --> WF[ProblemDiagnosisWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
         R[IntentNode 条件边分流] --> I[IntentNode 附件预处理+特征抽取]
@@ -297,7 +298,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 ### 4.2 接口清单
 
-**① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.ticket`（会话级固定，显式覆盖式写入即锁定）。
+**① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.diagnosis`（会话级固定，显式覆盖式写入即锁定）。
 
 **② send**（既有 POST）：请求体在 TicketInput（§4.3）基础上增加可选 `biz_event` 与可选 `answers`（HTTP 恢复三形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本）：
 
@@ -347,7 +348,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 - **metadata 只留会话属性**（mode/channel_id/...），不写任何 workflow 结果——同普通聊天的属性刷新语义；
 - 前端事实（已核）：`historyRestore.ts` 白名单 `ALLOWED_ASSISTANT_EVENT_TYPES` 含 ask_user_question/answer 与 chat.final——ticket 会话在 web 打开可重弹挂起卡（运营可接管），无空泡渲染风险。
 
-**④ 聊天模式接入（第二阶段，契约预留）**：聊天 DeepAgent 装三个工具（§2.2），中断信封与恢复接缝见 §2.4；结论走会话 chunk→final。前端零改动。
+**④ 聊天模式接入（第二阶段，契约预留）**：聊天 DeepAgent 装**单工具 `diagnose_problem`**（§2.2/§4.3），中断信封与恢复接缝见 §2.4；结论走会话 chunk→final。前端零改动。
 
 ### 4.3 同构入参 schema（工具与 HTTP 同构）
 
@@ -360,7 +361,7 @@ TicketInput {
 }
 ```
 
-- 聊天工具 `start_diagnosis`/`continue_diagnosis`/`close_diagnosis` 参数即此 schema + 标准输入事件；校验规则 = "description 非空"，与 HTTP 同一套；
+- 聊天工具 **`diagnose_problem`（单工具）** 参数即此 schema；校验规则 = "description 非空"，与 HTTP 同一套。挂起后恢复不经工具——应答经中断通道（ask_user 卡）回流，ReAct 重放同一 tool call；关闭同样以确认卡应答承载。
 - 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自不带 biz_event 的普通 send，进入状态机后完全同构。
 
 ---
