@@ -28,7 +28,7 @@ func rejectPackageNameAny(name any, kind string) (string, error) {
 	got, err := rejectPackageName(raw, kind)
 	if err != nil {
 		if kind == "agent_group" {
-			return "", &agentGroupPackageError{Message: err.Error(), Code: "AGENT_GROUP_NAME_INVALID"}
+			return "", &AgentGroupPackageError{Message: err.Error(), Code: "AGENT_GROUP_NAME_INVALID"}
 		}
 		return "", err
 	}
@@ -52,7 +52,7 @@ func rejectAbsolutePackageName(raw, kind string) error {
 func absoluteNameError(raw, kind string) error {
 	message := "invalid " + kind + " name (absolute): " + raw
 	if kind == "agent_group" {
-		return &agentGroupPackageError{Message: message, Code: "AGENT_GROUP_NAME_INVALID"}
+		return &AgentGroupPackageError{Message: message, Code: "AGENT_GROUP_NAME_INVALID"}
 	}
 	return &PackageConflictError{Message: message}
 }
@@ -240,8 +240,8 @@ func findMarketplaceEntry(entries []map[string]any, packageID string) *map[strin
 
 // ──────────────────────────── 分组创建 ────────────────────────────
 
-// agentGroupPackageError 分组建包专有错误（Python AgentGroupPackageError）。
-type agentGroupPackageError struct {
+// AgentGroupPackageError 分组建包专有错误（Python AgentGroupPackageError）。
+type AgentGroupPackageError struct {
 	// Message 信息
 	Message string
 	// Code 机器码（AGENT_GROUP_*）
@@ -249,42 +249,45 @@ type agentGroupPackageError struct {
 }
 
 // Error 实现 error 接口。
-func (e *agentGroupPackageError) Error() string { return e.Message }
+func (e *AgentGroupPackageError) Error() string { return e.Message }
+
+// ErrorCode 机器码读取（分派层分类用）。
+func (e *AgentGroupPackageError) ErrorCode() string { return e.Code }
 
 // requireAgentGroupMembers 校验 leader/成员专家 ID。
 // Python: _require_agent_group_members (:3888-3931)。
 func requireAgentGroupMembers(params map[string]any) (string, []string, error) {
 	rawLeader, _ := params["leaderId"].(string)
 	if strings.TrimSpace(rawLeader) == "" {
-		return "", nil, &agentGroupPackageError{Message: "missing or invalid leaderId", Code: "AGENT_GROUP_LEADER_REQUIRED"}
+		return "", nil, &AgentGroupPackageError{Message: "missing or invalid leaderId", Code: "AGENT_GROUP_LEADER_REQUIRED"}
 	}
 	leaderID, err := rejectPackageNameAny(rawLeader, "leaderId")
 	if err != nil {
-		return "", nil, &agentGroupPackageError{Message: err.Error(), Code: "AGENT_GROUP_LEADER_REQUIRED"}
+		return "", nil, &AgentGroupPackageError{Message: err.Error(), Code: "AGENT_GROUP_LEADER_REQUIRED"}
 	}
 	rawMembers, ok := params["memberIds"].([]any)
 	if !ok {
-		return "", nil, &agentGroupPackageError{Message: "missing or invalid memberIds", Code: "AGENT_GROUP_MEMBERS_REQUIRED"}
+		return "", nil, &AgentGroupPackageError{Message: "missing or invalid memberIds", Code: "AGENT_GROUP_MEMBERS_REQUIRED"}
 	}
 	members := []string{}
 	seen := map[string]bool{}
 	for _, rawMember := range rawMembers {
 		s, ok := rawMember.(string)
 		if !ok || strings.TrimSpace(s) == "" {
-			return "", nil, &agentGroupPackageError{Message: "invalid memberId", Code: "AGENT_GROUP_MEMBER_INVALID"}
+			return "", nil, &AgentGroupPackageError{Message: "invalid memberId", Code: "AGENT_GROUP_MEMBER_INVALID"}
 		}
 		memberID, mErr := rejectPackageNameAny(strings.TrimSpace(s), "memberId")
 		if mErr != nil {
-			return "", nil, &agentGroupPackageError{Message: mErr.Error(), Code: "AGENT_GROUP_MEMBER_INVALID"}
+			return "", nil, &AgentGroupPackageError{Message: mErr.Error(), Code: "AGENT_GROUP_MEMBER_INVALID"}
 		}
 		if memberID == leaderID {
-			return "", nil, &agentGroupPackageError{Message: "leaderId must not appear in memberIds", Code: "AGENT_GROUP_LEADER_MEMBER_CONFLICT"}
+			return "", nil, &AgentGroupPackageError{Message: "leaderId must not appear in memberIds", Code: "AGENT_GROUP_LEADER_MEMBER_CONFLICT"}
 		}
 		if memberID == "leader" {
-			return "", nil, &agentGroupPackageError{Message: "memberId 'leader' is reserved", Code: "AGENT_GROUP_MEMBER_RESERVED"}
+			return "", nil, &AgentGroupPackageError{Message: "memberId 'leader' is reserved", Code: "AGENT_GROUP_MEMBER_RESERVED"}
 		}
 		if seen[memberID] {
-			return "", nil, &agentGroupPackageError{Message: "duplicate memberId: " + memberID, Code: "AGENT_GROUP_MEMBER_DUPLICATE"}
+			return "", nil, &AgentGroupPackageError{Message: "duplicate memberId: " + memberID, Code: "AGENT_GROUP_MEMBER_DUPLICATE"}
 		}
 		seen[memberID] = true
 		members = append(members, memberID)
@@ -298,25 +301,25 @@ func agentTemplateSource(packageID, role string) (string, error) {
 	resolved, source, ok := resolveShowPackageDir(packageID, "agent_template")
 	if !ok {
 		// Hub asset id 兼容回退（Python :3957-3964；D-1 下 record 恒 nil）
-		return "", &agentGroupPackageError{
+		return "", &AgentGroupPackageError{
 			Message: role + " agent_template not found: " + packageID,
 			Code:    "AGENT_GROUP_MEMBER_NOT_FOUND"}
 	}
 	_ = source
 	manifest := readPackageManifestForShow(resolved)
 	if manifest == nil || manifestType(manifest) != "agent_template" {
-		return "", &agentGroupPackageError{
+		return "", &AgentGroupPackageError{
 			Message: role + " agent_template is invalid: " + packageID,
 			Code:    "AGENT_GROUP_TEMPLATE_INVALID"}
 	}
 	if _, loadErr := loadTemplateSpec(resolved); loadErr != nil {
-		return "", &agentGroupPackageError{
+		return "", &AgentGroupPackageError{
 			Message: role + " agent_template is not Team-compatible: " + packageID,
 			Code:    "AGENT_GROUP_MEMBER_INCOMPATIBLE"}
 	}
 	if role == "member" {
 		if _, err := os.Stat(filepath.Join(resolved, "AGENT.md")); err == nil {
-			return "", &agentGroupPackageError{
+			return "", &AgentGroupPackageError{
 				Message: "member agent_template contains unsupported AGENT.md: " + packageID,
 				Code:    "AGENT_GROUP_MEMBER_AGENT_MD"}
 		}
@@ -340,7 +343,7 @@ func assertAgentGroupNameAvailable(name string) error {
 		displayNames := i18nOf(manifest["display_name"], filepath.Base(packageDir))
 		for _, value := range displayNames {
 			if s, ok := value.(string); ok && strings.ToLower(strings.TrimSpace(s)) == normalizedName {
-				return &agentGroupPackageError{
+				return &AgentGroupPackageError{
 					Message: "agent_group display name already exists: " + name + " (" + filepath.Base(packageDir) + ")",
 					Code:    "AGENT_GROUP_DUPLICATE"}
 			}
