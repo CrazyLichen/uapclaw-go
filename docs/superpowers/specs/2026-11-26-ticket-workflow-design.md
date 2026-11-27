@@ -162,9 +162,9 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 |---|---|---|
 | IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取；输出后接 Pregel 条件边分流（原 RouterNode 职能，§3.3） | `searching` 等 |
 | GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（多问卡 ≤4 问，一卡多问+多选+custom_input；抛交互挂起） | `guiding` |
-| KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定（抛交互挂起待确认） | `wait_confirm` |
-| AgentNode | 诊断 DeepAgent（skill + 附件日志分析）；**结论正常流式输出到界面**（会话 chunk，不走卡片），完成后输出提交进 checkpoint | `wait_confirm` |
-| ConfirmNode | 独立确认节点：轻卡挂起（"问题解决了吗？" + 确认解决/未解决选项）——与结论产出分离，重放只重做本节点不重播长文 | `wait_confirm` |
+| KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定；**命中方案正常流式输出展示**（同 AgentNode，跨节点提交），完成后汇入 ConfirmNode | `wait_confirm` |
+| AgentNode | 诊断 DeepAgent（skill + 附件日志分析）；**结论正常流式输出到界面**（会话 chunk，不走卡片），完成后汇入 ConfirmNode | `wait_confirm` |
+| ConfirmNode | **两条路径（KB 命中 / Agent 诊断）的统一确认节点**：轻卡挂起（"问题解决了吗？" + 确认解决/未解决选项）——产出与确认分离，重放只重做本节点不重播方案/结论长文 | `wait_confirm` |
 | SettleNode | 关闭后归档：写历史库 / 命中计数 / 演进信号 | `closed` / `abandoned` |
 
 每次执行遇 `guiding` / `wait_confirm` 在图内抛交互挂起（checkpointer 承载），执行体不驻留进程内等待。
@@ -185,16 +185,17 @@ flowchart TD
         I -->|特征就绪| K[KBSearchNode scope=history]
         G1 -.挂起待补充.-> G1R[恢复后并入特征]
         G1R --> K
-        K -->|高置信单向| WC1[等待确认·抛交互挂起 历史方案+ticket关联]
+        K -->|高置信单向| WC1[命中方案正常流式展示]
         K -->|多向且未超轮数| G2[GuidanceNode 判别式引导·抛交互挂起]
         G2 -.补充后恢复.-> G2R[恢复后重新检索]
         G2R --> K
         K -->|无命中| K2[KBSearchNode scope=business]
         K -.scope升级.-> K2
-        K2 -->|命中| WC2[等待确认·抛交互挂起 业务库方案]
+        K2 -->|命中| WC2[命中方案正常流式展示]
         K2 -->|无果/超限| A[AgentNode 诊断DeepAgent+skill]
-        A --> WC3[等待确认·抛交互挂起 诊断结论]
-        WC1 & WC2 & WC3 -.轮询历史可查.-> EXT
+        A --> WC3[诊断结论正常流式展示]
+        WC1 & WC2 & WC3 --> C[ConfirmNode 轻卡挂起 问题解决了吗？]
+        C -.轮询历史可查.-> EXT
     end
 
     EXT -->|biz_event=confirm_solved| PEND[挂起等待 close]
