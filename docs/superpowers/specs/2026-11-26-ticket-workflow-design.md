@@ -40,6 +40,27 @@
 | 初始 skill | 用户侧预置提供，本设计只负责装配与触发 |
 | 业务库导入面板 | 第二阶段子项目，本 spec 仅定契约（workflow 只依赖契约） |
 | 关闭终态 | **用户确认驱动**（本轮拍板）：用户确认解决即 SettleNode 沉淀 → closed；工单系统只从历史读内容、不处理确认，关单后下发"确认解决"走同一 answers 通道（已终态 no-op，用户已补充信息则以诊断流程为准）；`biz_event` 整体删除 |
+| 外部字段 | `ticket_id`→`problem_id`、`TicketInput`→`ProblemInput`（外部载体字段与工作流解耦） |
+
+### 1.4 决议总览（2026-11-26/27 头脑风暴终版，正文按此展开）
+
+| # | 决议 | 落点 |
+|---|---|---|
+| 1 | **统一图内中断模型**：等待=图内抛 GraphInterrupt(8.7)+checkpointer(8.9b) 持久化；恢复=`Workflow.Invoke(*interaction.InteractiveInput)`；废弃 END+store/instance_id 键空间 | §1.3/§2.4/§3.9/§5.5 |
+| 2 | **双实例共享内核**：HTTP/聊天两个独立执行实例，checkpointer 按执行绑定天然隔离；共享=图定义+节点库+恢复协议+ProblemInput schema+GraphKB | §2.2 |
+| 3 | **恢复执行者分工**：聊天=ReAct 中断桥（WorkflowOutput{INPUT_REQUIRED}+__interaction__ 信封，禁普通 tool result 回喂 LLM）；HTTP=envelope 层 runner 直调 Invoke | §2.4 |
+| 4 | **剩余语义规则两条**：答案归属判定（answer_attribution）+单活跃实例（图内中断天然保证） | §2.3 |
+| 5 | **mode 三段式** `agent.workflow.diagnosis` 进 canonical 体系（IsWorkflowMode 判前缀） | §2.7 |
+| 6 | **分流在 envelope 层**（handle_message 读 metadata mode），不进门面不在 coordinator | §2.7 |
+| 7 | **零自定义事件**：挂起/应答/关闭全复用现网 `chat.ask_user_question`/`chat.ask_user_answer`/`chat.final`，外部不感知内部状态 | §2.6/§4.2③ |
+| 8 | **问题定位工作流命名**（工单仅为 HTTP 外部载体）；**单工具 `diagnose_problem`**（恢复重放同一 tool call，无 continue/close 工具） | 命名行/§2.2/§4.3 |
+| 9 | **命中即挂起原则**：正常 invoke 返回仅限终态（closed/abandoned），补充信息经中断应答直达节点信箱 | §3.1 |
+| 10 | **产出与确认分离**：KB 命中方案/Agent 结论正常流式展示（跨节点提交），ConfirmNode 统一轻卡挂起——重放不重播长文 | §3.1/§3.2 |
+| 11 | **RouterNode 废除**：Intent 分流降为 Pregel 条件边（8.5 addRouter） | §3.3 |
+| 12 | **biz_event 整体删除**：关闭终态用户确认驱动（确认即沉淀）；工单系统仅消费历史，关单下发走同一 answers 通道（终态 no-op） | §1.3/§3.3/§3.8/§4.2② |
+| 13 | **HTTP 恢复两形态**：answers（与 web 同款 ask_user 契约，runner 复用同一拆包）/纯文本（节点信箱并入特征） | §4.2② |
+| 14 | **Go adapter 回填**：build_inputs.go 补 ask_user 契约完整版（custom_input/__free_text__/interrupt_id 寻址）；permission/client_tool/evolution 缺口 ⤴️ 各自领域 | §6.2 |
+| 15 | **已核实现机制**：前端一卡多问（≤4）/多选/custom_input 渲染齐备；中断卡落盘 history 且历史恢复重弹卡（现网既有） | §6.2 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
