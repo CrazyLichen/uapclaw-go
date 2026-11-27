@@ -1,6 +1,6 @@
 # uapclaw-go v0.4.1 发布说明
 
-v0.4.0 的补丁版本，共 **6 个提交**，聚焦桌面/自托管体验修复与两处用户可见 UI 调整。
+v0.4.0 的补丁版本，共 **7 个提交**，聚焦桌面/自托管体验修复与两处用户可见 UI 调整。
 
 ## 修复
 
@@ -8,6 +8,7 @@ v0.4.0 的补丁版本，共 **6 个提交**，聚焦桌面/自托管体验修�
 2. **模型设置页 "unknown method: models.get"**：23.4d 模型目录 10 个 web method（models.get/upsert/delete/references、model_groups.*、session.selection.set、vendors.*）AgentServer 侧已实现但网关漏注册（01f3ffa15）
 3. **校验模型报 "[181002] 模型客户端配置 client_id 为空"**：探活用 ModelClientConfig 漏 client_id，探测预算同步对齐 Python（timeout 25s / max_retries 0）（2534ec111）
 4. **RSI 优化平台页 "unknown method: rsi.task.list" 等**：rsi.* 18 个 web method 补 WS 注册（1c16f370e）
+5. **"@name 引用素材" unknown method**：session.assets.list/register/rename/remove 四方法整域补移植（516e5e755，对齐 Python session_assets.py：client_id 幂等/generated 路径去重/name_history 占名）
 
 ## 变更
 
