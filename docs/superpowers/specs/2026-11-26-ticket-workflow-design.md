@@ -2,7 +2,7 @@
 
 - 日期：2026-11-26（图内中断统一修订版）
 - 状态：待评审
-- 命名：工作流本体为**问题定位工作流**（ProblemDiagnosisWorkflow）；"工单"只是 HTTP 模式的外部载体（工单系统持有工单实体，`ticket_id` 为外部回关联字段，与工作流解耦）
+- 命名：工作流本体为**问题定位工作流**（ProblemDiagnosisWorkflow）；"工单"只是 HTTP 模式的外部载体（工单系统持有工单实体，`problem_id` 为外部回关联字段，与工作流解耦）
 - 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 407cc1868（双实例隔离）→ d23eb3f12（统一图内中断）→ e8ab25a55（零自定义事件）→ 本轮（更名 + 单工具收敛）
 
 ---
@@ -13,7 +13,7 @@
 
 用户提出产品问题（问题描述 + 可选图片/日志附件），按三级链路处理：
 
-1. **第一级·历史知识库**：优先判断问题是否已存在于历史知识库；存在且有解决方案 → 直接返回结果 + 历史问题关联信息（ticket_id 回关联工单系统）。
+1. **第一级·历史知识库**：优先判断问题是否已存在于历史知识库；存在且有解决方案 → 直接返回结果 + 历史问题关联信息（problem_id 回关联工单系统）。
 2. **第二级·业务知识库**：历史库未命中或用户反馈未解决 → 业务知识库查询，处理同第一级；但用户确认解决后**只写历史库，业务库不动**。
 3. **第三级·Agent 处理**：两级均未成功 → 诊断 Agent（挂专门的问题定位 skill，用户侧预置），触发 skill 结合问题描述与附件日志分析给出结论；用户确认关闭后触发 skill 演进（auto_save 自动落盘，无需确认）。
 
@@ -29,7 +29,7 @@
 |---|---|
 | 实现位置 | 本仓（uapclaw-gateway）内，复用既有 KB/agent/skill/HITL 设施 |
 | 多租户 | 不做，单用户 |
-| 工单实体 | 外部工单系统持有，仅 HTTP 调用触发；两侧靠 `ticket_id` 关联 |
+| 工单实体 | 外部工单系统持有，仅 HTTP 调用触发；两侧靠 `problem_id` 关联 |
 | 编排形态 | workflow（PregelGraph）；**统一图内中断模型**（本轮拍板）：等待外部输入 = 图内抛交互挂起（checkpointer 持久化）+ INPUT_REQUIRED；恢复 = 带 `*interaction.InteractiveInput` 重新 Invoke，引擎按 checkpoint 重放续跑 |
 | 执行模型 | **图内中断统一**：两模式共用同一恢复协议；聊天恢复执行者 = ReAct 中断桥（现成），HTTP 恢复执行者 = envelope 层 runner 直调 `Workflow.Invoke(InteractiveInput)`（引擎恢复不依赖 ReAct，workflow.go Invoke 入参闭集已含 InteractiveInput） |
 | 实例模型 | **双实例共享内核**：HTTP / 聊天 = 两个独立 workflow 执行实例；隔离由 checkpointer 天然承载（挂起态按执行绑定，无需 store 键空间设计）；保留答案归属判定与单活跃实例两条语义规则（§2.3） |
@@ -168,12 +168,14 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 每次执行遇 `guiding` / `wait_confirm` 在图内抛交互挂起（checkpointer 承载），执行体不驻留进程内等待。
 
+**命中即挂起原则**（本轮拍板）：三级链路中任何"需要用户表态"的点（方案确认、引导补充）一律抛交互挂起；**正常 invoke 返回仅发生在终态（closed/abandoned）**——不存在"返回方案后会话结束、用户补充后需重新进图"的中间态，补充信息经中断应答通道直达节点信箱（workflow 分支 buildInteractiveInput 的 UserInputs 兜底），引擎重放即续跑。这也是单工具 `diagnose_problem` 成立的前提。
+
 ### 3.2 全局流程图
 
 ```mermaid
 flowchart TD
     EXT[外部工单系统] -->|POST 建会话 mode=agent.workflow.diagnosis| SES[(会话)]
-    EXT -->|POST send 问题+附件+ticket_id 可选biz_event| AS[agentserver envelope 层分流]
+    EXT -->|POST send 问题+附件+problem_id 可选biz_event| AS[agentserver envelope 层分流]
     AS --> WF[ProblemDiagnosisWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
@@ -276,7 +278,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 | 业务库命中 | 写历史库新文档；**业务库不动** | 轻判重（一次向量相似度查询） |
 | AgentNode 处理 | 写历史库全量新文档（含排查链路、附件摘要） | 轻判重（同上） |
 
-轻判重：表象向量与历史库比对，超阈值且根因同向 → 并入既有案例 +1；否则 `AddDocuments`（含三元组抽取 + 长尾合并规则 §2.8）。两条路径均写 `metadata.ticket_id`；agent 路径额外注入演进信号。abandon 不沉淀不演进。
+轻判重：表象向量与历史库比对，超阈值且根因同向 → 并入既有案例 +1；否则 `AddDocuments`（含三元组抽取 + 长尾合并规则 §2.8）。两条路径均写 `metadata.problem_id`；agent 路径额外注入演进信号。abandon 不沉淀不演进。
 
 ### 3.9 跨轮上下文（图状态 + checkpointer 承载）
 
@@ -307,7 +309,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
   "description": "推送消息收不到",
   "reproduce_steps": "高峰期必现",
   "attachments": [{"type": "image", "url": "..."}, {"type": "log", "url": "..."}],
-  "ticket_id": "T-123",
+  "problem_id": "T-123",
   "biz_event": "confirm_solved",
   "answers": [{"question": "是偶发还是必现？", "selected_options": ["transient"], "custom_input": ""}]
 }
@@ -339,7 +341,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
     "multi_select": false, "header": "现象特征"},
    {"question": "还有其他线索？", "header": "补充", "options": []}
  ],
- "ticket_id": "T-123"}
+ "problem_id": "T-123"}
 ```
 
 - 用户回答 → `chat.ask_user_answer`（answers 数组，question 绑定；含 selected_options/custom_input）；
@@ -357,7 +359,7 @@ TicketInput {
   description     string  必填（问题描述）
   reproduce_steps string  可选（复现步骤）
   attachments     list    可选（图片/日志）
-  ticket_id       string  HTTP 侧可选（工单回关联）；聊天侧不传，沉淀 metadata 为空
+  problem_id       string  HTTP 侧可选（工单回关联）；聊天侧不传，沉淀 metadata 为空
 }
 ```
 
@@ -381,7 +383,7 @@ TicketInput {
 | doc_id | string | 历史问题唯一 id |
 | text | string | 完整叙述：表象描述+排查过程+根因+方案（向量召回主体） |
 | vector | float32[] | text 的 embedding |
-| metadata.ticket_id | string | 工单系统 id（回关联） |
+| metadata.problem_id | string | 工单系统 id（回关联） |
 | metadata.component | string | 归属组件（检索过滤） |
 | metadata.hit_count | int | 被召回/确认次数（业务加权与展示） |
 | metadata.settled_at | int64 | 沉淀时间 |
