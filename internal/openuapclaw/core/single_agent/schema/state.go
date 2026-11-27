@@ -50,8 +50,6 @@ type ToolInterruptionState struct {
 	BaseInterruptionState
 	// InterruptedTools 被中断的工具映射 (tool_call_id → ToolInterruptEntry)
 	InterruptedTools map[string]*ToolInterruptEntry
-	// AutoConfirmMapping 自动确认映射 (inner_id → auto_confirm_key)
-	AutoConfirmMapping map[string]string
 	// DeferredToolImages 本轮已完成调用的图片项；等本轮没有任何调用暂停时
 	// 才送进模型（tool message 必须聚在一个 turn 里）。
 	// Python: ToolInterruptionState.deferred_tool_images（state.py:88-90）

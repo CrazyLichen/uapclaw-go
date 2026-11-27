@@ -91,7 +91,7 @@ func NewToolInterruptHandler(agent InterruptAgent) *ToolInterruptHandler {
 
 // BuildInterruptState 构建中断状态。
 // 遍历工具执行结果，区分 ToolInterruptException 和子 Agent 中断，
-// 收集 interrupted_tools、payloads、auto_confirm_mapping。
+// 收集 interrupted_tools 与 payloads。
 // 无中断时返回 (nil, nil)。
 // Python: build_interrupt_state(results, tool_calls, ai_message, iteration, original_query)
 func (h *ToolInterruptHandler) BuildInterruptState(
@@ -101,7 +101,7 @@ func (h *ToolInterruptHandler) BuildInterruptState(
 	iteration int,
 	originalQuery string,
 ) (*saschema.ToolInterruptionState, []PayloadEntry) {
-	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls, nil)
+	interruptedTools, payloads := h.collectInterrupts(results, toolCalls, nil)
 
 	if len(interruptedTools) == 0 {
 		return nil, nil
@@ -113,8 +113,7 @@ func (h *ToolInterruptHandler) BuildInterruptState(
 			Iteration:     iteration,
 			OriginalQuery: originalQuery,
 		},
-		InterruptedTools:   interruptedTools,
-		AutoConfirmMapping: autoConfirmMapping,
+		InterruptedTools: interruptedTools,
 	}
 
 	return intState, payloads
@@ -134,6 +133,20 @@ func (h *ToolInterruptHandler) Load(sess sessioninterfaces.SessionFacade) *sasch
 	if sess != nil {
 		val, _ := sess.GetState(state.StringKey(h.key))
 		if st, ok := val.(*saschema.ToolInterruptionState); ok {
+			// 旧持久化数据无 interrupt_id 的请求按其调用派生一个，
+			// 让每个加载方（含子 Agent 的副本）对同一中断取到一致 id。
+			// Python: ToolInterruptEntry.__setstate__（state.py:75-81，
+			// unpickle 恢复路径）；Go 的恢复入口即 Load。
+			for _, entry := range st.InterruptedTools {
+				if entry == nil {
+					continue
+				}
+				for callID, request := range entry.InterruptRequests {
+					if request.GetInterruptID() == "" {
+						request.SetInterruptID("intr_" + callID)
+					}
+				}
+			}
 			return st
 		}
 	}
@@ -334,7 +347,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	}
 
 	// 重新收集中断
-	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute, unanswered)
+	newInterruptedTools, subAgentOutputs := h.collectInterrupts(results, toolsToExecute, unanswered)
 
 	// 本轮又暂停的调用，把答案带进下一轮（标记 carried），供 rail 知道
 	// 副作用已执行过、不要重复。
@@ -347,7 +360,6 @@ func (h *ToolInterruptHandler) HandleResume(
 	newInterruptedTools, subAgentOutputs = mergeHeldCalls(intState, held, newInterruptedTools, subAgentOutputs)
 
 	intState.InterruptedTools = newInterruptedTools
-	intState.AutoConfirmMapping = autoConfirmMapping
 
 	// 有新中断则 commit
 	if len(newInterruptedTools) > 0 {
@@ -415,7 +427,6 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 // 返回:
 //   - interruptedTools: outerID → ToolInterruptEntry（中断工具条目）
 //   - payloads: []PayloadEntry（负载条目列表）
-//   - autoConfirmMapping: innerID → autoConfirmKey（自动确认映射）
 //
 // collectInterrupts 收集中断并入表。
 // 每个工具中断在这里拿到 id（issue_interrupt_id）；本次恢复留下未答的调用，
@@ -426,10 +437,9 @@ func (h *ToolInterruptHandler) collectInterrupts(
 	results []saschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	unanswered map[string]saschema.AnswerOwnerAndID,
-) (map[string]*saschema.ToolInterruptEntry, []PayloadEntry, map[string]string) {
+) (map[string]*saschema.ToolInterruptEntry, []PayloadEntry) {
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
-	autoConfirmMapping := make(map[string]string)
 
 	for i, result := range results {
 		if i >= len(toolCalls) {
@@ -447,13 +457,13 @@ func (h *ToolInterruptHandler) collectInterrupts(
 				owner = tie.ToolCall
 			}
 			issueIDFor(tie.Request, owner.ID, unanswered)
-			handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+			handleToolInterruptException(tie, toolCall, interruptedTools, &payloads)
 		} else if isSubAgentInterrupt(toolResult) {
-			handleSubAgentInterrupt(toolResult, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+			handleSubAgentInterrupt(toolResult, toolCall, interruptedTools, &payloads)
 		}
 	}
 
-	return interruptedTools, payloads, autoConfirmMapping
+	return interruptedTools, payloads
 }
 
 // issueIDFor 给中断请求发号，兼容子类（AskUserRequest 等）。
@@ -491,7 +501,6 @@ func handleToolInterruptException(
 	toolCall *llmschema.ToolCall,
 	interruptedTools map[string]*saschema.ToolInterruptEntry,
 	payloads *[]PayloadEntry,
-	autoConfirmMapping map[string]string,
 ) {
 	// 审批标识的是嵌套目标，但恢复必须重放模型可见的外层调用，
 	// wrapper 才能重建授权。
@@ -522,22 +531,17 @@ func handleToolInterruptException(
 	// 构造 payload: ToolCallInterruptRequest（按 inner call 上下文）
 	payload := NewToolCallInterruptRequest(tie.Request, innerToolCall)
 	*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: payload})
-
-	// 记录 auto_confirm_mapping
-	// Python: auto_confirm_mapping[inner_id] = tool_result.request.auto_confirm_key
-	autoConfirmMapping[innerID] = tie.Request.GetAutoConfirmKey()
 }
 
 // handleSubAgentInterrupt 处理子 Agent 中断 dict。
 // 从 dict["state"] 中提取 OutputSchema/InteractionOutput，
 // 构造 ToolInterruptEntry(is_sub_agent=True) 和 payload。
-// Python: _handle_sub_agent_interrupt(tool_result, tool_call, interrupted_tools, payloads, auto_confirm_mapping)
+// Python: _handle_sub_agent_interrupt(tool_result, tool_call, interrupted_tools, payloads)
 func handleSubAgentInterrupt(
 	toolResult any,
 	toolCall *llmschema.ToolCall,
 	interruptedTools map[string]*saschema.ToolInterruptEntry,
 	payloads *[]PayloadEntry,
-	autoConfirmMapping map[string]string,
 ) {
 	outerID := toolCall.ID
 
@@ -572,9 +576,6 @@ func handleSubAgentInterrupt(
 		if tcir, ok := payloadObj.(*saschema.ToolCallInterruptRequest); ok {
 			interruptRequests[innerID] = tcir
 			*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: outputSchema})
-			if tcir.GetAutoConfirmKey() != "" {
-				autoConfirmMapping[innerID] = tcir.GetAutoConfirmKey()
-			}
 		}
 	}
 

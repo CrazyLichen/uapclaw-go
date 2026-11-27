@@ -37,8 +37,7 @@ func attributionState(entries map[string]struct {
 		}
 	}
 	return &saschema.ToolInterruptionState{
-		InterruptedTools:   tools,
-		AutoConfirmMapping: map[string]string{},
+		InterruptedTools: tools,
 	}
 }
 

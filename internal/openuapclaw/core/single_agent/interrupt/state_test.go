@@ -46,7 +46,6 @@ func TestToolInterruptionState(t *testing.T) {
 		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc_1": {ToolCall: &llmschema.ToolCall{ID: "tc_1"}},
 		},
-		AutoConfirmMapping: map[string]string{"inner1": "auto_key"},
 	}
 	assert.Equal(t, 5, s.Iteration)
 	assert.Len(t, s.InterruptedTools, 1)

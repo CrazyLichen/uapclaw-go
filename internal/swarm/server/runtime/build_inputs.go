@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 	uinterrupt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
@@ -449,16 +450,18 @@ func buildInteractiveInputFromAnswers(requestID string, answers []any, source st
 type clientToolAnswer struct {
 	requestID   string
 	interruptID string
-	result      any
+	result      *tool.ClientToolResult
 }
 
 // clientToolAnswers 提取 client_tool_interrupt 恢复携带的结果。
 // 每条答案必须自带 request_id、interrupt_id 与 result；其余条目不回答任何调用。
 // Python: runtime/client_tools.py:69-84 client_tool_answers
 //
-// 偏差登记：Python 用 ClientToolResult.coerce 校验失败即丢弃该条目；Go 的
-// CoerceClientToolResult 恒成功，result 先按原值携带，消费方
-// finishClientToolCall 内再走 CoerceClientToolResult 归一，等值。
+// result 在 build 层就地 ClientToolResult.coerce（对齐 Python 的同点 coerce），
+// 类型从 any 收窄为 *tool.ClientToolResult。Python 的
+// except ValidationError: continue 实际不可达——coerce 对信封校验失败会落到
+// 整体即结果的兜底分支，恒成功返回；Go 的 CoerceClientToolResult 同样恒成功，
+// 故无丢弃分支。
 func clientToolAnswers(answers []any) []clientToolAnswer {
 	parsed := make([]clientToolAnswer, 0)
 	for _, raw := range answers {
@@ -477,7 +480,7 @@ func clientToolAnswers(answers []any) []clientToolAnswer {
 		parsed = append(parsed, clientToolAnswer{
 			requestID:   requestID,
 			interruptID: interruptID,
-			result:      answer["result"],
+			result:      tool.CoerceClientToolResult(answer["result"]),
 		})
 	}
 	return parsed

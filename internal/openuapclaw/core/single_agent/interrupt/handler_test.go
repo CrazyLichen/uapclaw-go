@@ -233,7 +233,6 @@ func TestHandleResume_无新中断(t *testing.T) {
 				},
 			},
 		},
-		AutoConfirmMapping: map[string]string{},
 	}
 	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 
@@ -273,7 +272,6 @@ func TestHandleResume_有新中断(t *testing.T) {
 				},
 			},
 		},
-		AutoConfirmMapping: map[string]string{},
 	}
 	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 
@@ -377,9 +375,8 @@ func TestHandleToolInterruptException(t *testing.T) {
 
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
-	autoConfirmMapping := make(map[string]string)
 
-	handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+	handleToolInterruptException(tie, toolCall, interruptedTools, &payloads)
 
 	assert.Len(t, interruptedTools, 1)
 	entry, ok := interruptedTools["tc1"]
@@ -389,7 +386,6 @@ func TestHandleToolInterruptException(t *testing.T) {
 	assert.Len(t, entry.InterruptRequests, 1)
 	assert.Equal(t, req, entry.InterruptRequests["tc1"])
 	assert.Len(t, payloads, 1)
-	assert.Equal(t, "auto_key", autoConfirmMapping["tc1"])
 }
 
 func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
@@ -400,9 +396,8 @@ func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
 
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
-	autoConfirmMapping := make(map[string]string)
 
-	handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+	handleToolInterruptException(tie, toolCall, interruptedTools, &payloads)
 
 	// 对齐 Python _handle_tool_interrupt_exception：表键与 entry.tool_call 都是
 	// 外层模型可见调用；异常携带的（inner）调用存 paused_call；payload 按 inner 上下文。
@@ -441,9 +436,8 @@ func TestHandleSubAgentInterrupt(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc_outer", Name: "agent_tool"}
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
-	autoConfirmMapping := make(map[string]string)
 
-	handleSubAgentInterrupt(subResult, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+	handleSubAgentInterrupt(subResult, toolCall, interruptedTools, &payloads)
 
 	assert.Len(t, interruptedTools, 1)
 	entry, ok := interruptedTools["tc_outer"]
@@ -455,7 +449,6 @@ func TestHandleSubAgentInterrupt(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "sub_tool", storedTCIR.ToolName)
 	assert.Equal(t, "inner_1", storedTCIR.ToolCallID)
-	assert.Equal(t, "sub_auto", autoConfirmMapping["inner_1"])
 	assert.Len(t, payloads, 1)
 }
 
@@ -469,10 +462,9 @@ func TestHandleSubAgentInterrupt_tuple包装(t *testing.T) {
 
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
-	autoConfirmMapping := make(map[string]string)
 
 	// handleSubAgentInterrupt 现在直接接收 map[string]any，不再支持 [2]any tuple
-	handleSubAgentInterrupt(subDict, toolCall, interruptedTools, &payloads, autoConfirmMapping)
+	handleSubAgentInterrupt(subDict, toolCall, interruptedTools, &payloads)
 
 	assert.Len(t, interruptedTools, 1)
 	entry, ok := interruptedTools["tc_outer"]
@@ -632,10 +624,9 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 		{ID: "tc3", Name: "agent_tool"},
 	}
 
-	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls, nil)
+	interruptedTools, payloads := h.collectInterrupts(results, toolCalls, nil)
 	assert.Len(t, interruptedTools, 2)
 	assert.NotEmpty(t, payloads)
-	assert.Equal(t, "key1", autoConfirmMapping["tc1"])
 }
 
 // ──────────────────────────── held / 定向恢复键 / deferred images ────────────────────────────
@@ -941,3 +932,31 @@ type testAskUserRequest struct {
 }
 
 // Questions 子类扩展字段（Python: AskUserRequest.questions）。
+
+// TestLoad_旧数据派生interruptID 验证恢复入口对无 id 的旧请求按调用派生
+// intr_{call_id}，与上游 unpickle 恢复路径一致。
+// Python: ToolInterruptEntry.__setstate__（state.py:75-81）
+func TestLoad_旧数据派生interruptID(t *testing.T) {
+	agent := &fakeInterruptAgent{}
+	h := NewToolInterruptHandler(agent)
+	sess := session.NewSession()
+
+	legacy := &saschema.InterruptRequest{Message: "旧数据无 id"}
+	modern := &saschema.InterruptRequest{Message: "新数据有 id", InterruptID: "intr_kept"}
+	entry := &saschema.ToolInterruptEntry{
+		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "tool1"},
+		InterruptRequests: map[string]saschema.InterruptRequester{
+			"tc1": legacy,
+			"tc2": modern,
+		},
+	}
+	sess.UpdateState(map[string]any{h.key: &saschema.ToolInterruptionState{
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{"tc1": entry},
+	}})
+
+	st := h.Load(sess)
+	require.NotNil(t, st)
+	loaded := st.InterruptedTools["tc1"]
+	assert.Equal(t, "intr_tc1", loaded.InterruptRequests["tc1"].GetInterruptID())
+	assert.Equal(t, "intr_kept", loaded.InterruptRequests["tc2"].GetInterruptID())
+}

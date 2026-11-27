@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
@@ -112,7 +113,10 @@ func (s *InterruptResumeFullChainSuite) TestFullChain_clientTool恢复保持暂�
 	})
 	answerValue, ok := ii.InterruptAnswers["intr_a"]
 	s.Require().True(ok)
-	s.Equal("completed", answerValue.(map[string]any)["status"])
+	// build 层就地 coerce（对齐 Python client_tool_answers），类型为 *tool.ClientToolResult
+	coerced, isResult := answerValue.(*tool.ClientToolResult)
+	s.Require().True(isResult)
+	s.Equal(tool.ClientToolStatusCompleted, coerced.Status)
 
 	// 内核：client tool 调用（无人回答保持暂停）+ permission 调用（已回答重放）
 	clientReq := saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{})

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -221,7 +222,12 @@ func TestBuildInteractiveInput_clientToolInterrupt(t *testing.T) {
 	})
 	v, ok := ii.InterruptAnswers["intr_a"]
 	require.True(t, ok)
-	assert.Equal(t, "completed", v.(map[string]any)["status"])
+	// build 层就地 coerce（对齐 Python client_tool_answers 的同点 coerce），
+	// 类型收窄为 *tool.ClientToolResult
+	result, isResult := v.(*tool.ClientToolResult)
+	require.True(t, isResult)
+	assert.Equal(t, tool.ClientToolStatusCompleted, result.Status)
+	assert.Equal(t, "ok", result.Content)
 	assert.NotContains(t, ii.InterruptAnswers, "intr_bad")
 }
 

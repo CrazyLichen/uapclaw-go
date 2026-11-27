@@ -680,8 +680,7 @@ func TestReActAgent_InvokeImpl_中断恢复(t *testing.T) {
 			Iteration:     0,
 			OriginalQuery: "原始查询",
 		},
-		InterruptedTools:   map[string]*agentschema.ToolInterruptEntry{},
-		AutoConfirmMapping: map[string]string{},
+		InterruptedTools: map[string]*agentschema.ToolInterruptEntry{},
 	}
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})
 
@@ -712,8 +711,7 @@ func TestReActAgent_InvokeImpl_中断恢复有ContextEngine(t *testing.T) {
 			Iteration:     0,
 			OriginalQuery: "原始查询",
 		},
-		InterruptedTools:   map[string]*agentschema.ToolInterruptEntry{},
-		AutoConfirmMapping: map[string]string{},
+		InterruptedTools: map[string]*agentschema.ToolInterruptEntry{},
 	}
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})
 
