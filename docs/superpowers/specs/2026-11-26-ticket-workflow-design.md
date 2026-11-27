@@ -478,16 +478,16 @@ ProblemInput（runner 内部视角）{
 | WS 方法（req.method） | 用途 | 关键 params |
 |---|---|---|
 | `session.create` | 建会话（mode 锁定） | `metadata: {mode: "agent.workflow.diagnosis"}` |
-| `media.persist` | **图片上传落盘**（前置） | `media_items`（base64）→ res 返回存储记录 `{path, filename, mime_type, size_bytes}` |
-| `document.persist` | **日志/文档上传落盘**（前置；含格式黑名单安全检查） | `documents`（base64）→ res 返回存储记录（含 path） |
-| `file.upload_chunk` | **大文件分块上传**（图片/文档通用，gateway 薄代理原样转发） | 2MiB/块逐块 `{upload_id, target_rel_path, resolved_path, data, final}`，末块返回 path；大文件经此通道规避单帧/单文件 base64 限制，path 后续被 chat.send 引用 |
+| `media.persist` | **图片上传落盘·主通道**（前置） | `media_items`（base64）→ res 返回存储记录 `{path, filename, mime_type, size_bytes}`；单张 10MiB×8 张 |
+| `document.persist` | **日志/文档上传落盘·主通道**（前置；含格式黑名单安全检查） | `documents`（base64）→ res 返回存储记录（含 path）；单个 100MiB×8 个 |
+| `file.upload_chunk` | **超大文件分块上传·备选通道**（图片/文档通用，gateway 薄代理原样转发，与 web 前端一致） | 仅当超出 persist 尺寸上限时使用：2MiB/块逐块 `{upload_id, target_rel_path, resolved_path, data, final}`，末块返回 path；`target_rel_path` 按约定 `agent/sessions/<session_id>/uploads/<文件名>` 给出（服务端校验越界+首块同名自动去重，`resolved_path` 为真实路径） |
 | `chat.send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`/`documents`（落盘记录引用）、`problem_id`（可选）、`answers`（可选）；`files` 摘要为 web 前端行为，工单侧不传（workflow 分流不进 BuildUserPrompt，runner 只读 records） |
 | `history.get` | 轮询结果（与事件帧互补的兜底通道） | 增量按记录 id/时间戳幂等 |
 | `chat.cancel` | 真正取消诊断 | `intent: "cancel"` |
 
 帧协议（与 web 前端同一套）：请求帧 `{"type":"req","id":"1","method":"chat.send","params":{...}}` → 响应帧 `{"type":"res","id":"1",...}`；执行过程中的事件（含 ask_user 卡、结论）以 `{"type":"event","event":"chat.ask_user_question","payload":{...}}` 等白名单事件帧推送到**同一连接**——工单不需要轮询即可收到卡载荷，history.get 仅作断线重连后的兜底增量通道。
 
-附件两阶段契约（同 web 前端）：先落盘拿 path，chat.send 只引用落盘记录，base64 不进 chat.send。小文件直接 media.persist / document.persist 一次传（限制：WS 单帧 150MiB；文档单个 100MiB×8 个；图片单张 10MiB×8 张；超限回显 `document_errors`，带 `forbidden_formats`）；大文件一律走 `file.upload_chunk` 分块通道（图片/文档通用，gateway 原样转发，2MiB/块，末块返回 path，无单文件大小上限）——分块是规避尺寸限制的通用手段，工单侧大日志推荐此路径。
+附件两阶段契约（同 web 前端，**双轨主备**）：主通道 = 图片 `media.persist`、文档 `document.persist` 一次传（限制：WS 单帧 150MiB；文档单个 100MiB×8 个 + 格式黑名单；图片单张 10MiB×8 张；超限回显 `document_errors`，带 `forbidden_formats`）；**备通道** = 超出上述上限的大文件走 `file.upload_chunk` 分块（2MiB/块，无单文件大小上限，末块返回 path）——与 web 前端行为完全一致（web 对超预算大图即在 persist 前自动切分块）。chat.send 一律只引用落盘记录（path），base64 不进 chat.send。
 
 ### 7.2 时序图
 
@@ -515,13 +515,19 @@ sequenceDiagram
     S->>S: 落盘 uploads 目录
     G-->>T: res{id:2, media_items:[{path,filename,...}]}
 
-    loop 大日志分块上传（2MiB/块）
-        T->>G: req{method:file.upload_chunk,<br/>{upload_id, target_rel_path, data, final}}
-        G->>S: 薄代理原样转发
-        S->>S: 追加写 uploads 目录
-        G-->>T: res{resolved_path}（末块 final=true 返回 path）
+    T->>G: req{method:document.persist, documents:[app.log base64]}
+    S->>S: 格式黑名单安全检查+落盘
+    G-->>T: res{id:3, records:[{path,...}]}
+
+    alt 日志超过 100MiB（persist 拒收时）
+        loop file.upload_chunk 分块备通道（2MiB/块）
+            T->>G: req{method:file.upload_chunk,<br/>{upload_id, target_rel_path, resolved_path, data, final}}
+            G->>S: 薄代理原样转发
+            S->>S: 首块独占创建+同名去重，后续追加写
+            G-->>T: res{path}（末块 final=true 返回真实路径）
+        end
+        Note over T: path 后续在 chat.send documents 记录中引用
     end
-    Note over T: 日志已落盘 app.log path；<br/>小文件也可 document.persist 一次传（100MiB 内）
     end
 
     rect rgb(245,240,255)
@@ -600,18 +606,25 @@ sequenceDiagram
    "payload":{"media_items":[{"type":"image","filename":"screenshot.png",
      "path":"/uploads/web_xxx/screenshot.png","mime_type":"image/png","size_bytes":12345}]}}
 
-→ {"type":"req","id":"3","method":"file.upload_chunk",
+→ {"type":"req","id":"3","method":"document.persist",
+   "params":{"session_id":"web_xxx","content":"",
+             "documents":[{"type":"document","filename":"app.log","data":"<base64>"}]}}
+← {"type":"res","id":"3","ok":true,
+   "payload":{"records":[{"type":"document","filename":"app.log",
+     "path":"/uploads/web_xxx/app.log","mime_type":"text/plain","size_bytes":67890}]}}
+
+# 备通道：日志超过 100MiB（document.persist 拒收）时走 file.upload_chunk 分块
+→ {"type":"req","id":"3a","method":"file.upload_chunk",
    "params":{"session_id":"web_xxx",
              "upload_id":"ticket-log-1","target_rel_path":"agent/sessions/web_xxx/uploads/app.log",
              "resolved_path":"","data":"<2MiB base64 块>","final":false}}
-← {"type":"res","id":"3","ok":true,"payload":{"path":"/uploads/web_xxx/app.log.part"}}
-# ... 逐块续传（resolved_path 取上一块返回值），末块 final=true：
+← {"type":"res","id":"3a","ok":true,"payload":{"path":"/uploads/web_xxx/app.log.part"}}
+# ... 逐块续传（resolved_path 取上一块返回值；首块服务端同名自动去重），末块 final=true：
 → {"type":"req","id":"3n","method":"file.upload_chunk",
    "params":{"session_id":"web_xxx",
              "upload_id":"ticket-log-1","target_rel_path":"agent/sessions/web_xxx/uploads/app.log",
              "resolved_path":"/uploads/web_xxx/app.log.part","data":"<尾部块>","final":true}}
 ← {"type":"res","id":"3n","ok":true,"payload":{"path":"/uploads/web_xxx/app.log"}}
-# 注：小日志（100MiB 内）也可 document.persist 一次传 base64，二选一
 ```
 
 **③ 首次 send（只引用落盘记录，不带 base64）**
