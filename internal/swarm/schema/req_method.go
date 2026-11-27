@@ -218,6 +218,49 @@ const (
 	// ReqMethodSessionPin 置顶/取消置顶会话（Python SESSION_PIN）
 	ReqMethodSessionPin ReqMethod = "session.pin"
 
+	// ─── 扩展设备管理（extension_package_manager.py）───
+
+	// ReqMethodAgentTemplatesList 模板列表（Python AGENT_TEMPLATES_LIST）
+	ReqMethodAgentTemplatesList ReqMethod = "agent_templates.list"
+	// ReqMethodAgentTemplatesShow 模板详情（Python AGENT_TEMPLATES_SHOW）
+	ReqMethodAgentTemplatesShow ReqMethod = "agent_templates.show"
+	// ReqMethodAgentTemplatesFileList 模板文件树（Python AGENT_TEMPLATES_FILE_LIST）
+	ReqMethodAgentTemplatesFileList ReqMethod = "agent_templates.file.list"
+	// ReqMethodAgentTemplatesFileRead 读模板包内文件（Python AGENT_TEMPLATES_FILE_READ）
+	ReqMethodAgentTemplatesFileRead ReqMethod = "agent_templates.file.read"
+	// ReqMethodAgentTemplatesCreate 创建模板包（Python AGENT_TEMPLATES_CREATE）
+	ReqMethodAgentTemplatesCreate ReqMethod = "agent_templates.create"
+	// ReqMethodAgentTemplatesImportLocal 本地导入模板（Python AGENT_TEMPLATES_IMPORT_LOCAL）
+	ReqMethodAgentTemplatesImportLocal ReqMethod = "agent_templates.import_local"
+	// ReqMethodAgentTemplatesInstall Hub 安装（Python AGENT_TEMPLATES_INSTALL；本批 D-1 拒绝）
+	ReqMethodAgentTemplatesInstall ReqMethod = "agent_templates.install"
+	// ReqMethodAgentTemplatesUninstall 卸载模板（Python AGENT_TEMPLATES_UNINSTALL）
+	ReqMethodAgentTemplatesUninstall ReqMethod = "agent_templates.uninstall"
+	// ReqMethodAgentTemplatesUpdate 更新模板（Python AGENT_TEMPLATES_UPDATE）
+	ReqMethodAgentTemplatesUpdate ReqMethod = "agent_templates.update"
+	// ReqMethodAgentTemplatesDelete 删除模板（Python AGENT_TEMPLATES_DELETE）
+	ReqMethodAgentTemplatesDelete ReqMethod = "agent_templates.delete"
+	// ReqMethodAgentGroupsList 分组列表（Python AGENT_GROUPS_LIST）
+	ReqMethodAgentGroupsList ReqMethod = "agent_groups.list"
+	// ReqMethodAgentGroupsShow 分组详情（Python AGENT_GROUPS_SHOW）
+	ReqMethodAgentGroupsShow ReqMethod = "agent_groups.show"
+	// ReqMethodAgentGroupsFileList 分组文件树（Python AGENT_GROUPS_FILE_LIST）
+	ReqMethodAgentGroupsFileList ReqMethod = "agent_groups.file.list"
+	// ReqMethodAgentGroupsFileRead 读分组包内文件（Python AGENT_GROUPS_FILE_READ）
+	ReqMethodAgentGroupsFileRead ReqMethod = "agent_groups.file.read"
+	// ReqMethodAgentGroupsCreate 创建分组（Python AGENT_GROUPS_CREATE）
+	ReqMethodAgentGroupsCreate ReqMethod = "agent_groups.create"
+	// ReqMethodAgentGroupsImportLocal 本地导入分组（Python AGENT_GROUPS_IMPORT_LOCAL）
+	ReqMethodAgentGroupsImportLocal ReqMethod = "agent_groups.import_local"
+	// ReqMethodAgentGroupsInstall Hub 安装分组（Python AGENT_GROUPS_INSTALL；本批 D-1 拒绝）
+	ReqMethodAgentGroupsInstall ReqMethod = "agent_groups.install"
+	// ReqMethodAgentGroupsUninstall 卸载分组（Python AGENT_GROUPS_UNINSTALL）
+	ReqMethodAgentGroupsUninstall ReqMethod = "agent_groups.uninstall"
+	// ReqMethodPluginPackagesInstall Hub 安装插件（Python PLUGIN_PACKAGES_INSTALL；D-1 拒绝）
+	ReqMethodPluginPackagesInstall ReqMethod = "plugin_packages.install"
+	// ReqMethodPluginPackagesUninstall 卸载插件（Python PLUGIN_PACKAGES_UNINSTALL）
+	ReqMethodPluginPackagesUninstall ReqMethod = "plugin_packages.uninstall"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史
@@ -759,6 +802,27 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodProjectGetCronSessions,
 		ReqMethodProjectCronResolveBinding,
 		ReqMethodSessionPin,
+		// 扩展设备管理（extension_package_manager.py 本地半区）
+		ReqMethodAgentTemplatesList,
+		ReqMethodAgentTemplatesShow,
+		ReqMethodAgentTemplatesFileList,
+		ReqMethodAgentTemplatesFileRead,
+		ReqMethodAgentTemplatesCreate,
+		ReqMethodAgentTemplatesImportLocal,
+		ReqMethodAgentTemplatesInstall,
+		ReqMethodAgentTemplatesUninstall,
+		ReqMethodAgentTemplatesUpdate,
+		ReqMethodAgentTemplatesDelete,
+		ReqMethodAgentGroupsList,
+		ReqMethodAgentGroupsShow,
+		ReqMethodAgentGroupsFileList,
+		ReqMethodAgentGroupsFileRead,
+		ReqMethodAgentGroupsCreate,
+		ReqMethodAgentGroupsImportLocal,
+		ReqMethodAgentGroupsInstall,
+		ReqMethodAgentGroupsUninstall,
+		ReqMethodPluginPackagesInstall,
+		ReqMethodPluginPackagesUninstall,
 	}
 }
 
