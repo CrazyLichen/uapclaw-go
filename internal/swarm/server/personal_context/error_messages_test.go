@@ -94,7 +94,7 @@ func TestLocalizePayload_原样返回(t *testing.T) {
 		t.Errorf("列表元素应保留")
 	}
 	// Python：key == "message" 且 value 含 "code" 时才整体翻译（error_messages.py:174-175）
-	if list[1] != messages["config_invalid"][1] {
+	if m, ok := list[1].(map[string]any); !ok || m["message"] != messages["config_invalid"][1] {
 		t.Errorf("列表内 map 应递归翻译: %v", list[1])
 	}
 	// 无 message 键时 map 原样保留（Python 无命中分支）
