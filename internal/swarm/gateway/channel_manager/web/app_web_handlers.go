@@ -275,6 +275,18 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	// ─── models 辅助方法 ───
 	wc.registerMethod("models.replace_all", configForwardToAgent(wc, agentClient, "models.replace_all"), false)
 	wc.registerMethod("models.validate", configForwardToAgent(wc, agentClient, "models.validate"), false)
+	// 模型目录资源 RPC（23.4d，Python: _register_config_proxy，个人版恒走 E2A 转发
+	// AgentServer configpanel；app_web_handlers.py:5644-5656）
+	wc.registerMethod("models.get", configForwardToAgent(wc, agentClient, "models.get"), false)
+	wc.registerMethod("models.upsert", configForwardToAgent(wc, agentClient, "models.upsert"), false)
+	wc.registerMethod("models.delete", configForwardToAgent(wc, agentClient, "models.delete"), false)
+	wc.registerMethod("models.references", configForwardToAgent(wc, agentClient, "models.references"), false)
+	wc.registerMethod("model_groups.list", configForwardToAgent(wc, agentClient, "model_groups.list"), false)
+	wc.registerMethod("model_groups.upsert", configForwardToAgent(wc, agentClient, "model_groups.upsert"), false)
+	wc.registerMethod("model_groups.delete", configForwardToAgent(wc, agentClient, "model_groups.delete"), false)
+	wc.registerMethod("session.selection.set", configForwardToAgent(wc, agentClient, "session.selection.set"), false)
+	wc.registerMethod("vendors.list", configForwardToAgent(wc, agentClient, "vendors.list"), false)
+	wc.registerMethod("vendors.fetch_models", configForwardToAgent(wc, agentClient, "vendors.fetch_models"), false)
 
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
