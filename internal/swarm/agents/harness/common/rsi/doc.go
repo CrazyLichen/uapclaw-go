@@ -22,6 +22,8 @@
 //	├── validation_dataset.go   # 数据集装载校验
 //	├── harness_adapter.go      # HARNESS 引擎适配器（契约+build_request）
 //	├── harness_provider.go     # HARNESS 引擎真身 provider
+//	├── filestamp_unix.go       # 文件指纹 ino/ctime（Unix Stat_t）
+//	├── filestamp_windows.go    # 文件指纹 ino/ctime（Windows 退化 0）
 //	├── worker.go               # 单队列 worker（并发=1）
 //	├── materializer.go         # 任务目录物化
 //	├── artifact_files_service.go # 任务文件读取服务

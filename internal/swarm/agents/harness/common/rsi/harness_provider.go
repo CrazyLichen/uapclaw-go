@@ -18,8 +18,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -1159,10 +1157,6 @@ func isResumeMismatch(err error) bool {
 
 // fileStamp 文件指纹（ino/mtime/size；Windows 下 ctime 不可用时退化为 0）。
 func fileStamp(info os.FileInfo) [4]int64 {
-	var ino, ctime int64
-	if st, ok := info.Sys().(*syscall.Stat_t); ok {
-		ino = int64(st.Ino)
-		ctime = st.Ctim.Sec*int64(time.Second) + st.Ctim.Nsec
-	}
+	ino, ctime := fileStampParts(info)
 	return [4]int64{ino, info.ModTime().UnixNano(), ctime, info.Size()}
 }

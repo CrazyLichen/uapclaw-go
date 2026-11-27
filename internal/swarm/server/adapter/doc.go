@@ -66,6 +66,8 @@
 //	├── workspace_file_adapter.go      # 27.8：文件域八 method 短路承接（27-A B2 后含 workspace 面板分发）
 //	├── workspace_panel_zones.go       # 27-A B2：workspace zones（白名单/防穿越/前缀规则）
 //	├── workspace_panel_service.go     # 27-A B2：workspace 面板服务（tree/preview/delete/du）
+//	├── ctime_unix.go                  # fileCTimeMs（Unix Stat_t.Ctim）
+//	├── ctime_windows.go               # fileCTimeMs（Windows 回退 mtime）
 //	├── workspace_panel_adapter.go     # 27-A B2：_handle_workspace 四方法分发
 //	├── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //	├── session_input.go          # 补充输入适配面（QueuedSessionInput/EnqueueBoundSessionInput/两守卫 rail/账本；Python agent_adapter/session_input.py）

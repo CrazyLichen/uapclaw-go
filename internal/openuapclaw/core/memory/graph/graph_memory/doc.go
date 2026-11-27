@@ -9,6 +9,8 @@
 //	├── parse_llm_response.go   # LLM 响应解析（ParseISO/Dict2Relation/ParseAllRelations/ResolveEntities/ParseRelationMerging）
 //	├── postprocess.go          # 后处理函数（ValidateEntitiesEpisodes/CreateEpisode/ProcessRelations/ProcessEntities/ParseRelationUUIDsToRemove）
 //	├── states.go               # 图记忆状态结构（asyncTask/LookupTables/GraphMemUpdate/GraphMemState/PersistToDB 等）
+//	├── signal_unix.go          # SIGINT 重发（Unix Kill）
+//	├── signal_windows.go       # SIGINT 重发（GenerateConsoleCtrlEvent）
 //	├── utils.go                # 消息转换、实体更新、参数组装
 //	└── validate_input.go       # 输入校验函数
 //

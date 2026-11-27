@@ -691,7 +691,7 @@ func BlockKeyboardInterrupt(ctx context.Context) context.CancelFunc {
 		close(done)
 		if received {
 			// 恢复后重新发送中断信号
-			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			_ = resendInterruptSignal()
 		}
 	}
 }

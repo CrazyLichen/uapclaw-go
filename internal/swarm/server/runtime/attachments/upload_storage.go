@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/common/attachmentsafety"
 	sessionlifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
@@ -205,14 +204,6 @@ func isSymlink(fi os.FileInfo) bool {
 	return fi.Mode()&os.ModeSymlink != 0
 }
 
-// statNlink 返回硬链接数；平台不支持时返回 1（跳过单链接校验）。
-func statNlink(fi os.FileInfo) uint64 {
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return st.Nlink
-	}
-	return 1
-}
-
 // min64 返回较小值。
 func min64(a, b int64) int64 {
 	if a < b {
@@ -220,6 +211,3 @@ func min64(a, b int64) int64 {
 	}
 	return b
 }
-
-// syscallStatT 平台 stat 别名（steer_images.sameInode 使用）。
-type syscallStatT = syscall.Stat_t
