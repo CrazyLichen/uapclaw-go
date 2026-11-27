@@ -223,7 +223,7 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 		RunE: runAppCmd,
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
-	cmd.Flags().String("host", "", "监听地址（默认 127.0.0.1）")
+	cmd.Flags().String("host", "", "监听地址（默认 0.0.0.0）")
 	cmd.Flags().Int("port", 0, "监听端口（默认 19000）")
 	cmd.Flags().String("dist", "", "前端产物目录（默认：<数据根>/channels/web/frontend/dist，再回落内嵌资源；对齐 Python --dist）")
 	cmd.Flags().Bool("no-browser", false, "启动后不自动打开浏览器（也可用 UAPCLAW_NO_BROWSER=1）")

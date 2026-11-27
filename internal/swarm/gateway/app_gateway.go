@@ -752,13 +752,14 @@ func connectWithRetry(ctx context.Context, client *routing.AgentClient, maxRetri
 }
 
 // defaultHost 返回 Web 通道的默认监听地址。
-// 优先级：命令行 --host（由 cmd 层写入环境变量）> 环境变量 UAPCLAW_WEB_HOST > 默认 127.0.0.1
-// Python: args.host or os.getenv("WEB_HOST", "127.0.0.1")（app_gateway.py:1807）
+// 优先级：命令行 --host（由 cmd 层写入环境变量）> 环境变量 UAPCLAW_WEB_HOST > 默认 0.0.0.0
+// Python: args.host or os.getenv("WEB_HOST", "127.0.0.1")（app_gateway.py:1807）；
+// host 默认 0.0.0.0（2026-11-27 用户裁决：出厂即局域网可访问，有意偏离 Python 的 127.0.0.1）。
 func defaultHost() string {
 	if v := os.Getenv("UAPCLAW_WEB_HOST"); v != "" {
 		return v
 	}
-	return "127.0.0.1"
+	return "0.0.0.0"
 }
 
 // defaultPort 返回 Web 通道的默认监听端口。

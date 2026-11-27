@@ -130,7 +130,7 @@ func TestDefaultHostPort(t *testing.T) {
 	// 环境变量为空时使用默认值（与 Python 一致：不从 config.yaml 读取）
 	t.Setenv("UAPCLAW_WEB_HOST", "")
 	t.Setenv("UAPCLAW_WEB_PORT", "")
-	assert.Equal(t, "127.0.0.1", defaultHost())
+	assert.Equal(t, "0.0.0.0", defaultHost())
 	assert.Equal(t, 19000, defaultPort())
 }
 
@@ -383,7 +383,7 @@ func TestDefaultHostPort_忽略配置文件(t *testing.T) {
 	t.Setenv("UAPCLAW_WEB_HOST", "")
 	t.Setenv("UAPCLAW_WEB_PORT", "")
 	// 即使配置文件写了 gateway.host/port，也应返回默认值
-	assert.Equal(t, "127.0.0.1", defaultHost())
+	assert.Equal(t, "0.0.0.0", defaultHost())
 	assert.Equal(t, 19000, defaultPort())
 }
 

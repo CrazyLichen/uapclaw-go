@@ -24,7 +24,7 @@ import (
 type WebChannelConfig struct {
 	// Enabled 是否启用
 	Enabled bool
-	// Host 监听地址，默认 "127.0.0.1"
+	// Host 监听地址，默认 "0.0.0.0"（用户裁决偏离 Python 默认 127.0.0.1）
 	Host string
 	// Port 监听端口，默认 19000
 	Port int
@@ -94,8 +94,8 @@ type ConnectHook func(conn *websocket.Conn) error
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// defaultWebHost 默认监听地址
-	defaultWebHost = "127.0.0.1"
+	// defaultWebHost 默认监听地址（用户裁决偏离 Python 默认 127.0.0.1）
+	defaultWebHost = "0.0.0.0"
 	// defaultWebPort 默认监听端口
 	defaultWebPort = 19000
 	// defaultWSPath 默认 WebSocket 路径

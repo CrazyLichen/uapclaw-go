@@ -39,7 +39,7 @@ type RouteConfig struct {
 type GatewayServerConfig struct {
 	// Enabled 是否启用（默认 true）
 	Enabled bool
-	// Host 监听地址（默认 127.0.0.1）
+	// Host 监听地址（默认 0.0.0.0）
 	Host string
 	// Port 监听端口（默认 19001）
 	Port int
@@ -62,11 +62,12 @@ type LocalHandlerFunc = routing.LocalHandlerFunc
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGatewayServerConfig 创建默认配置。
-// 默认值对齐 Python GatewayServerConfig：enabled=true, host="127.0.0.1", port=19001。
+// 端口对齐 Python GatewayServerConfig（enabled=true, port=19001）；
+// host 默认 0.0.0.0（2026-11-27 用户裁决：出厂即局域网可访问，有意偏离 Python 的 127.0.0.1）。
 func NewGatewayServerConfig() *GatewayServerConfig {
 	return &GatewayServerConfig{
 		Enabled: true,
-		Host:    "127.0.0.1",
+		Host:    "0.0.0.0",
 		Port:    19001,
 		Routes:  make(map[string]*RouteConfig),
 	}

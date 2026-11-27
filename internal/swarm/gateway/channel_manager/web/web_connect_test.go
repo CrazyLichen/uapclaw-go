@@ -23,7 +23,7 @@ func TestNewWebChannel_默认配置(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)
 	// 注册 RPC handlers（对齐 Python _register_web_handlers）
 	RegisterWebHandlers(&WebHandlersBindParams{Channel: wc})
-	assert.Equal(t, "127.0.0.1", wc.config.Host)
+	assert.Equal(t, "0.0.0.0", wc.config.Host)
 	assert.Equal(t, 19000, wc.config.Port)
 	assert.Equal(t, "/ws", wc.config.Path)
 	assert.NotNil(t, wc.methodHandlers)

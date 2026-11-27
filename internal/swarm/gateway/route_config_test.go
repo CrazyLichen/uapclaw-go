@@ -15,7 +15,7 @@ import (
 func TestNewGatewayServerConfig_默认值(t *testing.T) {
 	cfg := NewGatewayServerConfig()
 	assert.True(t, cfg.Enabled)
-	assert.Equal(t, "127.0.0.1", cfg.Host)
+	assert.Equal(t, "0.0.0.0", cfg.Host)
 	assert.Equal(t, 19001, cfg.Port)
 	assert.NotNil(t, cfg.Routes)
 	assert.Empty(t, cfg.Routes)
