@@ -475,23 +475,7 @@ ProblemInput（runner 内部视角，输入字段终版·决议 21）{
 
 **断开语义**（代码实证，上游一致）：WS/SSE 断开均**不触发取消**（Go：web_connect.go:210 仅移除连接；Python：web_http_routes.py:773 仅 break）——agentserver 执行不依赖连接存活，工单断开后 workflow 照常跑到挂起/终态并落历史；真正取消必须显式发 `chat.cancel`（intent=cancel）。
 
-### 7.1 WS 方法集与帧协议（全部既有，零新增）
-
-| WS 方法（req.method） | 用途 | 关键 params |
-|---|---|---|
-| `session.create` | 建会话（mode 锁定） | `metadata: {mode: "agent.workflow.diagnosis"}` |
-| `media.persist` | **图片上传落盘·主通道**（前置） | `media_items`（base64）→ res 返回存储记录 `{path, filename, mime_type, size_bytes}`；单张 10MiB×8 张 |
-| `document.persist` | **日志/文档上传落盘·主通道**（前置；含格式黑名单安全检查） | `documents`（base64）→ res 返回存储记录（含 path）；单个 100MiB×8 个 |
-| `file.upload_chunk` | **超大文件分块上传·备选通道**（图片/文档通用，gateway 薄代理原样转发，与 web 前端一致） | 仅当超出 persist 尺寸上限时使用：2MiB/块逐块 `{upload_id, target_rel_path, resolved_path, data, final}`，末块返回 path；`target_rel_path` 按约定 `agent/sessions/<session_id>/uploads/<文件名>` 给出（服务端校验越界+首块同名自动去重，`resolved_path` 为真实路径） |
-| `chat.send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`/`documents`（落盘记录引用）、`problem_id`（可选）、`answers`（可选）；`files` 摘要为 web 前端行为，工单侧不传（workflow 分流不进 BuildUserPrompt，runner 只读 records） |
-| `history.get` | 轮询结果（与事件帧互补的兜底通道） | 增量按记录 id/时间戳幂等 |
-| `chat.cancel` | 真正取消诊断 | `intent: "cancel"` |
-
-帧协议（与 web 前端同一套）：请求帧 `{"type":"req","id":"1","method":"chat.send","params":{...}}` → 响应帧 `{"type":"res","id":"1",...}`；执行过程中的事件（含 ask_user 卡、结论）以 `{"type":"event","event":"chat.ask_user_question","payload":{...}}` 等白名单事件帧推送到**同一连接**——工单不需要轮询即可收到卡载荷，history.get 仅作断线重连后的兜底增量通道。
-
-附件两阶段契约（同 web 前端，**双轨主备**）：主通道 = 图片 `media.persist`、文档 `document.persist` 一次传（限制：WS 单帧 150MiB；文档单个 100MiB×8 个 + 格式黑名单；图片单张 10MiB×8 张；超限回显 `document_errors`，带 `forbidden_formats`）；**备通道** = 超出上述上限的大文件走 `file.upload_chunk` 分块（2MiB/块，无单文件大小上限，末块返回 path）——与 web 前端行为完全一致（web 对超预算大图即在 persist 前自动切分块）。chat.send 一律只引用落盘记录（path），base64 不进 chat.send。
-
-### 7.2 时序图
+### 7.1 时序图
 
 ```mermaid
 sequenceDiagram
@@ -587,7 +571,7 @@ sequenceDiagram
     end
 ```
 
-### 7.3 帧交互示例
+### 7.2 帧交互示例
 
 **① 建会话**
 
@@ -633,7 +617,8 @@ sequenceDiagram
 
 ```
 → {"type":"req","id":"4","method":"chat.send",
-   "params":{"session_id":"web_xxx","query":"推送消息收不到，高峰期必现",
+   "params":{"session_id":"web_xxx","title":"推送消息收不到",
+             "query":"推送消息收不到，高峰期必现",
              "media_items":[{"type":"image","filename":"screenshot.png","path":"/uploads/web_xxx/screenshot.png"}],
              "documents":[{"type":"document","filename":"app.log","path":"/uploads/web_xxx/app.log"}],
              "problem_id":"T-123"}}
@@ -676,7 +661,7 @@ sequenceDiagram
 ```
 
 **语义要点**：
-- **工单与普通聊天同一 WS 逻辑**：同连接/同帧协议/同方法集，仅 agentserver envelope 层 mode 分流不同；
+- **工单与普通聊天同一 WS 逻辑**：同连接/同帧协议/同方法集，仅 agentserver envelope 层 mode 分流不同；方法集与上传限制细节以 §7.1 时序图与 §7.2 帧示例为准（帧协议：req/res/event 三种帧；附件双轨主备：media.persist/document.persist 为主通道，file.upload_chunk 为超限备通道，chat.send 只引用落盘记录）；
 - 事件帧实时推送（挂起卡、结论、chat.final 均推到同一连接）；history.get 为断线重连兜底；
 - **断开不触发取消**（上游 Python/Go 一致，见 §7 开头）：断开后 workflow 继续跑到挂起/终态并落历史；真正取消须显式 `chat.cancel`；
 - "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`（或 event 帧实时可见）；工单不感知内部 state 字段；
