@@ -101,7 +101,6 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode stri
 	return ""
 }
 
-
 // collectMessagesForEvolve 收集当前会话的缓存消息用于演进信号检测。
 // 对齐 Python: _collect_messages_for_evolve(session_id) (L4003-4019)
 //
@@ -135,13 +134,6 @@ func (d *DeepAdapter) collectMessagesForEvolve(sessionID string) []map[string]an
 	}
 	return signal.ParseMessages(rawMessages)
 }
-
-
-
-
-
-
-
 
 // skillBodyVersions 过滤出技能主体归档版本（Python: [a for a in archives if a.startswith("SKILL.v")]）。
 func skillBodyVersions(archives []string) []string {

@@ -675,6 +675,7 @@ func UserFacingGenerationError(message string) string {
 //	Python: 5. persistence_failed → "演进经验保存失败：{message}"（error）
 //	Python: 6. no_evolution_no_records → no_records_output + message 追加（answer）
 //	Python: 7. 其余 → None
+//
 // 返回 {"output","result_type"} 或 nil（evolveResult 形状：{"status","message"}）。
 func EvolutionStatusResponse(evolveResult map[string]any, generationFailedOutput, noRecordsOutput string) map[string]string {
 	if evolveResult == nil {
@@ -716,7 +717,6 @@ func EvolutionStatusResponse(evolveResult map[string]any, generationFailedOutput
 	}
 	return nil
 }
-
 
 // ──────────────────────────── 15.24d Task3：slash 结果前端注记 ────────────────────────────
 

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -74,8 +74,8 @@ func (p EvolutionArchivePair) EvolutionArchiveName() string {
 // Python: to_payload()（archive.py:42-47）。
 func (p EvolutionArchivePair) ToPayload() map[string]string {
 	return map[string]string{
-		"version":          p.Version,
-		"skill_archive":    p.SkillArchiveName(),
+		"version":           p.Version,
+		"skill_archive":     p.SkillArchiveName(),
 		"evolution_archive": p.EvolutionArchiveName(),
 	}
 }

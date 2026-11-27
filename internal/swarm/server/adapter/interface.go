@@ -22,6 +22,8 @@ import (
 // （sessionAdapterCache.entries）以本接口为元素类型，故根与 child 都是
 // 同一个接口的实例，无需额外抽象层。
 type AgentAdapter interface {
+	// UnloadEquipmentIfLoaded 从运行会话卸载已加载的设备包（15.18 unload 半区回收）。
+	UnloadEquipmentIfLoaded(kind, packageID string) error
 	// CreateInstance 初始化底层 SDK Agent。
 	// 启动时调用一次，skill install/uninstall 后再次调用。
 	// agentDefinition 非空时用于声明式 root agent
