@@ -7,11 +7,12 @@ import (
 
 // TestAllReqMethods 验证 AllReqMethods 返回全部枚举值
 // （27.4 新增 14 个配置面板方法 + 27.8 媒体/文件域十常量 + 27-A B2 workspace 四常量：192；
-// 2026-11-27 +10：session.assets+项目控制面 → 203；+20：扩展设备管理 → 223）
+// 2026-11-27 +10：session.assets+项目控制面 → 203；+20：扩展设备管理 → 223；
+// 24.3 +26：personal_context → 249）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 223 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 223", len(methods))
+	if len(methods) != 249 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 249", len(methods))
 	}
 
 	// 验证无重复
@@ -360,6 +361,44 @@ func TestReqMethod_MediaWireValues(t *testing.T) {
 		ReqMethodFileUploadChunk:           "file.upload_chunk",
 		ReqMethodFileReadUploadChunk:       "file.read_upload_chunk",
 		ReqMethodFileDownloadVerifiedChunk: "file.download_verified_chunk",
+	}
+	for m, want := range cases {
+		if string(m) != want {
+			t.Errorf("ReqMethod %q != 期望 wire 值 %q", string(m), want)
+		}
+	}
+}
+
+// TestReqMethod_PersonalContextWireValues 锁定 24.3 personal_context 26 个 method 的 wire 字面值
+// （Python ReqMethod 枚举；run_all/stream_tree 已在 jiuwenswarm gateway 测试 test_app_web_handlers.py:4766/4772 实证）。
+func TestReqMethod_PersonalContextWireValues(t *testing.T) {
+	cases := map[ReqMethod]string{
+		ReqMethodPersonalContextRuntimeStatus:               "personal_context.runtime.status",
+		ReqMethodPersonalContextRuntimeStartCollection:      "personal_context.runtime.start_collection",
+		ReqMethodPersonalContextRuntimeStopCollection:       "personal_context.runtime.stop_collection",
+		ReqMethodPersonalContextRuntimeStartAgentUse:        "personal_context.runtime.start_agent_use",
+		ReqMethodPersonalContextRuntimeStopAgentUse:         "personal_context.runtime.stop_agent_use",
+		ReqMethodPersonalContextRuntimeSetMasterEnabled:     "personal_context.runtime.set_master_enabled",
+		ReqMethodPersonalContextRuntimeGetConfig:            "personal_context.runtime.get_config",
+		ReqMethodPersonalContextRuntimePatchConfig:          "personal_context.runtime.patch_config",
+		ReqMethodPersonalContextRuntimeSelectModel:          "personal_context.runtime.select_model",
+		ReqMethodPersonalContextFetchListServices:           "personal_context.fetch.list_services",
+		ReqMethodPersonalContextFetchCreateService:          "personal_context.fetch.create_service",
+		ReqMethodPersonalContextFetchDeleteService:          "personal_context.fetch.delete_service",
+		ReqMethodPersonalContextFetchPatchService:           "personal_context.fetch.patch_service",
+		ReqMethodPersonalContextFetchStartService:           "personal_context.fetch.start_service",
+		ReqMethodPersonalContextFetchStopService:            "personal_context.fetch.stop_service",
+		ReqMethodPersonalContextFetchRunAll:                 "personal_context.fetch.run_all",
+		ReqMethodPersonalContextFetchRunOne:                 "personal_context.fetch.run_one",
+		ReqMethodPersonalContextFetchStopRun:                "personal_context.fetch.stop_run",
+		ReqMethodPersonalContextFetchGetRunStatus:           "personal_context.fetch.get_run_status",
+		ReqMethodPersonalContextFetchGetAuthorizationStatus: "personal_context.fetch.get_authorization_status",
+		ReqMethodPersonalContextFetchAuthorizeProvider:      "personal_context.fetch.authorize_provider",
+		ReqMethodPersonalContextContextStreamGraph:          "personal_context.context.stream_graph",
+		ReqMethodPersonalContextContextStreamTree:           "personal_context.context.stream_tree",
+		ReqMethodPersonalContextContextSearchPages:          "personal_context.context.search_pages",
+		ReqMethodPersonalContextContextGetNode:              "personal_context.context.get_node",
+		ReqMethodPersonalContextContextGetSource:            "personal_context.context.get_source",
 	}
 	for m, want := range cases {
 		if string(m) != want {
