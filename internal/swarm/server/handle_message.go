@@ -171,6 +171,9 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		schema.ReqMethodProjectGetCronSessions,
 		schema.ReqMethodProjectCronResolveBinding:
 		resp = repositories.HandleProjectRequest(request)
+	// 会话控制面（session_repository.py handle_pin）
+	case schema.ReqMethodSessionPin:
+		resp = repositories.HandleSessionRequest(request)
 	// 配置面板（27.4，Python: config_adapter.py ConfigAdapter.handle 分派）
 	case schema.ReqMethodConfigGet,
 		schema.ReqMethodConfigSet,

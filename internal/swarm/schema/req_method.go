@@ -213,6 +213,11 @@ const (
 	// ReqMethodProjectCronResolveBinding cron 项目绑定解析（Python PROJECT_CRON_RESOLVE_BINDING）
 	ReqMethodProjectCronResolveBinding ReqMethod = "project.cron.resolve_binding"
 
+	// ─── 会话控制面（session_repository.py）───
+
+	// ReqMethodSessionPin 置顶/取消置顶会话（Python SESSION_PIN）
+	ReqMethodSessionPin ReqMethod = "session.pin"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史
@@ -753,6 +758,7 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodProjectGetSessions,
 		ReqMethodProjectGetCronSessions,
 		ReqMethodProjectCronResolveBinding,
+		ReqMethodSessionPin,
 	}
 }
 

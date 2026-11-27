@@ -340,6 +340,10 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
 	}
 
+	// ─── 会话控制面（Python app_web_handlers.py:5694 _session_pin——
+	// E2A 转发 AgentServer 控制面 session_repository handle_pin）───
+	wc.registerMethod("session.pin", configForwardToAgent(wc, agentClient, "session.pin"), false)
+
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)
