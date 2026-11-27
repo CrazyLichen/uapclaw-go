@@ -392,3 +392,349 @@ func TestAsHostError(t *testing.T) {
 }
 
 func testCtx() context.Context { return context.Background() }
+
+// ─────────────── Task 3：Host API 主体（Python host_api.py:758-2061 空态行为） ───────────────
+
+// newTestHost 测试用 Host（home 指向 TempDir，cfgGo nil；注入一个可用默认模型）
+func newTestHost(t *testing.T) *PersonalContextHostAPI {
+	t.Helper()
+	setTestModels(t)
+	return NewPersonalContextHostAPI(t.TempDir(), nil)
+}
+
+// testModel 可用模型条目（model_client_config.model_name 非空，host_api.py:78-87）
+func testModel() map[string]any {
+	return map[string]any{
+		"model_client_config": map[string]any{"model_name": "test-model", "client_provider": "test"},
+		"model_config_obj":    map[string]any{"model": "test-model"},
+	}
+}
+
+// setTestModels 注入默认模型测试桩
+func setTestModels(t *testing.T) {
+	t.Helper()
+	original := defaultModelsFn
+	defaultModelsFn = func() []map[string]any { return []map[string]any{testModel()} }
+	t.Cleanup(func() { defaultModelsFn = original })
+}
+
+// setMasterEnabled 首开：初始配置落盘 + 级联子开关（host_api.py:1240-1267）
+func TestSetMasterEnabled_首开落盘(t *testing.T) {
+	h := newTestHost(t)
+	out, err := h.SetMasterEnabled(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["master_enabled"] != true || out["collection_enabled"] != true || out["agent_use_enabled"] != true {
+		t.Errorf("总开关应级联: %v", out)
+	}
+	stored, herr := readYaml(h.configPath)
+	if herr != nil || stored == nil || stored["master_enabled"] != true {
+		t.Errorf("yaml 应落盘: %v %v", stored, herr)
+	}
+	if h.GetStatus()["state"] != "CONFIGURED" {
+		t.Errorf("状态应 CONFIGURED（空转态，D-24.3-5）: %v", h.GetStatus()["state"])
+	}
+}
+
+// setMasterEnabled 关闭：全部子开关关闭（host_api.py:1259-1261）
+func TestSetMasterEnabled_关闭级联(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	out, err := h.SetMasterEnabled(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["master_enabled"] != false || out["collection_enabled"] != false || out["agent_use_enabled"] != false {
+		t.Errorf("关闭应级联: %v", out)
+	}
+}
+
+// setCollectionEnabled 首开 false 返回未配置投影（host_api.py:1169-1171）
+func TestSetCollectionEnabled_未配置关(t *testing.T) {
+	h := newTestHost(t)
+	out, err := h.SetCollectionEnabled(false)
+	if err != nil || out["configured"] != false {
+		t.Errorf("未配置关闭应返回未配置投影: %v %v", out, err)
+	}
+}
+
+// setAgentUseEnabled 未配置应拒绝（host_api.py:1216-1219）
+func TestSetAgentUseEnabled_未配置拒绝(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SetAgentUseEnabled(true); err == nil || err.Reason != "not_configured" {
+		t.Errorf("应 not_configured: %v", err)
+	}
+}
+
+// patchRuntimeConfig 未知字段拒绝 + 正常修补（host_api.py:1100-1130）
+func TestPatchRuntimeConfig(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.PatchRuntimeConfig(map[string]any{"bogus": 1}); err == nil || err.Reason != "parameter_invalid" {
+		t.Errorf("未知字段应拒绝: %v", err)
+	}
+	out, err := h.PatchRuntimeConfig(map[string]any{"strategy_profile": "balanced"})
+	if err != nil || out["strategy_profile"] != "balanced" {
+		t.Errorf("修补失败: %v %v", out, err)
+	}
+}
+
+// selectModel：非配置态拒绝 / 越界 model_invalid / 正常双写（host_api.py:1132-1160）
+func TestSelectModel(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SelectModel(float64(0)); err == nil || err.Reason != "not_configured" {
+		t.Errorf("未配置应拒绝: %v", err)
+	}
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SelectModel(float64(99)); err == nil || err.Reason != "model_invalid" {
+		t.Errorf("越界应 model_invalid: %v", err)
+	}
+	out, err := h.SelectModel(float64(0))
+	if err != nil || out["model_index"] != float64(0) || out["model_id"] != "test:test-model" {
+		t.Errorf("正常选择失败: %v %v", out, err)
+	}
+}
+
+// getRuntimeConfig 未配置投影 / 配置后投影（host_api.py:1092-1098）
+func TestGetRuntimeConfig(t *testing.T) {
+	h := newTestHost(t)
+	out, err := h.GetRuntimeConfig()
+	if err != nil || out["configured"] != false {
+		t.Errorf("未配置投影失败: %v %v", out, err)
+	}
+	if _, err = h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	out, err = h.GetRuntimeConfig()
+	if err != nil || out["collection_enabled"] != true {
+		t.Errorf("配置后应返回投影（configured 键属 get_overview，get_runtime_config 无此键，Python host_api.py:1092-1098）: %v %v", out, err)
+	}
+}
+
+// fetch services CRUD：rss 正常建 / github 未授权拒 / 重复拒 / 删除 / patch（host_api.py:1301-1600）
+func TestFetchServicesCRUD(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	rss := map[string]any{"service_id": "rss-1", "provider": "rss_feed", "source": map[string]any{"feed_url": "https://example.com/feed"}}
+	created, err := h.CreateFetchService(rss)
+	if err != nil || created["service_id"] != "rss-1" {
+		t.Fatalf("rss 建源失败: %v %v", created, err)
+	}
+	if _, hasCreds := created["credentials"]; hasCreds {
+		t.Errorf("投影不应带 credentials")
+	}
+	gh := map[string]any{"service_id": "gh-1", "provider": "github", "source": map[string]any{"owner": "o", "repo": "r"}, "credentials": map[string]any{"token": "x"}}
+	if _, err = h.CreateFetchService(gh); err == nil || err.Reason != "credentials_invalid" {
+		t.Errorf("github 自带凭据应拒（host_api.py:1353-1357）: %v", err)
+	}
+	gh2 := map[string]any{"service_id": "gh-1", "provider": "github", "source": map[string]any{"owner": "o", "repo": "r"}}
+	if _, err = h.CreateFetchService(gh2); err == nil || err.Reason != "authorization_required" {
+		t.Errorf("github 未授权应拒（host_api.py:1364-1368）: %v", err)
+	}
+	if _, err = h.CreateFetchService(rss); err == nil || err.Reason != "duplicate_service" {
+		t.Errorf("重复 id 应拒: %v", err)
+	}
+	list, err := h.ListFetchServices()
+	if err != nil || len(list) != 1 {
+		t.Errorf("列表应 1 项: %v %v", list, err)
+	}
+	patched, err := h.PatchFetchService("rss-1", map[string]any{"interval_seconds": float64(600)})
+	if err != nil || patched["interval_seconds"] != float64(600) {
+		t.Errorf("patch 失败: %v %v", patched, err)
+	}
+	if _, err = h.PatchFetchService("nope", map[string]any{}); err == nil || err.Reason != "unknown_service" {
+		t.Errorf("未知源 patch 应拒: %v", err)
+	}
+	if err = h.DeleteFetchService("rss-1"); err != nil {
+		t.Errorf("删除失败: %v", err)
+	}
+	if err = h.DeleteFetchService("rss-1"); err == nil || err.Reason != "unknown_service" {
+		t.Errorf("重复删除应拒: %v", err)
+	}
+	if err = h.DeleteFetchService(" "); err == nil || err.Reason != "parameter_invalid" {
+		t.Errorf("空白 id 应拒: %v", err)
+	}
+}
+
+// setFetchServiceEnabled：正常置位往返（host_api.py:1628-1674）
+func TestSetFetchServiceEnabled(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	rss := map[string]any{"service_id": "rss-1", "provider": "rss_feed", "source": map[string]any{"feed_url": "https://e.com/f"}}
+	if _, err := h.CreateFetchService(rss); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SetFetchServiceEnabled("rss-1", false); err != nil {
+		t.Errorf("置位失败: %v", err)
+	}
+	list, _ := h.ListFetchServices()
+	if list[0]["enabled"] != false {
+		t.Errorf("enabled 应落盘: %v", list[0])
+	}
+	if err := h.SetFetchServiceEnabled("nope", true); err == nil || err.Reason != "unknown_service" {
+		t.Errorf("未知源应拒: %v", err)
+	}
+}
+
+// run 类空态：run_fetch state_invalid / stop_run ok / get_run_status 空（host_api.py:1602-1706）
+func TestRun类空态(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.RunFetch(nil); err == nil || err.Reason != "not_configured" {
+		t.Errorf("未配置 run 应 not_configured: %v", err)
+	}
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	// master 开启后 collection_enabled=true，Core 缺席 → Python 走 Core 非 RUNNING 错误（无 reason 覆盖）
+	if _, err := h.RunFetch(nil); err == nil || err.Reason != "state_invalid" {
+		t.Errorf("运行时未就绪 run 应 state_invalid: %v", err)
+	}
+	// 关闭采集后补 collection_disabled 分支（host_api.py:1690-1691）
+	if _, err := h.SetCollectionEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.RunFetch(nil); err == nil || err.Reason != "collection_disabled" {
+		t.Errorf("采集关闭 run 应 collection_disabled: %v", err)
+	}
+	out, err := h.StopFetchRun("x")
+	if err != nil || out["ok"] != true {
+		t.Errorf("stop_run 空态应 ok: %v %v", out, err)
+	}
+	out2, err := h.GetFetchRunStatus(nil, nil)
+	if err != nil || len(out2["services"].([]any)) != 0 {
+		t.Errorf("get_run_status 应空: %v %v", out2, err)
+	}
+	if _, err = h.GetFetchRunStatus("", nil); err == nil {
+		t.Errorf("空 service_id 应拒")
+	}
+}
+
+// context 查询族空态：统一 state_invalid（host_api.py:1708-1741）
+func TestContext查询族空态(t *testing.T) {
+	h := newTestHost(t)
+	for name, fn := range map[string]func() *HostError{
+		"get_graph":      func() *HostError { _, e := h.GetGraph(nil, 3); return e },
+		"get_tree":       func() *HostError { _, e := h.GetTree(nil, 3); return e },
+		"search":         func() *HostError { _, e := h.SearchGraph("q"); return e },
+		"get_graph_page": func() *HostError { _, e := h.GetGraphPage("n"); return e },
+		"get_source":     func() *HostError { _, e := h.GetSource("s"); return e },
+	} {
+		err := fn()
+		if err == nil || err.Reason != "state_invalid" {
+			t.Errorf("%s 空态应 state_invalid: %v", name, err)
+		}
+	}
+}
+
+// 授权族空态（host_api.py:1743-1957，D-24.3-4）
+func Test授权族空态(t *testing.T) {
+	h := newTestHost(t)
+	if _, err := h.GetAuthorizationStatus(" "); err == nil {
+		t.Errorf("空 provider 应拒")
+	}
+	out, err := h.GetAuthorizationStatus("github")
+	if err != nil || out["state"] != "not_authorized" {
+		t.Errorf("未配置 github 应 not_authorized: %v %v", out, err)
+	}
+	if _, err = h.GetAuthorizationStatus("rss_feed"); err == nil || err.Reason != "authorization_unsupported" {
+		t.Errorf("rss_feed 应不支持授权: %v", err)
+	}
+	if _, err = h.GetAuthorizationStatus("feishu"); err == nil || err.Reason != "not_configured" {
+		t.Errorf("未配置 feishu 应 not_configured: %v", err)
+	}
+	if _, err = h.AuthorizeProvider("github", map[string]any{"pat": "x"}, false); err == nil {
+		t.Errorf("github 字段名错应拒（须 token）")
+	}
+	if _, err = h.AuthorizeProvider("github", map[string]any{"token": " "}, false); err == nil {
+		t.Errorf("空白 token 应拒")
+	}
+	out, err = h.AuthorizeProvider("github", map[string]any{"token": "good"}, false)
+	if err != nil || out["state"] != "not_authorized" {
+		t.Errorf("D-24.3-4：表单通过后应返回未授权空态: %v %v", out, err)
+	}
+	if _, err = h.AuthorizeProvider("feishu", map[string]any{"token": "x"}, false); err == nil {
+		t.Errorf("feishu 不应接受 credentials")
+	}
+	if _, err = h.AuthorizeProvider("rss_feed", nil, false); err == nil {
+		t.Errorf("rss_feed 应拒绝授权")
+	}
+}
+
+// start/isRuntimeEnabled/stop 生命周期（host_api.py:1959-2034）
+func TestStart生命周期(t *testing.T) {
+	h := newTestHost(t)
+	if err := h.Start(); err != nil {
+		t.Fatalf("无配置 start 应无错返回: %v", err)
+	}
+	if h.GetStatus()["state"] != "CREATED" {
+		t.Errorf("无配置状态 CREATED: %v", h.GetStatus())
+	}
+	if _, err := h.SetMasterEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if h.GetStatus()["state"] != "RUNNING" {
+		t.Errorf("开启后 start 应 RUNNING（空转态标记，D-24.3-5）: %v", h.GetStatus())
+	}
+	if !h.IsRuntimeEnabled() {
+		t.Errorf("agent_use_enabled 应 true")
+	}
+	if err := h.Stop(0); err == nil || err.StatusName != "CONTEXT_PROACTIVE_RUNTIME_TIMEOUT" {
+		t.Errorf("超时 0 应拒: %v", err)
+	}
+	if err := h.Stop(1); err != nil {
+		t.Errorf("stop 失败: %v", err)
+	}
+	if h.GetStatus()["state"] != "CONFIGURED" {
+		t.Errorf("stop 后应 CONFIGURED")
+	}
+}
+
+// configure + 重启加载：yaml 持久化往返（host_api.py:802-809 + 1959-1979）
+func TestConfigure与重启加载(t *testing.T) {
+	home := t.TempDir()
+	h := NewPersonalContextHostAPI(home, nil)
+	stored := map[string]any{
+		"master_enabled": true, "collection_enabled": true, "agent_use_enabled": false,
+		"strategy_profile": "rules", "fetch_services": []any{},
+		"provider_credentials": map[string]any{},
+	}
+	if err := h.Configure(stored); err != nil {
+		t.Fatalf("configure 失败: %v", err)
+	}
+	// 新实例模拟重启：从 yaml 加载
+	h2 := NewPersonalContextHostAPI(home, nil)
+	if err := h2.Start(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := h2.GetRuntimeConfig()
+	if err != nil || out["collection_enabled"] != true {
+		t.Errorf("重启加载失败: %v %v", out, err)
+	}
+}
+
+// get_overview 结构（host_api.py:1074-1090）
+func TestGetOverview(t *testing.T) {
+	h := newTestHost(t)
+	out, err := h.GetOverview()
+	if err != nil || out["configured"] != false {
+		t.Errorf("未配置 overview: %v %v", out, err)
+	}
+	status := out["status"].(map[string]any)
+	if status["state"] != "CREATED" {
+		t.Errorf("overview status.state 应 CREATED: %v", status)
+	}
+}

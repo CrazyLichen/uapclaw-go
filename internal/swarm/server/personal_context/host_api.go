@@ -35,10 +35,14 @@ import (
 type PersonalContextHostAPI struct {
 	// home 配置文件所在目录（Python self._home，host_api.py:761）
 	home string
+	// configPath 配置文件完整路径（Python self._config_path，host_api.py:763）
+	configPath string
 	// core Core 委托面（Python self._personal_context；本批恒 nil，24.3a 注入）
 	core coreRuntime
-	// mu 操作互斥锁（Python self._operation_lock asyncio.Lock，D-24.3-1）
+	// mu 操作互斥锁（Python self._operation_lock asyncio.Lock，host_api.py:767，D-24.3-1）
 	mu mutex
+	// fetchRunStopLock 采集停止独立锁（Python self._fetch_run_stop_lock，host_api.py:768）
+	fetchRunStopLock mutex
 	// storedConfig 已加载的存储配置（Python self._stored_config；nil=未配置）
 	storedConfig map[string]any
 	// coreConfig Core 配置（Python self._config；Core 未迁恒 nil，D-24.3-2）
@@ -93,11 +97,16 @@ const directoryCapacityDefaultsMaxSubdirectories = 20
 
 // NewPersonalContextHostAPI 创建 Host API（Python __init__，host_api.py:761-770）。
 func NewPersonalContextHostAPI(home string, cfg *config.Config) *PersonalContextHostAPI {
-	// Python __init__ 仅存 home 与 core 占位；error_language 在首次读取时刷新（host_api.py:761-770）
+	// Python Path(home).expanduser().resolve()（host_api.py:762-763）；Go 以 Abs 近似
+	absHome, absErr := filepath.Abs(home)
+	if absErr != nil {
+		absHome = home
+	}
 	h := &PersonalContextHostAPI{
-		home:    home,
-		cfgGo:   cfg,
-		errLang: "cn",
+		home:       absHome,
+		configPath: filepath.Join(absHome, configFilename),
+		cfgGo:      cfg,
+		errLang:    "zh",
 	}
 	h.refreshErrorLanguage()
 	return h
@@ -516,19 +525,6 @@ func readYaml(path string) (map[string]any, *HostError) {
 	return loaded.(map[string]any), nil
 }
 
-// isRuntimeActive 运行时是否活跃（host_api.py:443-444；D-24.3-5：Core Status 未迁，
-// 空转态由 Host.started 近似表达，⤴️ 24.3a 替换为 Core Status 读取）
-func isRuntimeActive(h *PersonalContextHostAPI) bool {
-	// Python: getattr(status, "state", None) in {"STARTING", "RUNNING"}
-	return false
-}
-
-// hasActiveFetch 是否有采集轮在跑（host_api.py:447-467；Core Status 未迁恒 false，⤴️ 24.3a）
-func hasActiveFetch(h *PersonalContextHostAPI, serviceID string) bool {
-	// Python: fetch_run_progress[*].run_state in {"running", "stopping"}
-	return false
-}
-
 // resolveModelReference 解析模型下标为 (client, request) 引用（host_api.py:470-502）
 func resolveModelReference(models []map[string]any, modelIndex any) (map[string]any, map[string]any, *HostError) {
 	idx, ok := toInt(modelIndex)
@@ -832,7 +828,7 @@ func yamlUnmarshal(payload []byte) (any, error) {
 	return out, nil
 }
 
-// ──────────────────────────── 导出方法（Python 类方法，Task 3 续写） ────────────────────────────
+// ──────────────────────────── 导出方法（Python 类方法，host_api.py:758-2061 同序） ────────────────────────────
 
 // ErrorLanguage 当前错误语言（Python error_language property，host_api.py:772-774）
 func (h *PersonalContextHostAPI) ErrorLanguage() string {
@@ -845,14 +841,1038 @@ func (h *PersonalContextHostAPI) refreshErrorLanguage() {
 	if h.cfgGo == nil {
 		return
 	}
-	lang := asString(h.cfgGo.Get("language"))
-	if lang != "" {
-		h.errLang = lang
+	language := h.cfgGo.Get("preferred_language") // host_api.py:780
+	if lv, ok := language.(string); ok && lv == "en" {
+		h.errLang = "en"
+	} else {
+		h.errLang = "zh" // Python: "en" if language == "en" else "zh"（host_api.py:784）
 	}
 }
 
-// defaultModels 默认模型列表（Python get_default_models() 全局调用点，host_api.py:114/128/143 等；
-// D-24.3-6：Go 无全局，统一走 config.GetDefaultModels(nil) 加载默认 config.yaml）
-func defaultModels() []map[string]any {
+// LocalizeErrorMethod 便捷本地化（Python localize_error 方法，host_api.py:786-787）
+func (h *PersonalContextHostAPI) LocalizeErrorMethod(err error) string {
+	return LocalizeError(err, h.errLang, "")
+}
+
+// refreshEmbeddingConfiguration 刷新 embedding 配置（Python _refresh_embedding_configuration，
+// host_api.py:789-796；Core 委托点 _set_embedding_configuration——Core nil 时跳过）
+func (h *PersonalContextHostAPI) refreshEmbeddingConfiguration() {
+	modelName, baseURL, apiKey := globalEmbeddingValues(h.cfgGo)
+	_ = modelName
+	_ = baseURL
+	_ = apiKey
+	// Python: self._personal_context._set_embedding_configuration(...)（host_api.py:792-796）
+}
+
+// startCollectionWithEmbedding 启动采集（Python _start_collection_with_embedding，host_api.py:798-800）
+func (h *PersonalContextHostAPI) startCollectionWithEmbedding() *HostError {
+	h.refreshEmbeddingConfiguration()
+	// Python: await self._personal_context.start_collection()；Core nil 空转态跳过（D-24.3-5）
+	return nil
+}
+
+// Configure 校验、保存并应用完整配置（Python configure，host_api.py:802-809）
+func (h *PersonalContextHostAPI) Configure(stored map[string]any) *HostError {
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return herr
+	}
+	payload, herr := serializeConfig(prepared)
+	if herr != nil {
+		return herr
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.applyConfigurationLocked(prepared, prepared, payload, false, nil, "")
+}
+
+// applyConfigurationLocked 持锁应用完整配置（Python _apply_configuration_locked，host_api.py:811-993）。
+// D-24.3-5：全部 Core 委托点（snapshot/deactivate/set_configuration/activate/stop_*）在 core==nil
+// 时按空转态跳过；knownPreviousActive/knownStatus/guardServiceID 对齐 Python 关键字参数。
+func (h *PersonalContextHostAPI) applyConfigurationLocked(candidate map[string]any, stored map[string]any, payload []byte, knownPreviousActive bool, knownStatus map[string]any, guardServiceID string) *HostError {
+	previous := h.coreConfig
+	previousStored := h.storedConfig
+	sameConfiguration := previous != nil && configsEquivalent(previous.(map[string]any), candidate)
+
+	previousActive := false
+	hasActiveFetch := false
+	status := knownStatus
+	if previous != nil {
+		if knownStatus != nil {
+			previousActive = statusIsActive(knownStatus)
+			hasActiveFetch = statusHasActiveFetch(knownStatus, guardServiceID)
+		} else {
+			previousActive = knownPreviousActive
+		}
+	}
+	shutdownPending := previousActive || hasActiveFetch
+	if sameConfiguration {
+		// Python: previous_active or has_active_fetch or pipeline_running or state==STOPPING
+		// （host_api.py:854-858）；空转态 status 由 statusSnapshot 提供等价字段
+		prevStatus := status
+		if prevStatus == nil && h.core == nil {
+			prevStatus = h.statusSnapshotLocked()
+		}
+		if boolOr(prevStatus["pipeline_running"]) || asString(prevStatus["state"]) == "STOPPING" {
+			shutdownPending = true
+		}
+	}
+	sameRuntimeConfiguration := sameConfiguration && previousActive == boolOr(candidate["collection_enabled"])
+	if sameRuntimeConfiguration && (boolOr(candidate["collection_enabled"]) || !shutdownPending) {
+		if herr := publishYaml(h.configPath, payload); herr != nil {
+			return herr
+		}
+		h.storedConfig = deepCopyMap(stored)
+		return nil
+	}
+
+	temporary, herr := stageYaml(h.configPath, payload)
+	if herr != nil {
+		return herr
+	}
+	disabling := previous != nil && !boolOr(candidate["collection_enabled"]) &&
+		(boolOr(previous.(map[string]any)["collection_enabled"]) || (sameConfiguration && shutdownPending))
+
+	// 运行中的采集轮不得被配置更新静默取消（host_api.py:874-885）
+	if previousActive && hasActiveFetch && !disabling {
+		cleanupTemporary(temporary)
+		return raiseHostError("A fetch task is running", "CONTEXT_PROACTIVE_STATE_INVALID", nil, "service_running")
+	}
+	disabledYamlPublished := false
+	rollbackRuntime := false
+	phase := "stop"
+	applyErr := func() (ret *HostError) {
+		defer func() { cleanupTemporary(temporary) }() // Python finally（host_api.py:992-993）
+		if disabling {
+			phase = "replace"
+			// 只发布停止期间生效的开关位（host_api.py:892-902）
+			stoppingStored := deepCopyMap(previousStored)
+			stoppingStored["collection_enabled"] = false
+			if !boolOr(candidate["agent_use_enabled"]) {
+				stoppingStored["agent_use_enabled"] = false
+			}
+			preparedStopping, herr := prepareStoredConfig(stoppingStored, defaultModels())
+			if herr != nil {
+				return herr
+			}
+			payloadStopping, serr := serializeConfig(preparedStopping)
+			if serr != nil {
+				return serr
+			}
+			if herr = publishYaml(h.configPath, payloadStopping); herr != nil {
+				return herr
+			}
+			disabledYamlPublished = true
+			h.coreConfig = preparedStopping
+			h.storedConfig = preparedStopping
+		}
+		if previous != nil {
+			phase = "stop"
+			rollbackRuntime = true
+			// Python host_api.py:904-916 Core stop/deactivate 委托——空转态跳过（D-24.3-5）
+		}
+		phase = "set"
+		rollbackRuntime = true
+		// Python: set_configuration(candidate)（host_api.py:920）——空转态跳过
+		if boolOr(candidate["collection_enabled"]) {
+			phase = "activate"
+			h.refreshEmbeddingConfiguration()
+			// Python: activate_runtime()（host_api.py:925）——空转态跳过
+		}
+		phase = "replace"
+		if temporary == "" {
+			return raiseHostError("PersonalContext configuration staging failed", "", nil, "config_file_error")
+		}
+		if herr := replaceYaml(temporary, h.configPath); herr != nil {
+			return herr
+		}
+		temporary = ""
+		h.coreConfig = candidate
+		h.storedConfig = deepCopyMap(stored)
+		return nil
+	}()
+	if applyErr != nil {
+		if disabledYamlPublished && phase == "stop" {
+			return asHostError(applyErr, "PersonalContext runtime could not be stopped", "", "")
+		}
+		var rollbackError *HostError
+		if rollbackRuntime || disabledYamlPublished {
+			if herr := h.restorePreviousLocked(previous, previousStored, previousActive); herr != nil {
+				rollbackError = herr
+			}
+		}
+		if disabledYamlPublished && previousStored != nil {
+			payloadPrev, serr := serializeConfig(previousStored)
+			if serr != nil {
+				rollbackError = rollbackErrorOr(rollbackError, serr)
+			} else if herr := publishYaml(h.configPath, payloadPrev); herr != nil {
+				rollbackError = rollbackErrorOr(rollbackError, herr)
+			}
+		}
+		if rollbackError != nil {
+			return asHostError(rollbackError, "PersonalContext previous configuration could not be restored", "", "")
+		}
+		if phase == "set" {
+			return asHostError(applyErr, "PersonalContext configuration could not be applied", "CONTEXT_PROACTIVE_CONFIG_INVALID", "")
+		}
+		if phase == "activate" {
+			return asHostError(applyErr, "PersonalContext runtime could not be started", "", "")
+		}
+		if phase == "replace" {
+			return asHostError(applyErr, "PersonalContext configuration file could not be replaced", "CONTEXT_PROACTIVE_FILE_EXECUTION_ERROR", "config_file_error")
+		}
+		return asHostError(applyErr, "PersonalContext previous runtime could not be stopped", "", "")
+	}
+	return nil
+}
+
+// applyLiveUpdateLocked 原子耦合一次热更新与其完整 YAML 快照（Python _apply_live_update_locked，
+// host_api.py:995-1073）。apply/rollback 为 Core 委托闭包——空转态 Core nil 时仍按序执行
+// 发布/回滚半区（D-24.3-5：闭包内 Core 调用由调用方以 nil 安全闭包传入）。
+func (h *PersonalContextHostAPI) applyLiveUpdateLocked(candidate map[string]any, stored map[string]any, payload []byte, apply func() *HostError, rollback func() *HostError, publishBeforeApply bool, preserveDisabledIntent bool) *HostError {
+	if h.storedConfig == nil {
+		return raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	previousPayload, serr := serializeConfig(h.storedConfig)
+	if serr != nil {
+		return serr
+	}
+	temporary, herr := stageYaml(h.configPath, payload)
+	if herr != nil {
+		return herr
+	}
+	published := false
+	applyStarted := false
+	applyErr := func() (ret *HostError) {
+		defer func() { cleanupTemporary(temporary) }() // Python finally（host_api.py:1071-1072）
+		if publishBeforeApply {
+			if temporary == "" {
+				return raiseHostError("PersonalContext configuration staging failed", "", nil, "config_file_error")
+			}
+			if herr := replaceYaml(temporary, h.configPath); herr != nil {
+				return herr
+			}
+			temporary = ""
+			published = true
+			if preserveDisabledIntent {
+				h.coreConfig = candidate
+				h.storedConfig = deepCopyMap(stored)
+			}
+		}
+		applyStarted = true
+		if herr := apply(); herr != nil {
+			return herr
+		}
+		if !published {
+			if temporary == "" {
+				return raiseHostError("PersonalContext configuration staging failed", "", nil, "config_file_error")
+			}
+			if herr := replaceYaml(temporary, h.configPath); herr != nil {
+				return herr
+			}
+			temporary = ""
+			published = true
+		}
+		h.coreConfig = candidate
+		h.storedConfig = deepCopyMap(stored)
+		return nil
+	}()
+	if applyErr != nil {
+		if preserveDisabledIntent && published {
+			return asHostError(applyErr, "PersonalContext runtime could not be stopped", "", "")
+		}
+		var rollbackError *HostError
+		if applyStarted {
+			if herr := rollback(); herr != nil {
+				rollbackError = herr
+			}
+		}
+		if published {
+			if herr := publishYaml(h.configPath, previousPayload); herr != nil {
+				rollbackError = rollbackErrorOr(rollbackError, herr)
+			}
+		}
+		if rollbackError != nil {
+			return asHostError(rollbackError, "PersonalContext previous live configuration could not be restored", "", "")
+		}
+		return asHostError(applyErr, "PersonalContext live configuration could not be applied", "", "")
+	}
+	return nil
+}
+
+// GetOverview 返回完整配置与 Core 状态的一致快照（Python get_overview，host_api.py:1074-1090）
+func (h *PersonalContextHostAPI) GetOverview() (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var configAny any
+	if h.storedConfig != nil {
+		projected, herr := projectStoredConfig(h.storedConfig)
+		if herr != nil {
+			return nil, herr
+		}
+		configAny = projected
+	}
+	return map[string]any{
+		"configured": h.storedConfig != nil,
+		"config":     configAny,
+		"status":     LocalizePayload(h.statusSnapshotLocked(), h.errLang),
+	}, nil
+}
+
+// GetRuntimeConfig 返回完整持久化配置（Python get_runtime_config，host_api.py:1092-1098）
+func (h *PersonalContextHostAPI) GetRuntimeConfig() (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return unconfiguredProjection(defaultModels()), nil
+	}
+	return projectStoredConfig(h.storedConfig)
+}
+
+// PatchRuntimeConfig 原子修补允许的运行时配置字段（Python patch_runtime_config，host_api.py:1100-1130）
+func (h *PersonalContextHostAPI) PatchRuntimeConfig(patch map[string]any) (map[string]any, *HostError) {
+	if patch == nil {
+		return nil, raiseHostError("patch must be an object", "", nil, "parameter_invalid")
+	}
+	allowed := map[string]bool{"collection_enabled": true, "agent_use_enabled": true, "strategy_profile": true}
+	for key := range patch {
+		if !allowed[key] {
+			return nil, raiseHostError("runtime patch contains unsupported fields", "", nil, "parameter_invalid")
+		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return nil, raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	stored := deepCopyMap(h.storedConfig)
+	for key, value := range deepCopyMap(patch) {
+		stored[key] = value
+	}
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if herr = h.applyConfigurationLocked(prepared, prepared, payload, false, nil, ""); herr != nil {
+		return nil, herr
+	}
+	return projectStoredConfig(prepared)
+}
+
+// SelectModel 按 models.list 下标选择模型（Python select_model，host_api.py:1132-1160）
+func (h *PersonalContextHostAPI) SelectModel(modelIndex any) (map[string]any, *HostError) {
+	idx, ok := toInt(modelIndex)
+	if !ok || idx < 0 {
+		return nil, raiseHostError("model_index must be a non-negative integer", "", nil, "parameter_invalid")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return nil, raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	models := defaultModels()
+	// 校验放锁内：显式选择必须拦截，_reconcile_model_selection 会静默回退（host_api.py:1144-1150）
+	if modelIndexIsUsable(models, idx) < 0 {
+		return nil, raiseHostError("selected JiuwenSwarm model no longer exists", "", nil, "model_invalid")
+	}
+	stored := deepCopyMap(h.storedConfig)
+	stored["model_index"] = idx
+	stored["model_id"] = modelEntryID(models[idx])
+	prepared, herr := prepareStoredConfig(stored, models)
+	if herr != nil {
+		return nil, herr
+	}
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if herr = h.applyConfigurationLocked(prepared, prepared, payload, false, nil, ""); herr != nil {
+		return nil, herr
+	}
+	return projectStoredConfig(prepared)
+}
+
+// SetCollectionEnabled 持久化并应用采集开关（Python set_collection_enabled，host_api.py:1162-1208）
+func (h *PersonalContextHostAPI) SetCollectionEnabled(enabled bool) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	firstStart := h.storedConfig == nil
+	var stored map[string]any
+	if h.storedConfig == nil {
+		if !enabled {
+			return unconfiguredProjection(defaultModels()), nil
+		}
+		stored = initialStoredConfig(defaultModels(), true)
+	} else {
+		stored = deepCopyMap(h.storedConfig)
+	}
+	stored["collection_enabled"] = enabled
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if firstStart {
+		if herr = h.applyConfigurationLocked(prepared, prepared, payload, false, nil, ""); herr != nil {
+			return nil, herr
+		}
+	} else {
+		// Python host_api.py:1184-1206：apply/rollback 闭包二选一，publish/preserve 随 enabled 反转
+		apply := func() *HostError {
+			if enabled {
+				return h.startCollectionWithEmbedding()
+			}
+			return nil // Python: stop_collection——空转态跳过（D-24.3-5）
+		}
+		rollback := func() *HostError {
+			if enabled {
+				return nil
+			}
+			return h.startCollectionWithEmbedding()
+		}
+		if herr = h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, !enabled, !enabled); herr != nil {
+			return nil, herr
+		}
+	}
+	return projectStoredConfig(prepared)
+}
+
+// SetAgentUseEnabled 持久化智能体使用开关（Python set_agent_use_enabled，host_api.py:1210-1238）
+func (h *PersonalContextHostAPI) SetAgentUseEnabled(enabled bool) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return nil, raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	stored := deepCopyMap(h.storedConfig)
+	stored["agent_use_enabled"] = enabled
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	apply := func() *HostError { return nil } // Python start/stop_agent_use——空转态跳过
+	rollback := func() *HostError { return nil }
+	if herr = h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, false, false); herr != nil {
+		return nil, herr
+	}
+	return projectStoredConfig(prepared)
+}
+
+// SetMasterEnabled 持久化并应用总开关，级联两个子开关（Python set_master_enabled，host_api.py:1240-1299）
+func (h *PersonalContextHostAPI) SetMasterEnabled(enabled bool) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if enabled && !boolOr(h.storedConfig["master_enabled"]) {
+		h.refreshErrorLanguage() // Python host_api.py:1250-1251
+	}
+	firstStart := h.storedConfig == nil
+	var stored map[string]any
+	if h.storedConfig == nil {
+		if !enabled {
+			return unconfiguredProjection(defaultModels()), nil
+		}
+		stored = initialStoredConfig(defaultModels(), true)
+	} else {
+		stored = deepCopyMap(h.storedConfig)
+	}
+	stored["master_enabled"] = enabled
+	stored["collection_enabled"] = enabled
+	stored["agent_use_enabled"] = enabled
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if firstStart {
+		if herr = h.applyConfigurationLocked(prepared, prepared, payload, false, nil, ""); herr != nil {
+			return nil, herr
+		}
+		if enabled {
+			// Python: start_agent_use()（host_api.py:1267）——空转态跳过
+		}
+	} else {
+		// Python apply_master/rollback_master 闭包（host_api.py:1270-1288）——空转态 Core 调用跳过
+		apply := func() *HostError {
+			if enabled {
+				return h.startCollectionWithEmbedding()
+			}
+			return nil
+		}
+		rollback := func() *HostError {
+			if enabled {
+				return nil
+			}
+			return h.startCollectionWithEmbedding()
+		}
+		if herr = h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, !enabled, !enabled); herr != nil {
+			return nil, herr
+		}
+	}
+	return projectStoredConfig(prepared)
+}
+
+// ListFetchServices 返回全部固定采集源配置（Python list_fetch_services，host_api.py:1301-1310）
+func (h *PersonalContextHostAPI) ListFetchServices() ([]map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return []map[string]any{}, nil
+	}
+	services, _ := h.storedConfig["fetch_services"].([]any)
+	out := make([]map[string]any, 0, len(services))
+	for _, item := range services {
+		if service, ok := item.(map[string]any); ok {
+			out = append(out, projectService(service))
+		}
+	}
+	return out, nil
+}
+
+// CreateFetchService 校验、持久化并应用一个新采集源（Python create_fetch_service，host_api.py:1312-1406）
+func (h *PersonalContextHostAPI) CreateFetchService(service map[string]any) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return nil, raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	if service == nil {
+		return nil, raiseHostError("service must be an object", "", nil, "parameter_invalid")
+	}
+	if herr := validateServiceIntegers(service); herr != nil {
+		return nil, herr
+	}
+	stored := deepCopyMap(h.storedConfig)
+	services, _ := stored["fetch_services"].([]any)
+	existingIDs := map[string]bool{}
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok {
+			existingIDs[asString(m["service_id"])] = true
+		}
+	}
+	serviceID := service["service_id"]
+	normalizedID := ""
+	if id, ok := serviceID.(string); ok {
+		normalizedID = strings.TrimSpace(id)
+	}
+	if normalizedID != "" && existingIDs[normalizedID] {
+		return nil, raiseHostError("PersonalContext fetch service already exists", "", nil, "duplicate_service")
+	}
+	provider := service["provider"]
+	normalizedProvider := ""
+	if p, ok := provider.(string); ok {
+		normalizedProvider = strings.ToLower(strings.TrimSpace(p))
+	}
+	if normalizedProvider != "" {
+		count := 0
+		for _, item := range services {
+			if m, ok := item.(map[string]any); ok && asString(m["provider"]) == normalizedProvider {
+				count++
+			}
+		}
+		if count >= 20 {
+			return nil, raiseHostError(normalizedProvider+" fetch service limit of 20 has been reached", "", nil, "service_limit")
+		}
+	}
+	internalService := deepCopyMap(service)
+	if _, isRepo := repositoryPATFields[normalizedProvider]; isRepo {
+		if _, hasCreds := service["credentials"]; hasCreds {
+			return nil, raiseHostError(
+				"repository fetch service credentials are managed by the provider authorization", "", nil, "credentials_invalid",
+			)
+		}
+		providerCredentials, _ := stored["provider_credentials"].(map[string]any)
+		current, _ := providerCredentials[normalizedProvider].(map[string]any)
+		field := repositoryPATFields[normalizedProvider]
+		if current == nil || current[field] == nil {
+			return nil, raiseHostError(
+				normalizedProvider+" must be authorized before creating a fetch service", "", nil, "authorization_required",
+			)
+		}
+		internalService["credentials"] = map[string]any{field: current[field]}
+	}
+	stored["fetch_services"] = append(services, internalService)
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	if _, isRepo := repositoryPATFields[normalizedProvider]; isRepo {
+		// Python host_api.py:1372-1380 写路径 PAT 验证——D-24.3-4 空态跳过 ⤴️ 24.3b
+	}
+	createdConfig, herr := findNewService(prepared, existingIDs)
+	if herr != nil {
+		return nil, herr
+	}
+	_ = createdConfig
+	apply := func() *HostError { return nil } // Python _append_fetch_service_config——空转态跳过
+	rollback := func() *HostError { return nil }
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if herr = h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, false, false); herr != nil {
+		return nil, herr
+	}
+	normalizedServices, _ := prepared["fetch_services"].([]any)
+	for _, item := range normalizedServices {
+		if m, ok := item.(map[string]any); ok && !existingIDs[asString(m["service_id"])] {
+			return projectService(m), nil
+		}
+	}
+	return nil, raiseHostError("created fetch service not found", "", nil, "")
+}
+
+// DeleteFetchService 删除一个已停止的采集源及其游标（Python delete_fetch_service，host_api.py:1408-1509）
+func (h *PersonalContextHostAPI) DeleteFetchService(serviceID string) *HostError {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	normalizedID := strings.TrimSpace(serviceID)
+	if normalizedID == "" {
+		return raiseHostError("service_id must be a non-empty string", "", nil, "parameter_invalid")
+	}
+	stored := deepCopyMap(h.storedConfig)
+	services, _ := stored["fetch_services"].([]any)
+	found := false
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok && asString(m["service_id"]) == normalizedID {
+			found = true
+		}
+	}
+	if !found {
+		return raiseHostError("unknown PersonalContext fetch service", "", nil, "unknown_service")
+	}
+	// Python host_api.py:1427-1441 snapshot + _has_active_fetch——空转态无运行，直接通过
+	// Python host_api.py:1443-1457 remove_fetch_cursor/remove_fetch_run_history——Core 委托，空转态跳过
+	kept := make([]any, 0, len(services))
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok && asString(m["service_id"]) != normalizedID {
+			kept = append(kept, m)
+		}
+	}
+	stored["fetch_services"] = kept
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return herr
+	}
+	apply := func() *HostError { return nil } // Python _remove_fetch_service_config——空转态跳过
+	rollback := func() *HostError { return nil }
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return serr
+	}
+	return h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, false, false)
+}
+
+// PatchFetchService 原子修补一个既有采集源（Python patch_fetch_service，host_api.py:1511-1600）
+func (h *PersonalContextHostAPI) PatchFetchService(serviceID string, patch map[string]any) (map[string]any, *HostError) {
+	normalizedID := strings.TrimSpace(serviceID)
+	if normalizedID == "" {
+		return nil, raiseHostError("service_id must be a non-empty string", "", nil, "parameter_invalid")
+	}
+	if patch == nil {
+		return nil, raiseHostError("patch must be an object", "", nil, "parameter_invalid")
+	}
+	allowed := map[string]bool{"interval_seconds": true, "max_items_per_run": true, "source": true, "time_range": true}
+	for key := range patch {
+		if !allowed[key] {
+			return nil, raiseHostError("fetch service patch contains unsupported fields", "", nil, "parameter_invalid")
+		}
+	}
+	if herr := validateServiceIntegers(patch); herr != nil {
+		return nil, herr
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return nil, raiseHostError("PersonalContext is not configured", "", nil, "not_configured")
+	}
+	stored := deepCopyMap(h.storedConfig)
+	services, _ := stored["fetch_services"].([]any)
+	var target map[string]any
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok && asString(m["service_id"]) == normalizedID {
+			target = m
+		}
+	}
+	if target == nil {
+		return nil, raiseHostError("unknown PersonalContext fetch service", "", nil, "unknown_service")
+	}
+	// Python host_api.py:1556-1570 snapshot + active fetch 守卫——空转态直接通过
+	for key, value := range deepCopyMap(patch) {
+		target[key] = value
+	}
+	prepared, herr := prepareStoredConfig(stored, defaultModels())
+	if herr != nil {
+		return nil, herr
+	}
+	apply := func() *HostError { return nil } // Python _update_fetch_service_config——空转态跳过
+	rollback := func() *HostError { return nil }
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return nil, serr
+	}
+	if herr = h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, false, false); herr != nil {
+		return nil, herr
+	}
+	updatedServices, _ := prepared["fetch_services"].([]any)
+	for _, item := range updatedServices {
+		if m, ok := item.(map[string]any); ok && asString(m["service_id"]) == normalizedID {
+			return projectService(m), nil
+		}
+	}
+	return nil, raiseHostError("updated fetch service not found", "", nil, "")
+}
+
+// GetFetchRunStatus 返回按服务分组的运行记录（Python get_fetch_run_status，host_api.py:1602-1626）。
+// D-24.3-5：Core 未迁返回空 services 列表（无运行历史=合法空态）。
+func (h *PersonalContextHostAPI) GetFetchRunStatus(serviceID any, runID any) (map[string]any, *HostError) {
+	if serviceID != nil {
+		sid, ok := serviceID.(string)
+		if !ok || strings.TrimSpace(sid) == "" {
+			return nil, raiseHostError("service_id must be a non-empty string", "", nil, "parameter_invalid")
+		}
+	}
+	if runID != nil {
+		rid, ok := runID.(string)
+		if serviceID == nil || !ok || strings.TrimSpace(rid) == "" {
+			return nil, raiseHostError("run_id requires service_id and a non-empty string", "", nil, "parameter_invalid")
+		}
+	}
+	// Python: core.get_fetch_run_status——空转态返回空结果（Core 未迁，D-24.3-5）
+	return map[string]any{"services": []any{}}, nil
+}
+
+// SetFetchServiceEnabled 持久化并热应用单源调度开关（Python set_fetch_service_enabled，host_api.py:1628-1674）
+func (h *PersonalContextHostAPI) SetFetchServiceEnabled(serviceID string, enabled bool) *HostError {
+	if _, ok := any(enabled).(bool); !ok { // 保持显式 bool 形参；类型守卫对齐 Python:1635
+		return raiseHostError("enabled must be a boolean", "", nil, "parameter_invalid")
+	}
+	if serviceID == "" {
+		return raiseHostError("service_id must be a string", "", nil, "parameter_invalid")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.storedConfig == nil {
+		return raiseHostError("PersonalContext configuration must be set before changing a fetch service", "", nil, "not_configured")
+	}
+	raw := deepCopyMap(h.storedConfig)
+	normalizedID := strings.TrimSpace(serviceID)
+	if normalizedID == "" {
+		return raiseHostError("service_id must not be empty", "", nil, "parameter_invalid")
+	}
+	services, _ := raw["fetch_services"].([]any)
+	var target map[string]any
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok && asString(m["service_id"]) == normalizedID {
+			target = m
+		}
+	}
+	if target == nil {
+		return raiseHostError("unknown PersonalContext fetch service", "", nil, "unknown_service")
+	}
+	target["enabled"] = enabled
+	prepared, herr := prepareStoredConfig(raw, defaultModels())
+	if herr != nil {
+		return herr
+	}
+	apply := func() *HostError { return nil } // Python set_fetch_service_enabled——空转态跳过
+	rollback := func() *HostError { return nil }
+	payload, serr := serializeConfig(prepared)
+	if serr != nil {
+		return serr
+	}
+	return h.applyLiveUpdateLocked(prepared, prepared, payload, apply, rollback, false, false)
+}
+
+// RunFetch 委托一次立即采集（Python run_fetch，host_api.py:1676-1692）。
+// D-24.3-5：Core 未迁，按 Python Core 在非 RUNNING 态的错误路径直接报 state_invalid。
+func (h *PersonalContextHostAPI) RunFetch(serviceID any) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	reason := "state_invalid"
+	if h.coreConfig == nil {
+		reason = "not_configured"
+	} else if !boolOr(h.coreConfig.(map[string]any)["collection_enabled"]) {
+		reason = "collection_disabled"
+	}
+	return nil, raiseHostError("PersonalContext runtime is not running", "CONTEXT_PROACTIVE_STATE_INVALID", nil, reason)
+}
+
+// StopFetchRun 停止一个活跃采集轮（Python stop_fetch_run，host_api.py:1694-1706）。
+// D-24.3-5：Core 未迁无可停任务，返回 ok（Python Core 无运行任务时同样返回 ok）。
+func (h *PersonalContextHostAPI) StopFetchRun(serviceID string) (map[string]any, *HostError) {
+	normalizedID := strings.TrimSpace(serviceID)
+	if normalizedID == "" {
+		return nil, raiseHostError("service_id must be a non-empty string", "", nil, "parameter_invalid")
+	}
+	// Python: 独立 _fetch_run_stop_lock 避免一次 Core 收尾阻塞 create/patch/delete（host_api.py:1702-1705）
+	h.fetchRunStopLock.Lock()
+	h.fetchRunStopLock.Unlock()
+	return map[string]any{"ok": true}, nil
+}
+
+// GetGraph 读取图谱切片（Python get_graph，host_api.py:1708-1716）
+func (h *PersonalContextHostAPI) GetGraph(rootID any, depth int) (map[string]any, *HostError) {
+	return nil, contextUnavailableError()
+}
+
+// GetTree 读取文件树切片（Python get_tree，host_api.py:1718-1726）
+func (h *PersonalContextHostAPI) GetTree(rootID any, depth int) (map[string]any, *HostError) {
+	return nil, contextUnavailableError()
+}
+
+// SearchGraph 搜索已发布 Context 页（Python search_graph，host_api.py:1728-1731）
+func (h *PersonalContextHostAPI) SearchGraph(query string) (map[string]any, *HostError) {
+	return nil, contextUnavailableError()
+}
+
+// GetGraphPage 读取一个已发布 Context 页（Python get_graph_page，host_api.py:1733-1736）
+func (h *PersonalContextHostAPI) GetGraphPage(nodeID string) (map[string]any, *HostError) {
+	return nil, contextUnavailableError()
+}
+
+// GetSource 读取结构化原子来源详情（Python get_source，host_api.py:1738-1741）
+func (h *PersonalContextHostAPI) GetSource(sourceID string) (map[string]any, *HostError) {
+	return nil, contextUnavailableError()
+}
+
+// GetAuthorizationStatus 读取 provider 凭据状态（Python get_authorization_status，host_api.py:1743-1819）
+func (h *PersonalContextHostAPI) GetAuthorizationStatus(provider string) (map[string]any, *HostError) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	normalizedProvider := strings.ToLower(strings.TrimSpace(provider))
+	if normalizedProvider == "" {
+		return nil, raiseHostError("provider must be a non-empty string", "", nil, "parameter_invalid")
+	}
+	if _, isRepo := repositoryPATFields[normalizedProvider]; isRepo {
+		if h.storedConfig == nil {
+			return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+		}
+		providerCredentials, _ := h.storedConfig["provider_credentials"].(map[string]any)
+		current, _ := providerCredentials[normalizedProvider].(map[string]any)
+		field := repositoryPATFields[normalizedProvider]
+		if current == nil || current[field] == nil {
+			return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+		}
+		// Python host_api.py:1781-1796 真网络验证 _validate_repository_pat——
+		// D-24.3-4 空态：凭据存在但验证挂账 24.3b，统一返回未授权（24.3b 回填后恢复）
+		return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+	}
+	if normalizedProvider != "feishu" {
+		return nil, raiseHostError("provider does not support authorization", "", nil, "authorization_unsupported")
+	}
+	if h.coreConfig == nil {
+		return nil, raiseHostError("PersonalContext configuration must be set before provider authorization", "", nil, "not_configured")
+	}
+	// Python host_api.py:1798-1819 Core 设备码流程——D-24.3-4 空态返回未授权（⤴️ 24.3b feishu 源）
+	return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+}
+
+// AuthorizeProvider 校验或发起 provider 授权（Python authorize_provider，host_api.py:1821-1957）。
+// D-24.3-4：github/gitcode 表单校验保留、网络验证与凭据落盘挂账 24.3b（空态返回未授权）；
+// feishu 设备码流程同样挂账 24.3b。
+func (h *PersonalContextHostAPI) AuthorizeProvider(provider string, credentials map[string]any, reauthorize bool) (map[string]any, *HostError) {
+	normalizedProvider := strings.ToLower(strings.TrimSpace(provider))
+	if normalizedProvider == "" {
+		return nil, raiseHostError("provider must be a non-empty string", "", nil, "parameter_invalid")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, isRepo := repositoryPATFields[normalizedProvider]; isRepo {
+		field := repositoryPATFields[normalizedProvider]
+		if credentials == nil || len(credentials) != 1 || credentials[field] == nil {
+			return nil, raiseHostError(normalizedProvider+" credentials must contain only "+field, "", nil, "credentials_invalid")
+		}
+		secret, okS := credentials[field].(string)
+		if !okS || strings.TrimSpace(secret) == "" {
+			return nil, raiseHostError(normalizedProvider+" credential must be a non-empty string", "", nil, "credentials_invalid")
+		}
+		// Python host_api.py:1854-1926：真验证 + provider_credentials 落盘 + reauthorize 回填——
+		// D-24.3-4 空态：验证挂账 24.3b，不落盘凭据，统一返回未授权
+		return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+	}
+	if normalizedProvider != "feishu" {
+		return nil, raiseHostError("provider does not support authorization", "", nil, "authorization_unsupported")
+	}
+	if credentials != nil {
+		return nil, raiseHostError("feishu authorization does not accept credentials", "", nil, "credentials_invalid")
+	}
+	if h.coreConfig == nil {
+		return nil, raiseHostError("PersonalContext configuration must be set before provider authorization", "", nil, "not_configured")
+	}
+	// Python host_api.py:1942-1957 Core 设备码流程——D-24.3-4 空态（⤴️ 24.3b feishu 源）
+	return repositoryAuthorizationResult(normalizedProvider, "not_authorized", nil, ""), nil
+}
+
+// Start 按需加载一次配置文件并启动 Core（Python start，host_api.py:1959-1992）。
+// D-24.3-5：空转态——加载/归一化照做，Core set_configuration/activate 跳过。
+func (h *PersonalContextHostAPI) Start() *HostError {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.coreConfig == nil {
+		raw, herr := readYaml(h.configPath)
+		if herr != nil {
+			return herr
+		}
+		if raw == nil {
+			return nil // Python host_api.py:1965-1966
+		}
+		stored, herr := prepareStoredConfig(raw, defaultModels())
+		if herr != nil {
+			return herr
+		}
+		h.coreConfig = stored // Python set_configuration——空转态直接落内存
+		h.storedConfig = stored
+	}
+	configMap, _ := h.coreConfig.(map[string]any)
+	if configMap == nil || !boolOr(configMap["collection_enabled"]) {
+		return nil // Python host_api.py:1980-1982
+	}
+	h.refreshErrorLanguage()
+	h.refreshEmbeddingConfiguration()
+	h.started = true // Python activate_runtime()——空转态置标记（D-24.3-5）
+	return nil
+}
+
+// IsRuntimeEnabled 返回已加载的智能体使用开关（Python is_runtime_enabled，host_api.py:1994-1999）
+func (h *PersonalContextHostAPI) IsRuntimeEnabled() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	configMap, _ := h.coreConfig.(map[string]any)
+	return configMap != nil && boolOr(configMap["agent_use_enabled"])
+}
+
+// GetStatus 返回 Core 无凭据状态快照（Python get_status，host_api.py:2001-2014）。
+// D-24.3-5：Core 未迁返回 Host 侧最小状态投影。
+func (h *PersonalContextHostAPI) GetStatus() map[string]any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return LocalizePayload(h.statusSnapshotLocked(), h.errLang).(map[string]any)
+}
+
+// Stop 停止 Core 运行时但保留配置与已发布文件（Python stop，host_api.py:2016-2034）。
+// D-24.3-5：Core 未迁无可停运行时，仅保留超时校验。
+func (h *PersonalContextHostAPI) Stop(timeoutSeconds float64) *HostError {
+	if timeoutSeconds <= 0 {
+		return raiseHostError("timeout_seconds must be greater than zero", "CONTEXT_PROACTIVE_RUNTIME_TIMEOUT", nil, "")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.started = false
+	return nil
+}
+
+// ──────────────────────────── 非导出方法（Python 私有方法与空态辅助） ────────────────────────────
+
+// restorePreviousLocked 失败候选配置后的恢复（Python _restore_previous，host_api.py:2036-2061）。
+// D-24.3-5：Core 委托点（deactivate/set_configuration/activate）空转态跳过。
+func (h *PersonalContextHostAPI) restorePreviousLocked(previous any, previousStored map[string]any, wasActive bool) *HostError {
+	if previous == nil {
+		h.coreConfig = nil
+		h.storedConfig = nil
+		return nil
+	}
+	if wasActive && boolOr(previous.(map[string]any)["collection_enabled"]) {
+		h.refreshEmbeddingConfiguration()
+		// Python: activate_runtime()——空转态跳过
+	}
+	h.coreConfig = previous
+	h.storedConfig = deepCopyMap(previousStored)
+	return nil
+}
+
+// statusSnapshotLocked 最小状态投影（D-24.3-5：Python PersonalContext.Status.model_dump 的
+// Host 侧近似；字段以满足 get_overview/runtime_status 前端消费为准，⤴️ 24.3a 替换为 Core Status）
+func (h *PersonalContextHostAPI) statusSnapshotLocked() map[string]any {
+	state := "CREATED"
+	if h.storedConfig != nil {
+		state = "CONFIGURED"
+	}
+	if h.started {
+		state = "RUNNING"
+	}
+	return map[string]any{
+		"state":                state,
+		"pipeline_running":     false,
+		"fetch_service_states": map[string]any{},
+		"fetch_run_progress":   map[string]any{},
+	}
+}
+
+// contextUnavailableError 上下文查询在 Core 缺席时的统一错误
+// （Python 由 Core get_graph/search_graph 等方法在未启动时抛出；空转态由 Host 直接报，D-24.3-5）
+func contextUnavailableError() *HostError {
+	return raiseHostError("PersonalContext context is not available", "CONTEXT_PROACTIVE_STATE_INVALID", nil, "state_invalid")
+}
+
+// findNewService 在归一化配置中找新建 service（Python next(...) 过滤，host_api.py:1381-1385）
+func findNewService(prepared map[string]any, existingIDs map[string]bool) (map[string]any, *HostError) {
+	services, _ := prepared["fetch_services"].([]any)
+	for _, item := range services {
+		if m, ok := item.(map[string]any); ok && !existingIDs[asString(m["service_id"])] {
+			return m, nil
+		}
+	}
+	return nil, raiseHostError("created fetch service not found in prepared config", "", nil, "")
+}
+
+// rollbackErrorOr 取先发生的回滚错误（Python rollback_error = rollback_error or restore_exc）
+func rollbackErrorOr(current *HostError, next *HostError) *HostError {
+	if current != nil {
+		return current
+	}
+	return next
+}
+
+// statusIsActive 状态是否活跃（host_api.py:443-444 _is_runtime_active 的 map 版本）
+func statusIsActive(status map[string]any) bool {
+	state := asString(status["state"])
+	return state == "STARTING" || state == "RUNNING"
+}
+
+// statusHasActiveFetch 是否有采集轮在跑（host_api.py:447-467 _has_active_fetch 的 map 版本）
+func statusHasActiveFetch(status map[string]any, serviceID string) bool {
+	progress, ok := status["fetch_run_progress"].(map[string]any)
+	if !ok {
+		return false
+	}
+	for sid, record := range progress {
+		if serviceID != "" && sid != serviceID {
+			continue
+		}
+		if m, ok := record.(map[string]any); ok {
+			rs := asString(m["run_state"])
+			if rs == "running" || rs == "stopping" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// defaultModelsFn Python get_default_models() 全局读取点的 Go 注入缝（D-24.3-6：
+// Go 无全局 config，默认走 config.GetDefaultModels(nil) 加载默认 config.yaml；测试可替换）
+var defaultModelsFn = func() []map[string]any {
 	return config.GetDefaultModels(nil)
+}
+
+// defaultModels 默认模型列表（Python get_default_models() 全局调用点，host_api.py:114/128/143 等）
+func defaultModels() []map[string]any {
+	return defaultModelsFn()
 }
