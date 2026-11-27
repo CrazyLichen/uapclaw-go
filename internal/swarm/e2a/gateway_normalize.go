@@ -363,6 +363,7 @@ func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string,
 		Metadata:        meta,
 		IdentityOrigin:  IdentityOriginAgent,
 		IsStream:        false,
+		AgentRef:        resp.AgentRef, // V2 透传回带（Python encode_agent_response_for_wire 携带）
 	}
 }
 
@@ -406,6 +407,7 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 			Channel:         chunk.ChannelID,
 			IdentityOrigin:  IdentityOriginAgent,
 			IsStream:        isStream,
+			AgentRef:        chunk.AgentRef, // V2 透传回带（终止哨兵帧）
 		}
 	}
 
@@ -431,6 +433,7 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 				Channel:        chunk.ChannelID,
 				IdentityOrigin: IdentityOriginAgent,
 				IsStream:       isStream,
+				AgentRef:       chunk.AgentRef, // V2 透传回带（chat.error 帧，ws_handler.py:127-141 同款）
 			}
 		}
 	}
@@ -451,6 +454,7 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 			Channel:         chunk.ChannelID,
 			IdentityOrigin:  IdentityOriginAgent,
 			IsStream:        isStream,
+			AgentRef:        chunk.AgentRef, // V2 透传回带（业务结束帧）
 		}
 	}
 
@@ -498,6 +502,7 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 		Channel:         chunk.ChannelID,
 		IdentityOrigin:  IdentityOriginAgent,
 		IsStream:        isStream,
+		AgentRef:        chunk.AgentRef, // V2 透传回带（中间帧）
 	}
 }
 

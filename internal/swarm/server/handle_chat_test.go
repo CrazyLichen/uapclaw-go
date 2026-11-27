@@ -189,7 +189,7 @@ func TestHandleUnaryImpl_特殊方法分流(t *testing.T) {
 // TestSendKeepalive_写出心跳帧 验证心跳帧编码与发送。
 func TestSendKeepalive_写出心跳帧(t *testing.T) {
 	s, tr := newTestServer()
-	s.sendKeepalive("req-keepalive", "web")
+	s.sendKeepalive("req-keepalive", "web", map[string]any{"id": "agent-x"})
 
 	frame := readFrame(t, tr)
 	body, _ := frame["body"].(map[string]any)

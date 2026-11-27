@@ -59,6 +59,9 @@ type E2AResponse struct {
 	SourceAgentID string `json:"source_agent_id"`
 	// Method 网关 RPC 方法名
 	Method string `json:"method"`
+	// AgentRef Agent 引用（V2 透传回带：对齐 Python E2AResponse.agent_ref，
+	// ws_send.py:45-56 读取该键做路由；设计 §6.3）
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 
 	// ─── 扩展槽 ───
 	// Projections 投影

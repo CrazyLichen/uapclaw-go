@@ -487,3 +487,51 @@ func TestAgentChunkToMap_基本(t *testing.T) {
 		t.Error("is_complete 期望 true")
 	}
 }
+
+// TestEncodeAgentResponseForWire_回带agentRef 验证 V2 agent_ref 出站回带
+// （对齐 Python ws_send.py:45 wire.get("agent_ref")；agent_compat.py:87-88 透传语义）。
+func TestEncodeAgentResponseForWire_回带agentRef(t *testing.T) {
+	ref := map[string]any{"id": "agent-x", "name": "team-a"}
+	resp := &schema.AgentResponse{
+		RequestID: "r1",
+		ChannelID: "web",
+		OK:        true,
+		AgentRef:  ref,
+	}
+	wire := EncodeAgentResponseForWire(resp, "resp-1", 0)
+	got, ok := wire["agent_ref"].(map[string]any)
+	if !ok {
+		t.Fatalf("wire[agent_ref] 期望 map，实际 %T", wire["agent_ref"])
+	}
+	if got["id"] != "agent-x" {
+		t.Errorf("agent_ref.id 期望 agent-x，实际 %v", got["id"])
+	}
+
+	// 无 agent_ref 时键不出现（omitempty 对齐 Python agent_ref=None）
+	resp2 := &schema.AgentResponse{RequestID: "r2", ChannelID: "web", OK: true}
+	wire2 := EncodeAgentResponseForWire(resp2, "resp-2", 0)
+	if _, exists := wire2["agent_ref"]; exists {
+		t.Error("空 agent_ref 不应出现在 wire dict")
+	}
+}
+
+// TestEncodeAgentChunkForWire_回带agentRef 验证流式分片的 agent_ref 回带
+// （对齐 Python ws_handler.py:97-112、agent_ws_server.py:766-767 keepalive 回填）。
+func TestEncodeAgentChunkForWire_回带agentRef(t *testing.T) {
+	ref := map[string]any{"id": "agent-y"}
+	chunk := &schema.AgentResponseChunk{
+		RequestID:  "r1",
+		ChannelID:  "web",
+		Payload:    map[string]any{"event_type": "keepalive"},
+		IsComplete: false,
+		AgentRef:   ref,
+	}
+	wire := EncodeAgentChunkForWire(chunk, "resp-1", -1, true)
+	got, ok := wire["agent_ref"].(map[string]any)
+	if !ok {
+		t.Fatalf("wire[agent_ref] 期望 map，实际 %T", wire["agent_ref"])
+	}
+	if got["id"] != "agent-y" {
+		t.Errorf("agent_ref.id 期望 agent-y，实际 %v", got["id"])
+	}
+}

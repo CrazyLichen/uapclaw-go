@@ -75,6 +75,9 @@ type AgentResponse struct {
 	Payload map[string]any `json:"payload,omitempty"`
 	// Metadata 扩展元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
+	// AgentRef Agent 引用（V2 透传回带：Python protocol AgentResponse.agent_ref，
+	// agent_ws_server.py:2611/3838 出站前全局回填；设计 §6.3 路由键）
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 }
 
 // AgentResponseChunk Agent 响应片段（AgentServer → Gateway，流式）。
@@ -101,6 +104,9 @@ type AgentResponseChunk struct {
 	// Python: external_harness_helpers.py _response_chunk 与
 	// interface_deep.py _stream_completion_state 同款；默认空串。
 	RuntimeCompletion string `json:"runtime_completion,omitempty"`
+	// AgentRef Agent 引用（V2 透传回带：Python protocol AgentResponseChunk.agent_ref，
+	// agent_ws_server.py:766-767 keepalive 分片回填；设计 §6.3 路由键）
+	AgentRef map[string]any `json:"agent_ref,omitempty"`
 }
 
 // AgentRequestOption Agent 请求可选配置函数。

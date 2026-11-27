@@ -174,7 +174,7 @@ func (s *AgentServer) handleStreamImpl(ctx context.Context, request *schema.Agen
 		interval = keepaliveInterval
 	}
 	keepalive := NewStreamKeepalive(func() {
-		s.sendKeepalive(request.RequestID, request.ChannelID)
+		s.sendKeepalive(request.RequestID, request.ChannelID, request.AgentRef)
 	}, interval)
 	keepalive.Start()
 

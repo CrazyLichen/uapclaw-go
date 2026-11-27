@@ -449,3 +449,39 @@ func TestHandleMessage_BeforeChatHook_Params非对象清洗(t *testing.T) {
 		t.Fatal("超时：未收到响应")
 	}
 }
+
+// TestHandleMessage_AgentRef回带 验证出站响应回填请求的 agent_ref
+// （对齐 Python agent_ws_server.py:2611-2612 `if response.agent_ref is None:
+// response.agent_ref = request.agent_ref` 全局语义；V2 设计 §6.3）。
+func TestHandleMessage_AgentRef回带(t *testing.T) {
+	s, transport := newTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	env := makeTestEnvelope("models.get", false)
+	env.AgentRef = map[string]any{"id": "agent-x"}
+
+	recvCh, err := transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
+	}
+
+	go s.handleMessage(ctx, env)
+
+	select {
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("响应 JSON 解码失败: %v", err)
+		}
+		if m["agent_ref"] == nil {
+			t.Fatalf("出站 wire 应携带回填的 agent_ref")
+		}
+		ref, ok := m["agent_ref"].(map[string]any)
+		if !ok || ref["id"] != "agent-x" {
+			t.Errorf("agent_ref = %v, 期望 id=agent-x", m["agent_ref"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到响应")
+	}
+}

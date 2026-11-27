@@ -380,6 +380,13 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		return
 	}
 	if resp != nil {
+		// V2 agent_ref 回带：出站前请求级回填（Python agent_ws_server.py:2611-2612、
+		// 3838-3839 的 `if response.agent_ref is None: response.agent_ref = request.agent_ref`
+		// 全局语义，覆盖全部非 personal_context 分发路径；personal_context 在
+		// ws_handler 内按 ws_handler.py:97-218 显式携带）。
+		if resp.AgentRef == nil {
+			resp.AgentRef = request.AgentRef
+		}
 		s.writeResponse(request.RequestID, request.ChannelID, resp)
 	}
 }
@@ -409,12 +416,17 @@ func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.Agen
 }
 
 // sendKeepalive 构造 keepalive chunk 通过 sendToGateway 发送。
-func (s *AgentServer) sendKeepalive(requestID, channelID string) {
+// agentRef 为流式请求的 agent_ref（Python self._request.agent_ref，agent_ws_server.py:766-767
+// keepalive 分片回填；无请求上下文时传 nil，与 Python agent_ref=None 同义）。
+func (s *AgentServer) sendKeepalive(requestID, channelID string, agentRef map[string]any) {
 	chunk := schema.NewAgentResponseChunk(requestID, channelID,
 		map[string]any{
 			"event_type": "keepalive",
 		},
 	)
+	if chunk.AgentRef == nil {
+		chunk.AgentRef = agentRef
+	}
 	s.writeChunk(requestID, channelID, chunk, -1, true)
 }
 

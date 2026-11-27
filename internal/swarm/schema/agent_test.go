@@ -528,3 +528,38 @@ func TestAgentResponseChunk_终止哨兵JSON往返(t *testing.T) {
 		t.Error("往返后的终止哨兵仍应被 IsTerminal() 识别")
 	}
 }
+
+// TestAgentResponseAgentRef序列化 验证 V2 agent_ref 字段的 json 序列化与 omitempty
+// （对齐 Python protocol AgentResponse.agent_ref / AgentResponseChunk.agent_ref）。
+func TestAgentResponseAgentRef序列化(t *testing.T) {
+	ref := map[string]any{"id": "agent-x"}
+	resp := &AgentResponse{RequestID: "r1", ChannelID: "web", OK: true, AgentRef: ref}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	refMap, ok := m["agent_ref"].(map[string]any)
+	if !ok {
+		t.Fatalf("agent_ref 期望对象，实际 %v", m["agent_ref"])
+	}
+	if refMap["id"] != "agent-x" {
+		t.Errorf("agent_ref.id 期望 agent-x，实际 %v", refMap["id"])
+	}
+
+	// 空 AgentRef 不落 json（omitempty）
+	resp2 := &AgentResponse{RequestID: "r2", ChannelID: "web", OK: true}
+	data2, _ := json.Marshal(resp2)
+	if strings.Contains(string(data2), "agent_ref") {
+		t.Errorf("空 agent_ref 不应序列化: %s", data2)
+	}
+
+	chunk := &AgentResponseChunk{RequestID: "r3", ChannelID: "web", AgentRef: ref}
+	data3, _ := json.Marshal(chunk)
+	if !strings.Contains(string(data3), `"agent_ref":{"id":"agent-x"}`) {
+		t.Errorf("chunk agent_ref 序列化不符: %s", data3)
+	}
+}

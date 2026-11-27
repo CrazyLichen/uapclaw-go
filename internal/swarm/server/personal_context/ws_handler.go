@@ -152,11 +152,13 @@ func sendPersonalContextResult(sender WireSender, request *schema.AgentRequest, 
 	if request.IsStream {
 		chunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, payload,
 			schema.WithChunkIsComplete(true))
+		chunk.AgentRef = request.AgentRef // Python ws_handler.py:103-112 agent_ref=request.agent_ref
 		sendWire(sender, e2a.EncodeAgentChunkForWire(chunk, request.RequestID, 0, true), request.RequestID)
 		return
 	}
 	resp := schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(true), schema.WithResponsePayload(payload))
+	resp.AgentRef = request.AgentRef // Python ws_handler.py:113-122
 	sendWire(sender, e2a.EncodeAgentResponseForWire(resp, request.RequestID, 0), request.RequestID)
 }
 
@@ -176,11 +178,13 @@ func sendPersonalContextError(host *PersonalContextHostAPI, sender WireSender, r
 		payload["event_type"] = "chat.error" // Python ws_handler.py:130
 		chunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, payload,
 			schema.WithChunkIsComplete(true))
+		chunk.AgentRef = request.AgentRef // Python ws_handler.py:135-141
 		sendWire(sender, e2a.EncodeAgentChunkForWire(chunk, request.RequestID, 0, true), request.RequestID)
 		return
 	}
 	resp := schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(false), schema.WithResponsePayload(payload))
+	resp.AgentRef = request.AgentRef // Python ws_handler.py:143-151
 	sendWire(sender, e2a.EncodeAgentResponseForWire(resp, request.RequestID, 0), request.RequestID)
 }
 
@@ -256,6 +260,7 @@ func streamGraph(host *PersonalContextHostAPI, sender WireSender, request *schem
 	for sequence, event := range events {
 		chunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, event,
 			schema.WithChunkIsComplete(sequence == len(events)-1))
+		chunk.AgentRef = request.AgentRef // Python ws_handler.py:218 agent_ref=request.agent_ref
 		if !sendWire(sender, e2a.EncodeAgentChunkForWire(chunk, request.RequestID, sequence, true), request.RequestID) {
 			return nil // Python 发送失败即停止流
 		}
