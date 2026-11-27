@@ -623,9 +623,17 @@ func TestRun类空态(t *testing.T) {
 // context 查询族空态：统一 state_invalid（host_api.py:1708-1741）
 func TestContext查询族空态(t *testing.T) {
 	h := newTestHost(t)
+	// get_graph/get_tree 空态返回空图谱（D-24.3-5，支撑 stream 四事件协议）
+	graph, gerr := h.GetGraph(nil, 3)
+	if gerr != nil {
+		t.Errorf("get_graph 空态应空图谱: %v", gerr)
+	} else if nodes, _ := graph["nodes"].([]any); len(nodes) != 0 {
+		t.Errorf("空图谱 nodes 应空: %v", graph)
+	}
+	if _, terr := h.GetTree(nil, 3); terr != nil {
+		t.Errorf("get_tree 空态应空图谱: %v", terr)
+	}
 	for name, fn := range map[string]func() *HostError{
-		"get_graph":      func() *HostError { _, e := h.GetGraph(nil, 3); return e },
-		"get_tree":       func() *HostError { _, e := h.GetTree(nil, 3); return e },
 		"search":         func() *HostError { _, e := h.SearchGraph("q"); return e },
 		"get_graph_page": func() *HostError { _, e := h.GetGraphPage("n"); return e },
 		"get_source":     func() *HostError { _, e := h.GetSource("s"); return e },

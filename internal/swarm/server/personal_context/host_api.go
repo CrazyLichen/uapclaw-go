@@ -1627,14 +1627,15 @@ func (h *PersonalContextHostAPI) StopFetchRun(serviceID string) (map[string]any,
 	return map[string]any{"ok": true}, nil
 }
 
-// GetGraph 读取图谱切片（Python get_graph，host_api.py:1708-1716）
+// GetGraph 读取图谱切片（Python get_graph，host_api.py:1708-1716）。
+// D-24.3-5：Core 未迁返回空图谱（未发布任何 Context=合法空态，支撑 stream_graph 四事件协议）
 func (h *PersonalContextHostAPI) GetGraph(rootID any, depth int) (map[string]any, *HostError) {
-	return nil, contextUnavailableError()
+	return map[string]any{"nodes": []any{}, "edges": []any{}, "context_ready": false}, nil
 }
 
-// GetTree 读取文件树切片（Python get_tree，host_api.py:1718-1726）
+// GetTree 读取文件树切片（Python get_tree，host_api.py:1718-1726）——空态同 GetGraph
 func (h *PersonalContextHostAPI) GetTree(rootID any, depth int) (map[string]any, *HostError) {
-	return nil, contextUnavailableError()
+	return map[string]any{"nodes": []any{}, "edges": []any{}, "context_ready": false}, nil
 }
 
 // SearchGraph 搜索已发布 Context 页（Python search_graph，host_api.py:1728-1731）
