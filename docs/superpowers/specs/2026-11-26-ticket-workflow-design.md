@@ -39,7 +39,7 @@
 | 知识库引擎 | 历史库与业务库均为 GraphKnowledgeBase（各自独立 collection）；分类树是三元组的查询侧视图，非独立存储 |
 | 初始 skill | 用户侧预置提供，本设计只负责装配与触发 |
 | 业务库导入面板 | 第二阶段子项目，本 spec 仅定契约（workflow 只依赖契约） |
-| 关闭终态 | 终态定义权在工单系统（confirm_solved 后他们关单下发 close）；`closed` 仅表示"已沉淀完成"的回执 |
+| 关闭终态 | **用户确认驱动**（本轮拍板）：用户确认解决即 SettleNode 沉淀 → closed；工单系统只从历史读内容、不处理确认，关单后下发"确认解决"走同一 answers 通道（已终态 no-op，用户已补充信息则以诊断流程为准）；`biz_event` 整体删除 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
@@ -79,16 +79,16 @@ agentserver envelope 层（handle_message 分流）
 | | HTTP 实例（本 spec 范围） | 聊天实例（第二阶段） |
 |---|---|---|
 | 入口 | envelope 层分流直调 runner | DeepAgent 调 `diagnose_problem` 工具（**单工具**，本轮拍板：恢复走中断应答通道重放同一 tool call，无需 continue/close 工具） |
-| 恢复执行者 | runner 直调 `Workflow.Invoke(InteractiveInput)`（biz_event/answers 映射为恢复输入） | ReAct 中断桥重放 tool call（现成，见 §2.4） |
+| 恢复执行者 | runner 直调 `Workflow.Invoke(InteractiveInput)`（answers/纯文本映射为恢复输入） | ReAct 中断桥重放 tool call（现成，见 §2.4） |
 | 等待呈现 | 追加历史记录（事件流），外部轮询历史接口可见 pending 交互 | 经 ReAct 中断信封发 ask_user 卡片（见 §2.4） |
-| 输入解释 | send 中 `biz_event` 协议直读（结构化，无歧义） | 卡片结构化 answers 直读（不经 LLM 猜测） |
+| 输入解释 | send 中 `answers`/纯文本（结构化与自由文本同构） | 卡片结构化 answers 直读（不经 LLM 猜测） |
 | 输出表达 | 追加历史记录（结构化事件载荷） | AgentNode 结论走会话 chunk → final |
 
 ### 2.3 语义规则（图内中断模型下的剩余约束）
 
 执行态隔离由 checkpointer 天然承载（挂起态按执行实例绑定，随 tool_call/执行生命周期走），原 END+store 模型下的 instance_id 键空间条款**作废**。剩余两条与执行模型无关的语义规则：
 
-1. **答案归属判定**：挂起期间到达的自由文本输入，先经归属判定（复用 interrupt 包 answer_attribution 机制）：是当前 pending 交互的应答 → 作为 InteractiveInput 恢复执行；明显是新话题 → 不消费，作为普通用户消息走 ReAct 新一轮（由 DeepAgent 决定开新诊断或提醒先回应挂起卡片）。HTTP 侧同理：不带 biz_event 且与 pending 选项无关的 send 视为补充特征并入恢复输入。
+1. **答案归属判定**：挂起期间到达的自由文本输入，先经归属判定（复用 interrupt 包 answer_attribution 机制）：是当前 pending 交互的应答 → 作为 InteractiveInput 恢复执行；明显是新话题 → 不消费，作为普通用户消息走 ReAct 新一轮（由 DeepAgent 决定开新诊断或提醒先回应挂起卡片）。HTTP 侧同理：与 pending 选项无关的 send 视为补充特征并入恢复输入。
 2. **单活跃实例**（图内中断天然保证）：会话挂起在 pending 交互上时，聊天侧会话本身挂起、不可能再调 `diagnose_problem`；HTTP 侧 runner 收到 start 类输入且存在活跃 checkpoint 时直接返回"已有进行中的诊断"提示。同一会话多诊断并行在图内中断模型下无发生面。
 
 ### 2.4 统一中断信封与恢复协议
@@ -110,7 +110,7 @@ agentserver envelope 层（handle_message 分流）
   → 全完成 → ResumeStartIterationKey 续跑 ReAct 循环
 
 HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
-  工单 send（biz_event / 补充）→ envelope 分流 → runner 将其映射为
+  工单 send（answers / 补充文本）→ envelope 分流 → runner 将其映射为
   *interaction.InteractiveInput → Workflow.Invoke → 引擎 checkpoint 重放续跑
   → 跑到下一等待（再追加历史）或终态（closed/abandoned）
 ```
@@ -176,7 +176,7 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 ```mermaid
 flowchart TD
     EXT[外部工单系统] -->|POST 建会话 mode=agent.workflow.diagnosis| SES[(会话)]
-    EXT -->|POST send 问题+附件+problem_id 可选biz_event| AS[agentserver envelope 层分流]
+    EXT -->|POST send 问题+附件+problem_id 可选answers| AS[agentserver envelope 层分流]
     AS --> WF[ProblemDiagnosisWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
@@ -198,9 +198,9 @@ flowchart TD
         C -.轮询历史可查.-> EXT
     end
 
-    EXT -->|biz_event=confirm_solved| PEND[挂起等待 close]
-    EXT -->|biz_event=not_solved/评论| UP[scope升级重查]
-    EXT -->|biz_event=close| S[SettleNode 写历史库/计数/演进信号]
+    EXT -->|answers=确认解决 或 纯文本确认| S[SettleNode 写历史库/计数/演进信号]
+    EXT -->|answers=未解决/补充文本| UP[scope升级重查]
+    EXT -->|关单后下发确认解决（已closed则no-op）| EXT2[仅追加历史记录]
     S --> CL[closed + 历史事件]
 ```
 
@@ -209,7 +209,7 @@ flowchart TD
 图内中断模型下无"重进路由"，RouterNode 作为节点**废除**：
 
 - **Intent 前置分流**（特征全模糊 → GuidanceNode / 特征就绪 → KBSearchNode）= IntentNode 输出后的 **Pregel 条件边**（8.5 addRouter），非独立节点；
-- **biz_event（confirm_solved/not_solved/close）是恢复输入**，由挂起点直接消费（见 §3.3 状态转移表与 §4.2②），无需转译节点；
+- **确认卡应答（确认解决/未解决）是恢复输入**，由 ConfirmNode 直接消费；工单系统关单后下发的确认解决走同一 answers 通道，已终态则 no-op；
 - scope 升级（history→business→agent 只进不退）由 KBSearchNode/AgentNode 协作承担。
 
 状态转移表：
@@ -222,9 +222,8 @@ searching ──历史库高置信单向──▶ wait_confirm（历史方案+ti
 searching ──历史库多向──▶ guiding（判别式引导）
 searching ──历史库无命中──▶ searching（scope=business 重查）
 searching ──业务库命中──▶ wait_confirm（业务库方案）
-wait_confirm ──biz_event=confirm_solved──▶ 等待 close
-wait_confirm ──biz_event=not_solved / 普通评论──▶ scope 升级重查或 AgentNode
-biz_event=close ──▶ SettleNode ──▶ closed
+wait_confirm ──确认解决──▶ SettleNode ──▶ closed（确认即沉淀，无 close 等待态）
+wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 AgentNode
 轮数超限/scope 已到顶 ──▶ AgentNode
 ```
 
@@ -272,7 +271,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 ### 3.8 SettleNode
 
-仅 `biz_event=close` 触发。按 scope 分流落库（SettleNode 本身不含智能，只做路由分发）：
+由 ConfirmNode 的确认解决应答触发（确认即沉淀，无 close 等待态；工单系统关单下发仅在未终态时等同确认解决应答，已终态 no-op）。按 scope 分流落库（SettleNode 本身不含智能，只做路由分发）：
 
 | 处理路径 | 落库动作 | 判重 |
 |---|---|---|
@@ -304,7 +303,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 **① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.diagnosis`（会话级固定，显式覆盖式写入即锁定）。
 
-**② send**（既有 POST）：请求体在 ProblemInput（§4.3）基础上增加可选 `biz_event` 与可选 `answers`（HTTP 恢复三形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本）：
+**② send**（既有 POST）：请求体在 ProblemInput（§4.3）基础上增加可选 `answers`（HTTP 恢复两形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本；`biz_event` 整体删除）：
 
 ```json
 {
@@ -312,18 +311,15 @@ biz_event=close ──▶ SettleNode ──▶ closed
   "reproduce_steps": "高峰期必现",
   "attachments": [{"type": "image", "url": "..."}, {"type": "log", "url": "..."}],
   "problem_id": "T-123",
-  "biz_event": "confirm_solved",
   "answers": [{"question": "是偶发还是必现？", "selected_options": ["transient"], "custom_input": ""}]
 }
 ```
 
 | 恢复形态 | 语义 | runner 处理 |
 |---|---|---|
-| `answers` 数组 | 结构化回答（工单系统按历史里 ask_user_question 载荷渲染自有 UI） | 复用与 web 同一 `buildInteractiveInputFromAnswers` 拆包 → ii → Invoke 恢复 |
-| 纯文本（description/普通补充） | 自由文本 | 直达挂起节点信箱 → 节点并入特征 |
-| `biz_event` | 状态事件（confirm_solved/not_solved/close） | 映射为对应挂起点的恢复输入（确认卡选项/等待 close） |
+| `answers` 数组 | 结构化回答（工单系统按历史里 ask_user_question 载荷渲染自有 UI；含确认解决/未解决） | 复用与 web 同一 `buildInteractiveInputFromAnswers` 拆包 → ii → Invoke 恢复 |
+| 纯文本（description/普通补充） | 自由文本 | 直达挂起节点信箱 → 节点并入特征；关单后下发的确认解决同样以此形态到达 |
 
-| biz_event | 挂起点消费（§3.3） |
 |---|---|
 | 不传 | 普通评论：并入特征，scope 升级重查（wait_confirm 态）/主流程（初态） |
 | `confirm_solved` | 置待归档标记，等 close |
@@ -366,7 +362,7 @@ ProblemInput {
 ```
 
 - 聊天工具 **`diagnose_problem`（单工具）** 参数即此 schema；校验规则 = "description 非空"，与 HTTP 同一套。挂起后恢复不经工具——应答经中断通道（ask_user 卡）回流，ReAct 重放同一 tool call；关闭同样以确认卡应答承载。
-- 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自不带 biz_event 的普通 send，进入状态机后完全同构。
+- 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自普通 send 纯文本，进入状态机后完全同构。
 
 ---
 
@@ -427,7 +423,7 @@ ProblemInput {
 ### 6.1 测试策略
 
 1. **单测**：真实 KB 会话管线验证（真实链纪律——禁窄接口/替身承载能力面；函数参数收具体类型）；GraphRetriever/判重规则/长尾合并/状态转移表逐一覆盖，目标 ≥85%；
-2. **集成测试**：覆盖"建会话→引导→确认→关闭落库→演进信号"全链，真实跨 KB/agent/checkpointer ≥3 子系统（满足集成审计两层门禁）；`biz_event` 三态与轮数超限分支必测；挂起/恢复必测（跨 Invoke 恢复后图状态续跑正确、恢复输入只进绑定执行）；
+2. **集成测试**：覆盖"建会话→引导→确认→关闭落库→演进信号"全链，真实跨 KB/agent/checkpointer ≥3 子系统（满足集成审计两层门禁）；确认卡两态（解决/未解决）与轮数超限分支必测；挂起/恢复必测（跨 Invoke 恢复后图状态续跑正确、恢复输入只进绑定执行）；
 3. **mock 只在边界**：HTTP 端点、LLM 端点；不得 mock 被测子系统本身。
 
 ### 6.2 已知偏差与遗留
