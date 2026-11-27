@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/repositories"
+	personalcontext "github.com/uapclaw/uapclaw-go/internal/swarm/server/personal_context"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -102,6 +103,15 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 	// agent_ws_server.py:3181-3186 的前缀分支，handle_rsi.go 自己写响应）。
 	if strings.HasPrefix(string(request.ReqMethod), "rsi.") {
 		s.HandleRSIRequest(ctx, request)
+		return
+	}
+
+	// 主动上下文（24.3）：personal_context.* method 统一分发（对齐 Python
+	// agent_ws_server.py 挂独立 handler handle_personal_context_request 的层次；
+	// ws_handler 自己构造响应写回，含流式 stream_graph/stream_tree 分帧）。
+	if personalcontext.IsPersonalContextMethod(request.ReqMethod) {
+		personalcontext.HandlePersonalContextRequest(
+			s.personalContext, s, request, nil)
 		return
 	}
 
@@ -451,6 +461,12 @@ func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelo
 			request.Metadata["acp_client_capabilities"] = caps
 		}
 	}
+}
+
+// SendWire personal_context wire 发送面（实现 personalcontext.WireSender；
+// Python send_wire_payload(ws, wire) 的对应物，串行化由 sendToGateway 内部保证）
+func (s *AgentServer) SendWire(data []byte) bool {
+	return s.sendToGateway(data)
 }
 
 // notImplementedResponse 返回 NOT_IMPLEMENTED 错误响应（供 stub handler 使用）。

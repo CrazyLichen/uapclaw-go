@@ -20,10 +20,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	personalcontext "github.com/uapclaw/uapclaw-go/internal/swarm/server/personal_context"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
+	"path/filepath"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -99,6 +101,9 @@ type AgentServer struct {
 	// proactiveEngine 主动推荐引擎；未注入时 proactive.tick 返回「not initialized」
 	// Python: services.proactive_engine
 	proactiveEngine *recommendation.ProactiveEngine
+	// personalContext 主动上下文宿主 API（24.3）
+	// Python: self._personal_context_host（agent_ws_server.py:1381-1385）
+	personalContext *personalcontext.PersonalContextHostAPI
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -165,6 +170,10 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 			}
 		},
 	})
+	// 主动上下文宿主装配（Python agent_ws_server.py:1381-1385：
+	// PersonalContextHostAPI(home=get_user_workspace_dir() / ".personal_context")）
+	server.personalContext = personalcontext.NewPersonalContextHostAPI(
+		filepath.Join(workspace.WorkspaceDir(), ".personal_context"), cfg)
 	// AgentManager 创建门面时把共享账本注入门面（P4：门面不自建账本）。
 	// 返回窄接口（agentRuntimePort）：*AgentRuntime 的两个方法满足它，
 	// 而 AgentManager 侧就不用 import swarm/runtime 的具体类型（P-7 前置）。
@@ -223,6 +232,17 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// 注册全局 Config，供 HookExecutor.queryLLM 运行时读取（executor 已迁 common/hooks）
 	// Python: from jiuwenswarm.common.config import get_config
 	hookscfg.RegisterConfig(s.config)
+
+	// 主动上下文 best-effort 启动（Python agent_ws_server.py:1833-1834, 1887-1895
+	// preparation.register("personal_context") + _start_personal_context_best_effort：
+	// 失败仅记日志，不阻断主服务）
+	go func() {
+		if err := s.personalContext.Start(); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("personal_context best-effort start failed")
+		}
+	}()
 
 	// 注入默认 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
 	adapter.SetDefaultSendPushFunc(s.SendPush)

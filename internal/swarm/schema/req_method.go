@@ -558,6 +558,62 @@ const (
 	ReqMethodScheduleCancel ReqMethod = "schedule.cancel"
 	// ReqMethodScheduleDelete 删除调度任务
 	ReqMethodScheduleDelete ReqMethod = "schedule.delete"
+
+	// ─── 主动上下文（24.3，对齐 ReqMethod.PERSONAL_CONTEXT_*，字面值见 personalContextApi.ts 与
+	// jiuwenswarm gateway 测试 test_app_web_handlers.py:4766/4772）───
+
+	// ReqMethodPersonalContextRuntimeStatus 查询运行时状态（对齐 PERSONAL_CONTEXT_RUNTIME_STATUS）
+	ReqMethodPersonalContextRuntimeStatus ReqMethod = "personal_context.runtime.status"
+	// ReqMethodPersonalContextRuntimeStartCollection 开启采集（对齐 PERSONAL_CONTEXT_RUNTIME_START_COLLECTION）
+	ReqMethodPersonalContextRuntimeStartCollection ReqMethod = "personal_context.runtime.start_collection"
+	// ReqMethodPersonalContextRuntimeStopCollection 停止采集（对齐 PERSONAL_CONTEXT_RUNTIME_STOP_COLLECTION）
+	ReqMethodPersonalContextRuntimeStopCollection ReqMethod = "personal_context.runtime.stop_collection"
+	// ReqMethodPersonalContextRuntimeStartAgentUse 开启智能体使用（对齐 PERSONAL_CONTEXT_RUNTIME_START_AGENT_USE）
+	ReqMethodPersonalContextRuntimeStartAgentUse ReqMethod = "personal_context.runtime.start_agent_use"
+	// ReqMethodPersonalContextRuntimeStopAgentUse 停止智能体使用（对齐 PERSONAL_CONTEXT_RUNTIME_STOP_AGENT_USE）
+	ReqMethodPersonalContextRuntimeStopAgentUse ReqMethod = "personal_context.runtime.stop_agent_use"
+	// ReqMethodPersonalContextRuntimeSetMasterEnabled 设置总开关（对齐 PERSONAL_CONTEXT_RUNTIME_SET_MASTER_ENABLED）
+	ReqMethodPersonalContextRuntimeSetMasterEnabled ReqMethod = "personal_context.runtime.set_master_enabled"
+	// ReqMethodPersonalContextRuntimeGetConfig 读取运行时配置（对齐 PERSONAL_CONTEXT_RUNTIME_GET_CONFIG）
+	ReqMethodPersonalContextRuntimeGetConfig ReqMethod = "personal_context.runtime.get_config"
+	// ReqMethodPersonalContextRuntimePatchConfig 修改运行时配置（对齐 PERSONAL_CONTEXT_RUNTIME_PATCH_CONFIG）
+	ReqMethodPersonalContextRuntimePatchConfig ReqMethod = "personal_context.runtime.patch_config"
+	// ReqMethodPersonalContextRuntimeSelectModel 选择采集模型（对齐 PERSONAL_CONTEXT_RUNTIME_SELECT_MODEL）
+	ReqMethodPersonalContextRuntimeSelectModel ReqMethod = "personal_context.runtime.select_model"
+	// ReqMethodPersonalContextFetchListServices 采集源列表（对齐 PERSONAL_CONTEXT_FETCH_LIST_SERVICES）
+	ReqMethodPersonalContextFetchListServices ReqMethod = "personal_context.fetch.list_services"
+	// ReqMethodPersonalContextFetchCreateService 创建采集源（对齐 PERSONAL_CONTEXT_FETCH_CREATE_SERVICE）
+	ReqMethodPersonalContextFetchCreateService ReqMethod = "personal_context.fetch.create_service"
+	// ReqMethodPersonalContextFetchDeleteService 删除采集源（对齐 PERSONAL_CONTEXT_FETCH_DELETE_SERVICE）
+	ReqMethodPersonalContextFetchDeleteService ReqMethod = "personal_context.fetch.delete_service"
+	// ReqMethodPersonalContextFetchPatchService 修改采集源（对齐 PERSONAL_CONTEXT_FETCH_PATCH_SERVICE）
+	ReqMethodPersonalContextFetchPatchService ReqMethod = "personal_context.fetch.patch_service"
+	// ReqMethodPersonalContextFetchStartService 启动单个采集源（对齐 PERSONAL_CONTEXT_FETCH_START_SERVICE）
+	ReqMethodPersonalContextFetchStartService ReqMethod = "personal_context.fetch.start_service"
+	// ReqMethodPersonalContextFetchStopService 停止单个采集源（对齐 PERSONAL_CONTEXT_FETCH_STOP_SERVICE）
+	ReqMethodPersonalContextFetchStopService ReqMethod = "personal_context.fetch.stop_service"
+	// ReqMethodPersonalContextFetchRunAll 全量采集（对齐 PERSONAL_CONTEXT_FETCH_RUN_ALL）
+	ReqMethodPersonalContextFetchRunAll ReqMethod = "personal_context.fetch.run_all"
+	// ReqMethodPersonalContextFetchRunOne 单源采集（对齐 PERSONAL_CONTEXT_FETCH_RUN_ONE）
+	ReqMethodPersonalContextFetchRunOne ReqMethod = "personal_context.fetch.run_one"
+	// ReqMethodPersonalContextFetchStopRun 停止采集运行（对齐 PERSONAL_CONTEXT_FETCH_STOP_RUN）
+	ReqMethodPersonalContextFetchStopRun ReqMethod = "personal_context.fetch.stop_run"
+	// ReqMethodPersonalContextFetchGetRunStatus 查询采集运行进度（对齐 PERSONAL_CONTEXT_FETCH_GET_RUN_STATUS）
+	ReqMethodPersonalContextFetchGetRunStatus ReqMethod = "personal_context.fetch.get_run_status"
+	// ReqMethodPersonalContextFetchGetAuthorizationStatus 查询 provider 授权状态（对齐 PERSONAL_CONTEXT_FETCH_GET_AUTHORIZATION_STATUS）
+	ReqMethodPersonalContextFetchGetAuthorizationStatus ReqMethod = "personal_context.fetch.get_authorization_status"
+	// ReqMethodPersonalContextFetchAuthorizeProvider 发起 provider 授权（对齐 PERSONAL_CONTEXT_FETCH_AUTHORIZE_PROVIDER）
+	ReqMethodPersonalContextFetchAuthorizeProvider ReqMethod = "personal_context.fetch.authorize_provider"
+	// ReqMethodPersonalContextContextStreamGraph 流式拉取上下文图谱（对齐 PERSONAL_CONTEXT_CONTEXT_STREAM_GRAPH）
+	ReqMethodPersonalContextContextStreamGraph ReqMethod = "personal_context.context.stream_graph"
+	// ReqMethodPersonalContextContextStreamTree 流式拉取上下文节点树（对齐 PERSONAL_CONTEXT_CONTEXT_STREAM_TREE）
+	ReqMethodPersonalContextContextStreamTree ReqMethod = "personal_context.context.stream_tree"
+	// ReqMethodPersonalContextContextSearchPages 搜索上下文页（对齐 PERSONAL_CONTEXT_CONTEXT_SEARCH_PAGES）
+	ReqMethodPersonalContextContextSearchPages ReqMethod = "personal_context.context.search_pages"
+	// ReqMethodPersonalContextContextGetNode 获取上下文节点（对齐 PERSONAL_CONTEXT_CONTEXT_GET_NODE）
+	ReqMethodPersonalContextContextGetNode ReqMethod = "personal_context.context.get_node"
+	// ReqMethodPersonalContextContextGetSource 获取上下文来源（对齐 PERSONAL_CONTEXT_CONTEXT_GET_SOURCE）
+	ReqMethodPersonalContextContextGetSource ReqMethod = "personal_context.context.get_source"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -786,6 +842,33 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodScheduleLogs,
 		ReqMethodScheduleCancel,
 		ReqMethodScheduleDelete,
+		// 主动上下文（24.3）
+		ReqMethodPersonalContextRuntimeStatus,
+		ReqMethodPersonalContextRuntimeStartCollection,
+		ReqMethodPersonalContextRuntimeStopCollection,
+		ReqMethodPersonalContextRuntimeStartAgentUse,
+		ReqMethodPersonalContextRuntimeStopAgentUse,
+		ReqMethodPersonalContextRuntimeSetMasterEnabled,
+		ReqMethodPersonalContextRuntimeGetConfig,
+		ReqMethodPersonalContextRuntimePatchConfig,
+		ReqMethodPersonalContextRuntimeSelectModel,
+		ReqMethodPersonalContextFetchListServices,
+		ReqMethodPersonalContextFetchCreateService,
+		ReqMethodPersonalContextFetchDeleteService,
+		ReqMethodPersonalContextFetchPatchService,
+		ReqMethodPersonalContextFetchStartService,
+		ReqMethodPersonalContextFetchStopService,
+		ReqMethodPersonalContextFetchRunAll,
+		ReqMethodPersonalContextFetchRunOne,
+		ReqMethodPersonalContextFetchStopRun,
+		ReqMethodPersonalContextFetchGetRunStatus,
+		ReqMethodPersonalContextFetchGetAuthorizationStatus,
+		ReqMethodPersonalContextFetchAuthorizeProvider,
+		ReqMethodPersonalContextContextStreamGraph,
+		ReqMethodPersonalContextContextStreamTree,
+		ReqMethodPersonalContextContextSearchPages,
+		ReqMethodPersonalContextContextGetNode,
+		ReqMethodPersonalContextContextGetSource,
 		// 推荐面板（10.7.2）
 		ReqMethodRecommendation,
 		ReqMethodPromptSuggestionCancel,
