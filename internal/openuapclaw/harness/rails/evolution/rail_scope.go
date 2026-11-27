@@ -382,3 +382,17 @@ type ScopeProcessorLike interface {
 
 // scopeProcessorLike 内部别名。
 type scopeProcessorLike = ScopeProcessorLike
+
+// InjectScopeTrajectoryForTest 测试注入团队 scope 轨迹（评审反馈证据面）。
+// 迁移期测试支持（span_helpers.go 同款先例，Python 无对应实现）：
+// scopeWindows 仅由真实 AfterInvoke 采集流程填充，评审反馈全链集成测试
+// 需要"成员读 SKILL.md 证据"的轨迹前置，经此面注入以驱动守卫。
+func (r *EvolutionRail) InjectScopeTrajectoryForTest(sessionID, teamID string, traj *trajectory.Trajectory) {
+	key := scopeKeyOf("team", sessionID, "")
+	r.scopeMu.Lock()
+	if r.scopeWindows == nil {
+		r.scopeWindows = map[string]*scopeWindowState{}
+	}
+	r.scopeWindows[key] = &scopeWindowState{trajectory: traj}
+	r.scopeMu.Unlock()
+}

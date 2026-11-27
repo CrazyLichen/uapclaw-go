@@ -467,6 +467,15 @@ func (c *ReviewFeedbackEvolutionCoordinator) matchingNewSkillPatterns(reusableGu
 // （证据面宽于上游——归因偏保守方向不受影响：读取证明仍需真实 span）。
 // 回收条件 = team 轨迹成员投影面落地后收紧为成员子集。
 func (c *ReviewFeedbackEvolutionCoordinator) getMemberTrajectory(teamRail TeamEvolutionRailLike, assignee string) *trajectory.Trajectory {
+	// D-15.24d-5 修复：对齐 Python _get_member_trajectory（:444-457）——
+	// 成员轨迹用组合 session_id（{team_id}_{assignee} / jiuwen_ 前缀）+ team_id
+	// 查询，而非直接复用团队轨迹。
+	for _, sid := range []string{c.teamID + "_" + assignee, "jiuwen_" + c.teamID + "_" + assignee} {
+		traj, err := teamRail.RailGetTrajectory(sid, c.teamID)
+		if err == nil && traj != nil {
+			return traj
+		}
+	}
 	traj := c.getTeamTrajectory(teamRail)
 	if traj == nil {
 		logger.Warn(logComponent).Str("assignee", assignee).

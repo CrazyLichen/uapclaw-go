@@ -1826,7 +1826,11 @@ func (r *TeamSkillEvolutionRail) ReviewGenerator() *skillopt.TeamSkillExperience
 // 偏差 D-25.2b-17：Go 侧捕获窗口恒 agent scope（rail_scope 捕获键不分区），
 // 读会话窗口作为证据面；回收条件 = rail 捕获键支持 team scope。
 func (r *TeamSkillEvolutionRail) RailGetTrajectory(sessionID, teamID string) (*trajectory.Trajectory, error) {
-	return r.GetTrajectory(sessionID, "", "")
+	// D-15.24d-5 修复（2026-12-26）：原实现丢弃 teamID（GetTrajectory(sessionID,"","")
+	// 走 agent scope key）→ 团队轨迹查询恒空。对齐 Python evolution_rail.py:589-599
+	// get_trajectory(session_id, team_id=...) 的 Team scope 语义
+	//（scheduling/review_feedback_evolution.py:482-483 team_id=self._team_id 必传）。
+	return r.GetTrajectory(sessionID, "", teamID)
 }
 
 // RailDrainApprovalEvents 排干待审批事件（payload map 形态）。
