@@ -40,13 +40,17 @@ func agentGroupMemberCard(pkgDir, memberID string) *hresources.AgentTemplateCard
 }
 
 // parseSkillFrontmatter SKILL.md YAML frontmatter 的 name/description（尽力解析）。
-// Python: _parse_skill_frontmatter_text (:430-453)：YAML 优先，失败回退行解析。
+// Python: _parse_skill_frontmatter (:455-462)。
 func parseSkillFrontmatter(skillMD string) map[string]any {
 	data, err := os.ReadFile(skillMD)
 	if err != nil {
 		return map[string]any{}
 	}
-	text := string(data)
+	return parseSkillFrontmatterText(string(data))
+}
+
+// parseSkillFrontmatterText frontmatter 文本解析。Python: _parse_skill_frontmatter_text (:430-453)。
+func parseSkillFrontmatterText(text string) map[string]any {
 	fmRe := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n?`)
 	match := fmRe.FindStringSubmatch(text)
 	if match == nil {
