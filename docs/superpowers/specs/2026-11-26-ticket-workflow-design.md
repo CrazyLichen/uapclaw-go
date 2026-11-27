@@ -644,6 +644,7 @@ POST /api/v1/chat/send
 
 **语义要点**：
 - send 非流式同步阻塞至本轮挂起/终态才返回；工单系统推荐 SSE 发起后断开 + history 轮询（不受 unary 超时限制）；
+- **断开不触发取消**（代码实证）：SSE 断开仅 break 帧循环（web_http_routes.go:726）、WS 断开仅移除连接（web_connect.go:210），gateway 均不向 agentserver 发 cancel——agentserver 执行不依赖连接存活，断开后 workflow 照常跑到挂起/终态并落历史；**真正取消必须显式调** `POST /chat/{session_id}/actions/interrupt`（intent=cancel）；
 - "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`；工单不感知内部 state 字段；
 - 补充信息（非当前卡应答的 send）视为特征并入恢复输入（答案归属判定 §2.3）；
 - 已终态后 send 的"确认解决"（工单关单下发）为 no-op，仅追加历史。
