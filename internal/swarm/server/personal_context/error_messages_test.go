@@ -89,12 +89,18 @@ func TestLocalizePayload_原样返回(t *testing.T) {
 	if got := LocalizePayload(7, "cn"); got != 7 {
 		t.Errorf("标量应原样: %v", got)
 	}
-	list := LocalizePayload([]any{"a", map[string]any{"code": "154000"}}, "en").([]any)
+	list := LocalizePayload([]any{"a", map[string]any{"code": "154000", "message": "x"}}, "en").([]any)
 	if list[0] != "a" {
 		t.Errorf("列表元素应保留")
 	}
+	// Python：key == "message" 且 value 含 "code" 时才整体翻译（error_messages.py:174-175）
 	if list[1] != messages["config_invalid"][1] {
 		t.Errorf("列表内 map 应递归翻译: %v", list[1])
+	}
+	// 无 message 键时 map 原样保留（Python 无命中分支）
+	plain := LocalizePayload(map[string]any{"code": "154000"}, "en").(map[string]any)
+	if plain["code"] != "154000" || len(plain) != 1 {
+		t.Errorf("无 message 键的 map 应原样: %v", plain)
 	}
 }
 
