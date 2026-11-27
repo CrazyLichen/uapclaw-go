@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	webfiledownload "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -90,12 +91,16 @@ func readPreviewableFile(pkgDir, relPath string) (map[string]any, error) {
 	}
 	size := info.Size()
 	if strings.ToLower(filepath.Ext(rel)) == ".pdf" {
-		// Python: build_file_download_info（web_file_download 半区）——
-		// Go 签名要求 sessionID/userID，预览上下文无会话；偏差 D-5：
-		// PDF 返回 content=null（无 download_url），回收条件：接资产账本会话上下文时补。
+		// Python: build_file_download_info(str(full_path), full_path.name, expires_in=600)
+		// （file_download_token.py:326）——session_id/user_id 走默认空串（预览无会话上下文），
+		// Go 签名一致，传空串即对齐；expires_in=600 秒。
+		expiresIn := 600
+		download := webfiledownload.BuildFileDownloadInfo(
+			fullPath, filepath.Base(fullPath), "", &expiresIn, "")
 		return map[string]any{
-			"path":    rel,
-			"content": nil,
+			"path":         rel,
+			"content":      nil,
+			"download_url": download["download_url"],
 		}, nil
 	}
 	if size > maxPreviewFileBytes {
