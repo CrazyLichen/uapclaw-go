@@ -176,22 +176,3 @@ func TestListAgentGroups_冲突报错(t *testing.T) {
 		t.Fatalf("应报冲突: %v", err)
 	}
 }
-
-// copyTreeHelper 递归拷贝目录（测试助手）。
-func copyTreeHelper(src, dst string) error {
-	return filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, p)
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, readErr := os.ReadFile(p)
-		if readErr != nil {
-			return readErr
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-}
