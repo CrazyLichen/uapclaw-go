@@ -128,9 +128,9 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 ### 2.6 帧与结果纪律（防污染）
 
-1. **结果只进历史**：workflow 每次状态变更经 `AppendHistoryRecord` 追加一条记录（结构化事件载荷，见 §4.2③），**不写 metadata**（metadata 保持会话属性本职，同普通聊天——普通聊天也只刷新属性键，不写内容）；**不产任何流式帧**。
+1. **结果只进历史，且零自定义事件**（本轮拍板）：统一走中断后，全部复用现网白名单事件类型——引导/确认挂起 = `chat.ask_user_question`（AskUserQuestionPayload.questions，含 options/multi_select，前端已有渲染且历史恢复可重弹）、用户回答 = `chat.ask_user_answer`、关闭结论 = `chat.final`。**不定义 ticket 专用 event_type，外部不感知内部状态**（想知道"等什么"看最新一条未配对的 ask_user_question 即可）；**不产流式帧**；不写 metadata。
 2. 聊天模式等待载荷只经 §2.4 中断信封呈现，禁止以普通 tool result 返回。
-3. `Guidance`/`Confirm` 仅聊天实例经 ask_user 中断呈现；HTTP 实例等待信息走历史事件流。
+3. `Guidance`/`Confirm` 两模式经同一 ask_user 卡契约呈现；web 前端渲染卡片，工单系统按同一载荷渲染自有 UI 或直接回传文本/状态事件。
 
 ### 2.7 分流层定位（本轮拍板）
 
@@ -159,9 +159,8 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 | 节点 | 职责 | 产出的阶段 |
 |---|---|---|
-| RouterNode | 图执行启动入口，Intent 前置分流（§3.3） | `searching` 等 |
-| IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取 | — |
-| GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（抛交互挂起） | `guiding` |
+| IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取；输出后接 Pregel 条件边分流（原 RouterNode 职能，§3.3） | `searching` 等 |
+| GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（多问卡 ≤4 问，一卡多问+多选+custom_input；抛交互挂起） | `guiding` |
 | KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定（抛交互挂起待确认） | `wait_confirm` |
 | AgentNode | 诊断 DeepAgent（skill + 附件日志分析） | `wait_confirm` |
 | SettleNode | 关闭后归档：写历史库 / 命中计数 / 演进信号 | `closed` / `abandoned` |
@@ -177,7 +176,7 @@ flowchart TD
     AS --> WF[TicketWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
-        R[RouterNode Intent前置分流] --> I[IntentNode 附件预处理+特征抽取]
+        R[IntentNode 条件边分流] --> I[IntentNode 附件预处理+特征抽取]
         I -->|表象/组件全模糊| G1[GuidanceNode 开放式澄清·抛交互挂起]
         I -->|特征就绪| K[KBSearchNode scope=history]
         G1 -.挂起待补充.-> G1R[恢复后并入特征]
@@ -200,10 +199,12 @@ flowchart TD
     S --> CL[closed + 历史事件]
 ```
 
-### 3.3 RouterNode
+### 3.3 图分支（原 RouterNode 职责的归宿）
 
-- 图执行的启动入口；读 TicketInput 做 Intent 分流前置路由（§3.4 分支 3）；
-- 恢复路径不经 RouterNode——引擎按 checkpoint 重放直续挂起节点；
+图内中断模型下无"重进路由"，RouterNode 作为节点**废除**：
+
+- **Intent 前置分流**（特征全模糊 → GuidanceNode / 特征就绪 → KBSearchNode）= IntentNode 输出后的 **Pregel 条件边**（8.5 addRouter），非独立节点；
+- **biz_event（confirm_solved/not_solved/close）是恢复输入**，由挂起点直接消费（见 §3.3 状态转移表与 §4.2②），无需转译节点；
 - scope 升级（history→business→agent 只进不退）由 KBSearchNode/AgentNode 协作承担。
 
 状态转移表：
@@ -298,7 +299,7 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 **① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.ticket`（会话级固定，显式覆盖式写入即锁定）。
 
-**② send**（既有 POST）：请求体在 TicketInput（§4.3）基础上增加可选 `biz_event`：
+**② send**（既有 POST）：请求体在 TicketInput（§4.3）基础上增加可选 `biz_event` 与可选 `answers`（HTTP 恢复三形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本）：
 
 ```json
 {
@@ -306,11 +307,18 @@ biz_event=close ──▶ SettleNode ──▶ closed
   "reproduce_steps": "高峰期必现",
   "attachments": [{"type": "image", "url": "..."}, {"type": "log", "url": "..."}],
   "ticket_id": "T-123",
-  "biz_event": "confirm_solved"
+  "biz_event": "confirm_solved",
+  "answers": [{"question": "是偶发还是必现？", "selected_options": ["transient"], "custom_input": ""}]
 }
 ```
 
-| biz_event | RouterNode 处理 |
+| 恢复形态 | 语义 | runner 处理 |
+|---|---|---|
+| `answers` 数组 | 结构化回答（工单系统按历史里 ask_user_question 载荷渲染自有 UI） | 复用与 web 同一 `buildInteractiveInputFromAnswers` 拆包 → ii → Invoke 恢复 |
+| 纯文本（description/普通补充） | 自由文本 | 直达挂起节点信箱 → 节点并入特征 |
+| `biz_event` | 状态事件（confirm_solved/not_solved/close） | 映射为对应挂起点的恢复输入（确认卡选项/等待 close） |
+
+| biz_event | 挂起点消费（§3.3） |
 |---|---|
 | 不传 | 普通评论：并入特征，scope 升级重查（wait_confirm 态）/主流程（初态） |
 | `confirm_solved` | 置待归档标记，等 close |
@@ -319,24 +327,25 @@ biz_event=close ──▶ SettleNode ──▶ closed
 
 附件（图片/日志）跟随 message 传递，复用仓内附件安全检查通道。
 
-**③ 结果读取 = 轮询既有历史接口**（本轮拍板，替代原 metadata 扩展键方案）：
+**③ 结果读取 = 轮询既有历史接口，复用现网事件类型（本轮拍板，零自定义事件）**：
 
-- workflow 每次状态变更追加一条历史记录（复用 `AppendHistoryRecord`，record `mode=agent.workflow.ticket`，`content` 为结构化事件载荷 JSON）：
+- 引导/确认挂起 → `chat.ask_user_question` 记录（AskUserQuestionPayload.questions：question/options/multi_select，含完整选项列表——与现网 ask_user 中断落盘形态一致，web 历史恢复可重弹卡）：
 
 ```json
-{
-  "type": "guidance | confirm | solution | state_change | closed",
-  "state": "guiding | wait_confirm | closed | abandoned",
-  "options": [{"label": "偶发还是必现?", "hint": "下游限流类多为高峰期偶发"}],
-  "result": null,
-  "kb_source": null,
-  "ticket_id": "T-123"
-}
+{"role": "assistant", "event_type": "chat.ask_user_question",
+ "questions": [
+   {"question": "是偶发还是必现？", "options": [{"label":"偶发","value":"transient"}, {"label":"必现","value":"always"}],
+    "multi_select": false, "header": "现象特征"},
+   {"question": "还有其他线索？", "header": "补充", "options": []}
+ ],
+ "ticket_id": "T-123"}
 ```
 
-- 外部工单系统按 `since` 时间戳增量拉取（记录自带 message_id/时间戳，天然事件轨迹 + 幂等增量）；事件序最后一条即当前态；
-- `wait_confirm` 阶段交付全量（方案+kb_source+ticket 关联）；`closed` 仅表示已沉淀完成的回执，result 不再变化。终态定义权在工单系统；
-- **metadata 只留会话属性**（mode/channel_id/...），不写任何 workflow 结果——同普通聊天的属性刷新语义。
+- 用户回答 → `chat.ask_user_answer`（answers 数组，question 绑定；含 selected_options/custom_input）；
+- 关闭沉淀完成 → `chat.final`（最终结论文本，白名单内正常消息）；
+- 外部工单系统轮询历史接口取增量（记录自带 id/时间戳，幂等）；**不感知内部 state 字段**——"当前等待什么" = 最新一条未配对的 ask_user_question；
+- **metadata 只留会话属性**（mode/channel_id/...），不写任何 workflow 结果——同普通聊天的属性刷新语义；
+- 前端事实（已核）：`historyRestore.ts` 白名单 `ALLOWED_ASSISTANT_EVENT_TYPES` 含 ask_user_question/answer 与 chat.final——ticket 会话在 web 打开可重弹挂起卡（运营可接管），无空泡渲染风险。
 
 **④ 聊天模式接入（第二阶段，契约预留）**：聊天 DeepAgent 装三个工具（§2.2），中断信封与恢复接缝见 §2.4；结论走会话 chunk→final。前端零改动。
 
