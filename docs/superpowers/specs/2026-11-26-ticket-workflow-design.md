@@ -486,7 +486,7 @@ ProblemInput（runner 内部视角）{
 
 帧协议（与 web 前端同一套）：请求帧 `{"type":"req","id":"1","method":"chat.send","params":{...}}` → 响应帧 `{"type":"res","id":"1",...}`；执行过程中的事件（含 ask_user 卡、结论）以 `{"type":"event","event":"chat.ask_user_question","payload":{...}}` 等白名单事件帧推送到**同一连接**——工单不需要轮询即可收到卡载荷，history.get 仅作断线重连后的兜底增量通道。
 
-附件两阶段契约（同 web 前端）：先 persist 落盘拿 path，chat.send 只引用落盘记录，base64 不进 chat.send。**上传限制**（超限回显 `document_errors` 不静默丢弃，响应带 `forbidden_formats`）：WS 单帧 150MiB（`web_connect.go:108`，为承载 100MiB 文档 base64≈133MiB 而放宽）；文档单个 100MiB + 单次 8 个 + 格式黑名单（`MaxDocumentBytes/MaxDocumentCount`）；图片单张 10MiB + 单次 8 张（`MaxImageBytes/MaxImageCount`）；大日志需工单侧先切分后分段上传。
+附件两阶段契约（同 web 前端）：先 persist 落盘拿 path，chat.send 只引用落盘记录，base64 不进 chat.send。**上传限制**（超限回显 `document_errors` 不静默丢弃，响应带 `forbidden_formats`）：WS 单帧 150MiB（`web_connect.go:108`，为承载 100MiB 文档 base64≈133MiB 而放宽）；文档单个 100MiB + 单次 8 个 + 格式黑名单（`MaxDocumentBytes/MaxDocumentCount`）；图片单张 10MiB + 单次 8 张（`MaxImageBytes/MaxImageCount`）。**大文件分块上传**：WS 方法 `file.upload_chunk`（上游 Python `app_web_handlers.py:5777` / Go `web_handlers_media.go:225` 同款），2MiB/块逐块请求 `{upload_id, target_rel_path, resolved_path, data, final}`，末块返回 path——大日志推荐走此通道（不塞大 base64 帧）；企业版另有 OBS 中转（upload-obs PUT + file.import_url）。
 
 ### 7.2 时序图
 
