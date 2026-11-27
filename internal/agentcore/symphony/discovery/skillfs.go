@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 
 	buildio "github.com/uapclaw/uapclaw-go/internal/agentcore/symphony/retrieval/build/io"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/symphony/retrieval/common"
@@ -1125,9 +1124,9 @@ func CaptureIndexSnapshot(root string) *SkillIndexSnapshot {
 	lockPath := filepath.Join(indexRoot, indexLockFilename)
 	lockFile, lerr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
 	if lerr == nil {
-		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX) // portalocker 等价
+		_ = lockFileExclusive(lockFile) // portalocker 等价
 		defer func() {
-			_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+			_ = unlockFile(lockFile)
 			_ = lockFile.Close()
 		}()
 	}

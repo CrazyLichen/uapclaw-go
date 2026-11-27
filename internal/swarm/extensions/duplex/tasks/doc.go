@@ -14,6 +14,8 @@
 //	├── interactions.go # 交互问题解析与校验（interactions.py）
 //	├── checkpoint.go  # 任务检查点（checkpoint.py）
 //	├── service.go     # TaskService 持久任务队列（service.py）
+//	├── lease_lock_unix.go    # 租约锁（Unix flock）
+//	├── lease_lock_windows.go # 租约锁（Windows LockFileEx）
 //	└── bridge.go     # 网关任务端点绑定（bridge.py，偏差 O-1）
 //
 // 对应 Python 代码：jiuwenswarm/extensions/video_duplex/backend/tasks/

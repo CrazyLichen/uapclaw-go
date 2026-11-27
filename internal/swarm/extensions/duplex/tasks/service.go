@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -105,12 +104,12 @@ func (s *TaskService) Start() error {
 		return nil
 	}
 	// 偏差 D-1：portalocker.Lock(timeout=0) → syscall.Flock 非阻塞独占
-	fd, err := syscall.Open(s.store.Path+".owner", syscall.O_CREAT|syscall.O_RDWR, 0o644)
+	fd, err := openLeaseFile(s.store.Path + ".owner")
 	if err != nil {
 		return err
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = syscall.Close(fd)
+	if err := tryLockLease(fd); err != nil {
+		_ = closeLease(fd)
 		return errors.New("another task service owns this ledger")
 	}
 	s.leaseFd = fd
@@ -150,8 +149,8 @@ func (s *TaskService) Start() error {
 		return nil
 	})
 	if err != nil {
-		_ = syscall.Flock(s.leaseFd, syscall.LOCK_UN)
-		_ = syscall.Close(s.leaseFd)
+		_ = unlockLease(s.leaseFd)
+		_ = closeLease(s.leaseFd)
 		s.leaseFd = -1
 		return err
 	}
@@ -814,8 +813,8 @@ func (s *TaskService) Close() error {
 		_ = s.executor.Close()
 	}
 	if started && leaseFd >= 0 {
-		_ = syscall.Flock(leaseFd, syscall.LOCK_UN)
-		_ = syscall.Close(leaseFd)
+		_ = unlockLease(leaseFd)
+		_ = closeLease(leaseFd)
 	}
 	return nil
 }

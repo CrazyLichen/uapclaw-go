@@ -11,6 +11,8 @@
 //	├── config.go             # DiscoverySettings 与配置装载
 //	├── models.go             # SkillRecord/SkillInventory/扫描/五层缓存
 //	├── skillfs.go            # SkillFS/树视图/四态策略/冻结快照
+//	├── lockfile_unix.go      # 索引发布锁（Unix flock）
+//	├── lockfile_windows.go   # 索引发布锁（Windows LockFileEx）
 //	├── toolkit.go            # 通知基线表/DCI 结果/增量会话
 //	└── directory_toolkit.go  # InstalledSkillsDirectoryToolkit/skill_index 三操作
 package discovery
