@@ -331,12 +331,16 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 ```json
 {
   "query": "推送消息收不到，高峰期必现",
-  "media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}],
-  "documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}],
+  "media_items": [{"type": "image", "filename": "screenshot.png", "path": "/uploads/.../screenshot.png"}],
+  "documents": [{"type": "document", "filename": "app.log", "path": "/uploads/.../app.log"}],
+  "files": {"uploaded_images": [{"filename": "screenshot.png", "path": "/uploads/.../screenshot.png", "mime_type": "image/png", "size_bytes": 12345}],
+            "uploaded_documents": [{"filename": "app.log", "path": "/uploads/.../app.log", "mime_type": "text/plain", "size_bytes": 67890}]},
   "problem_id": "T-123",
   "answers": [{"question": "组件归属？", "selected_options": ["push"], "custom_input": ""}]
 }
 ```
+
+**附件两阶段契约**（与 web 前端同一流程，决议 19）：先经 `POST /sessions/{id}/media`（media.persist）与 `POST /sessions/{id}/documents`（document.persist，含格式黑名单安全检查）上传落盘，chat.send 只引用落盘记录（path），base64 不进 chat.send。runner 拼装 ProblemInput 时附件即含落盘 path——IntentNode 仅读元信息（文件名/类型），AgentNode 按 path 读日志原文，顺序天然满足。
 
 | 恢复形态 | 语义 | runner 处理 |
 |---|---|---|
@@ -349,7 +353,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 | `not_solved` | scope 升级：history→business→agent |
 | `close` | 进 SettleNode 落库+演进，置 closed |
 
-附件（图片/日志）跟随 message 传递，复用仓内附件安全检查通道。
+附件走**两阶段契约**（先 media.persist / document.persist 上传落盘拿 path，chat.send 只引用落盘记录），安全检查在上传端点完成（图片校验 + 文档格式黑名单）。
 
 **③ 结果读取 = 轮询既有历史接口，复用现网事件类型（本轮拍板，零自定义事件）**：
 
@@ -381,7 +385,7 @@ ProblemInput **不是 HTTP 请求体 schema**（HTTP 复用既有 chat.send para
 ProblemInput（runner 内部视角）{
   description     string  必填（表象；来自 params["query"] / 工具参数 description）
   reproduce_steps string  可选（工具参数；HTTP 侧并入 query 文本）
-  attachments     list    可选（HTTP 对外契约：图片传 params["media_items"]、日志/文档传 params["documents"]，经既有 normalize 管线落盘后回填 files["uploaded_images"]/["uploaded_documents"]；files 是内部归一化槽位，不对外）
+  attachments     list    可选（HTTP 对外契约为两阶段：先经 POST /sessions/{id}/media、POST /sessions/{id}/documents 上传落盘（media.persist/document.persist），chat.send 引用落盘记录（media_items/documents 带 path + files 摘要），base64 不进 chat.send）
   problem_id      string  可选（HTTP 侧 params["problem_id"]，工单回关联；聊天侧不传）
 }
 ```
@@ -464,12 +468,14 @@ ProblemInput（runner 内部视角）{
 
 参与方：**工单系统**（外部 HTTP 调用方）→ **Gateway**（`web_http_routes.go` HTTP 端点 + E2A 透传）→ **AgentServer**（envelope 分流 + ProblemDiagnosisWorkflow runner）→ **Workflow**（PregelGraph 图执行实例）。
 
-涉及 HTTP 接口（全部既有，零新增 URL）：
+涉及 HTTP 接口（全部既有，零新增 URL）。附件为**两阶段契约**（与 web 前端同一流程，代码实证 `http_routes_mapped.go:203/205`）：先上传落盘拿 path，再 chat.send 引用落盘记录（base64 只出现在上传端点，chat.send 永远只带记录）：
 
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
 | `POST /api/v1/sessions` | 建会话（mode 锁定） | body `{"metadata": {"mode": "agent.workflow.diagnosis"}}` |
-| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（图片）/`documents`（日志文档）、`problem_id`（可选）、`answers`（可选） |
+| `POST /api/v1/sessions/{session_id}/media` | **图片上传落盘**（media.persist，前置） | base64 图片 → 返回存储记录 `{path, filename, mime_type, size_bytes}` |
+| `POST /api/v1/sessions/{session_id}/documents` | **日志/文档上传落盘**（document.persist，前置；含格式黑名单安全检查） | base64 文档 → 返回存储记录（含 path） |
+| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（落盘图片记录）/`documents`（落盘日志记录）+`files`（uploaded_images/uploaded_documents 摘要）、`problem_id`（可选）、`answers`（可选） |
 | `POST /api/v1/chat/resume` | （备用）恢复挂起会话 | 同 send |
 | `POST /api/v1/chat/{session_id}/actions/user_answer` | （备用）既有中断应答端点 | answers |
 | `GET /api/v1/sessions/{session_id}/history` | 工单轮询结果（唯一结果通道） | 增量按记录 id/时间戳幂等 |
@@ -486,18 +492,26 @@ sequenceDiagram
     participant W as Workflow(图实例)
 
     rect rgb(235,245,255)
-    Note over T,W: 阶段一：建会话 + 首次提交问题
+    Note over T,W: 阶段一：建会话 + 附件上传落盘 + 首次提交问题
     T->>G: POST /api/v1/sessions<br/>{metadata:{mode:agent.workflow.diagnosis}}
     G->>S: E2A session.create（透传）
     S-->>G: {session_id}
     G-->>T: 201 {session_id, ...}
 
-    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到", media_items:[图片], documents:[日志], problem_id:"T-123"}
+    T->>G: POST /api/v1/sessions/{id}/media<br/>{base64 图片}
+    S->>S: media.persist：落盘 uploads 目录
+    G-->>T: {media_items:[{path,filename,mime_type,size_bytes}]}
+
+    T->>G: POST /api/v1/sessions/{id}/documents<br/>{base64 日志 app.log}
+    S->>S: document.persist：格式安全检查+落盘
+    G-->>T: {records:[{path,filename,...}]}
+
+    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到",<br/>media_items:[落盘记录], documents:[落盘记录],<br/>files:{uploaded_images,uploaded_documents}, problem_id:"T-123"}
     G->>S: E2A chat.send（透传）
     S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
-    S->>S: 附件 normalize 管线（图片落盘/文档安全检查）<br/>runner 拼装 ProblemInput（attachments=files 归一化结果）
+    S->>S: runner 拼装 ProblemInput<br/>（attachments=落盘记录，含 path）
     S->>W: Invoke(ProblemInput)
-    W->>W: IntentNode：图片→视觉模型；日志不碰；<br/>就绪判定：表象✓ 组件✗
+    W->>W: IntentNode：图片→视觉模型；日志不碰（只读文件名/类型）；<br/>就绪判定：表象✓ 组件✗
     W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
     S->>S: 中断载荷追加历史（chat.ask_user_question）
     S-->>G: send 同步响应 {ok:true}
@@ -565,20 +579,38 @@ POST /api/v1/sessions
 
 mode 经 `SyncSessionRequestMetadata` 显式覆盖式写入，会话生命周期内不可变（§2.7）。
 
-**② 首次 send（问题提交）**
+**② 附件上传落盘（先于 send，两阶段契约）**
+
+```
+POST /api/v1/sessions/{session_id}/media
+{"media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}]}
+→ 200 {"media_items": [{"type": "image", "filename": "screenshot.png",
+        "path": "/uploads/web_xxx/screenshot.png", "mime_type": "image/png", "size_bytes": 12345}]}
+
+POST /api/v1/sessions/{session_id}/documents
+{"documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}]}
+→ 200 {"records": [{"type": "document", "filename": "app.log",
+        "path": "/uploads/web_xxx/app.log", "mime_type": "text/plain", "size_bytes": 67890}]}
+```
+
+**③ 首次 send（问题提交，只引用落盘记录，不带 base64）**
 
 ```
 POST /api/v1/chat/send
 {
   "query": "推送消息收不到，高峰期必现",
-  "media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}],
-  "documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}],
+  "media_items": [{"type": "image", "filename": "screenshot.png", "path": "/uploads/web_xxx/screenshot.png"}],
+  "files": {"uploaded_images": [{"filename": "screenshot.png", "path": "/uploads/web_xxx/screenshot.png",
+            "mime_type": "image/png", "size_bytes": 12345}],
+           "uploaded_documents": [{"filename": "app.log", "path": "/uploads/web_xxx/app.log",
+            "mime_type": "text/plain", "size_bytes": 67890}]},
+  "documents": [{"type": "document", "filename": "app.log", "path": "/uploads/web_xxx/app.log"}],
   "problem_id": "T-123"
 }
 → 200 {"ok": true, "request_id": "req-1"}   ← 同步即回，不等待工作流结果
 ```
 
-**③ 挂起后 history 轮询（工单拿到"等什么"）**
+**④ 挂起后 history 轮询（工单拿到"等什么"）**
 
 ```
 GET /api/v1/sessions/{session_id}/history
@@ -593,7 +625,7 @@ GET /api/v1/sessions/{session_id}/history
   ]}
 ```
 
-**④ 恢复应答（结构化 answers）**
+**⑤ 恢复应答（结构化 answers）**
 
 ```
 POST /api/v1/chat/send
@@ -601,7 +633,7 @@ POST /api/v1/chat/send
 → 200 {"ok": true, "request_id": "req-2"}
 ```
 
-**⑤ 确认解决 → 终态**
+**⑥ 确认解决 → 终态**
 
 ```
 POST /api/v1/chat/send
