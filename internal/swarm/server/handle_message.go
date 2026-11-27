@@ -174,6 +174,28 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 	// 会话控制面（session_repository.py handle_pin）
 	case schema.ReqMethodSessionPin:
 		resp = repositories.HandleSessionRequest(request)
+	// 扩展设备管理（extension_package_manager.py 分派，interface.py:2980）
+	case schema.ReqMethodAgentTemplatesList,
+		schema.ReqMethodAgentTemplatesShow,
+		schema.ReqMethodAgentTemplatesFileList,
+		schema.ReqMethodAgentTemplatesFileRead,
+		schema.ReqMethodAgentTemplatesCreate,
+		schema.ReqMethodAgentTemplatesImportLocal,
+		schema.ReqMethodAgentTemplatesInstall,
+		schema.ReqMethodAgentTemplatesUninstall,
+		schema.ReqMethodAgentTemplatesUpdate,
+		schema.ReqMethodAgentTemplatesDelete,
+		schema.ReqMethodAgentGroupsList,
+		schema.ReqMethodAgentGroupsShow,
+		schema.ReqMethodAgentGroupsFileList,
+		schema.ReqMethodAgentGroupsFileRead,
+		schema.ReqMethodAgentGroupsCreate,
+		schema.ReqMethodAgentGroupsImportLocal,
+		schema.ReqMethodAgentGroupsInstall,
+		schema.ReqMethodAgentGroupsUninstall,
+		schema.ReqMethodPluginPackagesInstall,
+		schema.ReqMethodPluginPackagesUninstall:
+		resp = HandlePackageCatalogRequest(request)
 	// 配置面板（27.4，Python: config_adapter.py ConfigAdapter.handle 分派）
 	case schema.ReqMethodConfigGet,
 		schema.ReqMethodConfigSet,

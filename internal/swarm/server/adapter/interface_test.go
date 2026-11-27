@@ -16,6 +16,11 @@ type stubAdapter struct{}
 
 var _ AgentAdapter = (*stubAdapter)(nil)
 
+// UnloadEquipmentIfLoaded 测试桩 no-op。
+func (s *stubAdapter) UnloadEquipmentIfLoaded(kind, packageID string) error {
+	return nil
+}
+
 func (s *stubAdapter) CreateInstance(_ context.Context, _ map[string]any, _ string, _ string, _ map[string]any) error {
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 
 // TestAllReqMethods 验证 AllReqMethods 返回全部枚举值
 // （27.4 新增 14 个配置面板方法 + 27.8 媒体/文件域十常量 + 27-A B2 workspace 四常量：192；
-// 2026-11-27 +10：session.assets+项目控制面 → 203；+20：扩展设备管理 → 223）
+// 2026-11-27 +10：session.assets+项目控制面 → 203（+1 session.pin）；+20：扩展设备管理 → 223）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
 	if len(methods) != 223 {

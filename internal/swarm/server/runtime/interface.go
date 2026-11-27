@@ -22,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	swruntimeattachments "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/attachments"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/equipment"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -162,7 +163,25 @@ func NewUapClaw() *UapClawSwarm {
 		appCancel:          appCancel,
 		sessionManager:     session.NewSessionManager(),
 	}
+	// 设备卸载缝注入（extension_package_manager update/delete/uninstall 的
+	// unload-live 联动；Python: interface_deep.py unload_equipment_if_loaded
+	// 经 self._adapter 属性探测）。懒初始化适配器，未启动前 no-op。
+	equipment.SetUnloadLiveAdapter(&uapClawUnloadAdapter{swarm: uc})
 	return uc
+}
+
+// uapClawUnloadAdapter 设备卸载缝的门面实现。
+type uapClawUnloadAdapter struct {
+	swarm *UapClawSwarm
+}
+
+// UnloadEquipmentIfLoaded 确保根适配器后委托卸载扇出。
+func (u *uapClawUnloadAdapter) UnloadEquipmentIfLoaded(kind, packageID string) error {
+	adapter, err := u.swarm.ensureAdapter("")
+	if err != nil {
+		return err
+	}
+	return adapter.UnloadEquipmentIfLoaded(kind, packageID)
 }
 
 // SetAgentRuntime 注入执行账本归属方（P4）。

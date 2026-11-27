@@ -246,7 +246,7 @@ func TestDeliverControlStream_emit失败可恢复(t *testing.T) {
 		t.Fatalf("emit=false 按 GeneratorExit 收尾不应报错: %v", err)
 	}
 	// exec-2：CANCELLED
-		// exec-2 的 request_id = 命中的交互标识（claimControlParent 返回
+	// exec-2 的 request_id = 命中的交互标识（claimControlParent 返回
 	// matchedRequestID）；Select 无 WorkKind 过滤，手工过滤
 	var childState SessionExecutionState
 	foundChild := false
@@ -279,4 +279,3 @@ func TestDeliverControlStream_emit失败可恢复(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
-

@@ -1,8 +1,8 @@
-// Python 源：jiuwenswarm/server/runtime/extension_package_manager.py（15.18a 最小切片）。
-// 仅移植三个纯本地函数（agent_template_runtime :244-283 / resolve_agent_template_dir
-// :1302-1305 / resolve_equipment_runtime_id :3269-3274）及其直接依赖的路径助手；
-// Hub 市场/下载/安装/卸载/预览半区（~4600 行）不移植，挂账 ⤴️扩展包管理章节回收
-// （15.18a 等待回填）。专家包来源=内置目录或手工放置 local 目录，无在线下载。
+// Python 源：jiuwenswarm/server/runtime/extension_package_manager.py（15.18a 切片 +
+// 2026-11-27 回收批：本地管理半区已并入本包 package_dirs/cards/install_state/
+// show/files/local_mgmt/import_package/uninstall_notice/unload_live 各文件；
+// Hub 市场/下载/安装半区按用户裁决整体不移植——偏差 D-1/D-2，install 返回
+// MARKET_UNAVAILABLE，回收条件：接入市场服务时按 Python hub_asset_port 补）。
 //
 // 偏差（登记 D-18-a-4）：Python 切片函数位于 server/runtime 包内，Go 侧因 runtime 包
 // 反向依赖 adapter（image_modality_warmup）构成 import cycle，下沉为叶子子包 equipment。
@@ -49,8 +49,9 @@ func SetAgentTemplateRuntimeProvidersForTest(names []string) func() {
 // AgentTemplateRuntime 校验专家卡片的 runtime 声明并规范化。
 // Python: extension_package_manager.py:244-283 agent_template_runtime（卡片形态分支
 // :258-263 + 尾部 provider 闭集门卫 :271-276）。
-// 偏差 D-18-a-1：入参收窄为已加载卡片（Python 另收 raw dict / AgentTemplateSpec；
-// dict 形态在 Go 侧不可达——15.14 卡片已结构化，spec 形态见 AgentTemplateRuntimeFromSpec）。
+// 偏差 D-18-a-1（保持，2026-11-27 复核）：入参收窄为已加载卡片（Python 另收 raw
+// dict / AgentTemplateSpec；dict 形态在 Go 侧不可达——15.14 卡片已结构化，
+// spec 形态见 AgentTemplateRuntimeFromSpec；与 15.14 D-1 同理由，非 Hub 半区件）。
 func AgentTemplateRuntime(card hresources.AgentTemplateCard) (*hschema.AgentRuntimeSpec, error) {
 	// 卡片形态：runtime 为 "native"（非空 dict 未声明）→ 无外部 runtime；
 	// 否则以 manifest.runtime.provider_name + manifest.runtime.config 构造。
@@ -75,7 +76,7 @@ func AgentTemplateRuntime(card hresources.AgentTemplateCard) (*hschema.AgentRunt
 // AgentTemplateRuntimeFromSpec 校验已加载 spec 的 runtime 声明。
 // Python: extension_package_manager.py:255-257（AgentTemplateSpec 形态直取
 // manifest.runtime，模型层已校验）+ :271-276 尾部闭集门卫。
-// 偏差 D-18-a-1 同上：Go 侧拆出独立入口以区分两种已加载形态。
+// 偏差 D-18-a-1 同上（保持）：Go 侧拆出独立入口以区分两种已加载形态。
 func AgentTemplateRuntimeFromSpec(spec *hschema.AgentTemplateSpec) (*hschema.AgentRuntimeSpec, error) {
 	return gateRuntimeProviders(spec.Runtime)
 }
@@ -95,8 +96,9 @@ func ResolveAgentTemplateDirIn(name, agentWorkspace string) (string, error) {
 
 // ResolveEquipmentRuntimeID 把 Hub 资产 UUID 翻译成本地运行时包标识。
 // Python: extension_package_manager.py:3269-3274 resolve_equipment_runtime_id。
-// 偏差 D-18-a-2：hub 安装状态存储（_hub_install_state_store）属下载/市场半区未移植，
-// 本实现恒走「查表 miss 原样返回」分支；回收点 ⤴️扩展包管理章节（15.18a）。
+// 偏差 D-18-a-2 已回收（2026-11-27）：hub 安装状态存储本地段已移植为
+// install_state.go HubInstallStateStore（hub_state.json，键 asset_id）；
+// 本实现查表 miss 原样返回分支对齐不变，Hub 记录随 D-1 不写入。
 func ResolveEquipmentRuntimeID(kind, identifier string) (string, error) {
 	// Python: _lifecycle_package_id({"id": identifier}, _hub_asset_kind(kind)) :2034-2038
 	// ——取 params.id 并按 rejectPackageName 校验（hub asset kind 作错误文案 kind）。
@@ -142,8 +144,9 @@ func sliceContains(set []string, value string) bool {
 
 // rejectPackageName 拒绝空、点、隐藏、路径分隔符包名。
 // Python: extension_package_manager.py:111-133 _reject_package_name。
-// 偏差（登记 D-18-a-3）：agent_group 分支的 AgentGroupPackageError 类型属 agent_group
-// 半区未移植，切片只涉 agent_template，非法名一律 ValueError 等价 error；回收点补。
+// 偏差 D-18-a-3 已回收（2026-11-27）：AgentGroupPackageError 类型已随
+// local_mgmt.go 分组建包移植（Code=AGENT_GROUP_NAME_INVALID 等六码）；
+// 本函数保持 ValueError 等价 error（15.18 切片调用方语义不变）。
 func rejectPackageName(name, kind string) (string, error) {
 	raw := strings.TrimSpace(name)
 	if raw == "" {

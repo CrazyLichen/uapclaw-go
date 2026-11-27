@@ -753,11 +753,11 @@ func TestEvolutionSlashDisplayLevel(t *testing.T) {
 // Python: evolution_slash_command_name()（evolution_helpers.py:341-347）。
 func TestEvolutionSlashCommandName(t *testing.T) {
 	for q, want := range map[string]string{
-		"/evolve_list x":  "evolve_list",
+		"/evolve_list x":   "evolve_list",
 		"/evolve_simplify": "evolve_simplify",
-		"/evolve skill":   "evolve",
-		"/evolve":         "evolve",
-		"/other":          "evolve",
+		"/evolve skill":    "evolve",
+		"/evolve":          "evolve",
+		"/other":           "evolve",
 	} {
 		if got := EvolutionSlashCommandName(q); got != want {
 			t.Fatalf("%q → %q, want %q", q, got, want)

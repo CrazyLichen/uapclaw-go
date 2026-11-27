@@ -1206,8 +1206,10 @@ func (r *AgentRuntime) StreamInteractionAnswer(
 // streamControlInputAnswer 交互答案经控制车道投递（DeliverControlStream）。
 // Python: service.py:2064-2077 一比一：
 // deliver_control_stream(session, answered=_control_ids(request),
-//   operation=lambda: _stream_control_started(request),
-//   interaction_ids=interaction_ids, on_execution=remember_execution)。
+//
+//	operation=lambda: _stream_control_started(request),
+//	interaction_ids=interaction_ids, on_execution=remember_execution)。
+//
 // emit=false（消费者关流）→ exec-2 CANCELLED + 父执行放回 waiting。
 func (r *AgentRuntime) streamControlInputAnswer(
 	ctx context.Context, req *schema.AgentRequest, params map[string]any,

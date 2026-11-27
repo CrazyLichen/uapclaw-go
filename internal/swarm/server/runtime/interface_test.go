@@ -54,6 +54,11 @@ type fakeAdapter struct {
 	recapErr        error
 }
 
+// UnloadEquipmentIfLoaded 测试桩 no-op（AgentAdapter 接口收敛）。
+func (f *fakeAdapter) UnloadEquipmentIfLoaded(kind, packageID string) error {
+	return nil
+}
+
 func newFakeAdapter() *fakeAdapter {
 	return &fakeAdapter{
 		processResp:    schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true), schema.WithPayload(map[string]any{"content": "mock response"})),

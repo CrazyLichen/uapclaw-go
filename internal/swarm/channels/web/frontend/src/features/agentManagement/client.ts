@@ -4,7 +4,6 @@ import { connectorApi } from '../../services/connectorApi';
 import { webRequest } from '../../services/webClient';
 import { requestEquipmentList } from '../equipmentListRequest';
 import {
-  AgentInstallPendingError,
   AgentManagementError,
   type AgentCatalogListOptions,
   type AgentManagementClient,
@@ -105,25 +104,6 @@ function rethrowAgentError(error: unknown): never {
   throw new AgentManagementError(String(error));
 }
 
-function extractPendingConnectors(error: unknown): string[] | undefined {
-  const payload = error instanceof AgentManagementError ? error.payload : undefined;
-  if (payload && typeof payload === 'object') {
-    const pending = (payload as { pending_connectors?: unknown }).pending_connectors;
-    if (Array.isArray(pending) && pending.every((item) => typeof item === 'string') && pending.length > 0)
-      return pending;
-  }
-
-  // The current Gateway error projection keeps the contract's human-readable
-  // message but drops the failed payload. Preserve the install flow when that
-  // projection is encountered; unrelated errors do not match this exact form.
-  const message = error instanceof Error ? error.message : String(error || '');
-  const names = /^connector not connected:\s*(.+)$/i
-    .exec(message.trim())?.[1]
-    ?.split(',')
-    .map((name) => name.trim())
-    .filter(Boolean);
-  return names && names.length > 0 ? names : undefined;
-}
 
 function mergeTeamMarketplaceSkillOptions(
   skillOptions: SkillOption[],
@@ -393,18 +373,10 @@ export function createLiveAgentManagementClient(): AgentManagementClient {
         return rethrowAgentError(error);
       }
     },
-    async installDefinition(id) {
-      try {
-        await webRequest('agent_templates.install', { id }, { timeoutMs: 180000 });
-        invalidateAgentCatalog();
-        return { kind: 'ok' };
-      } catch (error) {
-        const pendingConnectors = extractPendingConnectors(error);
-        if (pendingConnectors) {
-          throw new AgentInstallPendingError(error instanceof Error ? error.message : String(error), pendingConnectors);
-        }
-        return rethrowAgentError(error);
-      }
+    async installDefinition(_id) {
+      // 2026-11-27 用户裁决：专家 Hub 不启用（后端 MARKET_UNAVAILABLE），入口不发起调用。
+      // 回收条件：接入市场服务时恢复此调用（见 spec 2026-11-27-agent-template-management-design.md D-1）。
+      throw new AgentManagementError('专家市场服务未启用', 'market_unavailable', false);
     },
     async uninstallDefinition(id) {
       try {

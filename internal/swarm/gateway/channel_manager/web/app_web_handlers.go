@@ -344,6 +344,21 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	// E2A 转发 AgentServer 控制面 session_repository handle_pin）───
 	wc.registerMethod("session.pin", configForwardToAgent(wc, agentClient, "session.pin"), false)
 
+	// ─── 扩展设备管理 20 方法（Python app_web_handlers.py 注册段——
+	// E2A 转发 AgentServer 控制面 handle_equipment_catalog）───
+	for _, m := range []string{
+		"agent_templates.list", "agent_templates.show", "agent_templates.file.list",
+		"agent_templates.file.read", "agent_templates.create", "agent_templates.import_local",
+		"agent_templates.install", "agent_templates.uninstall", "agent_templates.update",
+		"agent_templates.delete",
+		"agent_groups.list", "agent_groups.show", "agent_groups.file.list",
+		"agent_groups.file.read", "agent_groups.create", "agent_groups.import_local",
+		"agent_groups.install", "agent_groups.uninstall",
+		"plugin_packages.install", "plugin_packages.uninstall",
+	} {
+		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
+	}
+
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)

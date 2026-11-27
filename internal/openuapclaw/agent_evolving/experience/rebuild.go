@@ -8,15 +8,15 @@ import (
 	"context"
 	"sort"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/agent_evolving/evoschema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // rebuildDefaults 构造缺省值。
 // Python: prepare_rebuild_context 形参缺省（rebuild.py:27-29）。
 const (
-	defaultRebuildMinScore         = 0.5
+	defaultRebuildMinScore          = 0.5
 	defaultRebuildMaxContextRecords = 40
 	defaultRebuildMaxContextChars   = 20000
 )
@@ -26,7 +26,7 @@ const (
 // ExperienceRebuildService 准备确定性重建上下文（不生成重建正文）。
 // Python: ExperienceRebuildService（rebuild.py:15-71）。
 type ExperienceRebuildService struct {
-	store         *checkpointing.EvolutionStore
+	store          *checkpointing.EvolutionStore
 	archiveService *EvolutionArchiveService
 }
 
@@ -200,4 +200,3 @@ func toRebuildItem(record *checkpointing.EvolutionRecord, content string) map[st
 	item["content"] = content
 	return item
 }
-
