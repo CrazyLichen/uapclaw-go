@@ -1615,8 +1615,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	}
 
 	// External Harness 会话分流（Python: :19001-19068；15.18 接线：child 流式入口）。
-	// _ensure_chat_extensions 门卫为 equipment 扩展半区（D-e12 ⤴️扩展包管理），
-	// Go 侧结构性跳过，登记偏差 D-18-12。
+	// _ensure_chat_extensions 门卫为 equipment 扩展半区（D-e12 已随 15.18a
+	// 回收批闭合 2026-11-27：本地管理半区移植、D-18-12 结构性跳过语义保持——
+	// 扩展装配面仍属执行平面挂账）。
 	if d.externalHarnessBinding != nil {
 		return d.ProcessExternalHarnessStream(ctx, d.externalHarnessState, req, inputs), nil
 	}
