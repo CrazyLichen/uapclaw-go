@@ -7,11 +7,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
+	uinterrupt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
-	uinterrupt "github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/rails/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/harness/prompts"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

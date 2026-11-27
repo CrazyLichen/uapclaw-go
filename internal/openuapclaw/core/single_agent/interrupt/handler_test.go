@@ -746,8 +746,8 @@ func TestHandleResume_clientTool无人回答保持暂停(t *testing.T) {
 
 	clientReq := saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{})
 	entry := &saschema.ToolInterruptEntry{
-		ToolCall:   &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
-		PausedCall: &llmschema.ToolCall{ID: "outer1", Name: "client_tool", Arguments: `{"q":1}`},
+		ToolCall:          &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
+		PausedCall:        &llmschema.ToolCall{ID: "outer1", Name: "client_tool", Arguments: `{"q":1}`},
 		InterruptRequests: map[string]saschema.InterruptRequester{"outer1": clientReq},
 	}
 	saschema.IssueInterruptRequesterID(clientReq, "outer1", nil)
@@ -757,8 +757,8 @@ func TestHandleResume_clientTool无人回答保持暂停(t *testing.T) {
 	permReq := &saschema.InterruptRequest{Message: "允许吗", InterruptOwner: "perm.rail"}
 	saschema.IssueInterruptRequesterID(permReq, "tc2", nil)
 	permEntry := &saschema.ToolInterruptEntry{
-		ToolCall:   &llmschema.ToolCall{ID: "tc2", Name: "bash"},
-		PausedCall: &llmschema.ToolCall{ID: "tc2", Name: "bash"},
+		ToolCall:          &llmschema.ToolCall{ID: "tc2", Name: "bash"},
+		PausedCall:        &llmschema.ToolCall{ID: "tc2", Name: "bash"},
 		InterruptRequests: map[string]saschema.InterruptRequester{"tc2": permReq},
 	}
 	intState := &saschema.ToolInterruptionState{
@@ -916,9 +916,9 @@ func TestSaveAutoConfirm_子类请求(t *testing.T) {
 	saschema.IssueInterruptRequesterID(askReq, "tc1", nil)
 	answers := map[string]*saschema.InterruptAnswer{
 		askReq.GetInterruptID(): {
-			Owner:  askReq.GetInterruptOwner(),
-			Kind:   askReq.GetInterruptKind(), // UNDECLARED，在白名单内
-			Value:  map[string]any{"approved": true, "auto_confirm": true},
+			Owner:   askReq.GetInterruptOwner(),
+			Kind:    askReq.GetInterruptKind(), // UNDECLARED，在白名单内
+			Value:   map[string]any{"approved": true, "auto_confirm": true},
 			Request: askReq,
 		},
 	}
