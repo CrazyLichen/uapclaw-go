@@ -918,7 +918,7 @@ func configForwardToAgent(wc *WebChannel, ac *routing.AgentClient, method string
 			wc.sendResponse(ws, reqID, false, nil, "AgentServer not ready", WsErrInternalError)
 			return
 		}
-		env := e2a.E2AFromAgentFields("",
+		env := e2a.E2AFromAgentFields(reqID,
 			e2a.WithFieldChannelID(""),
 			e2a.WithFieldSessionID(sessionID),
 			e2a.WithFieldReqMethod(method),
@@ -957,7 +957,7 @@ func permissionsForwardToAgent(wc *WebChannel, ac *routing.AgentClient, method s
 	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
 		// AgentServer 已就绪 → E2A 转发
 		if ac != nil && ac.ServerReady() {
-			env := e2a.E2AFromAgentFields("",
+			env := e2a.E2AFromAgentFields(reqID,
 				e2a.WithFieldChannelID(""),
 				e2a.WithFieldSessionID(sessionID),
 				e2a.WithFieldReqMethod(method),
