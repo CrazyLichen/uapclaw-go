@@ -18,11 +18,11 @@ import (
 const maxPreviewFileBytes = 1 * 1024 * 1024
 
 // previewSensitiveKeyPattern 敏感键（JSON 键/文本行键）。
-// Python: _PREVIEW_SENSITIVE_KEY_PATTERN (:73-77)。
+// Python: _PREVIEW_SENSITIVE_KEY_PATTERN。
 var previewSensitiveKeyPattern = regexp.MustCompile(`(?i)(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|authorization|auth[_-]?(?:code|token)|credential|private[_-]?key|user[_-]?id|project[_-]?id|amap[_-]?key|map[_-]?ak)`)
 
 // previewPrivateKeyPattern PEM 私钥块。
-// Python: _PREVIEW_PRIVATE_KEY_PATTERN (:78-80)。
+// Python: _PREVIEW_PRIVATE_KEY_PATTERN。
 var previewPrivateKeyPattern = regexp.MustCompile(`(?s)-----BEGIN [^-\r\n]*PRIVATE KEY-----.*?-----END [^-\r\n]*PRIVATE KEY-----`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -38,7 +38,7 @@ func ListPackageFiles(kindLabel, name string) ([]map[string]any, error) {
 	return buildFileTree(pkgDir, pkgDir), nil
 }
 
-// ReadPackageFile 读一个可预览文件（脱敏链）。
+// ReadPackageFile 读一个可预览文件（类型门卫 + 大小门卫 + 脱敏）。
 // Python: read_agent_template_file (:3696-3699) / read_agent_group_file (:3664-3670)
 // → _read_previewable_file (:3570-3602)。
 func ReadPackageFile(kindLabel, name, relPath string) (map[string]any, error) {
@@ -60,16 +60,14 @@ func previewDirFor(kindLabel, name string) (string, error) {
 		packageID = record.PackageID
 	}
 	var pkgDir string
-	var source string
 	if kindLabel == "agent_group" {
-		pkgDir, source, _ = resolveShowPackageDir(packageID, "agent_group")
+		pkgDir, _, _ = resolveShowPackageDir(packageID, "agent_group")
 	} else {
-		pkgDir, source, _ = resolveShowPackageDir(packageID, "agent_template")
+		pkgDir, _, _ = resolveShowPackageDir(packageID, "agent_template")
 	}
 	if pkgDir == "" {
 		logger.Warn(logger.ComponentAgentServer).Str("package", packageID).
 			Msg("[equipment] preview package not found")
-		_ = source
 		return "", &PackageConflictError{Message: kindLabel + " package not found: " + packageID}
 	}
 	return pkgDir, nil
@@ -92,8 +90,9 @@ func readPreviewableFile(pkgDir, relPath string) (map[string]any, error) {
 	}
 	size := info.Size()
 	if strings.ToLower(filepath.Ext(rel)) == ".pdf" {
-		// Python: build_file_download_info（web_file_download 半区，15.16f/资产账本）——
-		// Go 侧 web_file_download.go 已有对应物（D-23.8-5 批）；此处返回路径形态对齐。
+		// Python: build_file_download_info（web_file_download 半区）——
+		// Go 签名要求 sessionID/userID，预览上下文无会话；偏差 D-5：
+		// PDF 返回 content=null（无 download_url），回收条件：接资产账本会话上下文时补。
 		return map[string]any{
 			"path":    rel,
 			"content": nil,
@@ -101,14 +100,14 @@ func readPreviewableFile(pkgDir, relPath string) (map[string]any, error) {
 	}
 	if size > maxPreviewFileBytes {
 		return nil, &PackageConflictError{
-			Message: rel + " (" + itoaStr(size) + " bytes)"}
+			Message: rel + " (" + intToStr(size) + " bytes)"}
 	}
 	data, readErr := os.ReadFile(fullPath)
 	content := ""
 	if readErr == nil {
 		content = string(data)
 	} else {
-		content = "[二进制文件，大小 " + itoaStr(size) + " bytes]"
+		content = "[二进制文件，大小 " + intToStr(size) + " bytes]"
 	}
 	return map[string]any{
 		"path":    rel,
@@ -204,8 +203,8 @@ func maskSensitiveLine(line string) string {
 	return utils.MaskSensitive(line)
 }
 
-// itoaStr int64 → 字符串。
-func itoaStr(v int64) string {
+// intToStr int64 → 十进制字符串。
+func intToStr(v int64) string {
 	if v == 0 {
 		return "0"
 	}

@@ -2,8 +2,10 @@ package equipment
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -189,7 +191,53 @@ func RemoveAgentGroupMarketplaceEntry(packageID string) error {
 	return removeMarketplaceEntry(agentGroupKind, packageID)
 }
 
-// HubInstallStateStore 设备安装状态存储（本地段）。
+// hubStatePath Hub 安装状态独立文件：<kind_root>/hub_state.json。
+// Python: hub_install_state.py HubInstallStateStore.__init__（kind_root / "hub_state.json"）——
+// 与 marketplace.json 是两套文件（本批曾误合并导致本地包被误判 Hub 记录，已修正）。
+func hubStatePath(kind string) string {
+	return filepath.Join(equipmentKindRoot(kind, ""), "hub_state.json")
+}
+
+// readHubStatePackages 读 hub_state.json 的 packages 数组（键为 asset_id）。
+// Python: HubInstallStateStore._read。
+func readHubStatePackages(hubStatePath string) []map[string]any {
+	data, err := os.ReadFile(hubStatePath)
+	if err != nil {
+		return []map[string]any{}
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return []map[string]any{}
+	}
+	items, _ := doc["packages"].([]any)
+	out := []map[string]any{}
+	for _, item := range items {
+		if m, ok := item.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// writeHubStatePackages 原子写回（对齐 Python _write：临时文件 + replace）。
+func writeHubStatePackages(hubStatePath string, packages []map[string]any) error {
+	if err := os.MkdirAll(filepath.Dir(hubStatePath), 0o755); err != nil {
+		return err
+	}
+	payload := map[string]any{"packages": packages}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(filepath.Dir(hubStatePath),
+		"."+filepath.Base(hubStatePath)+"."+fmt.Sprintf("%d", time.Now().UnixNano())+".tmp")
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, hubStatePath)
+}
+
+// HubInstallStateStore Hub 安装状态存储（本地段）。
 // Python: marketplace/hub_install_state.py HubInstallStateStore（get/get_by_package_id/
 // set/remove 本地段）；Hub 远端同步函数不移植（偏差 D-1）。
 type HubInstallStateStore struct {
@@ -202,12 +250,14 @@ func NewHubInstallStateStore(kind string) *HubInstallStateStore {
 	return &HubInstallStateStore{kind: kind}
 }
 
-// Get 按记录主键（包名或 asset_id）取记录。
-// Python: HubInstallStateStore.get。
-func (s *HubInstallStateStore) Get(id string) *HubInstallStateRecord {
-	entries := readMarketplaceEntries(equipmentMarketplacePath(s.kind, ""))
-	for _, entry := range entries {
-		if eid, _ := entry["id"].(string); eid == id {
+// Get 按 asset_id 取记录。Python: HubInstallStateStore.get（_read 以 asset_id 键控）。
+func (s *HubInstallStateStore) Get(assetID string) *HubInstallStateRecord {
+	assetID = strings.TrimSpace(assetID)
+	if assetID == "" {
+		return nil
+	}
+	for _, entry := range readHubStatePackages(hubStatePath(s.kind)) {
+		if aid, _ := entry["asset_id"].(string); aid == assetID {
 			return recordFromEntry(entry)
 		}
 	}
@@ -217,20 +267,22 @@ func (s *HubInstallStateStore) Get(id string) *HubInstallStateRecord {
 // GetByPackageID 按本地包目录名反查记录。
 // Python: HubInstallStateStore.get_by_package_id。
 func (s *HubInstallStateStore) GetByPackageID(packageID string) *HubInstallStateRecord {
-	entries := readMarketplaceEntries(equipmentMarketplacePath(s.kind, ""))
-	for _, entry := range entries {
-		if pid, _ := entry["package_id"].(string); pid != "" && pid == packageID {
+	packageID = strings.TrimSpace(packageID)
+	if packageID == "" {
+		return nil
+	}
+	for _, entry := range readHubStatePackages(hubStatePath(s.kind)) {
+		if pid, _ := entry["package_id"].(string); pid == packageID {
 			return recordFromEntry(entry)
 		}
 	}
 	return nil
 }
 
-// Set 写/更新一条记录。
-// Python: HubInstallStateStore.set。
+// Set 写/更新一条记录。Python: HubInstallStateStore.set。
 func (s *HubInstallStateStore) Set(record *HubInstallStateRecord) error {
-	marketplacePath := equipmentMarketplacePath(s.kind, "")
-	entries := readMarketplaceEntries(marketplacePath)
+	hubStatePath := hubStatePath(s.kind)
+	packages := readHubStatePackages(hubStatePath)
 	payload, err := json.Marshal(record)
 	if err != nil {
 		return err
@@ -246,23 +298,34 @@ func (s *HubInstallStateStore) Set(record *HubInstallStateRecord) error {
 		}
 	}
 	replaced := false
-	for i, entry := range entries {
-		if id, _ := entry["id"].(string); id == record.ID {
-			entries[i] = asMap
+	for i, entry := range packages {
+		if aid, _ := entry["asset_id"].(string); aid == record.AssetID {
+			packages[i] = asMap
 			replaced = true
 			break
 		}
 	}
 	if !replaced {
-		entries = append(entries, asMap)
+		packages = append(packages, asMap)
 	}
-	return writeMarketplaceEntries(marketplacePath, entries)
+	return writeHubStatePackages(hubStatePath, packages)
 }
 
-// Remove 删除一条记录（按主键）。
+// Remove 删除一条记录（按 asset_id）。
 // Python: HubInstallStateStore.remove。
-func (s *HubInstallStateStore) Remove(id string) error {
-	return removeMarketplaceEntry(s.kind, id)
+func (s *HubInstallStateStore) Remove(assetID string) error {
+	hubStatePath := hubStatePath(s.kind)
+	packages := readHubStatePackages(hubStatePath)
+	kept := packages[:0:0]
+	for _, entry := range packages {
+		if aid, _ := entry["asset_id"].(string); aid != assetID {
+			kept = append(kept, entry)
+		}
+	}
+	if len(kept) != len(packages) {
+		return writeHubStatePackages(hubStatePath, kept)
+	}
+	return nil
 }
 
 // recordFromEntry entry → 强类型记录。
