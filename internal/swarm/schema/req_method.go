@@ -741,6 +741,18 @@ func AllReqMethods() []ReqMethod {
 		// 推荐面板（10.7.2）
 		ReqMethodRecommendation,
 		ReqMethodPromptSuggestionCancel,
+		// 会话素材（session_assets.py）
+		ReqMethodSessionAssetsList,
+		ReqMethodSessionAssetsRegister,
+		ReqMethodSessionAssetsRename,
+		ReqMethodSessionAssetsRemove,
+		// 项目控制面（project_repository.py）
+		ReqMethodProjectList,
+		ReqMethodProjectInfo,
+		ReqMethodProjectPinnedSessions,
+		ReqMethodProjectGetSessions,
+		ReqMethodProjectGetCronSessions,
+		ReqMethodProjectCronResolveBinding,
 	}
 }
 
