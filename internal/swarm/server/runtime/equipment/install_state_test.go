@@ -1,10 +1,11 @@
 package equipment
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // newInstallStateEnv 隔离数据根。
@@ -117,6 +118,4 @@ func TestInstallState_MarketplaceShape(t *testing.T) {
 	if got := readMarketplaceEntries(p); len(got) != 0 {
 		t.Fatal("损坏应空表")
 	}
-	_ = json.Marshal
-	_ = os.WriteFile
 }
