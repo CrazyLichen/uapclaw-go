@@ -690,12 +690,15 @@ func ModelsValidate(ctx context.Context, params map[string]any) (map[string]any,
 	if v, ok := params["verify_ssl"].(bool); ok {
 		verifySSL = v
 	}
+	// Python: build_probe_model_client_config（models_handlers.py:289-330）——
+	// 探测预算（client_id / timeout / max_retries）最后固定，不被表单草稿污染
 	clientConfig := &llmSchema.ModelClientConfig{
+		ClientID:       "config-validate",
 		ClientProvider: modelProvider,
 		APIKey:         apiKey,
 		APIBase:        apiBase,
-		Timeout:        60.0,
-		MaxRetries:     3,
+		Timeout:        25.0,
+		MaxRetries:     0,
 		VerifySSL:      verifySSL,
 	}
 	invoke := func(ctx context.Context, maxTokens int) error {
