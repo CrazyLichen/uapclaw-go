@@ -187,6 +187,17 @@ const (
 	// ReqMethodSessionSelectionSet 设置会话模型选择
 	ReqMethodSessionSelectionSet ReqMethod = "session.selection.set"
 
+	// ─── 会话素材（session_assets.py，企业版新增方法族）───
+
+	// ReqMethodSessionAssetsList 会话素材列表（Python SESSION_ASSETS_LIST）
+	ReqMethodSessionAssetsList ReqMethod = "session.assets.list"
+	// ReqMethodSessionAssetsRegister 注册会话素材（Python SESSION_ASSETS_REGISTER）
+	ReqMethodSessionAssetsRegister ReqMethod = "session.assets.register"
+	// ReqMethodSessionAssetsRename 重命名会话素材（Python SESSION_ASSETS_RENAME）
+	ReqMethodSessionAssetsRename ReqMethod = "session.assets.rename"
+	// ReqMethodSessionAssetsRemove 删除会话素材条目（Python SESSION_ASSETS_REMOVE）
+	ReqMethodSessionAssetsRemove ReqMethod = "session.assets.remove"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史

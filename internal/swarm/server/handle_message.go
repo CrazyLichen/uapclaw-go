@@ -153,6 +153,15 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.HandleVendorsFetchModels(ctx, request)
 	case schema.ReqMethodSessionSelectionSet:
 		resp, err = s.HandleSessionSelectionSet(ctx, request)
+	// 会话素材（session_assets.py 四方法，2026-11-27 补移植）
+	case schema.ReqMethodSessionAssetsList:
+		resp, err = s.HandleSessionAssetsList(ctx, request)
+	case schema.ReqMethodSessionAssetsRegister:
+		resp, err = s.HandleSessionAssetsRegister(ctx, request)
+	case schema.ReqMethodSessionAssetsRename:
+		resp, err = s.HandleSessionAssetsRename(ctx, request)
+	case schema.ReqMethodSessionAssetsRemove:
+		resp, err = s.HandleSessionAssetsRemove(ctx, request)
 	// 配置面板（27.4，Python: config_adapter.py ConfigAdapter.handle 分派）
 	case schema.ReqMethodConfigGet,
 		schema.ReqMethodConfigSet,

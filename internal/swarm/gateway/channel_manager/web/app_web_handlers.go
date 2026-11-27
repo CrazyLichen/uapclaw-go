@@ -314,6 +314,17 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
 	}
 
+	// ─── 会话素材 4 方法（Python _FORWARD_REQ_METHODS，app_web_handlers.py:415-417+
+	// session.assets.remove：恒 E2A 转发 AgentServer）───
+	for _, m := range []string{
+		"session.assets.list",
+		"session.assets.register",
+		"session.assets.rename",
+		"session.assets.remove",
+	} {
+		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
+	}
+
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)
