@@ -10,18 +10,18 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/interrupt"
 	saschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/single_agent/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
-	"github.com/stretchr/testify/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -82,8 +82,8 @@ func (s *InterruptResumeFullChainSuite) TestFullChain_permission答案经build�
 		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
 		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {
-				ToolCall:   &llmschema.ToolCall{ID: "tc1", Name: "bash"},
-				PausedCall: &llmschema.ToolCall{ID: "tc1", Name: "bash"},
+				ToolCall:          &llmschema.ToolCall{ID: "tc1", Name: "bash"},
+				PausedCall:        &llmschema.ToolCall{ID: "tc1", Name: "bash"},
 				InterruptRequests: map[string]saschema.InterruptRequester{"tc1": permReq},
 			},
 		},
@@ -118,15 +118,15 @@ func (s *InterruptResumeFullChainSuite) TestFullChain_clientTool恢复保持暂�
 	clientReq := saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{})
 	clientReq.InterruptID = "intr_client"
 	clientEntry := &saschema.ToolInterruptEntry{
-		ToolCall:   &llmschema.ToolCall{ID: "tcA", Name: "client_tool"},
-		PausedCall: &llmschema.ToolCall{ID: "tcA", Name: "client_tool", Arguments: `{"final":1}`},
+		ToolCall:          &llmschema.ToolCall{ID: "tcA", Name: "client_tool"},
+		PausedCall:        &llmschema.ToolCall{ID: "tcA", Name: "client_tool", Arguments: `{"final":1}`},
 		InterruptRequests: map[string]saschema.InterruptRequester{"tcA": clientReq},
 	}
 	permReq := &saschema.InterruptRequest{Message: "允许吗", InterruptOwner: "perm.rail"}
 	permReq.InterruptID = "intr_perm"
 	permEntry := &saschema.ToolInterruptEntry{
-		ToolCall:   &llmschema.ToolCall{ID: "tcB", Name: "bash"},
-		PausedCall: &llmschema.ToolCall{ID: "tcB", Name: "bash"},
+		ToolCall:          &llmschema.ToolCall{ID: "tcB", Name: "bash"},
+		PausedCall:        &llmschema.ToolCall{ID: "tcB", Name: "bash"},
 		InterruptRequests: map[string]saschema.InterruptRequester{"tcB": permReq},
 	}
 	state := &saschema.ToolInterruptionState{
@@ -206,8 +206,8 @@ func (s *InterruptResumeFullChainSuite) TestFullChain_askUser恢复路径() {
 		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 2},
 		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {
-				ToolCall:   &llmschema.ToolCall{ID: "tc1", Name: "ask_user"},
-				PausedCall: &llmschema.ToolCall{ID: "tc1", Name: "ask_user"},
+				ToolCall:          &llmschema.ToolCall{ID: "tc1", Name: "ask_user"},
+				PausedCall:        &llmschema.ToolCall{ID: "tc1", Name: "ask_user"},
 				InterruptRequests: map[string]saschema.InterruptRequester{"tc1": askReq},
 			},
 		},

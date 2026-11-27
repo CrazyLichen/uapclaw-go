@@ -231,9 +231,9 @@ func TestBuildInteractiveInput_askUser选项合并(t *testing.T) {
 		"source":     "ask_user_interrupt",
 		"request_id": "tc1",
 		"answers": []any{map[string]any{
-			"question":        "选择方案",
+			"question":         "选择方案",
 			"selected_options": []any{"A", "Other"},
-			"custom_input":    "自定义",
+			"custom_input":     "自定义",
 		}},
 	})
 	answers := ii.UserInputs["tc1"].(map[string]any)["answers"].(map[string]any)
@@ -254,7 +254,7 @@ func TestBuildInteractiveInput_askUser选项合并(t *testing.T) {
 	ii3 := buildII(t, map[string]any{
 		"source":     "ask_user_interrupt",
 		"request_id": "tc1",
-		"answers": []any{map[string]any{"custom_input": "就这样吧"}},
+		"answers":    []any{map[string]any{"custom_input": "就这样吧"}},
 	})
 	assert.Equal(t, "就这样吧", ii3.UserInputs["tc1"].(map[string]any)["answers"].(map[string]any)["__free_text__"])
 
