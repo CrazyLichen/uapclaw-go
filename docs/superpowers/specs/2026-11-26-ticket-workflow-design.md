@@ -148,7 +148,7 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 外部工单 send 走既有 gateway HTTP → transport `SendRequest/SendRequestNoWait`（E2A）→ agentserver，协议零改动：
 
-- E2A send 异步无等待语义（send 即返回，结果走历史事件），与"送完断开轮询"同构；
+- E2A 协议层零改动；**HTTP 客户端可见语义以 §7 勘误为准**：非流式 unary 同步阻塞至本轮挂起/终态（waitResponse），SSE 逐帧推送可提前断开——workflow 模式不产流式帧，SSE 下工单系统「发起后断开 + 轮询历史」即为异步语义；
 - ticket 模式 workflow 执行不产流式帧，E2A 响应事件通道不被占用，普通流式会话不受影响；
 - 分流点在 agentserver envelope 层（收到 E2A 请求之后），gateway 只透传。
 
@@ -340,7 +340,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 }
 ```
 
-**附件两阶段契约**（与 web 前端同一流程，决议 19）：先经 `POST /sessions/{id}/media`（media.persist）与 `POST /sessions/{id}/documents`（document.persist，含格式黑名单安全检查）上传落盘，chat.send 只引用落盘记录（path），base64 不进 chat.send。runner 拼装 ProblemInput 时附件即含落盘 path——IntentNode 仅读元信息（文件名/类型），AgentNode 按 path 读日志原文，顺序天然满足。
+**附件两阶段契约**（与 web 前端同一流程，决议 19）：先经 `POST /sessions/{id}/media`（media.persist）与 `POST /sessions/{id}/documents`（document.persist，含格式黑名单安全检查）上传落盘，chat.send 只引用落盘记录（path，带 filename/mime_type/size_bytes），base64 不进 chat.send；`files` 摘要为 web 前端行为（供普通对话链路 BuildUserPrompt 消费），工单侧不传。runner 拼装 ProblemInput 时附件即含落盘 path——IntentNode 仅读元信息（文件名/类型），AgentNode 按 path 读日志原文，顺序天然满足。
 
 | 恢复形态 | 语义 | runner 处理 |
 |---|---|---|
@@ -475,12 +475,12 @@ ProblemInput（runner 内部视角）{
 | `POST /api/v1/sessions` | 建会话（mode 锁定） | body `{"metadata": {"mode": "agent.workflow.diagnosis"}}` |
 | `POST /api/v1/sessions/{session_id}/media` | **图片上传落盘**（media.persist，前置） | base64 图片 → 返回存储记录 `{path, filename, mime_type, size_bytes}` |
 | `POST /api/v1/sessions/{session_id}/documents` | **日志/文档上传落盘**（document.persist，前置；含格式黑名单安全检查） | base64 文档 → 返回存储记录（含 path） |
-| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（落盘图片记录）/`documents`（落盘日志记录）+`files`（uploaded_images/uploaded_documents 摘要）、`problem_id`（可选）、`answers`（可选） |
+| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（落盘图片记录）/`documents`（落盘日志记录）、`problem_id`（可选）、`answers`（可选）；`files` 摘要为 web 前端行为，工单侧不传（workflow 分流不进 BuildUserPrompt，runner 只读 records） |
 | `POST /api/v1/chat/resume` | （备用）恢复挂起会话 | 同 send |
 | `POST /api/v1/chat/{session_id}/actions/user_answer` | （备用）既有中断应答端点 | answers |
 | `GET /api/v1/sessions/{session_id}/history` | 工单轮询结果（唯一结果通道） | 增量按记录 id/时间戳幂等 |
 
-send 响应：同步即返回（E2A send 即回，`{"ok": true, "request_id": "..."}`），**工作流结果不进 HTTP 响应**，全部经 runner 追加历史记录、工单轮询 history 获取。
+send 响应语义（本轮勘误，代码实证 runUnaryInternal `waitResponse`）：**非流式（无 SSE Accept）为同步阻塞**——请求挂起直到本轮处理结束（workflow 模式 = 执行到挂起或终态）才返回，受 `resolveWebHTTPUnaryTimeout` 上限约束；SSE（Accept: text/event-stream）逐帧推送、结束帧后关流，客户端可提前断开（agentserver 继续执行到挂起，结果落历史）。工单系统推荐 **SSE 发起后断开 + history 轮询**模式：不受 unary 超时限制（AgentNode 长诊断可能数分钟），且与「结果通道 = 历史」的唯一性一致。
 
 ### 7.1 时序图
 
@@ -506,7 +506,7 @@ sequenceDiagram
     S->>S: document.persist：格式安全检查+落盘
     G-->>T: {records:[{path,filename,...}]}
 
-    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到",<br/>media_items:[落盘记录], documents:[落盘记录],<br/>files:{uploaded_images,uploaded_documents}, problem_id:"T-123"}
+    T->>G: POST /api/v1/chat/send（建议 SSE 发起后断开）<br/>{query:"推送收不到",<br/>media_items:[落盘记录], documents:[落盘记录], problem_id:"T-123"}
     G->>S: E2A chat.send（透传）
     S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
     S->>S: runner 拼装 ProblemInput<br/>（attachments=落盘记录，含 path）
@@ -514,8 +514,8 @@ sequenceDiagram
     W->>W: IntentNode：图片→视觉模型；日志不碰（只读文件名/类型）；<br/>就绪判定：表象✓ 组件✗
     W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
     S->>S: 中断载荷追加历史（chat.ask_user_question）
-    S-->>G: send 同步响应 {ok:true}
-    G-->>T: 200 {ok:true}（结果走轮询）
+    S-->>G: send 返回（阻塞至挂起；SSE 模式推帧后客户端断开）
+    G-->>T: 200 / SSE 帧（结果同时落历史供轮询）
     end
 
     rect rgb(245,240,255)
@@ -600,14 +600,11 @@ POST /api/v1/chat/send
 {
   "query": "推送消息收不到，高峰期必现",
   "media_items": [{"type": "image", "filename": "screenshot.png", "path": "/uploads/web_xxx/screenshot.png"}],
-  "files": {"uploaded_images": [{"filename": "screenshot.png", "path": "/uploads/web_xxx/screenshot.png",
-            "mime_type": "image/png", "size_bytes": 12345}],
-           "uploaded_documents": [{"filename": "app.log", "path": "/uploads/web_xxx/app.log",
-            "mime_type": "text/plain", "size_bytes": 67890}]},
   "documents": [{"type": "document", "filename": "app.log", "path": "/uploads/web_xxx/app.log"}],
   "problem_id": "T-123"
 }
-→ 200 {"ok": true, "request_id": "req-1"}   ← 同步即回，不等待工作流结果
+→ 200（非流式：阻塞至本轮处理挂起/终态后返回；SSE：Accept: text/event-stream 逐帧推送，可提前断开）
+  注：工单侧不传 files（web 前端行为；workflow 分流不进 BuildUserPrompt，runner 只读 records）
 ```
 
 **④ 挂起后 history 轮询（工单拿到"等什么"）**
@@ -646,7 +643,7 @@ POST /api/v1/chat/send
 ```
 
 **语义要点**：
-- send 同步响应永远只有 `{ok:true}`，工作流状态变化全部经 history 轮询观察；
+- send 非流式同步阻塞至本轮挂起/终态才返回；工单系统推荐 SSE 发起后断开 + history 轮询（不受 unary 超时限制）；
 - "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`；工单不感知内部 state 字段；
 - 补充信息（非当前卡应答的 send）视为特征并入恢复输入（答案归属判定 §2.3）；
 - 已终态后 send 的"确认解决"（工单关单下发）为 no-op，仅追加历史。
