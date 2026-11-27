@@ -2,7 +2,7 @@
 
 - 日期：2026-11-26（图内中断统一修订版）
 - 状态：待评审
-- 命名：工作流本体为**问题定位工作流**（ProblemDiagnosisWorkflow）；"工单"只是 HTTP 模式的外部载体（工单系统持有工单实体，`problem_id` 为外部回关联字段，与工作流解耦）
+- 命名：工作流本体为**问题定位工作流**（ProblemDiagnosisWorkflow）；"工单"只是 WS 模式的外部载体（工单系统持有工单实体，`problem_id` 为外部回关联字段，与工作流解耦）
 - 演进史：2010f2e15 → 3cc09cc96 → daad3edca → 06a13a592 → b49fa96db → 407cc1868（双实例隔离）→ d23eb3f12（统一图内中断）→ e8ab25a55（零自定义事件）→ 本轮（更名 + 单工具收敛）
 
 ---
@@ -21,7 +21,7 @@
 
 - **越用越准**：历史知识库随闭环沉淀（判重合并计数 + 长尾合并收敛类别）；skill 经 SkillEvolutionRail 自演进。
 - **渐进式引导**：新问题召回多个不同方向时，不急于给答案，生成判别式澄清选项引导补充；选项文案来自历史根因分布与区分性特征（历史经验的沉淀形态，非预先配置的目录）。
-- **双触发模式**：模式一 HTTP（外部工单系统，本 spec 范围）；模式二聊天问答式（workflow 挂到聊天 agent，第二阶段，契约预留）。两模式为**两个独立 workflow 实例**，见 §2.2。
+- **双触发模式**：模式一 WS 会话式（外部工单系统，本 spec 范围——与普通聊天同一 WS 通道/帧协议/方法集，仅 envelope 层按 mode 分流）；模式二聊天问答式（workflow 挂到聊天 agent，第二阶段，契约预留）。两模式为**两个独立 workflow 实例**，见 §2.2。
 
 ### 1.3 边界与拍板记录
 
@@ -65,6 +65,7 @@
 | 17 | **开放式澄清固定模板零 LLM**：IntentNode 模糊分支直接抛固定模板中断卡（不路由 GuidanceNode）；GuidanceNode 只保留判别式引导一种形态（从 KBSearch 进）；每轮恢复后回到就绪判定（规则） | §3.4/§3.5 |
 | 18 | **最小前置信息集**：必需 = 表象 + 组件归属；增强 = 频率/时间模式、报错信息（口头）、复现步骤；组件选项来自配置的组件清单；必需字段齐 → 就绪 | §3.4 |
 | 19 | **HTTP 零新增字段**：ProblemInput 降级为 runner 内部归一化结构，由既有 chat.send params 拼装（description=query、附件对外用 media_items（图片）/documents（文档日志）走既有 normalize 管线、answers=answers（既有 buildInteractiveInputFromAnswers）、problem_id 新增可选 params 键，files 是内部归一化槽位不对外）；HTTP 纯文本下组件识别 = 组件清单关键字匹配，未命中并入表象下轮重问 | §4.3/§7 |
+| 20 | **工单走 WS 通道（勘误定案）**：与普通聊天同一 `/ws` 连接/帧协议/方法集，事件帧实时推送、history.get 断线兜底；废除「HTTP 端点 + SSE 断开」方案（unary 阻塞语义与超时不适配长诊断）；断开不触发取消（上游 Python/Go 行为一致，代码实证）；取消须显式 chat.cancel | §2.5/§7 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
@@ -144,11 +145,11 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 **HTTP runner 职责清单**：持有 workflow 组件引用；从最近一次 INPUT_REQUIRED 输出/历史记录解析 pending component_id；把 send 输入映射为 InteractiveInput（component_id + answers）；调 Invoke 恢复；把每轮结果追加历史。
 
-### 2.5 E2A 转发
+### 2.5 通道转发
 
-外部工单 send 走既有 gateway HTTP → transport `SendRequest/SendRequestNoWait`（E2A）→ agentserver，协议零改动：
+外部工单与普通聊天走**同一 WS 通道**（本轮拍板）→ gateway web channel → transport `SendRequest/SendRequestNoWait`（E2A）→ agentserver，协议零改动：
 
-- E2A 协议层零改动；**HTTP 客户端可见语义以 §7 勘误为准**：非流式 unary 同步阻塞至本轮挂起/终态（waitResponse），SSE 逐帧推送可提前断开——workflow 模式不产流式帧，SSE 下工单系统「发起后断开 + 轮询历史」即为异步语义；
+- 工单复用 web 前端的连接/帧协议/方法集（session.create、media.persist、document.persist、chat.send、history.get、chat.cancel），事件帧实时推送，history.get 为断线兜底；断开不触发取消（上游 Python/Go 一致，§7）；
 - ticket 模式 workflow 执行不产流式帧，E2A 响应事件通道不被占用，普通流式会话不受影响；
 - 分流点在 agentserver envelope 层（收到 E2A 请求之后），gateway 只透传。
 
@@ -464,187 +465,189 @@ ProblemInput（runner 内部视角）{
 
 ---
 
-## 7. 全链路交互时序（HTTP 模式，四级泳道）
+## 7. 全链路交互时序（WS 会话式，四级泳道；本轮拍板：工单与普通聊天同一 WS 逻辑）
 
-参与方：**工单系统**（外部 HTTP 调用方）→ **Gateway**（`web_http_routes.go` HTTP 端点 + E2A 透传）→ **AgentServer**（envelope 分流 + ProblemDiagnosisWorkflow runner）→ **Workflow**（PregelGraph 图执行实例）。
+参与方：**工单系统**（WS 客户端）→ **Gateway**（`/ws` WebSocket 端点，web channel）→ **AgentServer**（envelope 分流 + ProblemDiagnosisWorkflow runner）→ **Workflow**（PregelGraph 图执行实例）。
 
-涉及 HTTP 接口（全部既有，零新增 URL）。附件为**两阶段契约**（与 web 前端同一流程，代码实证 `http_routes_mapped.go:203/205`）：先上传落盘拿 path，再 chat.send 引用落盘记录（base64 只出现在上传端点，chat.send 永远只带记录）：
+**核心拍板（勘误定案）**：工单系统接入**不走专用 HTTP 端点，直接复用普通聊天的 WS 通道**——同一 `/ws` 连接、同一 req/res/event 帧协议、同一方法集；唯一差异在 agentserver envelope 层按会话 metadata mode 命中 `agent.workflow.*` 分流给 runner，工单系统不感知分流存在。上游 Python 行为一致（jiuwenswarm `web_http_routes.py:773-780` SSE 断开仅 break + 注销 outbound，无反向 cancel；Go 同）。
 
-| 接口 | 用途 | 关键参数 |
+**断开语义**（代码实证，上游一致）：WS/SSE 断开均**不触发取消**（Go：web_connect.go:210 仅移除连接；Python：web_http_routes.py:773 仅 break）——agentserver 执行不依赖连接存活，工单断开后 workflow 照常跑到挂起/终态并落历史；真正取消必须显式发 `chat.cancel`（intent=cancel）。
+
+### 7.1 WS 方法集与帧协议（全部既有，零新增）
+
+| WS 方法（req.method） | 用途 | 关键 params |
 |---|---|---|
-| `POST /api/v1/sessions` | 建会话（mode 锁定） | body `{"metadata": {"mode": "agent.workflow.diagnosis"}}` |
-| `POST /api/v1/sessions/{session_id}/media` | **图片上传落盘**（media.persist，前置） | base64 图片 → 返回存储记录 `{path, filename, mime_type, size_bytes}` |
-| `POST /api/v1/sessions/{session_id}/documents` | **日志/文档上传落盘**（document.persist，前置；含格式黑名单安全检查） | base64 文档 → 返回存储记录（含 path） |
-| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（落盘图片记录）/`documents`（落盘日志记录）、`problem_id`（可选）、`answers`（可选）；`files` 摘要为 web 前端行为，工单侧不传（workflow 分流不进 BuildUserPrompt，runner 只读 records） |
-| `POST /api/v1/chat/resume` | （备用）恢复挂起会话 | 同 send |
-| `POST /api/v1/chat/{session_id}/actions/user_answer` | （备用）既有中断应答端点 | answers |
-| `GET /api/v1/sessions/{session_id}/history` | 工单轮询结果（唯一结果通道） | 增量按记录 id/时间戳幂等 |
+| `session.create` | 建会话（mode 锁定） | `metadata: {mode: "agent.workflow.diagnosis"}` |
+| `media.persist` | **图片上传落盘**（前置） | `media_items`（base64）→ res 返回存储记录 `{path, filename, mime_type, size_bytes}` |
+| `document.persist` | **日志/文档上传落盘**（前置；含格式黑名单安全检查） | `documents`（base64）→ res 返回存储记录（含 path） |
+| `chat.send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`/`documents`（落盘记录引用）、`problem_id`（可选）、`answers`（可选）；`files` 摘要为 web 前端行为，工单侧不传（workflow 分流不进 BuildUserPrompt，runner 只读 records） |
+| `history.get` | 轮询结果（与事件帧互补的兜底通道） | 增量按记录 id/时间戳幂等 |
+| `chat.cancel` | 真正取消诊断 | `intent: "cancel"` |
 
-send 响应语义（本轮勘误，代码实证 runUnaryInternal `waitResponse`）：**非流式（无 SSE Accept）为同步阻塞**——请求挂起直到本轮处理结束（workflow 模式 = 执行到挂起或终态）才返回，受 `resolveWebHTTPUnaryTimeout` 上限约束；SSE（Accept: text/event-stream）逐帧推送、结束帧后关流，客户端可提前断开（agentserver 继续执行到挂起，结果落历史）。工单系统推荐 **SSE 发起后断开 + history 轮询**模式：不受 unary 超时限制（AgentNode 长诊断可能数分钟），且与「结果通道 = 历史」的唯一性一致。
+帧协议（与 web 前端同一套）：请求帧 `{"type":"req","id":"1","method":"chat.send","params":{...}}` → 响应帧 `{"type":"res","id":"1",...}`；执行过程中的事件（含 ask_user 卡、结论）以 `{"type":"event","event":"chat.ask_user_question","payload":{...}}` 等白名单事件帧推送到**同一连接**——工单不需要轮询即可收到卡载荷，history.get 仅作断线重连后的兜底增量通道。
 
-### 7.1 时序图
+附件两阶段契约（同 web 前端）：先 persist 落盘拿 path，chat.send 只引用落盘记录，base64 不进 chat.send。
+
+### 7.2 时序图
 
 ```mermaid
 sequenceDiagram
-    participant T as 工单系统
-    participant G as Gateway
+    participant T as 工单系统(WS客户端)
+    participant G as Gateway(/ws)
     participant S as AgentServer(envelope+runner)
     participant W as Workflow(图实例)
 
     rect rgb(235,245,255)
-    Note over T,W: 阶段一：建会话 + 附件上传落盘 + 首次提交问题
-    T->>G: POST /api/v1/sessions<br/>{metadata:{mode:agent.workflow.diagnosis}}
+    Note over T,W: 阶段一：建连接 + 建会话 + 附件上传落盘
+    T->>G: WS 连接 /ws
+    G-->>T: 连接建立
+    T->>G: req{method:session.create,<br/>metadata:{mode:agent.workflow.diagnosis}}
     G->>S: E2A session.create（透传）
-    S-->>G: {session_id}
-    G-->>T: 201 {session_id, ...}
+    S-->>G: res{session_id}
+    G-->>T: res{id:1, session_id}
 
-    T->>G: POST /api/v1/sessions/{id}/media<br/>{base64 图片}
-    S->>S: media.persist：落盘 uploads 目录
-    G-->>T: {media_items:[{path,filename,mime_type,size_bytes}]}
+    T->>G: req{method:media.persist, media_items:[图片base64]}
+    S->>S: 落盘 uploads 目录
+    G-->>T: res{id:2, media_items:[{path,filename,...}]}
 
-    T->>G: POST /api/v1/sessions/{id}/documents<br/>{base64 日志 app.log}
-    S->>S: document.persist：格式安全检查+落盘
-    G-->>T: {records:[{path,filename,...}]}
-
-    T->>G: POST /api/v1/chat/send（建议 SSE 发起后断开）<br/>{query:"推送收不到",<br/>media_items:[落盘记录], documents:[落盘记录], problem_id:"T-123"}
-    G->>S: E2A chat.send（透传）
-    S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
-    S->>S: runner 拼装 ProblemInput<br/>（attachments=落盘记录，含 path）
-    S->>W: Invoke(ProblemInput)
-    W->>W: IntentNode：图片→视觉模型；日志不碰（只读文件名/类型）；<br/>就绪判定：表象✓ 组件✗
-    W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
-    S->>S: 中断载荷追加历史（chat.ask_user_question）
-    S-->>G: send 返回（阻塞至挂起；SSE 模式推帧后客户端断开）
-    G-->>T: 200 / SSE 帧（结果同时落历史供轮询）
+    T->>G: req{method:document.persist, documents:[app.log base64]}
+    S->>S: 格式安全检查+落盘
+    G-->>T: res{id:3, records:[{path,...}]}
     end
 
     rect rgb(245,240,255)
-    Note over T,W: 阶段二：工单轮询 + 结构化应答
-    T->>G: GET /api/v1/sessions/{id}/history
-    G->>S: E2A history.get
-    S-->>G: 历史记录（含 ask_user_question 卡载荷）
-    G-->>T: 200（工单按载荷渲染自有 UI）
-    Note over T: 最新一条未配对 ask_user_question = 当前等待项
+    Note over T,W: 阶段二：首次提交问题 → 挂起
+    T->>G: req{method:chat.send,<br/>query:"推送收不到", media_items:[落盘记录],<br/>documents:[落盘记录], problem_id:"T-123"}
+    G->>S: E2A chat.send（透传）
+    S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
+    S->>S: runner 拼装 ProblemInput（attachments=落盘记录含 path）
+    S->>W: Invoke(ProblemInput)
+    W->>W: IntentNode：图片→视觉模型；日志不碰（只读文件名/类型）；<br/>就绪判定：表象✓ 组件✗
+    W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
+    S->>S: 载荷落历史（chat.ask_user_question）
+    S-->>G: event 帧 chat.ask_user_question
+    G-->>T: event{chat.ask_user_question}（同一连接推送，无需轮询）
+    G-->>T: res{id:4, ok:true}（本轮处理至挂起后收尾）
+    Note over T: 也可中途断开——不触发取消，<br/>workflow 继续跑到挂起并落历史，重连后 history.get 补增量
+    end
 
-    T->>G: POST /api/v1/chat/send<br/>{answers:[{question:"组件归属？",selected_options:["push"]}]}
+    rect rgb(235,255,240)
+    Note over T,W: 阶段三：结构化应答 → 检索/诊断 → 确认卡
+    T->>G: req{method:chat.send,<br/>answers:[{question:"组件归属？",selected_options:["push"]}]}
     G->>S: E2A chat.send
     S->>S: runner：buildInteractiveInputFromAnswers<br/>→ InteractiveInput（既有 PATH B）
     S->>W: Invoke(InteractiveInput) 引擎 checkpoint 重放续跑
     W->>W: 并入特征 → 就绪判定：表象✓组件✓ → KBSearchNode
     alt 历史库高置信单向
-        W->>W: 命中方案（流式输出进历史）→ ConfirmNode 轻卡挂起
+        W->>W: 命中方案（正常流式输出，event 帧推给工单）→ ConfirmNode 轻卡挂起
         W-->>S: GraphInterrupt（"问题解决了吗？"）
-        S->>S: 追加历史（ask_user_question）
+        S-->>G: event{chat.ask_user_question 确认卡}
+        G-->>T: event 帧
     else 多向且未超轮数
-        W->>W: GuidanceNode 判别式引导挂起<br/>（LLM 一次调用生成判别问题）
+        W->>W: GuidanceNode 判别式引导挂起（LLM 一次调用）
         W-->>S: GraphInterrupt
-        S->>S: 追加历史
+        S-->>G: event{chat.ask_user_question 判别卡}
+        G-->>T: event 帧
     else 无命中
         W->>W: scope 升级 history→business 重查<br/>→ 仍无果 → AgentNode 诊断（skill+日志原文）<br/>→ 结论流式输出 → ConfirmNode 挂起
         W-->>S: GraphInterrupt
-        S->>S: 追加历史（结论 + 确认卡）
+        S-->>G: event{结论 + 确认卡}
+        G-->>T: event 帧
     end
-    S-->>G: {ok:true}
-    G-->>T: 200
+    Note over T: 断线兜底：history.get 取增量（记录幂等）
     end
 
-    rect rgb(235,255,240)
-    Note over T,W: 阶段三：确认关闭 + 沉淀
-    T->>G: GET /api/v1/sessions/{id}/history （轮询）
-    G-->>T: 200（方案/结论 + 确认卡）
-
-    T->>G: POST /api/v1/chat/send<br/>{answers:[{question:"问题解决了吗？",selected_options:["solved"]}]}
+    rect rgb(255,245,235)
+    Note over T,W: 阶段四：确认关闭 + 沉淀
+    T->>G: req{method:chat.send,<br/>answers:[{question:"问题解决了吗？",selected_options:["solved"]}]}
     G->>S: E2A chat.send
     S->>W: Invoke(InteractiveInput)
     W->>W: SettleNode：写历史库/hit_count+1/演进信号<br/>（metadata.problem_id=T-123）
     W-->>S: 正常返回终态 closed（无挂起）
-    S->>S: 追加历史（chat.final 关闭结论）
-    S-->>G: {ok:true}
-    G-->>T: 200
-    Note over T: 轮询看到 chat.final → 流程结束<br/>工单关单后下发"确认解决"→ 已终态 no-op
+    S-->>G: event{chat.final 关闭结论} + res
+    G-->>T: event{chat.final}
+    Note over T: 看到 chat.final → 流程结束<br/>关单后下发"确认解决"→ 已终态 no-op<br/>中途放弃：显式 req{method:chat.cancel, intent:"cancel"}
     end
 ```
 
-纯文本应答路径（工单系统不实现 answers UI 时的最低成本接入）：恢复 send 只带 `query`（如 `"推送模块收不到，偶发"`）→ runner 做组件清单关键字匹配（命中填 component / 未命中整段并入表象，下轮卡再列组件项，零 LLM）→ 映射为 InteractiveInput → 后续链路同上。
-
-### 7.2 阶段交互明细与示例
+### 7.3 帧交互示例
 
 **① 建会话**
 
 ```
-POST /api/v1/sessions
-{"metadata": {"mode": "agent.workflow.diagnosis"}}
-→ 201 {"session_id": "web_xxx", "metadata": {"mode": "agent.workflow.diagnosis"}}
+→ {"type":"req","id":"1","method":"session.create",
+   "params":{"metadata":{"mode":"agent.workflow.diagnosis"}}}
+← {"type":"res","id":"1","ok":true,
+   "payload":{"session_id":"web_xxx","metadata":{"mode":"agent.workflow.diagnosis"}}}
 ```
 
-mode 经 `SyncSessionRequestMetadata` 显式覆盖式写入，会话生命周期内不可变（§2.7）。
-
-**② 附件上传落盘（先于 send，两阶段契约）**
+**② 附件上传落盘（先于 send）**
 
 ```
-POST /api/v1/sessions/{session_id}/media
-{"media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}]}
-→ 200 {"media_items": [{"type": "image", "filename": "screenshot.png",
-        "path": "/uploads/web_xxx/screenshot.png", "mime_type": "image/png", "size_bytes": 12345}]}
+→ {"type":"req","id":"2","method":"media.persist",
+   "params":{"session_id":"web_xxx","content":"",
+             "media_items":[{"type":"image","filename":"screenshot.png","data":"<base64>"}]}}
+← {"type":"res","id":"2","ok":true,
+   "payload":{"media_items":[{"type":"image","filename":"screenshot.png",
+     "path":"/uploads/web_xxx/screenshot.png","mime_type":"image/png","size_bytes":12345}]}}
 
-POST /api/v1/sessions/{session_id}/documents
-{"documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}]}
-→ 200 {"records": [{"type": "document", "filename": "app.log",
-        "path": "/uploads/web_xxx/app.log", "mime_type": "text/plain", "size_bytes": 67890}]}
+→ {"type":"req","id":"3","method":"document.persist",
+   "params":{"session_id":"web_xxx","content":"",
+             "documents":[{"type":"document","filename":"app.log","data":"<base64>"}]}}
+← {"type":"res","id":"3","ok":true,
+   "payload":{"records":[{"type":"document","filename":"app.log",
+     "path":"/uploads/web_xxx/app.log","mime_type":"text/plain","size_bytes":67890}]}}
 ```
 
-**③ 首次 send（问题提交，只引用落盘记录，不带 base64）**
+**③ 首次 send（只引用落盘记录，不带 base64）**
 
 ```
-POST /api/v1/chat/send
-{
-  "query": "推送消息收不到，高峰期必现",
-  "media_items": [{"type": "image", "filename": "screenshot.png", "path": "/uploads/web_xxx/screenshot.png"}],
-  "documents": [{"type": "document", "filename": "app.log", "path": "/uploads/web_xxx/app.log"}],
-  "problem_id": "T-123"
-}
-→ 200（非流式：阻塞至本轮处理挂起/终态后返回；SSE：Accept: text/event-stream 逐帧推送，可提前断开）
-  注：工单侧不传 files（web 前端行为；workflow 分流不进 BuildUserPrompt，runner 只读 records）
+→ {"type":"req","id":"4","method":"chat.send",
+   "params":{"session_id":"web_xxx","query":"推送消息收不到，高峰期必现",
+             "media_items":[{"type":"image","filename":"screenshot.png","path":"/uploads/web_xxx/screenshot.png"}],
+             "documents":[{"type":"document","filename":"app.log","path":"/uploads/web_xxx/app.log"}],
+             "problem_id":"T-123"}}
+← event 帧（本轮执行到挂起后推送）：
+{"type":"event","event":"chat.ask_user_question","payload":{
+   "questions":[{"question":"问题发生在哪个组件？","header":"组件归属",
+     "options":[{"label":"推送服务","value":"push"},{"label":"接入网关","value":"gateway"},
+                {"label":"存储层","value":"storage"}],"multi_select":false}],
+   "problem_id":"T-123"}}
+← {"type":"res","id":"4","ok":true}
 ```
 
-**④ 挂起后 history 轮询（工单拿到"等什么"）**
+**④ 恢复应答（结构化 answers）**
 
 ```
-GET /api/v1/sessions/{session_id}/history
-→ 200 {"records": [
-    {"id": 101, "role": "assistant", "event_type": "chat.ask_user_question",
-     "questions": [
-       {"question": "问题发生在哪个组件？", "header": "组件归属",
-        "options": [{"label":"推送服务","value":"push"}, {"label":"接入网关","value":"gateway"},
-                    {"label":"存储层","value":"storage"}], "multi_select": false}
-     ],
-     "problem_id": "T-123"}
-  ]}
+→ {"type":"req","id":"5","method":"chat.send",
+   "params":{"session_id":"web_xxx",
+             "answers":[{"question":"问题发生在哪个组件？","selected_options":["push"],"custom_input":""}]}}
+← event{chat.ask_user_answer} + 方案/结论 event 帧 + 后续 ask_user 卡 event 帧
+← {"type":"res","id":"5","ok":true}
 ```
 
-**⑤ 恢复应答（结构化 answers）**
+**⑤ 确认解决 → 终态**
 
 ```
-POST /api/v1/chat/send
-{"answers": [{"question": "问题发生在哪个组件？", "selected_options": ["push"], "custom_input": ""}]}
-→ 200 {"ok": true, "request_id": "req-2"}
+→ {"type":"req","id":"6","method":"chat.send",
+   "params":{"session_id":"web_xxx",
+             "answers":[{"question":"问题解决了吗？","selected_options":["solved"]}]}}
+← {"type":"event","event":"chat.final",
+   "payload":{"content":"问题已关闭并沉淀至历史知识库（关联 T-123）"}}
+← {"type":"res","id":"6","ok":true}
 ```
 
-**⑥ 确认解决 → 终态**
+**⑥ 中途取消**
 
 ```
-POST /api/v1/chat/send
-{"answers": [{"question": "问题解决了吗？", "selected_options": ["solved"]}]}
-→ 200 {"ok": true, "request_id": "req-3"}
-
-# 随后轮询 history 可见：
-{"id": 108, "role": "assistant", "event_type": "chat.final",
- "content": "问题已关闭并沉淀至历史知识库（关联 T-123）"}
+→ {"type":"req","id":"7","method":"chat.cancel","params":{"intent":"cancel"}}
 ```
 
 **语义要点**：
-- send 非流式同步阻塞至本轮挂起/终态才返回；工单系统推荐 SSE 发起后断开 + history 轮询（不受 unary 超时限制）；
-- **断开不触发取消**（代码实证）：SSE 断开仅 break 帧循环（web_http_routes.go:726）、WS 断开仅移除连接（web_connect.go:210），gateway 均不向 agentserver 发 cancel——agentserver 执行不依赖连接存活，断开后 workflow 照常跑到挂起/终态并落历史；**真正取消必须显式调** `POST /chat/{session_id}/actions/interrupt`（intent=cancel）；
-- "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`；工单不感知内部 state 字段；
-- 补充信息（非当前卡应答的 send）视为特征并入恢复输入（答案归属判定 §2.3）；
-- 已终态后 send 的"确认解决"（工单关单下发）为 no-op，仅追加历史。
+- **工单与普通聊天同一 WS 逻辑**：同连接/同帧协议/同方法集，仅 agentserver envelope 层 mode 分流不同；
+- 事件帧实时推送（挂起卡、结论、chat.final 均推到同一连接）；history.get 为断线重连兜底；
+- **断开不触发取消**（上游 Python/Go 一致，见 §7 开头）：断开后 workflow 继续跑到挂起/终态并落历史；真正取消须显式 `chat.cancel`；
+- "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`（或 event 帧实时可见）；工单不感知内部 state 字段；
+- 补充信息（非当前卡应答的 chat.send）视为特征并入恢复输入（答案归属判定 §2.3）；
+- 已终态后下发的"确认解决"为 no-op，仅追加历史。
+
