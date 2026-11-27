@@ -174,10 +174,15 @@ func TestAgentManager_Initialize(t *testing.T) {
 
 func TestAgentManager_CreateSession(t *testing.T) {
 	am := NewAgentManager()
-	// 空 sessionID → "default"
+	// 空 sessionID → "{channel}_{ts:x}_{uuid12}" 唯一 ID（Python L216-218）
 	sessionID, err := am.CreateSession("web", "")
 	require.NoError(t, err)
-	assert.Equal(t, "default", sessionID)
+	assert.True(t, strings.HasPrefix(sessionID, "web_"), "应带通道前缀: %q", sessionID)
+	assert.NotEqual(t, "default", sessionID, "不得固定返回 default")
+	// 连续创建得到不同 ID
+	sessionID2, err := am.CreateSession("web", "")
+	require.NoError(t, err)
+	assert.NotEqual(t, sessionID, sessionID2, "每次创建应分配新 ID")
 }
 
 func TestAgentManager_CreateSession_指定ID(t *testing.T) {

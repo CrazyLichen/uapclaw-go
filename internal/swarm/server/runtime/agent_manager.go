@@ -409,8 +409,22 @@ func (am *AgentManager) CreateSession(channelID, sessionID string) (string, erro
 			Msg("[AgentManager] ACP session created")
 		return sessionID, nil
 	}
-	// Python: L216: 其他 → "default"
-	return "default", nil
+	// Python: L216-218: 其他 → "{channel_key}_{ts:x}_{uuid12}" 唯一会话 ID
+	sessionID = fmt.Sprintf("%s_%x_%s", channelKey, time.Now().UnixMilli(), randomHex12())
+	logger.Info(logComponent).
+		Str("channel_id", channelID).
+		Str("session_id", sessionID).
+		Msg("[AgentManager] session id allocated")
+	return sessionID, nil
+}
+
+// randomHex12 12 位随机 hex（对齐 Python uuid.uuid4().hex[:12]）。
+func randomHex12() string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%012x", time.Now().UnixNano()&0xffffffffffff)
+	}
+	return hex.EncodeToString(b)
 }
 
 // GetClientCapabilities 获取客户端能力。
