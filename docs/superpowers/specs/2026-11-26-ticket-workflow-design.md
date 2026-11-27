@@ -64,7 +64,7 @@
 | 16 | **IntentNode 职责收窄**：只做图片识别（视觉模型）+ 查询文本合成；不碰日志原文、不做规则级抽取，日志分析归 AgentNode；附件元信息（文件名/类型）拼入检索查询 | §3.4 |
 | 17 | **开放式澄清固定模板零 LLM**：IntentNode 模糊分支直接抛固定模板中断卡（不路由 GuidanceNode）；GuidanceNode 只保留判别式引导一种形态（从 KBSearch 进）；每轮恢复后回到就绪判定（规则） | §3.4/§3.5 |
 | 18 | **最小前置信息集**：必需 = 表象 + 组件归属；增强 = 频率/时间模式、报错信息（口头）、复现步骤；组件选项来自配置的组件清单；必需字段齐 → 就绪 | §3.4 |
-| 19 | **HTTP 零新增字段**：ProblemInput 降级为 runner 内部归一化结构，由既有 chat.send params 拼装（description=query、attachments=files、answers=answers（既有 buildInteractiveInputFromAnswers）、problem_id 新增可选 params 键）；HTTP 纯文本下组件识别 = 组件清单关键字匹配，未命中并入表象下轮重问 | §4.3/§7 |
+| 19 | **HTTP 零新增字段**：ProblemInput 降级为 runner 内部归一化结构，由既有 chat.send params 拼装（description=query、附件对外用 media_items（图片）/documents（文档日志）走既有 normalize 管线、answers=answers（既有 buildInteractiveInputFromAnswers）、problem_id 新增可选 params 键，files 是内部归一化槽位不对外）；HTTP 纯文本下组件识别 = 组件清单关键字匹配，未命中并入表象下轮重问 | §4.3/§7 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
@@ -331,7 +331,8 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 ```json
 {
   "query": "推送消息收不到，高峰期必现",
-  "files": {"log": {"url": "..."}, "image": {"url": "..."}},
+  "media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}],
+  "documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}],
   "problem_id": "T-123",
   "answers": [{"question": "组件归属？", "selected_options": ["push"], "custom_input": ""}]
 }
@@ -380,7 +381,7 @@ ProblemInput **不是 HTTP 请求体 schema**（HTTP 复用既有 chat.send para
 ProblemInput（runner 内部视角）{
   description     string  必填（表象；来自 params["query"] / 工具参数 description）
   reproduce_steps string  可选（工具参数；HTTP 侧并入 query 文本）
-  attachments     list    可选（来自 params["files"]，走既有附件通道/FileImportURL）
+  attachments     list    可选（HTTP 对外契约：图片传 params["media_items"]、日志/文档传 params["documents"]，经既有 normalize 管线落盘后回填 files["uploaded_images"]/["uploaded_documents"]；files 是内部归一化槽位，不对外）
   problem_id      string  可选（HTTP 侧 params["problem_id"]，工单回关联；聊天侧不传）
 }
 ```
@@ -468,7 +469,7 @@ ProblemInput（runner 内部视角）{
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
 | `POST /api/v1/sessions` | 建会话（mode 锁定） | body `{"metadata": {"mode": "agent.workflow.diagnosis"}}` |
-| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`files`（附件）、`problem_id`（可选）、`answers`（可选） |
+| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`media_items`（图片）/`documents`（日志文档）、`problem_id`（可选）、`answers`（可选） |
 | `POST /api/v1/chat/resume` | （备用）恢复挂起会话 | 同 send |
 | `POST /api/v1/chat/{session_id}/actions/user_answer` | （备用）既有中断应答端点 | answers |
 | `GET /api/v1/sessions/{session_id}/history` | 工单轮询结果（唯一结果通道） | 增量按记录 id/时间戳幂等 |
@@ -491,10 +492,10 @@ sequenceDiagram
     S-->>G: {session_id}
     G-->>T: 201 {session_id, ...}
 
-    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到", files:{log,image}, problem_id:"T-123"}
+    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到", media_items:[图片], documents:[日志], problem_id:"T-123"}
     G->>S: E2A chat.send（透传）
     S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
-    S->>S: runner 拼装 ProblemInput<br/>{description=query, attachments=files, problem_id}
+    S->>S: 附件 normalize 管线（图片落盘/文档安全检查）<br/>runner 拼装 ProblemInput（attachments=files 归一化结果）
     S->>W: Invoke(ProblemInput)
     W->>W: IntentNode：图片→视觉模型；日志不碰；<br/>就绪判定：表象✓ 组件✗
     W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
@@ -570,7 +571,8 @@ mode 经 `SyncSessionRequestMetadata` 显式覆盖式写入，会话生命周期
 POST /api/v1/chat/send
 {
   "query": "推送消息收不到，高峰期必现",
-  "files": {"log": {"url": "https://.../app.log"}, "image": {"url": "https://.../screenshot.png"}},
+  "media_items": [{"type": "image", "filename": "screenshot.png", "data": "<base64>"}],
+  "documents": [{"type": "document", "filename": "app.log", "data": "<base64>"}],
   "problem_id": "T-123"
 }
 → 200 {"ok": true, "request_id": "req-1"}   ← 同步即回，不等待工作流结果
