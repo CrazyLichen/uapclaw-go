@@ -404,9 +404,17 @@ func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
 
 	handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
 
-	entry, ok := interruptedTools["tc_from_exception"]
+	// 对齐 Python _handle_tool_interrupt_exception：表键与 entry.tool_call 都是
+	// 外层模型可见调用；异常携带的（inner）调用存 paused_call；payload 按 inner 上下文。
+	entry, ok := interruptedTools["tc_original"]
 	require.True(t, ok)
-	assert.Equal(t, "tc_from_exception", entry.ToolCall.ID)
+	assert.Equal(t, "tc_original", entry.ToolCall.ID)
+	assert.Equal(t, "tc_from_exception", entry.PausedCall.ID)
+	assert.Len(t, payloads, 1)
+	assert.Equal(t, "tc_from_exception", payloads[0].InnerID)
+	payloadTCIR, isTCIR := payloads[0].Payload.(*saschema.ToolCallInterruptRequest)
+	require.True(t, isTCIR)
+	assert.Equal(t, "tc_from_exception", payloadTCIR.ToolCallID)
 }
 
 func TestHandleSubAgentInterrupt(t *testing.T) {
@@ -629,3 +637,307 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 	assert.NotEmpty(t, payloads)
 	assert.Equal(t, "key1", autoConfirmMapping["tc1"])
 }
+
+// ──────────────────────────── held / 定向恢复键 / deferred images ────────────────────────────
+
+// TestIsWaitingForClient 验证 client tool 中断且无人回答时保持暂停。
+// Python: _is_waiting_for_client（handler.py:395-401）
+func TestIsWaitingForClient(t *testing.T) {
+	// client tool 中断、未回答 → held
+	clientEntry := &saschema.ToolInterruptEntry{
+		ToolCall:   &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
+		PausedCall: &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
+		InterruptRequests: map[string]saschema.InterruptRequester{
+			"outer1": saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{}),
+		},
+	}
+	clientReq := clientEntry.InterruptRequests["outer1"]
+	saschema.IssueInterruptRequesterID(clientReq, "outer1", nil)
+	assert.True(t, isWaitingForClient(clientEntry, map[string]*saschema.InterruptAnswer{}))
+
+	// 回答了 → 不再 held
+	fresh := map[string]*saschema.InterruptAnswer{
+		clientReq.GetInterruptID(): {Owner: saschema.ClientToolInterruptOwner},
+	}
+	assert.False(t, isWaitingForClient(clientEntry, fresh))
+
+	// 子 Agent 条目 → 恒 false
+	sub := &saschema.ToolInterruptEntry{IsSubAgent: true, InterruptRequests: map[string]saschema.InterruptRequester{
+		"i": saschema.NewClientToolRequest("t", nil, nil),
+	}}
+	assert.False(t, isWaitingForClient(sub, map[string]*saschema.InterruptAnswer{}))
+
+	// 非 client tool owner → false
+	perm := &saschema.ToolInterruptEntry{
+		InterruptRequests: map[string]saschema.InterruptRequester{
+			"i": &saschema.InterruptRequest{Message: "确认", InterruptOwner: "perm.rail"},
+		},
+	}
+	saschema.IssueInterruptRequesterID(perm.InterruptRequests["i"], "i", nil)
+	assert.False(t, isWaitingForClient(perm, map[string]*saschema.InterruptAnswer{}))
+}
+
+// TestResumeUserInputKeysForState 验证定向恢复键收集与泛化回退。
+// Python: _resume_user_input_keys_for_state（handler.py:430-447）
+func TestResumeUserInputKeysForState(t *testing.T) {
+	// 带 metadata 定向键 + 无定向键请求并存 → 两键都注入
+	reqDirected := &saschema.InterruptRequest{Message: "a", Metadata: map[string]any{"resume_user_input_key": "_host_key"}}
+	reqPlain := &saschema.InterruptRequest{Message: "b"}
+	saschema.IssueInterruptRequesterID(reqDirected, "c1", nil)
+	saschema.IssueInterruptRequesterID(reqPlain, "c2", nil)
+	state := &saschema.ToolInterruptionState{InterruptedTools: map[string]*saschema.ToolInterruptEntry{
+		"outer": {ToolCall: &llmschema.ToolCall{ID: "outer"},
+			InterruptRequests: map[string]saschema.InterruptRequester{"c1": reqDirected, "c2": reqPlain}},
+	}}
+	keys := resumeUserInputKeysForState(state)
+	assert.ElementsMatch(t, []string{"_host_key", ResumeUserInputKey}, keys)
+
+	// 全部无定向键 → 仅泛化键
+	plainState := &saschema.ToolInterruptionState{InterruptedTools: map[string]*saschema.ToolInterruptEntry{
+		"outer": {ToolCall: &llmschema.ToolCall{ID: "outer"},
+			InterruptRequests: map[string]saschema.InterruptRequester{"c2": reqPlain}},
+	}}
+	assert.Equal(t, []string{ResumeUserInputKey}, resumeUserInputKeysForState(plainState))
+}
+
+// TestMergeHeldCalls 验证 held 调用按原样合回、payload 用 paused_call 重建。
+// Python: _merge_held_calls（handler.py:403-428）
+func TestMergeHeldCalls(t *testing.T) {
+	heldEntry := &saschema.ToolInterruptEntry{
+		ToolCall:   &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
+		PausedCall: &llmschema.ToolCall{ID: "outer1", Name: "client_tool", Arguments: `{"final":true}`},
+		InterruptRequests: map[string]saschema.InterruptRequester{
+			"outer1": saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{}),
+		},
+	}
+	heldReq := heldEntry.InterruptRequests["outer1"]
+	saschema.IssueInterruptRequesterID(heldReq, "outer1", nil)
+	state := &saschema.ToolInterruptionState{InterruptedTools: map[string]*saschema.ToolInterruptEntry{
+		"outer1": heldEntry,
+		"outer2": {ToolCall: &llmschema.ToolCall{ID: "outer2"}, IsSubAgent: true,
+			InterruptRequests: map[string]saschema.InterruptRequester{}},
+	}}
+	replayed := map[string]*saschema.ToolInterruptEntry{"outer2": state.InterruptedTools["outer2"]}
+	replayPayloads := []PayloadEntry{{InnerID: "inner2", Payload: "sub-payload"}}
+
+	merged, payloads := mergeHeldCalls(state, map[string]*saschema.ToolInterruptEntry{"outer1": heldEntry}, replayed, replayPayloads)
+	assert.Len(t, merged, 2)
+	// held payload 重建为 ToolCallInterruptRequest，上下文取 paused_call
+	found := false
+	for _, p := range payloads {
+		if tcir, ok := p.Payload.(*saschema.ToolCallInterruptRequest); ok {
+			found = true
+			assert.Equal(t, "outer1", p.InnerID)
+			assert.Equal(t, "client_tool", tcir.ToolName)
+			assert.Equal(t, `{"final":true}`, tcir.ToolArgs)
+		}
+	}
+	assert.True(t, found, "held payload 应重建为 ToolCallInterruptRequest")
+}
+
+// TestHandleResume_clientTool无人回答保持暂停 验证 held 语义整条链：
+// 不重放 held 调用、TOOL_CALLS_STILL_PAUSED 标记注入与清理、payload 用
+// paused_call 重建、中断 id 沿用。
+// Python: handle_resume（handler.py:317-393）
+func TestHandleResume_clientTool无人回答保持暂停(t *testing.T) {
+	agent := &fakeInterruptAgent{}
+	h := NewToolInterruptHandler(agent)
+	sess := session.NewSession()
+
+	clientReq := saschema.NewClientToolRequest("client_tool", map[string]any{}, map[string]any{})
+	entry := &saschema.ToolInterruptEntry{
+		ToolCall:   &llmschema.ToolCall{ID: "outer1", Name: "client_tool"},
+		PausedCall: &llmschema.ToolCall{ID: "outer1", Name: "client_tool", Arguments: `{"q":1}`},
+		InterruptRequests: map[string]saschema.InterruptRequester{"outer1": clientReq},
+	}
+	saschema.IssueInterruptRequesterID(clientReq, "outer1", nil)
+	previousID := clientReq.GetInterruptID()
+
+	// 第二个调用：permission 中断，本轮用 InteractiveInput.answer 回答 → 会重放
+	permReq := &saschema.InterruptRequest{Message: "允许吗", InterruptOwner: "perm.rail"}
+	saschema.IssueInterruptRequesterID(permReq, "tc2", nil)
+	permEntry := &saschema.ToolInterruptEntry{
+		ToolCall:   &llmschema.ToolCall{ID: "tc2", Name: "bash"},
+		PausedCall: &llmschema.ToolCall{ID: "tc2", Name: "bash"},
+		InterruptRequests: map[string]saschema.InterruptRequester{"tc2": permReq},
+	}
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
+			"outer1": entry,
+			"tc2":    permEntry,
+		},
+		DeferredToolImages: []map[string]any{{"image": "img1"}},
+	}
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+
+	var executedIDs []string
+	var stillPausedDuringExecute bool
+	executeFn := func(ctx context.Context, cbc *interfaces.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+		for _, tc := range toolCalls {
+			executedIDs = append(executedIDs, tc.ID)
+		}
+		_, stillPausedDuringExecute = cbc.GetExtra(saschema.ToolCallsStillPausedKey)
+		return []saschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
+	}
+
+	// InteractiveInput 只回答 permission 调用；client tool 无人回答 → held
+	interactive, err0 := interaction.NewInteractiveInput()
+	require.NoError(t, err0)
+	require.NoError(t, interactive.Answer(permReq.GetInterruptID(), map[string]any{"approved": true}))
+
+	resumeCtx := &ResumeContext{
+		State:           intState,
+		UserInput:       interactive,
+		Ctx:             cbc,
+		Session:         sess,
+		InvokeInputs:    &interfaces.InvokeInputs{},
+		ExecuteToolCall: executeFn,
+	}
+
+	result, err := h.HandleResume(context.Background(), resumeCtx)
+	require.NoError(t, err)
+	// held 调用不重放；permission 调用重放
+	assert.Equal(t, []string{"tc2"}, executedIDs)
+	// 恢复期间打了 still-paused 标记
+	assert.True(t, stillPausedDuringExecute)
+	// 仍有中断（held 的 client tool）→ commit，payload 为 held 重建结果
+	require.NotNil(t, result)
+	assert.Equal(t, "interrupt", result["result_type"])
+	interruptIDs, _ := result["interrupt_ids"].([]any)
+	require.Len(t, interruptIDs, 1)
+	// interrupt_ids 装的是 inner call id（对齐 Python payloads 的 (inner_id, payload)）
+	assert.Equal(t, "outer1", interruptIDs[0])
+	// 重建 payload 的请求保留原 interrupt_id（宿主手里的 id 一直有效）
+	stateOutputs, _ := result["state"].([]any)
+	require.Len(t, stateOutputs, 1)
+	outputSchema, _ := stateOutputs[0].(*stream.OutputSchema)
+	require.NotNil(t, outputSchema)
+	interactionOutput, _ := outputSchema.Payload.(*interaction.InteractionOutput)
+	require.NotNil(t, interactionOutput)
+	rebuiltTCIR, _ := interactionOutput.Value.(*saschema.ToolCallInterruptRequest)
+	require.NotNil(t, rebuiltTCIR)
+	assert.Equal(t, previousID, rebuiltTCIR.Request.GetInterruptID())
+	assert.Equal(t, `{"q":1}`, rebuiltTCIR.ToolArgs)
+	// deferred images 保留到 state
+	assert.Len(t, intState.DeferredToolImages, 1)
+	// 清理完成
+	_, ok := cbc.GetExtra(saschema.ToolCallsStillPausedKey)
+	assert.False(t, ok)
+	_, ok = cbc.GetExtra(saschema.DeferredToolImagesKey)
+	assert.False(t, ok)
+	_, ok = cbc.GetExtra(ResumeUserInputKey)
+	assert.False(t, ok)
+}
+
+// TestHandleResume_deferredImages无新中断清空 验证无新中断时 deferred images 清空。
+func TestHandleResume_deferredImages无新中断清空(t *testing.T) {
+	agent := &fakeInterruptAgent{}
+	h := NewToolInterruptHandler(agent)
+	sess := session.NewSession()
+
+	req := &saschema.InterruptRequest{Message: "确认"}
+	saschema.IssueInterruptRequesterID(req, "tc1", nil)
+	entry := &saschema.ToolInterruptEntry{
+		ToolCall:          &llmschema.ToolCall{ID: "tc1", Name: "tool1"},
+		InterruptRequests: map[string]saschema.InterruptRequester{"tc1": req},
+	}
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
+		InterruptedTools:      map[string]*saschema.ToolInterruptEntry{"tc1": entry},
+		DeferredToolImages:    []map[string]any{{"image": "img1"}},
+	}
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+	executeFn := func(ctx context.Context, cbc *interfaces.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+		return []saschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
+	}
+	interactive, err0 := interaction.NewInteractiveInput()
+	require.NoError(t, err0)
+	require.NoError(t, interactive.Answer(req.GetInterruptID(), map[string]any{"approved": true}))
+	resumeCtx := &ResumeContext{
+		State: intState, UserInput: interactive, Ctx: cbc, Session: sess,
+		InvokeInputs: &interfaces.InvokeInputs{}, ExecuteToolCall: executeFn,
+	}
+
+	result, err := h.HandleResume(context.Background(), resumeCtx)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+	// 无新中断 → deferred images 清空（对齐 Python else 分支 []）
+	assert.Empty(t, intState.DeferredToolImages)
+}
+
+// TestHandleResume_定向恢复键注入 验证 metadata 定向键随恢复注入并在 finally 清理。
+func TestHandleResume_定向恢复键注入(t *testing.T) {
+	agent := &fakeInterruptAgent{}
+	h := NewToolInterruptHandler(agent)
+	sess := session.NewSession()
+
+	req := &saschema.InterruptRequest{Message: "确认", Metadata: map[string]any{"resume_user_input_key": "_host_key"}}
+	saschema.IssueInterruptRequesterID(req, "tc1", nil)
+	entry := &saschema.ToolInterruptEntry{
+		ToolCall:          &llmschema.ToolCall{ID: "tc1", Name: "tool1"},
+		InterruptRequests: map[string]saschema.InterruptRequester{"tc1": req},
+	}
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
+		InterruptedTools:      map[string]*saschema.ToolInterruptEntry{"tc1": entry},
+	}
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+	var directedDuringExecute any
+	var genericDuringExecute any
+	executeFn := func(ctx context.Context, cbc *interfaces.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+		directedDuringExecute, _ = cbc.GetExtra("_host_key")
+		genericDuringExecute, _ = cbc.GetExtra(ResumeUserInputKey)
+		return []saschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
+	}
+	resumeCtx := &ResumeContext{
+		State: intState, UserInput: "输入值", Ctx: cbc, Session: sess,
+		InvokeInputs: &interfaces.InvokeInputs{}, ExecuteToolCall: executeFn,
+	}
+
+	_, err := h.HandleResume(context.Background(), resumeCtx)
+	require.NoError(t, err)
+	// 仅定向键注入（所有请求都有定向键时不暴露泛化键，对齐 Python）
+	assert.Equal(t, "输入值", directedDuringExecute)
+	assert.Nil(t, genericDuringExecute)
+	// finally 清理
+	_, ok := cbc.GetExtra("_host_key")
+	assert.False(t, ok)
+}
+
+// TestSaveAutoConfirm_子类请求 验证 AskUserRequest 子类答案也能写 auto_confirm
+// （D5：InterruptAnswer.Request 保留子类，经 GetAutoConfirmKey 读取）。
+func TestSaveAutoConfirm_子类请求(t *testing.T) {
+	agent := &fakeInterruptAgent{}
+	h := NewToolInterruptHandler(agent)
+	sess := session.NewSession()
+
+	askReq := &testAskUserRequest{InterruptRequest: saschema.InterruptRequest{Message: "反问", AutoConfirmKey: "ask_confirm_key"}}
+	saschema.IssueInterruptRequesterID(askReq, "tc1", nil)
+	answers := map[string]*saschema.InterruptAnswer{
+		askReq.GetInterruptID(): {
+			Owner:  askReq.GetInterruptOwner(),
+			Kind:   askReq.GetInterruptKind(), // UNDECLARED，在白名单内
+			Value:  map[string]any{"approved": true, "auto_confirm": true},
+			Request: askReq,
+		},
+	}
+
+	saveAutoConfirm(answers, sess)
+	val, _ := sess.GetState(sessionstate.StringKey(saschema.InterruptAutoConfirmKey))
+	config, ok := val.(map[string]any)
+	require.True(t, ok)
+	require.Len(t, config, 1)
+	for key := range config {
+		assert.Equal(t, askReq.GetAutoConfirmKey(), key)
+	}
+	_ = h
+}
+
+// testAskUserRequest 测试用 InterruptRequest 子类（模拟 rail 声明的子类请求；
+// Python 侧 AskUserRequest 形态经 model_dump 保留扩展字段，Go 经嵌入继承多态）。
+type testAskUserRequest struct {
+	saschema.InterruptRequest
+}
+
+// Questions 子类扩展字段（Python: AskUserRequest.questions）。

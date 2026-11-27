@@ -5,7 +5,8 @@
 //
 //	prompt/
 //	├── doc.go                   # 包文档
-//	└── code_prompt_builder.go   # 8 个 section builder + BuildCodeSystemPrompt
+//	├── code_prompt_builder.go   # 8 个 section builder + BuildCodeSystemPrompt
+//	└── plan_approval.go         # plan approval 常量与"跳过"反馈文案（对齐 plan_approval.py）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/code/prompt/code_prompt_builder.py
 package prompt

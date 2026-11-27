@@ -37,6 +37,10 @@ type ToolInterruptEntry struct {
 	// 在同一调用上又重新提问，说明上轮的答案没被接受，那条答案会被丢弃。
 	// Python: ToolInterruptEntry.carried_answers
 	CarriedAnswers map[string]map[string]*InterruptAnswer
+	// PausedCall rail 或客户端工具中断所针对的（inner）调用；为客户端
+	// 保持暂停的调用再次暂停时仍带着它。子 Agent 调用为 nil。
+	// Python: ToolInterruptEntry.paused_call（state.py:71-73）
+	PausedCall *llmschema.ToolCall
 }
 
 // ToolInterruptionState 工具中断状态（HITL 中断）。
@@ -48,6 +52,10 @@ type ToolInterruptionState struct {
 	InterruptedTools map[string]*ToolInterruptEntry
 	// AutoConfirmMapping 自动确认映射 (inner_id → auto_confirm_key)
 	AutoConfirmMapping map[string]string
+	// DeferredToolImages 本轮已完成调用的图片项；等本轮没有任何调用暂停时
+	// 才送进模型（tool message 必须聚在一个 turn 里）。
+	// Python: ToolInterruptionState.deferred_tool_images（state.py:88-90）
+	DeferredToolImages []map[string]any
 }
 
 // WorkflowInterruptEntry 工作流中断条目。
@@ -128,8 +136,10 @@ type InterruptAnswer struct {
 	Kind string
 	// Value 宿主发来的答案
 	Value any
-	// Request 被回答的请求
-	Request *InterruptRequest
+	// Request 被回答的请求。Python 存 InterruptRequest 子类实例
+	// （如 AskUserRequest、ClientToolRequest）；Go 用 InterruptRequester
+	// 接口保留子类完整字段（saveAutoConfirm 等经 GetAutoConfirmKey 读取）。
+	Request InterruptRequester
 	// Carried 是否为更早恢复轮次已处理的答案
 	Carried bool
 	// Unaddressed 是否为未指定中断的纯文本输入

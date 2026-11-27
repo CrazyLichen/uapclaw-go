@@ -74,6 +74,9 @@ type ExecuteToolCallFunc func(
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
+	// resumeUserInputKeyMetadata request.metadata 里宿主定向恢复键的名字。
+	// Python: _RESUME_USER_INPUT_KEY_METADATA = "resume_user_input_key"（handler.py:48）
+	resumeUserInputKeyMetadata = "resume_user_input_key"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -251,19 +254,47 @@ func (h *ToolInterruptHandler) HandleResume(
 	// Python: unanswered = self._unanswered_interrupts(state, fresh_answers)
 	unanswered := unansweredInterrupts(intState, freshAnswers)
 
-	// 设置恢复用户输入到 ctx.extra
-	// Python: ctx.extra[RESUME_USER_INPUT_KEY] = user_input
+	// 无人回答的 client tool 调用按原样保持暂停：重放它们会重跑 rails 并
+	// 重新 build_request，而客户端可能还在处理它已拿到的请求。
+	// Python: held = {outer_id: entry for ... if self._is_waiting_for_client(entry, fresh_answers)}
+	held := make(map[string]*saschema.ToolInterruptEntry)
+	for outerID, entry := range intState.InterruptedTools {
+		if isWaitingForClient(entry, freshAnswers) {
+			held[outerID] = entry
+		}
+	}
+
+	// 设置恢复用户输入到 ctx.extra：定向键按 request.metadata 里的
+	// resume_user_input_key，其余走泛化键（两者可并存）。
+	// Python: resume_user_input_keys = self._resume_user_input_keys_for_state(state)
+	//         ctx.extra.update({key: user_input for key in resume_user_input_keys})
 	// S-24: 裸 map 写迁移 SetExtra（线程安全）
-	cbc.SetExtra(ResumeUserInputKey, userInput)
+	resumeUserInputKeys := resumeUserInputKeysForState(intState)
+	for _, key := range resumeUserInputKeys {
+		cbc.SetExtra(key, userInput)
+	}
 
 	// 答案归属表：rail 通过 FindOwnAnswer 只读自己 owner 那份
 	// Python: ctx.extra[RESUME_INTERRUPT_ANSWERS_KEY] = call_answers
 	cbc.SetExtra(saschema.ResumeInterruptAnswersKey, callAnswersMap)
 
-	// 构建需要重执行的工具调用列表
+	// 已完成调用的图片项随恢复注入，等本轮没有任何调用暂停时再送模型
+	// Python: ctx.extra[DEFERRED_TOOL_IMAGES_KEY] = list(state.deferred_tool_images)
+	cbc.SetExtra(saschema.DeferredToolImagesKey, append([]map[string]any(nil), intState.DeferredToolImages...))
+
+	// 仍有调用保持暂停时打标记，rail 据此知道本轮没有完整重放
+	// Python: if held: ctx.extra[TOOL_CALLS_STILL_PAUSED_KEY] = True
+	if len(held) > 0 {
+		cbc.SetExtra(saschema.ToolCallsStillPausedKey, true)
+	}
+
+	// 构建需要重执行的工具调用列表（held 的调用跳过）
 	// Python: copy.deepcopy(entry.tool_call) + 子 Agent 注入 query
 	toolsToExecute := make([]*llmschema.ToolCall, 0)
-	for _, entry := range intState.InterruptedTools {
+	for outerID, entry := range intState.InterruptedTools {
+		if _, isHeld := held[outerID]; isHeld {
+			continue
+		}
 		tc := deepCopyToolCall(entry.ToolCall)
 		if entry.IsSubAgent {
 			tc = buildSubAgentResumeToolCall(tc, userInput)
@@ -275,19 +306,32 @@ func (h *ToolInterruptHandler) HandleResume(
 	// Python: results = await execute_tool_call(ctx, tools_to_execute, session, context)
 	// Python 中 execute_tool_call 失败时异常直接传播给调用方
 	var results []saschema.ExecuteResult
+	executeErr := error(nil)
 	if len(toolsToExecute) > 0 && resumeCtx.ExecuteToolCall != nil {
-		var err error
-		results, err = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("handle_resume: re-execute tool call failed")
-			return nil, fmt.Errorf("handle_resume: 重执行工具调用失败: %w", err)
-		}
+		results, executeErr = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
 	}
 
-	// 清除恢复用户输入与答案归属表
-	// Python: finally 块里 pop 掉 RESUME_USER_INPUT_KEY / RESUME_INTERRUPT_ANSWERS_KEY
-	cbc.DeleteExtra(ResumeUserInputKey)
+	// finally 块：无论执行成败都清理恢复期注入的 ctx.extra
+	// Python: finally: pop resume_user_input_keys / RESUME_INTERRUPT_ANSWERS_KEY /
+	//         TOOL_CALLS_STILL_PAUSED_KEY / DEFERRED_TOOL_IMAGES_KEY
+	for _, key := range resumeUserInputKeys {
+		cbc.DeleteExtra(key)
+	}
 	cbc.DeleteExtra(saschema.ResumeInterruptAnswersKey)
+	cbc.DeleteExtra(saschema.ToolCallsStillPausedKey)
+	var deferredImages []map[string]any
+	if raw, ok := cbc.GetExtra(saschema.DeferredToolImagesKey); ok {
+		if list, isList := raw.([]map[string]any); isList {
+			deferredImages = list
+		}
+	}
+	cbc.DeleteExtra(saschema.DeferredToolImagesKey)
+
+	// 执行失败在清理之后上抛（对齐 Python finally 后异常继续传播）
+	if executeErr != nil {
+		logger.Error(logComponent).Err(executeErr).Msg("handle_resume: re-execute tool call failed")
+		return nil, fmt.Errorf("handle_resume: 重执行工具调用失败: %w", executeErr)
+	}
 
 	// 重新收集中断
 	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute, unanswered)
@@ -297,13 +341,23 @@ func (h *ToolInterruptHandler) HandleResume(
 	// Python: self._carry_answers(new_interrupted_tools, call_answers)
 	carryAnswers(newInterruptedTools, callAnswersMap)
 
+	// 为客户端保持暂停的调用按原顺序合回，payload 用 paused_call 重建
+	// Python: new_interrupted_tools, sub_agent_outputs = self._merge_held_calls(
+	//             state, held, new_interrupted_tools, sub_agent_outputs)
+	newInterruptedTools, subAgentOutputs = mergeHeldCalls(intState, held, newInterruptedTools, subAgentOutputs)
+
 	intState.InterruptedTools = newInterruptedTools
 	intState.AutoConfirmMapping = autoConfirmMapping
 
 	// 有新中断则 commit
 	if len(newInterruptedTools) > 0 {
+		// Python: state.deferred_tool_images = deferred_images if new_interrupted_tools else []
+		intState.DeferredToolImages = deferredImages
 		return h.CommitInterrupt(ctx, intState, modelCtx, sess, invokeInputs, subAgentOutputs)
 	}
+
+	// 无新中断，清空 deferred images（本turn已无暂停调用，图片随本轮送模型）
+	intState.DeferredToolImages = nil
 
 	// 无新中断，设置恢复起始迭代
 	// Python: ctx.extra[RESUME_START_ITERATION_KEY] = resume_iteration + 1
@@ -439,26 +493,34 @@ func handleToolInterruptException(
 	payloads *[]PayloadEntry,
 	autoConfirmMapping map[string]string,
 ) {
-	// Python: tc = tool_result.tool_call or tool_call
-	tc := tie.ToolCall
-	if tc == nil {
-		tc = toolCall
+	// 审批标识的是嵌套目标，但恢复必须重放模型可见的外层调用，
+	// wrapper 才能重建授权。
+	// Python: inner_tool_call = tool_result.tool_call or tool_call
+	//         outer_id = tool_call.id
+	//         inner_id = inner_tool_call.id
+	innerToolCall := tie.ToolCall
+	if innerToolCall == nil {
+		innerToolCall = toolCall
 	}
-	outerID := tc.ID
-	innerID := outerID
+	outerID := toolCall.ID
+	innerID := innerToolCall.ID
 
 	// 构造 ToolInterruptEntry
-	// Python: interrupt_requests={inner_id: tool_result.request}
-	// tie.Request 是 *InterruptRequest，满足 InterruptRequester 接口
+	// Python: interrupted_tools[outer_id] = ToolInterruptEntry(
+	//     tool_call=tool_call,                        # 外层模型可见调用
+	//     interrupt_requests={inner_id: tool_result.request},
+	//     paused_call=inner_tool_call,
+	// )
 	interruptedTools[outerID] = &saschema.ToolInterruptEntry{
-		ToolCall: tc,
+		ToolCall: toolCall,
 		InterruptRequests: map[string]saschema.InterruptRequester{
 			innerID: tie.Request,
 		},
+		PausedCall: innerToolCall,
 	}
 
-	// 构造 payload: ToolCallInterruptRequest
-	payload := NewToolCallInterruptRequest(tie.Request, tc)
+	// 构造 payload: ToolCallInterruptRequest（按 inner call 上下文）
+	payload := NewToolCallInterruptRequest(tie.Request, innerToolCall)
 	*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: payload})
 
 	// 记录 auto_confirm_mapping
@@ -563,4 +625,105 @@ func deepCopyToolCall(tc *llmschema.ToolCall) *llmschema.ToolCall {
 		Arguments: tc.Arguments,
 		Index:     tc.Index,
 	}
+}
+
+// isWaitingForClient 该调用是否在等客户端（client tool 中断且本轮无人回答）。
+// Python: _is_waiting_for_client(entry, fresh_answers)（handler.py:395-401）
+func isWaitingForClient(
+	entry *saschema.ToolInterruptEntry,
+	freshAnswers map[string]*saschema.InterruptAnswer,
+) bool {
+	if entry == nil || entry.IsSubAgent || len(entry.InterruptRequests) == 0 {
+		return false
+	}
+	for _, request := range entry.InterruptRequests {
+		if request.GetInterruptOwner() != saschema.ClientToolInterruptOwner {
+			return false
+		}
+		if _, answered := freshAnswers[request.GetInterruptID()]; answered {
+			return false
+		}
+	}
+	return true
+}
+
+// resumeUserInputKeysForState 收集本次恢复应注入 ctx.extra 的全部恢复输入键。
+// 带 resume_user_input_key 元数据的请求暴露到各自的定向键下；任一请求没有
+// 定向键（或整个状态没有定向键）时同时暴露泛化键。
+// Python: _resume_user_input_keys_for_state(state)（handler.py:430-447）
+func resumeUserInputKeysForState(intState *saschema.ToolInterruptionState) []string {
+	keys := make([]string, 0)
+	needsGenericKey := false
+	for _, entry := range intState.InterruptedTools {
+		if entry == nil {
+			continue
+		}
+		for _, request := range entry.InterruptRequests {
+			metadata := request.GetMetadata()
+			if metadata == nil {
+				needsGenericKey = true
+				continue
+			}
+			raw, hasKey := metadata[resumeUserInputKeyMetadata]
+			if !hasKey {
+				needsGenericKey = true
+				continue
+			}
+			key, isStr := raw.(string)
+			if !isStr || key == "" {
+				needsGenericKey = true
+				continue
+			}
+			keys = append(keys, key)
+		}
+	}
+	if needsGenericKey || len(keys) == 0 {
+		keys = append(keys, ResumeUserInputKey)
+	}
+	return keys
+}
+
+// mergeHeldCalls 把为客户端保持暂停的调用按本轮原顺序合回。
+// held 的调用按原样暂停：请求与中断 id 不变，payload 用 paused_call 重建。
+// Python: _merge_held_calls(state, held, replayed, payloads)（handler.py:403-428）
+func mergeHeldCalls(
+	intState *saschema.ToolInterruptionState,
+	held map[string]*saschema.ToolInterruptEntry,
+	replayed map[string]*saschema.ToolInterruptEntry,
+	payloads []PayloadEntry,
+) (map[string]*saschema.ToolInterruptEntry, []PayloadEntry) {
+	if len(held) == 0 {
+		return replayed, payloads
+	}
+	payloadByID := make(map[string]any, len(payloads))
+	for _, entry := range payloads {
+		payloadByID[entry.InnerID] = entry.Payload
+	}
+	merged := make(map[string]*saschema.ToolInterruptEntry)
+	mergedPayloads := make([]PayloadEntry, 0)
+	for outerID := range intState.InterruptedTools {
+		if entry, isHeld := held[outerID]; isHeld {
+			merged[outerID] = entry
+			// Python: [(inner_id, request)] = entry.interrupt_requests.items()
+			// （held 恒为单请求条目；Go map 无序，取唯一元素等价）
+			for innerID, request := range entry.InterruptRequests {
+				innerCall := entry.PausedCall
+				if innerCall == nil {
+					innerCall = entry.ToolCall
+				}
+				mergedPayloads = append(mergedPayloads, PayloadEntry{
+					InnerID: innerID,
+					Payload: NewToolCallInterruptRequest(request, innerCall),
+				})
+			}
+		} else if entry, wasReplayed := replayed[outerID]; wasReplayed {
+			merged[outerID] = entry
+			for innerID := range entry.InterruptRequests {
+				if payload, ok := payloadByID[innerID]; ok {
+					mergedPayloads = append(mergedPayloads, PayloadEntry{InnerID: innerID, Payload: payload})
+				}
+			}
+		}
+	}
+	return merged, mergedPayloads
 }

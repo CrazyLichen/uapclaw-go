@@ -84,3 +84,27 @@ func (i *InteractiveInput) Update(nodeID string, value any) error {
 	i.UserInputs[nodeID] = value
 	return nil
 }
+
+// Answer 按 interrupt_id 回答一个工具调用中断。
+// id 是被暂停请求的 InterruptRequest.InterruptID；只有抛出该中断的 rail
+// （或客户端工具）会收到这个值。
+// Python: InteractiveInput.answer(interrupt_id, value)（interactive_input.py:60-68）
+func (i *InteractiveInput) Answer(interruptID string, value any) error {
+	if interruptID == "" {
+		return exception.RaiseError(exception.StatusInteractionInputInvalid,
+			exception.WithParam("reason", "interrupt_id must be a non-empty string"),
+		)
+	}
+	if i.RawInputs != nil {
+		return exception.RaiseError(exception.StatusInteractionInputInvalid,
+			exception.WithParam("reason", "raw_inputs existed, update is invalid"),
+		)
+	}
+	if value == nil {
+		return exception.RaiseError(exception.StatusInteractionInputInvalid,
+			exception.WithParam("reason", "value is none or node_id is none"),
+		)
+	}
+	i.InterruptAnswers[interruptID] = value
+	return nil
+}

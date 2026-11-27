@@ -210,7 +210,7 @@ func attributeAnswers(
 			Owner:       requestOwnerOf(request),
 			Kind:        requestKindOf(request),
 			Value:       value,
-			Request:     requestAsInterruptRequest(request),
+			Request:     request,
 			Unaddressed: plainText,
 		}
 	}
@@ -364,10 +364,10 @@ func saveAutoConfirm(
 			continue
 		}
 		autoConfirm, _ := value["auto_confirm"].(bool)
-		if !autoConfirm || answer.Request == nil || answer.Request.AutoConfirmKey == "" {
+		if !autoConfirm || answer.Request == nil || answer.Request.GetAutoConfirmKey() == "" {
 			continue
 		}
-		config[answer.Request.AutoConfirmKey] = true
+		config[answer.Request.GetAutoConfirmKey()] = true
 	}
 
 	sess.UpdateState(map[string]any{saschema.InterruptAutoConfirmKey: config})
@@ -410,14 +410,6 @@ func requestKindOf(request saschema.InterruptRequester) string {
 		return saschema.InterruptKindUndeclared
 	}
 	return saschema.InterruptKindOf(ir)
-}
-
-// requestAsInterruptRequest 把中断请求转成 *InterruptRequest，非该类型返回 nil。
-func requestAsInterruptRequest(request saschema.InterruptRequester) *saschema.InterruptRequest {
-	if ir, ok := request.(*saschema.InterruptRequest); ok {
-		return ir
-	}
-	return nil
 }
 
 // ──────────────────────────── owner 路由读取（InterruptOwnerMixin 对应） ────────────────────────────
