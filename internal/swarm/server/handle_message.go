@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/repositories"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -162,6 +163,14 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.HandleSessionAssetsRename(ctx, request)
 	case schema.ReqMethodSessionAssetsRemove:
 		resp, err = s.HandleSessionAssetsRemove(ctx, request)
+	// 项目控制面（project_repository.py，Phase 1 只读：list/info/sessions 族）
+	case schema.ReqMethodProjectList,
+		schema.ReqMethodProjectInfo,
+		schema.ReqMethodProjectPinnedSessions,
+		schema.ReqMethodProjectGetSessions,
+		schema.ReqMethodProjectGetCronSessions,
+		schema.ReqMethodProjectCronResolveBinding:
+		resp = repositories.HandleProjectRequest(request)
 	// 配置面板（27.4，Python: config_adapter.py ConfigAdapter.handle 分派）
 	case schema.ReqMethodConfigGet,
 		schema.ReqMethodConfigSet,

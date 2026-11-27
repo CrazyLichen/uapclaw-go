@@ -198,6 +198,21 @@ const (
 	// ReqMethodSessionAssetsRemove 删除会话素材条目（Python SESSION_ASSETS_REMOVE）
 	ReqMethodSessionAssetsRemove ReqMethod = "session.assets.remove"
 
+	// ─── 项目控制面（project_repository.py，Phase 1 只读）───
+
+	// ReqMethodProjectList 项目列表含统计（Python PROJECT_LIST）
+	ReqMethodProjectList ReqMethod = "project.list"
+	// ReqMethodProjectInfo 项目详情（Python PROJECT_INFO）
+	ReqMethodProjectInfo ReqMethod = "project.info"
+	// ReqMethodProjectPinnedSessions 置顶会话列表（Python PROJECT_PINNED_SESSIONS）
+	ReqMethodProjectPinnedSessions ReqMethod = "project.pinned_sessions"
+	// ReqMethodProjectGetSessions 项目普通会话列表（Python PROJECT_GET_SESSIONS）
+	ReqMethodProjectGetSessions ReqMethod = "project.get_sessions"
+	// ReqMethodProjectGetCronSessions 项目 cron 会话列表（Python PROJECT_GET_CRON_SESSIONS）
+	ReqMethodProjectGetCronSessions ReqMethod = "project.get_cron_sessions"
+	// ReqMethodProjectCronResolveBinding cron 项目绑定解析（Python PROJECT_CRON_RESOLVE_BINDING）
+	ReqMethodProjectCronResolveBinding ReqMethod = "project.cron.resolve_binding"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史

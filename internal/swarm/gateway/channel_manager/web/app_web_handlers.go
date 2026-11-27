@@ -325,6 +325,21 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
 	}
 
+	// ─── 项目控制面 5 方法（Python app_web_handlers.py:5701-5709
+	// _project_list/_project_info/_project_get_sessions/_project_get_cron_sessions
+	// + lifecycle_handlers _project_pinned_sessions——全部 E2A 转发
+	// AgentServer 控制面 project_repository；session.archive 族与
+	// project.create/rename/pin/remove/restore/git.* 在执行平面，⤴️ 挂账）───
+	for _, m := range []string{
+		"project.list",
+		"project.info",
+		"project.get_sessions",
+		"project.get_cron_sessions",
+		"project.pinned_sessions",
+	} {
+		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
+	}
+
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)
