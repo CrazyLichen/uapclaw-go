@@ -17,7 +17,6 @@ import {
   Image as ImageIcon,
   Info,
   LoaderCircle,
-  Megaphone,
   PanelBottomClose,
   PanelBottomOpen,
   Presentation,
@@ -87,12 +86,11 @@ import {
   type DesktopLocalFilesEventDetail,
   type LocalFilePick,
 } from '../../features/workspace/localFilePicker';
-import { useDesktopLocalFilePickerReady, useWelcomeBubblePosition } from '../../hooks';
+import { useDesktopLocalFilePickerReady } from '../../hooks';
 import { ApplicationPluginTaskRuntimes, flushApplicationConversationHistory } from '../../applicationPlugins/ApplicationPluginOutlet';
 import { generateUuidV4 } from '../../utils/uuid';
 import { useOrganizationConversationKey } from '../../features/teamOrganization/conversation';
 import { useOrganizationProcessing } from '../../features/teamOrganization/processing';
-import { requestLogin, useAuthStore } from '../../stores/authStore';
 import type { PromptSuggestionBox } from '../../hooks/usePromptSuggestionBox';
 import { webClient, webRequest } from '../../services/webClient';
 import {
@@ -1117,7 +1115,6 @@ function scrollToBottom(el: HTMLDivElement): void {
 }
 
 const BEE_ANIMATION_DURATION = 4536;
-const WELCOME_BUBBLE_HIDE_DELAY = 3000;
 
 function BeeBanner({
   className,
@@ -1127,8 +1124,9 @@ function BeeBanner({
 }: {
   className: string;
   altText: string;
-  onTrigger: () => void;
-  onLeave: () => void;
+  // 2026-11-27 用户裁决：移除欢迎区悬浮提示气泡，回调改为可选（动画触发保留）
+  onTrigger?: () => void;
+  onLeave?: () => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1138,7 +1136,7 @@ function BeeBanner({
       clearTimeout(timerRef.current);
     }
     setIsPlaying(true);
-    onTrigger();
+    onTrigger?.();
     timerRef.current = setTimeout(() => {
       setIsPlaying(false);
       timerRef.current = null;
@@ -1158,7 +1156,7 @@ function BeeBanner({
       alt={altText}
       data-testid="chat-panel-welcome-banner"
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={onLeave}
+      onMouseLeave={onLeave ? () => onLeave() : undefined}
     />
   );
 }
@@ -1269,7 +1267,6 @@ export const ChatPanel = React.memo(function ChatPanel({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const panelShellRef = useRef<HTMLDivElement>(null);
   const composeRef = useRef<HTMLDivElement>(null);
-  const bubbleRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<InputAreaHandle>(null);
   const desktopFileDropAcceptUntilRef = useRef(0);
   const lastConsumedDesktopDropIdRef = useRef<string | null>(null);
@@ -1396,43 +1393,6 @@ export const ChatPanel = React.memo(function ChatPanel({
   const shouldShowShareExport = !isEnterprise() && Boolean(onExportShare);
   const shouldShowHumanShare = mode === 'team' && teamHumanShareCommands.length > 0;
   const [humanShareOpen, setHumanShareOpen] = React.useState(false);
-  const isAuthorized = useAuthStore((state) => state.islogin);
-  const [bubbleVisible, setBubbleVisible] = useState(false);
-  const [freeModelsPromptDismissed, setFreeModelsPromptDismissed] = useState(false);
-  const bubbleHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleBubbleShow = useCallback(() => {
-    if (!isAuthorized && freeModelsPromptDismissed) return;
-    if (bubbleHideTimerRef.current) {
-      clearTimeout(bubbleHideTimerRef.current);
-      bubbleHideTimerRef.current = null;
-    }
-    setBubbleVisible(true);
-  }, [freeModelsPromptDismissed, isAuthorized]);
-  const handleBubbleLeave = useCallback(() => {
-    if (bubbleHideTimerRef.current) {
-      clearTimeout(bubbleHideTimerRef.current);
-    }
-    bubbleHideTimerRef.current = setTimeout(() => {
-      bubbleHideTimerRef.current = null;
-      setBubbleVisible(false);
-    }, WELCOME_BUBBLE_HIDE_DELAY);
-  }, []);
-  const handleFreeModelsPromptClose = useCallback(() => {
-    if (bubbleHideTimerRef.current) {
-      clearTimeout(bubbleHideTimerRef.current);
-      bubbleHideTimerRef.current = null;
-    }
-    setFreeModelsPromptDismissed(true);
-    setBubbleVisible(false);
-  }, []);
-  useEffect(() => {
-    return () => {
-      if (bubbleHideTimerRef.current) {
-        clearTimeout(bubbleHideTimerRef.current);
-        bubbleHideTimerRef.current = null;
-      }
-    };
-  }, []);
   // 新会话占位符 'new' 还没有真实 session_id，隐藏心跳入口，见接口规格说明 §16.2
   const heartbeatAvailable = !isEnterprise() && Boolean(activeSessionId && activeSessionId !== NEW_CONVERSATION_ID);
   const handlePluginConversationItem = useCallback((sid: string, role: 'user' | 'assistant', text: string, presentation?: 'tool_result') => {
@@ -1749,13 +1709,6 @@ export const ChatPanel = React.memo(function ChatPanel({
     observer.observe(content);
     return () => observer.disconnect();
   }, [activeSessionId, historyLoadingMore, historyPrepending, updateHistoryLayoutSnapshot]);
-
-  // 根据 chat-panel 宽度动态调整 welcome bubble 的 right 值
-  useWelcomeBubblePosition({
-    panelRef: panelShellRef,
-    bubbleRef,
-    active: !hasConversation,
-  });
 
   // 检测鼠标滚轮事件，即使没有滚动条也能触发加载更多
   const handleWheel = useCallback(
@@ -2607,49 +2560,9 @@ export const ChatPanel = React.memo(function ChatPanel({
               <div className="chat-welcome__composer" data-testid="chat-panel-welcome-composer">
                 {!isGroupCreateWelcome && (
                   <>
-                    <div
-                      ref={bubbleRef}
-                      className={`chat-welcome__banner chat-welcome__banner--bubble${!isAuthorized ? ' chat-welcome__banner--bubble--campaign' : ''}${bubbleVisible ? ' chat-welcome__banner--bubble--visible' : ''}`}
-                      data-testid="chat-panel-welcome-banner-bubble"
-                      onMouseEnter={handleBubbleShow}
-                      onMouseLeave={handleBubbleLeave}
-                    >
-                      {isAuthorized ? (
-                        t('chat.welcomeBubbleText')
-                      ) : (
-                        <>
-                          <div className="chat-welcome__campaign-heading">
-                            <span>
-                              <Megaphone aria-hidden />
-                              {t('chat.freeModelsCampaign.title')}
-                            </span>
-                            <button
-                              type="button"
-                              className="chat-welcome__campaign-close"
-                              onClick={handleFreeModelsPromptClose}
-                              aria-label={t('common.close')}
-                              title={t('common.close')}
-                            >
-                              <X aria-hidden />
-                            </button>
-                          </div>
-                          <p>{t('chat.freeModelsCampaign.description')}</p>
-                          <button
-                            type="button"
-                            className="chat-welcome__campaign-claim"
-                            onClick={() => requestLogin()}
-                            data-testid="chat-panel-free-models-claim"
-                          >
-                            {t('chat.freeModelsCampaign.claim')}
-                          </button>
-                        </>
-                      )}
-                    </div>
                     <BeeBanner
                       className="chat-welcome__banner chat-welcome__banner--bee"
                       altText={t('chat.welcomeLogoAlt')}
-                      onTrigger={handleBubbleShow}
-                      onLeave={handleBubbleLeave}
                     />
                   </>
                 )}

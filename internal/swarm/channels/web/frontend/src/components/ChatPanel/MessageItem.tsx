@@ -155,7 +155,7 @@ export function TeamMemberMessageFrame({
   const selectedConversation = useOrganizationConversationKey(sessionId);
   const activeSessionId = sourceTeamId ? conversationKey(sessionId ?? '', sourceTeamId) : selectedConversation;
   const teamMembers = useSessionStore((s) => s.runtimes[activeSessionId ?? '']?.teamMembers);
-  // 头像旁的成员名：leader 使用显式 session identity，否则固定 Jiuwen；其他成员
+  // 头像旁的成员名：leader 使用显式 session identity，否则固定 UapClaw；其他成员
   // 使用名册 display name，查不到退回 member_id。
   // 订阅名册而非 getState 直读，成员迟到时名字能跟着刷新（同 TeamMemberAvatar 的考量）。
   const memberName = useMemo(() => {
@@ -164,7 +164,7 @@ export function TeamMemberMessageFrame({
     if (isTeamLeaderMember(id)) {
       return teamGroupIdentity?.displayName?.trim()
         || resolveTeamLeaderDisplayName(teamLeaderIdentity, i18n.language)
-        || 'Jiuwen';
+        || 'UapClaw';
     }
     const known = teamMembers?.find((item) => item.member_id === id);
     return known?.name?.trim() || id;
@@ -957,7 +957,7 @@ export const MessageItem = memo(function MessageItem({
             data-state={isStreaming ? 'streaming' : 'final'}
           >
             {!isUser && message.presentation === 'tool_result' && (
-              <div className="chat-bubble__result-label">{t('chat.toolResultLabel', '工具结果')} · Jiuwen Core Agent</div>
+              <div className="chat-bubble__result-label">{t('chat.toolResultLabel', '工具结果')} · UapClaw Core Agent</div>
             )}
             {isStreaming ? (
               isUser ? (

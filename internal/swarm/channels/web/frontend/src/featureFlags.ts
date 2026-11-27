@@ -1,7 +1,8 @@
 /**
  * 前端功能开关（集中管理，便于按构建裁剪 UI）
  */
-export const FEATURE_APP_UPDATER_UI = true;
+// 2026-11-27 用户裁决：桌面/自托管分发无应用内更新链路，移除更新页签
+export const FEATURE_APP_UPDATER_UI = false;
 
 /**
  * 个人上下文（主动上下文）UI 开关。

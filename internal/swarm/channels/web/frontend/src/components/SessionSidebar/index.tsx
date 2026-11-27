@@ -5,6 +5,7 @@
  */
 
 import { useCallback } from 'react';
+import { FEATURE_APP_UPDATER_UI } from '../../featureFlags';
 import { useTranslation } from 'react-i18next';
 import './SessionSidebar.css';
 import PlusIcon from '../../assets/sidebar/plus.svg?react';
@@ -95,7 +96,8 @@ const mainNavItems: NavItem[] = [
   { key: 'experiments', labelKey: 'nav.experiments', icon: experimentsNavIcon },
   { key: 'personalContext', labelKey: 'nav.personalContext', icon: personalContextNavIcon },
   { key: 'settings', labelKey: 'nav.settings', icon: <SettingsIcon aria-hidden /> },
-  { key: 'updatepanel', labelKey: 'nav.update', icon: <UpdateIcon aria-hidden /> },
+  // FEATURE_APP_UPDATER_UI=false 时不显示更新页签（见 featureFlags.ts）
+  ...(FEATURE_APP_UPDATER_UI ? [{ key: 'updatepanel' as MainNavKey, labelKey: 'nav.update', icon: <UpdateIcon aria-hidden /> }] : []),
 ];
 
 export function SessionSidebar({

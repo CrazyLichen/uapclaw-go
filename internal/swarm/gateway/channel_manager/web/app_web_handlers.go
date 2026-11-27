@@ -288,6 +288,32 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("vendors.list", configForwardToAgent(wc, agentClient, "vendors.list"), false)
 	wc.registerMethod("vendors.fetch_models", configForwardToAgent(wc, agentClient, "vendors.fetch_models"), false)
 
+	// ─── RSI 优化平台 18 个 web method（对齐 Python app_web_handlers.py:6478-6500
+	// rsi_methods 注册表：仅注册 + proxy_unary_request，业务在 AgentServer
+	// HandleRSIRequest 前缀分发）───
+	for _, m := range []string{
+		"rsi.dataset.validate",
+		"rsi.task.create",
+		"rsi.task.list",
+		"rsi.task.get",
+		"rsi.task.delete",
+		"rsi.training.start",
+		"rsi.training.pause",
+		"rsi.training.resume",
+		"rsi.training.terminate",
+		"rsi.report.get",
+		"rsi.usage.get",
+		"rsi.artifact.download",
+		"rsi.artifact.files.list",
+		"rsi.artifact.files.get",
+		"rsi.tree.get",
+		"rsi.harness.install",
+		"rsi.harness.versions.list",
+		"rsi.harness.rollback",
+	} {
+		wc.registerMethod(m, configForwardToAgent(wc, agentClient, m), false)
+	}
+
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)
