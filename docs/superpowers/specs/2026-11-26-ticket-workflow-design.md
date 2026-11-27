@@ -61,6 +61,10 @@
 | 13 | **HTTP 恢复两形态**：answers（与 web 同款 ask_user 契约，runner 复用同一拆包）/纯文本（节点信箱并入特征） | §4.2② |
 | 14 | **Go adapter 回填**：build_inputs.go 补 ask_user 契约完整版（custom_input/__free_text__/interrupt_id 寻址）；permission/client_tool/evolution 缺口 ⤴️ 各自领域 | §6.2 |
 | 15 | **已核实现机制**：前端一卡多问（≤4）/多选/custom_input 渲染齐备；中断卡落盘 history 且历史恢复重弹卡（现网既有） | §6.2 |
+| 16 | **IntentNode 职责收窄**：只做图片识别（视觉模型）+ 查询文本合成；不碰日志原文、不做规则级抽取，日志分析归 AgentNode；附件元信息（文件名/类型）拼入检索查询 | §3.4 |
+| 17 | **开放式澄清固定模板零 LLM**：IntentNode 模糊分支直接抛固定模板中断卡（不路由 GuidanceNode）；GuidanceNode 只保留判别式引导一种形态（从 KBSearch 进）；每轮恢复后回到就绪判定（规则） | §3.4/§3.5 |
+| 18 | **最小前置信息集**：必需 = 表象 + 组件归属；增强 = 频率/时间模式、报错信息（口头）、复现步骤；组件选项来自配置的组件清单；必需字段齐 → 就绪 | §3.4 |
+| 19 | **HTTP 零新增字段**：ProblemInput 降级为 runner 内部归一化结构，由既有 chat.send params 拼装（description=query、attachments=files、answers=answers（既有 buildInteractiveInputFromAnswers）、problem_id 新增可选 params 键）；HTTP 纯文本下组件识别 = 组件清单关键字匹配，未命中并入表象下轮重问 | §4.3/§7 |
 | CI 结果 | 默认不追踪（规则 11），完成标准 = 本地编译 + vet + 单测 + 集成测试 + 推送 |
 
 ---
@@ -181,7 +185,7 @@ HTTP 恢复（runner 承担恢复执行者角色，协议同一）：
 
 | 节点 | 职责 | 产出的阶段 |
 |---|---|---|
-| IntentNode | 附件预处理（图片→视觉模型；日志→文本）+ 特征抽取；输出后接 Pregel 条件边分流（原 RouterNode 职能，§3.3） | `searching` 等 |
+| IntentNode | 附件预处理（仅图片→视觉模型；日志不碰）+ 就绪判定（必需=表象+组件）；输出后接 Pregel 条件边分流（§3.3） | `searching` 等 |
 | GuidanceNode | 渐进式引导：开放式澄清 / 判别式选项（多问卡 ≤4 问，一卡多问+多选+custom_input；抛交互挂起） | `guiding` |
 | KBSearchNode | GraphRetriever 检索（scope 参数化），方向判定；**命中方案正常流式输出展示**（同 AgentNode，跨节点提交），完成后汇入 ConfirmNode | `wait_confirm` |
 | AgentNode | 诊断 DeepAgent（skill + 附件日志分析）；**结论正常流式输出到界面**（会话 chunk，不走卡片），完成后汇入 ConfirmNode | `wait_confirm` |
@@ -201,11 +205,9 @@ flowchart TD
     AS --> WF[ProblemDiagnosisWorkflow runner: Invoke→图执行→挂起/续跑→追加历史]
 
     subgraph 节点执行
-        R[IntentNode 条件边分流] --> I[IntentNode 附件预处理+特征抽取]
-        I -->|表象/组件全模糊| G1[GuidanceNode 开放式澄清·抛交互挂起]
-        I -->|特征就绪| K[KBSearchNode scope=history]
-        G1 -.挂起待补充.-> G1R[恢复后并入特征]
-        G1R --> K
+        R[IntentNode 就绪判定·条件边分流] -->|表象✓组件✓| K[KBSearchNode scope=history]
+        R -->|缺必需字段·固定模板卡| G1[IntentNode 直接抛中断·零LLM]
+        G1 -.恢复并入特征·重判.-> R
         K -->|高置信单向| WC1[命中方案正常流式展示]
         K -->|多向且未超轮数| G2[GuidanceNode 判别式引导·抛交互挂起]
         G2 -.补充后恢复.-> G2R[恢复后重新检索]
@@ -236,8 +238,8 @@ flowchart TD
 状态转移表：
 
 ```
-init ──Intent模糊──▶ guiding（开放式澄清，不查库）
-init ──Intent就绪──▶ searching
+init ──缺必需字段──▶ 固定模板卡挂起（零 LLM，重判规则见 §3.4）
+init ──必需字段齐──▶ searching
 guiding ──用户补充──▶ searching（scope 不变，重新检索）
 searching ──历史库高置信单向──▶ wait_confirm（历史方案+ticket关联）
 searching ──历史库多向──▶ guiding（判别式引导）
@@ -250,20 +252,20 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 
 ### 3.4 IntentNode
 
-1. **附件预处理**：图片附件 → 视觉模型（多模态 LLM）抽现象特征（错误码/界面异常/堆栈）；日志附件 → 文本抽取（错误关键字/时间戳/组件线索）；视觉模型走配置，无多模态时降级文本并 Warn；
-2. **特征抽取**：产出结构化特征 `{表象, 组件, 特征...}`（键值，**非向量**；向量只出现在检索查询文本上，特征本身始终是结构化数据）；
-3. **路由分支**：表象/组件全模糊 → 开放式澄清（不查库）；可查 → 主检索；
-4. 检索查询文本 = 用户描述 + 附件抽取结果合成（图片先转文字再入查询，多模态与文本走同一条查询链）；
-5. 主检索用原始完整语句；LLM 抽取为组件过滤/引导并入/沉淀服务，第一版可砍为"仅触发引导后才抽取"（冷路径省一次调用）。
+职责收窄（本轮拍板，决议 16/17/18）：**只做图片识别 + 查询文本合成 + 就绪判定，不碰日志原文**——日志分析归 AgentNode（挂诊断 skill + 附件读取工具）。
 
-### 3.5 GuidanceNode（两种形态）
+1. **附件预处理**：仅处理图片附件 → 视觉模型（多模态 LLM）抽现象特征（错误码/界面异常/堆栈）；视觉模型走配置，无多模态时降级跳过并 Warn；**日志附件不解析**，仅取文件名/类型元信息拼入检索查询；
+2. **特征归集**：表象取 ProblemInput.description（零提取）；组件归属来自用户应答（卡片选项/纯文本清单匹配）；产出结构化特征 `{表象, 组件, 特征...}`（键值，非向量）；
+3. **就绪判定（规则，零 LLM）**：必需字段 = 表象 + 组件归属，两者非空 → 就绪；缺 → 抛固定模板中断卡（只列缺的字段，组件项带配置清单选项），计入 `guidance_rounds`；**每轮恢复输入并入特征后回到本判定**，超限（2~3 轮，可配）带着已有特征进 KBSearchNode 兜底；
+4. 检索查询文本 = 表象描述 + 图片识别结果 + 附件元信息合成（图片先转文字再入查询）。
+
+### 3.5 GuidanceNode（仅判别式引导，本轮拍板）
 
 | 形态 | 触发（规则） | 生成（LLM 一次调用） |
 |---|---|---|
-| 开放式澄清 | Intent 抽不出关键特征 | 澄清问题文案（不依赖历史） |
 | 判别式引导 | 召回候选根因类别数 ≥2 | 候选按根因聚类 + 从各类区分性特征生成判别问题文案（含命中次数提示） |
 
-轮数上限 2~3（可配置），开放式与判别式合并计数；超限自动进下一级。判定全规则、不进 LLM；LLM 只干语义工作。
+开放式澄清**不再是 GuidanceNode 形态**（决议 17）：IntentNode 模糊分支直接抛固定模板中断卡（零 LLM，见 §3.4 第 3 条）。轮数上限 2~3（可配置），开放式模板卡与判别式引导合并计数（图状态 `guidance_rounds`）；超限自动进下一级。判定全规则、不进 LLM；LLM 只干语义工作。
 
 ### 3.6 KBSearchNode
 
@@ -324,22 +326,21 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 
 **① 会话创建**（既有 POST）：session metadata `mode=agent.workflow.diagnosis`（会话级固定，显式覆盖式写入即锁定）。
 
-**② send**（既有 POST）：请求体在 ProblemInput（§4.3）基础上增加可选 `answers`（HTTP 恢复两形态，本轮拍板——外部工单系统**无需实现卡片 UI**，最低成本接入为纯文本；`biz_event` 整体删除）：
+**② send**（既有 POST `/api/v1/chat/send`，请求体即既有 chat.send params 零新增字段，决议 19）：ProblemInput 不作为独立请求体 schema，而是 runner 从既有 params 拼装的内部归一化结构（§4.3）；可选 `problem_id` 为唯一新增 params 键（HTTP 侧回关联）；`answers` 复用既有 `buildInteractiveInputFromAnswers` 拆包（build_inputs.go PATH B）：
 
 ```json
 {
-  "description": "推送消息收不到",
-  "reproduce_steps": "高峰期必现",
-  "attachments": [{"type": "image", "url": "..."}, {"type": "log", "url": "..."}],
+  "query": "推送消息收不到，高峰期必现",
+  "files": {"log": {"url": "..."}, "image": {"url": "..."}},
   "problem_id": "T-123",
-  "answers": [{"question": "是偶发还是必现？", "selected_options": ["transient"], "custom_input": ""}]
+  "answers": [{"question": "组件归属？", "selected_options": ["push"], "custom_input": ""}]
 }
 ```
 
 | 恢复形态 | 语义 | runner 处理 |
 |---|---|---|
-| `answers` 数组 | 结构化回答（工单系统按历史里 ask_user_question 载荷渲染自有 UI；含确认解决/未解决） | 复用与 web 同一 `buildInteractiveInputFromAnswers` 拆包 → ii → Invoke 恢复 |
-| 纯文本（description/普通补充） | 自由文本 | 直达挂起节点信箱 → 节点并入特征；关单后下发的确认解决同样以此形态到达 |
+| `answers` 数组 | 结构化回答（工单系统按历史里 ask_user_question 载荷渲染自有 UI；含确认解决/未解决/组件选项） | 复用既有 `buildInteractiveInputFromAnswers` 拆包 → InteractiveInput → Invoke 恢复 |
+| 纯文本（query） | 自由文本 | 组件清单关键字匹配（命中填 component；未命中整段并入表象，下轮卡再列组件项，零 LLM）；关单后下发的确认解决同样以此形态到达 |
 
 |---|---|
 | 不传 | 普通评论：并入特征，scope 升级重查（wait_confirm 态）/主流程（初态） |
@@ -371,19 +372,23 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 
 **④ 聊天模式接入（第二阶段，契约预留）**：聊天 DeepAgent 装**单工具 `diagnose_problem`**（§2.2/§4.3），中断信封与恢复接缝见 §2.4；结论走会话 chunk→final。前端零改动。
 
-### 4.3 同构入参 schema（工具与 HTTP 同构）
+### 4.3 ProblemInput：runner 内部归一化结构（本轮拍板，决议 19）
+
+ProblemInput **不是 HTTP 请求体 schema**（HTTP 复用既有 chat.send params 零新增字段），而是 runner 从 params 拼装的内部归一化结构；聊天侧 `diagnose_problem` 单工具参数仍用它定义，两侧在 runner 内汇合同构：
 
 ```
-ProblemInput {
-  description     string  必填（问题描述）
-  reproduce_steps string  可选（复现步骤）
-  attachments     list    可选（图片/日志）
-  problem_id       string  HTTP 侧可选（工单回关联）；聊天侧不传，沉淀 metadata 为空
+ProblemInput（runner 内部视角）{
+  description     string  必填（表象；来自 params["query"] / 工具参数 description）
+  reproduce_steps string  可选（工具参数；HTTP 侧并入 query 文本）
+  attachments     list    可选（来自 params["files"]，走既有附件通道/FileImportURL）
+  problem_id      string  可选（HTTP 侧 params["problem_id"]，工单回关联；聊天侧不传）
 }
 ```
 
-- 聊天工具 **`diagnose_problem`（单工具）** 参数即此 schema；校验规则 = "description 非空"，与 HTTP 同一套。挂起后恢复不经工具——应答经中断通道（ask_user 卡）回流，ReAct 重放同一 tool call；关闭同样以确认卡应答承载。
-- 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自普通 send 纯文本，进入状态机后完全同构。
+- 校验规则 = "description 非空"，与工具/HTTP 同一套；
+- **必需前置信息集**（决议 18）：表象 + 组件归属；组件选项来自配置的组件清单，经固定模板中断卡收集；
+- 挂起后恢复不经工具——应答经中断通道（ask_user 卡 / answers）回流，ReAct 重放同一 tool call；HTTP 侧经 `buildInteractiveInputFromAnswers`；
+- 多轮补充：两侧同构并入 `intent_features`——工具侧来自对话消息，HTTP 侧来自 send 纯文本/answers，进入状态机后完全同构。
 
 ---
 
@@ -451,3 +456,163 @@ ProblemInput {
 
 - 无对齐上游场景（平台自有业务编排流），不存在 Python 对照问题；
 - 遗留：业务库导入面板第二阶段；trail 字段第一版可缓（YAGNI）；定期类别合并任务不做（沉淀时规则已覆盖）；聊天模式接入第二阶段（§2.4 统一中断协议契约已预留）；历史接口 `since` 增量参数若既有接口不具备则在本 spec 实施时定义参数级扩展。
+
+---
+
+## 7. 全链路交互时序（HTTP 模式，四级泳道）
+
+参与方：**工单系统**（外部 HTTP 调用方）→ **Gateway**（`web_http_routes.go` HTTP 端点 + E2A 透传）→ **AgentServer**（envelope 分流 + ProblemDiagnosisWorkflow runner）→ **Workflow**（PregelGraph 图执行实例）。
+
+涉及 HTTP 接口（全部既有，零新增 URL）：
+
+| 接口 | 用途 | 关键参数 |
+|---|---|---|
+| `POST /api/v1/sessions` | 建会话（mode 锁定） | body `{"metadata": {"mode": "agent.workflow.diagnosis"}}` |
+| `POST /api/v1/chat/send` | 首次提交问题 / 恢复应答 / 纯文本补充 | `query`（表象）、`files`（附件）、`problem_id`（可选）、`answers`（可选） |
+| `POST /api/v1/chat/resume` | （备用）恢复挂起会话 | 同 send |
+| `POST /api/v1/chat/{session_id}/actions/user_answer` | （备用）既有中断应答端点 | answers |
+| `GET /api/v1/sessions/{session_id}/history` | 工单轮询结果（唯一结果通道） | 增量按记录 id/时间戳幂等 |
+
+send 响应：同步即返回（E2A send 即回，`{"ok": true, "request_id": "..."}`），**工作流结果不进 HTTP 响应**，全部经 runner 追加历史记录、工单轮询 history 获取。
+
+### 7.1 时序图
+
+```mermaid
+sequenceDiagram
+    participant T as 工单系统
+    participant G as Gateway
+    participant S as AgentServer(envelope+runner)
+    participant W as Workflow(图实例)
+
+    rect rgb(235,245,255)
+    Note over T,W: 阶段一：建会话 + 首次提交问题
+    T->>G: POST /api/v1/sessions<br/>{metadata:{mode:agent.workflow.diagnosis}}
+    G->>S: E2A session.create（透传）
+    S-->>G: {session_id}
+    G-->>T: 201 {session_id, ...}
+
+    T->>G: POST /api/v1/chat/send<br/>{query:"推送收不到", files:{log,image}, problem_id:"T-123"}
+    G->>S: E2A chat.send（透传）
+    S->>S: envelope 读 session metadata mode<br/>命中 agent.workflow.* → 交 runner（不进门面）
+    S->>S: runner 拼装 ProblemInput<br/>{description=query, attachments=files, problem_id}
+    S->>W: Invoke(ProblemInput)
+    W->>W: IntentNode：图片→视觉模型；日志不碰；<br/>就绪判定：表象✓ 组件✗
+    W-->>S: GraphInterrupt 挂起（checkpointer 持久化）<br/>固定模板卡（组件项带配置清单选项）
+    S->>S: 中断载荷追加历史（chat.ask_user_question）
+    S-->>G: send 同步响应 {ok:true}
+    G-->>T: 200 {ok:true}（结果走轮询）
+    end
+
+    rect rgb(245,240,255)
+    Note over T,W: 阶段二：工单轮询 + 结构化应答
+    T->>G: GET /api/v1/sessions/{id}/history
+    G->>S: E2A history.get
+    S-->>G: 历史记录（含 ask_user_question 卡载荷）
+    G-->>T: 200（工单按载荷渲染自有 UI）
+    Note over T: 最新一条未配对 ask_user_question = 当前等待项
+
+    T->>G: POST /api/v1/chat/send<br/>{answers:[{question:"组件归属？",selected_options:["push"]}]}
+    G->>S: E2A chat.send
+    S->>S: runner：buildInteractiveInputFromAnswers<br/>→ InteractiveInput（既有 PATH B）
+    S->>W: Invoke(InteractiveInput) 引擎 checkpoint 重放续跑
+    W->>W: 并入特征 → 就绪判定：表象✓组件✓ → KBSearchNode
+    alt 历史库高置信单向
+        W->>W: 命中方案（流式输出进历史）→ ConfirmNode 轻卡挂起
+        W-->>S: GraphInterrupt（"问题解决了吗？"）
+        S->>S: 追加历史（ask_user_question）
+    else 多向且未超轮数
+        W->>W: GuidanceNode 判别式引导挂起<br/>（LLM 一次调用生成判别问题）
+        W-->>S: GraphInterrupt
+        S->>S: 追加历史
+    else 无命中
+        W->>W: scope 升级 history→business 重查<br/>→ 仍无果 → AgentNode 诊断（skill+日志原文）<br/>→ 结论流式输出 → ConfirmNode 挂起
+        W-->>S: GraphInterrupt
+        S->>S: 追加历史（结论 + 确认卡）
+    end
+    S-->>G: {ok:true}
+    G-->>T: 200
+    end
+
+    rect rgb(235,255,240)
+    Note over T,W: 阶段三：确认关闭 + 沉淀
+    T->>G: GET /api/v1/sessions/{id}/history （轮询）
+    G-->>T: 200（方案/结论 + 确认卡）
+
+    T->>G: POST /api/v1/chat/send<br/>{answers:[{question:"问题解决了吗？",selected_options:["solved"]}]}
+    G->>S: E2A chat.send
+    S->>W: Invoke(InteractiveInput)
+    W->>W: SettleNode：写历史库/hit_count+1/演进信号<br/>（metadata.problem_id=T-123）
+    W-->>S: 正常返回终态 closed（无挂起）
+    S->>S: 追加历史（chat.final 关闭结论）
+    S-->>G: {ok:true}
+    G-->>T: 200
+    Note over T: 轮询看到 chat.final → 流程结束<br/>工单关单后下发"确认解决"→ 已终态 no-op
+    end
+```
+
+纯文本应答路径（工单系统不实现 answers UI 时的最低成本接入）：恢复 send 只带 `query`（如 `"推送模块收不到，偶发"`）→ runner 做组件清单关键字匹配（命中填 component / 未命中整段并入表象，下轮卡再列组件项，零 LLM）→ 映射为 InteractiveInput → 后续链路同上。
+
+### 7.2 阶段交互明细与示例
+
+**① 建会话**
+
+```
+POST /api/v1/sessions
+{"metadata": {"mode": "agent.workflow.diagnosis"}}
+→ 201 {"session_id": "web_xxx", "metadata": {"mode": "agent.workflow.diagnosis"}}
+```
+
+mode 经 `SyncSessionRequestMetadata` 显式覆盖式写入，会话生命周期内不可变（§2.7）。
+
+**② 首次 send（问题提交）**
+
+```
+POST /api/v1/chat/send
+{
+  "query": "推送消息收不到，高峰期必现",
+  "files": {"log": {"url": "https://.../app.log"}, "image": {"url": "https://.../screenshot.png"}},
+  "problem_id": "T-123"
+}
+→ 200 {"ok": true, "request_id": "req-1"}   ← 同步即回，不等待工作流结果
+```
+
+**③ 挂起后 history 轮询（工单拿到"等什么"）**
+
+```
+GET /api/v1/sessions/{session_id}/history
+→ 200 {"records": [
+    {"id": 101, "role": "assistant", "event_type": "chat.ask_user_question",
+     "questions": [
+       {"question": "问题发生在哪个组件？", "header": "组件归属",
+        "options": [{"label":"推送服务","value":"push"}, {"label":"接入网关","value":"gateway"},
+                    {"label":"存储层","value":"storage"}], "multi_select": false}
+     ],
+     "problem_id": "T-123"}
+  ]}
+```
+
+**④ 恢复应答（结构化 answers）**
+
+```
+POST /api/v1/chat/send
+{"answers": [{"question": "问题发生在哪个组件？", "selected_options": ["push"], "custom_input": ""}]}
+→ 200 {"ok": true, "request_id": "req-2"}
+```
+
+**⑤ 确认解决 → 终态**
+
+```
+POST /api/v1/chat/send
+{"answers": [{"question": "问题解决了吗？", "selected_options": ["solved"]}]}
+→ 200 {"ok": true, "request_id": "req-3"}
+
+# 随后轮询 history 可见：
+{"id": 108, "role": "assistant", "event_type": "chat.final",
+ "content": "问题已关闭并沉淀至历史知识库（关联 T-123）"}
+```
+
+**语义要点**：
+- send 同步响应永远只有 `{ok:true}`，工作流状态变化全部经 history 轮询观察；
+- "当前等待什么" = 最新一条未配对的 `chat.ask_user_question`；工单不感知内部 state 字段；
+- 补充信息（非当前卡应答的 send）视为特征并入恢复输入（答案归属判定 §2.3）；
+- 已终态后 send 的"确认解决"（工单关单下发）为 no-op，仅追加历史。
