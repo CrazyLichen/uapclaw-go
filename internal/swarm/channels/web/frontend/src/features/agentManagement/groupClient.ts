@@ -118,12 +118,9 @@ export function createLiveAgentGroupManagementClient(): AgentGroupManagementClie
         return rethrowGroupError(error);
       }
     },
-    async installGroup(id) {
-      try {
-        await webRequest('agent_groups.install', { id });
-      } catch (error) {
-        return rethrowGroupError(error);
-      }
+    async installGroup(_id) {
+      // 2026-11-27 用户裁决：专家 Hub 不启用，入口不发起调用（同 client.installDefinition）。
+      throw new AgentManagementError('专家市场服务未启用', 'market_unavailable', false);
     },
     async uninstallGroup(id) {
       try {
