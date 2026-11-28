@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/indexer"
 	vs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
 )
 
@@ -37,10 +38,13 @@ type KBService struct {
 type RetrievalKBFactory struct {
 	// dataDir 各 KB collection 持久化根目录（<dataDir>/<kbID>/chroma）
 	dataDir string
-	// mu stores 并发保护
+	// mu stores/configs 并发保护
 	mu sync.Mutex
 	// stores kbID → 已建向量库（delete 时取用）
 	stores map[string]*vs.ChromaVectorStore
+	// configs kbID → KB config 解析结果（D-30-1-4 收口：configJSON 消费登记，
+	// worker 管线装配读取）
+	configs map[string]KBConfig
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -53,11 +57,13 @@ func NewKBService(store *Store, kbFactory *RetrievalKBFactory) (*KBService, erro
 // NewRetrievalKBFactory 构造 collection 生命周期接线（dataDir 为空时 CreateCollection 必然失败，
 // 供回滚用例与调用方校验）
 func NewRetrievalKBFactory(dataDir string) *RetrievalKBFactory {
-	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]*vs.ChromaVectorStore)}
+	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]*vs.ChromaVectorStore),
+		configs: make(map[string]KBConfig)}
 }
 
-// CreateCollection 为 KB 创建向量库 collection（Chroma 本地持久化，构造期即建）
-func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, _ string) error {
+// CreateCollection 为 KB 创建向量库 collection（Chroma 本地持久化，构造期即建）。
+// configJSON 消费收口（D-30-1-4）：解析登记到 configs，供 worker 管线装配读取。
+func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, configJSON string) error {
 	if f.dataDir == "" {
 		err := fmt.Errorf("kb 数据目录未配置")
 		logger.Error(logComponent).Str("kb_id", kbID).Err(err).
@@ -81,7 +87,27 @@ func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, _ string)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.stores[kbID] = store
+	f.configs[kbID] = ParseKBConfig(configJSON)
 	return nil
+}
+
+// Config 读取已登记的 KB config 解析结果（未登记返回 false）
+func (f *RetrievalKBFactory) Config(kbID string) (KBConfig, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cfg, ok := f.configs[kbID]
+	return cfg, ok
+}
+
+// CreateIndexer 为已建 collection 构造 ChromaIndexer（chunk/triple 索引共用；
+// chromaPath 与 CreateCollection 同源：dataDir/<kbID>/chroma）
+func (f *RetrievalKBFactory) CreateIndexer(_ context.Context, kbID string) (indexer.Indexer, error) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "kb_" + kbID,
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	return indexer.NewChromaIndexer(config, filepath.Join(f.dataDir, kbID, "chroma"))
 }
 
 // DeleteCollection 删除 KB 的向量库 collection（DeleteTable 模板方法路径）
