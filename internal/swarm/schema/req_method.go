@@ -686,6 +686,12 @@ const (
 	ReqMethodKBTaskProgress ReqMethod = "kb.task.progress"
 	// ReqMethodKBTaskSubscribe 任务进度订阅
 	ReqMethodKBTaskSubscribe ReqMethod = "kb.task.subscribe"
+	// ReqMethodKBFileUploadChunk KB 上传数据面分帧（30.5；gateway 映射为 file.upload_chunk 协议）
+	ReqMethodKBFileUploadChunk ReqMethod = "kb.file.upload_chunk"
+	// ReqMethodKBFileUploadComplete KB 上传收尾（服务端复算 hash）
+	ReqMethodKBFileUploadComplete ReqMethod = "kb.file.upload_complete"
+	// ReqMethodKBDocCancelUpload KB 上传取消/中断清理
+	ReqMethodKBDocCancelUpload ReqMethod = "kb.doc.cancel_upload"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -1014,6 +1020,9 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodKBSearchTest,
 		ReqMethodKBTaskProgress,
 		ReqMethodKBTaskSubscribe,
+		ReqMethodKBFileUploadChunk,
+		ReqMethodKBFileUploadComplete,
+		ReqMethodKBDocCancelUpload,
 	}
 }
 

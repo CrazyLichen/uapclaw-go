@@ -11,8 +11,8 @@ import (
 // 24.3 +26：personal_context → 249；领域三十 30.1 +35：kb.* 方法族 → 284）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 284 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 284", len(methods))
+	if len(methods) != 287 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 287", len(methods))
 	}
 
 	// 验证无重复
@@ -403,6 +403,23 @@ func TestReqMethod_PersonalContextWireValues(t *testing.T) {
 	for m, want := range cases {
 		if string(m) != want {
 			t.Errorf("ReqMethod %q != 期望 wire 值 %q", string(m), want)
+		}
+	}
+}
+
+// TestKBFileMethods_有效注册 30.5 分帧通道三方法须进 AllReqMethods 白名单且 wire 值正确
+func TestKBFileMethods_有效注册(t *testing.T) {
+	cases := map[ReqMethod]string{
+		ReqMethodKBFileUploadChunk:   "kb.file.upload_chunk",
+		ReqMethodKBFileUploadComplete: "kb.file.upload_complete",
+		ReqMethodKBDocCancelUpload:    "kb.doc.cancel_upload",
+	}
+	for m, want := range cases {
+		if string(m) != want {
+			t.Errorf("ReqMethod %q != 期望 wire 值 %q", string(m), want)
+		}
+		if !IsValid(string(m)) {
+			t.Errorf("方法 %s 未进 AllReqMethods 白名单", m)
 		}
 	}
 }
