@@ -164,17 +164,21 @@ func embedStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 		IndexType:           "vector",
 		UseCaptionForImages: false,
 	}
+	// 重解析语义（spec §3）：先删旧 doc 索引再建（幂等；不存在时删除为空操作）。
+	// 索引器为工厂缓存单实例（同 client 读一致，dedup 不会误报），错误真实上抛
+	if _, derr := idx.DeleteIndex(ctx, job.DocID, "kb_"+job.KBID+"_chunks"); derr != nil {
+		logger.Warn(logComponent).Str("doc_id", job.DocID).Err(derr).
+			Msg("delete stale doc index before build failed")
+	}
 	success, err := idx.BuildIndex(ctx, job.chunks, indexConfig, env.embedModel,
 		indexer.WithIndexExtra("database_name", "kb_"+job.KBID))
 	if err != nil {
-		_ = idx.Close()
 		return err
 	}
 	if !success {
-		_ = idx.Close()
 		return errors.New("Failed to build chunk index")
 	}
-	return idx.Close()
+	return nil
 }
 
 // tripleStep graph 追加步骤：TripleExtractor 抽取 + triple 索引
@@ -193,7 +197,6 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 	}
 	triples, err := env.tripleExtractor.Extract(ctx, job.chunks)
 	if err != nil {
-		_ = idx.Close()
 		return err
 	}
 	if len(triples) > 0 {
@@ -206,17 +209,15 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 		success, err := idx.BuildIndex(ctx, tripleChunks, tripleConfig, env.embedModel,
 			indexer.WithIndexExtra("database_name", "kb_"+job.KBID))
 		if err != nil {
-			_ = idx.Close()
 			return err
 		}
 		if !success {
-			_ = idx.Close()
 			return errors.New("Failed to build triple index")
 		}
 		logger.Info(logComponent).Int("triple_chunk_count", len(tripleChunks)).
 			Msg("Built triple index with triples")
 	}
-	return idx.Close()
+	return nil
 }
 
 // triplesToTextChunks 三元组转文本块（逐行对照 graph_kb.go:414-434 移植——

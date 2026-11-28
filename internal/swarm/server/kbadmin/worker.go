@@ -235,7 +235,7 @@ func (w *ParseWorker) rollbackDoc(job *ParseJob, ctx context.Context) {
 			logger.Error(logComponent).Str("doc_id", job.DocID).Err(derr).
 				Msg("rollback vector index failed")
 		}
-		_ = idx.Close()
+		// 索引器为工厂缓存单实例，不在此 Close
 	} else {
 		logger.Error(logComponent).Str("kb_id", job.KBID).Err(err).
 			Msg("rollback indexer construction failed")

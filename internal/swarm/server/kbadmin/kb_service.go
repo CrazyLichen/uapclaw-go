@@ -46,6 +46,9 @@ type RetrievalKBFactory struct {
 	// configs kbID → KB config 解析结果（D-30-1-4 收口：configJSON 消费登记，
 	// worker 管线装配读取）
 	configs map[string]KBConfig
+	// indexers kbID → 缓存的 ChromaIndexer（单实例复用：chroma PersistentClient
+	// 反复新建存在跨实例读可见性抖动，实测 155108 dedup 误报；单实例消除）
+	indexers map[string]indexer.Indexer
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -59,7 +62,7 @@ func NewKBService(store *Store, kbFactory *RetrievalKBFactory) (*KBService, erro
 // 供回滚用例与调用方校验）
 func NewRetrievalKBFactory(dataDir string) *RetrievalKBFactory {
 	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]*vs.ChromaVectorStore),
-		configs: make(map[string]KBConfig)}
+		configs: make(map[string]KBConfig), indexers: make(map[string]indexer.Indexer)}
 }
 
 // CreateCollection 为 KB 创建向量库 collection（Chroma 本地持久化，构造期即建）。
@@ -101,22 +104,45 @@ func (f *RetrievalKBFactory) Config(kbID string) (KBConfig, bool) {
 }
 
 // CreateIndexer 为已建 collection 构造 ChromaIndexer（chunk/triple 索引共用；
-// chromaPath 与 CreateCollection 同源：dataDir/<kbID>/chroma）
+// chromaPath 与 CreateCollection 同源：dataDir/<kbID>/chroma）。
+// 实例按 kbID 缓存复用（并发安全）：反复新建 PersistentClient 存在读可见性
+// 抖动（155108 dedup 误报实测），单实例消除；调用方不再各自 Close。
 func (f *RetrievalKBFactory) CreateIndexer(_ context.Context, kbID string) (indexer.Indexer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if idx, ok := f.indexers[kbID]; ok {
+		return idx, nil
+	}
 	config := common.VectorStoreConfig{
 		StoreProvider:  common.StoreTypeChroma,
 		CollectionName: "kb_" + kbID,
 		DistanceMetric: common.DistanceMetricCosine,
+		// 与 BuildIndex 的 database_name extra 同源（kb_<kbID>）：client 建在
+		// 正确 database 上，否则 DeleteIndex 在默认库中查不到 collection 恒
+		// 返回 false（M-44 路径缺陷，30.2 update/delete 路径首次踩中）
+		DatabaseName: "kb_" + kbID,
 	}
-	return indexer.NewChromaIndexer(config, filepath.Join(f.dataDir, kbID, "chroma"))
+	idx, err := indexer.NewChromaIndexer(config, filepath.Join(f.dataDir, kbID, "chroma"))
+	if err != nil {
+		return nil, err
+	}
+	f.indexers[kbID] = idx
+	return idx, nil
 }
 
-// DeleteCollection 删除 KB 的向量库 collection（DeleteTable 模板方法路径）
+// DeleteCollection 删除 KB 的向量库 collection（DeleteTable 模板方法路径）；
+// 同步关闭并逐出缓存的 indexer 实例
 func (f *RetrievalKBFactory) DeleteCollection(ctx context.Context, kbID string) error {
 	f.mu.Lock()
 	store, ok := f.stores[kbID]
 	delete(f.stores, kbID)
+	delete(f.configs, kbID)
+	idx, hasIdx := f.indexers[kbID]
+	delete(f.indexers, kbID)
 	f.mu.Unlock()
+	if hasIdx {
+		_ = idx.Close()
+	}
 	if !ok {
 		return nil // 幂等：未登记视为已删
 	}
