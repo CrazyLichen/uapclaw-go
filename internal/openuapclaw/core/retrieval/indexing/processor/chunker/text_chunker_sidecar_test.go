@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── ChunkDocuments×sidecar 集成（30.3 Task6） ────────────────────────────
@@ -24,16 +24,16 @@ func newNoPreprocessChunker(t *testing.T, size, overlap int) *TextChunker {
 func TestChunkDocuments_pdfSidecar(t *testing.T) {
 	c := newNoPreprocessChunker(t, 20, 0)
 	pageText := "Alpha Bravo\nCharlie Delta Echo"
-	pm := &common.PageMap{PageNo: 1, PageText: pageText,
-		Words: []common.PageWord{
-			{Text: "Alpha", BBox: common.BBox{10, 100, 60, 112}, CharStart: 0, CharEnd: 5},
-			{Text: "Bravo", BBox: common.BBox{70, 100, 120, 112}, CharStart: 6, CharEnd: 11},
-			{Text: "Charlie", BBox: common.BBox{10, 120, 70, 132}, CharStart: 12, CharEnd: 19},
-			{Text: "Delta", BBox: common.BBox{80, 120, 130, 132}, CharStart: 20, CharEnd: 25},
-			{Text: "Echo", BBox: common.BBox{140, 120, 180, 132}, CharStart: 26, CharEnd: 30},
+	pm := sourceloc.PageMap{PageNo: 1, PageText: pageText,
+		Words: []sourceloc.PageWord{
+			{Text: "Alpha", BBox: sourceloc.BBox{10, 100, 60, 112}, CharStart: 0, CharEnd: 5},
+			{Text: "Bravo", BBox: sourceloc.BBox{70, 100, 120, 112}, CharStart: 6, CharEnd: 11},
+			{Text: "Charlie", BBox: sourceloc.BBox{10, 120, 70, 132}, CharStart: 12, CharEnd: 19},
+			{Text: "Delta", BBox: sourceloc.BBox{80, 120, 130, 132}, CharStart: 20, CharEnd: 25},
+			{Text: "Echo", BBox: sourceloc.BBox{140, 120, 180, 132}, CharStart: 26, CharEnd: 30},
 		}}
 	doc := reranker.Document{ID: "doc-1", Text: pageText,
-		Metadata: map[string]any{common.MetaKeySourcePageMap: []*common.PageMap{pm}}}
+		SourceMaps: &sourceloc.SourceMaps{Pages: []sourceloc.PageMap{pm}}}
 
 	chunks, err := c.ChunkDocuments(t.Context(), []reranker.Document{doc})
 	if err != nil {
@@ -57,18 +57,13 @@ func TestChunkDocuments_pdfSidecar(t *testing.T) {
 				_ = w
 			}
 		}
-		// sidecar 键剥离断言
-		for _, k := range []string{common.MetaKeySourcePageMap, common.MetaKeySourceParagraphMap, common.MetaKeySourceCharRange} {
-			if _, ok := ch.Metadata[k]; ok {
-				t.Errorf("chunk metadata 不应含 sidecar 键 %s", k)
-			}
-		}
+		// metadata 不携带坐标（类型化字段方案）：无键可剔，正文/溯源键不受影响
 	}
 	// 至少一个 chunk 带 text 锚
 	var anchored int
 	for _, ch := range chunks {
 		for _, l := range ch.SourceLocators {
-			if l.Type == common.LocatorTypeText && l.PageNo == 1 && len(l.LineBBoxes) > 0 {
+			if l.Type == sourceloc.LocatorTypeText && l.PageNo == 1 && len(l.LineBBoxes) > 0 {
 				anchored++
 			}
 		}
@@ -82,7 +77,7 @@ func TestChunkDocuments_pdfSidecar(t *testing.T) {
 func TestChunkDocuments_charRange(t *testing.T) {
 	c := newNoPreprocessChunker(t, 10, 0)
 	doc := reranker.Document{ID: "doc-2", Text: "aaa bbb ccc ddd",
-		Metadata: map[string]any{common.MetaKeySourceCharRange: true}}
+		SourceMaps: &sourceloc.SourceMaps{CharRange: true}}
 	chunks, err := c.ChunkDocuments(t.Context(), []reranker.Document{doc})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +88,7 @@ func TestChunkDocuments_charRange(t *testing.T) {
 	for i, ch := range chunks {
 		found := false
 		for _, l := range ch.SourceLocators {
-			if l.Type == common.LocatorTypeCharRange {
+			if l.Type == sourceloc.LocatorTypeCharRange {
 				found = true
 				if l.Quote != ch.Text {
 					t.Errorf("chunk %d Quote 应为 chunk 文本: %q vs %q", i, l.Quote, ch.Text)

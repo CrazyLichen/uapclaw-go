@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -87,9 +87,10 @@ func (p *WordParser) Parse(ctx context.Context, doc string, opts ...ParseOption)
 		return []reranker.Document{}, nil
 	}
 	return []reranker.Document{{
-		ID:       o.DocID,
-		Text:     content,
-		Metadata: map[string]any{common.MetaKeySourceParagraphMap: paraMaps},
+		ID:         o.DocID,
+		Text:       content,
+		Metadata:   map[string]any{},
+		SourceMaps: &sourceloc.SourceMaps{Paragraphs: paraMaps},
 	}}, nil
 }
 
@@ -97,7 +98,7 @@ func (p *WordParser) Parse(ctx context.Context, doc string, opts ...ParseOption)
 
 // parseWordDocx DOCX 解析主体（非导出，便于单测直接驱动）。
 // Python: word_parser.py WordParser._parse 的 try 块主体（不含软失败包装）。
-func parseWordDocx(ctx context.Context, filePath, filename string, captioner *ImageCaptioner) (string, []common.ParagraphMap, error) {
+func parseWordDocx(ctx context.Context, filePath, filename string, captioner *ImageCaptioner) (string, []sourceloc.ParagraphMap, error) {
 	dm, err := loadDocxModel(filePath)
 	if err != nil {
 		return "", nil, err
@@ -105,7 +106,7 @@ func parseWordDocx(ctx context.Context, filePath, filename string, captioner *Im
 	blocks := dm.parseBlocks()
 
 	var content []string
-	paraMaps := make([]common.ParagraphMap, 0)
+	paraMaps := make([]sourceloc.ParagraphMap, 0)
 	for paragraphNum, blk := range blocks {
 		lines, err := parseWordBlock(ctx, dm, blk, paragraphNum, filename, captioner)
 		if err != nil {
@@ -114,7 +115,7 @@ func parseWordDocx(ctx context.Context, filePath, filename string, captioner *Im
 		content = append(content, lines...)
 		// 30.3：段落映射（para 块非空文本入 sidecar；表格块无段落锚不收集）
 		if blk.kind == "para" && len(lines) > 0 {
-			paraMaps = append(paraMaps, common.ParagraphMap{
+			paraMaps = append(paraMaps, sourceloc.ParagraphMap{
 				Paragraph: paragraphNum,
 				Text:      strings.Join(lines, "\n"),
 			})

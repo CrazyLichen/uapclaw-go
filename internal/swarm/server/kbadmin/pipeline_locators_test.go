@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 )
 
 // ──────────────────────────── 30.3 Task7：locators 落库链测试 ────────────────────────────
@@ -51,13 +51,13 @@ func TestChunkStep_locators落库(t *testing.T) {
 			continue
 		}
 		withLocators++
-		var locs []common.SourceLocator
+		var locs []sourceloc.SourceLocator
 		if err := json.Unmarshal([]byte(m.LocatorsJSON), &locs); err != nil {
 			t.Fatalf("locators_json 反序列化失败: %v", err)
 		}
 		var hasText bool
 		for _, l := range locs {
-			if l.Type == common.LocatorTypeText && l.PageNo >= 1 && len(l.LineBBoxes) > 0 {
+			if l.Type == sourceloc.LocatorTypeText && l.PageNo >= 1 && len(l.LineBBoxes) > 0 {
 				hasText = true
 				for _, b := range l.LineBBoxes {
 					if b[2] <= b[0] || b[3] <= b[1] {
@@ -90,8 +90,8 @@ func TestMarshalLocators(t *testing.T) {
 	if got := marshalLocators(nil); got != "" {
 		t.Fatalf("空 locators 应空串，实际 %q", got)
 	}
-	got := marshalLocators([]common.SourceLocator{
-		{Type: common.LocatorTypeParagraph, Paragraph: 3, Quote: "q"},
+	got := marshalLocators([]sourceloc.SourceLocator{
+		{Type: sourceloc.LocatorTypeParagraph, Paragraph: 3, Quote: "q"},
 	})
 	if got == "" {
 		t.Fatal("非空 locators 应序列化")

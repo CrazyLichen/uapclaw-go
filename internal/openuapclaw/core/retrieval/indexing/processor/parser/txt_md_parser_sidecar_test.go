@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── TxtMdParser sidecar 测试（30.3 Task5） ────────────────────────────
@@ -28,9 +26,8 @@ func TestTxtMdParser_Parse_charRange标记(t *testing.T) {
 	if len(docs) != 1 {
 		t.Fatalf("docs = %d, want 1", len(docs))
 	}
-	raw, ok := docs[0].Metadata[common.MetaKeySourceCharRange]
-	if !ok || raw != true {
-		t.Fatalf("Metadata 应含 source_char_range=true，实际 %v", raw)
+	if docs[0].SourceMaps == nil || !docs[0].SourceMaps.CharRange {
+		t.Fatal("Document.SourceMaps 应携带 CharRange=true")
 	}
 	if docs[0].Text != "hello world\nsecond line" {
 		t.Errorf("TrimSpace 语义回归: %q", docs[0].Text)

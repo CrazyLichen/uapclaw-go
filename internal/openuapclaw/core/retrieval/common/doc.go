@@ -7,7 +7,6 @@
 //	├── doc.go           # 包文档
 //	├── config.go        # 索引/知识库/检索/向量存储配置类型
 //	├── document.go      # MultimodalDocument + TextChunk 文档数据模型
-//	├── source_locator.go # SourceLocator/BBox/PageMap 原文定位类型（30.3）
 //	├── triple.go        # Triple 三元组数据模型（OpenIE 抽取产物，写入侧）
 //	├── triple_beam.go   # TripleBeam beam search 路径载体（读取侧）
 //	├── triple_memory.go # TripleMemory 事实记忆 + TripleFact 定长类型（读取侧）

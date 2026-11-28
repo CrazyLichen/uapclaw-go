@@ -8,9 +8,9 @@ import (
 
 	"github.com/saintfish/chardet"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -93,8 +93,8 @@ func (p *TxtMdParser) ParseContent(ctx context.Context, doc string, llmClient *l
 }
 
 // Parse 解析文档并标记 char_range 定位模式（30.3 覆写点）。
-// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），Metadata 携带
-// MetaKeySourceCharRange=true：chunker 见标记即产 char_range 型 locator
+// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），SourceMaps 携带
+// CharRange=true：chunker 见标记即产 char_range 型 locator
 // （chunk 全文区间即原文区间——TrimSpace 后全文即解析产出，offset 精确）。
 func (p *TxtMdParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
 	o := NewParseOptions(opts...)
@@ -106,9 +106,10 @@ func (p *TxtMdParser) Parse(ctx context.Context, doc string, opts ...ParseOption
 		return []reranker.Document{}, nil
 	}
 	return []reranker.Document{{
-		ID:       o.DocID,
-		Text:     content,
-		Metadata: map[string]any{common.MetaKeySourceCharRange: true},
+		ID:         o.DocID,
+		Text:       content,
+		Metadata:   map[string]any{},
+		SourceMaps: &sourceloc.SourceMaps{CharRange: true},
 	}}, nil
 }
 

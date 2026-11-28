@@ -68,7 +68,7 @@ func (s *DocService) SubmitParseTask(kbID, fileName, finalPath string, size int6
 	now := time.Now().Unix()
 	doc := &KBDoc{ID: uuid.NewString(), KBID: kbID, FileName: fileName,
 		ParseStatus: "pending", ContentHash: contentHash,
-		MetaJSON:      mustJSONString(map[string]any{"size": size, "final_path": finalPath}),
+		MetaJSON:       mustJSONString(map[string]any{"size": size, "final_path": finalPath}),
 		LastActivityAt: now, CreatedAt: now, UpdatedAt: now}
 	if err := s.store.Doc().Create(doc); err != nil {
 		return nil, nil, err

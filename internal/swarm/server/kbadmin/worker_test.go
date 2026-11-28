@@ -52,7 +52,7 @@ func TestWorker_全链完成(t *testing.T) {
 	store, factory, embedURL := newTestWorkerEnv(t)
 	_ = store.KB().Create(&KBInfo{ID: "kb-1", Type: "document",
 		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
-		CreatedAt: 1, UpdatedAt: 1})
+		CreatedAt:  1, UpdatedAt: 1})
 	if err := factory.CreateCollection(context.Background(), "kb-1", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestWorker_取消中途退出(t *testing.T) {
 	store, factory, embedURL := newTestWorkerEnv(t)
 	_ = store.KB().Create(&KBInfo{ID: "kb-1", Type: "document",
 		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
-		CreatedAt: 1, UpdatedAt: 1})
+		CreatedAt:  1, UpdatedAt: 1})
 	if err := factory.CreateCollection(context.Background(), "kb-1", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestWorker_graph类型_triple索引(t *testing.T) {
 	store, factory, embedURL := newTestWorkerEnv(t)
 	_ = store.KB().Create(&KBInfo{ID: "kg-1", Type: "graph",
 		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
-		CreatedAt: 1, UpdatedAt: 1})
+		CreatedAt:  1, UpdatedAt: 1})
 	if err := factory.CreateCollection(context.Background(), "kg-1", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestWorker_graph类型_无抽取器跳过triple(t *testing.T) {
 	store, factory, embedURL := newTestWorkerEnv(t)
 	_ = store.KB().Create(&KBInfo{ID: "kg-2", Type: "graph",
 		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
-		CreatedAt: 1, UpdatedAt: 1})
+		CreatedAt:  1, UpdatedAt: 1})
 	if err := factory.CreateCollection(context.Background(), "kg-2", ""); err != nil {
 		t.Fatal(err)
 	}

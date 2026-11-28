@@ -9,7 +9,7 @@ import (
 )
 
 // TestUploadStore_发起认领与同名并行 测试槽位登记、字段回填与同名并行放行
-//（busy 守卫已按 ②+① 改进拍板移除：同名各自独立目录互不干扰，去重判据 ⤵️30.2 content_hash）
+// （busy 守卫已按 ②+① 改进拍板移除：同名各自独立目录互不干扰，去重判据 ⤵️30.2 content_hash）
 func TestUploadStore_发起认领与同名并行(t *testing.T) {
 	st := NewUploadStore(t.TempDir())
 	slot, err := st.InitUpload("kb-1", "测试.txt", 10, "abc")
@@ -125,6 +125,7 @@ func TestUploadStore_Complete_hash比对(t *testing.T) {
 	}
 	_ = sum
 }
+
 // TestUploadStore_孤儿目录janitor 测试 D-30-5-R1（A 拍板）：无槽位引用且超龄的
 // upload 子目录被 CleanupExpired 清扫（已完成/断线遗留目录滞留问题）
 func TestUploadStore_孤儿目录janitor(t *testing.T) {
