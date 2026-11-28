@@ -85,6 +85,7 @@ require (
 	github.com/sentencizer/sentencizer v0.3.0
 	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/spf13/cobra v1.10.2
+	github.com/srijanmukherjee/gomupdf v1.1.0
 	github.com/stretchr/testify v1.12.1
 	github.com/tamnd/gopapy/v2 v2.0.0
 	github.com/theoneLee/deepseek-harness-sdk-go v0.1.5-alpha.1
@@ -213,7 +214,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/soheilhy/cmux v0.1.5 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/srijanmukherjee/gomupdf v1.1.0 // indirect
 	github.com/tiendc/go-deepcopy v1.6.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect

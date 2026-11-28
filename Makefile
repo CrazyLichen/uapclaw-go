@@ -48,6 +48,8 @@ build-cli:
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/uapclaw-process ./cmd/uapclaw-process/
 
 # 运行测试
+# 依赖：libmupdf-dev（30.3 gomupdf cgo；Debian: apt install libmupdf-dev libgumbo-dev libmujs-dev libharfbuzz-dev）
+#   CGO_LDFLAGS 由 ~/.bashrc 或 CI 环境提供完整传递依赖（-lz -lm -lopenjp2 -ljbig2dec -ljpeg -lfreetype -lgumbo -lmujs -lharfbuzz）
 test:
 	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test" ./...
 
