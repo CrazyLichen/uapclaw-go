@@ -3,12 +3,16 @@ package kbadmin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/extractor"
 )
 
 // newFixedEmbeddingServer httptest 起 OpenAI 兼容 /embeddings 端点（固定向量返回）。
@@ -183,4 +187,111 @@ func waitTaskStatus(t *testing.T, store *Store, taskID, status string, timeout t
 		t.Logf("ListByKB err: %v", err)
 	}
 	t.FailNow()
+}
+
+// fakeTripleExtractor 测试用三元组抽取器（实现 extractor.Extractor 接口）
+type fakeTripleExtractor struct{}
+
+func (f *fakeTripleExtractor) Extract(_ context.Context, chunks []common.TextChunk,
+	_ ...extractor.ExtractOption) ([]common.Triple, error) {
+	if len(chunks) == 0 {
+		return nil, nil
+	}
+	return []common.Triple{{
+		Subject: "主题A", Predicate: "包含", Object: "对象B",
+		Metadata: map[string]any{"chunk_id": chunks[0].ID, "doc_id": chunks[0].DocID},
+	}}, nil
+}
+
+func (f *fakeTripleExtractor) Process(ctx context.Context, chunks []common.TextChunk,
+	opts ...extractor.ExtractOption) ([]common.Triple, error) {
+	return f.Extract(ctx, chunks, opts...)
+}
+
+// TestWorker_graph类型_triple索引 graph 库全链：解析→切分→向量→triple 索引→completed
+func TestWorker_graph类型_triple索引(t *testing.T) {
+	store, factory, embedURL := newTestWorkerEnv(t)
+	_ = store.KB().Create(&KBInfo{ID: "kg-1", Type: "graph",
+		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
+		CreatedAt: 1, UpdatedAt: 1})
+	if err := factory.CreateCollection(context.Background(), "kg-1", ""); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "g.txt")
+	_ = os.WriteFile(fp, []byte("graph kb triple extraction test content for pipeline."), 0o644)
+	svc := NewDocService(store)
+	w := NewParseWorker(store, factory, 1)
+	w.SetSink(NewProgressSink(store, nil))
+	w.SetTripleExtractor(&fakeTripleExtractor{})
+	svc.SetEnqueue(w.Enqueue)
+	task, doc, err := svc.SubmitParseTask("kg-1", "g.txt", fp, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Start()
+	t.Cleanup(w.Stop)
+	waitTaskStatus(t, store, task.ID, "completed", 15*time.Second)
+	gotDoc, _ := store.Doc().Get(doc.ID)
+	if gotDoc.ParseStatus != "completed" {
+		t.Fatalf("graph doc 应 completed, got %s (%s)", gotDoc.ParseStatus, gotDoc.ErrorMsg)
+	}
+}
+
+// TestWorker_graph类型_无抽取器跳过triple 未装配抽取器 = 跳过 triple 步不失败
+func TestWorker_graph类型_无抽取器跳过triple(t *testing.T) {
+	store, factory, embedURL := newTestWorkerEnv(t)
+	_ = store.KB().Create(&KBInfo{ID: "kg-2", Type: "graph",
+		ConfigJSON: `{"embedding":{"provider":"openai","model_name":"m","base_url":"` + embedURL + `","api_key":"k"}}`,
+		CreatedAt: 1, UpdatedAt: 1})
+	if err := factory.CreateCollection(context.Background(), "kg-2", ""); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "g2.txt")
+	_ = os.WriteFile(fp, []byte("graph kb without extractor content."), 0o644)
+	svc := NewDocService(store)
+	w := NewParseWorker(store, factory, 1)
+	w.SetSink(NewProgressSink(store, nil))
+	svc.SetEnqueue(w.Enqueue)
+	task, doc, err := svc.SubmitParseTask("kg-2", "g2.txt", fp, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Start()
+	t.Cleanup(w.Stop)
+	waitTaskStatus(t, store, task.ID, "completed", 15*time.Second)
+	gotDoc, _ := store.Doc().Get(doc.ID)
+	if gotDoc.ParseStatus != "completed" {
+		t.Fatalf("无抽取器 graph doc 应 completed, got %s", gotDoc.ParseStatus)
+	}
+}
+
+// TestWorker_ConfigAccessor 工厂 config 登记访问器
+func TestWorker_ConfigAccessor(t *testing.T) {
+	f := NewRetrievalKBFactory(t.TempDir())
+	if _, ok := f.Config("nope"); ok {
+		t.Fatal("未登记应 false")
+	}
+	_ = f.CreateCollection(context.Background(), "kb-c", `{"max_file_mb":7}`)
+	cfg, ok := f.Config("kb-c")
+	if !ok || cfg.MaxFileMB != 7 {
+		t.Fatalf("config 登记不符: %+v ok=%v", cfg, ok)
+	}
+}
+
+// TestDocErrCode 错误哨兵映射
+func TestDocErrCode(t *testing.T) {
+	if docErrCode(ErrDocDuplicate) != "DOC_DUPLICATE" {
+		t.Fatal("DOC_DUPLICATE 映射不符")
+	}
+	if docErrCode(ErrDocParseActive) != "TASK_ACTIVE" {
+		t.Fatal("TASK_ACTIVE 映射不符")
+	}
+	if docErrCode(ErrDocNotFound) != ErrCodeKBNotFound {
+		t.Fatal("NotFound 映射不符")
+	}
+	if docErrCode(errors.New("x")) != ErrCodeKBInternal {
+		t.Fatal("默认映射不符")
+	}
 }
