@@ -435,6 +435,26 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	// ─── kb 分帧方法族（领域三十 30.5，B1 薄映射） ───
 	registerKBFileProxies(wc, agentClient)
 
+	// ─── KB 管理面 kb.* 方法族（30.1-30.6 全 WS 拍板：gateway 薄转发 E2A，
+	// 业务在 AgentServer HandleKBRequest 前缀分发；30.3 gateway 集成补齐——
+	// 30.2 直投 server 的套件未覆盖网关转发面，规则 13.2 缺口回填）───
+	// 排除 kb_file 五方法（专用分帧代理，上条已注册）与 file.upload_chunk
+	// 数据面（gateway 侧映射协议）
+	kbFileProxied := map[string]bool{
+		"kb.doc.upload":           true,
+		"kb.file.upload_chunk":    true,
+		"kb.file.upload_complete": true,
+		"kb.doc.download":         true,
+		"kb.doc.cancel_upload":    true,
+	}
+	for _, m := range schema.AllReqMethods() {
+		ms := string(m)
+		if !strings.HasPrefix(ms, "kb.") || kbFileProxied[ms] {
+			continue
+		}
+		wc.registerMethod(ms, sessionProxyForward(wc, agentClient, ms), false)
+	}
+
 	// ─── session 薄代理（B1b-7） ───
 	// Python: app_web_handlers.py:5692-5693（两个都是 proxy_unary_request 薄代理）
 	wc.registerMethod("session.rename", sessionProxyForward(wc, agentClient, "session.rename"), false)
