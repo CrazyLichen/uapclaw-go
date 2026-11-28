@@ -32,8 +32,10 @@ func TestSemanticTokens_分词与停用词(t *testing.T) {
 
 func TestSemanticFields_字段权重(t *testing.T) {
 	fields := SemanticFields("安装", []string{"指南", "指南"}, "安装说明")
-	require.InDelta(t, 5.0, fields["安装"], 1e-9) // title 4.0 + preview 1.0
-	require.InDelta(t, 4.0, fields["指南"], 1e-9) // headings 两行各 2.0
+	// Python run 先 append、2 元组再 append → 双字 run 在自身字段出现两次：
+	// 安装 = title 4.0*2 + preview bigram 1.0 = 9.0；指南 = headings 2.0*2*2 = 8.0
+	require.InDelta(t, 9.0, fields["安装"], 1e-9)
+	require.InDelta(t, 8.0, fields["指南"], 1e-9)
 }
 
 func TestAdaptiveAcceptCut_边界(t *testing.T) {
