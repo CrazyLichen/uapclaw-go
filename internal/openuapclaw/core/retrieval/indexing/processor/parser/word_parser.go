@@ -8,6 +8,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -53,7 +55,7 @@ func NewWordParser() (*WordParser, error) {
 func (p *WordParser) ParseContent(ctx context.Context, filePath string, llmClient *llm.Model) (string, error) {
 	captioner := NewImageCaptioner(llmClient)
 
-	result, err := parseWordDocx(ctx, filePath, filepath.Base(filePath), captioner)
+	result, _, err := parseWordDocx(ctx, filePath, filepath.Base(filePath), captioner)
 	if err != nil {
 		// 对齐 Python: logger.error(f"Failed to parse DOCX {file_path}: {e}")
 		logger.Error(logComponent).
@@ -65,24 +67,58 @@ func (p *WordParser) ParseContent(ctx context.Context, filePath string, llmClien
 	return result, nil
 }
 
+// Parse 解析文档并注入段落映射 sidecar（30.3 覆写点）。
+// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），Metadata 额外携带
+// MetaKeySourceParagraphMap（仅 parser→chunker 内部传递，chunker 消费后剔除）。
+// 软失败语义与 ParseContent 一致：err → Error 日志 + 空切片。
+func (p *WordParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
+	o := NewParseOptions(opts...)
+	captioner := NewImageCaptioner(o.LLMClient)
+	content, paraMaps, err := parseWordDocx(ctx, doc, filepath.Base(doc), captioner)
+	if err != nil {
+		// 对齐 Python: logger.error(f"Failed to parse DOCX {file_path}: {e}")
+		logger.Error(logComponent).
+			Str("file_path", doc).
+			Err(err).
+			Msg("failed to parse DOCX")
+		return []reranker.Document{}, nil
+	}
+	if content == "" {
+		return []reranker.Document{}, nil
+	}
+	return []reranker.Document{{
+		ID:       o.DocID,
+		Text:     content,
+		Metadata: map[string]any{common.MetaKeySourceParagraphMap: paraMaps},
+	}}, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseWordDocx DOCX 解析主体（非导出，便于单测直接驱动）。
 // Python: word_parser.py WordParser._parse 的 try 块主体（不含软失败包装）。
-func parseWordDocx(ctx context.Context, filePath, filename string, captioner *ImageCaptioner) (string, error) {
+func parseWordDocx(ctx context.Context, filePath, filename string, captioner *ImageCaptioner) (string, []common.ParagraphMap, error) {
 	dm, err := loadDocxModel(filePath)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	blocks := dm.parseBlocks()
 
 	var content []string
+	paraMaps := make([]common.ParagraphMap, 0)
 	for paragraphNum, blk := range blocks {
 		lines, err := parseWordBlock(ctx, dm, blk, paragraphNum, filename, captioner)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		content = append(content, lines...)
+		// 30.3：段落映射（para 块非空文本入 sidecar；表格块无段落锚不收集）
+		if blk.kind == "para" && len(lines) > 0 {
+			paraMaps = append(paraMaps, common.ParagraphMap{
+				Paragraph: paragraphNum,
+				Text:      strings.Join(lines, "\n"),
+			})
+		}
 	}
 	// 对齐 Python: result = "\n".join([line for line in content if line.strip()])
 	var kept []string
@@ -91,7 +127,7 @@ func parseWordDocx(ctx context.Context, filePath, filename string, captioner *Im
 			kept = append(kept, line)
 		}
 	}
-	return strings.Join(kept, "\n"), nil
+	return strings.Join(kept, "\n"), paraMaps, nil
 }
 
 // parseWordBlock 对齐 Python _parse_block：段落 → markdown + 图片 caption；表格 → markdown。

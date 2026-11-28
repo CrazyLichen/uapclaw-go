@@ -36,9 +36,11 @@
 //	├── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
 //	├── captioner.go     # ImageCaptioner 图片描述生成 + CpImage 归档（13.15）
 //	├── image_parser.go  # ImageParser 图片解析（image_path 元数据产出）（13.15）
-//	├── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
+//	├── pdf_parser.go    # PDFParser：PDF gomupdf 统一链（词 bbox+图片 placement+caption，30.3）
+//	├── pdfcoord.go      # gomupdf 提取门面：词框/图片字节/placement 单点收敛（30.3）
+//	├── gen_pdf_fixture_test.go # pdf fixture 生成器（-tags gen 显式触发，30.3）
 //	├── docx_model.go    # docx stdlib 自研解析层：zip/rels/styles/块遍历/合并单元格/图片链（13.13）
-//	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）
+//	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）+ 段落映射 sidecar（30.3）
 //	├── excel_value.go   # cellValue 密封 sum type + cellStr/utils.PyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
 //	├── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
 //	├── html_file_parser.go  # HTMLFileParser：本地 HTML 主内容/标题/文本净化共享工具链（13.14）
