@@ -72,7 +72,7 @@ func NewUploadStore(root string) *UploadStore {
 // maxBytes 可选传入 KB config 上限（D-30-5-1：编排层读 config 后传入；
 // 缺省回退 MaxFileBytes 固定 50MiB）。
 func (s *UploadStore) InitUpload(kbID, fileName string, totalSize int64, expectedHash string, maxBytes ...int64) (*UploadSlot, error) {
-	limit := MaxFileBytes
+	limit := int64(MaxFileBytes)
 	if len(maxBytes) > 0 && maxBytes[0] > 0 {
 		limit = maxBytes[0]
 	}
