@@ -79,8 +79,10 @@ func TestPageLabelCandidate_拒绝分类(t *testing.T) {
 	// 2024年01月：dateLabel 模式不匹配（月后无数字），CJK ≥2 → accepted（对齐 Python）
 	_, reason = pageLabelCandidate("2024年01月")
 	require.Equal(t, "accepted", reason)
-	_, reason = pageLabelCandidate("   ")
-	require.Equal(t, "empty", reason)
+	// 纯空白 → markdownLabel 回落"来源"（Python 语义）→ 可读标签被接受
+	label, reason = pageLabelCandidate("   ")
+	require.Equal(t, "accepted", reason)
+	require.Equal(t, "来源", label)
 }
 
 func TestSourceTitleLabel_拒绝投影(t *testing.T) {
