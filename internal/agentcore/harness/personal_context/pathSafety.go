@@ -70,10 +70,12 @@ func ValidateServiceID(value string) (string, error) {
 
 // ServiceStorageSegment 传统路径保持可移植；新名字在命名空间外编码。
 // Python: path_safety.py:42 service_storage_segment
-func ServiceStorageSegment(serviceID string) string {
+// 偏差（经用户裁决 2026-11-28）：Python 直接 raise ValueError，Go 侧改为返回
+// error 由调用者判断（避免 panic 崩溃面）；签名偏离已登记 24.3b 行待回填清单。
+func ServiceStorageSegment(serviceID string) (string, error) {
 	text, err := ValidateServiceID(serviceID)
 	if err != nil {
-		panic(err) // Python 直接上抛 ValueError；调用点已在 Host 层校验过
+		return "", err
 	}
 	firstDot := text
 	if idx := strings.Index(text, "."); idx >= 0 {
@@ -81,10 +83,10 @@ func ServiceStorageSegment(serviceID string) string {
 	}
 	if legacyServiceSegment.MatchString(text) && !strings.HasSuffix(text, ".") &&
 		!isWindowsDeviceName(strings.ToLower(firstDot)) {
-		return text
+		return text, nil
 	}
 	sum := sha256.Sum256([]byte(text))
-	return ".service-" + hex.EncodeToString(sum[:])
+	return ".service-" + hex.EncodeToString(sum[:]), nil
 }
 
 // ServiceStorageSegmentIsSafe 清理期识别磁盘组件而不重复编码。

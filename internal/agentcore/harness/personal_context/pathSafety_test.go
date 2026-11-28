@@ -28,27 +28,35 @@ func TestValidateServiceID_合法与非法(t *testing.T) {
 }
 
 func TestServiceStorageSegment_传统段与哈希段(t *testing.T) {
-	seg, ok := func() (string, bool) {
-		s := ServiceStorageSegment("my-service")
-		return s, s == "my-service"
-	}()
-	require.True(t, ok, "合法传统名应原样返回")
+	seg, err := ServiceStorageSegment("my-service")
+	require.NoError(t, err)
 	require.Equal(t, "my-service", seg)
 
-	// 含大写/非法字符的名字走哈希段
-	hashed := ServiceStorageSegment("My Service")
+	// 含大写/非法字符（但仍是合法 service_id）的名字走哈希段
+	hashed, err := ServiceStorageSegment("My Service")
+	require.NoError(t, err)
 	require.Regexp(t, `^\.service-[0-9a-f]{64}$`, hashed)
 
 	// 同输入稳定
-	require.Equal(t, hashed, ServiceStorageSegment("My Service"))
+	stable, err := ServiceStorageSegment("My Service")
+	require.NoError(t, err)
+	require.Equal(t, hashed, stable)
 
 	// Windows 保留名走哈希段
-	require.Regexp(t, `^\.service-[0-9a-f]{64}$`, ServiceStorageSegment("con"))
+	conSeg, err := ServiceStorageSegment("con")
+	require.NoError(t, err)
+	require.Regexp(t, `^\.service-[0-9a-f]{64}$`, conSeg)
+
+	// 非法 service_id 返回 error（由调用者判断，Python raise ValueError 对应）
+	_, err = ServiceStorageSegment("   ")
+	require.EqualError(t, err, "service_id must be a non-empty string")
 }
 
 func TestServiceStorageSegmentIsSafe_两形态识别(t *testing.T) {
 	require.True(t, ServiceStorageSegmentIsSafe("abc-123"))
-	require.True(t, ServiceStorageSegmentIsSafe(ServiceStorageSegment("My Service")))
+	hashed, err := ServiceStorageSegment("My Service")
+	require.NoError(t, err)
+	require.True(t, ServiceStorageSegmentIsSafe(hashed))
 	require.False(t, ServiceStorageSegmentIsSafe("../escape"))
 	require.False(t, ServiceStorageSegmentIsSafe(".service-zzz"))
 }
