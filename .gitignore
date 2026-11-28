@@ -60,3 +60,4 @@ coding_memory/uap-claw-go/memory.db
 /rpc-matrix
 /jiuwenbox
 /integration-audit
+internal/openuapclaw/core/retrieval/indexing/processor/parser/images/
