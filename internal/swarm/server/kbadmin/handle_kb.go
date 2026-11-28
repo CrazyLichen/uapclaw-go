@@ -55,6 +55,11 @@ func NewDomain(store *Store, kbFactory KBFactory) (*Domain, error) {
 // IsKBMethod 判定是否 kb.* 方法族
 func IsKBMethod(method string) bool { return strings.HasPrefix(method, "kb.") }
 
+// BootstrapErrorResponse 域装配失败的统一错误响应（server 薄适配层使用）
+func BootstrapErrorResponse(request *schema.AgentRequest) *schema.AgentResponse {
+	return errorResponse(request, "kb_admin 域装配失败", ErrCodeKBInternal)
+}
+
 // HandleKBRequest kb.* 方法族统一分发（30.1 注册全族；未实现返 KB_NOT_IMPLEMENTED）。
 // 对齐 repositories.HandleProjectRequest 写法：返回 *schema.AgentResponse，
 // 失败经 OK=false + payload.error_code 表达；由 server 侧薄适配写回。
