@@ -28,6 +28,18 @@ type KBConfig struct {
 	Chunker ChunkerConfig `json:"chunker"`
 	// Embedding 向量化配置，D-30-1-4 回填消费点
 	Embedding EmbeddingEndpointConfig `json:"embedding"`
+	// Store 向量存储 provider 配置（spec §9 分派；缺省 chroma）
+	Store StoreConfig `json:"store"`
+}
+
+// StoreConfig 向量存储 provider 配置
+type StoreConfig struct {
+	// Provider 存储类型：chroma（默认）/ sqlite / milvus
+	Provider string `json:"provider"`
+	// MilvusURI milvus 连接地址（provider=milvus 时必填）
+	MilvusURI string `json:"milvus_uri"`
+	// MilvusToken milvus 认证 token
+	MilvusToken string `json:"milvus_token"`
 }
 
 // ChunkerConfig 切分器配置
@@ -82,6 +94,9 @@ func ParseKBConfig(raw string) KBConfig {
 	}
 	if parsed.Embedding.Provider != "" {
 		cfg.Embedding = parsed.Embedding
+	}
+	if parsed.Store.Provider != "" {
+		cfg.Store = parsed.Store
 	}
 	return cfg
 }

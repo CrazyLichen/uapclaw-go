@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -34,19 +35,19 @@ type KBService struct {
 	kbFactory *RetrievalKBFactory
 }
 
-// RetrievalKBFactory collection 生命周期接线：retrieval 层 Chroma 本地持久化
-// 向量库（构造期 GetOrCreateCollection 真建 collection，与 13.27 真链同款）
+// RetrievalKBFactory collection/indexer 生命周期接线（spec §9 provider 分派）：
+// 按 KB config store.provider 分派 chroma（默认）/ sqlite / milvus
 type RetrievalKBFactory struct {
-	// dataDir 各 KB collection 持久化根目录（<dataDir>/<kbID>/chroma）
+	// dataDir 各 KB collection 持久化根目录（<dataDir>/<kbID>/chroma 或 kbvector.db）
 	dataDir string
 	// mu stores/configs 并发保护
 	mu sync.Mutex
-	// stores kbID → 已建向量库（delete 时取用）
-	stores map[string]*vs.ChromaVectorStore
+	// stores kbID → 已建向量库（delete 时取用；chroma/sqlite 两 provider 登记）
+	stores map[string]vs.VectorStore
 	// configs kbID → KB config 解析结果（D-30-1-4 收口：configJSON 消费登记，
 	// worker 管线装配读取）
 	configs map[string]KBConfig
-	// indexers kbID → 缓存的 ChromaIndexer（单实例复用：chroma PersistentClient
+	// indexers kbID → 缓存的 indexer（单实例复用：chroma PersistentClient
 	// 反复新建存在跨实例读可见性抖动，实测 155108 dedup 误报；单实例消除）
 	indexers map[string]indexer.Indexer
 }
@@ -61,12 +62,13 @@ func NewKBService(store *Store, kbFactory *RetrievalKBFactory) (*KBService, erro
 // NewRetrievalKBFactory 构造 collection 生命周期接线（dataDir 为空时 CreateCollection 必然失败，
 // 供回滚用例与调用方校验）
 func NewRetrievalKBFactory(dataDir string) *RetrievalKBFactory {
-	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]*vs.ChromaVectorStore),
+	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]vs.VectorStore),
 		configs: make(map[string]KBConfig), indexers: make(map[string]indexer.Indexer)}
 }
 
-// CreateCollection 为 KB 创建向量库 collection（Chroma 本地持久化，构造期即建）。
-// configJSON 消费收口（D-30-1-4）：解析登记到 configs，供 worker 管线装配读取。
+// CreateCollection 为 KB 创建向量库 collection（按 KB config store.provider 分派，
+// spec §9；缺省 chroma）。configJSON 消费收口（D-30-1-4）：解析登记到 configs，
+// 供 worker 管线装配读取。
 func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, configJSON string) error {
 	if f.dataDir == "" {
 		err := fmt.Errorf("kb 数据目录未配置")
@@ -74,24 +76,50 @@ func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, configJSO
 			Msg("kb collection creation failed")
 		return err
 	}
-	config := common.VectorStoreConfig{
-		StoreProvider:  common.StoreTypeChroma,
+	cfg := ParseKBConfig(configJSON)
+	// sqlite provider 不自建父目录（chroma 客户端自建），统一先建
+	if err := os.MkdirAll(filepath.Join(f.dataDir, kbID), 0o755); err != nil {
+		logger.Error(logComponent).Str("kb_id", kbID).Err(err).
+			Msg("kb collection dir creation failed")
+		return fmt.Errorf("创建 kb collection 目录失败: %w", err)
+	}
+	vsConfig := common.VectorStoreConfig{
 		CollectionName: "kb_" + kbID,
 		DistanceMetric: common.DistanceMetricCosine,
 	}
-	store, err := vs.NewChromaVectorStore(config, filepath.Join(f.dataDir, kbID, "chroma"),
-		"content", vector_fields.NewDefaultChromaVectorField(),
-		"sparse_vector", "metadata", "document_id",
-	)
+	var store vs.VectorStore
+	var err error
+	switch cfg.Store.Provider {
+	case "", "chroma":
+		vsConfig.StoreProvider = common.StoreTypeChroma
+		vsConfig.DatabaseName = "kb_" + kbID
+		store, err = vs.NewChromaVectorStore(vsConfig, filepath.Join(f.dataDir, kbID, "chroma"),
+			"content", vector_fields.NewDefaultChromaVectorField(),
+			"sparse_vector", "metadata", "document_id",
+		)
+	case "sqlite":
+		// D-25-7 私有 provider：FTS5 bm25 + sqlite-vec，本地零依赖真混合检索
+		vsConfig.StoreProvider = common.StoreTypeSqlite
+		vsConfig.DatabaseName = "kb_" + kbID
+		store, err = vs.NewSQLiteVectorStore(vsConfig, filepath.Join(f.dataDir, kbID, "kbvector.db"),
+			"content", "vector", "sparse_vector", "metadata", "document_id")
+	case "milvus":
+		// milvus collection 由 MilvusIndexer 建表时创建（13.3 路径），无独立构造步骤
+		vsConfig.StoreProvider = common.StoreTypeMilvus
+		vsConfig.DatabaseName = "kb_" + kbID
+		store = nil
+	default:
+		err = fmt.Errorf("未知存储 provider: %s（支持 chroma/sqlite/milvus）", cfg.Store.Provider)
+	}
 	if err != nil {
-		logger.Error(logComponent).Str("kb_id", kbID).Err(err).
+		logger.Error(logComponent).Str("kb_id", kbID).Str("provider", cfg.Store.Provider).Err(err).
 			Msg("kb collection creation failed")
 		return fmt.Errorf("创建 kb collection 失败: %w", err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.stores[kbID] = store
-	f.configs[kbID] = ParseKBConfig(configJSON)
+	f.configs[kbID] = cfg
 	return nil
 }
 
@@ -103,18 +131,26 @@ func (f *RetrievalKBFactory) Config(kbID string) (KBConfig, bool) {
 	return cfg, ok
 }
 
-// CreateIndexer 为已建 collection 构造 ChromaIndexer（chunk/triple 索引共用；
-// chromaPath 与 CreateCollection 同源：dataDir/<kbID>/chroma）。
-// 实例按 kbID 缓存复用（并发安全）：反复新建 PersistentClient 存在读可见性
-// 抖动（155108 dedup 误报实测），单实例消除；调用方不再各自 Close。
+// CreateIndexer 为已建 collection 构造 indexer（chunk/triple 索引共用；按 KB
+// config store.provider 分派，spec §9；缺省 chroma）。实例按 kbID 缓存复用
+// （并发安全）：反复新建 chroma PersistentClient 存在读可见性抖动（155108
+// dedup 误报实测），单实例消除；调用方不再各自 Close。
 func (f *RetrievalKBFactory) CreateIndexer(_ context.Context, kbID string) (indexer.Indexer, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if idx, ok := f.indexers[kbID]; ok {
 		return idx, nil
 	}
-	config := common.VectorStoreConfig{
-		StoreProvider:  common.StoreTypeChroma,
+	cfg := f.configs[kbID]
+	// 未登记 config（如域重建后直接 reparse）回退 chroma 默认
+	provider := cfg.Store.Provider
+	// sqlite provider 不自建父目录，统一先建
+	if err := os.MkdirAll(filepath.Join(f.dataDir, kbID), 0o755); err != nil {
+		logger.Error(logComponent).Str("kb_id", kbID).Err(err).
+			Msg("kb indexer dir creation failed")
+		return nil, fmt.Errorf("创建 kb collection 目录失败: %w", err)
+	}
+	vsConfig := common.VectorStoreConfig{
 		CollectionName: "kb_" + kbID,
 		DistanceMetric: common.DistanceMetricCosine,
 		// 与 BuildIndex 的 database_name extra 同源（kb_<kbID>）：client 建在
@@ -122,8 +158,24 @@ func (f *RetrievalKBFactory) CreateIndexer(_ context.Context, kbID string) (inde
 		// 返回 false（M-44 路径缺陷，30.2 update/delete 路径首次踩中）
 		DatabaseName: "kb_" + kbID,
 	}
-	idx, err := indexer.NewChromaIndexer(config, filepath.Join(f.dataDir, kbID, "chroma"))
+	var idx indexer.Indexer
+	var err error
+	switch provider {
+	case "", "chroma":
+		vsConfig.StoreProvider = common.StoreTypeChroma
+		idx, err = indexer.NewChromaIndexer(vsConfig, filepath.Join(f.dataDir, kbID, "chroma"))
+	case "sqlite":
+		vsConfig.StoreProvider = common.StoreTypeSqlite
+		idx, err = indexer.NewSQLiteIndexer(vsConfig, filepath.Join(f.dataDir, kbID, "kbvector.db"))
+	case "milvus":
+		vsConfig.StoreProvider = common.StoreTypeMilvus
+		idx, err = indexer.NewMilvusIndexer(vsConfig, cfg.Store.MilvusURI, cfg.Store.MilvusToken)
+	default:
+		err = fmt.Errorf("未知存储 provider: %s（支持 chroma/sqlite/milvus）", provider)
+	}
 	if err != nil {
+		logger.Error(logComponent).Str("kb_id", kbID).Str("provider", provider).Err(err).
+			Msg("kb indexer construction failed")
 		return nil, err
 	}
 	f.indexers[kbID] = idx
@@ -145,6 +197,11 @@ func (f *RetrievalKBFactory) DeleteCollection(ctx context.Context, kbID string) 
 	}
 	if !ok {
 		return nil // 幂等：未登记视为已删
+	}
+	// milvus provider 无本地 store 登记（collection 由 milvus 服务端管理），
+	// 本地 DeleteTable 不适用——远端 collection 清理随 milvus 侧生命周期
+	if store == nil {
+		return nil
 	}
 	if err := store.DeleteTable(ctx, "kb_"+kbID); err != nil {
 		logger.Error(logComponent).Str("kb_id", kbID).Err(err).

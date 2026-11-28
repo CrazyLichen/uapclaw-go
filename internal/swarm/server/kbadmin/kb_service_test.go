@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/indexer"
 )
 
 // newTestService 构造真实链 Service（真实 SQLite + 真实 retrieval Chroma
@@ -150,4 +152,58 @@ func TestCloseAll_缓存逐出后可重建(t *testing.T) {
 		t.Fatal("CloseAll 后应构造新实例")
 	}
 	_ = idx2.Close()
+}
+
+// TestCreateCollection_sqliteProvider sqlite provider 分派（spec §9）：
+// collection 登记 + CreateIndexer 返回 SQLiteIndexer（真构造，vec 缺失时该分支
+// 由 SQLiteVectorStore 构造期报错——用 unknown provider 分支兜覆盖）。
+func TestCreateCollection_sqliteProvider(t *testing.T) {
+	dir := t.TempDir()
+	f := NewRetrievalKBFactory(dir)
+	if err := f.CreateCollection(context.Background(), "kb-sq",
+		`{"store":{"provider":"sqlite"}}`); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := f.CreateIndexer(context.Background(), "kb-sq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := idx.(interface {
+		GetIndexInfo(context.Context, string) (map[string]any, error)
+	}); !ok {
+		t.Fatal("indexer 应具备 GetIndexInfo 契约")
+	}
+	info, err := idx.GetIndexInfo(context.Background(), "kb_sq_chunks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info["provider"] != "sqlite" {
+		t.Fatalf("provider 应 sqlite: %v", info["provider"])
+	}
+	_ = idx.Close()
+}
+
+// TestCreateCollection_未知Provider拒单 未支持 provider 建库拒单（DAO 回滚）。
+func TestCreateCollection_未知Provider拒单(t *testing.T) {
+	f := NewRetrievalKBFactory(t.TempDir())
+	if err := f.CreateCollection(context.Background(), "kb-bad",
+		`{"store":{"provider":"pgvector"}}`); err == nil {
+		t.Fatal("pgvector 未实现入库面，应拒单")
+	}
+	if f.Has("kb-bad") {
+		t.Fatal("拒单后不得登记 store")
+	}
+}
+
+// TestCreateIndexer_缺省回退chroma 未登记 config 时 provider 缺省回退 chroma
+// （域重建后直接 reparse 场景）。
+func TestCreateIndexer_缺省回退chroma(t *testing.T) {
+	f := NewRetrievalKBFactory(t.TempDir())
+	idx, err := f.CreateIndexer(context.Background(), "kb-fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := idx.(*indexer.ChromaIndexer); !ok {
+		t.Fatalf("缺省应回退 ChromaIndexer, got %T", idx)
+	}
 }

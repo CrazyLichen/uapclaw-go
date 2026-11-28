@@ -8,7 +8,8 @@
 //	├── base.go           # Indexer 接口定义 + IndexOptions
 //	├── embed_chunks.go   # ComputeChunkEmbeddings 共享嵌入逻辑 + ChunkEmbedOptions
 //	├── chroma.go         # ChromaIndexer ChromaDB 文档索引实现
-//	└── milvus.go         # MilvusIndexer Milvus 文档索引实现
+//	├── milvus.go         # MilvusIndexer Milvus 文档索引实现
+//	└── sqlite_indexer.go # SQLiteIndexer SQLite 向量存储（D-25-7）入库面实现
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/indexer/
 //

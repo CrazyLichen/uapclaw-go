@@ -716,6 +716,32 @@ func (s *SQLiteVectorStore) deleteLocked(ctx context.Context, ids []string, filt
 	return deleted, nil
 }
 
+// IDsByDoc 按 docID 列出该文档的全部 chunk id（indexer DeleteIndex 消费：
+// sqlite Delete 仅支持 id 过滤，非 id filter 会被忽略）。
+func (s *SQLiteVectorStore) IDsByDoc(ctx context.Context, docID string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.conn.QueryContext(ctx,
+		fmt.Sprintf("SELECT id FROM \"%s_chunks\" WHERE doc_id = ?", s.collectionName), docID)
+	if err != nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalVectorStoreProviderInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("sqlite store: 按 docID 查询 chunk id 失败: %s", err)),
+			exception.WithCause(err),
+		)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // tableExistsLocked TableExists 的锁内实现。
 func (s *SQLiteVectorStore) tableExistsLocked(ctx context.Context, tableName string) (bool, error) {
 	var count int
