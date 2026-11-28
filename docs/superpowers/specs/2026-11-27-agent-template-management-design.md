@@ -109,6 +109,12 @@ extension_package_manager（本地半区）────────────�
 | D-3 | 异步变体（`aload_*`/`to_thread`） | 沿 D-15b 惯例同步化 | 既有偏差惯例 | 不回收 |
 | D-4 | 企业版 allowlist（`_filter_allowed_cards`/`hidden_from_enterprise`/`_package_allowed`） | 保留判断结构、个人版恒放行路径照写 | 对齐结构忠实 | 企业版移植时归位 |
 
+## 4a. 实施期新增偏差（Task 8 复核补记）
+
+| # | Python 锚点 | 偏差 | 理由 | 回收条件 |
+|---|---|---|---|---|
+| D-8 | interface_deep.py:3073-3089（`_loaded_agent_template` native 分支 + `_rsi_selected_plugin`/`_loaded_plugins` plugin 分支） | Go 会话级运行态字段未移植（执行平面挂账），unload 对应分支不可达；CodeAdapter 经组合委托继承卸载（对齐 Python 继承，interface_code.py:535） | native 模板/RSI 插件的会话内装载面属模板运行装载批，本批只有 external harness 绑定面 | 模板/插件运行装载面移植批接线后补分支 |
+
 ## 5. 前端 Hub 隐藏（不改设计页主体）
 
 1. 目录卡片过滤兜底：`viewModel.ts:114/146` 的 `scope==='catalog'` 判断保留（hub 卡天然不出现）
