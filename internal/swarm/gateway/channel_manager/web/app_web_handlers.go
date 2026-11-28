@@ -432,6 +432,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	// _pre_persist_large_media/_documents 大文件分流再统一转发。
 	registerWorkspaceFileProxies(wc, agentClient)
 	registerRSIArtifactProxies(wc, agentClient)
+	// ─── kb 分帧方法族（领域三十 30.5，B1 薄映射） ───
+	registerKBFileProxies(wc, agentClient)
 
 	// ─── session 薄代理（B1b-7） ───
 	// Python: app_web_handlers.py:5692-5693（两个都是 proxy_unary_request 薄代理）
