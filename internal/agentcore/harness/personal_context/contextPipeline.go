@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"unicode"
+
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -1928,4 +1930,1281 @@ func commitContextTree(candidate string, target string) error {
 		return err
 	}
 	return assertNoSymlinks(target)
+}
+
+// 流水线第三块 A：标记常量、受管块替换、容量、语义部件与上下文目录助手。
+// Python: context_pipeline.py:63-103（标记）、1427-1780、1795-1843、3763-3789、3986-4035、
+// 7030-7130（语义名）。路由/导航/来源分布留后续块。
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// 管理块标记。Python: context_pipeline.py:88-103
+const (
+	rootNavigationStart       = "<!-- personal-context:navigation:start -->"
+	rootNavigationEnd         = "<!-- personal-context:navigation:end -->"
+	directoryOverviewStart    = "<!-- personal-context:directory-overview:start -->"
+	directoryOverviewEnd      = "<!-- personal-context:directory-overview:end -->"
+	directoryDescriptionStart = "<!-- personal-context:directory-description:start -->"
+	directoryDescriptionEnd   = "<!-- personal-context:directory-description:end -->"
+	sourceLinksStart          = "<!-- personal-context:source-links:start -->"
+	sourceLinksEnd            = "<!-- personal-context:source-links:end -->"
+	topicLinksStart           = "<!-- personal-context:topic-links:start -->"
+	topicLinksEnd             = "<!-- personal-context:topic-links:end -->"
+	relatedStart              = "<!-- personal-context-related:start -->"
+	relatedEnd                = "<!-- personal-context-related:end -->"
+	emptyDeterministicPreview = "（没有可用的确定性预览。）"
+)
+
+// 已知源标题扩展名。Python: context_pipeline.py:125 _KNOWN_SOURCE_TITLE_EXTENSIONS
+var knownSourceTitleExtensions = []string{
+	".markdown", ".docx", ".pptx", ".xlsx", ".html", ".epub", ".pdf",
+	".doc", ".ppt", ".xls", ".txt", ".md", ".htm",
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// markdownAngleDestination / markdownBareDestination 目的地词法。
+// Python: context_pipeline.py:76-77
+const markdownAngleDestinationPatternSrc = `<[^<>\r\n]+>(?:\s+(?:"[^"\r\n]*"|'[^'\r\n]*'|\([^)]*\)))?`
+const markdownBareDestinationPatternSrc = `(?:[^()\r\n]|\([^()\r\n]*\))+`
+
+// markdownDestinationTokenPattern 目的地标记。
+var markdownDestinationTokenPattern = regexp.MustCompile(
+	`(` + markdownAngleDestinationPatternSrc + `|` + markdownBareDestinationPatternSrc + `)`)
+
+// markdownLinkTokenPattern 链接（含图片）。
+// Python: context_pipeline.py:79 _MARKDOWN_LINK_TOKEN
+var markdownLinkTokenPattern = regexp.MustCompile(
+	`\[[^\]\r\n]*\]\(` + markdownDestinationTokenPattern.String() + `\)`)
+
+// markdownInlineLinkPattern 行内链接。
+// Python: context_pipeline.py:81 _MARKDOWN_INLINE_LINK
+var markdownInlineLinkPattern = regexp.MustCompile(
+	`!?\[([^\]\r\n]+)\]\(` + markdownDestinationTokenPattern.String() + `\)`)
+
+// shortReferencePattern 受管引用令牌。
+// Python: context_pipeline.py:83 _SHORT_REFERENCE
+var shortReferencePattern = regexp.MustCompile(`\[\[ref:(0|[1-9][0-9]*)\]\]`)
+
+// sourceMetadataIDPattern 源 ID。
+// Python: context_pipeline.py:85 _SOURCE_METADATA_ID
+var sourceMetadataIDPattern = regexp.MustCompile(`^src_[0-9a-f]{32}$`)
+
+// uriSchemePattern URI scheme 前缀。
+// Python: context_pipeline.py:86 _URI_SCHEME
+var uriSchemePattern = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*:`)
+
+// personalContextManagedMarkerPattern 管理块标记全集。
+// Python: context_pipeline.py:87 _PERSONAL_CONTEXT_MANAGED_MARKER
+var personalContextManagedMarkerPattern = regexp.MustCompile(
+	`<!--\s*personal-context(?::[a-z0-9-]+|-[a-z0-9-]+):(?:start|end)\s*-->`)
+
+// managedSourceMarkerPattern 受管源标记行。
+// Python: context_pipeline.py:100 _MANAGED_SOURCE_MARKER
+var managedSourceMarkerPattern = regexp.MustCompile(
+	`(?m)^<!-- personal-context-managed-source: (src_[0-9a-f]{32}) -->\r?$`)
+
+// managedLocalLinkPattern 受管块内链接行。
+// Python: context_pipeline.py:1668 内联 fullmatch
+var managedLocalLinkPattern = regexp.MustCompile(`- \[([^\]\r\n]+)\]\(([^\r\n]+)\)`)
+
+// connectorSuffixPattern 连接词尾缀。
+// Python: context_pipeline.py 内 _trim_semantic_connector 的 connector
+var connectorSuffixPattern = regexp.MustCompile(
+	`(?i)(?:\s+(?:and|or|for|from|with|after|before|to|of|in|on|via|the|以及|和|与|或|及|的|在|用于|支持))$`)
+
+// chineseConnectorSuffixPattern 中文连接词尾缀。
+// Python: _trim_truncated_chinese_connector 的 connector
+var chineseConnectorSuffixPattern = regexp.MustCompile(`(?:以及|用于|与|和|或|及|的)$`)
+
+// fenceClosingPattern 围栏闭合行。
+var fenceClosingPattern = regexp.MustCompile(`^ {0,3}(` + "`{3,}|~{3,})[ \\t]*$")
+
+// fenceOpeningPattern 围栏开启行。
+var fenceOpeningPattern = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
+
+// inlineCodeRunPattern 行内代码段。
+var inlineCodeRunPattern = regexp.MustCompile("`+[^`\r\n]*`+")
+
+// htmlCommentPattern HTML 注释。
+var htmlCommentPattern = regexp.MustCompile("(?s)<!--.*?-->")
+
+// readableNonTextPattern 纯数字/符号判定。
+// Python: _readable_topic_identity 内 r"[\d\W_]+"
+var readableNonTextPattern = regexp.MustCompile(`^[\d\W_]+$`)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TitleFor 变更项标题回落逻辑。
+// Python: context_pipeline.py:1427 _title_for
+func TitleFor(item *RawChangeItem) string {
+	title := ""
+	if item.Title != nil {
+		title = strings.TrimSpace(strings.NewReplacer("\r", " ", "\n", " ").Replace(*item.Title))
+	}
+	if title != "" {
+		runes := []rune(title)
+		if len(runes) > 512 {
+			return string(runes[:512])
+		}
+		return title
+	}
+	parts := strings.Split(item.LogicalID, "/")
+	fallback := parts[len(parts)-1]
+	if fallback == "" {
+		return item.LogicalID
+	}
+	return fallback
+}
+
+// MarkdownReferenceTextP 保持 pipeline 内调用的别名（Python 同名引用）。
+// Python: context_pipeline.py:7160 _markdown_reference_text → markdown_reference_text
+func MarkdownReferenceTextP(markdown string) string {
+	return MarkdownReferenceText(markdown)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// managedSourceComment 受管源标记注释。
+// Python: context_pipeline.py:1434 _managed_source_comment
+func managedSourceComment(sourceID string) (string, error) {
+	if !sourceMetadataIDPattern.MatchString(sourceID) {
+		return "", pipelineError("managed source ID is invalid")
+	}
+	return fmt.Sprintf("<!-- personal-context-managed-source: %s -->", sourceID), nil
+}
+
+// managedPagesBySource 扫描受管源标记 → 页路径。
+// Python: context_pipeline.py:1440 _managed_pages_by_source
+func managedPagesBySource(contextRoot string) (map[string]string, error) {
+	result := map[string]string{}
+	var pages []string
+	for _, page := range walkTreePaths(contextRoot) {
+		if strings.EqualFold(filepath.Ext(page), ".md") {
+			pages = append(pages, page)
+		}
+	}
+	sort.Slice(pages, func(i, j int) bool { return pages[i] < pages[j] })
+	for _, page := range pages {
+		if strings.EqualFold(filepath.Base(page), "description.md") ||
+			pipelinePathIsLinkOrReparse(page) || !pipelinePathIsFile(page) {
+			continue
+		}
+		raw, err := os.ReadFile(extendedPath(page))
+		if err != nil {
+			return nil, publishError("managed source identity could not be inspected")
+		}
+		markers := managedSourceMarkerPattern.FindAllStringSubmatch(string(raw), -1)
+		if len(markers) > 1 {
+			return nil, pipelineError("managed source identity is duplicated")
+		}
+		if len(markers) == 1 {
+			if _, duplicated := result[markers[0][1]]; duplicated {
+				return nil, pipelineError("managed source identity is duplicated")
+			}
+			result[markers[0][1]] = page
+		}
+	}
+	return result, nil
+}
+
+// removeRulesPagesForDeletedSourceIDs 删除已删源的受管页。
+// Python: context_pipeline.py:1458 _remove_rules_pages_for_deleted_source_ids
+func removeRulesPagesForDeletedSourceIDs(contextRoot string, deletedSourceIDs []string) error {
+	managedPages, err := managedPagesBySource(contextRoot)
+	if err != nil {
+		return err
+	}
+	unique := map[string]struct{}{}
+	for _, sourceID := range deletedSourceIDs {
+		unique[sourceID] = struct{}{}
+	}
+	var sortedIDs []string
+	for sourceID := range unique {
+		sortedIDs = append(sortedIDs, sourceID)
+	}
+	sort.Strings(sortedIDs)
+	for _, sourceID := range sortedIDs {
+		if !sourceMetadataIDPattern.MatchString(sourceID) {
+			return pipelineError("deleted managed source ID is invalid")
+		}
+		if page, exists := managedPages[sourceID]; exists {
+			if err := removeTreeEntry(page); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// directoryOrdinaryMarkdownCount 目录普通 Markdown 页计数。
+// Python: context_pipeline.py:1472 _directory_ordinary_markdown_count
+func directoryOrdinaryMarkdownCount(directory string) (int, error) {
+	target := extendedPath(directory)
+	if _, err := os.Stat(target); err != nil {
+		return 0, nil
+	}
+	info, err := os.Lstat(target)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return 0, publishError("Context directory capacity target is invalid")
+	}
+	entries, readErr := os.ReadDir(target)
+	if readErr != nil {
+		return 0, publishError("Context directory capacity could not be inspected")
+	}
+	count := 0
+	for _, entry := range entries {
+		if !strings.EqualFold(filepath.Ext(entry.Name()), ".md") ||
+			strings.EqualFold(entry.Name(), "description.md") {
+			continue
+		}
+		child := filepath.Join(directory, entry.Name())
+		if !pipelinePathIsFile(child) || pipelinePathIsLinkOrReparse(child) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// defaultDirectoryCapacity 从公共 config 模型读默认值。
+// Python: context_pipeline.py:1495 _default_directory_capacity —— Go 侧
+// PersonalContextConfig 默认值即 config.go 常量（挂账③锚点）。
+func defaultDirectoryCapacity(fieldName string) (int, error) {
+	switch fieldName {
+	case "max_pages_per_directory":
+		return DefaultMaxPagesPerDirectory, nil
+	case "max_subdirectories_per_directory":
+		return DefaultMaxSubdirectoriesPerDirectory, nil
+	}
+	return 0, publishError("PersonalContext directory capacity default is invalid")
+}
+
+// capacityWarningThreshold 容量告警阈值（80%）。
+// Python: context_pipeline.py:1504 _capacity_warning_threshold
+func capacityWarningThreshold(limit int) int {
+	return int(math.Ceil(float64(limit) * 0.8))
+}
+
+// directoryDirectSubdirectoryCount 直接子目录计数。
+// Python: context_pipeline.py:1508 _directory_direct_subdirectory_count
+func directoryDirectSubdirectoryCount(directory string) (int, error) {
+	target := extendedPath(directory)
+	if _, err := os.Stat(target); err != nil {
+		return 0, nil
+	}
+	if pipelinePathIsLinkOrReparse(directory) || !pipelinePathIsDir(directory) {
+		return 0, publishError("Context directory capacity target is invalid")
+	}
+	entries, readErr := os.ReadDir(target)
+	if readErr != nil {
+		return 0, publishError("Context directory capacity could not be inspected")
+	}
+	count := 0
+	for _, entry := range entries {
+		child := filepath.Join(directory, entry.Name())
+		if pipelinePathIsDir(child) && !pipelinePathIsLinkOrReparse(child) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// directoryAcceptsNewPage 页容量闸。
+// Python: context_pipeline.py:1520 _directory_accepts_new_page
+func directoryAcceptsNewPage(directory string, maxPages int, hasMax bool) (bool, error) {
+	if pipelinePathExists(directory) &&
+		(pipelinePathIsLinkOrReparse(directory) || !pipelinePathIsDir(directory)) {
+		return false, nil
+	}
+	limit := maxPages
+	if !hasMax {
+		var err error
+		limit, err = defaultDirectoryCapacity("max_pages_per_directory")
+		if err != nil {
+			return false, err
+		}
+	}
+	count, err := directoryOrdinaryMarkdownCount(directory)
+	if err != nil {
+		return false, err
+	}
+	return count < limit, nil
+}
+
+// directoryAcceptsNewSubdirectory 子目录容量闸。
+// Python: context_pipeline.py:1528 _directory_accepts_new_subdirectory
+func directoryAcceptsNewSubdirectory(directory string, maxSubdirectories int, hasMax bool) (bool, error) {
+	if pipelinePathExists(directory) &&
+		(pipelinePathIsLinkOrReparse(directory) || !pipelinePathIsDir(directory)) {
+		return false, nil
+	}
+	limit := maxSubdirectories
+	if !hasMax {
+		var err error
+		limit, err = defaultDirectoryCapacity("max_subdirectories_per_directory")
+		if err != nil {
+			return false, err
+		}
+	}
+	count, err := directoryDirectSubdirectoryCount(directory)
+	if err != nil {
+		return false, err
+	}
+	return count < limit, nil
+}
+
+// validateContextCapacities 全树容量校验。
+// Python: context_pipeline.py:1544 _validate_context_capacities
+func validateContextCapacities(contextRoot string, maxPages int, maxSubdirectories int, hasLimits bool, repairable bool, capacityExempt bool) error {
+	buildErr := publishError
+	if repairable {
+		buildErr = pipelineError
+	}
+	_ = buildErr
+	if err := assertNoSymlinks(contextRoot); err != nil {
+		return err
+	}
+	if capacityExempt {
+		return nil
+	}
+	pagesLimit := maxPages
+	subdirectoriesLimit := maxSubdirectories
+	if !hasLimits {
+		var err error
+		pagesLimit, err = defaultDirectoryCapacity("max_pages_per_directory")
+		if err != nil {
+			return err
+		}
+		subdirectoriesLimit, err = defaultDirectoryCapacity("max_subdirectories_per_directory")
+		if err != nil {
+			return err
+		}
+	}
+	for _, directory := range contextDirectories(contextRoot) {
+		pageCount, err := directoryOrdinaryMarkdownCount(directory)
+		if err != nil {
+			return err
+		}
+		if pageCount > pagesLimit {
+			if repairable {
+				return pipelineError("candidate Context directory page capacity is exceeded")
+			}
+			return publishError("candidate Context directory page capacity is exceeded")
+		}
+		subdirectoryCount, err := directoryDirectSubdirectoryCount(directory)
+		if err != nil {
+			return err
+		}
+		if subdirectoryCount > subdirectoriesLimit {
+			if repairable {
+				return pipelineError("candidate Context directory subdirectory capacity is exceeded")
+			}
+			return publishError("candidate Context directory subdirectory capacity is exceeded")
+		}
+	}
+	return nil
+}
+
+// contextDirectories 根 + 排序子目录列表。
+// Python: context_pipeline.py:3782 _context_directories
+func contextDirectories(contextRoot string) []string {
+	result := []string{contextRoot}
+	var subdirectories []string
+	for _, path := range walkTreePaths(contextRoot) {
+		if pipelinePathIsDir(path) {
+			subdirectories = append(subdirectories, path)
+		}
+	}
+	sort.Slice(subdirectories, func(i, j int) bool {
+		ri, _ := filepath.Rel(contextRoot, subdirectories[i])
+		rj, _ := filepath.Rel(contextRoot, subdirectories[j])
+		return filepath.ToSlash(ri) < filepath.ToSlash(rj)
+	})
+	return append(result, subdirectories...)
+}
+
+// contextOrdinaryPages 排序普通页列表。
+// Python: context_pipeline.py:3763 _context_ordinary_pages
+func contextOrdinaryPages(contextRoot string) ([]string, error) {
+	if err := assertNoSymlinks(contextRoot); err != nil {
+		return nil, err
+	}
+	var ordinaryPages []string
+	for _, page := range walkTreePaths(contextRoot) {
+		if !strings.EqualFold(filepath.Ext(page), ".md") ||
+			strings.EqualFold(filepath.Base(page), "description.md") ||
+			!pipelinePathIsFile(page) || pipelinePathIsLinkOrReparse(page) {
+			continue
+		}
+		ordinaryPages = append(ordinaryPages, page)
+	}
+	sort.Slice(ordinaryPages, func(i, j int) bool {
+		ri, _ := filepath.Rel(contextRoot, ordinaryPages[i])
+		rj, _ := filepath.Rel(contextRoot, ordinaryPages[j])
+		return filepath.ToSlash(ri) < filepath.ToSlash(rj)
+	})
+	return ordinaryPages, nil
+}
+
+// managedBlockBounds 定位受管块（畸形/嵌套报错）。
+// Python: context_pipeline.py:1575 _managed_block_bounds
+func managedBlockBounds(markdown string, start string, end string) (int, int, error) {
+	startPattern := regexp.MustCompile(regexp.QuoteMeta(start))
+	endPattern := regexp.MustCompile(regexp.QuoteMeta(end))
+	var starts, ends []int
+	for _, loc := range startPattern.FindAllStringIndex(markdown, -1) {
+		starts = append(starts, loc[0])
+	}
+	for _, loc := range endPattern.FindAllStringIndex(markdown, -1) {
+		ends = append(ends, loc[0])
+	}
+	if len(starts) == 0 && len(ends) == 0 {
+		return 0, 0, nil
+	}
+	if len(starts) != 1 || len(ends) != 1 || starts[0] >= ends[0] {
+		return 0, 0, pipelineError("managed Markdown block markers are malformed")
+	}
+	blockEnd := ends[0] + len(end)
+	blockStart := starts[0]
+	nested := personalContextManagedMarkerPattern.FindAllString(markdown[blockStart:blockEnd], -1)
+	if len(nested) != 2 || nested[0] != start || nested[1] != end {
+		return 0, 0, pipelineError("managed Markdown block markers are nested")
+	}
+	return blockStart, blockEnd, nil
+}
+
+// markdownNewline 首个换行形态。
+// Python: context_pipeline.py:1590 _markdown_newline
+func markdownNewline(markdown string) string {
+	if strings.Contains(markdown, "\r\n") {
+		return "\r\n"
+	}
+	if strings.Contains(markdown, "\n") {
+		return "\n"
+	}
+	return "\n"
+}
+
+// normalizeMarkdownNewlines 统一换行形态。
+// Python: context_pipeline.py:1595 _normalize_markdown_newlines
+func normalizeMarkdownNewlines(value string, newline string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	return strings.ReplaceAll(value, "\n", newline)
+}
+
+// replaceManagedBlock 替换合法块或在首个 H1 后插入。
+// Python: context_pipeline.py:1599 _replace_managed_block
+func replaceManagedBlock(markdown string, start string, end string, body string, hasBody bool, defaultHeading string) (string, error) {
+	begin, finish, boundsErr := managedBlockBounds(markdown, start, end)
+	if boundsErr != nil {
+		return "", boundsErr
+	}
+	hasBounds := !(begin == 0 && finish == 0)
+	newline := markdownNewline(markdown)
+	normalizedBody := ""
+	hasNormalized := false
+	if hasBody {
+		normalizedBody = strings.TrimRight(normalizeMarkdownNewlines(body, newline), "\r\n")
+		hasNormalized = true
+	}
+	block := ""
+	hasBlock := false
+	if hasNormalized {
+		block = start + newline + normalizedBody + newline + end
+		hasBlock = true
+	}
+	if hasBounds {
+		if hasBlock {
+			return markdown[:begin] + block + markdown[finish:], nil
+		}
+		return markdown[:begin] + markdown[finish:], nil
+	}
+	if !hasBlock {
+		return markdown, nil
+	}
+	if markdown == "" {
+		markdown = fmt.Sprintf("# %s%s", defaultHeading, newline)
+	}
+	headingPattern := regexp.MustCompile(`(?m)^# [^\r\n]+(?:\r?\n|$)`)
+	heading := headingPattern.FindStringIndex(markdown)
+	if heading == nil {
+		return "", pipelineError("managed Markdown file has no top-level heading")
+	}
+	return markdown[:heading[1]] + newline + block + newline + markdown[heading[1]:], nil
+}
+
+// markdownHeading 首个 H1（无则回落）。
+// Python: context_pipeline.py:1627 _markdown_heading
+func markdownHeading(markdown string, fallback string) string {
+	for _, line := range strings.Split(markdown, "\n") {
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(line[2:])
+		}
+	}
+	return fallback
+}
+
+// markdownLabel 标签归一（方括号替换 + 截断）。
+// Python: context_pipeline.py:1632 _markdown_label
+func markdownLabel(value string) string {
+	normalized := strings.NewReplacer("[", "(", "]", ")", "\r", " ", "\n", " ").
+		Replace(value)
+	normalized = strings.TrimSpace(normalized)
+	runes := []rune(normalized)
+	if len(runes) > 512 {
+		normalized = string(runes[:512])
+	}
+	if normalized == "" {
+		return "来源"
+	}
+	return normalized
+}
+
+// relativeMarkdownTarget 相对 POSIX 目标。
+// Python: context_pipeline.py:1637 _relative_markdown_target
+func relativeMarkdownTarget(path string, fromDirectory string) string {
+	relative, err := filepath.Rel(fromDirectory, path)
+	if err != nil {
+		return path
+	}
+	return strings.ReplaceAll(relative, "\\", "/")
+}
+
+// managedLocalLinks 解析描述页受管链接块。
+// Python: context_pipeline.py:1641 _managed_local_links
+func managedLocalLinks(descriptionPath string, contextRoot string, start string, end string, heading string) (map[string]string, error) {
+	raw, err := os.ReadFile(extendedPath(descriptionPath))
+	if err != nil {
+		return nil, err
+	}
+	markdown := string(raw)
+	begin, finish, boundsErr := managedBlockBounds(markdown, start, end)
+	if boundsErr != nil {
+		return nil, boundsErr
+	}
+	if begin == 0 && finish == 0 {
+		return map[string]string{}, nil
+	}
+	block := markdown[begin+len(start) : finish-len(end)]
+	result := map[string]string{}
+	for _, line := range strings.Split(block, "\n") {
+		stripped := strings.TrimSpace(line)
+		if stripped == "" || stripped == heading {
+			continue
+		}
+		match := managedLocalLinkPattern.FindStringSubmatch(stripped)
+		if match == nil {
+			return nil, pipelineError("managed local link block is malformed")
+		}
+		destination := markdownDestination(match[2])
+		if destination == "" || uriSchemePattern.MatchString(destination) {
+			return nil, pipelineError("managed local link target is invalid")
+		}
+		rootAbs, _ := filepath.Abs(contextRoot)
+		target := filepath.Join(filepath.Dir(descriptionPath), filepath.FromSlash(destination))
+		targetAbs, _ := filepath.Abs(target)
+		relative, relErr := filepath.Rel(rootAbs, targetAbs)
+		if relErr != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return nil, pipelineError("managed local link escaped Context")
+		}
+		if pipelinePathIsFile(targetAbs) {
+			result[relativeMarkdownTarget(targetAbs, filepath.Dir(descriptionPath))] = match[1]
+		}
+	}
+	return result, nil
+}
+
+// appendManagedSourceLink 追加来源关联链接行。
+// Python: context_pipeline.py:1680 _append_managed_source_link
+func appendManagedSourceLink(descriptionPath string, contextRoot string, sourcePage string, title string) error {
+	links, err := managedLocalLinks(descriptionPath, contextRoot, sourceLinksStart, sourceLinksEnd, "## PersonalContext 来源关联")
+	if err != nil {
+		return err
+	}
+	target := relativeMarkdownTarget(sourcePage, filepath.Dir(descriptionPath))
+	links[target] = markdownLabel(title)
+	var paths []string
+	for path := range links {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	rows := make([]string, 0, len(paths))
+	for _, path := range paths {
+		rows = append(rows, fmt.Sprintf("- [%s](%s)", links[path], markdownLinkTarget(path)))
+	}
+	raw, err := os.ReadFile(extendedPath(descriptionPath))
+	if err != nil {
+		return err
+	}
+	updated, err := replaceManagedBlock(string(raw), sourceLinksStart, sourceLinksEnd,
+		"## PersonalContext 来源关联\n\n"+strings.Join(rows, "\n"), true, filepath.Base(filepath.Dir(descriptionPath)))
+	if err != nil {
+		return err
+	}
+	return pipelineAtomicWrite(descriptionPath, []byte(updated))
+}
+
+// appendManagedTopicLink 追加受管主题链接行。
+// Python: context_pipeline.py:1696 _append_managed_topic_link
+func appendManagedTopicLink(contextRoot string, topicDirectory string, title string) error {
+	topicsRoot := filepath.Join(contextRoot, "topics")
+	descriptionPath := filepath.Join(topicsRoot, "description.md")
+	if !pipelinePathIsFile(descriptionPath) {
+		if err := pipelineAtomicWrite(descriptionPath, []byte("# 主题导航\n")); err != nil {
+			return err
+		}
+	}
+	links, err := managedLocalLinks(descriptionPath, contextRoot, topicLinksStart, topicLinksEnd, "## PersonalContext 受控主题")
+	if err != nil {
+		return err
+	}
+	targetPath := filepath.Join(topicDirectory, "description.md")
+	target := relativeMarkdownTarget(targetPath, filepath.Dir(descriptionPath))
+	links[target] = markdownLabel(title)
+	var paths []string
+	for path := range links {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	rows := make([]string, 0, len(paths))
+	for _, path := range paths {
+		rows = append(rows, fmt.Sprintf("- [%s](%s)", links[path], markdownLinkTarget(path)))
+	}
+	raw, err := os.ReadFile(extendedPath(descriptionPath))
+	if err != nil {
+		return err
+	}
+	updated, err := replaceManagedBlock(string(raw), topicLinksStart, topicLinksEnd,
+		"## PersonalContext 受控主题\n\n"+strings.Join(rows, "\n"), true, "主题导航")
+	if err != nil {
+		return err
+	}
+	return pipelineAtomicWrite(descriptionPath, []byte(updated))
+}
+
+// normalizedTopicTerm 主题词归一（过短/泛名 → 空）。
+// Python: context_pipeline.py:1728 _normalized_topic_term
+func normalizedTopicTerm(value string) string {
+	term := regexp.MustCompile("[`*_#]").ReplaceAllString(value, "")
+	term = strings.TrimSpace(term)
+	compact := regexp.MustCompile(`\s+`).ReplaceAllString(term, "")
+	if len([]rune(compact)) < 4 {
+		return ""
+	}
+	if _, generic := genericTopicNames[strings.ToLower(term)]; generic {
+		return ""
+	}
+	return term
+}
+
+// topicTermMatchesTitle 主题词与标题匹配（CJK 包含 / ascii 词边界）。
+// Python: context_pipeline.py:1746 _topic_term_matches_title —— RE2 无 lookahead，
+// ascii 词边界手写扫描。
+func topicTermMatchesTitle(term string, title string) bool {
+	if cjkCharPattern.MatchString(term) {
+		return strings.Contains(strings.ToLower(title), strings.ToLower(term))
+	}
+	termLower := strings.ToLower(term)
+	titleLower := strings.ToLower(title)
+	for index := 0; index+len(termLower) <= len(titleLower); index++ {
+		if titleLower[index:index+len(termLower)] != termLower {
+			continue
+		}
+		if index > 0 && isAlnumByte(titleLower[index-1]) {
+			continue
+		}
+		if index+len(termLower) < len(titleLower) && isAlnumByte(titleLower[index+len(termLower)]) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// isAlnumByte ascii 字母数字。
+func isAlnumByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
+}
+
+// uniqueRulesTopicDescription 唯一匹配主题描述目录。
+// Python: context_pipeline.py:1753 _unique_rules_topic_description
+func uniqueRulesTopicDescription(contextRoot string, title string) string {
+	matches := map[string]struct{}{}
+	for _, description := range walkTreePaths(contextRoot) {
+		if filepath.Base(description) != "description.md" {
+			continue
+		}
+		relative, relErr := filepath.Rel(contextRoot, description)
+		if relErr != nil {
+			continue
+		}
+		if filepath.Dir(description) == contextRoot ||
+			strings.HasPrefix(filepath.ToSlash(relative), "sources/") {
+			continue
+		}
+		raw, err := os.ReadFile(description)
+		if err != nil {
+			continue
+		}
+		values := []string{filepath.Base(filepath.Dir(description)), markdownHeading(string(raw), "")}
+		matched := false
+		for _, value := range values {
+			term := normalizedTopicTerm(value)
+			if term != "" && topicTermMatchesTitle(term, title) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			matches[description] = struct{}{}
+		}
+	}
+	if len(matches) == 1 {
+		for match := range matches {
+			return match
+		}
+	}
+	return ""
+}
+
+// documentSemanticParts 文档语义三元组（含 balanced 富集优先）。
+// Python: context_pipeline.py:1781 _document_semantic_parts
+func documentSemanticParts(document map[string]any) SemanticRecord {
+	titleSource := document["title"]
+	if titleSource == nil {
+		titleSource = document["logical_id"]
+	}
+	titleText, _ := titleSource.(string)
+	if titleText == "" {
+		titleText = "来源"
+	}
+	title := markdownLabel(titleText)
+	markdownSource, _ := document["markdown"].(string)
+	markdown := strings.TrimSpace(shortReferencePattern.ReplaceAllString(markdownSource, ""))
+	briefing := DeterministicBriefingPreview(markdown)
+	var headings []string
+	if headingValues, ok := briefing["headings"].([]map[string]any); ok {
+		for _, heading := range headingValues {
+			if text, ok := heading["text"].(string); ok && text != "" {
+				headings = append(headings, text)
+			}
+		}
+	}
+	if enrichment, ok := document["_balanced_semantics"].(map[string]any); ok {
+		pageTitle, _ := enrichment["page_title"].(string)
+		keywords, _ := enrichment["keywords"].([]string)
+		summary, _ := enrichment["summary"].(string)
+		return SemanticRecord{Title: pageTitle, Headings: append(headings, keywords...), Preview: summary}
+	}
+	summary, _ := briefing["summary"].(string)
+	return SemanticRecord{Title: title, Headings: headings, Preview: strings.TrimSpace(summary)}
+}
+
+// directorySemanticParts 目录语义三元组。
+// Python: context_pipeline.py:1795 _directory_semantic_parts
+func directorySemanticParts(directory string, excludePage string) SemanticRecord {
+	var headings []string
+	var previews []string
+	description := filepath.Join(directory, "description.md")
+	if pipelinePathIsFile(description) && !pipelinePathIsLinkOrReparse(description) {
+		raw, _ := os.ReadFile(extendedPath(description))
+		markdown := string(raw)
+		if strings.Contains(markdown, directoryDescriptionStart) {
+			markdown = regexp.MustCompile(`(?m)^# [^\r\n]+`).ReplaceAllString(markdown, "")
+		}
+		markdown = sanitizedSemanticMarkdown(markdown)
+		headings = append(headings, markdownHeading(markdown, filepath.Base(directory)))
+		previewMap := DeterministicBriefingPreview(markdown)
+		summary, _ := previewMap["summary"].(string)
+		previews = append(previews, summary)
+	}
+	entries, err := os.ReadDir(extendedPath(directory))
+	if err != nil {
+		return SemanticRecord{Title: filepath.Base(directory), Headings: headings, Preview: strings.Join(previews, "\n")}
+	}
+	var directEntries []string
+	for _, entry := range entries {
+		directEntries = append(directEntries, filepath.Join(directory, entry.Name()))
+	}
+	sort.Slice(directEntries, func(i, j int) bool { return directEntries[i] < directEntries[j] })
+	for _, page := range directEntries {
+		if !strings.EqualFold(filepath.Ext(page), ".md") {
+			continue
+		}
+		if page == excludePage ||
+			strings.EqualFold(filepath.Base(page), "description.md") ||
+			pipelinePathIsLinkOrReparse(page) || !pipelinePathIsFile(page) {
+			continue
+		}
+		raw, _ := os.ReadFile(extendedPath(page))
+		markdown := string(raw)
+		headings = append(headings, markdownHeading(markdown, strings.TrimSuffix(filepath.Base(page), filepath.Ext(page))))
+		previewMap := DeterministicBriefingPreview(markdown)
+		summary, _ := previewMap["summary"].(string)
+		previews = append(previews, summary)
+	}
+	return SemanticRecord{Title: filepath.Base(directory), Headings: headings, Preview: strings.Join(previews, "\n")}
+}
+
+// directorySemanticFields 目录语义字段向量。
+// Python: context_pipeline.py:1815 _directory_semantic_fields
+func directorySemanticFields(directory string) map[string]float64 {
+	parts := directorySemanticParts(directory, "")
+	return SemanticFields(parts.Title, parts.Headings, parts.Preview)
+}
+
+// directorySemanticText 目录嵌入文本。
+// Python: context_pipeline.py:1819 _directory_semantic_text
+func directorySemanticText(directory string) string {
+	parts := directorySemanticParts(directory, "")
+	return SemanticEmbeddingText(parts.Title, parts.Headings, parts.Preview)
+}
+
+// semanticContextDirectories 含普通页的非保留目录。
+// Python: context_pipeline.py:1825 _semantic_context_directories
+func semanticContextDirectories(contextRoot string) []string {
+	var result []string
+	directories := contextDirectories(contextRoot)
+	for _, directory := range directories[1:] {
+		relative, relErr := filepath.Rel(contextRoot, directory)
+		if relErr != nil {
+			continue
+		}
+		parts := strings.Split(filepath.ToSlash(relative), "/")
+		reserved := false
+		for _, part := range parts {
+			if _, isReserved := reservedContextSegments[strings.ToLower(part)]; isReserved {
+				reserved = true
+				break
+			}
+		}
+		if reserved {
+			continue
+		}
+		entries, err := os.ReadDir(extendedPath(directory))
+		if err != nil {
+			continue
+		}
+		hasMarkdown := false
+		for _, entry := range entries {
+			if strings.EqualFold(filepath.Ext(entry.Name()), ".md") && pipelinePathIsFile(filepath.Join(directory, entry.Name())) {
+				hasMarkdown = true
+				break
+			}
+		}
+		if hasMarkdown {
+			result = append(result, directory)
+		}
+	}
+	return result
+}
+
+// sanitizedSemanticMarkdown 剥离程序块与代码后供语义抽取。
+// Python: context_pipeline.py:3986 _sanitized_semantic_markdown
+func sanitizedSemanticMarkdown(markdown string) string {
+	semanticMarkdown := markdown
+	for _, pair := range [][2]string{
+		{directoryDescriptionStart, directoryDescriptionEnd},
+		{rootNavigationStart, rootNavigationEnd},
+		{directoryOverviewStart, directoryOverviewEnd},
+		{sourceLinksStart, sourceLinksEnd},
+		{topicLinksStart, topicLinksEnd},
+		{relatedStart, relatedEnd},
+	} {
+		begin, finish, boundsErr := managedBlockBounds(semanticMarkdown, pair[0], pair[1])
+		if boundsErr == nil && (begin > 0 || finish > 0) {
+			semanticMarkdown = semanticMarkdown[:begin] + semanticMarkdown[finish:]
+		}
+	}
+	semanticMarkdown = strings.ReplaceAll(semanticMarkdown, emptyDeterministicPreview, " ")
+	var semanticLines []string
+	fenceCharacter := byte(0)
+	fenceLength := 0
+	for _, line := range strings.Split(semanticMarkdown, "\n") {
+		if fenceCharacter != 0 {
+			closing := fenceClosingPattern.FindStringSubmatch(line)
+			if closing != nil && closing[1][0] == fenceCharacter && len(closing[1]) >= fenceLength {
+				fenceCharacter = 0
+				fenceLength = 0
+			}
+			continue
+		}
+		opening := fenceOpeningPattern.FindStringSubmatch(line)
+		if opening != nil {
+			fenceCharacter = opening[1][0]
+			fenceLength = len(opening[1])
+			continue
+		}
+		semanticLines = append(semanticLines, inlineCodeRunPattern.ReplaceAllString(line, " "))
+	}
+	return strings.Join(semanticLines, "\n")
+}
+
+// semanticMarkdownParts 语义标题与预览。
+// Python: context_pipeline.py:4019 _semantic_markdown_parts
+func semanticMarkdownParts(markdown string) ([][2]string, string) {
+	semanticMarkdown := sanitizedSemanticMarkdown(markdown)
+	var headings [][2]string
+	for _, line := range strings.Split(semanticMarkdown, "\n") {
+		match := briefingHeadingPattern.FindStringSubmatch(line)
+		if match != nil {
+			headings = append(headings, [2]string{fmt.Sprint(len(match[1])), strings.TrimSpace(match[2])})
+		}
+	}
+	previewMarkdown := htmlCommentPattern.ReplaceAllString(semanticMarkdown, " ")
+	previewMarkdown = markdownInlineLinkPattern.ReplaceAllString(previewMarkdown, " ")
+	var kept []string
+	for _, line := range strings.Split(previewMarkdown, "\n") {
+		if briefingHeadingPattern.FindStringSubmatch(line) == nil {
+			kept = append(kept, line)
+		}
+	}
+	previewMarkdown = strings.Join(kept, "\n")
+	previewMap := DeterministicBriefingPreview(previewMarkdown)
+	preview, _ := previewMap["summary"].(string)
+	return headings, strings.TrimSpace(preview)
+}
+
+// stripKnownSourceTitleExtension 剥离已知源标题扩展。
+// Python: context_pipeline.py:6942 _strip_known_source_title_extension
+func stripKnownSourceTitleExtension(value string) string {
+	folded := strings.ToLower(value)
+	for _, extension := range knownSourceTitleExtensions {
+		if strings.HasSuffix(folded, extension) && len([]rune(value)) > len(extension) {
+			return strings.TrimRight(string([]rune(value)[:len([]rune(value))-len(extension)]), semanticTrim)
+		}
+	}
+	return value
+}
+
+// removeUnbalancedBracketSuffix 截掉未平衡括号后缀。
+// Python: context_pipeline.py:6950 _remove_unbalanced_bracket_suffix
+func removeUnbalancedBracketSuffix(value string) string {
+	pairs := map[rune]rune{'(': ')', '（': '）', '[': ']', '【': '】', '<': '>', '《': '》'}
+	closings := map[rune]struct{}{}
+	for _, closing := range pairs {
+		closings[closing] = struct{}{}
+	}
+	var stack []rune
+	runes := []rune(value)
+	for index, character := range runes {
+		if closing, isOpening := pairs[character]; isOpening {
+			_ = closing
+			stack = append(stack, pairs[character])
+		} else if _, isClosing := closings[character]; isClosing {
+			if len(stack) == 0 || stack[len(stack)-1] != character {
+				return strings.TrimRight(string(runes[:index]), semanticTrim)
+			}
+			stack = stack[:len(stack)-1]
+		}
+	}
+	if len(stack) > 0 {
+		unmatchedAt := -1
+		for opening, closing := range pairs {
+			for _, pending := range stack {
+				if pending == closing {
+					pos := strings.IndexRune(value, opening)
+					if pos >= 0 && (unmatchedAt < 0 || pos < unmatchedAt) {
+						unmatchedAt = pos
+					}
+				}
+			}
+		}
+		if unmatchedAt < 0 {
+			unmatchedAt = 0
+		}
+		return strings.TrimRight(string(runes[:unmatchedAt]), semanticTrim)
+	}
+	return strings.TrimRight(value, semanticTrim)
+}
+
+// semanticBoundaryPositions 语义边界（自然边界 + 驼峰）。
+// Python: context_pipeline.py:6967 _semantic_boundary_positions
+func semanticBoundaryPositions(value string) ([]int, []int) {
+	naturalSet := map[int]struct{}{}
+	runes := []rune(value)
+	for index, character := range runes {
+		if index > 0 && strings.ContainsRune(semanticBoundaries, character) {
+			naturalSet[index] = struct{}{}
+		}
+	}
+	var camelSet []int
+	for index := 1; index < len(runes); index++ {
+		previous := runes[index-1]
+		current := runes[index]
+		if (unicode.IsLower(previous) || (previous >= '0' && previous <= '9')) && unicode.IsUpper(current) {
+			camelSet = append(camelSet, index)
+		}
+	}
+	var natural []int
+	for position := range naturalSet {
+		natural = append(natural, position)
+	}
+	sort.Ints(natural)
+	sort.Ints(camelSet)
+	return natural, camelSet
+}
+
+// trimSemanticConnector 剥离语义连接词尾缀。
+// Python: context_pipeline.py:6980 _trim_semantic_connector
+func trimSemanticConnector(value string) string {
+	result := strings.TrimRight(value, semanticTrim)
+	for {
+		shortened := strings.TrimRight(connectorSuffixPattern.ReplaceAllString(result, ""), semanticTrim)
+		if shortened == result {
+			return result
+		}
+		result = shortened
+	}
+}
+
+// trimTruncatedChineseConnector 剥离截断后暴露的中文连接词。
+// Python: context_pipeline.py:6990 _trim_truncated_chinese_connector
+func trimTruncatedChineseConnector(value string) string {
+	result := trimSemanticConnector(value)
+	for {
+		shortened := strings.TrimRight(chineseConnectorSuffixPattern.ReplaceAllString(result, ""), semanticTrim)
+		if shortened == result {
+			return result
+		}
+		result = shortened
+	}
+}
+
+// semanticPrefix 语义前缀截断（自然边界/驼峰/省略号）。
+// Python: context_pipeline.py:7007 _semantic_prefix
+func semanticPrefix(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	balanced := removeUnbalancedBracketSuffix(value)
+	if len([]rune(balanced)) <= limit {
+		return trimSemanticConnector(balanced)
+	}
+	ellipsis := "…"
+	// Python len("…") == 1（按字符计）；Go len 按字节，必须取 rune 数。
+	ellipsisLen := len([]rune(ellipsis))
+	naturalBoundaries, camelBoundaries := semanticBoundaryPositions(balanced)
+	var natural []int
+	for _, position := range naturalBoundaries {
+		if position <= limit {
+			natural = append(natural, position)
+		}
+	}
+	if len(natural) > 0 {
+		candidate := trimTruncatedChineseConnector(string([]rune(balanced)[:natural[len(natural)-1]]))
+		if candidate != "" {
+			return candidate
+		}
+	}
+	boundaryLimit := limit - ellipsisLen
+	if boundaryLimit < 0 {
+		boundaryLimit = 0
+	}
+	var camel []int
+	for _, position := range camelBoundaries {
+		if position <= boundaryLimit {
+			camel = append(camel, position)
+		}
+	}
+	if len(camel) > 0 {
+		candidate := trimTruncatedChineseConnector(string([]rune(balanced)[:camel[len(camel)-1]]))
+		if candidate != "" {
+			return candidate + ellipsis
+		}
+	}
+	runes := []rune(balanced)
+	candidate := trimTruncatedChineseConnector(string(runes[:boundaryLimit]))
+	if candidate == "" {
+		candidate = strings.TrimRight(string(runes[:boundaryLimit]), semanticTrim)
+	}
+	return candidate + ellipsis
+}
+
+// truncateSemanticContextSegment 语义段截断（后缀保形）。
+// Python: context_pipeline.py:7030 _truncate_semantic_context_segment
+func truncateSemanticContextSegment(value string, suffix string) (string, error) {
+	ending := ""
+	if suffix != "" {
+		ending = "-" + suffix
+	}
+	bodyLimit := semanticNameMaxChars - len([]rune(ending))
+	if bodyLimit <= 0 {
+		return "", pipelineError("semantic Context name suffix exceeds the safety limit")
+	}
+	body := semanticPrefix(value, bodyLimit)
+	if body == "" {
+		body = semanticPrefix("主题", bodyLimit)
+	}
+	return body + ending, nil
+}
+
+// safeSemanticName 语义名安全化（约定式提交/非法字符/回落摘要）。
+// Python: context_pipeline.py:7039 _safe_semantic_name
+func safeSemanticName(title string) (string, error) {
+	normalized := strings.Join(strings.Fields(norm.NFKC.String(strings.TrimSpace(title))), " ")
+	normalized = stripKnownSourceTitleExtension(normalized)
+	if conventional := conventionalCommitPattern.FindStringSubmatch(normalized); conventional != nil {
+		normalized = strings.TrimSpace(conventional[2])
+		normalized = stripKnownSourceTitleExtension(normalized)
+	}
+	var characters []rune
+	for _, character := range normalized {
+		unsafe := strings.ContainsRune(PortableForbidden, character) ||
+			unicode.Is(unicode.Cc, character) || unicode.Is(unicode.Cf, character)
+		replacement := character
+		if unsafe {
+			replacement = '-'
+		}
+		if replacement == '-' && len(characters) > 0 && characters[len(characters)-1] == '-' {
+			continue
+		}
+		characters = append(characters, replacement)
+	}
+	cleaned := removeUnbalancedBracketSuffix(strings.Trim(strings.TrimSpace(string(characters)), " .-"))
+	if cleaned == "" {
+		return fmt.Sprintf("主题-%s", Digest(title)[:12]), nil
+	}
+	candidate, err := truncateSemanticContextSegment(cleaned, "")
+	if err != nil {
+		return "", err
+	}
+	if PortableContextSegmentIsSafe(candidate) {
+		return candidate, nil
+	}
+	return fmt.Sprintf("主题-%s", Digest(title)[:12]), nil
+}
+
+// semanticTopicMatchesTitle 描述页标题与主题匹配。
+// Python: context_pipeline.py:7107 _semantic_topic_matches_title
+func semanticTopicMatchesTitle(description string, title string) bool {
+	if pipelinePathIsLinkOrReparse(description) || !pipelinePathIsFile(description) {
+		return false
+	}
+	raw, err := os.ReadFile(extendedPath(description))
+	if err != nil {
+		return false
+	}
+	existingTitle := markdownHeading(string(raw), "")
+	return strings.ToLower(normalizedBalancedTopicTitle(existingTitle)) ==
+		strings.ToLower(normalizedBalancedTopicTitle(title))
+}
+
+// normalizedBalancedTopicTitle 主题标题归一。
+// Python: context_pipeline.py:7103 _normalized_balanced_topic_title
+func normalizedBalancedTopicTitle(title string) string {
+	return strings.ToLower(strings.Join(strings.Fields(norm.NFKC.String(markdownLabel(title))), " "))
+}
+
+// markdownLinkTarget 本地 Markdown 目标渲染（空格/括号加尖括号）。
+// Python: context_pipeline.py:7155 _markdown_link_target
+func markdownLinkTarget(relative string) string {
+	for _, character := range relative {
+		if unicode.IsSpace(character) || character == '(' || character == ')' {
+			return "<" + relative + ">"
+		}
+	}
+	return relative
+}
+
+// markdownDestination 解析行内 Markdown 目的地（剥片段与标题）。
+// Python: context_pipeline.py:7166 _markdown_destination
+func markdownDestination(rawTarget string) string {
+	target := strings.TrimSpace(rawTarget)
+	if target == "" || strings.HasPrefix(target, "#") {
+		return ""
+	}
+	var destination string
+	if strings.HasPrefix(target, "<") {
+		match := regexp.MustCompile(`<([^<>]+)>(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?$`).FindStringSubmatch(target)
+		if match == nil {
+			return ""
+		}
+		destination = match[1]
+	} else {
+		match := regexp.MustCompile(`(\S+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?$`).FindStringSubmatch(target)
+		if match == nil {
+			return ""
+		}
+		destination = match[1]
+	}
+	destination = regexp.MustCompile("[?#]").Split(destination, 2)[0]
+	return strings.TrimSpace(destination)
+}
+
+// semanticNameMaxChars 语义名上限（pathSafety 常量别名）。
+// Python: context_pipeline.py:44 import SEMANTIC_NAME_MAX_CHARS
+const semanticNameMaxChars = SemanticNameMaxChars
+
+// semanticEquivalentChildren NFC 大小写等价兄弟目录。
+// Python: context_pipeline.py:1962 _semantic_equivalent_children
+func semanticEquivalentChildren(parent string, name string) ([]string, error) {
+	if !pipelinePathExists(parent) {
+		return nil, nil
+	}
+	if pipelinePathIsLinkOrReparse(parent) || !pipelinePathIsDir(parent) {
+		return nil, pipelineError("semantic Context parent directory is invalid")
+	}
+	key := strings.ToLower(norm.NFC.String(name))
+	entries, err := os.ReadDir(extendedPath(parent))
+	if err != nil {
+		return nil, pipelineError("semantic Context directory siblings could not be inspected")
+	}
+	var matches []string
+	for _, entry := range entries {
+		if strings.ToLower(norm.NFC.String(entry.Name())) == key {
+			matches = append(matches, filepath.Join(parent, entry.Name()))
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		ni, nj := filepath.Base(matches[i]), filepath.Base(matches[j])
+		if strings.ToLower(ni) != strings.ToLower(nj) {
+			return strings.ToLower(ni) < strings.ToLower(nj)
+		}
+		return ni < nj
+	})
+	return matches, nil
+}
+
+// semanticDirectoryCandidate 冲突消解的目录候选。
+// Python: context_pipeline.py:1978 _semantic_directory_candidate
+func semanticDirectoryCandidate(parent string, title string, seed string) (string, error) {
+	base, err := safeSemanticName(title)
+	if err != nil {
+		return "", err
+	}
+	// Python seed[:N] 越界自动钳制；Go 显式钳制。
+	clampSeed := func(n int) string {
+		if n > len(seed) {
+			return seed
+		}
+		return seed[:n]
+	}
+	suffixes := []string{"", clampSeed(8), clampSeed(12), clampSeed(16)}
+	for _, suffix := range suffixes {
+		name := base
+		if suffix != "" {
+			name, err = truncateSemanticContextSegment(base, suffix)
+			if err != nil {
+				return "", err
+			}
+		}
+		candidate := filepath.Join(parent, name)
+		equivalent, eqErr := semanticEquivalentChildren(parent, name)
+		if eqErr != nil {
+			return "", eqErr
+		}
+		if len(equivalent) == 0 {
+			return candidate, nil
+		}
+		candidateIsAvailable := len(equivalent) == 1 && pipelinePathIsDir(equivalent[0]) &&
+			!pipelinePathIsLinkOrReparse(equivalent[0])
+		if candidateIsAvailable &&
+			semanticTopicMatchesTitle(filepath.Join(equivalent[0], "description.md"), title) {
+			return equivalent[0], nil
+		}
+	}
+	return "", pipelineError("semantic Context directory conflicts with an existing path")
 }
