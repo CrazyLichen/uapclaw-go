@@ -104,3 +104,36 @@ func TestUploadStore_Complete_hash比对(t *testing.T) {
 	}
 	_ = sum
 }
+// TestUploadStore_孤儿目录janitor 测试 D-30-5-R1（A 拍板）：无槽位引用且超龄的
+// upload 子目录被 CleanupExpired 清扫（已完成/断线遗留目录滞留问题）
+func TestUploadStore_孤儿目录janitor(t *testing.T) {
+	st := NewUploadStore(t.TempDir())
+	// 1) 完成后的目录（槽位已摘除）→ 超龄即清
+	slot, _ := st.InitUpload("kb-1", "a.txt", 1, "")
+	_ = os.WriteFile(slot.ResolvedPath, []byte("x"), 0o644)
+	if _, err := st.Complete(slot.UploadID); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	completedDir := filepath.Dir(slot.ResolvedPath)
+	// 目录 mtime 改老（超过 ttl）
+	old := time.Now().Add(-2 * uploadTTLDefault)
+	if err := os.Chtimes(completedDir, old, old); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	// 2) 在途槽位目录 → 不清扫
+	live, _ := st.InitUpload("kb-1", "b.txt", 1, "")
+	liveDir := filepath.Dir(live.ResolvedPath)
+	if err := os.Chtimes(liveDir, old, old); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	st.CleanupExpired()
+	if _, err := os.Stat(completedDir); !os.IsNotExist(err) {
+		t.Fatal("孤儿目录未被 janitor 清理")
+	}
+	if _, err := os.Stat(liveDir); err != nil {
+		t.Fatal("在途目录被误清扫")
+	}
+	if _, err := st.Get(live.UploadID); err != nil {
+		t.Fatal("在途槽位被误摘除")
+	}
+}

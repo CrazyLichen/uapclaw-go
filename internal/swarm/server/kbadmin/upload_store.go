@@ -166,6 +166,36 @@ func (s *UploadStore) CleanupExpired() {
 	for _, slot := range expired {
 		_ = os.RemoveAll(filepath.Dir(slot.ResolvedPath))
 	}
+	s.cleanupOrphanDirs(now)
+}
+
+// cleanupOrphanDirs janitor（D-30-5-R1 A 拍板）：清扫「无槽位引用且 mtime 超龄」的
+// upload 子目录——已完成/断线遗留目录滞留 kb_uploads 的问题；在途槽位目录跳过。
+func (s *UploadStore) cleanupOrphanDirs(now time.Time) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	live := make(map[string]struct{}, len(s.slots))
+	for _, slot := range s.slots {
+		live[filepath.Dir(slot.ResolvedPath)] = struct{}{}
+	}
+	s.mu.Unlock()
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := filepath.Join(s.root, entry.Name())
+		if _, used := live[dir]; used {
+			continue
+		}
+		fi, err := entry.Info()
+		if err != nil || now.Sub(fi.ModTime()) <= s.ttl {
+			continue
+		}
+		_ = os.RemoveAll(dir)
+	}
 }
 
 // FileSha256 单文件 sha256（十六进制小写；集成测试与收尾比对同口径）
