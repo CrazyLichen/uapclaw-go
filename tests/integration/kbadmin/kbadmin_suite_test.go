@@ -110,10 +110,10 @@ func (s *KBAdminSuite) TestCreateListGetUpdateDelete_全链() {
 // TestNotImplemented_全族 测试未实现方法经 E2A 分发返回 KB_NOT_IMPLEMENTED。
 func (s *KBAdminSuite) TestNotImplemented_全族() {
 	methods := []string{
-		"kb.doc.list", "kb.chunk.list", "kb.chunk.update",
-		"kb.chunker.preview", "kb.search.test", "kb.task.progress",
-		"kb.task.subscribe", "kb.kb.pin", "kb.kb.statistics",
+		"kb.chunk.list", "kb.chunk.update",
+		"kb.chunker.preview", "kb.search.test", "kb.kb.pin", "kb.kb.statistics",
 	}
+	// 30.2 已摘除：kb.doc.list/get/reparse/cancel_parse、kb.task.progress/subscribe
 	for _, method := range methods {
 		rid := s.env.Send(method, map[string]any{}, "", false)
 		resp := s.env.AwaitUnary(rid)
