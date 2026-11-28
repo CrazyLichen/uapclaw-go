@@ -12,6 +12,7 @@
 //
 //	chunker/
 //	├── doc.go               # 包文档
+//	├── source_loc.go       # source_locators 区间索引映射（30.3，WeKnora sourceloc 同构）
 //	├── base.go              # Chunker 接口 + DimsProvider + BaseChunker 默认适配器 + 构造校验
 //	├── registry.go          # 分块器注册表 + GetChunker/RegisterChunker + hybridFactory
 //	├── text_splitter.go     # TextSplitter 接口 + CharSplitter + Tokenizer 三态接口
