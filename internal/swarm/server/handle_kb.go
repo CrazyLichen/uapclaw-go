@@ -8,6 +8,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -21,6 +23,9 @@ var (
 	kbDomainInstance *kbadmin.Domain
 	kbWiringMu       sync.Mutex
 	kbWiringErr      error
+	// kbPushWired 推送桥进程级一次性接线标记
+	kbPushWired   bool
+	kbPushWiredMu sync.Mutex
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -34,8 +39,26 @@ func (s *AgentServer) HandleKBRequest(_ context.Context, request *schema.AgentRe
 		s.writeResponse(request.RequestID, request.ChannelID, kbadmin.BootstrapErrorResponse(request))
 		return
 	}
+	s.wireKBPushOnce(domain)
 	s.writeResponse(request.RequestID, request.ChannelID,
 		kbadmin.HandleKBRequest(domain, request))
+}
+
+// wireKBPushOnce 30.2 kb.task 推送桥（进程一次）：kbadmin 事件 → AgentServer
+// writeResponse 主动推送（响应帧 payload 携带 kb_task_event；requestID 走新生成
+// UUID——推送无对应请求上下文，前端按 payload 语义消费，30.8 接入）
+func (s *AgentServer) wireKBPushOnce(domain *kbadmin.Domain) {
+	kbPushWiredMu.Lock()
+	defer kbPushWiredMu.Unlock()
+	if kbPushWired {
+		return
+	}
+	kbPushWired = true
+	domain.SetPushFunc(func(channelID string, event kbadmin.TaskEvent) {
+		resp := schema.NewAgentResponse(uuid.NewString(), channelID,
+			schema.WithPayload(map[string]any{"kb_task_event": event}))
+		s.writeResponse("", channelID, resp)
+	})
 }
 
 // getKBDomain 懒装配 kb_admin 域（真实 SQLite + 真实 Chroma 本地向量库；
