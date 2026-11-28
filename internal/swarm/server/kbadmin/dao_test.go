@@ -113,3 +113,15 @@ func TestTaskDAO_CRUD(t *testing.T) {
 	_, err = dao.Get("t2")
 	require.ErrorIs(t, err, ErrTaskNotFound)
 }
+
+// TestStoreAccessors 测试 Store 四个 DAO 访问器可用
+func TestStoreAccessors(t *testing.T) {
+	st := newTestStore(t)
+	require.NotNil(t, st.Doc())
+	require.NotNil(t, st.Chunk())
+	require.NotNil(t, st.Task())
+	require.NoError(t, st.Doc().Create(&KBDoc{ID: "d9", KBID: "kb9", FileName: "x", CreatedAt: 1, UpdatedAt: 1}))
+	got, err := st.Doc().Get("d9")
+	require.NoError(t, err)
+	require.Equal(t, "x", got.FileName)
+}

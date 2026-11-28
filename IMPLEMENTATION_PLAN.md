@@ -1542,7 +1542,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 步骤 | 状态 | 内容 | 产出 | 参考 |
 |------|------|------|------|------|
-| 30.1 | ☐ | **地基：kb_admin 域 + 数据模型**：`kb_info/kb_doc/kb_chunk_meta/kb_chunk_revision/kb_task` 五表 DAO（GORM 结构体映射）、KBService/DocService/ChunkService/SearchService 骨架、E2A 方法注册（kb.* 方法族白名单） | `internal/swarm/server/kbadmin/`（或归置对齐既有 server 结构） | 方案 §2 §3 |
+| 30.1 | ✅ | **地基：kb_admin 域 + 数据模型**：`kb_info/kb_doc/kb_chunk_meta/kb_chunk_revision/kb_task` 五表 DAO（GORM 结构体映射）、KBService/DocService/ChunkService/SearchService 骨架、E2A 方法注册（kb.* 方法族白名单） | `internal/swarm/server/kbadmin/`（或归置对齐既有 server 结构） | 方案 §2 §3 |
 | 30.2 | ☐ | **解析任务链**：goroutine worker 池 + 状态机（pending→processing[stages: parsing/chunking/embedding/extracting]→completed/failed/cancelled）+ 活动追踪（last_activity_at/stall_state）+ cancel/reparse + 重启孤儿任务恢复 | 同上 `worker*.go` | 方案 §4 |
 | 30.3 | ☐ | **source_locators 全量**：pdf 页码+bbox 坐标提取链、docx 段落号、字符区间；`retrieval` 包 parser/chunker 侧扩展（**唯一侵入点**，单独提交登记偏差）；chunk locators_json 落 DAO | `core/retrieval/indexing/processor/` | 方案 §8 |
 | 30.4 | ☐ | **CSV 解析 + AI 增强**：CSV parser 补齐；LLM 二阶段（摘要/标签/enhance_state 独立标记）+ 生成问题（GeneratedQuestion）生成链 | 同上 | 方案 §9 |
