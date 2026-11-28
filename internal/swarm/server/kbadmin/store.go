@@ -25,12 +25,14 @@ func AllModels() []any {
 	return []any{&KBInfo{}, &KBDoc{}, &KBChunkMeta{}, &KBChunkRevision{}, &KBTask{}}
 }
 
-// OpenStore 打开（或创建）kbadmin SQLite 存储并自动迁移五表
+// OpenStore 打开（或创建）kbadmin SQLite 存储并自动迁移五表。
+// busy_timeout + WAL：worker 池并发写 + 多连接读写下，默认 journal 下锁竞争
+// 会以 "database is locked" 冒泡为业务错误（实测 30.2 集成链路 flaky 根因）
 func OpenStore(dbPath string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建 kbadmin 数据目录失败: %w", err)
 	}
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open("file:"+dbPath+"?_busy_timeout=5000&_journal_mode=WAL"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
