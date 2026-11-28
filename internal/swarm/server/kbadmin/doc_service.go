@@ -85,6 +85,73 @@ func (s *DocService) SubmitParseTask(kbID, fileName, finalPath string, size int6
 	return task, doc, nil
 }
 
+// Reparse 重解析：failed/cancelled/completed 文档建新任务行（旧行保留作历史，spec §3）
+func (s *DocService) Reparse(docID string) (*KBTask, error) {
+	doc, err := s.store.Doc().Get(docID)
+	if err != nil {
+		return nil, ErrDocNotFound
+	}
+	if doc.ParseStatus == "pending" || doc.ParseStatus == "processing" {
+		return nil, ErrDocParseActive
+	}
+	now := time.Now().Unix()
+	doc.ParseStatus = "pending"
+	doc.RetryCount++
+	doc.ErrorMsg = ""
+	doc.StallState = "normal"
+	doc.UpdatedAt = now
+	if err := s.store.Doc().Update(doc); err != nil {
+		return nil, err
+	}
+	task := &KBTask{ID: uuid.NewString(), DocID: doc.ID, KBID: doc.KBID,
+		Status: "pending", CreatedAt: now}
+	if err := s.store.Task().Create(task); err != nil {
+		return nil, err
+	}
+	if s.enqueue != nil {
+		s.enqueue(task.ID)
+	}
+	return task, nil
+}
+
+// CancelParse 取消解析：worker 在途走 ctx 取消（收尾落 cancelled 终态）；
+// 否则 DAO 直接标 cancelled（pending 任务无执行体）
+func (s *DocService) CancelParse(taskID string) error {
+	task, err := s.store.Task().Get(taskID)
+	if err != nil {
+		return ErrTaskNotFound
+	}
+	if task.Status == "pending" || task.Status == "processing" {
+		if s.cancelFn != nil && s.cancelFn(taskID) {
+			return nil // worker 收尾统一落终态（含推送）
+		}
+		task.Status = "cancelled"
+		task.CancelReason = "user_cancel"
+		task.FinishedAt = time.Now().Unix()
+		if err := s.store.Task().Update(task); err != nil {
+			return err
+		}
+		doc, derr := s.store.Doc().Get(task.DocID)
+		if derr == nil {
+			doc.ParseStatus = "cancelled"
+			doc.UpdatedAt = time.Now().Unix()
+			_ = s.store.Doc().Update(doc)
+		}
+	}
+	return nil
+}
+
+// List 文档列表（kb.doc.list；status 非空走状态过滤）
+func (s *DocService) List(kbID, status string) ([]KBDoc, error) {
+	if status != "" {
+		return s.store.Doc().ListByKBAndStatus(kbID, status)
+	}
+	return s.store.Doc().ListByKB(kbID)
+}
+
+// Get 文档详情（kb.doc.get）
+func (s *DocService) Get(docID string) (*KBDoc, error) { return s.store.Doc().Get(docID) }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // mustJSONString map→JSON 字符串（失败返回 "{}"，仅元数据展示字段）
