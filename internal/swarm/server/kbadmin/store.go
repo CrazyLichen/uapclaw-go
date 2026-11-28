@@ -40,6 +40,18 @@ func OpenStore(dbPath string) (*Store, error) {
 // DB 返回 GORM 句柄（DAO 使用）
 func (s *Store) DB() *gorm.DB { return s.db }
 
+// KB 返回 kb_info DAO
+func (s *Store) KB() *KBDAO { return NewKBDAO(s.db) }
+
+// Doc 返回 kb_doc DAO
+func (s *Store) Doc() *DocDAO { return NewDocDAO(s.db) }
+
+// Chunk 返回分块 DAO
+func (s *Store) Chunk() *ChunkDAO { return NewChunkDAO(s.db) }
+
+// Task 返回 kb_task DAO
+func (s *Store) Task() *TaskDAO { return NewTaskDAO(s.db) }
+
 // Close 关闭底层连接
 func (s *Store) Close() error {
 	sqlDB, err := s.db.DB()
