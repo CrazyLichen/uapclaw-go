@@ -60,9 +60,10 @@ func (s *ProgressSink) OnStageStart(job *ParseJob, stage string) {
 	s.emit(TaskEvent{TaskID: job.TaskID, DocID: job.DocID, KBID: job.KBID, Stage: stage, Phase: "started"})
 }
 
-// OnStageEnd 阶段成功结束
+// OnStageEnd 阶段成功结束：刷新 kb_task.progress 与 stage_desc
 func (s *ProgressSink) OnStageEnd(job *ParseJob, stage string) {
 	s.touchStage(job, stage, func(st *stageRecord) { st.FinishedAt = time.Now().Unix() })
+	s.touchTaskProgress(job, stage)
 	s.emit(TaskEvent{TaskID: job.TaskID, DocID: job.DocID, KBID: job.KBID, Stage: stage, Phase: "finished"})
 }
 
@@ -100,6 +101,14 @@ func (s *ProgressSink) ScanStalled(threshold time.Duration) {
 	}
 }
 
+// stageProgressWeights 阶段→进度权重（kb_task.progress 0-100）
+var stageProgressWeights = map[string]int{
+	"parsing":   25,
+	"chunking":  50,
+	"embedding": 75,
+	"triple":    90,
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // emit 发布事件（publisher 为 nil 时跳过）
@@ -107,6 +116,23 @@ func (s *ProgressSink) emit(e TaskEvent) {
 	e.Timestamp = time.Now().Unix()
 	if s.publisher != nil {
 		s.publisher(e)
+	}
+}
+
+// touchTaskProgress 按阶段推进 kb_task.progress（阶段权重表；未知阶段不更新）
+func (s *ProgressSink) touchTaskProgress(job *ParseJob, stage string) {
+	weight, ok := stageProgressWeights[stage]
+	if !ok {
+		return
+	}
+	task, err := s.store.Task().Get(job.TaskID)
+	if err != nil {
+		return
+	}
+	if weight > task.Progress {
+		task.Progress = weight
+		task.StageDesc = stage
+		_ = s.store.Task().Update(task)
 	}
 }
 

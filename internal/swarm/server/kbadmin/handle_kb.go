@@ -7,6 +7,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -27,18 +28,30 @@ const ErrCodeKBInternal = "KB_INTERNAL"
 // ErrCodeKBInvalidParams 参数解析失败
 const ErrCodeKBInvalidParams = "KB_CONFIG_INVALID"
 
+// stallScanThreshold 停滞扫描阈值（spec §3：仅标记不自动取消）
+const stallScanThreshold = 10 * time.Minute
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Domain kb_admin 域聚合（server 侧单点注入）
 type Domain struct {
 	// KB 知识库 CRUD 编排
 	KB *KBService
-	// Doc 文档管理编排（30.5/30.2 回填）
+	// Doc 文档管理编排（30.2 真实现：解析任务/重解析/取消/列表）
 	Doc *DocService
 	// Chunk 分块管理编排（30.6 回填）
 	Chunk *ChunkService
 	// Search 检索测试编排（30.6 回填）
 	Search *SearchService
+	// Worker 解析执行器（30.2）
+	Worker *ParseWorker
+	// Sink 进度观察者（kb.task 推送源）
+	Sink *ProgressSink
+	// subscribers kb.task.subscribe 注册表（channelID → 订阅中）
+	subMu       sync.Mutex
+	subscribers map[string]struct{}
+	// push 推送函数（server 侧注入：事件 → WS 帧写出）
+	push func(channelID string, event TaskEvent)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -50,10 +63,11 @@ func NewDomain(store *Store, kbFactory *RetrievalKBFactory) (*Domain, error) {
 		return nil, err
 	}
 	d := &Domain{
-		KB:     kbSvc,
-		Doc:    NewDocService(store),
-		Chunk:  NewChunkService(store),
-		Search: NewSearchService(store),
+		KB:          kbSvc,
+		Doc:         NewDocService(store),
+		Chunk:       NewChunkService(store),
+		Search:      NewSearchService(store),
+		subscribers: make(map[string]struct{}),
 	}
 	// 30.5 上传槽位表：落盘根目录置于 WorkspaceDir()/kb_uploads（既有
 	// isPathWithinUserDirs 边界内，file.upload_chunk 复用协议可直接写）；
@@ -67,7 +81,43 @@ func NewDomain(store *Store, kbFactory *RetrievalKBFactory) (*Domain, error) {
 			uploads.CleanupExpired()
 		}
 	}()
+	// 30.2 解析任务链装配：worker 池 + 进度观察者 + 任务提交/取消接线 +
+	// 停滞扫描周期任务（spec §2）
+	d.Sink = NewProgressSink(store, d.fanoutTaskEvent)
+	d.Worker = NewParseWorker(store, kbFactory, 2)
+	d.Worker.SetSink(d.Sink)
+	d.Doc.SetEnqueue(d.Worker.Enqueue)
+	d.Doc.SetCancelFn(d.Worker.CancelTask)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			d.Sink.ScanStalled(stallScanThreshold)
+		}
+	}()
+	d.Worker.Start()
 	return d, nil
+}
+
+// Stop 停机（测试与优雅退出用）
+func (d *Domain) Stop() { d.Worker.Stop() }
+
+// SetPushFunc 注入推送函数（server 侧接线：事件 → WS 帧写出）
+func (d *Domain) SetPushFunc(fn func(channelID string, event TaskEvent)) { d.push = fn }
+
+// fanoutTaskEvent 事件扇出：逐订阅 channel 经 push 发出（无订阅即丢弃）
+func (d *Domain) fanoutTaskEvent(event TaskEvent) {
+	d.subMu.Lock()
+	targets := make([]string, 0, len(d.subscribers))
+	for ch := range d.subscribers {
+		targets = append(targets, ch)
+	}
+	d.subMu.Unlock()
+	for _, ch := range targets {
+		if d.push != nil {
+			d.push(ch, event)
+		}
+	}
 }
 
 // IsKBMethod 判定是否 kb.* 方法族
@@ -201,23 +251,94 @@ func HandleKBRequest(domain *Domain, request *schema.AgentRequest) *schema.Agent
 			"offset":      p.Offset,
 			"eof":         eof,
 		})
-	// 其余方法族：30.1 只注册不实现（spec D-30-1-2，30.2-30.6 各批摘除；
-	// 30.5 已摘除 kb.doc.upload/kb.doc.download 并新增 upload_complete/cancel_upload）
+	// ── 文档管理面（30.2 摘除）──
+	case schema.ReqMethodKBDocList:
+		var p struct {
+			KBID   string `json:"kb_id"`
+			Status string `json:"status"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		docs, err := domain.Doc.List(p.KBID, p.Status)
+		if err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInternal)
+		}
+		return okResponse(request, map[string]any{"docs": mustJSONAny(docs)})
+	case schema.ReqMethodKBDocGet:
+		var p struct {
+			ID string `json:"id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		doc, err := domain.Doc.Get(p.ID)
+		if err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBNotFound)
+		}
+		return okResponse(request, map[string]any{"doc": mustJSONValue(doc)})
+	case schema.ReqMethodKBDocReparse:
+		var p struct {
+			DocID string `json:"doc_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		task, err := domain.Doc.Reparse(p.DocID)
+		if err != nil {
+			return errorResponse(request, err.Error(), docErrCode(err))
+		}
+		return okResponse(request, map[string]any{"task": mustJSONValue(task)})
+	case schema.ReqMethodKBDocCancelParse:
+		var p struct {
+			TaskID string `json:"task_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		if err := domain.Doc.CancelParse(p.TaskID); err != nil {
+			return errorResponse(request, err.Error(), docErrCode(err))
+		}
+		return okResponse(request, map[string]any{"cancelled": true})
+	// ── 解析任务通信面（30.2 全量：spec §5）──
+	case schema.ReqMethodKBTaskProgress:
+		var p struct {
+			TaskIDs []string `json:"task_ids"`
+			KBID    string   `json:"kb_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		tasks, err := domain.TaskProgress(p.TaskIDs, p.KBID)
+		if err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInternal)
+		}
+		return okResponse(request, map[string]any{"tasks": mustJSONAny(tasks)})
+	case schema.ReqMethodKBTaskSubscribe:
+		var p struct {
+			ChannelID string `json:"channel_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		domain.subscribeChannel(p.ChannelID)
+		return okResponse(request, map[string]any{"subscribed": true})
+	// 其余方法族：30.1 只注册不实现（spec D-30-1-2，30.6 各批摘除；
+	// 30.2 已摘除 kb.doc.list/get/reparse/cancel_parse 与 kb.task.progress/subscribe）
 	case schema.ReqMethodKBKBPin, schema.ReqMethodKBKBMove,
 		schema.ReqMethodKBKBSetConfig, schema.ReqMethodKBKBStatistics,
 		schema.ReqMethodKBKBGenerateProfile,
 		schema.ReqMethodKBDocImportURL, schema.ReqMethodKBDocImportManual,
-		schema.ReqMethodKBDocList, schema.ReqMethodKBDocGet, schema.ReqMethodKBDocUpdate,
+		schema.ReqMethodKBDocUpdate,
 		schema.ReqMethodKBDocDelete, schema.ReqMethodKBDocBatchDelete,
-		schema.ReqMethodKBDocReparse, schema.ReqMethodKBDocBatchReparse,
-		schema.ReqMethodKBDocCancelParse, schema.ReqMethodKBDocRegenerateSummary,
+		schema.ReqMethodKBDocBatchReparse,
+		schema.ReqMethodKBDocRegenerateSummary,
 		schema.ReqMethodKBDocPreview,
 		schema.ReqMethodKBChunkList, schema.ReqMethodKBChunkUpdate,
 		schema.ReqMethodKBChunkRevisions, schema.ReqMethodKBChunkRevert,
 		schema.ReqMethodKBChunkDelete, schema.ReqMethodKBChunkGenerateQuestions,
 		schema.ReqMethodKBChunkListQuestions, schema.ReqMethodKBChunkerPreview,
-		schema.ReqMethodKBSearchTest, schema.ReqMethodKBTaskProgress,
-		schema.ReqMethodKBTaskSubscribe:
+		schema.ReqMethodKBSearchTest:
 		return notImplemented()
 	default:
 		return errorResponse(request, "未知的 kb 方法", ErrCodeKBInternal)
@@ -237,6 +358,20 @@ func uploadErrCode(err error) string {
 		return "KB_UPLOAD_NOT_FOUND"
 	case errors.Is(err, ErrHashMismatch):
 		return "UPLOAD_HASH_MISMATCH"
+	default:
+		return ErrCodeKBInternal
+	}
+}
+
+// docErrCode 文档/解析链错误哨兵 → 错误码（spec §5 错误码族）
+func docErrCode(err error) string {
+	switch {
+	case errors.Is(err, ErrDocNotFound), errors.Is(err, ErrTaskNotFound):
+		return ErrCodeKBNotFound
+	case errors.Is(err, ErrDocDuplicate):
+		return "DOC_DUPLICATE"
+	case errors.Is(err, ErrDocParseActive):
+		return "TASK_ACTIVE"
 	default:
 		return ErrCodeKBInternal
 	}

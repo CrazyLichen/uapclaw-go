@@ -85,32 +85,89 @@ func TestHandleKBRequest_未实现方法(t *testing.T) {
 	require.Equal(t, ErrCodeKBNotImplemented, resp.Payload["error_code"])
 }
 
-// TestHandleKBRequest_未实现全族覆盖 测试 30.1 未实现方法逐一返回 KB_NOT_IMPLEMENTED
+// TestHandleKBRequest_未实现全族覆盖 测试剩余未实现方法逐一返回 KB_NOT_IMPLEMENTED
+// （30.2 已摘除：kb.doc.list/get/reparse/cancel_parse、kb.task.progress/subscribe）
 func TestHandleKBRequest_未实现全族覆盖(t *testing.T) {
 	d := newTestDomain(t)
+	t.Cleanup(d.Stop)
 	methods := []schema.ReqMethod{
 		schema.ReqMethodKBKBPin, schema.ReqMethodKBKBMove,
 		schema.ReqMethodKBKBSetConfig, schema.ReqMethodKBKBStatistics,
 		schema.ReqMethodKBKBGenerateProfile,
 		schema.ReqMethodKBDocImportURL,
-		schema.ReqMethodKBDocImportManual, schema.ReqMethodKBDocList,
-		schema.ReqMethodKBDocGet, schema.ReqMethodKBDocUpdate,
+		schema.ReqMethodKBDocImportManual, schema.ReqMethodKBDocUpdate,
 		schema.ReqMethodKBDocDelete, schema.ReqMethodKBDocBatchDelete,
-		schema.ReqMethodKBDocReparse, schema.ReqMethodKBDocBatchReparse,
-		schema.ReqMethodKBDocCancelParse, schema.ReqMethodKBDocRegenerateSummary,
+		schema.ReqMethodKBDocBatchReparse,
+		schema.ReqMethodKBDocRegenerateSummary,
 		schema.ReqMethodKBDocPreview,
 		schema.ReqMethodKBChunkList, schema.ReqMethodKBChunkUpdate,
 		schema.ReqMethodKBChunkRevisions, schema.ReqMethodKBChunkRevert,
 		schema.ReqMethodKBChunkDelete, schema.ReqMethodKBChunkGenerateQuestions,
 		schema.ReqMethodKBChunkListQuestions, schema.ReqMethodKBChunkerPreview,
-		schema.ReqMethodKBSearchTest, schema.ReqMethodKBTaskProgress,
-		schema.ReqMethodKBTaskSubscribe,
+		schema.ReqMethodKBSearchTest,
 	}
 	for _, m := range methods {
 		resp := HandleKBRequest(d, &schema.AgentRequest{RequestID: "r", ReqMethod: m, Params: []byte(`{}`)})
 		require.False(t, resp.OK, "method %s 应未实现", m)
 		require.Equal(t, ErrCodeKBNotImplemented, resp.Payload["error_code"], "method %s", m)
 	}
+}
+
+// TestHandleKBRequest_DocListGet 文档列表与详情
+func TestHandleKBRequest_DocListGet(t *testing.T) {
+	d := newTestDomain(t)
+	t.Cleanup(d.Stop)
+	_ = d.KB.store.KB().Create(&KBInfo{ID: "kb-1", Name: "n", Type: "document", CreatedAt: 1, UpdatedAt: 1})
+	_ = d.KB.store.Doc().Create(&KBDoc{ID: "d1", KBID: "kb-1", FileName: "a.txt", ParseStatus: "completed", CreatedAt: 1, UpdatedAt: 1})
+	resp := HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBDocList, Params: []byte(`{"kb_id":"kb-1"}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+	resp = HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBDocGet, Params: []byte(`{"id":"d1"}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+	resp = HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBDocGet, Params: []byte(`{"id":"nope"}`)})
+	require.False(t, resp.OK)
+	require.Equal(t, ErrCodeKBNotFound, resp.Payload["error_code"])
+}
+
+// TestHandleKBRequest_ReparseCancelParse 重解析与取消分发
+func TestHandleKBRequest_ReparseCancelParse(t *testing.T) {
+	d := newTestDomain(t)
+	t.Cleanup(d.Stop)
+	_ = d.KB.store.KB().Create(&KBInfo{ID: "kb-1", Name: "n", Type: "document", CreatedAt: 1, UpdatedAt: 1})
+	_ = d.KB.store.Doc().Create(&KBDoc{ID: "d1", KBID: "kb-1", FileName: "a.txt", ParseStatus: "failed", CreatedAt: 1, UpdatedAt: 1})
+	resp := HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBDocReparse, Params: []byte(`{"doc_id":"d1"}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+	// 处理中的任务可取消（无 worker 注册取消 → DAO 直接标 cancelled）
+	_ = d.KB.store.Task().Create(&KBTask{ID: "t1", DocID: "d1", KBID: "kb-1", Status: "pending", CreatedAt: 1})
+	resp = HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBDocCancelParse, Params: []byte(`{"task_id":"t1"}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+}
+
+// TestHandleKBRequest_TaskProgressSubscribe kb.task.progress 全量对齐 + subscribe 注册
+func TestHandleKBRequest_TaskProgressSubscribe(t *testing.T) {
+	d := newTestDomain(t)
+	t.Cleanup(d.Stop)
+	_ = d.KB.store.Task().Create(&KBTask{ID: "t1", DocID: "d1", KBID: "kb-1",
+		Status: "completed", Progress: 100, CreatedAt: 1, FinishedAt: 2})
+	resp := HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBTaskProgress, Params: []byte(`{"task_ids":["t1"]}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+	resp = HandleKBRequest(d, &schema.AgentRequest{RequestID: "r",
+		ReqMethod: schema.ReqMethodKBTaskSubscribe, Params: []byte(`{"channel_id":"ch-1"}`)})
+	require.True(t, resp.OK, "%v", resp.Payload)
+	// 订阅后事件扇出经注入的 push 函数可达
+	var got []TaskEvent
+	d.SetPushFunc(func(channelID string, e TaskEvent) {
+		require.Equal(t, "ch-1", channelID)
+		got = append(got, e)
+	})
+	d.Sink.EmitStatus(&ParseJob{TaskID: "t1", DocID: "d1", KBID: "kb-1"}, "completed", "")
+	require.Len(t, got, 1)
+	require.Equal(t, "t1", got[0].TaskID)
 }
 
 // TestHandleKBRequest_未知方法 测试分发 default 分支
