@@ -1,6 +1,7 @@
 package kbadmin
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,6 +39,21 @@ func TestUploadStore_超限拒绝(t *testing.T) {
 	st := NewUploadStore(t.TempDir())
 	if _, err := st.InitUpload("kb-1", "big.bin", MaxFileBytes+1, "x"); err != ErrFileTooLarge {
 		t.Fatalf("期望 ErrFileTooLarge, got %v", err)
+	}
+}
+
+// TestUploadStore_按传入上限判定 D-30-5-1：编排层传 KB config 上限
+func TestUploadStore_按传入上限判定(t *testing.T) {
+	st := NewUploadStore(t.TempDir())
+	if _, err := st.InitUpload("kb-1", "a.txt", 2*1024*1024, "h", 1*1024*1024); !errors.Is(err, ErrFileTooLarge) {
+		t.Fatalf("1MB 上限应拒 2MB 文件, got %v", err)
+	}
+	if _, err := st.InitUpload("kb-1", "a.txt", 2*1024*1024, "h", 10*1024*1024); err != nil {
+		t.Fatalf("10MB 上限应放行, got %v", err)
+	}
+	// 非法上限（<=0）回退默认
+	if _, err := st.InitUpload("kb-1", "a.txt", MaxFileBytes, "h", 0); err != nil {
+		t.Fatalf("0 上限应回退默认放行, got %v", err)
 	}
 }
 

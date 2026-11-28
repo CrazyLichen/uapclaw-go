@@ -25,10 +25,14 @@ func (s *DocService) SetUploadStore(ups *UploadStore) { s.uploads = ups }
 // InitUpload kb.doc.upload 编排：校验 KB 存在 → 登记槽位并认领去重落盘路径。
 // Python 对应物：无（30.5 新增；数据面分帧复用 27.8 file.upload_chunk 协议语义）。
 func (s *DocService) InitUpload(kbID, fileName string, totalSize int64, expectedHash string) (*UploadSlot, error) {
-	if _, err := s.store.KB().Get(kbID); err != nil {
+	kb, err := s.store.KB().Get(kbID)
+	if err != nil {
 		return nil, ErrKBNotFound
 	}
-	return s.uploads.InitUpload(kbID, fileName, totalSize, expectedHash)
+	// D-30-5-1 收口：上限按 KB config 可调（无配置回退固定 50MiB）
+	cfg := ParseKBConfig(kb.ConfigJSON)
+	return s.uploads.InitUpload(kbID, fileName, totalSize, expectedHash,
+		int64(cfg.MaxFileMB)*1024*1024)
 }
 
 // CompleteUpload kb.file.upload_complete 编排：sha256 复算一致后返回文件标识。

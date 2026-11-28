@@ -68,9 +68,15 @@ func NewUploadStore(root string) *UploadStore {
 	}
 }
 
-// InitUpload 登记槽位：超限拒绝 → 建落盘目录 → 认领去重路径
-func (s *UploadStore) InitUpload(kbID, fileName string, totalSize int64, expectedHash string) (*UploadSlot, error) {
-	if totalSize > MaxFileBytes {
+// InitUpload 登记槽位：超限拒绝 → 建落盘目录 → 认领去重路径。
+// maxBytes 可选传入 KB config 上限（D-30-5-1：编排层读 config 后传入；
+// 缺省回退 MaxFileBytes 固定 50MiB）。
+func (s *UploadStore) InitUpload(kbID, fileName string, totalSize int64, expectedHash string, maxBytes ...int64) (*UploadSlot, error) {
+	limit := MaxFileBytes
+	if len(maxBytes) > 0 && maxBytes[0] > 0 {
+		limit = maxBytes[0]
+	}
+	if totalSize > limit {
 		return nil, ErrFileTooLarge
 	}
 	s.mu.Lock()
