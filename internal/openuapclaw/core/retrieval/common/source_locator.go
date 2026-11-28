@@ -40,6 +40,9 @@ type PageWord struct {
 	BBox BBox
 	// Line 词所属行号（gomupdf Word.Line，行级合并直接分组用）
 	Line int
+	// CharStart/CharEnd 词在全文中的字符区间（半开；parser 组装期计算）
+	CharStart int
+	CharEnd   int
 }
 
 // PageImage 页内展示图片：placement bbox + 提取字节

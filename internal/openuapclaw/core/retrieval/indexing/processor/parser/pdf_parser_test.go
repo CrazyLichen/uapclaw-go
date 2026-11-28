@@ -4,21 +4,22 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"image"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	pdf "github.com/ledongthuc/pdf"
+	"github.com/srijanmukherjee/gomupdf"
 
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 测试辅助：合成 PDF ────────────────────────────
 
 // tinyJPEGBytes 1x1 灰度 JPEG 真实字节（Go 标准库 jpeg.Encode 产物，
-// 作 DCTDecode XObject 数据——保证 image.DecodeConfig 可解码断言成立）。
+// 作 DCTDecode XObject 数据——保证可解码断言成立）。
 var tinyJPEGBytes = []byte{
 	255, 216, 255, 219, 0, 132, 0, 5, 3, 4, 4, 4, 3, 5, 4, 4, 4, 5, 5, 5,
 	6, 7, 12, 8, 7, 7, 7, 7, 15, 11, 11, 9, 12, 17, 15, 18, 18, 17, 15, 17,
@@ -27,7 +28,7 @@ var tinyJPEGBytes = []byte{
 	7, 14, 8, 8, 14, 30, 20, 17, 20, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
 	30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
 	30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
-	30, 30, 30, 30, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255, 196,
+	30, 30, 30, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255, 196,
 	0, 210, 0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3,
 	4, 5, 6, 7, 8, 9, 10, 11, 16, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0,
 	0, 1, 125, 1, 2, 3, 0, 4, 17, 5, 18, 33, 49, 65, 6, 19, 81, 97, 7, 34,
@@ -55,9 +56,8 @@ type pdfObject struct {
 // pages：每页一项（页文本）；imgOnPage：页号→是否嵌图（嵌入 DCTDecode XObject）。
 // 固定对象布局：1=Catalog 2=Pages 3=Font 4=Image XObject（仅需要时）
 // 5..=每页 Page 与 Contents。图片绘制走内容流 Do 操作符 + Resources XObject 声明。
-// 文本走裸 Td/Tj（不带 BT/ET）：ledongthuc 的 BT 操作符会注入前导 "\n"
-// （page.go showText("\n")），真实 PDF 渲染器无此行为；去掉 BT/ET 使
-// GetPlainText 输出即页面文本本身，断言无需容忍前导换行。
+// 30.3 基线更新：合成 PDF 为真实合法文档，gomupdf（MuPDF）同样可解析；
+// 文本断言由「逐字节相等」放宽为「词序拼接相等」（MuPDF 词框组装语义）。
 func buildPDF(pages []string, imgOnPage map[int]bool) []byte {
 	var objs []pdfObject
 
@@ -177,96 +177,71 @@ func writeTempPDF(t *testing.T, name string, pages []string, imgOnPage map[int]b
 	return path
 }
 
-// TestBuildPDF_合成合法性 fixture 自检：ledongthuc 与 pdfcpu 均可解析。
+// chdirTemp 切工作目录（images/ 落临时目录）。
+func chdirTemp(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+}
+
+// TestBuildPDF_合成合法性 fixture 自检：gomupdf（MuPDF）可解析。
 func TestBuildPDF_合成合法性(t *testing.T) {
-	pdfBytes := buildPDF([]string{"Hello PDF"}, map[int]bool{1: true})
+	pdfPath := writeTempPDF(t, "sanity.pdf", []string{"Hello PDF"}, map[int]bool{1: true})
 
-	// ledongthuc 文本侧
-	r, err := pdf.NewReader(bytes.NewReader(pdfBytes), int64(len(pdfBytes)))
+	doc, err := gomupdf.Open(pdfPath)
 	if err != nil {
-		t.Fatalf("ledongthuc 解析失败: %v", err)
+		t.Fatalf("gomupdf 解析失败: %v", err)
 	}
-	if r.NumPage() != 1 {
-		t.Fatalf("应为 1 页，实际 %d", r.NumPage())
+	defer doc.Close()
+	if doc.PageCount() != 1 {
+		t.Fatalf("应为 1 页，实际 %d", doc.PageCount())
 	}
-	fonts := make(map[string]*pdf.Font)
-	page := r.Page(1)
-	for _, name := range page.Fonts() {
-		f := page.Font(name)
-		fonts[name] = &f
-	}
-	text, err := page.GetPlainText(fonts)
+	page, err := doc.LoadPage(0)
 	if err != nil {
-		t.Fatalf("GetPlainText 失败: %v", err)
-	}
-	if !bytes.Contains([]byte(text), []byte("Hello PDF")) {
-		t.Errorf("文本应含 'Hello PDF'，实际 %q", text)
-	}
-
-	// pdfcpu 图片侧：图片通道分桶断言（TestExtractImagesByPage_* 覆盖，
-	// 此处仅保证 fixture 不被 pdfcpu 文档级拒绝——经图片用例间接验证）
-}
-
-// ──────────────────────────── extractImagesByPage 测试 ────────────────────────────
-
-// TestExtractImagesByPage_单页带图 单图分桶 + 落盘字节可解码。
-func TestExtractImagesByPage_单页带图(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
-
-	pdfBytes := buildPDF([]string{"page one"}, map[int]bool{1: true})
-	imgByPage := extractImagesByPage(t.Context(), pdfBytes, savedImageDir, "doc.pdf")
-
-	if len(imgByPage[1]) != 1 {
-		t.Fatalf("第 1 页应提取 1 张图，实际 %d", len(imgByPage[1]))
-	}
-	imgPath := imgByPage[1][0]
-	if filepath.Base(imgPath) != "doc.pdf__page_1__img_0.jpg" {
-		t.Errorf("落盘名应为 doc.pdf__page_1__img_0.jpg（原生扩展名），实际 %q", filepath.Base(imgPath))
-	}
-	// 字节可 image.Decode（解码后 JPEG）
-	data, err := os.ReadFile(imgPath)
+	text, err := page.ExtractText(gomupdf.TextOptions{})
 	if err != nil {
-		t.Fatalf("读落盘图失败: %v", err)
+		t.Fatalf("ExtractText 失败: %v", err)
 	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		t.Errorf("落盘字节应可解码，实际 err: %v", err)
-	}
-	if cfg.Width != 1 || cfg.Height != 1 {
-		t.Errorf("尺寸应为 1x1，实际 %dx%d", cfg.Width, cfg.Height)
+	if !strings.Contains(text, "Hello") || !strings.Contains(text, "PDF") {
+		t.Errorf("文本应含 'Hello'/'PDF'，实际 %q", text)
 	}
 }
 
-// TestExtractImagesByPage_多页分桶 页码归属正确。
-func TestExtractImagesByPage_多页分桶(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
+// ──────────────────────────── archivePageImage 测试 ────────────────────────────
+
+// TestArchivePageImage_命名与落盘 复刻旧命名 {filename}__page_{n}__img_{i}.{ext}。
+func TestArchivePageImage_命名与落盘(t *testing.T) {
+	chdirTemp(t)
+
+	img := common.PageImage{Data: tinyJPEGBytes, Ext: "jpeg"}
+	path, err := archivePageImage("doc.pdf", 1, 0, img)
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
-
-	pdfBytes := buildPDF([]string{"p1", "p2", "p3"}, map[int]bool{1: true, 3: true})
-	imgByPage := extractImagesByPage(t.Context(), pdfBytes, savedImageDir, "m.pdf")
-
-	if len(imgByPage[1]) != 1 || len(imgByPage[3]) != 1 {
-		t.Fatalf("页 1/3 各应 1 图，实际 %d/%d", len(imgByPage[1]), len(imgByPage[3]))
+	if filepath.Base(path) != "doc.pdf__page_1__img_0.jpeg" {
+		t.Errorf("落盘名不符，实际 %q", filepath.Base(path))
 	}
-	if len(imgByPage[2]) != 0 {
-		t.Errorf("页 2 无图，实际 %d", len(imgByPage[2]))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-// TestExtractImagesByPage_损坏输入软失败 非法字节返回空 map 不报错。
-func TestExtractImagesByPage_损坏输入软失败(t *testing.T) {
-	imgByPage := extractImagesByPage(t.Context(), []byte("not a pdf at all"), savedImageDir, "x.pdf")
-	if len(imgByPage) != 0 {
-		t.Errorf("损坏输入应返回空 map，实际 %v", imgByPage)
+	if !bytes.Equal(data, tinyJPEGBytes) {
+		t.Error("落盘字节应与原字节一致")
+	}
+	// 空扩展名回落 png
+	img2 := common.PageImage{Data: []byte{1}, Ext: ""}
+	path2, err := archivePageImage("doc.pdf", 1, 1, img2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(path2) != "doc.pdf__page_1__img_1.png" {
+		t.Errorf("空扩展名应回落 png，实际 %q", filepath.Base(path2))
 	}
 }
 
@@ -284,12 +259,7 @@ func newPDFParserOrFatal(t *testing.T) *PDFParser {
 
 // TestPDFParser_ParseContent_双通道 文本+图片 caption 拼接。
 func TestPDFParser_ParseContent_双通道(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	chdirTemp(t)
 
 	pdfPath := writeTempPDF(t, "doc.pdf", []string{"page one text", "page two text"}, map[int]bool{1: true})
 
@@ -304,25 +274,22 @@ func TestPDFParser_ParseContent_双通道(t *testing.T) {
 		t.Fatalf("ParseContent 不应报错: %v", err)
 	}
 
-	// 断言拼接顺序：页1文本 → caption → 页2文本（Python 同页+追加序语义）
+	// 断言拼接顺序：页1文本 → caption → 页2文本（Python 同页+追加序语义；
+	// MuPDF 词组装下页文本词空格 join，与单行 Tj 文本一致）
 	want := "page one text\nimage caption\npage two text"
 	if content != want {
 		t.Errorf("content 应为:\n%q\n实际:\n%q", want, content)
 	}
-	// 落盘验证
-	if _, err := os.Stat(filepath.Join("images", "doc.pdf__page_1__img_0.jpg")); err != nil {
-		t.Errorf("图片应落盘 images/doc.pdf__page_1__img_0.jpg: %v", err)
+	// 落盘验证（扩展名来自 gomupdf 原生格式识别）
+	matches, _ := filepath.Glob(filepath.Join("images", "doc.pdf__page_1__img_0.*"))
+	if len(matches) != 1 {
+		t.Errorf("图片应落盘 images/doc.pdf__page_1__img_0.*: %v", matches)
 	}
 }
 
 // TestPDFParser_ParseContent_禁用态 nil client 只出文本。
 func TestPDFParser_ParseContent_禁用态(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	chdirTemp(t)
 
 	pdfPath := writeTempPDF(t, "plain.pdf", []string{"only text"}, map[int]bool{1: true})
 
@@ -338,12 +305,7 @@ func TestPDFParser_ParseContent_禁用态(t *testing.T) {
 
 // TestPDFParser_ParseContent_空结果软失败 空白页返回空串。
 func TestPDFParser_ParseContent_空结果软失败(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	chdirTemp(t)
 
 	pdfPath := writeTempPDF(t, "blank.pdf", []string{""}, nil)
 
@@ -359,14 +321,9 @@ func TestPDFParser_ParseContent_空结果软失败(t *testing.T) {
 
 // TestPDFParser_ParseContent_损坏输入软失败 非 PDF 字节整体软失败。
 func TestPDFParser_ParseContent_损坏输入软失败(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	chdirTemp(t)
 
-	badPath := filepath.Join(dir, "bad.pdf")
+	badPath := filepath.Join(t.TempDir(), "bad.pdf")
 	if err := os.WriteFile(badPath, []byte("garbage bytes not pdf"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -381,14 +338,9 @@ func TestPDFParser_ParseContent_损坏输入软失败(t *testing.T) {
 	}
 }
 
-// TestPDFParser_Parse_模板集成 Parse 经 BaseParser 包装单文档。
+// TestPDFParser_Parse_模板集成 Parse 覆写包装单文档 + sidecar 注入。
 func TestPDFParser_Parse_模板集成(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	chdirTemp(t)
 
 	pdfPath := writeTempPDF(t, "integ.pdf", []string{"integ text"}, nil)
 
@@ -402,6 +354,96 @@ func TestPDFParser_Parse_模板集成(t *testing.T) {
 	}
 	if docs[0].ID != "pdf-doc-1" || docs[0].Text != "integ text" {
 		t.Errorf("Document 应透传 DocID 与文本，实际 ID=%q Text=%q", docs[0].ID, docs[0].Text)
+	}
+	// 30.3：sidecar 注入
+	raw, ok := docs[0].Metadata[common.MetaKeySourcePageMap]
+	if !ok {
+		t.Fatal("Metadata 应含 source_page_map sidecar")
+	}
+	maps, ok := raw.([]*common.PageMap)
+	if !ok || len(maps) != 1 {
+		t.Fatalf("sidecar 应为 1 页 PageMap，实际 %T", raw)
+	}
+}
+
+// TestPDFParser_Parse_sidecar词区间 PageMap 词区间切出的子串 == 词文本。
+func TestPDFParser_Parse_sidecar词区间(t *testing.T) {
+	chdirTemp(t)
+
+	pdfPath := writeTempPDF(t, "loc.pdf", []string{"Alpha Bravo Charlie", "second line here"}, nil)
+
+	p := newPDFParserOrFatal(t)
+	docs, err := p.Parse(t.Context(), pdfPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 {
+		t.Fatal("应产出 1 个 Document")
+	}
+	text := docs[0].Text
+	maps := docs[0].Metadata[common.MetaKeySourcePageMap].([]*common.PageMap)
+	if len(maps) != 2 {
+		t.Fatalf("应为 2 页，实际 %d", len(maps))
+	}
+	if len(maps[0].Words) == 0 {
+		t.Fatal("第 1 页应有词")
+	}
+	for _, pm := range maps {
+		for _, w := range pm.Words {
+			if w.CharStart < 0 || w.CharEnd <= w.CharStart {
+				t.Fatalf("词区间非法: %+v", w)
+			}
+			if w.CharEnd > len(text) {
+				t.Fatalf("词区间越界: %+v", w)
+			}
+			if got := text[w.CharStart:w.CharEnd]; got != w.Text {
+				t.Fatalf("词区间切片 %q != 词文本 %q", got, w.Text)
+			}
+			// 词框合法性
+			if w.BBox[2] <= w.BBox[0] || w.BBox[3] <= w.BBox[1] {
+				t.Fatalf("词框非法: %+v", w)
+			}
+		}
+	}
+	// 第 1 页页文本与全文前缀一致（单页文本为全文第一段）
+	if !strings.HasPrefix(text, maps[0].PageText) {
+		t.Errorf("全文应以第 1 页文本开头: %q vs %q", text, maps[0].PageText)
+	}
+}
+
+// TestPDFParser_Parse_caption宿主锚 caption 文本块锚到宿主图（image 锚）。
+func TestPDFParser_Parse_caption宿主锚(t *testing.T) {
+	chdirTemp(t)
+
+	pdfPath := writeTempPDF(t, "cap.pdf", []string{"before caption", "after caption"}, map[int]bool{1: true})
+
+	model := newCaptionModel(t, nil, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("generated caption text"), nil
+	})
+
+	p := newPDFParserOrFatal(t)
+	docs, err := p.Parse(t.Context(), pdfPath, WithLLMClient(model))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 {
+		t.Fatal("应产出 1 个 Document")
+	}
+	text := docs[0].Text
+	maps := docs[0].Metadata[common.MetaKeySourcePageMap].([]*common.PageMap)
+	anchors := maps[0].CaptionAnchors
+	if len(anchors) != 1 {
+		t.Fatalf("应 1 个 caption 锚，实际 %d", len(anchors))
+	}
+	a := anchors[0]
+	if got := text[a.Start:a.End]; got != "generated caption text" {
+		t.Fatalf("锚区间切片 %q != caption 文本", got)
+	}
+	if a.ImageIndex != 0 {
+		t.Fatalf("宿主图下标应为 0，实际 %d", a.ImageIndex)
+	}
+	if len(maps[0].Images) != 1 {
+		t.Fatalf("第 1 页应 1 张图（placement），实际 %d", len(maps[0].Images))
 	}
 }
 
