@@ -49,7 +49,9 @@ func (d *ChunkDAO) ListByDoc(docID string) ([]KBChunkMeta, error) {
 func (d *ChunkDAO) UpdateMeta(m *KBChunkMeta) error { return d.db.Save(m).Error }
 
 // DeleteMeta 按 ID 删除分块元数据
-func (d *ChunkDAO) DeleteMeta(id string) error { return d.db.Delete(&KBChunkMeta{}, "id = ?", id).Error }
+func (d *ChunkDAO) DeleteMeta(id string) error {
+	return d.db.Delete(&KBChunkMeta{}, "id = ?", id).Error
+}
 
 // CreateRevision 追加版本记录
 func (d *ChunkDAO) CreateRevision(r *KBChunkRevision) error { return d.db.Create(r).Error }

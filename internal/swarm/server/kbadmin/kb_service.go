@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	vs "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/vector_store"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/vector_fields"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
