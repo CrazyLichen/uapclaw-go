@@ -155,10 +155,9 @@ func TestSafeSemanticName_清洗与回落(t *testing.T) {
 func TestSemanticPrefix_边界截断(t *testing.T) {
 	// 长度 ≤ limit → 原样（尾部非连接词）
 	require.Equal(t, "安装指南与部署手册", semanticPrefix("安装指南与部署手册", 10))
-	// 无自然边界/驼峰 → 硬截 + 省略号
+	// 无自然边界/驼峰 → 硬截（4 字）+ 省略号 = 5 runes
 	out := semanticPrefix("安装指南与部署手册", 6)
-	require.Contains(t, out, "…")
-	require.Len(t, []rune(out), 6)
+	require.Equal(t, "安装指南…", out)
 	require.Equal(t, "", semanticPrefix("abc", 0))
 }
 
@@ -291,7 +290,7 @@ func TestUniqueRulesTopicDescription_唯一匹配(t *testing.T) {
 	require.NotEqual(t, "", match)
 	// 第二个匹配 → 返回空
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "部署"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "部署", "description.md"), []byte("# 安装手册\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "部署", "description.md"), []byte("# 安装指南\n"), 0o644))
 	match = uniqueRulesTopicDescription(root, "安装指南使用")
 	require.Equal(t, "", match)
 }
