@@ -11,9 +11,9 @@ import (
 
 	"github.com/srijanmukherjee/gomupdf"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 测试辅助：合成 PDF ────────────────────────────
@@ -219,7 +219,7 @@ func TestBuildPDF_合成合法性(t *testing.T) {
 func TestArchivePageImage_命名与落盘(t *testing.T) {
 	chdirTemp(t)
 
-	img := common.PageImage{Data: tinyJPEGBytes, Ext: "jpeg"}
+	img := sourceloc.PageImage{Data: tinyJPEGBytes, Ext: "jpeg"}
 	path, err := archivePageImage("doc.pdf", 1, 0, img)
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestArchivePageImage_命名与落盘(t *testing.T) {
 		t.Error("落盘字节应与原字节一致")
 	}
 	// 空扩展名回落 png
-	img2 := common.PageImage{Data: []byte{1}, Ext: ""}
+	img2 := sourceloc.PageImage{Data: []byte{1}, Ext: ""}
 	path2, err := archivePageImage("doc.pdf", 1, 1, img2)
 	if err != nil {
 		t.Fatal(err)
@@ -355,14 +355,9 @@ func TestPDFParser_Parse_模板集成(t *testing.T) {
 	if docs[0].ID != "pdf-doc-1" || docs[0].Text != "integ text" {
 		t.Errorf("Document 应透传 DocID 与文本，实际 ID=%q Text=%q", docs[0].ID, docs[0].Text)
 	}
-	// 30.3：sidecar 注入
-	raw, ok := docs[0].Metadata[common.MetaKeySourcePageMap]
-	if !ok {
-		t.Fatal("Metadata 应含 source_page_map sidecar")
-	}
-	maps, ok := raw.([]*common.PageMap)
-	if !ok || len(maps) != 1 {
-		t.Fatalf("sidecar 应为 1 页 PageMap，实际 %T", raw)
+	// 30.3：sidecar 注入（类型化字段）
+	if docs[0].SourceMaps == nil || len(docs[0].SourceMaps.Pages) != 1 {
+		t.Fatalf("Document.SourceMaps 应含 1 页 PageMap，实际 %+v", docs[0].SourceMaps)
 	}
 }
 
@@ -381,7 +376,7 @@ func TestPDFParser_Parse_sidecar词区间(t *testing.T) {
 		t.Fatal("应产出 1 个 Document")
 	}
 	text := docs[0].Text
-	maps := docs[0].Metadata[common.MetaKeySourcePageMap].([]*common.PageMap)
+	maps := docs[0].SourceMaps.Pages
 	if len(maps) != 2 {
 		t.Fatalf("应为 2 页，实际 %d", len(maps))
 	}
@@ -430,7 +425,7 @@ func TestPDFParser_Parse_caption宿主锚(t *testing.T) {
 		t.Fatal("应产出 1 个 Document")
 	}
 	text := docs[0].Text
-	maps := docs[0].Metadata[common.MetaKeySourcePageMap].([]*common.PageMap)
+	maps := docs[0].SourceMaps.Pages
 	anchors := maps[0].CaptionAnchors
 	if len(anchors) != 1 {
 		t.Fatalf("应 1 个 caption 锚，实际 %d", len(anchors))

@@ -8,8 +8,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/indexer"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/chunker"
@@ -223,11 +224,9 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 	return nil
 }
 
-
-
 // marshalLocators 序列化 chunk 原文定位（30.3）。空/序列化失败落空串
 // （台账列可空；失败 Warn 不阻塞——定位属增强数据）。
-func marshalLocators(locs []common.SourceLocator) string {
+func marshalLocators(locs []sourceloc.SourceLocator) string {
 	if len(locs) == 0 {
 		return ""
 	}

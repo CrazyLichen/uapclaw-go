@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -36,6 +37,10 @@ type Document struct {
 	Text string `json:"text"`
 	// Metadata 文档元数据
 	Metadata map[string]any `json:"metadata"`
+	// SourceMaps 原文定位 sidecar（30.3，WeKnora 对标新增，Python 无对应物；
+	// 仅 parser→chunker 内部传递：pdf/dockx 坐标账本，chunker 消费产出
+	// TextChunk.SourceLocators，坐标不进向量库 metadata）
+	SourceMaps *sourceloc.SourceMaps `json:"source_maps,omitempty"`
 }
 
 // RerankerConfig 重排序模型配置。

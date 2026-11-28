@@ -2,12 +2,12 @@ package kbadmin
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
-	"strconv"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"

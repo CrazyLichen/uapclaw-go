@@ -1,6 +1,8 @@
 package common
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
+
 	"encoding/base64"
 	"fmt"
 	"mime"
@@ -70,7 +72,7 @@ type TextChunk struct {
 	// Embedding 分块嵌入向量（嵌入计算后填充）
 	Embedding []float64 `json:"embedding,omitempty"`
 	// SourceLocators 原文定位（30.3 source_locators；空=该格式未产出定位）
-	SourceLocators []SourceLocator `json:"source_locators,omitempty"`
+	SourceLocators []sourceloc.SourceLocator `json:"source_locators,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

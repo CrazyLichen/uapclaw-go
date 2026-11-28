@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
@@ -141,8 +142,9 @@ func (c *TextChunker) ChunkText(text string) ([]string, error) {
 // doc_text = pipeline(doc.text) → self.chunker.chunk_text(doc_text)（注意
 // 调 inner 的 ChunkText，非本类型覆写版）→ 组块（uuid + 溯源三键，
 // mergeChunkMetadata 复用 13.8 提取的 base.go 函数）。
-// 30.3 追加（步骤序不变，组块后缀）：sidecar 提取 → chunk 全文区间前向
-// 定位 → MapChunkLocators 映射 → StripSidecarKeys 剔除（坐标不进向量库）。
+// 30.3 追加（步骤序不变，组块后缀）：读 Document.SourceMaps 类型化 sidecar
+// → chunk 全文区间前向定位 → MapChunkLocators 映射（metadata 全程不携带
+// 坐标，无泄漏面）。
 // Python: chunking.py TextChunker.chunk_documents
 func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
 	_ = ctx // 对齐 Python 同步签名，当前无 ctx 消费
@@ -152,10 +154,8 @@ func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Docume
 		if c.pipeline != nil {
 			docText = c.pipeline.Process(docText)
 		}
-		// 30.3：sidecar 提取（pdf 页映射 / docx 段落映射 / char_range 标记）
-		pageMaps := sidecarPageMaps(doc.Metadata)
-		paraMaps := sidecarParagraphMaps(doc.Metadata)
-		charRange := sidecarCharRange(doc.Metadata)
+		// 30.3：类型化 sidecar（pdf 页映射 / docx 段落映射 / char_range 标记）
+		sm := doc.SourceMaps
 
 		texts, err := c.inner.ChunkText(docText)
 		if err != nil {
@@ -165,18 +165,17 @@ func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Docume
 		for i, text := range texts {
 			uid := uuid.NewString()
 			meta := mergeChunkMetadata(doc.Metadata, i, len(texts), uid)
-			var locs []common.SourceLocator
+			var locs []sourceloc.SourceLocator
 			if start, end, ok := chunkRange(docText, text, &cursor); ok {
-				locs = MapChunkLocators(docText, start, end, pageMaps, paraMaps)
-				if charRange {
+				locs = MapChunkLocators(docText, start, end, sm)
+				if sm != nil && sm.CharRange {
 					locs = append(locs, MapCharRangeLocator(start, end, text))
 				}
-			} else if pageMaps != nil || paraMaps != nil || charRange {
+			} else if sm != nil {
 				// token 规整等导致 chunk 非精确子串：定位留空不猜（spec §5）
 				logger.Warn(logComponent).Str("doc_id", doc.ID).Int("chunk_index", i).
 					Msg("chunk_locator_miss")
 			}
-			StripSidecarKeys(meta)
 			chunks = append(chunks, common.TextChunk{
 				ID:             uid,
 				Text:           text,

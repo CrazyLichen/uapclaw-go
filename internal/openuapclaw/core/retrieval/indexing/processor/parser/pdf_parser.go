@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -22,9 +22,8 @@ import (
 // 30.3 重写（偏差 D-30-3-1，用户拍板「直接替换」）：统一 gomupdf 单库链——
 //   - 文本：逐页词框（含坐标与行号），行分组拼页文本
 //   - 图片：placement bbox + 原生字节（归档命名语义不变），ledongthuc/pdfcpu 退役
-//   - sidecar：PageMap（词全文区间 + 图片 placement + caption 宿主锚）
-//     经 Document.Metadata[MetaKeySourcePageMap] 内部传递（spec §4），
-//     chunker 消费后剔除
+//   - sidecar：SourceMaps（词全文区间 + 图片 placement + caption 宿主锚）
+//     经 Document.SourceMaps 类型化字段传递（方案A2 独立包），全程零 any
 //
 // 正文组装语义保持：非空页文本 + 该页图片 caption 紧随其后；
 // 过滤空行后 "\n".join；空串返回（"result if result else None"）。
@@ -74,8 +73,8 @@ func (p *PDFParser) ParseContent(ctx context.Context, doc string, llmClient *llm
 }
 
 // Parse 解析文档并注入 source_locators sidecar（30.3 覆写点）。
-// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），Metadata 额外携带
-// MetaKeySourcePageMap（仅 parser→chunker 内部传递，chunker 消费后剔除）。
+// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），SourceMaps 类型化
+// 字段携带 pdf 页映射（仅 parser→chunker 内部传递）。
 // 软失败语义与 ParseContent 一致：err → Error 日志 + 空切片。
 func (p *PDFParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
 	o := NewParseOptions(opts...)
@@ -92,9 +91,10 @@ func (p *PDFParser) Parse(ctx context.Context, doc string, opts ...ParseOption) 
 		return []reranker.Document{}, nil
 	}
 	return []reranker.Document{{
-		ID:       o.DocID,
-		Text:     content,
-		Metadata: map[string]any{common.MetaKeySourcePageMap: pageMaps},
+		ID:         o.DocID,
+		Text:       content,
+		Metadata:   map[string]any{},
+		SourceMaps: &sourceloc.SourceMaps{Pages: pageMaps},
 	}}, nil
 }
 
@@ -127,7 +127,7 @@ type pageAssemble struct {
 //  4. 词区间 = 页起始 offset + 页内 offset（全文为顺序追加，折算精确）；
 //     caption 记 CaptionAnchor（全文区间 + 宿主图下标）
 //  5. 产出 PageMap sidecar
-func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient *llm.Model) (string, []*common.PageMap, error) {
+func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient *llm.Model) (string, []sourceloc.PageMap, error) {
 	pages, err := extractPDFPages(doc)
 	if err != nil {
 		return "", nil, err
@@ -137,10 +137,10 @@ func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient
 	filename := filepath.Base(doc)
 
 	var b strings.Builder
-	pageMaps := make([]*common.PageMap, 0, len(pages))
+	pageMaps := make([]sourceloc.PageMap, 0, len(pages))
 	for _, pd := range pages {
 		pa := assemblePageText(pd.Words)
-		pm := &common.PageMap{PageNo: pd.PageNo, PageText: pa.text, Images: pd.Images}
+		pm := sourceloc.PageMap{PageNo: pd.PageNo, PageText: pa.text, Images: pd.Images}
 
 		// 非空页文本入全文；词区间折算（pageStart 在分隔符写入后取值）
 		pageStart := -1
@@ -184,7 +184,7 @@ func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient
 				}
 				capStart := b.Len()
 				b.WriteString(c)
-				pm.CaptionAnchors = append(pm.CaptionAnchors, common.CaptionAnchor{
+				pm.CaptionAnchors = append(pm.CaptionAnchors, sourceloc.CaptionAnchor{
 					Start: capStart, End: b.Len(), ImageIndex: i,
 				})
 			}
@@ -197,7 +197,7 @@ func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient
 
 // assemblePageText 单页词→文本：同 Line 空格 join、跨 Line "\n" 分隔，
 // 同步记录每词页内 offset（词序 = 提取序，语义对齐旧 GetPlainText 读取序）。
-func assemblePageText(words []common.PageWord) pageAssemble {
+func assemblePageText(words []sourceloc.PageWord) pageAssemble {
 	var b strings.Builder
 	rel := make([]int, len(words))
 	prevLine := -1
@@ -219,7 +219,7 @@ func assemblePageText(words []common.PageWord) pageAssemble {
 
 // archivePageImage 归档单张页图片（旧 extractImagesByPage 命名语义）。
 // Python: pdf_parser.py _extract_images_from_pdf_page 命名复刻
-func archivePageImage(filename string, pageNo, imgIndex int, img common.PageImage) (string, error) {
+func archivePageImage(filename string, pageNo, imgIndex int, img sourceloc.PageImage) (string, error) {
 	if err := os.MkdirAll(savedImageDir, 0o755); err != nil {
 		return "", fmt.Errorf("创建图片目录失败: %w", err)
 	}

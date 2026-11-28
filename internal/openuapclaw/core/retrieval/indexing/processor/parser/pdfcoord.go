@@ -9,7 +9,7 @@ import (
 
 	"github.com/srijanmukherjee/gomupdf"
 
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/sourceloc"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -19,9 +19,9 @@ type pdfPageData struct {
 	// PageNo 页号（1 起）
 	PageNo int
 	// Words 词列表（读取序）
-	Words []common.PageWord
+	Words []sourceloc.PageWord
 	// Images 展示图片（fill order）
-	Images []common.PageImage
+	Images []sourceloc.PageImage
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -45,11 +45,11 @@ func extractPDFPages(path string) ([]pdfPageData, error) {
 			return nil, fmt.Errorf("page %d words: %w", i+1, werr)
 		}
 		for _, w := range words {
-			pd.Words = append(pd.Words, common.PageWord{
+			pd.Words = append(pd.Words, sourceloc.PageWord{
 				Text: w.Text,
 				// gomupdf.Rect 为 {X,Y,W,H}（左上原点，y 向下）；折算为
 				// [x0,y0,x1,y1] 四元组（同左上原点，pdf.js viewport 直接可用）
-				BBox: common.BBox{w.BBox.X, w.BBox.Y, w.BBox.X1(), w.BBox.Y1()},
+				BBox: sourceloc.BBox{w.BBox.X, w.BBox.Y, w.BBox.X1(), w.BBox.Y1()},
 				Line: w.Line,
 			})
 		}
@@ -66,8 +66,8 @@ func extractPDFPages(path string) ([]pdfPageData, error) {
 			if extracted == nil {
 				continue
 			}
-			pd.Images = append(pd.Images, common.PageImage{
-				BBox: common.BBox{info.BBox.X0, info.BBox.Y0, info.BBox.X1, info.BBox.Y1},
+			pd.Images = append(pd.Images, sourceloc.PageImage{
+				BBox: sourceloc.BBox{info.BBox.X0, info.BBox.Y0, info.BBox.X1, info.BBox.Y1},
 				Data: extracted.Bytes,
 				Ext:  extracted.Ext,
 			})

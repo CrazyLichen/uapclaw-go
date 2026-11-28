@@ -3,8 +3,6 @@ package parser
 import (
 	"strings"
 	"testing"
-
-	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── WordParser sidecar 测试（30.3 Task4） ────────────────────────────
@@ -22,14 +20,11 @@ func TestWordParser_Parse_段落sidecar(t *testing.T) {
 	if len(docs) != 1 {
 		t.Fatalf("docs = %d, want 1", len(docs))
 	}
-	raw, ok := docs[0].Metadata[common.MetaKeySourceParagraphMap]
-	if !ok {
-		t.Fatal("Metadata 应含 source_paragraph_map sidecar")
+	sm := docs[0].SourceMaps
+	if sm == nil || len(sm.Paragraphs) == 0 {
+		t.Fatal("Document.SourceMaps 应含非空 Paragraphs")
 	}
-	paraMaps, ok := raw.([]common.ParagraphMap)
-	if !ok || len(paraMaps) == 0 {
-		t.Fatalf("sidecar 应为非空 []common.ParagraphMap，实际 %T", raw)
-	}
+	paraMaps := sm.Paragraphs
 	for _, pm := range paraMaps {
 		if pm.Paragraph < 0 {
 			t.Fatalf("段落号非法: %+v", pm)
