@@ -124,3 +124,11 @@ func TestHandleKBRequest_未知方法(t *testing.T) {
 
 // 编译期引用守卫（context 导入占位，后续批次 respond 助手使用）
 var _ = context.Background
+
+// TestBootstrapErrorResponse 测试装配失败响应构造
+func TestBootstrapErrorResponse(t *testing.T) {
+	resp := BootstrapErrorResponse(&schema.AgentRequest{RequestID: "r1", ChannelID: "c1"})
+	require.False(t, resp.OK)
+	require.Equal(t, ErrCodeKBInternal, resp.Payload["error_code"])
+	require.Equal(t, "r1", resp.RequestID)
+}

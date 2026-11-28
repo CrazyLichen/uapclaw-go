@@ -8,11 +8,11 @@ import (
 // TestAllReqMethods 验证 AllReqMethods 返回全部枚举值
 // （27.4 新增 14 个配置面板方法 + 27.8 媒体/文件域十常量 + 27-A B2 workspace 四常量：192；
 // 2026-11-27 +10：session.assets+项目控制面 → 203（+1 session.pin）；+20：扩展设备管理 → 223；
-// 24.3 +26：personal_context → 249）
+// 24.3 +26：personal_context → 249；领域三十 30.1 +35：kb.* 方法族 → 284）
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 249 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 249", len(methods))
+	if len(methods) != 284 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 284", len(methods))
 	}
 
 	// 验证无重复
