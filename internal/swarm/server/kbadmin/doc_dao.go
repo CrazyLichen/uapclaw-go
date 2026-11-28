@@ -53,6 +53,13 @@ func (d *DocDAO) ListByKBAndStatus(kbID, status string) ([]KBDoc, error) {
 	return list, err
 }
 
+// ListByStatus 全库按解析状态过滤（停滞扫描与孤儿恢复用）
+func (d *DocDAO) ListByStatus(status string) ([]KBDoc, error) {
+	var list []KBDoc
+	err := d.db.Where("parse_status = ?", status).Find(&list).Error
+	return list, err
+}
+
 // Update 更新文档记录
 func (d *DocDAO) Update(doc *KBDoc) error { return d.db.Save(doc).Error }
 
