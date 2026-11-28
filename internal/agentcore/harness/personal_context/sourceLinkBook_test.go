@@ -1,7 +1,6 @@
 package personal_context
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -83,7 +82,6 @@ func TestResolveSourceLinks_发布期重写(t *testing.T) {
 	markdown := "见 [指南](./guide.md)"
 	registered, book, err := RegisterSourceLinks(markdown, "https://e.com/repo/guide.md")
 	require.NoError(t, err)
-	fmt.Sprint(registered)
 
 	// 发布树里放一篇带令牌的页
 	contextRoot := filepath.Join(root, "sandbox")
