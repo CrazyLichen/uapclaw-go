@@ -18,6 +18,7 @@
 //	├── task_dao.go      # kb_task DAO
 //	├── kb_service.go    # KBService 真实 CRUD 编排
 //	├── stub_services.go # Doc/Chunk/Search Service 骨架
+//	├── upload_store.go  # 上传槽位表（TTL 清理/串行守卫/sha256 收尾，30.5）
 //	└── handle_kb.go     # HandleKBRequest 分发入口
 //
 // 对应 Python 代码：无（新增能力域，上游 Python 无对应物，对标 Tencent/WeKnora）。
