@@ -5,12 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"unicode"
 
@@ -3207,4 +3210,360 @@ func semanticDirectoryCandidate(parent string, title string, seed string) (strin
 		}
 	}
 	return "", pipelineError("semantic Context directory conflicts with an existing path")
+}
+
+// 流水线第三块 B：导航目录、时间/来源回落、快照与重定位。
+// Python: context_pipeline.py:2057-2120、2145-2178、9756-9800、9880-9895、
+// 3877-3884、3931-3984（来源标签助手）。
+// _select_rules_directory 族与 _apply_rules_increment 归 rules 引擎块（Task 9d）。
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// pageIDPattern page_ 前缀十六进制标识。
+// Python: context_pipeline.py:3900 内联 page_[0-9a-f]{16,}
+var pageIDPattern = regexp.MustCompile(`^page_[0-9a-f]{16,}$`)
+
+// dateLabelPattern 日期形态标题。
+// Python: context_pipeline.py:3904 内联
+var dateLabelPattern = regexp.MustCompile(`^\d{4}(?:[-/.年]\d{1,2})?(?:[-/.月]\d{1,2}日?)?$`)
+
+// labelTrimChars 标签裁剪字符。
+const labelTrimChars = " .,:;，。；：!?！？、()（）[]【】<>《》\"'"
+
+// nonHierarchicalTitleURISchemes 非层次 URI scheme。
+// Python: context_pipeline.py:3881 附近 _NON_HIERARCHICAL_TITLE_URI_SCHEMES
+var nonHierarchicalTitleURISchemes = map[string]struct{}{
+	"mailto": {}, "tel": {}, "data": {}, "javascript": {},
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// HashFile 分块哈希文件内容。
+// Python: context_pipeline.py:9880 _hash_file
+func HashFile(path string) (string, error) {
+	digest := sha256.New()
+	file, err := os.Open(extendedPath(path))
+	if err != nil {
+		return "", publishError("managed file could not be read")
+	}
+	defer file.Close()
+	buffer := make([]byte, 1024*1024)
+	for {
+		read, readErr := file.Read(buffer)
+		if read > 0 {
+			digest.Write(buffer[:read])
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return "", publishError("managed file could not be read")
+		}
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
+// SnapshotManagedFiles Agent 尝试前的受管文件快照（size, hash）。
+// Python: context_pipeline.py:9767 _snapshot_managed_files
+func SnapshotManagedFiles(root string) (map[string][2]string, error) {
+	result := map[string][2]string{}
+	if !pipelinePathExists(root) {
+		return result, nil
+	}
+	if err := assertNoSymlinks(root); err != nil {
+		return nil, err
+	}
+	for _, path := range walkTreePaths(root) {
+		if !pipelinePathIsFile(path) || pipelinePathIsLinkOrReparse(path) {
+			continue
+		}
+		dataHash, hashErr := HashFile(path)
+		if hashErr != nil {
+			return nil, hashErr
+		}
+		info, statErr := os.Stat(extendedPath(path))
+		if statErr != nil {
+			return nil, publishError("managed file could not be inspected")
+		}
+		relative, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return nil, relErr
+		}
+		result[filepath.ToSlash(relative)] = [2]string{fmt.Sprint(info.Size()), dataHash}
+	}
+	return result, nil
+}
+
+// ValidateUnchangedTree 拒绝 Agent 对程序自有输入树的写入。
+// Python: context_pipeline.py:9895 _validate_unchanged_tree
+func ValidateUnchangedTree(root string, baseline map[string][2]string, name string) error {
+	current, err := SnapshotManagedFiles(root)
+	if err != nil {
+		return err
+	}
+	if len(current) != len(baseline) {
+		return pipelineError(fmt.Sprintf("%s must not be modified by the Filesystem Agent", name))
+	}
+	for relative, expected := range baseline {
+		if actual, exists := current[relative]; !exists || actual != expected {
+			return pipelineError(fmt.Sprintf("%s must not be modified by the Filesystem Agent", name))
+		}
+	}
+	return nil
+}
+
+// ResetFilesystemSandbox 丢弃 Filesystem 输出而保留 run 输入树。
+// Python: context_pipeline.py:9756 _reset_filesystem_sandbox
+func ResetFilesystemSandbox(sandbox string) error {
+	if err := assertNoSymlinks(sandbox); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(extendedPath(sandbox))
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Name() == "inputs" || entry.Name() == "materialized-source" {
+			continue
+		}
+		path := filepath.Join(sandbox, entry.Name())
+		if err := makeTreeWritable(path); err != nil {
+			return err
+		}
+		if err := removeTreeEntry(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RecordContextRelocations 候选搬迁回溯组合。
+// Python: context_pipeline.py:9786 _record_context_relocations
+func RecordContextRelocations(relocations map[string]string, mapping map[string]string) {
+	if relocations == nil {
+		return
+	}
+	previousTargets := map[string]struct{}{}
+	for _, target := range relocations {
+		previousTargets[target] = struct{}{}
+	}
+	for original, current := range relocations {
+		if mapped, exists := mapping[current]; exists {
+			relocations[original] = mapped
+		} else {
+			relocations[original] = current
+		}
+	}
+	for old, new := range mapping {
+		if _, wasTarget := previousTargets[old]; !wasTarget {
+			relocations[old] = new
+		}
+	}
+}
+
+// HumanLabelIsURI 人读标签是否含具体 URI 证据。
+// Python: context_pipeline.py:3877 _human_label_is_uri
+func HumanLabelIsURI(value string) bool {
+	match := uriSchemePattern.FindStringIndex(value)
+	if match == nil || match[0] != 0 {
+		return false
+	}
+	scheme := strings.ToLower(strings.TrimSuffix(value[:match[1]], ":"))
+	return strings.HasPrefix(value[match[1]:], "//") ||
+		func() bool { _, isNonHierarchical := nonHierarchicalTitleURISchemes[scheme]; return isNonHierarchical }()
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// contentCapacityNavigationDirectory 容量触顶时的内容导航子目录。
+// Python: context_pipeline.py:2057 _content_capacity_navigation_directory
+func contentCapacityNavigationDirectory(contextRoot string, fullDirectory string, topicTitle string, seed string, maxPages int, hasMaxPages bool, maxSubdirectories int, hasMaxSub bool) (string, error) {
+	acceptsFull, err := directoryAcceptsNewPage(fullDirectory, maxPages, hasMaxPages)
+	if err != nil {
+		return "", err
+	}
+	if acceptsFull {
+		return fullDirectory, nil
+	}
+	fullTitle, err := safeSemanticName(filepath.Base(fullDirectory))
+	if err != nil {
+		return "", err
+	}
+	topicName, err := safeSemanticName(topicTitle)
+	if err != nil {
+		return "", err
+	}
+	labels := []string{fullTitle}
+	if !strings.EqualFold(topicName, fullTitle) {
+		labels = append(labels, topicName)
+	}
+	suffix := "导航"
+	joined := labels[0]
+	if len(labels) > 1 {
+		joined = labels[0] + "·" + labels[1]
+	}
+	body := semanticPrefix(joined, semanticNameMaxChars-len([]rune(suffix)))
+	if body == "" {
+		body = "内容"
+	}
+	navigationTitle := body + suffix
+	if !SemanticContextSegmentIsSafe(navigationTitle, false) {
+		navigationTitle = "内容导航"
+	}
+	parent := fullDirectory
+	for {
+		acceptsSub, subErr := directoryAcceptsNewSubdirectory(parent, maxSubdirectories, hasMaxSub)
+		if subErr != nil {
+			return "", subErr
+		}
+		if acceptsSub {
+			candidate, candErr := semanticDirectoryCandidate(parent, navigationTitle, seed)
+			if candErr != nil {
+				return "", candErr
+			}
+			acceptsCandidate, candPageErr := directoryAcceptsNewPage(candidate, maxPages, hasMaxPages)
+			if candPageErr != nil {
+				return "", candPageErr
+			}
+			if acceptsCandidate {
+				return candidate, nil
+			}
+		}
+		if parent == contextRoot {
+			break
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			break
+		}
+		parent = next
+	}
+	return "", nil
+}
+
+// timePartitionDirectory 时间分片目录（YYYY年MM月 + 第N组）。
+// Python: context_pipeline.py:2110 _time_partition_directory
+func timePartitionDirectory(parent string, runTime time.Time, maxPages int, hasMax bool) (string, error) {
+	month := runTime.UTC().Format("2006年01月")
+	base := filepath.Join(parent, month)
+	accepts, err := directoryAcceptsNewPage(base, maxPages, hasMax)
+	if err != nil {
+		return "", err
+	}
+	if accepts {
+		return base, nil
+	}
+	for group := 2; group <= 9999; group++ {
+		candidate := filepath.Join(base, fmt.Sprintf("第%d组", group))
+		acceptsCandidate, pageErr := directoryAcceptsNewPage(candidate, maxPages, hasMax)
+		if pageErr != nil {
+			return "", pageErr
+		}
+		if acceptsCandidate {
+			return candidate, nil
+		}
+	}
+	return "", pipelineError("semantic Context time partition capacity is exhausted")
+}
+
+// providerFallbackDirectory provider 回落目录（待整理/<展示名>/时间分片）。
+// Python: context_pipeline.py:2128 _provider_fallback_directory
+func providerFallbackDirectory(contextRoot string, provider string, runTime time.Time, maxPages int, hasMax bool) (string, error) {
+	displayName, hasDisplay := providerDisplayNames[provider]
+	if !hasDisplay {
+		var err error
+		displayName, err = safeSemanticName(provider)
+		if err != nil {
+			return "", err
+		}
+	}
+	providerRoot := filepath.Join(contextRoot, "待整理", displayName)
+	return timePartitionDirectory(providerRoot, runTime, maxPages, hasMax)
+}
+
+// pageLabelCandidate 可读标签候选（含拒绝原因）。
+// Python: context_pipeline.py:3884 _page_label_candidate（body 至 :3928 完整语义）。
+func pageLabelCandidate(value string) (string, string) {
+	normalized := strings.Join(strings.Fields(norm.NFKC.String(markdownLabel(value))), " ")
+	normalized = strings.Trim(normalized, labelTrimChars)
+	if normalized == "" {
+		return "", "empty"
+	}
+	if HumanLabelIsURI(normalized) || isAbsolutePathLabel(normalized) || strings.HasPrefix(normalized, "\\\\") ||
+		strings.HasPrefix(normalized, "//") {
+		return "", "generic"
+	}
+	folded := strings.ToLower(normalized)
+	if sourceMetadataIDPattern.MatchString(folded) || pageIDPattern.MatchString(folded) {
+		return "", "generic"
+	}
+	if dateLabelPattern.MatchString(normalized) {
+		return "", "generic"
+	}
+	cjkCount := 0
+	hasAsciiWord := false
+	for _, character := range normalized {
+		if cjkCharPattern.MatchString(string(character)) {
+			cjkCount++
+		}
+	}
+	if regexp.MustCompile(`[A-Za-z][A-Za-z0-9]`).MatchString(normalized) {
+		hasAsciiWord = true
+	}
+	if cjkCount < 2 && !hasAsciiWord {
+		return "", "generic"
+	}
+	return normalized, "accepted"
+}
+
+// isAbsolutePathLabel POSIX/Windows 绝对路径形态标题。
+func isAbsolutePathLabel(value string) bool {
+	return strings.HasPrefix(value, "/") || windowsDriveFullPattern.MatchString(value)
+}
+
+// sourceTitleLabel 拒绝定位符投影式标题。
+// Python: context_pipeline.py:3946 _source_title_label
+func sourceTitleLabel(metadata map[string]string) string {
+	title := strings.TrimSpace(metadata["title"])
+	locator := strings.TrimSpace(metadata["locator"])
+	if title == "" || title == locator {
+		return ""
+	}
+	if HumanLabelIsURI(title) || isAbsolutePathLabel(title) ||
+		strings.HasPrefix(title, "\\\\") || strings.HasPrefix(title, "//") {
+		return ""
+	}
+	return title
+}
+
+// sourceFilenameLabel 源定位符末段文件名（剥已知扩展）。
+// Python: context_pipeline.py:3960 _source_filename_label
+func sourceFilenameLabel(metadata map[string]string) string {
+	locator := strings.TrimSpace(metadata["locator"])
+	if locator == "" {
+		return ""
+	}
+	path := locator
+	if parsed, err := url.Parse(locator); err == nil && (parsed.Scheme != "" || parsed.Host != "") {
+		path = parsed.Path
+	}
+	basename := strings.TrimRight(strings.ReplaceAll(path, "\\", "/"), "/")
+	parts := strings.Split(basename, "/")
+	basename = parts[len(parts)-1]
+	if basename == "" || basename == "." || basename == ".." {
+		return ""
+	}
+	decoded, err := url.PathUnescape(basename)
+	if err != nil || strings.Contains(decoded, "%") || strings.Contains(decoded, "/") ||
+		strings.Contains(decoded, "\\") {
+		return ""
+	}
+	return stripKnownSourceTitleExtension(decoded)
+}
+
+// sortPathsSorted 排序助手（路径字典序）。
+func sortPathsSorted(paths []string) []string {
+	sorted := append([]string{}, paths...)
+	sort.Strings(sorted)
+	return sorted
 }
