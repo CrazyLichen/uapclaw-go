@@ -74,11 +74,12 @@ func TestHandleKBRequest_GetNotFound(t *testing.T) {
 	require.Equal(t, ErrCodeKBNotFound, resp.Payload["error_code"])
 }
 
-// TestHandleKBRequest_未实现方法 测试 kb.doc.upload 返回 KB_NOT_IMPLEMENTED
+// TestHandleKBRequest_未实现方法 测试 kb.doc.import_url 返回 KB_NOT_IMPLEMENTED
+// （30.5 已实现 kb.doc.upload，本用例改用 doc 族剩余未实现方法承载）
 func TestHandleKBRequest_未实现方法(t *testing.T) {
 	d := newTestDomain(t)
 	resp := HandleKBRequest(d, &schema.AgentRequest{
-		RequestID: "r1", ReqMethod: schema.ReqMethodKBDocUpload, Params: []byte(`{}`),
+		RequestID: "r1", ReqMethod: schema.ReqMethodKBDocImportURL, Params: []byte(`{}`),
 	})
 	require.False(t, resp.OK)
 	require.Equal(t, ErrCodeKBNotImplemented, resp.Payload["error_code"])
@@ -91,13 +92,13 @@ func TestHandleKBRequest_未实现全族覆盖(t *testing.T) {
 		schema.ReqMethodKBKBPin, schema.ReqMethodKBKBMove,
 		schema.ReqMethodKBKBSetConfig, schema.ReqMethodKBKBStatistics,
 		schema.ReqMethodKBKBGenerateProfile,
-		schema.ReqMethodKBDocUpload, schema.ReqMethodKBDocImportURL,
+		schema.ReqMethodKBDocImportURL,
 		schema.ReqMethodKBDocImportManual, schema.ReqMethodKBDocList,
 		schema.ReqMethodKBDocGet, schema.ReqMethodKBDocUpdate,
 		schema.ReqMethodKBDocDelete, schema.ReqMethodKBDocBatchDelete,
 		schema.ReqMethodKBDocReparse, schema.ReqMethodKBDocBatchReparse,
 		schema.ReqMethodKBDocCancelParse, schema.ReqMethodKBDocRegenerateSummary,
-		schema.ReqMethodKBDocPreview, schema.ReqMethodKBDocDownload,
+		schema.ReqMethodKBDocPreview,
 		schema.ReqMethodKBChunkList, schema.ReqMethodKBChunkUpdate,
 		schema.ReqMethodKBChunkRevisions, schema.ReqMethodKBChunkRevert,
 		schema.ReqMethodKBChunkDelete, schema.ReqMethodKBChunkGenerateQuestions,

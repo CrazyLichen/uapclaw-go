@@ -2,9 +2,14 @@ package kbadmin
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -44,12 +49,25 @@ func NewDomain(store *Store, kbFactory *RetrievalKBFactory) (*Domain, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Domain{
+	d := &Domain{
 		KB:     kbSvc,
 		Doc:    NewDocService(store),
 		Chunk:  NewChunkService(store),
 		Search: NewSearchService(store),
-	}, nil
+	}
+	// 30.5 上传槽位表：落盘根目录置于 WorkspaceDir()/kb_uploads（既有
+	// isPathWithinUserDirs 边界内，file.upload_chunk 复用协议可直接写）；
+	// TTL 清理挂后台周期任务（泄漏防护）
+	uploads := NewUploadStore(filepath.Join(path.WorkspaceDir(), "kb_uploads"))
+	d.Doc.SetUploadStore(uploads)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			uploads.CleanupExpired()
+		}
+	}()
+	return d, nil
 }
 
 // IsKBMethod 判定是否 kb.* 方法族
@@ -126,17 +144,74 @@ func HandleKBRequest(domain *Domain, request *schema.AgentRequest) *schema.Agent
 			return errorResponse(request, err.Error(), ErrCodeKBNotFound)
 		}
 		return okResponse(request, map[string]any{"deleted": true})
-	// 其余方法族：30.1 只注册不实现（spec D-30-1-2，30.2-30.6 各批摘除）
+	// ── 上传分帧通道（30.5；X 边界：落盘成功不触发解析，⤵️30.2 加挂点）──
+	case schema.ReqMethodKBDocUpload:
+		var p struct {
+			KBID     string `json:"kb_id"`
+			FileName string `json:"file_name"`
+			Size     int64  `json:"size"`
+			FileHash string `json:"file_hash"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		slot, err := domain.Doc.InitUpload(p.KBID, p.FileName, p.Size, p.FileHash)
+		if err != nil {
+			return errorResponse(request, err.Error(), uploadErrCode(err))
+		}
+		return okResponse(request, map[string]any{"upload": mustJSONValue(slot)})
+	case schema.ReqMethodKBFileUploadComplete:
+		var p struct {
+			UploadID string `json:"upload_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		done, err := domain.Doc.CompleteUpload(p.UploadID)
+		if err != nil {
+			return errorResponse(request, err.Error(), uploadErrCode(err))
+		}
+		return okResponse(request, map[string]any{"file": mustJSONValue(done)})
+	case schema.ReqMethodKBDocCancelUpload:
+		var p struct {
+			UploadID string `json:"upload_id"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		if err := domain.Doc.CancelUpload(p.UploadID); err != nil {
+			return errorResponse(request, err.Error(), uploadErrCode(err))
+		}
+		return okResponse(request, map[string]any{"cancelled": true})
+	case schema.ReqMethodKBDocDownload:
+		var p struct {
+			Path   string `json:"path"`
+			Offset int    `json:"offset"`
+			Limit  int    `json:"limit"`
+		}
+		if err := parseParams(request, &p); err != nil {
+			return errorResponse(request, err.Error(), ErrCodeKBInvalidParams)
+		}
+		data, eof, err := domain.Doc.DownloadChunk(p.Path, p.Offset, p.Limit)
+		if err != nil {
+			return errorResponse(request, err.Error(), uploadErrCode(err))
+		}
+		return okResponse(request, map[string]any{
+			"data_base64": base64.StdEncoding.EncodeToString(data),
+			"offset":      p.Offset,
+			"eof":         eof,
+		})
+	// 其余方法族：30.1 只注册不实现（spec D-30-1-2，30.2-30.6 各批摘除；
+	// 30.5 已摘除 kb.doc.upload/kb.doc.download 并新增 upload_complete/cancel_upload）
 	case schema.ReqMethodKBKBPin, schema.ReqMethodKBKBMove,
 		schema.ReqMethodKBKBSetConfig, schema.ReqMethodKBKBStatistics,
 		schema.ReqMethodKBKBGenerateProfile,
-		schema.ReqMethodKBDocUpload,
 		schema.ReqMethodKBDocImportURL, schema.ReqMethodKBDocImportManual,
 		schema.ReqMethodKBDocList, schema.ReqMethodKBDocGet, schema.ReqMethodKBDocUpdate,
 		schema.ReqMethodKBDocDelete, schema.ReqMethodKBDocBatchDelete,
 		schema.ReqMethodKBDocReparse, schema.ReqMethodKBDocBatchReparse,
 		schema.ReqMethodKBDocCancelParse, schema.ReqMethodKBDocRegenerateSummary,
-		schema.ReqMethodKBDocPreview, schema.ReqMethodKBDocDownload,
+		schema.ReqMethodKBDocPreview,
 		schema.ReqMethodKBChunkList, schema.ReqMethodKBChunkUpdate,
 		schema.ReqMethodKBChunkRevisions, schema.ReqMethodKBChunkRevert,
 		schema.ReqMethodKBChunkDelete, schema.ReqMethodKBChunkGenerateQuestions,
@@ -150,6 +225,24 @@ func HandleKBRequest(domain *Domain, request *schema.AgentRequest) *schema.Agent
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// uploadErrCode 上传链错误哨兵 → 错误码（spec §5 错误码族）
+func uploadErrCode(err error) string {
+	switch {
+	case errors.Is(err, ErrKBNotFound):
+		return ErrCodeKBNotFound
+	case errors.Is(err, ErrFileTooLarge):
+		return "FILE_TOO_LARGE"
+	case errors.Is(err, ErrUploadChannelBusy):
+		return "UPLOAD_CHANNEL_BUSY"
+	case errors.Is(err, ErrKBUploadNotFound):
+		return "KB_UPLOAD_NOT_FOUND"
+	case errors.Is(err, ErrHashMismatch):
+		return "UPLOAD_HASH_MISMATCH"
+	default:
+		return ErrCodeKBInternal
+	}
+}
 
 // okResponse 成功响应（对齐 repositories.buildErrorResponse 的工厂用法）
 func okResponse(request *schema.AgentRequest, payload map[string]any) *schema.AgentResponse {

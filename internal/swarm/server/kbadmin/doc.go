@@ -17,7 +17,8 @@
 //	├── chunk_dao.go     # kb_chunk_meta + kb_chunk_revision DAO
 //	├── task_dao.go      # kb_task DAO
 //	├── kb_service.go    # KBService 真实 CRUD 编排
-//	├── stub_services.go # Doc/Chunk/Search Service 骨架
+//	├── doc_upload.go    # DocService 上传分帧编排（发起/收尾/取消/反向下载，30.5）
+//	├── stub_services.go # Doc/Chunk/Search Service 骨架（Doc 上传段 30.5 已摘）
 //	├── upload_store.go  # 上传槽位表（TTL 清理/串行守卫/sha256 收尾，30.5）
 //	└── handle_kb.go     # HandleKBRequest 分发入口
 //
