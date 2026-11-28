@@ -1,36 +1,37 @@
 package parser
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	pdf "github.com/ledongthuc/pdf"
-	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
-	pdfmodel "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
-
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PDFParser PDF 文档解析器。
-// 嵌入 BaseParser 仅覆写 ParseContent（对齐 Python PDFParser 仅覆写 _parse）；
-// Parse/LazyParse/Process/Supports 继承 13.10 模板默认。
-// 双通道（对齐 Python pdfplumber 语义的 Go 工程等价，偏差归档 spec §8）：
-//   - 文本：ledongthuc/pdf 逐页 GetPlainText（extract_text 对应物）
-//   - 图片：pdfcpu ExtractImages 抽嵌入对象原生字节（page.images +
-//     crop + to_image(300) 的产出面对应物——渲染路径需 PDFium/C++，
-//     抽对象产出语义等价）
+// 嵌入 BaseParser，覆写 ParseContent 与 Parse（Parse 覆写为 30.3 sidecar
+// 注入点——ImageParser 覆写先例）。
+//
+// 30.3 重写（偏差 D-30-3-1，用户拍板「直接替换」）：统一 gomupdf 单库链——
+//   - 文本：逐页词框（含坐标与行号），行分组拼页文本
+//   - 图片：placement bbox + 原生字节（归档命名语义不变），ledongthuc/pdfcpu 退役
+//   - sidecar：PageMap（词全文区间 + 图片 placement + caption 宿主锚）
+//     经 Document.Metadata[MetaKeySourcePageMap] 内部传递（spec §4），
+//     chunker 消费后剔除
+//
+// 正文组装语义保持：非空页文本 + 该页图片 caption 紧随其后；
+// 过滤空行后 "\n".join；空串返回（"result if result else None"）。
 //
 // Python: openjiuwen/core/retrieval/indexing/processor/parser/pdf_parser.py (PDFParser)
 type PDFParser struct {
-	// BaseParser 默认适配器（Parse/LazyParse/Process/Supports 默认实现）
+	// BaseParser 默认适配器（LazyParse/Process/Supports 默认实现）
 	*BaseParser
 }
 
@@ -42,8 +43,7 @@ var _ Parser = (*PDFParser)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPDFParser 构造 PDFParser。
-// 零参数（对齐 Python __init__(**kwargs): pass）；NewBaseParser(self)
-// 注入使模板方法动态派发到本类覆写。
+// NewBaseParser(self) 注入使模板方法动态派发到本类覆写。
 // Python: pdf_parser.py PDFParser.__init__
 func NewPDFParser() (*PDFParser, error) {
 	p := &PDFParser{}
@@ -55,33 +55,13 @@ func NewPDFParser() (*PDFParser, error) {
 	return p, nil
 }
 
-// ParseContent 解析 PDF：双通道（对齐 Python _parse(file_path, llm_client)）。
-// 流程（对齐 Python _async_parse_pdf 主循环）：
-//  1. 读入字节（双通道共享——图片通道 io.ReadSeeker / 文本通道 ReaderAt）
-//  2. extractImagesByPage 一次性提图分桶（独立软失败）
-//  3. 逐页 GetPlainText（fonts 跨页累积——read_file.go 先例）；
-//     非空文本入 content
-//  4. 该页图片 caption 经 CaptionImages 生成；非空 caption 紧随该页
-//     文本入 content（Python 同页+追加序关联语义）
-//  5. 过滤空行后 "\n".join；空串返回（对齐 "result if result else None"）
-//
+// ParseContent 解析 PDF 文本通道（模板派发点，签名对齐 Python _parse）。
+// 委托 parseWithLocators，仅返回文本（sidecar 由 Parse 覆写注入 Document）。
 // 整体软失败：任一通道 err → Error 日志 + 返回 ("", nil)
 // （对齐 Python except → logger.error → return None）。
 // Python: pdf_parser.py PDFParser._parse
 func (p *PDFParser) ParseContent(ctx context.Context, doc string, llmClient *llm.Model) (string, error) {
-	pdfBytes, err := os.ReadFile(doc)
-	if err != nil {
-		logger.Error(logComponent).
-			Str("file_path", doc).
-			Err(err).
-			Msg("failed to parse pdf")
-		return "", nil
-	}
-
-	imgByPage := extractImagesByPage(ctx, pdfBytes, savedImageDir, filepath.Base(doc))
-
-	// 文本通道：ledongthuc 逐页（ReadFile err 之外错误在此统一软失败）
-	content, err := p.parsePages(ctx, pdfBytes, imgByPage, llmClient)
+	content, _, err := p.parseWithLocators(ctx, doc, llmClient)
 	if err != nil {
 		// 对齐 Python: logger.error(f"Failed to parse PDF {file_path}: {e}")
 		logger.Error(logComponent).
@@ -90,12 +70,32 @@ func (p *PDFParser) ParseContent(ctx context.Context, doc string, llmClient *llm
 			Msg("failed to parse pdf")
 		return "", nil
 	}
+	return content, nil
+}
 
-	result := joinNonBlank(content)
-	if result == "" {
-		return "", nil // 对齐 Python "result if result else None"
+// Parse 解析文档并注入 source_locators sidecar（30.3 覆写点）。
+// 复刻 BaseParser.Parse 模板（非空内容包装为单文档），Metadata 额外携带
+// MetaKeySourcePageMap（仅 parser→chunker 内部传递，chunker 消费后剔除）。
+// 软失败语义与 ParseContent 一致：err → Error 日志 + 空切片。
+func (p *PDFParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
+	o := NewParseOptions(opts...)
+	content, pageMaps, err := p.parseWithLocators(ctx, doc, o.LLMClient)
+	if err != nil {
+		// 对齐 Python: logger.error(f"Failed to parse PDF {file_path}: {e}")
+		logger.Error(logComponent).
+			Str("file_path", doc).
+			Err(err).
+			Msg("failed to parse pdf")
+		return []reranker.Document{}, nil
 	}
-	return result, nil
+	if content == "" {
+		return []reranker.Document{}, nil
+	}
+	return []reranker.Document{{
+		ID:       o.DocID,
+		Text:     content,
+		Metadata: map[string]any{common.MetaKeySourcePageMap: pageMaps},
+	}}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -109,107 +109,127 @@ func init() {
 	})
 }
 
-// extractImagesByPage 用 pdfcpu 提取全部嵌入图片并按页分桶落盘。
-// 对齐 Python _extract_images_from_pdf_page 的产出面（图片文件路径列表），
-// 重组为一次性批量 + img.PageNr 分桶（pdfcpu 回调天然按页序遍历，
-// 页内对象号升序——偏差归档 spec §8-5）：
-//   - 命名复刻 Python：{filename}__page_{页码}__img_{页内序号}.{原生扩展名}
-//     （Python 恒 .png 是渲染路径产物；Go 存原生格式——偏差 §8-3）
-//   - img.Reader 为解码后字节，直接落盘
-//   - 软失败：pdfcpu 出错 → Error 日志 + 空 map + nil error（图片通道独立
-//     软失败，文本通道继续——对齐 Python 该路径被整体 except 吞的净效果，
-//     Go 显式化日志不改变软失败语义）
-//
-// Python: pdf_parser.py PDFParser._extract_images_from_pdf_page
-func extractImagesByPage(ctx context.Context, pdfBytes []byte, outputDir, filename string) map[int][]string {
-	imgByPage := map[int][]string{}
-
-	if err := pdfapi.ExtractImages(ctx, bytes.NewReader(pdfBytes), nil, func(img pdfmodel.Image, _ bool, _ int) error {
-		data, err := io.ReadAll(img)
-		if err != nil {
-			return fmt.Errorf("读取图片流失败: %w", err)
-		}
-		// 落盘目录（对齐 Python os.makedirs(output_dir, exist_ok=True)）
-		if err := os.MkdirAll(outputDir, 0o755); err != nil {
-			return fmt.Errorf("创建图片目录失败: %w", err)
-		}
-		// 页内序号 = 该页已落盘张数（回调页内顺序确定性：对象号升序）
-		imgIndex := len(imgByPage[img.PageNr])
-		ext := img.FileType
-		if ext == "" {
-			ext = "png" // 防御：无扩展名回落 png
-		}
-		imagePath := filepath.Join(outputDir, fmt.Sprintf("%s__page_%d__img_%d.%s", filename, img.PageNr, imgIndex, ext))
-		if err := os.WriteFile(imagePath, data, 0o644); err != nil {
-			return fmt.Errorf("落盘图片失败: %w", err)
-		}
-		imgByPage[img.PageNr] = append(imgByPage[img.PageNr], imagePath)
-		return nil
-	}, nil); err != nil {
-		// conf=nil → 默认 UnsupportedResourceSkip（不支持的格式软跳过），
-		// 此处 err 为文档级失败（损坏/加密等）
-		logger.Error(logComponent).
-			Err(err).
-			Msg("failed to extract images from pdf")
-		return map[int][]string{}
-	}
-	return imgByPage
+// pageAssemble 单页文本拼装产物
+type pageAssemble struct {
+	// text 页文本（同词空格 join、跨行 "\n" 分隔）
+	text string
+	// wordRel 每词在页文本中的起始 offset（与输入词序下标对齐）
+	wordRel []int
 }
 
-// parsePages 文本通道逐页循环 + caption 并入。
-// Python: pdf_parser.py _async_parse_pdf 循环体
-func (p *PDFParser) parsePages(ctx context.Context, pdfBytes []byte, imgByPage map[int][]string, llmClient *llm.Model) ([]string, error) {
-	r, err := pdf.NewReader(bytes.NewReader(pdfBytes), int64(len(pdfBytes)))
+// parseWithLocators 完整解析：词框文本通道 + 图片归档/caption + sidecar。
+// 步骤（组装语义对齐旧链与 Python _async_parse_pdf 主循环）：
+//  1. extractPDFPages 提取词框与图片（placement + 字节）
+//  2. 逐页拼页文本（行分组）；非空页文本入全文（页间/段间 "\n"）
+//  3. 每页图片归档落盘（命名 {filename}__page_{页码}__img_{页内序号}.{ext}，
+//     Python 命名复刻）；caption 经 CaptionImages 生成，非空 caption
+//     紧随该页文本（软失败：归档/调用失败跳过该 caption，不阻塞）
+//  4. 词区间 = 页起始 offset + 页内 offset（全文为顺序追加，折算精确）；
+//     caption 记 CaptionAnchor（全文区间 + 宿主图下标）
+//  5. 产出 PageMap sidecar
+func (p *PDFParser) parseWithLocators(ctx context.Context, doc string, llmClient *llm.Model) (string, []*common.PageMap, error) {
+	pages, err := extractPDFPages(doc)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	// 单次构造 captioner（Python 每页重建但无状态副作用，等价——偏差 §8-6）
 	captioner := NewImageCaptioner(llmClient)
+	filename := filepath.Base(doc)
 
-	fonts := make(map[string]*pdf.Font)
-	content := []string{}
-	for pageNr := 1; pageNr <= r.NumPage(); pageNr++ {
-		page := r.Page(pageNr)
-		if page.V.IsNull() {
-			continue // 空页跳过（Python extract_text 返回 None → ""）
+	var b strings.Builder
+	pageMaps := make([]*common.PageMap, 0, len(pages))
+	for _, pd := range pages {
+		pa := assemblePageText(pd.Words)
+		pm := &common.PageMap{PageNo: pd.PageNo, PageText: pa.text, Images: pd.Images}
+
+		// 非空页文本入全文；词区间折算（pageStart 在分隔符写入后取值）
+		pageStart := -1
+		if pa.text != "" {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
+			pageStart = b.Len()
+			b.WriteString(pa.text)
 		}
-		// 缓存当前页字体（跨页共享——read_file.go 先例）
-		for _, name := range page.Fonts() {
-			if _, ok := fonts[name]; !ok {
-				f := page.Font(name)
-				fonts[name] = &f
+		for i := range pd.Words {
+			pd.Words[i].CharStart = pageStart + pa.wordRel[i]
+			pd.Words[i].CharEnd = pd.Words[i].CharStart + len(pd.Words[i].Text)
+		}
+		pm.Words = pd.Words
+
+		// 该页图片归档 → caption（整页一批，caption 下标 = 图片下标）
+		imgPaths := make([]string, 0, len(pd.Images))
+		for i, img := range pd.Images {
+			imagePath, aerr := archivePageImage(filename, pd.PageNo, i, img)
+			if aerr != nil {
+				logger.Error(logComponent).Err(aerr).
+					Str("file_path", doc).
+					Msg("failed to archive pdf image")
+				continue // 图片通道独立软失败，文本通道继续
+			}
+			imgPaths = append(imgPaths, imagePath)
+			if len(imgPaths)-1 != i {
+				// 归档失败导致的下标错位：后续锚点以 imgPaths 实际下标为准
+				continue
 			}
 		}
-		pageText, err := page.GetPlainText(fonts)
-		if err != nil {
-			return nil, fmt.Errorf("第 %d 页文本抽取失败: %w", pageNr, err)
-		}
-		if pageText != "" {
-			content = append(content, pageText)
-		}
-
-		// 该页图片 caption（对齐 Python captions 紧随该页文本）
-		imgs := imgByPage[pageNr]
-		if len(imgs) > 0 {
-			captions := captioner.CaptionImages(ctx, imgs)
-			for _, c := range captions {
-				if c != "" {
-					content = append(content, c)
+		if len(imgPaths) > 0 {
+			captions := captioner.CaptionImages(ctx, imgPaths)
+			for i, c := range captions {
+				if c == "" || i >= len(pd.Images) {
+					continue
 				}
+				if b.Len() > 0 {
+					b.WriteString("\n")
+				}
+				capStart := b.Len()
+				b.WriteString(c)
+				pm.CaptionAnchors = append(pm.CaptionAnchors, common.CaptionAnchor{
+					Start: capStart, End: b.Len(), ImageIndex: i,
+				})
 			}
 		}
+
+		pageMaps = append(pageMaps, pm)
 	}
-	return content, nil
+	return b.String(), pageMaps, nil
 }
 
-// joinNonBlank 过滤空行后拼接（对齐 Python "[line for line in content if line.strip()]"）。
-func joinNonBlank(lines []string) string {
-	var kept []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			kept = append(kept, line)
+// assemblePageText 单页词→文本：同 Line 空格 join、跨 Line "\n" 分隔，
+// 同步记录每词页内 offset（词序 = 提取序，语义对齐旧 GetPlainText 读取序）。
+func assemblePageText(words []common.PageWord) pageAssemble {
+	var b strings.Builder
+	rel := make([]int, len(words))
+	prevLine := -1
+	for i, w := range words {
+		switch {
+		case b.Len() == 0:
+			// 行首
+		case w.Line != prevLine:
+			b.WriteString("\n")
+		default:
+			b.WriteString(" ")
 		}
+		rel[i] = b.Len()
+		b.WriteString(w.Text)
+		prevLine = w.Line
 	}
-	return strings.Join(kept, "\n")
+	return pageAssemble{text: b.String(), wordRel: rel}
+}
+
+// archivePageImage 归档单张页图片（旧 extractImagesByPage 命名语义）。
+// Python: pdf_parser.py _extract_images_from_pdf_page 命名复刻
+func archivePageImage(filename string, pageNo, imgIndex int, img common.PageImage) (string, error) {
+	if err := os.MkdirAll(savedImageDir, 0o755); err != nil {
+		return "", fmt.Errorf("创建图片目录失败: %w", err)
+	}
+	ext := img.Ext
+	if ext == "" {
+		ext = "png" // 防御：无扩展名回落 png
+	}
+	imagePath := filepath.Join(savedImageDir, fmt.Sprintf("%s__page_%d__img_%d.%s", filename, pageNo, imgIndex, ext))
+	if err := os.WriteFile(imagePath, img.Data, 0o644); err != nil {
+		return "", fmt.Errorf("落盘图片失败: %w", err)
+	}
+	return imagePath, nil
 }
