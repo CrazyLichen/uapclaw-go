@@ -1,8 +1,13 @@
 package personal_context
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -1288,4 +1293,639 @@ func isAllDigits(value string) bool {
 		}
 	}
 	return true
+}
+
+// 流水线第二块：磁盘工具层。
+// Python: context_pipeline.py:1012-1426（一比一移植）。
+// asyncio 协作式取消 → goroutine + ctx 轮询（偏差 D-24.3a-4，spec §5）。
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// briefing 摘要上限。Python: context_pipeline.py:118-120
+const (
+	briefingSummaryChars = 450
+	briefingHeadingLimit = 8
+	briefingHeadingChars = 160
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// markdownHeadingPattern 发布页标题（1-6 级，含尾部 # 剥离）。
+// Python: context_pipeline.py:82 _MARKDOWN_HEADING
+var markdownHeadingPattern = regexp.MustCompile(`(?m)^ {0,3}(#{1,6})[ \t]+(.+?)\s*#*\s*$`)
+
+// briefingHeadingPattern briefing 提取用（fullmatch 单行）。
+// Python: context_pipeline.py:1378 内 _MARKDOWN_HEADING.fullmatch(line)
+var briefingHeadingPattern = regexp.MustCompile(`^ {0,3}(#{1,6})[ \t]+(.+?)\s*#*\s*$`)
+
+// windowsDriveFullPattern 盘符绝对路径。
+// Python: context_pipeline.py:1213 内 r"[A-Za-z]:.*"
+var windowsDriveFullPattern = regexp.MustCompile(`^[A-Za-z]:.*`)
+
+// fenceStartPrefixes 围栏开头标记。
+var fenceStartPrefixes = []string{"```", "~~~"}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CancelSafeToThread 等线程 IO 落定后再上抛调用方取消。
+// Python: context_pipeline.py:1021 _cancel_safe_to_thread —— Go：goroutine 执行 +
+// ctx.Done 后等待结果再返回 ctx.Err()（偏差 D-24.3a-4）。
+func CancelSafeToThread(ctx context.Context, fn func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		<-done // 等线程结果落定（Python: task.result() 吞异常后 raise cancellation）
+		return ctx.Err()
+	}
+}
+
+// CancelCooperativeToThread 协作式可停只读工作。
+// Python: context_pipeline.py:1061 _cancel_cooperative_to_thread —— fn 接收
+// cancelRequested 轮询函数；ctx 取消时置位并等待结果后上抛取消。
+func CancelCooperativeToThread(ctx context.Context, fn func(cancelRequested func() bool) error) error {
+	done := make(chan error, 1)
+	go func() { done <- fn(func() bool { return ctx.Err() != nil }) }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		<-done
+		return ctx.Err()
+	}
+}
+
+// RaiseIfThreadCancelled 取消检查点。
+// Python: context_pipeline.py:1056 _raise_if_thread_cancelled
+func RaiseIfThreadCancelled(cancelRequested func() bool) error {
+	if cancelRequested != nil && cancelRequested() {
+		return context.Canceled
+	}
+	return nil
+}
+
+// Digest 管理路径摘要（sha256 前 32 位，保 Windows MAX_PATH 之下）。
+// Python: context_pipeline.py:1091 _digest
+func Digest(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:32]
+}
+
+// SplitBlocks 段落切块并按上限再切。
+// Python: context_pipeline.py:1362 _split_blocks
+func SplitBlocks(markdown string) []string {
+	paragraphPattern := regexp.MustCompile(`\n\s*\n`)
+	var paragraphs []string
+	for _, part := range paragraphPattern.Split(markdown, -1) {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			paragraphs = append(paragraphs, trimmed)
+		}
+	}
+	if len(paragraphs) == 0 {
+		trimmed := strings.TrimSpace(markdown)
+		if trimmed != "" {
+			paragraphs = []string{trimmed}
+		}
+	}
+	var blocks []string
+	for _, paragraph := range paragraphs {
+		runes := []rune(paragraph)
+		for index := 0; index < len(runes); index += maxBlockChars {
+			end := index + maxBlockChars
+			if end > len(runes) {
+				end = len(runes)
+			}
+			blocks = append(blocks, string(runes[index:end]))
+		}
+	}
+	if len(blocks) == 0 {
+		return []string{""}
+	}
+	return blocks
+}
+
+// NormalizeMarkdown 规范化采集的源 Markdown（去 NUL、统一换行、行尾去空白）。
+// Python: context_pipeline.py:1372 _normalize_markdown
+func NormalizeMarkdown(content string) string {
+	normalized := strings.ReplaceAll(content, "\x00", "")
+	normalized = strings.ReplaceAll(normalized, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	var lines []string
+	for _, line := range strings.Split(normalized, "\n") {
+		lines = append(lines, strings.TrimRight(line, " \t\v\f\r"))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n")) + "\n"
+}
+
+// DeterministicBriefingPreview 无模型抽取有界大纲与首段。
+// Python: context_pipeline.py:1378 _deterministic_briefing_preview
+func DeterministicBriefingPreview(content string) map[string]any {
+	normalized := NormalizeMarkdown(SourceLinkPreview(content))
+	lines := strings.Split(strings.TrimSuffix(normalized, "\n"), "\n")
+	var headings []map[string]any
+	var paragraph []string
+	var fallbackLines []string
+	paragraphComplete := false
+	inFrontmatter := len(lines) > 0 && strings.TrimSpace(lines[0]) == "---"
+	inFence := false
+
+	for index, line := range lines {
+		stripped := strings.TrimSpace(line)
+		if inFrontmatter {
+			if index > 0 && (stripped == "---" || stripped == "...") {
+				inFrontmatter = false
+			}
+			continue
+		}
+		if strings.HasPrefix(stripped, "```") || strings.HasPrefix(stripped, "~~~") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		heading := briefingHeadingPattern.FindStringSubmatch(line)
+		if heading != nil {
+			if len(headings) < briefingHeadingLimit {
+				text := strings.TrimSpace(heading[2])
+				text = strings.ReplaceAll(text, "`", "'")
+				runes := []rune(text)
+				if len(runes) > briefingHeadingChars {
+					text = string(runes[:briefingHeadingChars])
+				}
+				headings = append(headings, map[string]any{
+					"level": len(heading[1]), "text": text,
+				})
+			}
+			if len(paragraph) > 0 {
+				paragraphComplete = true
+			}
+			continue
+		}
+		if stripped == "" || stripped == "---" || stripped == "***" || stripped == "___" {
+			if len(paragraph) > 0 {
+				paragraphComplete = true
+			}
+			continue
+		}
+		fallbackLines = append(fallbackLines, stripped)
+		if !paragraphComplete {
+			paragraph = append(paragraph, stripped)
+		}
+	}
+
+	summary := strings.Join(paragraph, " ")
+	if summary == "" {
+		summary = strings.Join(fallbackLines, " ")
+	}
+	if summary == "" {
+		summary = strings.TrimSpace(normalized)
+	}
+	runes := []rune(summary)
+	if len(runes) > briefingSummaryChars {
+		summary = strings.TrimRight(string(runes[:briefingSummaryChars]), "")
+	}
+	return map[string]any{
+		"headings":      headings,
+		"summary":       summary,
+		"content_chars": len([]rune(normalized)),
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// pipelinePathExists 探测存在性（扩展路径）。
+// Python: context_pipeline.py:1110 _path_exists —— 委托 pathSafety 同名实现。
+func pipelinePathExists(path string) bool {
+	return pathExists(path)
+}
+
+// pipelinePathIsFile 是否常规文件。
+// Python: context_pipeline.py:1114 _path_is_file
+func pipelinePathIsFile(path string) bool {
+	info, err := os.Lstat(extendedPath(path))
+	return err == nil && info.Mode().IsRegular()
+}
+
+// pipelinePathIsDir 是否目录。
+// Python: context_pipeline.py:1118 _path_is_dir
+func pipelinePathIsDir(path string) bool {
+	info, err := os.Lstat(extendedPath(path))
+	return err == nil && info.IsDir()
+}
+
+// pipelinePathIsLinkOrReparse 链接或重解析点。
+// Python: context_pipeline.py:1122 _path_is_link_or_reparse
+func pipelinePathIsLinkOrReparse(path string) bool {
+	return pathIsLinkOrReparse(path)
+}
+
+// walkTreePaths 确定性遍历（先目录后文件，casefold 排序）。
+// Python: context_pipeline.py:1127 _walk_tree_paths
+func walkTreePaths(root string) []string {
+	var result []string
+	if !pipelinePathExists(root) {
+		return result
+	}
+	extendedRoot := extendedPath(root)
+	var walk func(current string, relative string)
+	walk = func(current string, relative string) {
+		entries, err := os.ReadDir(current)
+		if err != nil {
+			return
+		}
+		var dirNames, fileNames []string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				dirNames = append(dirNames, entry.Name())
+			} else {
+				fileNames = append(fileNames, entry.Name())
+			}
+		}
+		sort.Slice(dirNames, func(i, j int) bool { return identifierLess(dirNames[i], dirNames[j]) })
+		sort.Slice(fileNames, func(i, j int) bool { return identifierLess(fileNames[i], fileNames[j]) })
+		for _, name := range append(append([]string{}, dirNames...), fileNames...) {
+			childRelative := name
+			if relative != "" {
+				childRelative = relative + "/" + name
+			}
+			result = append(result, filepath.Join(root, filepath.FromSlash(childRelative)))
+			if entry := current + string(filepath.Separator) + name; pipelinePathIsDir(entry) &&
+				!pathIsLinkOrReparse(entry) {
+				walk(entry, childRelative)
+			}
+		}
+	}
+	walk(extendedRoot, "")
+	return result
+}
+
+// pipelineReplacePath rename 替换（父目录自动创建）。
+// Python: context_pipeline.py:1144 _replace_path
+func pipelineReplacePath(source string, target string) error {
+	if err := os.MkdirAll(filepath.Dir(extendedPath(target)), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(extendedPath(source), extendedPath(target))
+}
+
+// pipelineAtomicWrite 临时文件 + fsync + rename（前缀 .tmp-）。
+// Python: context_pipeline.py:1150 _atomic_write
+func pipelineAtomicWrite(path string, data []byte) error {
+	target := extendedPath(path)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	tempFile, err := os.CreateTemp(filepath.Dir(target), ".tmp-")
+	if err != nil {
+		return err
+	}
+	temporary := tempFile.Name()
+	defer func() {
+		if temporary != "" {
+			_ = os.Remove(temporary)
+		}
+	}()
+	if _, err := tempFile.Write(data); err != nil {
+		tempFile.Close()
+		return err
+	}
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, target); err != nil {
+		return err
+	}
+	temporary = ""
+	return nil
+}
+
+// assertNoSymlinks 受管目录内禁 symlink/reparse。
+// Python: context_pipeline.py:1168 _assert_no_symlinks
+func assertNoSymlinks(root string) error {
+	if err := assertPipelinePathChainNoSymlinks(root); err != nil {
+		return err
+	}
+	if pipelinePathIsLinkOrReparse(root) {
+		return publishError("managed directory must not contain symlinks")
+	}
+	if !pipelinePathExists(root) {
+		return nil
+	}
+	for _, entry := range walkTreePaths(root) {
+		if pipelinePathIsLinkOrReparse(entry) {
+			return publishError("managed directory must not contain symlinks")
+		}
+	}
+	return nil
+}
+
+// assertPipelinePathChainNoSymlinks 既有路径与其父链禁 symlink。
+// Python: context_pipeline.py:1181 _assert_path_chain_no_symlinks
+func assertPipelinePathChainNoSymlinks(path string) error {
+	current := path
+	for {
+		if pipelinePathIsLinkOrReparse(current) {
+			return publishError("managed path must not traverse symlinks")
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+		current = parent
+	}
+}
+
+// copyTree 复制目录树（symlinks=False 语义：链接按实体复制）。
+// Python: context_pipeline.py:1193 _copy_tree
+func copyTree(source string, target string) error {
+	if !pipelinePathExists(source) {
+		return os.MkdirAll(extendedPath(target), 0o755)
+	}
+	if err := assertNoSymlinks(source); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(extendedPath(target), 0o755); err != nil {
+		return err
+	}
+	var copyErr error
+	for _, entry := range walkTreePaths(source) {
+		relative, relErr := filepath.Rel(source, entry)
+		if relErr != nil {
+			return relErr
+		}
+		destination := filepath.Join(target, relative)
+		info, statErr := os.Lstat(entry)
+		if statErr != nil {
+			return statErr
+		}
+		if info.IsDir() {
+			if err := os.MkdirAll(destination, info.Mode().Perm()); err != nil {
+				return err
+			}
+			continue
+		}
+		data, readErr := os.ReadFile(entry)
+		if readErr != nil {
+			return readErr
+		}
+		if copyErr = os.WriteFile(destination, data, info.Mode().Perm()); copyErr != nil {
+			return copyErr
+		}
+	}
+	return nil
+}
+
+// pipelineRelativeFile 相对受管根的 POSIX 相对路径。
+// Python: context_pipeline.py:1206 _relative_file
+func pipelineRelativeFile(path string, root string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", publishError("managed path escaped its root")
+	}
+	rootAbsolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", publishError("managed path escaped its root")
+	}
+	relative, relErr := filepath.Rel(rootAbsolute, absolute)
+	if relErr != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", publishError("managed path escaped its root")
+	}
+	return filepath.ToSlash(relative), nil
+}
+
+// validatedRelativePath 工作区相对路径校验。
+// Python: context_pipeline.py:1213 _validated_relative_path
+func validatedRelativePath(value string, name string) (string, error) {
+	normalized := strings.ReplaceAll(value, "\\", "/")
+	if windowsDriveFullPattern.MatchString(normalized) || normalized == "" ||
+		strings.HasPrefix(normalized, "/") {
+		return "", publishError(fmt.Sprintf("%s is unsafe", name))
+	}
+	for _, part := range strings.Split(normalized, "/") {
+		if part == "" || part == "." || part == ".." {
+			return "", publishError(fmt.Sprintf("%s is unsafe", name))
+		}
+	}
+	return normalized, nil
+}
+
+// isProgramDescription 目录级描述页是程序元数据。
+// Python: context_pipeline.py:1226 _is_program_description
+func isProgramDescription(relative string) bool {
+	return strings.EqualFold(filepath.Base(relative), "description.md")
+}
+
+// assertCanonicalDescriptionNames 拒绝非规范大小写描述名。
+// Python: context_pipeline.py:1233 _assert_canonical_description_names
+func assertCanonicalDescriptionNames(contextRoot string, repairable bool) error {
+	for _, entry := range walkTreePaths(contextRoot) {
+		name := filepath.Base(entry)
+		if strings.EqualFold(name, "description.md") && name != "description.md" {
+			if repairable {
+				return pipelineError("description.md must use canonical lowercase casing")
+			}
+			return publishError("description.md must use canonical lowercase casing")
+		}
+	}
+	return nil
+}
+
+// removeTreeEntry 删除单个树条目（文件/链接删除，目录递归）。
+// Python: context_pipeline.py:1242 _remove_tree_entry
+func removeTreeEntry(path string) error {
+	if pipelinePathIsLinkOrReparse(path) || pipelinePathIsFile(path) {
+		return os.Remove(extendedPath(path))
+	}
+	if pipelinePathIsDir(path) {
+		return removeTree(path)
+	}
+	return nil
+}
+
+// removeTree 递归删除（只读文件 chmod 后重试）。
+// Python: context_pipeline.py:1266 _remove_tree
+func removeTree(path string) error {
+	err := os.RemoveAll(path)
+	if err == nil {
+		return nil
+	}
+	if !os.IsNotExist(err) && !os.IsPermission(err) {
+		return err
+	}
+	if !pipelinePathExists(path) && !pipelinePathIsLinkOrReparse(path) {
+		return nil
+	}
+	return os.RemoveAll(extendedPath(path))
+}
+
+// makeTreeWritable 只读源副本落地后使候选可删。
+// Python: context_pipeline.py:1280 _make_tree_writable
+func makeTreeWritable(path string) error {
+	if !pipelinePathExists(path) || pipelinePathIsLinkOrReparse(path) {
+		return nil
+	}
+	entries := append([]string{path}, walkTreePaths(path)...)
+	for _, entry := range entries {
+		info, statErr := os.Stat(extendedPath(entry))
+		if statErr != nil {
+			continue
+		}
+		if err := os.Chmod(extendedPath(entry), info.Mode().Perm()|0o222); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeEmptyDirectories 自深而浅删除空目录。
+// Python: context_pipeline.py:1290 _remove_empty_directories
+func removeEmptyDirectories(root string) error {
+	if !pipelinePathExists(root) {
+		return nil
+	}
+	var directories []string
+	for _, entry := range walkTreePaths(root) {
+		if pipelinePathIsDir(entry) {
+			directories = append(directories, entry)
+		}
+	}
+	sort.Slice(directories, func(i, j int) bool {
+		ri, _ := filepath.Rel(root, directories[i])
+		rj, _ := filepath.Rel(root, directories[j])
+		depthI := len(strings.Split(filepath.ToSlash(ri), "/"))
+		depthJ := len(strings.Split(filepath.ToSlash(rj), "/"))
+		if depthI != depthJ {
+			return depthI > depthJ
+		}
+		return filepath.ToSlash(ri) < filepath.ToSlash(rj)
+	})
+	for _, directory := range directories {
+		_ = os.Remove(extendedPath(directory))
+	}
+	return nil
+}
+
+// copyAndPublishTree 候选文件增量发布（不动旧根描述仍引用的文件）。
+// Python: context_pipeline.py:1302 _copy_and_publish_tree
+func copyAndPublishTree(candidate string, target string, skipRelative string) (map[string]struct{}, error) {
+	if err := assertNoSymlinks(candidate); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(extendedPath(target), 0o755); err != nil {
+		return nil, err
+	}
+	if err := assertNoSymlinks(target); err != nil {
+		return nil, err
+	}
+	candidateFiles := map[string]struct{}{}
+	for _, entry := range walkTreePaths(candidate) {
+		if pipelinePathIsFile(entry) {
+			relative, err := pipelineRelativeFile(entry, candidate)
+			if err != nil {
+				return nil, err
+			}
+			candidateFiles[relative] = struct{}{}
+		}
+	}
+	targetFiles := map[string]struct{}{}
+	for _, entry := range walkTreePaths(target) {
+		if pipelinePathIsFile(entry) {
+			relative, err := pipelineRelativeFile(entry, target)
+			if err != nil {
+				return nil, err
+			}
+			targetFiles[relative] = struct{}{}
+		}
+	}
+	if skipRelative != "" {
+		delete(candidateFiles, skipRelative)
+		delete(targetFiles, skipRelative)
+	}
+	var ordinaryFiles, nestedDescriptions []string
+	for relative := range candidateFiles {
+		if isProgramDescription(relative) {
+			nestedDescriptions = append(nestedDescriptions, relative)
+		} else {
+			ordinaryFiles = append(ordinaryFiles, relative)
+		}
+	}
+	sort.Strings(ordinaryFiles)
+	sort.Slice(nestedDescriptions, func(i, j int) bool {
+		depthI := len(strings.Split(nestedDescriptions[i], "/"))
+		depthJ := len(strings.Split(nestedDescriptions[j], "/"))
+		if depthI != depthJ {
+			return depthI > depthJ
+		}
+		return nestedDescriptions[i] < nestedDescriptions[j]
+	})
+	for _, relative := range append(append([]string{}, ordinaryFiles...), nestedDescriptions...) {
+		sourceData, err := os.ReadFile(extendedPath(filepath.Join(candidate, filepath.FromSlash(relative))))
+		if err != nil {
+			return nil, err
+		}
+		destination := extendedPath(filepath.Join(target, filepath.FromSlash(relative)))
+		if info, statErr := os.Lstat(destination); statErr == nil && info.Mode().IsRegular() {
+			if existing, readErr := os.ReadFile(destination); readErr == nil &&
+				string(existing) == string(sourceData) {
+				continue
+			}
+		}
+		if err := pipelineAtomicWrite(filepath.Join(target, filepath.FromSlash(relative)), sourceData); err != nil {
+			return nil, err
+		}
+	}
+	obsolete := map[string]struct{}{}
+	for relative := range targetFiles {
+		if _, stillUsed := candidateFiles[relative]; !stillUsed {
+			obsolete[relative] = struct{}{}
+		}
+	}
+	return obsolete, nil
+}
+
+// removePublishedTreeEntries 新根描述可见后清理废弃文件。
+// Python: context_pipeline.py:1339 _remove_published_tree_entries
+func removePublishedTreeEntries(target string, relatives map[string]struct{}) error {
+	if err := assertNoSymlinks(target); err != nil {
+		return err
+	}
+	var sortedRelatives []string
+	for relative := range relatives {
+		sortedRelatives = append(sortedRelatives, relative)
+	}
+	sort.Strings(sortedRelatives)
+	for _, relative := range sortedRelatives {
+		if err := removeTreeEntry(filepath.Join(target, filepath.FromSlash(relative))); err != nil {
+			return err
+		}
+	}
+	return removeEmptyDirectories(target)
+}
+
+// commitContextTree 把校验后的候选作为取消安全提交单元发布。
+// Python: context_pipeline.py:1348 _commit_context_tree
+func commitContextTree(candidate string, target string) error {
+	obsolete, err := copyAndPublishTree(candidate, target, "description.md")
+	if err != nil {
+		return err
+	}
+	descriptionData, err := os.ReadFile(filepath.Join(candidate, "description.md"))
+	if err != nil {
+		return err
+	}
+	if err := pipelineAtomicWrite(filepath.Join(target, "description.md"), descriptionData); err != nil {
+		return err
+	}
+	if err := removePublishedTreeEntries(target, obsolete); err != nil {
+		return err
+	}
+	return assertNoSymlinks(target)
 }
