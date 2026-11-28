@@ -65,7 +65,10 @@ func TestAgentServer_Start_发送ConnectionAck(t *testing.T) {
 		if m["event"] != "connection.ack" {
 			t.Errorf("event = %v, 期望 connection.ack", m["event"])
 		}
-	case <-time.After(2 * time.Second):
+	// ack 由 Start 末尾 go s.run(ctx) 异步发送：run() 先走四步慢路径才发首帧
+	//（agent_server.go run 步骤 0-4），整包并发高负载下 2s 会偶发超时（假红），
+	// 放宽到 10s 等待异步启动。
+	case <-time.After(10 * time.Second):
 		t.Fatal("超时：未收到 connection.ack")
 	}
 
@@ -95,7 +98,10 @@ func TestAgentServer_Stop(t *testing.T) {
 	select {
 	case <-recvCh:
 		// 收到 connection.ack，启动完成
-	case <-time.After(2 * time.Second):
+	// ack 由 Start 末尾 go s.run(ctx) 异步发送：run() 先走四步慢路径才发首帧
+	//（agent_server.go run 步骤 0-4），整包并发高负载下 2s 会偶发超时（假红），
+	// 放宽到 10s 等待异步启动。
+	case <-time.After(10 * time.Second):
 		t.Fatal("超时：未收到 connection.ack")
 	}
 
@@ -183,7 +189,10 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 	select {
 	case <-recvCh:
 		// 收到 connection.ack，启动完成
-	case <-time.After(2 * time.Second):
+	// ack 由 Start 末尾 go s.run(ctx) 异步发送：run() 先走四步慢路径才发首帧
+	//（agent_server.go run 步骤 0-4），整包并发高负载下 2s 会偶发超时（假红），
+	// 放宽到 10s 等待异步启动。
+	case <-time.After(10 * time.Second):
 		t.Fatal("超时：未收到 connection.ack")
 	}
 
