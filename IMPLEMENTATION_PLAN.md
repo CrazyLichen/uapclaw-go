@@ -1539,13 +1539,13 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 > **无上游 Python 对应物**——对标 Tencent/WeKnora 的 KB→文档→分块三层组织方式。检索/解析内核复用领域十三既有 `core/retrieval`（零侵入，唯一例外见 30.3）。📄 整体方案 `docs/superpowers/specs/2026-11-28-domain30-kb-admin-design.md`（用户逐节确认定稿）。
 > 已拍板：四层全量（KB/文档/分块/检索测试）· SimpleKB+MultiKB+GraphKB 全覆盖 · 全 WS 通信（gateway 薄转发 E2A，上传下载走分帧通道，零独立 HTTP 路由）· goroutine 池+SQLite 任务表+WS 推送 · 单用户全局共享 · 原文定位全量（pdf bbox + pdf.js 高亮）· 顺带补 CSV。
 > **⤵️ 延后登记**：FAQ/Wiki 库类型、KB 发布 MCP 端点、共享权限/多用户、PPT/EPUB/XMind 解析、docx 在线富渲染（见方案 §11）。
-> **30.2 回填登记**：extracting 执行体（LLM 摘要/标签/生成问题+生成问题向量条目）⤵️30.4 · MultiKB 聚合检索与 kb.chunk.list 分块正文回查 ⤵️30.6 · kb_task 推送前端消费 ⤵️30.8 · chunk 原文定位 locators_json 写入链 ⤵️30.3。
+> **30.2 回填登记**：extracting 执行体（LLM 摘要/标签/生成问题+生成问题向量条目）⤵️30.4 · MultiKB 聚合检索与 kb.chunk.list 分块正文回查 ⤵️30.6 · kb_task 推送前端消费 ⤵️30.8 · chunk 原文定位 locators_json 写入链 ✅30.3 兑现。
 
 | 步骤 | 状态 | 内容 | 产出 | 参考 |
 |------|------|------|------|------|
 | 30.1 | ✅ | **地基：kb_admin 域 + 数据模型**：`kb_info/kb_doc/kb_chunk_meta/kb_chunk_revision/kb_task` 五表 DAO（GORM 结构体映射）、KBService/DocService/ChunkService/SearchService 骨架、E2A 方法注册（kb.* 方法族白名单） | `internal/swarm/server/kbadmin/`（或归置对齐既有 server 结构） | 方案 §2 §3 |
 | 30.2 | ✅ | **解析任务链**：goroutine worker 池 + 状态机（pending→processing[stages: parsing/chunking/embedding/extracting]→completed/failed/cancelled）+ 活动追踪（last_activity_at/stall_state）+ cancel/reparse + 重启孤儿任务恢复 | 同上 `worker*.go` | 方案 §4 |
-| 30.3 | ☐ | **source_locators 全量**：pdf 页码+bbox 坐标提取链、docx 段落号、字符区间；`retrieval` 包 parser/chunker 侧扩展（**唯一侵入点**，单独提交登记偏差）；chunk locators_json 落 DAO | `core/retrieval/indexing/processor/` | 方案 §8 |
+| 30.3 | ✅ | **source_locators 全量**：pdf 页码+bbox 坐标提取链、docx 段落号、字符区间；`retrieval` 包 parser/chunker 侧扩展（**唯一侵入点**，单独提交登记偏差）；chunk locators_json 落 DAO | `core/retrieval/indexing/processor/` | 方案 §8 |
 | 30.4 | ☐ | **CSV 解析 + AI 增强**：CSV parser 补齐；LLM 二阶段（摘要/标签/enhance_state 独立标记）+ 生成问题（GeneratedQuestion）生成链 | 同上 | 方案 §9 |
 | 30.5 | ✅ | **WS 文件分帧通道**：上传（前端切帧→流式落盘→hash 校验→触发解析）/下载预览（反向流式→blob URL）；50MB 默认上限 + 流量控制/背压 | gateway 薄转发 + server 侧帧处理 | 方案 §5（30.5 已实施：B1 薄映射复用 file.upload_chunk 协议，X 边界止步安全落盘；触发解析 ⤵️30.2、前端 UI ⤵️30.8） |
 | 30.6 | ☐ | **检索测试 + 分块管理端点**：kb.search.test（topK/阈值/rerank/use_generated_questions 参数 + 召回来源徽标）；kb.chunk.update 乐观锁/revisions/revert/启停/删除（向量库先行→DAO，失败回滚）；kb.chunker.preview 无状态试切 | 同上 | 方案 §5 §7 |
