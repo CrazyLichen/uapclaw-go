@@ -22,7 +22,9 @@ func (d *Domain) TaskProgress(taskIDs []string, kbID string) ([]KBTask, error) {
 	} else if kbID != "" {
 		q = q.Where("kb_id = ?", kbID)
 	}
-	if err := q.Order("created_at DESC").Find(&rows).Error; err != nil {
+	// rowid tiebreak：created_at 为秒级时间戳，同秒插入的行序不确定
+	// （30.2 集成 flake 根因之一），插入序（rowid）保证「最新行优先」确定性
+	if err := q.Order("created_at DESC, rowid DESC").Find(&rows).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []KBTask{}, nil
 		}

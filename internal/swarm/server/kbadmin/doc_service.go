@@ -103,6 +103,10 @@ func (s *DocService) Reparse(docID string) (*KBTask, error) {
 	if err := s.store.Doc().Update(doc); err != nil {
 		return nil, err
 	}
+	// 清旧 chunk 台账行（向量库侧由 embedStep 先删后建对齐；两侧同步防陈旧累积）
+	if err := s.store.Chunk().DeleteByDoc(docID); err != nil {
+		return nil, err
+	}
 	task := &KBTask{ID: uuid.NewString(), DocID: doc.ID, KBID: doc.KBID,
 		Status: "pending", CreatedAt: now}
 	if err := s.store.Task().Create(task); err != nil {

@@ -139,7 +139,7 @@ func (g *GraphKnowledgeBase) AddDocuments(ctx context.Context, documents []reran
 				IndexType:           g.config.IndexType,
 				UseCaptionForImages: true,
 			}
-			tripleChunks := triplesToTextChunks(triples)
+			tripleChunks := TriplesToTextChunks(triples)
 			success, err := g.indexManager.BuildIndex(ctx, tripleChunks, tripleConfig, g.embedModel,
 				indexer.WithIndexExtra("database_name", databaseName))
 			if err != nil {
@@ -404,14 +404,14 @@ func (g *GraphKnowledgeBase) retrieveViaSimpleKB(ctx context.Context, query stri
 	return base.Retrieve(ctx, query, config, opts...)
 }
 
-// triplesToTextChunks 三元组转 TextChunk（图索引的写入形态）。
+// TriplesToTextChunks 三元组转 TextChunk（图索引的写入形态）。
 // metadata 先展开 triple.metadata 再覆写 triple / chunk_index / chunk_id：
 // 后两键是 13.23 graph_fetch 读侧回链原始分块（metadata["doc_id"] /
 // metadata["chunk_id"]）的契约，缺一个键图扩展就断链。
 // triple 用 json.Marshal（紧凑）而非 Python json.dumps 的 ", " 形态，
 // 语义等价、字节不同（spec §8-2）。
 // Python: add_documents L144-158
-func triplesToTextChunks(triples []common.Triple) []common.TextChunk {
+func TriplesToTextChunks(triples []common.Triple) []common.TextChunk {
 	chunks := make([]common.TextChunk, 0, len(triples))
 	for i, t := range triples {
 		meta := make(map[string]any, len(t.Metadata)+3)

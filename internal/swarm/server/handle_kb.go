@@ -92,10 +92,15 @@ func getKBDomain() *kbadmin.Domain {
 	return kbDomainInstance
 }
 
-// ResetKBDomainForTest 测试用：重置懒装配状态（仅 _test.go 可达语义）
+// ResetKBDomainForTest 测试用：重置懒装配状态（仅 _test.go 可达语义）。
+// 重置前先停旧域（worker 停止 + chroma client 全量释放）——旧域资源泄漏会让
+// 新旧两个 PersistentClient 同路径并发，锁竞争/读抖动致后续解析 flake
 func ResetKBDomainForTest() {
 	kbWiringMu.Lock()
 	defer kbWiringMu.Unlock()
+	if kbDomainInstance != nil {
+		kbDomainInstance.Stop()
+	}
 	kbDomainInstance = nil
 	kbWiringErr = nil
 }

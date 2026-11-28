@@ -2,7 +2,6 @@ package kbadmin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -15,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/chunker"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/extractor"
 	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/indexing/processor/parser"
+	"github.com/uapclaw/uapclaw-go/internal/openuapclaw/core/retrieval/knowledgebase"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -182,7 +182,7 @@ func embedStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 }
 
 // tripleStep graph 追加步骤：TripleExtractor 抽取 + triple 索引
-// （逐行对照 graph_kb.go:126-156：抽取→空集跳过→triplesToTextChunks→BuildIndex，
+// （逐行对照 graph_kb.go:126-156：抽取→空集跳过→TriplesToTextChunks→BuildIndex，
 // use_caption_for_images 硬编码 true——三元组恒走 text-only 嵌入路径）
 func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 	if env.tripleExtractor == nil {
@@ -205,7 +205,7 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 			IndexType:           "vector",
 			UseCaptionForImages: true,
 		}
-		tripleChunks := triplesToTextChunks(triples)
+		tripleChunks := knowledgebase.TriplesToTextChunks(triples)
 		success, err := idx.BuildIndex(ctx, tripleChunks, tripleConfig, env.embedModel,
 			indexer.WithIndexExtra("database_name", "kb_"+job.KBID))
 		if err != nil {
@@ -220,37 +220,4 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 	return nil
 }
 
-// triplesToTextChunks 三元组转文本块（逐行对照 graph_kb.go:414-434 移植——
-// 该助手在 knowledgebase 包为非导出，kbadmin 编排层按同语义复刻；偏差登记见 spec §7）
-func triplesToTextChunks(triples []common.Triple) []common.TextChunk {
-	chunks := make([]common.TextChunk, 0, len(triples))
-	for i, t := range triples {
-		meta := make(map[string]any, len(t.Metadata)+3)
-		for k, v := range t.Metadata {
-			meta[k] = v
-		}
-		tripleJSON, _ := json.Marshal([]string{t.Subject, t.Predicate, t.Object})
-		meta["triple"] = string(tripleJSON)
-		meta["chunk_index"] = i
-		meta["chunk_id"] = tripleMetaString(t.Metadata, "chunk_id")
 
-		chunks = append(chunks, common.TextChunk{
-			ID:       uuid.NewString(),
-			Text:     t.Subject + " " + t.Predicate + " " + t.Object,
-			DocID:    tripleMetaString(t.Metadata, "doc_id"),
-			Metadata: meta,
-		})
-	}
-	return chunks
-}
-
-// tripleMetaString 从元数据取字符串值，缺失或非 string 收窄空串（对照 graph_kb.go metaString）
-func tripleMetaString(meta map[string]any, key string) string {
-	if meta == nil {
-		return ""
-	}
-	if s, ok := meta[key].(string); ok {
-		return s
-	}
-	return ""
-}

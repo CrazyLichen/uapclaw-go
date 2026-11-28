@@ -122,3 +122,32 @@ func TestKBService_Delete_MultiKB级联引用检查(t *testing.T) {
 	// 引用解除后子库可删
 	require.NoError(t, svc.Delete(context.Background(), "sub-1"))
 }
+
+// TestCloseAll_缓存逐出后可重建 域停机清理链回归：CloseAll 后同 kbID 可重新
+// CreateIndexer（新 client），且旧实例已 Close
+func TestCloseAll_缓存逐出后可重建(t *testing.T) {
+	dir := t.TempDir()
+	f := NewRetrievalKBFactory(dir)
+	if err := f.CreateCollection(context.Background(), "kb-ca", "{}"); err != nil {
+		t.Fatal(err)
+	}
+	idx1, err := f.CreateIndexer(context.Background(), "kb-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.CloseAll()
+	f.mu.Lock()
+	n := len(f.indexers)
+	f.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("CloseAll 后缓存应空, got %d", n)
+	}
+	idx2, err := f.CreateIndexer(context.Background(), "kb-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idx1 == idx2 {
+		t.Fatal("CloseAll 后应构造新实例")
+	}
+	_ = idx2.Close()
+}

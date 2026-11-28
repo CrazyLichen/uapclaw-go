@@ -99,8 +99,13 @@ func NewDomain(store *Store, kbFactory *RetrievalKBFactory) (*Domain, error) {
 	return d, nil
 }
 
-// Stop 停机（测试与优雅退出用）
-func (d *Domain) Stop() { d.Worker.Stop() }
+// Stop 停机（测试与优雅退出用）：worker 停止 + 释放工厂缓存的 chroma client。
+// 域重建前必须先停旧域——chroma PersistentClient 同路径双实例并发会锁竞争/
+// 读可见性抖动（30.2 集成 flake 根因），单停 worker 不够
+func (d *Domain) Stop() {
+	d.Worker.Stop()
+	d.KB.CloseIndexers()
+}
 
 // SetPushFunc 注入推送函数（server 侧接线：事件 → WS 帧写出）
 func (d *Domain) SetPushFunc(fn func(channelID string, event TaskEvent)) { d.push = fn }

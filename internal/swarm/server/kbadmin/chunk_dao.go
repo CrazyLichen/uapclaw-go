@@ -53,6 +53,12 @@ func (d *ChunkDAO) DeleteMeta(id string) error {
 	return d.db.Delete(&KBChunkMeta{}, "id = ?", id).Error
 }
 
+// DeleteByDoc 按 docID 删除全部 chunk 台账行（重解析前清旧分块：
+// 向量库侧由 embedStep 先删后建对齐，两侧同步防陈旧 chunk 累积）
+func (d *ChunkDAO) DeleteByDoc(docID string) error {
+	return d.db.Delete(&KBChunkMeta{}, "doc_id = ?", docID).Error
+}
+
 // CreateRevision 追加版本记录
 func (d *ChunkDAO) CreateRevision(r *KBChunkRevision) error { return d.db.Create(r).Error }
 

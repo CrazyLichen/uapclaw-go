@@ -39,6 +39,8 @@ type KBParsePipelineSuite struct {
 	env *testhelpers.ServerEnv
 	// embedURL httptest embedding 端点（OpenAI 兼容协议）
 	embedURL string
+	// currentFileName 最近一次 uploadFile 的文件名（latestTaskByKB 按文档匹配任务行）
+	currentFileName string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -51,8 +53,11 @@ func TestKBParsePipelineSuite(t *testing.T) {
 // SetupSuite 隔离数据目录、启动 embedding 端点与 AgentServer、建宿主 KB。
 func (s *KBParsePipelineSuite) SetupSuite() {
 	s.BaseIntegrationSuite.SetupSuite()
-	// embedding 端点（网络边界替身）：按请求 input 数量回显固定向量
+	// embedding 端点（网络边界替身）：按请求 input 数量回显固定向量；
+	// 120ms 固定延迟拉长 processing 窗口（全链 ~100ms 时轮询可能整窗错过，
+	// TestCancelParse 等 processing 状态会 flake）
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(120 * time.Millisecond)
 		var req struct {
 			Input []string `json:"input"`
 		}
@@ -237,6 +242,7 @@ func (s *KBParsePipelineSuite) TestOrphanRecovery_孤儿恢复() {
 // uploadFile 分帧上传一文件到指定 KB（复用 30.5 协议映射形态），返回 upload_id 与落盘路径。
 func (s *KBParsePipelineSuite) uploadFile(kbID, fileName string, data []byte) (string, string) {
 	s.T().Helper()
+	s.currentFileName = fileName
 	hash := kbSha256Hex(data)
 	rid := s.env.Send("kb.doc.upload", map[string]any{
 		"kb_id": kbID, "file_name": fileName,
@@ -289,23 +295,41 @@ func (s *KBParsePipelineSuite) awaitKBStatusByKB(kbID, status string, timeout ti
 	return nil
 }
 
-// latestTaskByKB 取 kb 下最新创建的任务行（progress DESC 首行）。
+// latestTaskByKB 取 kb 下指定文件名文档的任务行（doc 匹配，避开同秒
+// created_at 排序歧义——progress DESC 首行在并发用例间会挑错任务，
+// 30.2 TestReparse flake 根因）。
 func (s *KBParsePipelineSuite) latestTaskByKB(kbID string) map[string]any {
+	return s.taskByDoc(kbID, s.currentFileName)
+}
+
+// taskByDoc 按 file_name 定位文档 → 按 doc_id 匹配任务行（跳过孤儿哨兵）
+func (s *KBParsePipelineSuite) taskByDoc(kbID, fileName string) map[string]any {
 	s.T().Helper()
-	rid := s.env.Send("kb.task.progress", map[string]any{"kb_id": kbID}, "", false)
+	rid := s.env.Send("kb.doc.list", map[string]any{"kb_id": kbID}, "", false)
 	resp := s.env.AwaitUnary(rid)
 	s.Require().True(resp.OK, "%v", resp.Payload)
-	tasks := resp.Payload["tasks"].([]any)
-	s.Require().NotEmpty(tasks)
-	for _, t := range tasks {
+	var docID string
+	for _, d := range resp.Payload["docs"].([]any) {
+		dm := d.(map[string]any)
+		if dm["file_name"] == fileName {
+			docID, _ = dm["id"].(string)
+		}
+	}
+	s.Require().NotEmpty(docID, "kb %s 无文件 %s", kbID, fileName)
+	rid = s.env.Send("kb.task.progress", map[string]any{"kb_id": kbID}, "", false)
+	resp = s.env.AwaitUnary(rid)
+	s.Require().True(resp.OK, "%v", resp.Payload)
+	for _, t := range resp.Payload["tasks"].([]any) {
 		tm := t.(map[string]any)
-		// 跳过孤儿恢复预置行（it-orphan 前缀哨兵）
+		if tm["doc_id"] != docID {
+			continue
+		}
 		if id, _ := tm["id"].(string); len(id) >= 9 && id[:9] == "it-orphan" {
 			continue
 		}
 		return tm
 	}
-	s.T().Fatalf("kb %s 无非哨兵任务行", kbID)
+	s.T().Fatalf("kb %s doc %s(%s) 无任务行", kbID, fileName, docID)
 	return nil
 }
 

@@ -162,6 +162,26 @@ func (f *RetrievalKBFactory) Has(kbID string) bool {
 	return ok
 }
 
+// CloseAll 关闭并逐出全部缓存的 indexer（域停机/重建清理）。
+// chroma PersistentClient 对同一路径多实例并发存在锁竞争与读可见性抖动
+// （30.2 集成 flake 根因：域重建后旧域 client 未释放，新旧双实例打架），
+// 域重建前必须先经本方法释放旧域持有的全部 client
+func (f *RetrievalKBFactory) CloseAll() {
+	f.mu.Lock()
+	idxs := make(map[string]indexer.Indexer, len(f.indexers))
+	for kbID, idx := range f.indexers {
+		idxs[kbID] = idx
+		delete(f.indexers, kbID)
+	}
+	f.mu.Unlock()
+	for kbID, idx := range idxs {
+		if err := idx.Close(); err != nil {
+			logger.Error(logComponent).Str("kb_id", kbID).Err(err).
+				Msg("kb indexer close failed")
+		}
+	}
+}
+
 // Create 创建知识库：类型校验 → DAO 落行 → collection 创建（向量库失败则 DAO 回滚）。
 // 类型编排（D-30-1-1 收口）：document/graph 建向量 collection；multi 为聚合配置
 // 只落库不建 collection（config 须可解析 JSON）；其余类型拒单
@@ -196,6 +216,9 @@ func (s *KBService) Create(ctx context.Context, id, name, typ, configJSON, folde
 
 // Get 查询知识库（纯 DAO）
 func (s *KBService) Get(id string) (*KBInfo, error) { return s.store.KB().Get(id) }
+
+// CloseIndexers 释放工厂缓存的全部 chroma client（Domain.Stop 消费）
+func (s *KBService) CloseIndexers() { s.kbFactory.CloseAll() }
 
 // List 列表（纯 DAO）
 func (s *KBService) List() ([]KBInfo, error) { return s.store.KB().List() }

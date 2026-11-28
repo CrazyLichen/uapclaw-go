@@ -828,7 +828,7 @@ func TestGraphKB_元数据取值(t *testing.T) {
 
 // TestGraphKB_三元组元数据非字符串 非 string 的 doc_id/chunk_id 收窄空串（偏差 §8-3）。
 func TestGraphKB_三元组元数据非字符串(t *testing.T) {
-	chunks := triplesToTextChunks([]common.Triple{{
+	chunks := TriplesToTextChunks([]common.Triple{{
 		Subject: "a", Predicate: "b", Object: "c",
 		Metadata: map[string]any{"doc_id": 7, "chunk_id": true},
 	}})
