@@ -46,7 +46,7 @@ func TestGenPDFFixture(t *testing.T) {
 	if err := p1.InsertText(72, 100, 12, "Alpha Bravo Charlie"); err != nil {
 		t.Fatalf("InsertText 1-1: %v", err)
 	}
-	if err := p1.InsertText(72, 130, 12, "知识库原文定位测试第一页"); err != nil {
+	if err := p1.InsertText(72, 130, 12, "KB locator fixture page one"); err != nil {
 		t.Fatalf("InsertText 1-2: %v", err)
 	}
 
