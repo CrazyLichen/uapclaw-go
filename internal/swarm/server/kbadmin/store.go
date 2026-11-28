@@ -37,6 +37,9 @@ func OpenStore(dbPath string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// DB 返回 GORM 句柄（DAO 使用）
+func (s *Store) DB() *gorm.DB { return s.db }
+
 // Close 关闭底层连接
 func (s *Store) Close() error {
 	sqlDB, err := s.db.DB()
