@@ -78,3 +78,47 @@ func TestKBService_GetNotFound(t *testing.T) {
 	_, err := svc.Get("nope")
 	require.ErrorIs(t, err, ErrKBNotFound)
 }
+
+// TestKBService_Create_graph类型 graph 库同源建 collection（triple 索引在解析期建）
+func TestKBService_Create_graph类型(t *testing.T) {
+	svc := newTestService(t)
+	kb, err := svc.Create(context.Background(), "kg-1", "图库", "graph", "{}", "/")
+	require.NoError(t, err)
+	require.Equal(t, "graph", kb.Type)
+	require.True(t, svc.kbFactory.Has("kg-1"))
+}
+
+// TestKBService_Create_未知类型拒单 30.2 只收 document/graph/multi
+func TestKBService_Create_未知类型拒单(t *testing.T) {
+	svc := newTestService(t)
+	_, err := svc.Create(context.Background(), "x", "n", "faq", "{}", "/")
+	require.Error(t, err)
+	_, err = svc.store.KB().Get("x")
+	require.ErrorIs(t, err, ErrKBNotFound)
+}
+
+// TestKBService_Create_MultiKB聚合配置 multi 只落库不建 collection，config 须可解析
+func TestKBService_Create_MultiKB聚合配置(t *testing.T) {
+	svc := newTestService(t)
+	_, err := svc.Create(context.Background(), "multi-1", "聚合", "multi", `{"sub_kb_ids":["sub-1"]}`, "/")
+	require.NoError(t, err)
+	require.False(t, svc.kbFactory.Has("multi-1"))
+	// 坏 JSON 拒单
+	_, err = svc.Create(context.Background(), "multi-2", "聚合", "multi", "{bad", "/")
+	require.Error(t, err)
+}
+
+// TestKBService_Delete_MultiKB级联引用检查 被聚合引用的子库不得直接删除
+func TestKBService_Delete_MultiKB级联引用检查(t *testing.T) {
+	svc := newTestService(t)
+	_, err := svc.Create(context.Background(), "sub-1", "子库", "document", "{}", "/")
+	require.NoError(t, err)
+	_, err = svc.Create(context.Background(), "multi-1", "聚合", "multi", `{"sub_kb_ids":["sub-1"]}`, "/")
+	require.NoError(t, err)
+	// 引用中 → 拒删
+	require.Error(t, svc.Delete(context.Background(), "sub-1"))
+	// 聚合库可删
+	require.NoError(t, svc.Delete(context.Background(), "multi-1"))
+	// 引用解除后子库可删
+	require.NoError(t, svc.Delete(context.Background(), "sub-1"))
+}

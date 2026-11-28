@@ -2,6 +2,7 @@ package kbadmin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -135,20 +136,34 @@ func (f *RetrievalKBFactory) Has(kbID string) bool {
 	return ok
 }
 
-// Create 创建知识库：DAO 落行 + collection 创建（向量库失败则 DAO 回滚）
+// Create 创建知识库：类型校验 → DAO 落行 → collection 创建（向量库失败则 DAO 回滚）。
+// 类型编排（D-30-1-1 收口）：document/graph 建向量 collection；multi 为聚合配置
+// 只落库不建 collection（config 须可解析 JSON）；其余类型拒单
 func (s *KBService) Create(ctx context.Context, id, name, typ, configJSON, folderPath string) (*KBInfo, error) {
 	now := time.Now().Unix()
 	if id == "" {
 		id = uuid.NewString()
+	}
+	switch typ {
+	case "document", "graph":
+	case "multi":
+		var probe map[string]any
+		if err := json.Unmarshal([]byte(configJSON), &probe); err != nil {
+			return nil, fmt.Errorf("multi 聚合配置不可解析: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("不支持的库类型: %s", typ)
 	}
 	kb := &KBInfo{ID: id, Name: name, Type: typ, ConfigJSON: configJSON,
 		FolderPath: folderPath, CreatedAt: now, UpdatedAt: now}
 	if err := s.store.KB().Create(kb); err != nil {
 		return nil, err
 	}
-	if err := s.kbFactory.CreateCollection(ctx, id, configJSON); err != nil {
-		_ = s.store.KB().Delete(id) // 回滚
-		return nil, err
+	if typ != "multi" {
+		if err := s.kbFactory.CreateCollection(ctx, id, configJSON); err != nil {
+			_ = s.store.KB().Delete(id) // 回滚
+			return nil, err
+		}
 	}
 	return kb, nil
 }
@@ -168,10 +183,41 @@ func (s *KBService) Update(kb *KBInfo) (*KBInfo, error) {
 	return kb, nil
 }
 
-// Delete 删除知识库：先删 collection 再删 DAO 行（固定顺序，spec §7 一致性）
+// Delete 删除知识库：MultiKB 引用检查 → 先删 collection 再删 DAO 行（固定顺序，spec §7 一致性）
 func (s *KBService) Delete(ctx context.Context, id string) error {
+	if err := s.checkMultiReferences(id); err != nil {
+		return err
+	}
 	if err := s.kbFactory.DeleteCollection(ctx, id); err != nil {
 		return err
 	}
 	return s.store.KB().Delete(id)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// checkMultiReferences MultiKB 级联引用检查：任一聚合库 config 的 sub_kb_ids
+// 含目标 ID 即拒绝删除（引用解除后可删——先删聚合库）
+func (s *KBService) checkMultiReferences(id string) error {
+	kbs, err := s.store.KB().List()
+	if err != nil {
+		return err
+	}
+	for _, kb := range kbs {
+		if kb.Type != "multi" {
+			continue
+		}
+		var cfg struct {
+			SubKBIDs []string `json:"sub_kb_ids"`
+		}
+		if json.Unmarshal([]byte(kb.ConfigJSON), &cfg) != nil {
+			continue
+		}
+		for _, sub := range cfg.SubKBIDs {
+			if sub == id {
+				return fmt.Errorf("知识库被聚合库 %s 引用，先解除引用再删除", kb.ID)
+			}
+		}
+	}
+	return nil
 }
