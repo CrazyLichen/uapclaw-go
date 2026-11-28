@@ -61,3 +61,4 @@ coding_memory/uap-claw-go/memory.db
 /jiuwenbox
 /integration-audit
 internal/openuapclaw/core/retrieval/indexing/processor/parser/images/
+internal/swarm/server/kbadmin/images/
