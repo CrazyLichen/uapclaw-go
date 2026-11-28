@@ -23,9 +23,9 @@ var (
 	kbDomainInstance *kbadmin.Domain
 	kbWiringMu       sync.Mutex
 	kbWiringErr      error
-	// kbPushWired 推送桥进程级一次性接线标记
-	kbPushWired   bool
-	kbPushWiredMu sync.Mutex
+	// kbPushWiredDomain 推送桥接线标记（按 Domain 实例——域重建/测试重置后需重接）
+	kbPushWiredDomain *kbadmin.Domain
+	kbPushWiredMu     sync.Mutex
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -50,14 +50,18 @@ func (s *AgentServer) HandleKBRequest(_ context.Context, request *schema.AgentRe
 func (s *AgentServer) wireKBPushOnce(domain *kbadmin.Domain) {
 	kbPushWiredMu.Lock()
 	defer kbPushWiredMu.Unlock()
-	if kbPushWired {
+	if kbPushWiredDomain == domain {
 		return
 	}
-	kbPushWired = true
+	kbPushWiredDomain = domain
 	domain.SetPushFunc(func(channelID string, event kbadmin.TaskEvent) {
-		resp := schema.NewAgentResponse(uuid.NewString(), channelID,
-			schema.WithPayload(map[string]any{"kb_task_event": event}))
-		s.writeResponse("", channelID, resp)
+		// 统一推送入口（对齐 SendPush 注释：所有 server_push 场景经此通道；
+		// payload.kb_task_event 为前端消费语义，30.8 接入）
+		_ = s.SendPush(context.Background(), map[string]any{
+			"request_id": uuid.NewString(),
+			"channel_id": channelID,
+			"payload":    map[string]any{"kb_task_event": event},
+		})
 	})
 }
 
