@@ -6,7 +6,7 @@
 // 重解析/取消/列表）、ParseWorker 解析任务链（固定池 + 声明式 pipeline +
 // ProgressSink 观察者）、kb.* 方法族 E2A 分发与 kb.task 通信面。
 // chunk 正文与向量在向量库 collection（retrieval 所有），本域只管管理面元数据，
-// 靠 kb_id/doc_id/chunk_id 与向量库对齐；retrieval 包零改动。
+// 靠 kb_id/doc_id/chunk_id 与向量库对齐；retrieval 包改动仅 30.3 source_locators 侵入点（spec §3）。
 //
 // 文件目录：
 //
@@ -20,7 +20,8 @@
 //	├── chunk_dao.go     # kb_chunk_meta + kb_chunk_revision DAO
 //	├── task_dao.go      # kb_task DAO
 //	├── kb_service.go    # KBService 三库类型 CRUD 编排 + RetrievalKBFactory
-//	├── pipeline.go      # 声明式解析步骤计划（parse/chunk/embed/triple）
+//	├── llm_assembly.go   # caption 视觉 LLM 装配（GetDefaultModels 单点复用，30.3）
+//	├── pipeline.go      # 声明式解析步骤计划（parse/chunk/embed/triple）+ locators 落库（30.3）
 //	├── worker.go        # ParseWorker 固定池（CAS 认领/孤儿恢复/ctx 取消）
 //	├── progress.go      # ProgressSink 观察者（stages_json/事件发布/停滞扫描）
 //	├── doc_service.go   # DocService 解析任务编排（提交/重解析/取消/列表）

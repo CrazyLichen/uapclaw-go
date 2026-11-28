@@ -2,6 +2,7 @@ package kbadmin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -115,7 +116,8 @@ func parseStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 	if err != nil {
 		return err
 	}
-	docs, err := ap.Process(ctx, job.FilePath)
+	// 30.3：caption 视觉 LLM 装配（无可用模型 → nil，captioner 禁用态软失败）
+	docs, err := ap.Process(ctx, job.FilePath, parser.WithLLMClient(resolveVisionLLM()))
 	if err != nil {
 		return err
 	}
@@ -143,7 +145,8 @@ func chunkStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 			chunks[i].ID = uuid.NewString()
 		}
 		meta := &KBChunkMeta{ID: chunks[i].ID, DocID: job.DocID, KBID: job.KBID,
-			ChunkType: "text", Enabled: true, Revision: 1}
+			ChunkType: "text", Enabled: true, Revision: 1,
+			LocatorsJSON: marshalLocators(chunks[i].SourceLocators)}
 		if err := env.store.Chunk().CreateMeta(meta); err != nil {
 			return err
 		}
@@ -221,3 +224,19 @@ func tripleStep(ctx context.Context, job *ParseJob, env *pipelineEnv) error {
 }
 
 
+
+// marshalLocators 序列化 chunk 原文定位（30.3）。空/序列化失败落空串
+// （台账列可空；失败 Warn 不阻塞——定位属增强数据）。
+func marshalLocators(locs []common.SourceLocator) string {
+	if len(locs) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(locs)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Int("locator_count", len(locs)).
+			Msg("marshal source locators failed")
+		return ""
+	}
+	return string(b)
+}
