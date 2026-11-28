@@ -69,6 +69,8 @@ type TextChunk struct {
 	Metadata map[string]any `json:"metadata"`
 	// Embedding 分块嵌入向量（嵌入计算后填充）
 	Embedding []float64 `json:"embedding,omitempty"`
+	// SourceLocators 原文定位（30.3 source_locators；空=该格式未产出定位）
+	SourceLocators []SourceLocator `json:"source_locators,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
