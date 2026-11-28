@@ -614,6 +614,78 @@ const (
 	ReqMethodPersonalContextContextGetNode ReqMethod = "personal_context.context.get_node"
 	// ReqMethodPersonalContextContextGetSource 获取上下文来源（对齐 PERSONAL_CONTEXT_CONTEXT_GET_SOURCE）
 	ReqMethodPersonalContextContextGetSource ReqMethod = "personal_context.context.get_source"
+
+	// ── 知识库管理面（领域三十 30.1；WeKnora 对标，Python 无对应物）──
+	// ReqMethodKBKBCreate 创建知识库
+	ReqMethodKBKBCreate ReqMethod = "kb.kb.create"
+	// ReqMethodKBKBList 知识库列表
+	ReqMethodKBKBList ReqMethod = "kb.kb.list"
+	// ReqMethodKBKBGet 知识库详情
+	ReqMethodKBKBGet ReqMethod = "kb.kb.get"
+	// ReqMethodKBKBUpdate 更新知识库
+	ReqMethodKBKBUpdate ReqMethod = "kb.kb.update"
+	// ReqMethodKBKBDelete 删除知识库
+	ReqMethodKBKBDelete ReqMethod = "kb.kb.delete"
+	// ReqMethodKBKBPin 置顶
+	ReqMethodKBKBPin ReqMethod = "kb.kb.pin"
+	// ReqMethodKBKBMove 移动文件夹
+	ReqMethodKBKBMove ReqMethod = "kb.kb.move"
+	// ReqMethodKBKBSetConfig 更新配置
+	ReqMethodKBKBSetConfig ReqMethod = "kb.kb.set_config"
+	// ReqMethodKBKBStatistics 统计
+	ReqMethodKBKBStatistics ReqMethod = "kb.kb.statistics"
+	// ReqMethodKBKBGenerateProfile 生成 AI 描述（异步）
+	ReqMethodKBKBGenerateProfile ReqMethod = "kb.kb.generate_profile"
+	// ReqMethodKBDocUpload 上传发起（文件本体走 30.5 数据帧）
+	ReqMethodKBDocUpload ReqMethod = "kb.doc.upload"
+	// ReqMethodKBDocImportURL URL 导入
+	ReqMethodKBDocImportURL ReqMethod = "kb.doc.import_url"
+	// ReqMethodKBDocImportManual 手工导入
+	ReqMethodKBDocImportManual ReqMethod = "kb.doc.import_manual"
+	// ReqMethodKBDocList 文档列表
+	ReqMethodKBDocList ReqMethod = "kb.doc.list"
+	// ReqMethodKBDocGet 文档详情
+	ReqMethodKBDocGet ReqMethod = "kb.doc.get"
+	// ReqMethodKBDocUpdate 更新文档
+	ReqMethodKBDocUpdate ReqMethod = "kb.doc.update"
+	// ReqMethodKBDocDelete 删除文档
+	ReqMethodKBDocDelete ReqMethod = "kb.doc.delete"
+	// ReqMethodKBDocBatchDelete 批量删除
+	ReqMethodKBDocBatchDelete ReqMethod = "kb.doc.batch_delete"
+	// ReqMethodKBDocReparse 重解析
+	ReqMethodKBDocReparse ReqMethod = "kb.doc.reparse"
+	// ReqMethodKBDocBatchReparse 批量重解析
+	ReqMethodKBDocBatchReparse ReqMethod = "kb.doc.batch_reparse"
+	// ReqMethodKBDocCancelParse 取消解析
+	ReqMethodKBDocCancelParse ReqMethod = "kb.doc.cancel_parse"
+	// ReqMethodKBDocRegenerateSummary 重新生成摘要
+	ReqMethodKBDocRegenerateSummary ReqMethod = "kb.doc.regenerate_summary"
+	// ReqMethodKBDocPreview 预览
+	ReqMethodKBDocPreview ReqMethod = "kb.doc.preview"
+	// ReqMethodKBDocDownload 下载
+	ReqMethodKBDocDownload ReqMethod = "kb.doc.download"
+	// ReqMethodKBChunkList 分块列表
+	ReqMethodKBChunkList ReqMethod = "kb.chunk.list"
+	// ReqMethodKBChunkUpdate 分块编辑（乐观锁）
+	ReqMethodKBChunkUpdate ReqMethod = "kb.chunk.update"
+	// ReqMethodKBChunkRevisions 版本历史
+	ReqMethodKBChunkRevisions ReqMethod = "kb.chunk.revisions"
+	// ReqMethodKBChunkRevert 版本回滚
+	ReqMethodKBChunkRevert ReqMethod = "kb.chunk.revert"
+	// ReqMethodKBChunkDelete 删除分块
+	ReqMethodKBChunkDelete ReqMethod = "kb.chunk.delete"
+	// ReqMethodKBChunkGenerateQuestions 生成问题
+	ReqMethodKBChunkGenerateQuestions ReqMethod = "kb.chunk.generate_questions"
+	// ReqMethodKBChunkListQuestions 问题列表
+	ReqMethodKBChunkListQuestions ReqMethod = "kb.chunk.list_questions"
+	// ReqMethodKBChunkerPreview 无状态试切
+	ReqMethodKBChunkerPreview ReqMethod = "kb.chunker.preview"
+	// ReqMethodKBSearchTest 检索测试
+	ReqMethodKBSearchTest ReqMethod = "kb.search.test"
+	// ReqMethodKBTaskProgress 任务进度（重连兜底全量对齐）
+	ReqMethodKBTaskProgress ReqMethod = "kb.task.progress"
+	// ReqMethodKBTaskSubscribe 任务进度订阅
+	ReqMethodKBTaskSubscribe ReqMethod = "kb.task.subscribe"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -906,6 +978,42 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodAgentGroupsUninstall,
 		ReqMethodPluginPackagesInstall,
 		ReqMethodPluginPackagesUninstall,
+		// 知识库管理面（领域三十 30.1）
+		ReqMethodKBKBCreate,
+		ReqMethodKBKBList,
+		ReqMethodKBKBGet,
+		ReqMethodKBKBUpdate,
+		ReqMethodKBKBDelete,
+		ReqMethodKBKBPin,
+		ReqMethodKBKBMove,
+		ReqMethodKBKBSetConfig,
+		ReqMethodKBKBStatistics,
+		ReqMethodKBKBGenerateProfile,
+		ReqMethodKBDocUpload,
+		ReqMethodKBDocImportURL,
+		ReqMethodKBDocImportManual,
+		ReqMethodKBDocList,
+		ReqMethodKBDocGet,
+		ReqMethodKBDocUpdate,
+		ReqMethodKBDocDelete,
+		ReqMethodKBDocBatchDelete,
+		ReqMethodKBDocReparse,
+		ReqMethodKBDocBatchReparse,
+		ReqMethodKBDocCancelParse,
+		ReqMethodKBDocRegenerateSummary,
+		ReqMethodKBDocPreview,
+		ReqMethodKBDocDownload,
+		ReqMethodKBChunkList,
+		ReqMethodKBChunkUpdate,
+		ReqMethodKBChunkRevisions,
+		ReqMethodKBChunkRevert,
+		ReqMethodKBChunkDelete,
+		ReqMethodKBChunkGenerateQuestions,
+		ReqMethodKBChunkListQuestions,
+		ReqMethodKBChunkerPreview,
+		ReqMethodKBSearchTest,
+		ReqMethodKBTaskProgress,
+		ReqMethodKBTaskSubscribe,
 	}
 }
 
