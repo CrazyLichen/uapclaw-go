@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	
+
 	"strings"
 	"unicode/utf8"
 
@@ -131,10 +131,10 @@ type SearchResult struct {
 // searchPage 单页索引记录。
 // Python: context_graph.py:29 _SearchPage 五元组。
 type searchPage struct {
-	relative    string
-	title       string
-	text        string
-	fieldCounts map[string]map[string]int
+	relative     string
+	title        string
+	text         string
+	fieldCounts  map[string]map[string]int
 	fieldLengths map[string]int
 }
 
