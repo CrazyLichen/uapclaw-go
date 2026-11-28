@@ -2,6 +2,8 @@ package kbadmin
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -25,6 +27,9 @@ func AllModels() []any {
 
 // OpenStore 打开（或创建）kbadmin SQLite 存储并自动迁移五表
 func OpenStore(dbPath string) (*Store, error) {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, fmt.Errorf("创建 kbadmin 数据目录失败: %w", err)
+	}
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})

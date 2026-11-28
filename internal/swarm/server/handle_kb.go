@@ -1,0 +1,74 @@
+package server
+
+// AgentServer kb 分发接线：kb.* 前缀统一走 kbadmin 域（领域三十 30.1；
+// Python 无对应物，独立编排域；分发层 = server/kbadmin 包）。
+// 对齐 handle_rsi.go 前缀分支约定：本文件自己构造响应写回。
+
+import (
+	"context"
+	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/kbadmin"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// kbDomainInstance kb_admin 域句柄（懒装配，每进程一次）
+var (
+	kbDomainInstance *kbadmin.Domain
+	kbWiringMu       sync.Mutex
+	kbWiringErr      error
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// HandleKBRequest 处理任意 kb.* method（30.1 分发全族，未实现方法返
+// KB_NOT_IMPLEMENTED，见 kbadmin.HandleKBRequest）。
+// 域装配失败时返回统一错误响应（不 panic、不影响 WS 主链）。
+func (s *AgentServer) HandleKBRequest(_ context.Context, request *schema.AgentRequest) {
+	domain := getKBDomain()
+	if domain == nil {
+		s.writeResponse(request.RequestID, request.ChannelID, kbadmin.BootstrapErrorResponse(request))
+		return
+	}
+	s.writeResponse(request.RequestID, request.ChannelID,
+		kbadmin.HandleKBRequest(domain, request))
+}
+
+// getKBDomain 懒装配 kb_admin 域（真实 SQLite + 真实 Chroma 本地向量库；
+// 数据目录 = workspace/kbadmin）。装配失败时返回 nil Domain，分发层
+// nil-service 调用会 panic —— 防线上挂死改为装配失败也走错误响应。
+func getKBDomain() *kbadmin.Domain {
+	kbWiringMu.Lock()
+	defer kbWiringMu.Unlock()
+	if kbDomainInstance == nil && kbWiringErr == nil {
+		store, err := kbadmin.OpenStore(workspace.WorkspaceDir() + "/kbadmin/kbadmin.db")
+		if err != nil {
+			logger.Error(logger.ComponentAgentServer).Err(err).
+				Msg("kbadmin store bootstrap failed")
+			kbWiringErr = err
+			return nil
+		}
+		domain, err := kbadmin.NewDomain(store,
+			kbadmin.NewRetrievalKBFactory(workspace.WorkspaceDir()+"/kbadmin/collections"))
+		if err != nil {
+			logger.Error(logger.ComponentAgentServer).Err(err).
+				Msg("kbadmin domain bootstrap failed")
+			kbWiringErr = err
+			return nil
+		}
+		kbDomainInstance = domain
+	}
+	return kbDomainInstance
+}
+
+// ResetKBDomainForTest 测试用：重置懒装配状态（仅 _test.go 可达语义）
+func ResetKBDomainForTest() {
+	kbWiringMu.Lock()
+	defer kbWiringMu.Unlock()
+	kbDomainInstance = nil
+	kbWiringErr = nil
+}

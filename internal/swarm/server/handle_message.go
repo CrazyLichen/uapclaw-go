@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/control/repositories"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/kbadmin"
 	personalcontext "github.com/uapclaw/uapclaw-go/internal/swarm/server/personal_context"
 )
 
@@ -112,6 +113,13 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 	if personalcontext.IsPersonalContextMethod(request.ReqMethod) {
 		personalcontext.HandlePersonalContextRequest(
 			s.personalContext, s, request, nil)
+		return
+	}
+
+	// 知识库管理面（领域三十 30.1）：kb.* method 统一分发（Python 无对应物，
+	// 独立编排域；handle_kb 自己构造响应写回）。
+	if kbadmin.IsKBMethod(string(request.ReqMethod)) {
+		s.HandleKBRequest(ctx, request)
 		return
 	}
 
