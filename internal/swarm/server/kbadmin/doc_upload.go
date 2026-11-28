@@ -3,6 +3,8 @@ package kbadmin
 import (
 	"errors"
 	"os"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -46,6 +48,15 @@ func (s *DocService) CompleteUpload(uploadID string) (*UploadedFile, error) {
 	fi, err := os.Stat(slot.ResolvedPath)
 	if err != nil {
 		return nil, err
+	}
+	// D-30-5-2 挂点（30.2 收口）：落盘成功接管文件 + 建解析任务。
+	// hash 用槽位登记的期望值（Complete 已复算校验一致；空则 SubmitParseTask 内兜底计算）。
+	// 挂点失败不吞上传结果：文件已安全落盘，解析可手动 reparse 重试。
+	if _, _, err := s.SubmitParseTask(slot.KBID, slot.FileName, slot.ResolvedPath,
+		fi.Size(), slot.ExpectedHash); err != nil {
+		logger.Error(logComponent).Str("upload_id", slot.UploadID).
+			Str("kb_id", slot.KBID).Err(err).
+			Msg("parse task submission after upload failed")
 	}
 	return &UploadedFile{
 		UploadID: slot.UploadID, KBID: slot.KBID, FileName: slot.FileName,

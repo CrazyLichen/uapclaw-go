@@ -9,12 +9,6 @@ var ErrNotImplemented = errors.New("kb method not implemented yet")
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// DocService 文档管理编排骨架（30.5 已接上传分帧编排；解析任务/重解析/取消/预览 ⤵️30.2）
-type DocService struct {
-	store   *Store
-	uploads *UploadStore
-}
-
 // ChunkService 分块管理编排骨架（30.6 回填：乐观锁编辑/启停/版本回滚/生成问题）
 type ChunkService struct {
 	store *Store
@@ -26,9 +20,6 @@ type SearchService struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// NewDocService 构造 DocService
-func NewDocService(store *Store) *DocService { return &DocService{store: store} }
 
 // NewChunkService 构造 ChunkService
 func NewChunkService(store *Store) *ChunkService { return &ChunkService{store: store} }
