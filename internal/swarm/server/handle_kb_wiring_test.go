@@ -37,13 +37,14 @@ func TestHandleMessage_KBPrefixBranch(t *testing.T) {
 	}
 }
 
-// TestHandleMessage_KBNotImplemented 验证未实现方法经前缀分支返回 KB_NOT_IMPLEMENTED。
+// TestHandleMessage_KBNotImplemented 验证未实现方法经前缀分支返回 KB_NOT_IMPLEMENTED
+// （30.5 已实现 kb.doc.upload，本用例改用 doc 族剩余未实现方法承载）。
 func TestHandleMessage_KBNotImplemented(t *testing.T) {
 	s, transport := newTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	env := makeTestEnvelope("kb.doc.upload", false)
+	env := makeTestEnvelope("kb.doc.import_url", false)
 	go func() { s.handleMessage(ctx, env) }()
 
 	recvCh, err := transport.Recv()
@@ -61,6 +62,6 @@ func TestHandleMessage_KBNotImplemented(t *testing.T) {
 		require.NotNil(t, details)
 		require.Equal(t, "KB_NOT_IMPLEMENTED", details["error_code"])
 	case <-time.After(4 * time.Second):
-		t.Fatal("kb.doc.upload 响应超时")
+		t.Fatal("kb.doc.import_url 响应超时")
 	}
 }

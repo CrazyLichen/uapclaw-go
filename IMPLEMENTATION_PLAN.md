@@ -1546,7 +1546,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 30.2 | ☐ | **解析任务链**：goroutine worker 池 + 状态机（pending→processing[stages: parsing/chunking/embedding/extracting]→completed/failed/cancelled）+ 活动追踪（last_activity_at/stall_state）+ cancel/reparse + 重启孤儿任务恢复 | 同上 `worker*.go` | 方案 §4 |
 | 30.3 | ☐ | **source_locators 全量**：pdf 页码+bbox 坐标提取链、docx 段落号、字符区间；`retrieval` 包 parser/chunker 侧扩展（**唯一侵入点**，单独提交登记偏差）；chunk locators_json 落 DAO | `core/retrieval/indexing/processor/` | 方案 §8 |
 | 30.4 | ☐ | **CSV 解析 + AI 增强**：CSV parser 补齐；LLM 二阶段（摘要/标签/enhance_state 独立标记）+ 生成问题（GeneratedQuestion）生成链 | 同上 | 方案 §9 |
-| 30.5 | ☐ | **WS 文件分帧通道**：上传（前端切帧→流式落盘→hash 校验→触发解析）/下载预览（反向流式→blob URL）；50MB 默认上限 + 流量控制/背压 | gateway 薄转发 + server 侧帧处理 | 方案 §5 |
+| 30.5 | ✅ | **WS 文件分帧通道**：上传（前端切帧→流式落盘→hash 校验→触发解析）/下载预览（反向流式→blob URL）；50MB 默认上限 + 流量控制/背压 | gateway 薄转发 + server 侧帧处理 | 方案 §5（30.5 已实施：B1 薄映射复用 file.upload_chunk 协议，X 边界止步安全落盘；触发解析 ⤵️30.2、前端 UI ⤵️30.8） |
 | 30.6 | ☐ | **检索测试 + 分块管理端点**：kb.search.test（topK/阈值/rerank/use_generated_questions 参数 + 召回来源徽标）；kb.chunk.update 乐观锁/revisions/revert/启停/删除（向量库先行→DAO，失败回滚）；kb.chunker.preview 无状态试切 | 同上 | 方案 §5 §7 |
 | 30.7 | ☐ | **前端页签骨架**：features/knowledge 一级页签 + 知识库列表页（文件夹树/卡片/置顶/创建向导含试切预览面板） | `frontend/src/features/knowledge/` | 方案 §6 |
 | 30.8 | ☐ | **前端详情页**：文档列表（状态过滤/批量操作/拖拽上传/解析时间线/取消重解析）+ 检索测试面板 + 文档详情（分块列表/inline 编辑/版本历史 diff/生成问题管理/pdf.js bbox 高亮） | 同上 | 方案 §6 |
