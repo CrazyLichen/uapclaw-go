@@ -20,9 +20,6 @@ import (
 // ErrFileTooLarge 超过单文件上限（spec §5 FILE_TOO_LARGE）
 var ErrFileTooLarge = errors.New("file too large")
 
-// ErrUploadChannelBusy 同 KB 同名在途上传/并发帧守卫（spec §5 UPLOAD_CHANNEL_BUSY）
-var ErrUploadChannelBusy = errors.New("upload channel busy")
-
 // ErrKBUploadNotFound upload_id 不存在（超时清理后引用，spec §5 KB_UPLOAD_NOT_FOUND）
 var ErrKBUploadNotFound = errors.New("kb upload not found")
 
@@ -51,12 +48,13 @@ type UploadSlot struct {
 }
 
 // UploadStore KB 上传槽位登记表（内存单点，全局一份；落盘根目录下每 upload 一子目录）
+// 同名并行已放行（②+① 改进拍板）：每 upload 独立子目录互不干扰，重复文件判据
+// content_hash 去重编排 ⤵️30.2 入库时实施。
 type UploadStore struct {
-	mu       sync.Mutex
-	slots    map[string]*UploadSlot // upload_id → slot
-	inflight map[string]string      // kbID+"/"+fileName → upload_id（串行守卫）
-	root     string
-	ttl      time.Duration
+	mu    sync.Mutex
+	slots map[string]*UploadSlot // upload_id → slot
+	root  string
+	ttl   time.Duration
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -64,24 +62,19 @@ type UploadStore struct {
 // NewUploadStore 构造槽位表；root 为落盘根目录（生产装配传 WorkspaceDir()/kb_uploads）
 func NewUploadStore(root string) *UploadStore {
 	return &UploadStore{
-		slots:    map[string]*UploadSlot{},
-		inflight: map[string]string{},
-		root:     root,
-		ttl:      uploadTTLDefault,
+		slots: map[string]*UploadSlot{},
+		root:  root,
+		ttl:   uploadTTLDefault,
 	}
 }
 
-// InitUpload 登记槽位：超限拒绝 → 串行守卫 → 建落盘目录 → 认领去重路径
+// InitUpload 登记槽位：超限拒绝 → 建落盘目录 → 认领去重路径
 func (s *UploadStore) InitUpload(kbID, fileName string, totalSize int64, expectedHash string) (*UploadSlot, error) {
 	if totalSize > MaxFileBytes {
 		return nil, ErrFileTooLarge
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := kbID + "/" + fileName
-	if _, exists := s.inflight[key]; exists {
-		return nil, ErrUploadChannelBusy
-	}
 	id, err := newUploadID()
 	if err != nil {
 		return nil, err
@@ -101,7 +94,6 @@ func (s *UploadStore) InitUpload(kbID, fileName string, totalSize int64, expecte
 		ResolvedPath: target, CreatedAt: time.Now(),
 	}
 	s.slots[id] = slot
-	s.inflight[key] = id
 	return slot, nil
 }
 
@@ -203,10 +195,9 @@ func FileSha256(p string) (string, error) { return fileSha256(p) }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// release 摘除槽位与 KB+文件名在途索引（持锁调用）
+// release 摘除槽位（持锁调用）
 func (s *UploadStore) release(slot *UploadSlot) {
 	delete(s.slots, slot.UploadID)
-	delete(s.inflight, slot.KBID+"/"+slot.FileName)
 }
 
 // newUploadID crypto/rand 生成 32 位十六进制上传标识

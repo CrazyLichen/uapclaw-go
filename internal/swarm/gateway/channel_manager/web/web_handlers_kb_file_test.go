@@ -83,3 +83,188 @@ func TestKBFileUploadChunk_真链映射落盘(t *testing.T) {
 	// 收尾清理（不污染 workspace）
 	require.NoError(t, os.RemoveAll(filepath.Join(path.WorkspaceDir(), "kb_frame_it")))
 }
+
+// TestKBUploadForward_成功登记upload_id ②+①：kb.doc.upload 成功后 upload_id
+// 应登记进 session 注册表，断连清理后摘除（真实 AgentServer 链）。
+func TestKBUploadForward_成功登记upload_id(t *testing.T) {
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tr := transport.NewChannelTransport()
+	srv := server.NewAgentServer(cfg, tr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, srv.Start(ctx))
+
+	ac := routing.NewAgentClient(tr)
+	require.NoError(t, ac.Connect(ctx))
+	require.True(t, ac.WaitServerReady(ctx))
+	defer ac.Disconnect()
+
+	wc := newTestChannel()
+	wc.kbUploadAC = ac
+
+	// 建宿主 KB
+	env := e2a.E2AFromAgentFields("req-kb-create",
+		e2a.WithFieldChannelID(wc.ChannelID()),
+		e2a.WithFieldReqMethod("kb.kb.create"),
+		e2a.WithFieldParams(map[string]any{
+			"id": "it-track-kb", "name": "断连登记库", "type": "document",
+		}),
+	)
+	resp, err := ac.SendRequest(ctx, env)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.True(t, resp.OK, "kb.kb.create 失败: %v", resp.Payload)
+
+	// 发起上传（经带追踪的 handler）
+	payload, herr := callHandler(kbDocUploadForward(wc, ac), map[string]any{
+		"kb_id": "it-track-kb", "file_name": "track.txt",
+		"size": 3, "file_hash": "",
+	}, "sess-track")
+	require.NoError(t, herr)
+	require.True(t, payload["upload"] != nil, "成功响应缺 upload: %v", payload)
+
+	wc.kbUploadMu.Lock()
+	_, tracked := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	require.True(t, tracked, "upload_id 未登记进 session 注册表")
+
+	// 断连清理：注册表摘除（真实 cancel fire-and-forget；TTL/janitor 兜底）
+	wc.trackConnSession(nil, "sess-track")
+	wc.cleanupKBUploadsOnDisconnect(nil)
+	wc.kbUploadMu.Lock()
+	_, still := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	assert.False(t, still, "断连后在途登记未清理")
+}
+
+// TestExtractUploadID payload 形状解析
+func TestExtractUploadID(t *testing.T) {
+	assert.Equal(t, "u-1", extractUploadID(map[string]any{
+		"upload": map[string]any{"upload_id": "u-1"},
+	}))
+	assert.Empty(t, extractUploadID(map[string]any{}))
+	assert.Empty(t, extractUploadID(nil))
+}
+// TestKBUploadForward_成功登记upload_id ②+①：kb.doc.upload 成功后 upload_id
+// 应登记进 session 注册表（真实 AgentServer 链）。
+func TestKBUploadForward_成功登记upload_id(t *testing.T) {
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tr := transport.NewChannelTransport()
+	srv := server.NewAgentServer(cfg, tr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, srv.Start(ctx))
+
+	ac := routing.NewAgentClient(tr)
+	require.NoError(t, ac.Connect(ctx))
+	require.True(t, ac.WaitServerReady(ctx))
+	defer ac.Disconnect()
+
+	wc := newTestChannel()
+	wc.kbUploadAC = ac
+
+	// 建宿主 KB
+	env := e2a.E2AFromAgentFields("req-kb-create",
+		e2a.WithFieldChannelID(wc.ChannelID()),
+		e2a.WithFieldReqMethod("kb.kb.create"),
+		e2a.WithFieldParams(map[string]any{
+			"id": "it-track-kb", "name": "断连登记库", "type": "document",
+		}),
+	)
+	resp, err := ac.SendRequest(ctx, env)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.True(t, resp.OK, "kb.kb.create 失败: %v", resp.Payload)
+
+	// 发起上传（经带追踪的 handler）
+	payload, herr := callHandler(kbDocUploadForward(wc, ac), map[string]any{
+		"kb_id": "it-track-kb", "file_name": "track.txt",
+		"size": 3, "file_hash": "",
+	}, "sess-track")
+	require.NoError(t, herr)
+	require.True(t, payload["upload"] != nil, "成功响应缺 upload: %v", payload)
+
+	wc.kbUploadMu.Lock()
+	_, tracked := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	require.True(t, tracked, "upload_id 未登记进 session 注册表")
+
+	// 断连清理：注册表摘除（真实 cancel fire-and-forget；TTL/janitor 兜底）
+	wc.trackConnSession(nil, "sess-track")
+	wc.cleanupKBUploadsOnDisconnect(nil)
+	wc.kbUploadMu.Lock()
+	_, still := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	assert.False(t, still, "断连后在途登记未清理")
+}
+
+// TestExtractUploadID payload 形状解析
+func TestExtractUploadID(t *testing.T) {
+	assert.Equal(t, "u-1", extractUploadID(map[string]any{
+		"upload": map[string]any{"upload_id": "u-1"},
+	}))
+	assert.Empty(t, extractUploadID(map[string]any{}))
+	assert.Empty(t, extractUploadID(nil))
+}
+
+// TestKBUploadForward_成功登记upload_id ②+①：kb.doc.upload 成功后 upload_id
+// 应登记进 session 注册表，断连清理后摘除（真实 AgentServer 链）。
+func TestKBUploadForward_成功登记upload_id(t *testing.T) {
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tr := transport.NewChannelTransport()
+	srv := server.NewAgentServer(cfg, tr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, srv.Start(ctx))
+
+	ac := routing.NewAgentClient(tr)
+	require.NoError(t, ac.Connect(ctx))
+	require.True(t, ac.WaitServerReady(ctx))
+	defer ac.Disconnect()
+
+	wc := newTestChannel()
+	wc.kbUploadAC = ac
+
+	env := e2a.E2AFromAgentFields("req-kb-create",
+		e2a.WithFieldChannelID(wc.ChannelID()),
+		e2a.WithFieldReqMethod("kb.kb.create"),
+		e2a.WithFieldParams(map[string]any{
+			"id": "it-track-kb", "name": "断连登记库", "type": "document",
+		}),
+	)
+	resp, err := ac.SendRequest(ctx, env)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.True(t, resp.OK, "kb.kb.create 失败: %v", resp.Payload)
+
+	payload, herr := callHandler(kbDocUploadForward(wc, ac), map[string]any{
+		"kb_id": "it-track-kb", "file_name": "track.txt",
+		"size": 3, "file_hash": "",
+	}, "sess-track")
+	require.NoError(t, herr)
+	require.True(t, payload["upload"] != nil, "成功响应缺 upload: %v", payload)
+
+	wc.kbUploadMu.Lock()
+	_, tracked := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	require.True(t, tracked, "upload_id 未登记进 session 注册表")
+
+	wc.trackConnSession(nil, "sess-track")
+	wc.cleanupKBUploadsOnDisconnect(nil)
+	wc.kbUploadMu.Lock()
+	_, still := wc.kbUploadSessions["sess-track"]
+	wc.kbUploadMu.Unlock()
+	assert.False(t, still, "断连后在途登记未清理")
+}
+
+// TestExtractUploadID payload 形状解析
+func TestExtractUploadID(t *testing.T) {
+	assert.Equal(t, "u-1", extractUploadID(map[string]any{
+		"upload": map[string]any{"upload_id": "u-1"},
+	}))
+	assert.Empty(t, extractUploadID(map[string]any{}))
+	assert.Empty(t, extractUploadID(nil))
+}

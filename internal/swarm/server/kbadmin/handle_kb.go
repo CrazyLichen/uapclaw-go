@@ -233,8 +233,6 @@ func uploadErrCode(err error) string {
 		return ErrCodeKBNotFound
 	case errors.Is(err, ErrFileTooLarge):
 		return "FILE_TOO_LARGE"
-	case errors.Is(err, ErrUploadChannelBusy):
-		return "UPLOAD_CHANNEL_BUSY"
 	case errors.Is(err, ErrKBUploadNotFound):
 		return "KB_UPLOAD_NOT_FOUND"
 	case errors.Is(err, ErrHashMismatch):

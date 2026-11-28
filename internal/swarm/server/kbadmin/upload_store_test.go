@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// TestUploadStore_发起认领与串行守卫 测试槽位登记、字段回填与同 KB 同名 busy 守卫
-func TestUploadStore_发起认领与串行守卫(t *testing.T) {
+// TestUploadStore_发起认领与同名并行 测试槽位登记、字段回填与同名并行放行
+//（busy 守卫已按 ②+① 改进拍板移除：同名各自独立目录互不干扰，去重判据 ⤵️30.2 content_hash）
+func TestUploadStore_发起认领与同名并行(t *testing.T) {
 	st := NewUploadStore(t.TempDir())
 	slot, err := st.InitUpload("kb-1", "测试.txt", 10, "abc")
 	if err != nil {
@@ -17,9 +18,13 @@ func TestUploadStore_发起认领与串行守卫(t *testing.T) {
 	if slot.UploadID == "" || slot.ResolvedPath == "" || slot.TotalSize != 10 {
 		t.Fatalf("slot 字段异常: %+v", slot)
 	}
-	// 同 KB 同名在途重复发起 → busy
-	if _, err := st.InitUpload("kb-1", "测试.txt", 10, "abc"); err != ErrUploadChannelBusy {
-		t.Fatalf("期望 ErrUploadChannelBusy, got %v", err)
+	// 同 KB 同名并行发起 → 放行（独立槽位/独立目录）
+	second, err := st.InitUpload("kb-1", "测试.txt", 10, "abc")
+	if err != nil {
+		t.Fatalf("同名并行应放行, got %v", err)
+	}
+	if second.UploadID == slot.UploadID || second.ResolvedPath == slot.ResolvedPath {
+		t.Fatal("同名并行两次发起应得到独立槽位与独立目录")
 	}
 	// Get 可取回
 	got, err := st.Get(slot.UploadID)

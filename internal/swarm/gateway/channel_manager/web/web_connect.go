@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
 	"github.com/uapclaw/uapclaw-go/internal/common/wswrite"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -69,6 +70,16 @@ type WebChannel struct {
 	// delivery HTTP 请求级 outbound 注册表（Agent 回复路由）。
 	// Python: WebChannel.__init__ self.delivery = WebDeliveryRegistry()（web_connect.py:259）。
 	delivery *webDeliveryRegistry
+	// connSessions 连接内出现过的 session 集合（断连时清理 kb 在途上传，30.5 ②+①）
+	connSessions map[*websocket.Conn]map[string]struct{}
+	// connSessionsMu 保护 connSessions
+	connSessionsMu sync.Mutex
+	// kbUploadSessions sid → 在途 kb 上传 upload_id 集合（断连自动 cancel，30.5 ②+①）
+	kbUploadSessions map[string]map[string]struct{}
+	// kbUploadMu 保护 kbUploadSessions
+	kbUploadMu sync.Mutex
+	// kbUploadAC kb 上传 cancel 转发用的 AgentClient（registerKBFileProxies 注入）
+	kbUploadAC *routing.AgentClient
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -148,6 +159,8 @@ func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfig
 		channelMgr:       channelMgr,
 		methodHandlers:   make(map[string]methodHandler),
 		localOnlyMethods: make(map[string]bool),
+		connSessions:     make(map[*websocket.Conn]map[string]struct{}),
+		kbUploadSessions: make(map[string]map[string]struct{}),
 	}
 
 	return wc
@@ -220,6 +233,9 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Str("remote_addr", conn.RemoteAddr().String()).
 			Int("total_clients", wc.clientCount()).
 			Msg("WebSocket client disconnected")
+
+		// 断连清理：取消该连接各 session 的在途 kb 上传（30.5 ②+①）
+		wc.cleanupKBUploadsOnDisconnect(conn)
 	}()
 
 	for {
@@ -259,6 +275,8 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if s, ok := params["session_id"].(string); ok && s != "" {
 			sid = s
 		}
+		// 记录连接内 session（断连清理 kb 在途上传用，30.5 ②+①）
+		wc.trackConnSession(conn, sid)
 
 		// 处理文件下载（对齐 Python _process_files）
 		ctx := context.Background()
