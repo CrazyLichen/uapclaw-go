@@ -39,7 +39,7 @@ type Domain struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDomain 组装 kb_admin 域
-func NewDomain(store *Store, kbFactory KBFactory) (*Domain, error) {
+func NewDomain(store *Store, kbFactory *RetrievalKBFactory) (*Domain, error) {
 	kbSvc, err := NewKBService(store, kbFactory)
 	if err != nil {
 		return nil, err

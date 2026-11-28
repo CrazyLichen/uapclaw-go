@@ -22,26 +22,17 @@ const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// KBFactory collection 生命周期接线（create → 建 collection；delete → 删 collection）
-type KBFactory interface {
-	// CreateCollection 为 KB 创建向量库 collection（本地持久化模式，构造期即建）
-	CreateCollection(ctx context.Context, kbID, configJSON string) error
-	// DeleteCollection 删除 KB 的向量库 collection
-	DeleteCollection(ctx context.Context, kbID string) error
-	// Has 登记/存在判定（管理面与测试断言用）
-	Has(kbID string) bool
-}
-
 // KBService 知识库 CRUD 编排（30.1 方案 C：DAO 全真 + create/delete
 // 最小编排 SimpleKB 先行；graph/MultiKB 差异 ⤵️30.2 回填，spec D-30-1-1）
 type KBService struct {
 	// store kbadmin SQLite 存储
 	store *Store
-	// kbFactory collection 生命周期接线
-	kbFactory KBFactory
+	// kbFactory collection 生命周期接线（具体类型直调，用户拍板：禁止为
+	// 未发生的未来需求预留窄接口）
+	kbFactory *RetrievalKBFactory
 }
 
-// RetrievalKBFactory KBFactory 生产实现：retrieval 层 Chroma 本地持久化
+// RetrievalKBFactory collection 生命周期接线：retrieval 层 Chroma 本地持久化
 // 向量库（构造期 GetOrCreateCollection 真建 collection，与 13.27 真链同款）
 type RetrievalKBFactory struct {
 	// dataDir 各 KB collection 持久化根目录（<dataDir>/<kbID>/chroma）
@@ -55,11 +46,11 @@ type RetrievalKBFactory struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewKBService 构造 KBService
-func NewKBService(store *Store, kbFactory KBFactory) (*KBService, error) {
+func NewKBService(store *Store, kbFactory *RetrievalKBFactory) (*KBService, error) {
 	return &KBService{store: store, kbFactory: kbFactory}, nil
 }
 
-// NewRetrievalKBFactory 构造生产 KBFactory（dataDir 为空时 CreateCollection 必然失败，
+// NewRetrievalKBFactory 构造 collection 生命周期接线（dataDir 为空时 CreateCollection 必然失败，
 // 供回滚用例与调用方校验）
 func NewRetrievalKBFactory(dataDir string) *RetrievalKBFactory {
 	return &RetrievalKBFactory{dataDir: dataDir, stores: make(map[string]*vs.ChromaVectorStore)}
