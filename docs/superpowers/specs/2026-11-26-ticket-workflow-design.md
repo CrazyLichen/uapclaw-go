@@ -259,7 +259,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 1. **附件预处理**：仅处理图片附件 → 视觉模型（多模态 LLM）抽现象特征（错误码/界面异常/堆栈）；视觉模型走配置，无多模态时降级跳过并 Warn；**日志附件不解析**，仅取文件名/类型元信息拼入检索查询；
 2. **特征归集**：表象取 ProblemInput.title + description（零提取）；组件归属来自用户应答（卡片选项/纯文本清单匹配）；产出结构化特征 `{表象, 组件, 特征...}`（键值，非向量）；
 3. **就绪判定（规则，零 LLM）**：必需字段 = 表象 + 组件归属，两者非空 → 就绪；缺 → 抛固定模板中断卡（只列缺的字段，组件项带配置清单选项），计入 `guidance_rounds`；**每轮恢复输入并入特征后回到本判定**，超限（2~3 轮，可配）带着已有特征进 KBSearchNode 兜底；
-4. 检索查询文本 = 表象描述 + 图片识别结果 + 附件元信息合成（图片先转文字再入查询）。
+4. 检索查询文本合成（title+description 双字段定案）：**title 做主题锚 + description 做区分度**——`查询文本 = title（开头一句锚定主题）+ description（错误细节/现象特征）+ 图片识别结果 + 附件元信息`（图片先转文字再入查询）。只用 title 会缺细节召回泛化；只用 description 长文本语义稀释、主题漂移；title 在最前锚定重心是检索实践的 title-boost 标准合成。title 同时独立用于历史库 `metadata.title`（展示/回关联/同标题优先聚合），不进向量。
 
 ### 3.5 GuidanceNode（仅判别式引导，本轮拍板）
 
@@ -300,7 +300,7 @@ wait_confirm ──未解决 / 补充文本──▶ scope 升级重查或 Agent
 
 | 处理路径 | 落库动作 | 判重 |
 |---|---|---|
-| 历史库命中 | 命中案例 `hit_count+1`，增量并入 text（doc_id 已记录） | 无需 |
+| 历史库命中 | 命中案例 `hit_count+1`，增量并入 text（doc_id 已记录） | 无需（同标题案例优先聚合） |
 | 业务库命中 | 写历史库新文档；**业务库不动** | 轻判重（一次向量相似度查询） |
 | AgentNode 处理 | 写历史库全量新文档（含排查链路、附件摘要） | 轻判重（同上） |
 
@@ -413,10 +413,11 @@ ProblemInput（runner 内部视角，输入字段终版·决议 21）{
 | 字段 | 类型 | 内容 |
 |---|---|---|
 | doc_id | string | 历史问题唯一 id |
-| text | string | 完整叙述：表象描述+排查过程+根因+方案（向量召回主体） |
+| text | string | 完整叙述：**开头=title+description（与查询侧形态对称）**+排查过程+根因+方案（向量召回主体） |
 | vector | float32[] | text 的 embedding |
 | metadata.problem_id | string | 工单系统 id（回关联） |
 | metadata.component | string | 归属组件（检索过滤） |
+| metadata.title | string | 问题标题（工单回关联展示/chat.final 结论文案引用/长尾合并同标题优先聚合；不进向量） |
 | metadata.hit_count | int | 被召回/确认次数（业务加权与展示） |
 | metadata.settled_at | int64 | 沉淀时间 |
 
