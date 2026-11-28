@@ -91,9 +91,13 @@ func (f *RetrievalKBFactory) CreateCollection(_ context.Context, kbID, configJSO
 	var err error
 	switch cfg.Store.Provider {
 	case "", "chroma":
+		// chroma 域扩展实现（spec §10）：ChromaVectorStore + Bleve 倒排组合——
+		// 向量半边原样 chroma，稀疏半边由 Bleve BM25 接管（替代伪 EF 路径）
 		vsConfig.StoreProvider = common.StoreTypeChroma
 		vsConfig.DatabaseName = "kb_" + kbID
-		store, err = vs.NewChromaVectorStore(vsConfig, filepath.Join(f.dataDir, kbID, "chroma"),
+		store, err = vs.NewChromaBleveStore(vsConfig,
+			filepath.Join(f.dataDir, kbID, "chroma"),
+			filepath.Join(f.dataDir, kbID, "bleve"),
 			"content", vector_fields.NewDefaultChromaVectorField(),
 			"sparse_vector", "metadata", "document_id",
 		)
@@ -162,8 +166,24 @@ func (f *RetrievalKBFactory) CreateIndexer(_ context.Context, kbID string) (inde
 	var err error
 	switch provider {
 	case "", "chroma":
+		// spec §10：chroma 路径走组合 store 单实例（chroma 向量 + Bleve 倒排），
+		// 入库/检索共享同一 chroma client（消除双 client 读可见性抖动根因）
 		vsConfig.StoreProvider = common.StoreTypeChroma
-		idx, err = indexer.NewChromaIndexer(vsConfig, filepath.Join(f.dataDir, kbID, "chroma"))
+		inner, ok := f.stores[kbID].(*vs.ChromaBleveStore)
+		if !ok || inner == nil {
+			// 未登记（域重建后直接 reparse）：构造完整组合 store（与 CreateCollection 同构）
+			inner, err = vs.NewChromaBleveStore(vsConfig,
+				filepath.Join(f.dataDir, kbID, "chroma"),
+				filepath.Join(f.dataDir, kbID, "bleve"),
+				"content", vector_fields.NewDefaultChromaVectorField(),
+				"sparse_vector", "metadata", "document_id",
+			)
+			if err != nil {
+				break
+			}
+			f.stores[kbID] = inner
+		}
+		idx = indexer.NewChromaBleveIndexer(inner)
 	case "sqlite":
 		vsConfig.StoreProvider = common.StoreTypeSqlite
 		idx, err = indexer.NewSQLiteIndexer(vsConfig, filepath.Join(f.dataDir, kbID, "kbvector.db"))
@@ -226,15 +246,28 @@ func (f *RetrievalKBFactory) Has(kbID string) bool {
 func (f *RetrievalKBFactory) CloseAll() {
 	f.mu.Lock()
 	idxs := make(map[string]indexer.Indexer, len(f.indexers))
+	stores := make(map[string]vs.VectorStore, len(f.stores))
 	for kbID, idx := range f.indexers {
 		idxs[kbID] = idx
 		delete(f.indexers, kbID)
+	}
+	for kbID, st := range f.stores {
+		stores[kbID] = st
+		delete(f.stores, kbID)
+		delete(f.configs, kbID)
 	}
 	f.mu.Unlock()
 	for kbID, idx := range idxs {
 		if err := idx.Close(); err != nil {
 			logger.Error(logComponent).Str("kb_id", kbID).Err(err).
 				Msg("kb indexer close failed")
+		}
+	}
+	// 组合 store 的 bleve 索引句柄随 store 关闭（chroma inner Close 为空操作惯例）
+	for kbID, st := range stores {
+		if err := st.Close(); err != nil {
+			logger.Error(logComponent).Str("kb_id", kbID).Err(err).
+				Msg("kb store close failed")
 		}
 	}
 }

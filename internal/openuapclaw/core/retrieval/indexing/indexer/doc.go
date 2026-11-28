@@ -8,6 +8,7 @@
 //	├── base.go           # Indexer 接口定义 + IndexOptions
 //	├── embed_chunks.go   # ComputeChunkEmbeddings 共享嵌入逻辑 + ChunkEmbedOptions
 //	├── chroma.go         # ChromaIndexer ChromaDB 文档索引实现
+//	├── chroma_bleve_indexer.go # ChromaBleveIndexer chroma+Bleve 组合存储入库面实现
 //	├── milvus.go         # MilvusIndexer Milvus 文档索引实现
 //	└── sqlite_indexer.go # SQLiteIndexer SQLite 向量存储（D-25-7）入库面实现
 //

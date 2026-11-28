@@ -16,10 +16,12 @@ import (
 )
 
 // newFixedEmbeddingServer httptest 起 OpenAI 兼容 /embeddings 端点（固定向量返回）。
-// 网络边界替身——真实链路纪律允许的 mock 边界。
+// 网络边界替身——真实链路纪律允许的 mock 边界。150ms 固定延迟拉长 processing
+// 窗口（管线全链仅数十 ms 时轮询可能整窗错过，取消类用例会 flake）
 func newFixedEmbeddingServer(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
 		var req struct {
 			Input []string `json:"input"`
 		}

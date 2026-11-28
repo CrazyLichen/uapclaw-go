@@ -203,7 +203,7 @@ func TestCreateIndexer_缺省回退chroma(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := idx.(*indexer.ChromaIndexer); !ok {
-		t.Fatalf("缺省应回退 ChromaIndexer, got %T", idx)
+	if _, ok := idx.(*indexer.ChromaBleveIndexer); !ok {
+		t.Fatalf("缺省应回退 ChromaBleveIndexer（spec §10 组合 store）, got %T", idx)
 	}
 }
